@@ -233,8 +233,7 @@ describe('buildPosixCommandPathLookupScript', () => {
     'resolves through the Windows-to-WSL login-shell boundary with inline masks',
     () => {
       const lookup = buildPosixCommandPathLookupScript({ kind: 'literal', value: 'sh' })
-      // Why the captured form: an interactive login shell also prints the distro's
-      // rc/motd to stdout, which would land in front of the resolved path.
+      // Capture fencing excludes interactive-login rc/motd output from the resolved path.
       const captured = buildWslCapturedLoginShellCommand(
         [
           `sh() { printf '%s\\n' masked-function; }`,

@@ -26,8 +26,7 @@ const fixture = (name: string): string =>
 // The bytes dsh-tui 0.17 paints as its first turn starts.
 const DSH_TURN_STARTED = '\x1b]0;⠂ 🐋 \x07\x1b]7501;state=working:app=dsh-tui\x1b\\'
 
-// #33227: dsh-tui 0.17 paints its launchpad before its session opens and refuses Enter until then,
-// keeping the draft, so a launch prompt sat in the launchpad after Orca's one Enter.
+// dsh-tui 0.17 paints a launchpad before the session accepts Enter, retaining drafts after the first submission (#33227).
 describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
   afterEach(() => vi.useRealTimers())
 

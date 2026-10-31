@@ -30,38 +30,21 @@ vi.mock('electron', () => ({
 }))
 
 describe('Antigravity raw captured readiness', () => {
-  /**
-   * Pins Antigravity readiness to captured transcripts instead of hand-written fixtures.
-   *
-   * Five detector attempts were tuned against a five-line screen someone typed from memory, and
-   * three of them shipped worse behaviour than the bug they replaced. Nothing here asserts what
-   * Antigravity prints: the transcripts do. Six are recorded from a live `agy`; the rest name
-   * themselves as skipped until someone can reach them.
-   *
-   * One case is pinned as a KNOWN DEFECT: the shipped detector refuses a ready screen whose retained
-   * tail ends on the error block. That asserts what it does, not what it should.
-   */
+  /** Live PTY transcripts avoid guessed screen fixtures; unavailable captures stay skipped.
+   * knownDefect cases pin shipped behavior while expectReady retains the correct result. */
 
   const FIXTURE_DIR = join(__dirname, '__fixtures__')
-  // Why asymmetric: a ready verdict has to survive the settle window, while a refusal only has to
-  // hold for one poll. Keeping the refusal short keeps seven transcripts off the suite's clock.
+  // Ready must survive settling; refusal needs only one poll.
   const READY_TIMEOUT_MS = 2_000
   const REFUSAL_TIMEOUT_MS = 600
-  /** Antigravity's binary, as Orca launches and probes it (`tui-agent-config.ts` detectCmd). */
   const ANTIGRAVITY_COMMAND = 'agy'
   type TranscriptCase = {
-    /** Fixture basename; `<name>.txt` under `__fixtures__/`. */
     name: string
-    /** Capture group identifier. */
     capture: string
     what: string
-    /** What a correct detector must answer. Not what the shipped one answers. */
+    /** Correct behavior, including when the shipped detector disagrees. */
     expectReady: boolean
-    /**
-     * Set where the shipped detector contradicts the transcript. The case then runs inverted, so
-     * CI pins the defect instead of going permanently red — and flips to failing the moment
-     * someone fixes it, which is exactly when these expectations need re-reading.
-     */
+    /** Invert a known defect to pin shipped behavior; a detector fix then forces expectation review. */
     knownDefect?: string
   }
 
@@ -103,8 +86,7 @@ describe('Antigravity raw captured readiness', () => {
       expectReady: false
     },
     {
-      // Expected ready because the turn is over and the composer is back on screen. The captured
-      // turn ends in a backend error, which is the only ending this account's key can produce.
+      // This account's turn ends in a backend error, but its composer is ready.
       name: 'antigravity-busy-turn-ended',
       capture: 'E',
       what: 'the turn has ended and the composer has returned, process still alive',
@@ -117,8 +99,7 @@ describe('Antigravity raw captured readiness', () => {
       what: 'the screen immediately after the model picker is dismissed',
       expectReady: true
     },
-    // Not captured: this machine's agy has no OAuth session and offers only Gemini models, and
-    // reaching the rest would mean signing the operator out or deleting their config.
+    // Missing captures require changing the operator's account/config; leave them skipped.
     {
       name: 'antigravity-ready-business-non-gemini',
       capture: 'A',
@@ -155,19 +136,13 @@ describe('Antigravity raw captured readiness', () => {
     return join(FIXTURE_DIR, `${name}.txt`)
   }
 
-  /**
-   * A `tui-idle` wait ends three ways, and only one of them is readiness: it resolves satisfied, it
-   * resolves unsatisfied with a blocked reason, or it rejects with `timeout` because nothing ever
-   * looked ready. The orchestrator treats the last two identically — no prompt is delivered — so
-   * they are both `ready: false` here. This is the shape `worker-start` sees.
-   */
+  /** Blocked and timeout both mean no prompt may be delivered; only satisfied means ready. */
   async function readinessVerdict(
     transcript: string,
     timeoutMs: number
   ): Promise<{ ready: boolean; blockedReason: unknown; outcome: string }> {
     const { runtime, handle } = await createTranscriptPane({
-      // Why the transcript's own title: every attempt guessed at Antigravity's title. A raw
-      // capture carries the OSC bytes, so the pane wears whatever the CLI actually set.
+      // Use captured OSC title bytes rather than guessing the CLI title.
       paneTitle: extractLastOscTitle(transcript) ?? ANTIGRAVITY_COMMAND,
       foregroundProcess: ANTIGRAVITY_COMMAND,
       data: transcript
@@ -191,9 +166,7 @@ describe('Antigravity raw captured readiness', () => {
       const captured = existsSync(path)
       const label = `capture ${transcript.capture}: ${transcript.what}`
 
-      // A pinned defect asserts what the detector DOES, so CI is honest rather than permanently
-      // red; fixing the detector flips this case to failing, which is when these expectations
-      // need re-reading. The correct answer stays in `expectReady` and in the test's name.
+      // A detector fix flips known-defect expectations and requires review.
       const shipped =
         transcript.knownDefect === undefined ? transcript.expectReady : !transcript.expectReady
       const verdictName =
@@ -204,14 +177,11 @@ describe('Antigravity raw captured readiness', () => {
       it.skipIf(!captured)(
         verdictName,
         async () => {
-          // A refusal only has to hold for one poll; a ready verdict has to survive the settle
-          // window. Keeping the refusal short keeps eleven transcripts off the suite's clock.
           const verdict = await readinessVerdict(
             readFileSync(path, 'utf8'),
             transcript.expectReady ? READY_TIMEOUT_MS : REFUSAL_TIMEOUT_MS
           )
-          // A silent dialog carries no blocked-signal wording, so the assertion is only that Orca
-          // does not call the pane ready and type a prompt into a dialog that owns the screen.
+          // Silent dialogs lack blocker wording; they still must not receive prompts.
           expect({ ready: verdict.ready, outcome: verdict.outcome }).toMatchObject({
             ready: shipped
           })
@@ -248,7 +218,6 @@ describe('Antigravity screen ruled readiness', () => {
       foregroundProcess: 'agy',
       ready: READY,
       notReady: NOT_READY,
-      // Why these: the line-folded text rule reads only these ready screens.
       readyWithoutScreen: [
         'antigravity-1-2-14-ready',
         'antigravity-1-2-14-ready-80x24',
@@ -272,7 +241,6 @@ describe('Antigravity screen ruled readiness', () => {
         120,
         40
       )
-      // Presence precondition: the text alone would say ready.
       expect(isKnownReadyPromptPreview(waitText)).toBe(true)
       expect(isQuietReadyScreenBody(waitText, 'antigravity', () => ruledScreenLines)).toBe(false)
       expect(isKnownReadyPromptBody(waitText, 'antigravity', () => ruledScreenLines, false)).toBe(
@@ -280,7 +248,7 @@ describe('Antigravity screen ruled readiness', () => {
       )
     })
 
-    // Why a caret rule is not enough: agy keeps the bare composer caret painted through both.
+    // agy retains a composer caret while busy and in menus.
     it.each(['antigravity-1-2-14-busy-streaming', 'antigravity-1-2-14-model-picker'])(
       '%s: the bare caret is still on screen',
       async (name) => {
@@ -289,8 +257,7 @@ describe('Antigravity screen ruled readiness', () => {
       }
     )
 
-    // Why a clocked pane waits for quiet: the submit repaint clears the composer a moment before
-    // it swaps `? for shortcuts` for `esc to cancel`.
+    // Submit briefly clears the composer before swapping shortcuts for esc to cancel.
     it('reads a submit repaint as ready for a moment mid-turn', async () => {
       const data = readRuntimeFixture('antigravity-1-2-14-turn-ended')
       let submitted = false
@@ -307,8 +274,7 @@ describe('Antigravity screen ruled readiness', () => {
       expect(readyMidTurn).toBeGreaterThan(0)
     })
 
-    // Why: a shell auto-title names the process; before the screen decided, that name-only idle
-    // title settled a pane whose picker carries no blocked wording.
+    // A name-only shell title cannot prove a wording-free picker ready.
     it('does not settle an open model picker from a name-only `agy` title', async () => {
       const { runtime, handle } = await createTranscriptPane({
         paneTitle: 'agy',
@@ -321,7 +287,7 @@ describe('Antigravity screen ruled readiness', () => {
       await expect(waitForTranscriptIdle({ runtime, handle }, 5_000)).rejects.toThrow(/timeout/)
     }, 15_000)
 
-    // Why this recording: only the screen reads it ready, so settling proves the grid is trusted.
+    // Only the screen proves readiness here, so settlement proves grid trust.
     it('trusts a reflowed grid again once a PTY resize off it repaints the TUI', async () => {
       const turnEnded = readRuntimeFixture('antigravity-1-2-14-turn-ended')
       const options = {

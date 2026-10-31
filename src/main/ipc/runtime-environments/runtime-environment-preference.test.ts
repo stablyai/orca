@@ -115,6 +115,22 @@ describe('Active Server after a saved host is removed', () => {
     }
   })
 
+  it('tells renderers when the CLI saves a new server (#25251)', async () => {
+    saveEnvironment('existing')
+    const onRegistryChanged = vi.fn()
+    const stopWatching = watchRuntimeEnvironmentPreference(
+      preferenceStore(null),
+      userDataPath,
+      onRegistryChanged
+    )
+    try {
+      saveEnvironment('cli-added')
+      await vi.waitFor(() => expect(onRegistryChanged).toHaveBeenCalled(), { timeout: 5_000 })
+    } finally {
+      stopWatching()
+    }
+  })
+
   it('repairs a CLI removal before settings can route to the deleted pairing', () => {
     const environment = saveEnvironment()
     const store = preferenceStore(environment.id)

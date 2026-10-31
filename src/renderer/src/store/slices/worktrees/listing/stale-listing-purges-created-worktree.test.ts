@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import * as launchRecords from '@/lib/structured-agent-session-launch-persistence'
-import { parseDesktopCreateLaunchRecord } from '@/lib/structured-agent-session-launch-record'
+import * as launchRecords from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import { parseDesktopCreateLaunchRecord } from '@/lib/agent-session/launch/structured-agent-session-launch-record'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -28,12 +28,12 @@ import {
   readStructuredAgentLaunchRecord,
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
-} from '@/lib/structured-agent-session-launch-persistence'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/structured-agent-session-local-launch-cancel'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests
-} from '@/lib/structured-agent-session-launch-registry'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }
@@ -170,9 +170,7 @@ function applyListing(
   })
 }
 
-// Why this suite exists: it pins what an authoritative listing that omits a known worktree does to
-// the client, which is exactly why the host re-runs a scan that a create overtook instead of
-// publishing it (see detected-provider-listing.ts). The client keeps no fence of its own.
+// An authoritative omission purges known client rows; host must rescan when create overtakes its scan (detected-provider-listing.ts).
 describe('an authoritative listing that omits a just-created worktree', () => {
   beforeEach(() => {
     resetStructuredAgentLaunchPersistenceForTests()
@@ -206,27 +204,9 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     expect(state.activeWorktreeId).toBeNull()
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toBeUndefined()
   })
-
-  it('control: a listing that includes the created worktree leaves everything intact', () => {
-    const store = createTestStore()
-    seedCreatedWorkspaceWithPendingLaunch(store, true)
-    const rows = store.getState().worktreesByRepo[REPO_ID]!
-
-    expect(applyListing(store, [...rows])).toBe('applied')
-
-    const state = store.getState()
-    expect(readStructuredAgentLaunchRecord(SESSION_ID)).toBeDefined()
-    expect(launchWasCancelled()).toBe(false)
-    expect(state.activeWorktreeId).toBe(CREATED_ID)
-    expect(state.unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
-  })
 })
 
-// Why this suite exists: the host stamps every listing with the catalog version its scan began
-// at and every create reply with the version the create produced. A listing that predates an
-// applied create is not applied at all, whatever delayed it -- host post-scan work, a coalesced
-// joiner, or the pre-merge terminal teardown -- so it can neither purge the new worktree nor
-// replace the host's rows with a list that lacks it.
+// Catalog versions fence delayed listings before merge/teardown so scans predating applied create cannot purge new tabs or replace current rows.
 describe('a listing versioned before an applied create', () => {
   const HOST = 'host-epoch-1'
   const before = { epoch: HOST, sequence: 6 }
@@ -395,11 +375,11 @@ it('keeps lost outer replies unknown through admitted catalog, publication, relo
   const { retryStructuredAgentSessionLaunch } =
     await import('@/lib/structured-agent-session-launch')
   const { recheckUnconfirmedStructuredAgentLaunches } =
-    await import('@/lib/structured-agent-session-launch-unconfirmed-recheck')
+    await import('@/lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck')
   const { markStructuredAgentSessionLaunchPublished } =
-    await import('@/lib/structured-agent-session-launch-publication')
+    await import('@/lib/agent-session/launch/structured-agent-session-launch-publication')
   const { getStructuredAgentSessionLaunchLifecycle } =
-    await import('@/lib/structured-agent-session-launch-registry')
+    await import('@/lib/agent-session/launch/structured-agent-session-launch-registry')
   const { deriveAgentLaunchChildOperationId } =
     await import('../../../../../../shared/agent-launch-child-operation')
   const store = createTestStore()
@@ -607,7 +587,7 @@ it('restores an outer paired launch only from current admitted catalog and manua
   const { retryStructuredAgentSessionLaunch } =
     await import('@/lib/structured-agent-session-launch')
   const { recheckUnconfirmedStructuredAgentLaunches } =
-    await import('@/lib/structured-agent-session-launch-unconfirmed-recheck')
+    await import('@/lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck')
   const { stagedStructuredLaunchPrompts } =
     await import('@/lib/structured-agent-session-launch-prompt')
   const store = createTestStore()

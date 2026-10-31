@@ -27,6 +27,9 @@ vi.mock('../../../codex/managed-wsl-home-shell-preflight', () => ({
   }) => (hooksEnabled ? { agent: 'codex', state: 'installed' } : null)
 }))
 vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
+vi.mock('../../../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: async () => {} })
+}))
 afterEach(() => vi.restoreAllMocks())
 
 function makeRequest(method: string, params?: unknown): RpcRequest {

@@ -117,10 +117,10 @@ describe('orchestration worker launch preferences', () => {
     ).toThrow('does not support effort turbo')
   })
 
-  it('refuses an opencode model until the execution host verifies legacy TUI support', () => {
+  it('refuses an OpenCode model on an unsupported execution host', () => {
     expect(() =>
       resolveWorkerLaunchPreferences({ agent: 'opencode', model: 'meta/muse-spark-1.3' })
-    ).toThrow('cannot verify launch-time model selection')
+    ).toThrow('cannot apply a model choice on this execution host')
   })
 
   it('explains the existing-worktree requirement even if a new-worktree host is verified', () => {
@@ -249,10 +249,26 @@ describe('orchestration worker launch preferences', () => {
     )
   })
 
+  it('passes a Grok model and reasoning effort through the launch arguments', () => {
+    const launch = resolveWorkerLaunchPreferences({
+      agent: 'grok',
+      model: 'grok-4.7',
+      effort: 'high'
+    })
+
+    expect(launch.preferences).toEqual({ model: 'grok-4.7', effort: 'high' })
+    expect(resolveAgentSessionOptionLaunch('grok', launch.preferences, [], false).args).toEqual([
+      '-m',
+      'grok-4.7',
+      '--reasoning-effort',
+      'high'
+    ])
+  })
+
   it('rejects model selection for agents without a launch catalog', () => {
-    expect(() =>
-      resolveWorkerLaunchPreferences({ agent: 'grok', model: 'grok-code-fast-1' })
-    ).toThrow('does not support launch-time model selection')
+    expect(() => resolveWorkerLaunchPreferences({ agent: 'zcode', model: 'glm-5' })).toThrow(
+      'does not support launch-time model selection'
+    )
   })
 
   it('does not expose deprecated Gemini model selection to worker-start', () => {

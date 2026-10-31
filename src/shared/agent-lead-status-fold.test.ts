@@ -101,8 +101,7 @@ describe('isAgentTimeAccruing', () => {
   })
 
   it('relies on the fold emitting monitoring only for a settled main agent', () => {
-    // Every lane folds through here (Codex never emits monitoring), so a monitoring row can never
-    // hide a running main agent turn from the stats.
+    // Monitoring requires a settled lead; live lead turns must still accrue time.
     const leadStates = ['working', 'waiting', 'blocked', 'done'] as const
     const liveness = ['waiting', 'working', 'monitoring', null] as const
     for (const leadState of leadStates) {

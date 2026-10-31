@@ -28,7 +28,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - Status bar toggles, including **Resource Manager** (CPU/memory/sessions, daemon controls, workspace disk scans).
 - **Usage percentages** — show provider limits as **% used** or **% remaining** on the status-bar roster.
 - App Icon — cycle between Classic, Watercolor, and Blue for the icon shown in the Dock and window switcher.
-- **Language** — primary Interface control. Switch between System (follows the OS), English, 中文（简体）, 한국어, 日本語, or Español. Settings search also matches native words for “language” (语言 / 語言 / 언어 / 言語 / Idioma) so you can find Language while the UI is still in English.
+- **Language** — primary Interface control. Switch between System (follows the OS), English, 中文（简体）, 繁體中文（台灣）, 한국어, 日本語, Español, Français, Português (Brasil), Русский, Türkçe, or Deutsch. Settings search also matches native words for “language” (语言 / 語言 / 언어 / 言語 / Idioma / Langue / Язык / Dil / Sprache) so you can find Language while the UI is still in English.
 
 ## Git
 
@@ -65,6 +65,11 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Keep computer awake** — **On** (stay awake continuously), **Agent** (stay awake while an agent is working), or **Off**. The same control lives on the desktop status bar as **Caffeinate** (coffee icon). Hidden on paired web clients.
 - **Skill freshness** — the Agents pane and skill cards still show full status. Sidebar navigation only badges skills that need action (**Update available**, **Needs attention** / review); healthy, loading, and optional not-installed rows stay quiet. Use **Update** in the dialog to refresh global skills in the background (no terminal). Progress appears on the status bar; closing the dialog does not cancel the run. See [Orca skills](/docs/cli/skills#keep-skills-up-to-date).
 
+## Chat
+
+- Choose **Chat** or **CLI** for each supported agent in **Settings → Chat → Providers**. Agents without their own choice inherit the global Chat or Terminal default. Fresh installs default to Terminal.
+- Existing users keep their previous launch choices. Existing conversations keep their form. See [Chat UI](/docs/agents/native-chat) for continuing conversations in chat or the terminal.
+
 ## Browser
 
 - Profiles (see [Browser-use profiles](/docs/browser/profiles)).
@@ -87,7 +92,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 
 ## Integrations
 
-- GitHub OAuth.
+- GitHub — uses the `gh` CLI login on the machine running Orca (on a [Remote Orca Server](/docs/remote-servers), run `gh auth login` on the server); there is no Orca OAuth app to approve or revoke. Expects the `repo`, `read:org`, and `project` scopes. See [Troubleshooting GitHub errors](/docs/github-errors).
 - Linear API token.
 - Jira — Cloud (email + API token) or self-hosted Server/Data Center (PAT or username/password). See [Jira items drawer](/docs/review/jira).
 - Bitbucket Cloud — **Connect** with **Email & API token** (default) or an **Access token**. Orca verifies the credential before saving. `ORCA_BITBUCKET_*` environment variables take precedence and hide Connect / Disconnect. Saved credentials stay on this machine — on a [Remote Orca Server](/docs/remote-servers), set the env vars on the server instead. See [Hosted reviews](/docs/review/github).
@@ -137,6 +142,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Toggle Workspace Board** ships unbound; assign it here to open or close the Workspace Board with one shortcut. Existing bindings for `workspace.openBoard` continue to work.
 - Close all editor tabs defaults to `Cmd+Option+W` on macOS and `Ctrl+Alt+W` on Windows / Linux.
 - **Tab navigation defaults (new installs):** next/previous tab **across all types** is `Cmd+Shift+]` / `Cmd+Shift+[` (Ctrl on Linux/Windows). Same-type next/previous is `Cmd+Option+]` / `Cmd+Option+[`. Previous recent tab is `Ctrl+Tab`. Existing installs keep customized overrides under `~/.orca/keybindings.json`.
+- **Switch between Chat UI and terminal** defaults to `Cmd+Shift+J` on macOS and `Ctrl+Shift+J` on Windows / Linux in a supported agent tab. Remap it or remove its binding here. Existing custom shortcuts keep their chords. On Windows / Linux, **Switch worktree** takes precedence when it uses the same chord; terminal-first can allow the toggle from terminal input.
 - **Add Review Note** defaults to `Cmd+Shift+A` (macOS) / `Ctrl+Shift+A` (Windows / Linux); remappable.
 - **Send Review Notes to Agent** ships unbound; assign it here to open the send-notes menu for the active worktree's diff notes without using the mouse.
 - **Delete workspace** defaults to `Cmd+Shift+Backspace` on macOS and `Ctrl+Shift+Backspace` on Windows / Linux. Hover the sidebar workspace you mean to delete; Orca still asks for confirmation.
@@ -155,7 +161,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Terminal Directory** — start directory for new floating terminal tabs (`~` = home).
 - **Toggle Button Location** — where the floating-workspace toggle appears; the keyboard shortcut works regardless of button placement.
 
-## Plugins (Experimental)
+## Plugins (Alpha)
 
 - **Plugin system** — Settings → Plugins. Turn the system on, then review and enable each plugin individually. Nothing runs until you consent.
 - **Marketplaces** — add a git marketplace source, browse plugins, preview capabilities (panels, commands, language packs, VM recipes), install, update, or roll back.
@@ -168,6 +174,5 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - Compact worktree cards — hide redundant second lines in the sidebar while the layout is still experimental.
 - [Agent hibernation](/docs/agents/hibernation) — pause idle background agents and auto-resume them on reopen.
 - **Agent Dashboard** — kanban of Needs You / Working / Done agents (optional Idle), with search and project/workspace/PR filters; open in-window or as a pop-out. **Show idle agents** lives on the dashboard board settings control, not here. See [Agents & sessions](/docs/model/agents-sessions#agent-dashboard).
-- **Chat UI** — opens supported new agents in structured chat. Other agents open in the terminal, and existing chats keep their form. See [Chat UI](/docs/agents/native-chat) for continuing conversations in chat or the terminal.
 - **Cloud VM** — show setup controls and workspace **Run on** targets for repo-owned, on-demand environments (cloud sandboxes, VMs, or local Docker). Setup guide and recipe install live under this experimental toggle. See [Ways to run Orca](/docs/ways-to-run#4-cloud-vms-per-workspace-environments).
 - Features not yet stable — behavior may change.

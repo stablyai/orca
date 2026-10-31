@@ -1,10 +1,135 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AgentCommandOverrideInput, AgentDefaultArgsInput } from './AgentLaunchDefaultsEditor'
+import {
+  AgentCommandOverrideInput,
+  AgentDefaultArgsInput,
+  AgentDefaultEnvInput
+} from './AgentLaunchDefaultsEditor'
+import { TooltipProvider } from '../ui/tooltip'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
+it.each([false, true])(
+  'reserves the full chip layout width during popover zoom, hideLabel=%s',
+  (hideLabel) => {
+    let resize = () => {}
+    let width = 280
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.classList.contains('-mb-5') ? width : 0
+    })
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, width * 0.95, 20)
+    )
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          resize = callback
+        }
+        observe() {}
+        disconnect() {}
+      }
+    )
+    const editor = (withChip: boolean) => (
+      <TooltipProvider>
+        <AgentDefaultArgsInput
+          hideLabel={hideLabel}
+          defaultArgs=""
+          argsOverride="fdsa"
+          onSaveArgs={vi.fn()}
+          choiceChips={
+            withChip
+              ? [
+                  {
+                    key: 'permissionMode',
+                    label: 'Claude',
+                    flag: '--dangerously-skip-permissions',
+                    onRemove: (text) => text
+                  }
+                ]
+              : undefined
+          }
+        />
+      </TooltipProvider>
+    )
+    const view = render(editor(true))
+    const input = screen.getByRole('textbox', { name: 'Arguments' })
+    expect(input.style.textIndent).toBe('calc(280px + var(--spacing) * 2)')
+    width = 320
+    act(() => resize())
+    expect(input.style.textIndent).toBe('calc(320px + var(--spacing) * 2)')
+    view.rerender(editor(false))
+    expect(input.style.textIndent).toBe('')
+  }
+)
+
+it('bounds content sizing and permits long tokens to wrap inside the scrollable Arguments field', () => {
+  render(<AgentDefaultArgsInput defaultArgs="" argsOverride="" onSaveArgs={vi.fn()} />)
+  const input = screen.getByRole('textbox', { name: 'Arguments' })
+  const longToken = 'fdsafjdkslafjkdls;ajfkld;sjaklfd;'.repeat(80)
+  fireEvent.change(input, { target: { value: longToken } })
+  expect(input).toHaveProperty('value', longToken)
+  // happy-dom has no line layout; keep the browser's wrapping/growth/scroll constraints explicit.
+  expect(input.classList.contains('[overflow-wrap:anywhere]')).toBe(true)
+  expect(input.classList.contains('max-w-full')).toBe(true)
+  expect(input.classList.contains('[field-sizing:content]')).toBe(true)
+  expect(input.parentElement?.classList.contains('overflow-y-auto')).toBe(true)
+  expect(input.parentElement?.classList.contains('max-h-[calc(var(--spacing)*41+2px)]')).toBe(true)
+})
+
+it('keeps the environment editor reachable when no variables are configured', async () => {
+  const save = vi.fn().mockResolvedValue(undefined)
+  const user = userEvent.setup()
+  render(<AgentDefaultEnvInput defaultEnv={{}} envOverride={{}} onSaveEnv={save} />)
+  const input = screen.getByPlaceholderText('No default environment')
+  await user.type(input, 'CLAUDE_CONFIG_DIR=/tmp/claude-official')
+  await user.tab()
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith({ CLAUDE_CONFIG_DIR: '/tmp/claude-official' })
+  )
+})
+
+it.each(['', '--default'])(
+  'hides the %j placeholder while a permission chip is present',
+  (defaultArgs) => {
+    const editor = (withChip: boolean) => (
+      <TooltipProvider>
+        <AgentDefaultArgsInput
+          defaultArgs={defaultArgs}
+          argsOverride=""
+          onSaveArgs={vi.fn()}
+          choiceChips={
+            withChip
+              ? [
+                  {
+                    key: 'permissionMode',
+                    label: 'Claude',
+                    flag: '--permission-mode default',
+                    onRemove: (text) => text
+                  }
+                ]
+              : undefined
+          }
+        />
+      </TooltipProvider>
+    )
+    const view = render(editor(true))
+    expect(screen.getByRole('button', { name: /Remove --permission-mode default/ })).toBeDefined()
+    const input = screen.getByRole('textbox', { name: 'Arguments' })
+    expect(input).toHaveProperty('placeholder', '')
+    expect(input).toHaveProperty('value', '')
+    view.rerender(editor(false))
+    expect(input).toHaveProperty('placeholder', defaultArgs || 'No default arguments')
+  }
+)
 
 describe('launch field reset ordering', () => {
   it.each(['arguments', 'command'] as const)(

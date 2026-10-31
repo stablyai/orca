@@ -28,7 +28,6 @@ async function relayToken(key: SigningKey): Promise<string> {
     .sign(key.privateKey)
 }
 
-// Auth's JWKS endpoint: serves the current key, or fails like a down service.
 function auth(initial: SigningKey) {
   const state = { key: initial, up: true }
   const fetch = vi.fn(async () => {

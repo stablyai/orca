@@ -81,3 +81,17 @@ invalid:
   - "describe('suite', { timeout: 60_000 }, () => {})"
   - test.setTimeout(300_000)
   - test.slow()
+---
+id: test-no-in-test-import-actual
+valid:
+  - "vi.mock('./git', async () => ({ ...(await vi.importActual<typeof Git>('./git')), run: vi.fn() }))"
+  - "beforeAll(async () => { actual = await vi.importActual<typeof Git>('./git') })"
+  - "const actual = await vi.importActual<typeof Git>('./git')"
+invalid:
+  - "vi.doMock('./git', async () => ({ ...(await vi.importActual<typeof Git>('./git')) }))"
+  - "function mockGit() { vi.doMock('./git', async () => ({ ...(await vi.importActual('./git')) })) }"
+  - "it('creates', async () => { const actual = await vi.importActual<typeof Git>('./git') })"
+  - "async function useReal() { return await vi.importActual('./git') }"
+  - "beforeEach(async () => { actual = await vi.importActual('./git') })"
+  - "it('reloads', async () => { vi.doMock('./git', async () => ({ ...(await vi.importActual('./git')) })) })"
+  - "it.each([1])('reloads %s', async () => { vi.doMock('./git', async () => ({ ...(await vi.importActual('./git')) })) })"

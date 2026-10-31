@@ -1,7 +1,4 @@
-import type {
-  CreateWorktreeProgressEvent,
-  CreateWorktreeResult
-} from '../../../shared/worktree/create-types'
+import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   WorktreeLineageInput,
@@ -25,16 +22,12 @@ import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../opencode/openc
 import type { RuntimeWorkspaceCreateEvents } from '../../workspace-create-telemetry'
 import { createdWorkspaceActivationCallbacks } from './workspace-create-activation'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { resolveManagedWorktreeCreateStartup } from './managed-worktree-create-startup'
+import { resolveManagedWorktreeCreateStartup, wslUserAct } from './managed-worktree-create-startup'
 import type { WorkspaceCreationHandle } from './workspace-lifecycle-creations'
 import { workspaceLifecycleKey } from './workspace-lifecycle-commands'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
-  notifyWorktreeCreationProgress(event: CreateWorktreeProgressEvent): void {
-    this.notifier?.worktreeCreationProgress?.(event)
-  }
-
   protected abstract resolveLineageForWorktreeCreate(
     input?: WorktreeLineageInput,
     childRepo?: Repo
@@ -132,9 +125,12 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           store,
           ptySpawnAvailable: Boolean(this.ptyController?.spawn),
           provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
-          createTerminal: (selector, options) => this.createTerminal(selector, options),
+          createTerminal: (selector, options) =>
+            this.createTerminal(selector, { ...options, ...wslUserAct(args) }),
           pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
-          sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),
+          sendFollowup: (handle, followup, terminal) => {
+            void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal })
+          },
           invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
           notifyWorktreesChanged: (repoId) => this.notifyWorktreesChanged(repoId),
           emitCreated: (event) => this.emitWorktreeLifecycle(event),
@@ -235,11 +231,17 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       ports: {
         canSpawn: Boolean(this.ptyController?.spawn),
         provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
-        createTerminal: (selector, options) => this.createTerminal(selector, options, worktree),
+        createTerminal: (selector, options) =>
+          this.createTerminal(selector, { ...options, ...wslUserAct(args) }, worktree),
         pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
-        sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),
+        sendFollowup: (handle, followup, terminal) => {
+          void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal })
+        },
         provision: async (options) => {
-          const result = await this.provisionManagedWorktreeTerminals(options, worktree)
+          const result = await this.provisionManagedWorktreeTerminals(
+            { ...options, ...wslUserAct(args) },
+            worktree
+          )
           if (!result.setupSpawned) {
             this.workspaceSetupAgentStarts.observe(worktree.id, null)
           }
@@ -278,8 +280,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
                 ? ('not_configured' as const)
                 : effectiveDecision === 'skip' || !shouldRunSetup
                   ? ('skipped' as const)
-                  : // Why: the in-process hook is already executing, so reporting
-                    // spawn_failed would strand callers that retry on it.
+                  : // The in-process setup hook already started; spawn_failed would strand retrying callers.
                     didSpawnSetup || didStartInProcessSetupHook
                     ? ('running' as const)
                     : ('spawn_failed' as const),

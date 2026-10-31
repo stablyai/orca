@@ -9,6 +9,10 @@ import type { StructuredAgentSessionConversationLifetime } from './structured-ag
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 
+import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
+import type { StructuredAgentSessionConversationDelivery } from './structured-agent-session-host-delivery'
+import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+
 type WorkspaceSleepHost = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'hasOpenDispatch' | 'now'>
   tasks: StructuredAgentSessionTaskQueue
@@ -19,6 +23,36 @@ type WorkspaceSleepHost = {
   publishRecordNotes: (sessionId: string) => void
 }
 
+export function createStructuredAgentSessionWorkspaceSleeper(
+  readHost: () => Pick<WorkspaceSleepHost, 'deps' | 'tasks' | 'lifetime' | 'sessions'> & {
+    clientDelivery: Pick<
+      StructuredAgentSessionClientDelivery,
+      'childWorkIncomplete' | 'publishRecordNotes'
+    >
+    conversationDelivery: Pick<StructuredAgentSessionConversationDelivery, 'loop'>
+    runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'startFlights'>
+  }
+) {
+  return (workspaceId: string, markAsleep?: boolean) => {
+    const host = readHost()
+    return sleepStructuredAgentSessionWorkspace(
+      {
+        deps: host.deps,
+        tasks: host.tasks,
+        lifetime: host.lifetime,
+        sessions: host.sessions,
+        // Starts registered after Stop are newer work.
+        deliveryRunning: (id) =>
+          host.conversationDelivery.loop.isRunning(id) || host.runtimeState.startFlights.has(id),
+        childWorkIncomplete: host.clientDelivery.childWorkIncomplete,
+        publishRecordNotes: host.clientDelivery.publishRecordNotes
+      },
+      workspaceId,
+      markAsleep
+    )
+  }
+}
+
 type WorkspaceSleepVerdict = { stopped: true } | { stopped: false; fence: number } | null
 
 /** Return only this call’s current proven stops; markAsleep marks exactly those receipts. */
@@ -27,9 +61,9 @@ export async function sleepStructuredAgentSessionWorkspace(
   workspaceId: string,
   markAsleep = false
 ): Promise<AgentSessionWorkspaceSleepResult> {
-  let records: ReturnType<StructuredAgentSessionHostDeps['store']['listRecords']>
+  let records: ReturnType<StructuredAgentSessionHostDeps['store']['listConversations']>
   try {
-    records = host.deps.store.listRecords()
+    records = host.deps.store.listConversations()
   } catch (error) {
     host.deps.logger.warn('workspace chat inventory failed', {
       scope: 'workspace-chat-inventory',
@@ -54,17 +88,20 @@ export async function sleepStructuredAgentSessionWorkspace(
         LOCAL_EXECUTION_HOST_ID
       )
       return host.tasks.serialize(sessionId, async () => {
-        const record = host.deps.store.getRecord(sessionId)
+        const record = host.deps.store.getConversation(sessionId)
         if (
           !stop ||
           !record ||
           !belongs(record.location) ||
-          record.lease.runtimeFence !== stop.fence ||
+          record.currentFence !== stop.fence ||
           host.deps.store.admittedSendCount(sessionId) !== stop.admittedSends
         ) {
           return null
         }
-        return settleWorkspaceSleepChat(host, sessionId, stop.stopped, markAsleep)
+        if (!stop.stopped) {
+          return { stopped: false as const, fence: record.currentFence }
+        }
+        return settleWorkspaceSleepChat(host, sessionId, true, markAsleep)
       })
     })
   )
@@ -83,7 +120,7 @@ export async function sleepStructuredAgentSessionWorkspace(
       stoppedSessionIds.push(sessionId)
     } else if (
       stop.value &&
-      host.deps.store.getRecord(sessionId)?.lease.runtimeFence === stop.value.fence
+      host.deps.store.getConversation(sessionId)?.currentFence === stop.value.fence
     ) {
       failures.push({ sessionId, reason: 'stop-unverifiable' })
     }
@@ -99,7 +136,8 @@ async function settleWorkspaceSleepChat(
 ): Promise<WorkspaceSleepVerdict> {
   const current = host.deps.store.getRecord(sessionId)
   if (!current) {
-    return null
+    const conversation = host.deps.store.getConversation(sessionId)
+    return conversation ? { stopped: false, fence: conversation.currentFence } : null
   }
   if (!stopped) {
     return { stopped: false, fence: current.lease.runtimeFence }

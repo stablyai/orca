@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
 import type {
   CodexManagedAccount,
@@ -11,8 +12,6 @@ import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-cre
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
-import { buildEncodedWslBashCommand } from '../wsl-bash-command'
-import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 import { CodexAccountIdentity, type ResolvedCodexIdentity } from './codex-account-identity'
@@ -97,13 +96,7 @@ export class CodexAccountService {
     private readonly runtimeHome: CodexRuntimeHomeService,
     lifecycle: CodexAccountServiceLifecycle = {}
   ) {
-    this.managedHomePaths = new CodexManagedHomePath((distro, script) =>
-      execFileSync(
-        'wsl.exe',
-        ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(script)],
-        { windowsHide: true, encoding: 'utf-8', timeout: 5000, cwd: resolveWslInteropSpawnCwd() }
-      )
-    )
+    this.managedHomePaths = new CodexManagedHomePath()
     this.managedHomes = new CodexManagedHomeLifecycle(this.managedHomePaths)
     this.identity = new CodexAccountIdentity((path, accountId) =>
       this.managedHomePaths.assert(path, accountId)
@@ -127,6 +120,10 @@ export class CodexAccountService {
       configMirror: this.configMirror,
       lifecycle,
       resolveSystemDefault: () => this.resolveSystemDefaultIdentity(),
+      readIdentityFromHostHome: (path, accountId) =>
+        this.identity.readFromTrustedHome(
+          this.managedHomePaths.assertHostOwnership(path, accountId)
+        ),
       removeManagedHome: (path, accountId) => this.safeRemoveManagedHome(path, accountId),
       discardResetAttempts: (accountId) => this.resetCredits.discardForRemovedAccount(accountId)
     })
@@ -141,7 +138,8 @@ export class CodexAccountService {
       managedHomes: this.managedHomes,
       login: (managedHomePath) => this.runCodexLogin(managedHomePath)
     })
-    this.configMirror.safeSyncToManagedHomes()
+    // Host homes finish within this tick; a WSL home's check runs in the distro, off the main thread.
+    void this.configMirror.safeSyncToManagedHomes()
   }
 
   /** Expose runtime-home status without preparing a launch home. */
@@ -269,7 +267,7 @@ export class CodexAccountService {
   private readIdentityFromHome(
     managedHomePath: string,
     expectedAccountId: string
-  ): ResolvedCodexIdentity {
+  ): Promise<ResolvedCodexIdentity> {
     return this.identity.readFromHome(managedHomePath, expectedAccountId)
   }
 
@@ -277,8 +275,8 @@ export class CodexAccountService {
     return toCodexManagedAccountSummary(account)
   }
 
-  private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): void {
-    this.managedHomes.safeRemove(candidatePath, expectedAccountId)
+  private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): Promise<void> {
+    return this.managedHomes.safeRemove(candidatePath, expectedAccountId)
   }
 
   private async runCodexLogin(
@@ -298,13 +296,15 @@ export class CodexAccountService {
     try {
       await runCodexLoginSession(managedHomePath, {
         wslCommand: 'wsl.exe',
-        spawn: ({ command, args, env, stdio }) =>
-          spawn(command, args, {
+        spawn: ({ command, args, env, stdio }) => {
+          assertWslDistroAllowed(command, args)
+          return spawn(command, args, {
             stdio,
             // Hide the outer wrapper; the dedicated login console remains visible.
             windowsHide: true,
             env
-          }),
+          })
+        },
         killProcessTree: killLoginProcessTree,
         setCancel: (cancel) => {
           this.cancelPendingCodexLogin = cancel

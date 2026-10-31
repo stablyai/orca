@@ -431,8 +431,7 @@ describe('buildSearchableBrowserPages', () => {
     expect(results[0].isCurrentPage).toBe(true)
   })
 
-  // Why this matters to the workspace index: it keeps the first browser tab per workspace id, so
-  // it would lose a later owned tab if two ever reached the lookup. This pins that they cannot.
+  // The index keeps the first tab per workspace ID; prevent duplicates from hiding a later owned tab.
   it('omits a workspace claimed by more than one unified browser tab', () => {
     const entries = buildFixture({
       unifiedTabsByWorktree: {

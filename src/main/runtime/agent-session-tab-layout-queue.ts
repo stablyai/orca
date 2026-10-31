@@ -1,6 +1,3 @@
-// A layout-owner build's chat tab changes from this host (a chat it publishes, retires or
-// restores): main's own layout commands, with or without a window.
-
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -11,15 +8,16 @@ import {
   type ChatTabLayoutCommand
 } from './agent-session/agent-session-tab-layout'
 
-export type QueuedChatTabChange = { worktreeId: string; change: ChatTabChange }
+export type QueuedChatTabChange = {
+  worktreeId: string
+  change: ChatTabChange
+  eligible?: () => boolean
+}
 
-/**
- * Runs each batch in order, every change read against the layout as it stands when the queue
- * reaches it, so a close follows the open it undoes. A refusal is logged, never thrown.
- */
+/** Serialize changes against the current layout so close follows open; log refusals and continue. */
 export function createChatTabLayoutQueue(deps: {
   sessionOf: (worktreeId: string) => WorkspaceSessionState | null
-  /** Read only for a worktree with a saved session; it throws for one the host cannot place. */
+  /** Called only with a saved session; unplaceable worktrees throw. */
   hostIdOf: (worktreeId: string) => ExecutionHostId
   apply: (command: ChatTabLayoutCommand) => Promise<LayoutApplyReply>
 }): (changesNow: () => readonly QueuedChatTabChange[]) => void {
@@ -40,7 +38,6 @@ export function createChatTabLayoutQueue(deps: {
   }
   return (changesNow) => {
     queue = queue.then(async () => {
-      // A batch or change that fails is logged and the queue goes on: a later one must still land.
       let changes: readonly QueuedChatTabChange[]
       try {
         changes = changesNow()
@@ -50,6 +47,9 @@ export function createChatTabLayoutQueue(deps: {
       }
       for (const queued of changes) {
         try {
+          if (queued.eligible && !queued.eligible()) {
+            continue
+          }
           const command = commandNow(queued)
           const reply = command ? await deps.apply(command) : null
           if (command && reply && !reply.ok) {

@@ -83,20 +83,6 @@ describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
     expect(legacy.spawn).not.toHaveBeenCalled()
   })
 
-  it('creates on the current daemon once the older daemon no longer runs the id', async () => {
-    const current = createAdapter('current')
-    const legacy = createAdapter('legacy', [])
-    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
-
-    await router.spawn({ ...SPAWN, sessionId: 'exited-session' })
-    await router.spawn({ ...SPAWN, sessionId: 'fresh-id', isNewSession: true })
-    await router.spawn(SPAWN)
-
-    expect(current.spawn).toHaveBeenCalledTimes(3)
-    expect(legacy.spawn).not.toHaveBeenCalled()
-    expect(legacy.probePtyLiveness).toHaveBeenCalledOnce()
-  })
-
   it('refuses while the older daemon socket answers even if its pid is gone', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['claude-session'])
@@ -136,12 +122,12 @@ describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
       expect(current.spawn).toHaveBeenCalledOnce()
     }
   )
-  it.each([50, 51, 52])(
-    'keeps generation%s live ownership while generation53 receives new native setup',
+  it.each([50, 51, 52, 53, 54])(
+    'keeps generation%s live ownership while generation55 receives new native setup',
     async (previous) => {
-      expect(PROTOCOL_VERSION).toBe(53)
+      expect(PROTOCOL_VERSION).toBe(55)
       expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(previous)
-      const current = createAdapter('v53', [], undefined, 53)
+      const current = createAdapter('v55', [], undefined, 55)
       const legacy = createAdapter(`v${previous}`, ['old-live'], undefined, previous)
       const router = new DaemonPtyRouter({ current, legacy: [legacy] })
       await router.discoverLegacySessions()

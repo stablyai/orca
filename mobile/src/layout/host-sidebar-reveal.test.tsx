@@ -5,14 +5,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createFakeBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { RpcClientProvider } from '../transport/client-context.web'
 import type { MobileSessionController } from '../session/use-mobile-session-controller'
+import { useSessionTitleCard } from '../session/use-session-title-card'
 import { MobileSessionHeader } from '../session/MobileSessionHeader'
 import HostGroupLayout from '../../app/h/_layout'
 
 vi.mock('react-native', () => ({
+  Animated: { View: 'View' },
   View: 'View',
   Text: 'Text',
   ScrollView: 'ScrollView',
   Pressable: 'Pressable',
+  useWindowDimensions: () => ({ width: 1024, height: 768 }),
   Platform: {
     OS: 'web',
     select: (values: Record<string, unknown>) => values.web ?? values.default
@@ -20,7 +23,10 @@ vi.mock('react-native', () => ({
   PanResponder: { create: () => ({ panHandlers: {} }) },
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
 }))
-vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
+vi.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: 'SafeAreaView',
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 })
+}))
 vi.mock('lucide-react-native', () => ({
   ChevronLeft: 'ChevronLeft',
   Folder: 'Folder',
@@ -58,9 +64,17 @@ vi.mock('../host-screen/HostScreen', () => ({
     })
 }))
 vi.mock('../navigation/host-stack', () => ({
-  HostStack: () => createElement(MobileSessionHeader, { controller: headerController() })
+  HostStack: () =>
+    createElement(MobileSessionHeader, {
+      controller: headerController(),
+      details: useSessionTitleCard(false, false)
+    })
 }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
+vi.mock('./use-top-chrome-space', () => ({ useTopChromeSpace: () => ({}) }))
+vi.mock('../session/MobileSessionHeaderMoreMenu', () => ({
+  MobileSessionHeaderMoreMenu: () => null
+}))
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: () => {} }))
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: vi.fn(),
@@ -82,11 +96,11 @@ function headerController(): MobileSessionController {
     isFolderWorkspaceRoute: true,
     isFloatingWorkspaceRoute: true,
     connState: 'connected',
+    presentedConnState: 'connected',
     worktreeName: 'Workspace',
     visibleTabs: [],
     showConnectionRetry: false,
     terminalSummary: 'Claude',
-    showHeaderMoreButton: false,
     requestLeaveSession: vi.fn()
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This header fixture supplies every rendered field; no tab or panel actions are exercised.

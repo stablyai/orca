@@ -16,6 +16,8 @@ export const CLAUDE_HOOK_EVENT_FIRST_VERSIONS = {
   PermissionRequest: '2.0.45',
   PostToolUseFailure: '2.0.56',
   TeammateIdle: '2.1.33',
+  Elicitation: '2.1.63',
+  ElicitationResult: '2.1.63',
   PostCompact: '2.1.76',
   StopFailure: '2.1.78'
 } as const
@@ -33,6 +35,15 @@ export type ClaudeHookEventName = keyof typeof CLAUDE_HOOK_EVENT_FIRST_VERSIONS
 
 export function parseClaudeCliVersion(output: string | null | undefined): string | null {
   const version = output?.match(/\b\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\b/)?.[0]
+  return version && isValidAppVersion(version) ? version : null
+}
+
+// A launcher in Command (`npx claude`, `op run -- claude`) answers `--version` with its own
+// version; only Claude's own `x.y.z (Claude Code)` line may pick the hook events.
+export function parseClaudeCliVersionOutput(output: string | null | undefined): string | null {
+  const version = output?.match(
+    /\b(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)[ \t]+\(Claude Code\)/i
+  )?.[1]
   return version && isValidAppVersion(version) ? version : null
 }
 
@@ -67,7 +78,12 @@ export function claudeAcceptsExecFormHooks(version: string | null | undefined): 
 /** Probe with the launch cwd and env so version-manager shims select the same CLI. */
 export async function probeClaudeCliVersion(
   executablePath: string,
-  launch?: { cwd: string; env: Record<string, string>; timeoutMs?: number }
+  launch?: {
+    cwd: string
+    env: Record<string, string>
+    timeoutMs?: number
+    prefixArgs?: readonly string[]
+  }
 ): Promise<string | null> {
   try {
     const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
@@ -75,7 +91,8 @@ export async function probeClaudeCliVersion(
     const inheritedPath = process.env[pathKey]
     const result = await runProcess({
       program: executablePath,
-      args: ['--version'],
+      args: [...(launch?.prefixArgs ?? []), '--version'],
+      terminationBarrier: true,
       // Keep the sibling runtime on PATH for version-manager shims using /usr/bin/env node.
       env: launch?.env ?? {
         ...process.env,
@@ -87,7 +104,9 @@ export async function probeClaudeCliVersion(
       timeoutMs: launch?.timeoutMs ?? 5_000,
       maxOutputBytes: 4_096
     })
-    return result.code === 0 ? parseClaudeCliVersion(`${result.stdout}\n${result.stderr}`) : null
+    return result.code === 0
+      ? parseClaudeCliVersionOutput(`${result.stdout}\n${result.stderr}`)
+      : null
   } catch {
     return null
   }

@@ -1,3 +1,4 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { structuredAgentSessionSendBody } from '../../shared/structured-agent-session-send-mutation'
 import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
@@ -16,6 +17,7 @@ import {
 export type CreatedSurface = {
   outcome: AgentLaunchResult['outcome']
   warning?: string
+  terminalCreation?: RuntimeTerminalCreate
   structured?: AgentLaunchStructuredSurface
   /** True when this create folded the prompt into the agent's launch command. */
   promptRodeLaunchCommand?: boolean
@@ -36,6 +38,9 @@ export async function createLaunchSurface(
         ? { hostFoundingAttempt: execution.hostFoundingAttempt }
         : {}),
       agent: intent.agent,
+      ...(intent.chatOptions ? { chatOptions: intent.chatOptions } : {}),
+      ...(execution.signal ? { signal: execution.signal } : {}),
+      ...(intent.prompt ? {} : { withoutPrompt: true as const }),
       ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
       ...(intent.sessionId ? { sessionId: intent.sessionId } : {}),
       ...(reservedTabId ? { tabId: reservedTabId } : {}),
@@ -83,6 +88,7 @@ export async function createLaunchTerminalSurface(
       handle: terminal.handle,
       ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
     },
+    terminalCreation: terminal.terminalCreation,
     ...(terminal.warning ? { warning: terminal.warning } : {}),
     ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
   }

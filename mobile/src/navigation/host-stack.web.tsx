@@ -1,18 +1,16 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Navigator, usePathname } from 'expo-router'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screens'
 import { isOverlayPageRoute } from '../new-workspace/overlay-page-route'
 
-/**
- * Web sibling: the page's host stack, with the push and pop slide the native stack has.
- *
- * expo-router's `Stack` renders native-stack's web view on the page, which flips each screen's
- * `display` and ignores `animation`. This is the same expo-router `StackRouter` under the public
- * `Navigator`, with a view that keeps a popped screen mounted until it has slid out.
- */
+// Expo native-stack’s web view ignores animation and switches display; reuse StackRouter with a view that retains popped screens through their exit slide.
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
+  useMobileTranslation()
   return (
     <Navigator>
       {HOST_STACK_SCREENS.map(({ name, title }) => (
@@ -24,22 +22,20 @@ export function HostStack({ animation }: { animation: HostStackAnimation }) {
 }
 
 const SLIDE_MS = 300
-// Bounds the wait for a suspended screen, so a route that renders nothing still arrives.
+// Bound suspended-screen waits so a route with no content can still arrive.
 const CONTENT_WAIT_CAP_MS = 1000
-// Close to iOS's push curve, so the page and the native stack read as one motion.
+// Approximate iOS push timing so page/native transitions feel continuous.
 const SLIDE_EASING = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
 
 type NavigatorContext = ReturnType<typeof Navigator.useContext>
 type Descriptors = NavigatorContext['descriptors']
 type Routes = NavigatorContext['state']['routes']
 
-/** A pop needs no under key: the screen beneath it is always the new top. */
 type Transition =
   | Readonly<{ kind: 'push'; enteringKey: string; underKey: string }>
   | Readonly<{ kind: 'pop'; leaving: Routes[number]; descriptors: Descriptors }>
 
 type Shown = Readonly<{
-  /** The navigator's own routes array, whose identity changes exactly when the state does. */
   routes: Routes
   descriptors: Descriptors
   transition: Transition | null
@@ -49,7 +45,6 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-/** Push = the old top is still in the stack below the new one; pop = the old top left it. */
 function transitionBetween(previous: Shown, next: Routes): Transition | null {
   const previousTop = previous.routes.at(-1)
   const nextTop = next.at(-1)
@@ -63,16 +58,16 @@ function transitionBetween(previous: Shown, next: Routes): Transition | null {
   if (!nextKeys.includes(previousTop.key) && previous.routes.some((r) => r.key === nextTop.key)) {
     return { kind: 'pop', leaving: previousTop, descriptors: previous.descriptors }
   }
-  // A replace or a reset has no direction to slide in.
   return null
 }
 
 function HostStackView({ animation }: { animation: HostStackAnimation }) {
+  useMobileColorScheme()
   const { state, descriptors } = Navigator.useContext()
   const { routes } = state
   const [shown, setShown] = useState<Shown>({ routes, descriptors, transition: null })
 
-  // Derived during render, so the first painted frame of a pop still holds the leaving screen.
+  // Derive during render so a pop’s first frame still contains its outgoing screen.
   if (shown.routes !== routes) {
     const moved = shown.routes.at(-1)?.key !== routes.at(-1)?.key
     const slides = moved && animation !== 'none' && !prefersReducedMotion()
@@ -86,13 +81,12 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
   const settle = useCallback(() => setShown((current) => ({ ...current, transition: null })), [])
   const { transition } = shown
   const topKey = routes.at(-1)?.key
-  // One flat keyed list, so the leaving screen keeps its mount when it moves to the last slot.
+  // Keep one keyed sibling list so moving the leaving screen to the end preserves its mount.
   const slots = transition?.kind === 'pop' ? [...routes, transition.leaving] : routes
 
   return (
-    // No NavigationContent: it must render in the navigator's own pass, and a settle re-renders
-    // only this view. expo-router's NavigatorSlot renders descriptors bare for the same reason.
-    // Untappable mid-slide, as natively: a second tap on the list would push a second screen.
+    // Render descriptors bare like NavigatorSlot; NavigationContent cannot run in this view-only rerender.
+    // Disable taps mid-slide so repeated row taps cannot push duplicate screens.
     <View style={styles.stack} pointerEvents={transition ? 'none' : 'auto'}>
       {slots.map((route) => {
         const leaving = transition?.kind === 'pop' && route.key === transition.leaving.key
@@ -125,14 +119,14 @@ function StackScreen({
   onSettled: () => void
   children: ReactNode
 }) {
+  useMobileColorScheme()
   const ref = useRef<View>(null)
   const transparent = isOverlayPageRoute(usePathname())
-  // Where an interrupted slide stopped, so a pop during a push leaves from there and not from 0.
+  // Resume interrupted offsets when a pop reverses an unfinished push.
   const stoppedAt = useRef<string | null>(null)
 
-  // Before paint, so neither screen is ever painted at rest before its slide starts.
+  // Start before paint so screens never flash at rest before sliding.
   useLayoutEffect(() => {
-    // Consumed by every run, so a slot that settles at rest carries no stale offset.
     const from = stoppedAt.current
     stoppedAt.current = null
     const node: unknown = ref.current
@@ -143,7 +137,7 @@ function StackScreen({
       motion === 'enter'
         ? [{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }]
         : [{ transform: from ?? 'translateX(0)' }, { transform: 'translateX(100%)' }]
-    // Web Animations run on the compositor, so a heavy screen mounting does not stall the slide.
+    // Use compositor animations so expensive screen mounts cannot stall slides.
     const slide = node.animate(frames, { duration: SLIDE_MS, easing: SLIDE_EASING, fill: 'both' })
     slide.onfinish = onSettled
     const stop = () => {
@@ -153,8 +147,7 @@ function StackScreen({
     if (motion === 'exit' || node.childElementCount > 0) {
       return stop
     }
-    // A route whose chunk is still loading suspends to an empty screen: hold it off-screen until
-    // its content commits, so the slide carries the screen and not a blank panel.
+    // Keep suspended chunks off-screen until content commits so the slide cannot reveal an empty pane.
     slide.pause()
     const start = () => {
       observer.disconnect()
@@ -181,7 +174,7 @@ function StackScreen({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   stack: {
     flex: 1,
     overflow: 'hidden'
@@ -196,4 +189,4 @@ const styles = StyleSheet.create({
   hidden: {
     display: 'none'
   }
-})
+}))

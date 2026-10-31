@@ -7,9 +7,8 @@ import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-i
 
 export const ORCAD_EXIT_FAILED = 1
 
-/** Configuration faults cannot be repaired by a supervisor restart. */
 export function resolveOrcadExitCode(error: unknown): number {
-  // Why the already-running code: a supervisor waits for that holder instead of giving up on it.
+  // Supervisors wait for an existing holder instead of abandoning the host.
   if (
     error instanceof OrcadInstanceLockError &&
     error.code === 'orcad_instance_lock_holder_unverifiable'

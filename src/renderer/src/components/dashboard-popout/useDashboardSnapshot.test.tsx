@@ -77,13 +77,11 @@ async function collectUnhandledRejections(run: () => void): Promise<unknown[]> {
   return reasons
 }
 
-/** The pop-out is hidden whenever the main window covers it or it is minimized. */
 function hideDocument(): void {
   Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
 }
 
-/** A Radix dialog marks its open content with role + data-state; mimic that so
- *  the hook's top-layer-conflict guard sees an "open terminal". */
+/** Mimic Radix’s open-dialog attributes so the top-layer conflict guard recognizes the terminal. */
 function openTerminalDialog(): HTMLElement {
   const el = document.createElement('div')
   el.setAttribute('role', 'dialog')
@@ -146,8 +144,7 @@ describe('useDashboardSnapshot', () => {
     openTerminalDialog()
 
     act(() => apply(snapshot([card({ bucket: 'working' })])))
-    // Why: the card's View Transition snapshot would paint in the browser top
-    // layer, above the z-50 dialog — so we jump instead of morphing.
+    // View-transition snapshots paint above any z-index, including the open terminal dialog.
     expect(startViewTransition).not.toHaveBeenCalled()
     expect(result.current.cards[0].bucket).toBe('working')
   })
@@ -215,9 +212,7 @@ describe('useDashboardSnapshot', () => {
     expect(result.current.cards[0].bucket).toBe('working')
   })
 
-  // Why: the bridge stops re-sending repoIconsByRepoId on throttled republishes
-  // once it is unchanged, so the icons would disappear from the board on the
-  // very next tick if this window did not hold on to the last map it was given.
+  // Throttled snapshots omit unchanged icons; retain the previous map rather than losing icons on the next tick.
   it('retains the last repo icons when a republish omits them', () => {
     const icons = {
       r1: { type: 'image' as const, src: 'data:image/png;base64,AAAA', source: 'upload' as const }
@@ -248,8 +243,7 @@ describe('useDashboardSnapshot', () => {
     expect(result.current.repoIconsByRepoId).toEqual(second)
   })
 
-  // A repo whose icon was cleared must actually lose it — retention applies to
-  // an OMITTED map, never to an empty one.
+  // An explicit empty map clears icons; only omission means retention.
   it('honours an explicitly empty icon map', () => {
     const icons = { r1: { type: 'emoji' as const, emoji: '🦑' } }
     const { result } = renderHook(() => useDashboardSnapshot())

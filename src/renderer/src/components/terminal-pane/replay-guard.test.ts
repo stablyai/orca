@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
+import { disposePane } from '@/lib/pane-manager/pane-lifecycle'
 import {
   isPaneReplaying,
   replayIntoTerminal,
@@ -49,13 +51,17 @@ type FakeTerminal = {
   }
   _core: {
     refresh: (start: number, end: number, sync?: boolean) => void
+    // Private flag read by isXtermInstanceDisposed.
+    _store?: { _isDisposed: boolean }
   }
   refresh: (start: number, end: number) => void
+  /** Like xterm 6: drops queued write callbacks and flags the private store. */
+  dispose: () => void
   /** Flush all pending xterm write callbacks, simulating parse completion. */
   flush: () => void
 }
 
-function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTerminal } {
+function makeFakePane(paneId: number): { pane: ManagedPaneInternal; terminal: FakeTerminal } {
   const pendingCallbacks: (() => void)[] = []
   const terminal: FakeTerminal = {
     lastData: [],
@@ -71,6 +77,10 @@ function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTermin
       refresh() {}
     },
     refresh() {},
+    dispose() {
+      pendingCallbacks.length = 0
+      terminal._core._store = { _isDisposed: true }
+    },
     write(data: string, cb?: () => void) {
       terminal.lastData.push(data)
       if (cb) {
@@ -83,8 +93,8 @@ function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTermin
       }
     }
   }
-  // Only `id` and `terminal` are exercised by replayIntoTerminal.
-  const pane = { id: paneId, terminal } as unknown as ManagedPane
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replay reads only id/terminal; disposePane null-checks or try-wraps every other field it touches.
+  const pane = { id: paneId, terminal } as unknown as ManagedPaneInternal
   return { pane, terminal }
 }
 
@@ -147,9 +157,7 @@ describe('replay-guard', () => {
 
     replayIntoTerminal(pane, ref, 'hello')
 
-    // Before xterm fires its write-completion callback, the guard is engaged —
-    // this is the window during which xterm could emit auto-replies for any
-    // query sequences embedded in the replayed data.
+    // Keep the guard until parse completion so replay queries cannot emit shell input.
     expect(isPaneReplaying(ref, 1)).toBe(true)
 
     terminal.flush()
@@ -160,15 +168,13 @@ describe('replay-guard', () => {
     const ref = makeRef()
     const { pane, terminal } = makeFakePane(1)
 
-    // Simulates the cold-restore path: clear preamble + scrollback + banner
-    // dispatched back-to-back before xterm completes any of them.
+    // Queue cold-restore preamble, history and banner before any parse completion.
     replayIntoTerminal(pane, ref, '\x1b[2J\x1b[3J\x1b[H')
     replayIntoTerminal(pane, ref, 'scrollback bytes')
     replayIntoTerminal(pane, ref, '--- session restored ---')
     expect(isPaneReplaying(ref, 1)).toBe(true)
 
-    // Completion of the first write must not clear the guard — the later
-    // writes are still in xterm's queue and may still auto-reply.
+    // The first completion cannot release later queued replay writes that may still auto-reply.
     terminal.pendingCallbacks.shift()!()
     expect(isPaneReplaying(ref, 1)).toBe(true)
 
@@ -216,12 +222,7 @@ describe('replay-guard', () => {
   })
 
   it('auto-releases the guard when xterm never fires the parse callback', () => {
-    // Repro of the cold-restore reattach lockout (main #7661):
-    // handleReattachResult replays three chunks into a just-mounted /
-    // offscreen pane whose terminal never flushes, so xterm's parse callback
-    // never runs and the counter would stay pinned at 3 — isPaneReplaying()
-    // stuck true drops EVERY keystroke. The probe-certified stall path (probe
-    // never parses either => wedged release) must free the guard.
+    // Lost parse completions can pin every replay counter and eat input; a probe-certified quiet wedge must release them (#7661).
     vi.useFakeTimers()
     try {
       const ref = makeRef()
@@ -231,8 +232,7 @@ describe('replay-guard', () => {
       replayIntoTerminal(pane, ref, '--- session restored ---', { stallCheckMs: 400 })
       expect(isPaneReplaying(ref, 1)).toBe(true)
 
-      // Never flush — the probe write never parses; the wedged release fires
-      // one stall window after the probe (400 + 400).
+      // Never parse replay or probe; release only after both quiet stall windows.
       vi.advanceTimersByTime(1000)
 
       expect(isPaneReplaying(ref, 1)).toBe(false)
@@ -460,8 +460,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
     vi.advanceTimersByTime(999)
     expect(isPaneReplaying(ref, 1)).toBe(true)
 
-    // Parsing finishes: FIFO runs the replay completion first (normal
-    // release), then the probe completion as a no-op.
+    // FIFO completes replay before the probe; normal release makes the probe a no-op.
     terminal.flush()
     expect(isPaneReplaying(ref, 1)).toBe(false)
     expect(ref.current.has(1)).toBe(false)
@@ -482,8 +481,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       terminal.pendingCallbacks.shift() // xterm lost the replay's completion
       vi.advanceTimersByTime(1_000) // stall check → probe enqueued
 
-      // The probe's completion firing certifies every earlier replay byte
-      // parsed — releasing now cannot leak auto-replies.
+      // Probe completion proves every earlier replay byte parsed, making release safe.
       terminal.flush()
       expect(isPaneReplaying(ref, 1)).toBe(false)
       expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
@@ -543,8 +541,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       vi.advanceTimersByTime(1_000) // stall check → probe enqueued
       expect(isPaneReplaying(ref, 1)).toBe(true)
 
-      // A wedged parser will never run the probe callback — and can never
-      // emit auto-replies either, so this bounded release cannot leak input.
+      // A certified silent parser cannot emit query replies, so bounded wedge release cannot leak input.
       vi.advanceTimersByTime(1_000)
       expect(isPaneReplaying(ref, 1)).toBe(false)
       expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
@@ -557,11 +554,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
   })
 
   it('holds past the probe deadline while sibling completions prove the parser alive', () => {
-    // Production shape (wedge-release breadcrumbs in bursts of ~a dozen on a
-    // pane that later parses fine): a hidden-restore loop queues several
-    // replay writes and xterm's FIFO parse falls behind by more than two
-    // probe windows while still completing writes. Certifying that as wedged
-    // opens the guard mid-parse (auto-reply leak) and remounts a live pane.
+    // Slow but progressing replay must retain guards; certifying backlog as dead would leak auto-replies mid-parse and remount a live pane.
     vi.useFakeTimers()
     const ref = makeRef()
     const { pane, terminal } = makeFakePane(1)
@@ -580,8 +573,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       terminal.pendingCallbacks.shift()!()
       expect(isPaneReplaying(ref, 1)).toBe(true)
 
-      // t=2500: B's probe deadline fires with A's completion inside the
-      // window. Progress means "behind", not "wedged" — the guard HOLDS.
+      // Recent FIFO progress proves backlog, not death; extend the quiet window and hold the guard.
       vi.advanceTimersByTime(900)
       expect(isPaneReplaying(ref, 1)).toBe(true)
       expect(recoveryReasons).toEqual([])
@@ -684,6 +676,34 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       )
     } finally {
       errorSpy.mockRestore()
+    }
+  })
+
+  it('settles guards on a disposed xterm without certifying a wedge', async () => {
+    vi.useFakeTimers()
+    const ref = makeRef()
+    const { pane, terminal } = makeFakePane(1)
+    const onUndeliverable = vi.fn()
+    registerUndeliverableWriteHandler(pane.terminal, onUndeliverable)
+    try {
+      let resolved = false
+      void replayIntoTerminalAsync(pane, ref, 'snapshot', { stallCheckMs: 1_000 }).then(() => {
+        resolved = true
+      })
+      replayIntoTerminal(pane, ref, 'epilogue', { stallCheckMs: 1_000 })
+      disposePane(pane, new Map([[pane.id, pane]]))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(resolved).toBe(true)
+
+      replayIntoTerminal(pane, ref, 'late replay', { stallCheckMs: 1_000 })
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(terminal.lastData).toEqual(['snapshot', 'epilogue'])
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(onUndeliverable).not.toHaveBeenCalled()
+      expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
+    } finally {
+      _resetWritePipelineHealthForTests(pane.terminal)
     }
   })
 

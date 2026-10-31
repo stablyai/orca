@@ -18,10 +18,7 @@ export function parseChangedArg(args) {
   return next === undefined || next.startsWith('-') ? true : undefined
 }
 
-/**
- * Whether Git reports no changed files for Vitest's `--changed`, which then runs nothing, so the
- * caller can skip starting it. Any doubt returns false.
- */
+// Skip empty --changed runs only when Git proves no changes; uncertainty still starts Vitest.
 export async function hasNoChangedFiles(args, root, runProcess) {
   const changed = parseChangedArg(args)
   if (changed === undefined) {

@@ -72,8 +72,7 @@ export function useGitLabItemScopeResetEffect(
     setReviewerUpdating,
     setTitleDraft
   } = state
-  // Why: clear item-scoped dialog state when the sheet target changes. The
-  // top-level comment draft is reconciled during render so it cannot flash stale.
+  // Reset item-scoped provider state here; render already resets the top-level draft before paint.
   useEffect(() => {
     setEditingDetails(false)
     setTitleDraft('')

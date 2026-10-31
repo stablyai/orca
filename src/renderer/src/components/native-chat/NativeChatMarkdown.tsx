@@ -2,6 +2,7 @@ import {
   Children,
   cloneElement,
   isValidElement,
+  useContext,
   useEffect,
   useMemo,
   useState,
@@ -14,7 +15,7 @@ import CommentMarkdown, {
 } from '@/components/sidebar/CommentMarkdown'
 import { createDocumentCommentMarkdownComponents } from '@/components/sidebar/comment-markdown-element-renderers'
 import { cn } from '@/lib/utils'
-import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../shared/native-chat-visual-directive'
+import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../shared/native-chat/native-chat-visual-directive'
 import { NativeChatMarkdownRowKeyContext } from './native-chat-disclosure-store'
 import { useNativeChatVisualMarkdownExtension } from './native-chat-visual-markdown-extension'
 import { useNativeChatFileLinkExists } from './use-native-chat-file-link-existence'
@@ -22,6 +23,9 @@ import {
   NativeChatMarkdownImage,
   NativeChatMarkdownImageLinkContext
 } from './NativeChatMarkdownImage'
+import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
+import { NativeChatLinkPeek } from './NativeChatLinkPeek'
+import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
 import './native-chat-markdown.css'
 
 /** Existing words stay opaque when a reply first starts growing. */
@@ -47,6 +51,20 @@ type NativeChatMarkdownProps = Omit<ComponentProps<typeof CommentMarkdown>, 'fil
   rowKey?: string
 }
 
+/** Every chat surface rewrites `file:` destinations before sanitize can drop them. */
+function withFileDestinations(
+  visualExtension: CommentMarkdownExtension | undefined
+): CommentMarkdownExtension {
+  return {
+    remarkPlugins: [...(visualExtension?.remarkPlugins ?? []), remarkNativeChatFileDestinations],
+    extraFlowSyntaxMarkers: visualExtension?.remarkPlugins.length
+      ? visualExtension.extraFlowSyntaxMarkers
+      : [],
+    sanitizeAttributes: visualExtension?.sanitizeAttributes ?? {},
+    components: visualExtension?.components ?? {}
+  }
+}
+
 type MarkdownElementProps = { node?: { tagName: string }; children?: ReactNode }
 
 function containsImage(children: ReactNode): boolean {
@@ -62,21 +80,24 @@ function createNativeChatImageExtension(
   onLinkClick: CommentMarkdownLinkClickHandler | undefined
 ): CommentMarkdownExtension {
   const Anchor = createDocumentCommentMarkdownComponents(onLinkClick).a
+  const base = withFileDestinations(visualExtension)
   return {
-    remarkPlugins: visualExtension?.remarkPlugins ?? [],
-    sanitizeAttributes: visualExtension?.sanitizeAttributes ?? {},
+    ...base,
     components: {
-      ...visualExtension?.components,
+      ...base.components,
       img: ({ src, alt }) => (
         <NativeChatMarkdownImage src={src} alt={alt} onLinkClick={onLinkClick} />
       ),
       a: (props) => {
-        const renderAnchor = (children: ReactNode): ReactNode =>
-          typeof Anchor === 'function' ? (
-            <Anchor {...props}>{children}</Anchor>
-          ) : (
-            <a href={props.href}>{children}</a>
-          )
+        const renderAnchor = (children: ReactNode): ReactNode => (
+          <NativeChatLinkPeek href={props.href}>
+            {typeof Anchor === 'function' ? (
+              <Anchor {...props}>{children}</Anchor>
+            ) : (
+              <a href={props.href}>{children}</a>
+            )}
+          </NativeChatLinkPeek>
+        )
         const renderChild = (child: ReactNode): ReactNode => {
           if (!isValidElement<MarkdownElementProps>(child) || !containsImage(child)) {
             return renderAnchor(child)
@@ -116,21 +137,25 @@ export function NativeChatMarkdown({
     () =>
       variant === 'document'
         ? createNativeChatImageExtension(visualExtension, onLinkClick)
-        : visualExtension,
+        : withFileDestinations(visualExtension),
     [onLinkClick, variant, visualExtension]
   )
   const fileLinkExists = useNativeChatFileLinkExists(linkifyFilePaths, streaming)
+  const { githubRepo } = useContext(NativeChatLinkPeekContext)
   return (
     <NativeChatMarkdownRowKeyContext.Provider value={rowKey}>
       <CommentMarkdown
         {...props}
         variant={variant}
+        // Only the document variant's links can peek; bare #123 links follow it.
+        githubRepo={variant === 'document' ? githubRepo?.referenceRepo : undefined}
         onLinkClick={onLinkClick}
         content={
           visualExtension && streaming
             ? withoutPendingNativeChatVisualDirectiveTail(content)
             : content
         }
+        math
         extension={extension}
         fileLinkExists={fileLinkExists}
         fadeWords={fadeWords}

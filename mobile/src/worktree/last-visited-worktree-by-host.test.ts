@@ -52,7 +52,6 @@ describe('readLastVisitedWorktreeOnHost', () => {
       worktreeId: 'repo::/w/b',
       executionHost: 'runtime:env-1'
     })
-    // Home's Resume card still reads the latest visit off the same record.
     expect(readLastVisitedWorktreeRecord(raw)).toEqual({
       hostId: 'host-2',
       worktreeId: 'repo::/w/b'

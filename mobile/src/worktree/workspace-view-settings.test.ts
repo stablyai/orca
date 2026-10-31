@@ -86,7 +86,6 @@ describe('applyDesktopViewSettings', () => {
     const newerGroup: WorkspaceViewSettings = JSON.parse('{"groupBy":"mystery"}')
     const next = applyDesktopViewSettings(base, newerGroup)
     expect(next.groupBy).toBe('repo')
-    // A sort a newer desktop adds arrives untyped over the wire.
     const newerSort: WorkspaceViewSettings = JSON.parse('{"sortBy":"bogus"}')
     expect(applyDesktopViewSettings(base, newerSort).sortBy).toBe('recent')
   })

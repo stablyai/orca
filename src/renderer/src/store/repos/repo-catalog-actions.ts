@@ -36,6 +36,10 @@ import {
 } from '../../../../shared/project-compatibility-merge'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
+import {
+  withWslMovedRepoIds,
+  withWslMovedSetupScriptDismissals
+} from './wsl-moved-repo-ui-retention'
 
 export function createRepoCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -63,11 +67,7 @@ export function createRepoCatalogActions(
             setups: remainingSetups
           }
         )
-        // Why: mergeProjectHostSetupCompatibility always allocates; a no-op readoption
-        // must not churn catalog identity. This write is all-repos, not host-scoped,
-        // so it cannot go through mergeFetchedHostProjectCatalog. Reconcile
-        // hands the store arrays straight back when nothing moved, so writing them
-        // unconditionally still leaves identity-keyed selectors untouched.
+        // All-repos readoption cannot use host-scoped merge. Reconcile always-allocating compat results to preserve unchanged catalog arrays and avoid selector churn.
         const projects = reconcileCatalogRows(
           s.projects,
           compatibility.projects,
@@ -139,10 +139,17 @@ export function createRepoCatalogActions(
               : { folderWorkspacePathStatuses: {} }),
             activeRepoId:
               s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-            filterRepoIds: retainValidFilterRepoIds(s.filterRepoIds, validRepoIds),
-            setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+            filterRepoIds: retainValidFilterRepoIds(
+              s.filterRepoIds,
+              withWslMovedRepoIds(validRepoIds, s.wslMovedProjects)
+            ),
+            setupScriptPromptDismissedRepoIds: withWslMovedSetupScriptDismissals(
               s.setupScriptPromptDismissedRepoIds,
-              validRepoHostIdentities
+              filterSetupScriptPromptDismissalsToValidRepos(
+                s.setupScriptPromptDismissedRepoIds,
+                validRepoHostIdentities
+              ),
+              s.wslMovedProjects
             )
           }
         })

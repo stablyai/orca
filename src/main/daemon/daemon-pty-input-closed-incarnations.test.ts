@@ -14,6 +14,10 @@ it('keeps a replacement incarnation closed when its report beats its spawn reply
 it('forgets a closed incarnation once a reply names a different live one', () => {
   const closed = new DaemonPtyInputClosedIncarnations()
   closed.record('pty', 'old')
+  expect(closed.isClosed('pty', 'old')).toBe(true)
+  expect(closed.isClosed('pty', undefined)).toBe(true)
   closed.sync('pty', { isNew: true, incarnationId: 'replacement' })
   expect(closed.isClosed('pty', 'replacement')).toBe(false)
+  expect(closed.isClosed('pty', 'old')).toBe(false)
+  expect(closed.isClosed('pty', undefined)).toBe(false)
 })

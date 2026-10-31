@@ -80,18 +80,14 @@ export function createElectronHomeIsolation({
 
   const requestedIsolatedHome = path.join(userDataDir, 'home')
   mkdirSync(requestedIsolatedHome, { recursive: true, mode: 0o700 })
-  // Why: tmpdir-rooted paths are aliases (macOS /var symlink, Windows 8.3
-  // short names). Git canonicalizes worktree paths, so a non-canonical HOME
-  // makes freshly created worktrees invisible to Orca's listing comparisons.
+  // Canonicalize macOS symlinks/Windows 8.3 aliases like git or worktree path comparisons miss new rows.
   const isolatedHome = realpathSync.native(requestedIsolatedHome)
-  // Why: Windows resolves roaming AppData under USERPROFILE, and Electron 43 crashes natively
-  // (0xFFFF7003) when that lookup fails before userData is pinned.
+  // Create roaming AppData before Electron 43’s Windows home lookup, which otherwise crashes with 0xFFFF7003.
   if (process.platform === 'win32') {
     mkdirSync(path.join(isolatedHome, 'AppData', 'Roaming'), { recursive: true })
     mkdirSync(path.join(isolatedHome, 'AppData', 'Local'), { recursive: true })
   }
-  // Why: a bad fixture path must fail before Electron can resolve a real Codex
-  // home; userData isolation alone does not change app.getPath('home').
+  // Refuse real HOME before launch; userData isolation alone does not change app.getPath(home).
   if (areSameHomePath(isolatedHome, realHome)) {
     throw new Error('Refusing to launch E2E with the developer home as its isolated HOME')
   }
@@ -121,8 +117,7 @@ export function assertElectronResolvedIsolatedHome(
     !areSameHomePath(actualHome, isolation.isolatedHome) ||
     areSameHomePath(actualHome, isolation.realHome)
   ) {
-    // Why: a failed safety assertion can land in shared CI artifacts; do not
-    // print a developer username or native home path while reporting it.
+    // Safety failures reach shared CI artifacts; omit native usernames/home paths.
     throw new Error('Electron E2E HOME escaped the disposable profile boundary')
   }
 }

@@ -210,8 +210,6 @@ describe('mobile clipboard image downscaling', () => {
   })
 
   it('shrinks both edges by ~sqrt(budget/actual) when over the budget', () => {
-    // 400 base64 chars vs 100 budget -> scale sqrt(0.25) * 0.85 safety = 0.425
-    // 40 * 0.425 = 17, 20 * 0.425 = 8.5 -> floor 8
     expect(computeMobileClipboardImageDownscale(400, 40, 20, 100)).toEqual({ width: 17, height: 8 })
   })
 

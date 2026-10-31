@@ -1,3 +1,4 @@
+import { normalizeBitbucketRemoteHost } from '../../shared/git-remote-host-alias'
 import { createRemoteRefProbeCache } from '../git/remote-ref-probe-cache'
 
 export type BitbucketRepoRef = {
@@ -58,8 +59,7 @@ export function parseBitbucketRepoRef(remoteUrl: string): BitbucketRepoRef | nul
 
   try {
     const url = new URL(trimmed)
-    const host = url.hostname.toLowerCase()
-    if (host !== 'bitbucket.org' && host !== 'ssh.bitbucket.org') {
+    if (normalizeBitbucketRemoteHost(url.hostname) !== 'bitbucket.org') {
       return null
     }
     return parseBitbucketPath(url.pathname)

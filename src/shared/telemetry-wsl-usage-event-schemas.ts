@@ -45,7 +45,13 @@ export const wslUsageSnapshotSchema = z
     projects_wsl_git: countBucketSchema,
     projects_wsl_folder: countBucketSchema,
     project_distros_used: countBucketSchema,
-    wsl_hosts_gate_open: z.boolean()
+    wsl_hosts_gate_open: z.boolean(),
+    /** open / serve-only / closed. Optional, so older builds' payloads still validate. */
+    wsl_hosts_gate_state: z.enum(['open', 'serve-only', 'closed']).optional(),
+    /** The cached remote WSL hosts policy applied at launch. Optional, for older builds. */
+    wsl_hosts_policy: z.enum(['allow', 'block', 'missing']).optional(),
+    /** With a block only: whether it asks for moved projects back. Optional, for older builds. */
+    wsl_hosts_moved_projects: z.enum(['keep', 'bring-back']).optional()
   })
   .strict()
 

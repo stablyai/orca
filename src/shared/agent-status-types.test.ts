@@ -20,7 +20,7 @@ import {
   ORCA_DISPATCH_PROMPT_LEAD_LINE,
   ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
 } from './orca-dispatch-status-prompt'
-import { parseAskFromStatus } from './native-chat-ask'
+import { parseAskFromStatus } from './native-chat/input/native-chat-ask'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -647,9 +647,7 @@ describe('agentSubagentsEqual', () => {
   })
 })
 
-// Why: the per-source hook normalizers construct these literals and validate them
-// directly. This pins that the direct path stays identical to the JSON round trip
-// they used to take, including where stringify would have altered the payload.
+// Pin direct normalizer parity with the former JSON round trip, including values stringify alters.
 describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
   const CASES: Record<string, unknown>[] = [
     {

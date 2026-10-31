@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { ResourcePtyRow as PtyRow } from './resource-pty-view-model'
 import { ResourcePtyDetails, resourcePtyBindingLabel } from './ResourcePtyDetails'
 import { ptyTerminationReason } from './use-resource-pty-actions'
@@ -25,6 +26,7 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
   onEnd: (row: PtyRow) => void
   onNavigate: (tabId: string, paneKey: string | null) => void
 }) {
+  useUiLanguageRevision()
   const endUnavailable = unverifiable
     ? translate(
         'resourceManager.pty.refreshBeforeEnd',

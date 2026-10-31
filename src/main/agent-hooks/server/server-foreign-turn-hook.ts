@@ -3,11 +3,8 @@ import { rowHoldsOtherCodexThread } from '../../../shared/agent-hook-listener/pr
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
-/**
- * A relayed hook from a Codex /side thread that a relay restarted mid-chat forwards: it lost the
- * fork's SessionStart and the row. Only a running main turn is protected, and any SessionStart
- * passes, since the relay already let only a new conversation's start through.
- */
+// A restarted relay may forward a Codex /side thread without its lost SessionStart; protect only a running main turn.
+// SessionStart passes because the relay already filters it to new conversations.
 function isRelayedCodexSideThreadHook(
   previous: EnrichedAgentHookEventPayload,
   incoming: AgentHookEventPayload

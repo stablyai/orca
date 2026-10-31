@@ -1,6 +1,7 @@
 import type { AgentLaunchTerminalSequence } from '../../../../../agent-launch/agent-launch-surface-factories'
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
-import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat-session-option-defaults'
+import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
@@ -12,6 +13,8 @@ export type WorkerEffect = {
   action?: string
   role?: string
   id?: string
+  /** A created worktree's name, so the coordinator can tell the user where the worker runs. */
+  name?: string
   state?: string
   tabId?: string
   leafId?: string
@@ -65,11 +68,9 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   sequenceTerminalCommand?: AgentLaunchTerminalSequence
   taskId: string
   effects: WorkerEffect[]
-}): Promise<{ handle: string; warning?: string }> {
+}): Promise<RuntimeTerminalCreate> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
-    // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
-    // desktop app while its CLI is `cursor-agent`. Let the runtime build the
-    // configured launcher instead of executing the raw id.
+    // Resolve ids through agent config; cursor alone opens the desktop app, its CLI is cursor-agent.
     startupAgent: args.agent,
     ...(args.sequenceTerminalCommand
       ? { sequenceTerminalCommand: args.sequenceTerminalCommand }
@@ -78,8 +79,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     suppressStartupUpdatePrompt: true,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
     title: `worker-${args.taskId}`,
-    // Why: dispatching a worker is background work; it must not pull the sidebar
-    // to the worker's workspace while the user is reading somewhere else.
+    // Worker creation is background work and must not pull the sidebar away.
     surfaceOwner: false
   })
   args.effects.push({
@@ -90,15 +90,10 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     surface: terminal.surface,
     warning: terminal.warning
   })
-  return { handle: terminal.handle, warning: terminal.warning }
+  return terminal
 }
 
-/**
- * A worker that IS a structured chat session, in the same shape the terminal path returns.
- *
- * `requireWorkerAuthority` needs no branch: the runtime's pane-key and process-incarnation getters
- * consult the structured registry, so the handle minted here answers exactly like a PTY handle.
- */
+/** Return structured workers in the terminal authority shape; registry-backed pane/incarnation getters keep requireWorkerAuthority mode-independent. */
 export async function createStructuredWorkerSessionForWorktree(args: {
   runtime: OrcaRuntimeService
   worktreeId: string

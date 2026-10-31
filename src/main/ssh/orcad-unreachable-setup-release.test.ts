@@ -34,7 +34,6 @@ afterEach(async () => {
   }
 })
 
-/** A conversion that fenced the host and registered its server, then could not reach it. */
 async function strandedConversion() {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orcad-unreachable-setup-'))
   directories.push(userDataPath)

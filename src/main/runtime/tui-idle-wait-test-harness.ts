@@ -1,17 +1,9 @@
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
-/**
- * Shared fixtures for the tui-idle wait suites.
- *
- * Why a module rather than per-file helpers: the runtime's store, PTY controller and
- * terminal records are wide contracts (40 members on the controller alone) and the wait
- * path reads a handful of fields from each. Standing up a complete instance per test
- * would bury the behaviour under fixture noise, so the partial doubles are built once
- * here and every cast that needs is confined to this file.
- */
+/** Centralize narrow wait-path fixtures and checked field contracts; wide unused runtime members stay confined to these doubles. */
 
 /** The fields the tui-idle wait path actually reads off a PTY record. */
 export type TuiIdlePtyFixture = Pick<
@@ -20,30 +12,10 @@ export type TuiIdlePtyFixture = Pick<
 > &
   Partial<RuntimePtyWorktreeRecord>
 
-/** The fields the tui-idle wait path actually reads off a leaf record. */
-export type TuiIdleLeafFixture = Pick<
-  RuntimeLeafRecord,
-  | 'tabId'
-  | 'leafId'
-  | 'ptyId'
-  | 'lastAgentStatus'
-  | 'lastOscTitle'
-  | 'lastOutputAt'
-  | 'paneTitle'
-  | 'tailBuffer'
-  | 'preview'
-> &
-  Partial<RuntimeLeafRecord>
-
-// The fixture types above pin every field the wait path reads; the remaining record
-// members are inert here, and the compiler still checks the pinned ones at each call site.
+// Fixture types check every consumed field; other record members are inert here.
 const asPty = (fixture: TuiIdlePtyFixture): RuntimePtyWorktreeRecord =>
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: TuiIdlePtyFixture pins every field the wait path reads.
   fixture as unknown as RuntimePtyWorktreeRecord
-
-const asLeaf = (fixture: TuiIdleLeafFixture): RuntimeLeafRecord =>
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: TuiIdleLeafFixture pins every field the wait path reads.
-  fixture as unknown as RuntimeLeafRecord
 
 export function makeTuiIdlePty(
   overrides: Partial<RuntimePtyWorktreeRecord> = {}
@@ -56,25 +28,6 @@ export function makeTuiIdlePty(
     lastAgentStatus: null,
     lastOscTitle: null,
     lastOutputAt: Date.now(),
-    tailBuffer: [],
-    tailPartialLine: '',
-    preview: '',
-    ...overrides
-  })
-}
-
-export function makeTuiIdleLeaf(overrides: Partial<RuntimeLeafRecord> = {}): RuntimeLeafRecord {
-  return asLeaf({
-    tabId: 'tab-1',
-    leafId: 'leaf-1',
-    ptyId: 'pty-1',
-    connected: true,
-    lastExitCode: null,
-    lastExitCause: null,
-    lastAgentStatus: null,
-    lastOscTitle: null,
-    lastOutputAt: Date.now(),
-    paneTitle: null,
     tailBuffer: [],
     tailPartialLine: '',
     preview: '',
@@ -115,8 +68,7 @@ export type TuiIdleRuntimeOptions = {
 
 /** A runtime wired with the narrowest store and controller the wait path needs. */
 export function makeTuiIdleRuntime(options: TuiIdleRuntimeOptions): OrcaRuntimeService {
-  // RuntimeStore and RuntimePtyController are wide contracts; the wait path calls only the
-  // members provided here, and a missing one throws loudly rather than silently passing.
+  // Partial store/controller doubles fail loudly if the wait path reads missing members.
   const runtime = new OrcaRuntimeService(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial store double; the wait path reads only the members defined above.
     makeStore(options.repoPath) as never

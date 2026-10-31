@@ -1,4 +1,5 @@
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
+import type { DiffCommentBaseMutation } from '../../../shared/diff-comment-mutation'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -110,7 +111,7 @@ export class MetadataLineageOperations {
 
   setWorktreeMeta(
     target: HostWorktreeTarget,
-    meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
+    meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation & DiffCommentBaseMutation
   ): WorktreeMeta {
     return setWorktreeMetaForHostOperation(
       this[metadataLineageOperationsContext].runtime,
@@ -125,7 +126,6 @@ export class MetadataLineageOperations {
     this.removeWorktreeMetaRows(target.id, target.hostId)
   }
 
-  /** For a row no host stamped: removes every host's copy, and refuses a stamped row. */
   removeUnhostedWorktreeMeta(worktreeId: string): boolean {
     if (this[metadataLineageOperationsContext].runtime.state.worktreeMeta[worktreeId]?.hostId) {
       return false
@@ -135,7 +135,6 @@ export class MetadataLineageOperations {
   }
 
   private removeWorktreeMetaRows(worktreeId: string, hostId: ExecutionHostId | undefined): void {
-    // A host-qualified removal names the owner; the persisted host is the fallback.
     const persistedOwner =
       this[metadataLineageOperationsContext].runtime.state.worktreeMeta[worktreeId]?.hostId
     const owner = hostId ?? persistedOwner
@@ -152,14 +151,13 @@ export class MetadataLineageOperations {
           ownerPartition
         ))
     )
-    // Mirror the legacy delete's scope below: a full removal takes every host's identity rows,
-    // otherwise the surviving owner keeps its own.
+    // Match legacy deletion scope; surviving hosts retain their identity rows.
     removeWorktreeMetadataForHost(
       this[metadataLineageOperationsContext].runtime.state,
       worktreeId,
       hostId
     )
-    // Skip partitions main never wrote: materializing one fences every sibling worktree of the repo.
+    // Do not materialize partitions: that would fence sibling worktrees the host never persisted.
     const partitions = new Set<ExecutionHostId>(
       workspaceSessionPartitionIdsForHost(owner).filter(
         (partition) =>
@@ -167,13 +165,11 @@ export class MetadataLineageOperations {
             this[metadataLineageOperationsContext].sessions,
             partition
           ) &&
-          // The local partition can be a remote spill surface or a same-id owner.
-          // Preserve it whenever another owner may still use the bare id.
+          // Local can hold remote spill data; preserve it while another owner may use this ID.
           (!preservesSameIdSessionOwner || partition === ownerPartition)
       )
     )
-    // A repo-wide fence must not rebase a sibling's unpersisted tabs onto main's copy, and a spill
-    // partition that never held this worktree has no claim on the repo at all.
+    // Fence only partitions with owned tabs; unrelated siblings must retain unsaved renderer state.
     const fencedPartitions = new Set(
       [...partitions].filter(
         (partition) =>
@@ -207,8 +203,7 @@ export class MetadataLineageOperations {
         }
       )
     }
-    // Why: dropping a row can free the identity key that was vetoing an unrelated row's removal, so
-    // the metadata prune needs to look again — it is otherwise waiting on evidence (#17775).
+    // Removal may release identity collisions that previously blocked unrelated metadata pruning.
     invalidateLocalWorktreeMetadataPruneInputs()
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
   }
@@ -245,7 +240,7 @@ export class MetadataLineageOperations {
     return this[metadataLineageOperationsContext].runtime.state.worktreeLineageById
   }
 
-  /** Undefined when the id's lineage bucket belongs to a same-id twin on another host. */
+  /** Undefined when another host owns this raw-ID lineage bucket. */
   setWorktreeLineage(
     target: HostWorktreeTarget,
     lineage: WorktreeLineage
@@ -259,7 +254,6 @@ export class MetadataLineageOperations {
     return lineage
   }
 
-  /** Drops both lineage records of a worktree, unless a same-id twin on another host owns them. */
   removeWorktreeLineage(target: HostWorktreeTarget): void {
     const state = this[metadataLineageOperationsContext].runtime.state
     if (!ownsRawIdBucket(state, target)) {
@@ -282,7 +276,7 @@ export class MetadataLineageOperations {
       target.hostId
     )
     if (legacyChanged || canonicalChanged) {
-      // Legacy identity moves also re-key sessions, lineage, mobile selections, and UI state.
+      // Legacy identity moves also touch sessions, lineage, mobile selections and UI state.
       scheduleSave(
         this[metadataLineageOperationsContext].scheduling,
         legacyChanged ? undefined : WORKTREE_METADATA_DOMAINS
@@ -309,7 +303,7 @@ export class MetadataLineageOperations {
   }
 }
 
-// Raw-id buckets (legacy meta, lineage) belong to the first host that stamped the id (D7).
+// The first host stamp owns raw-ID metadata and lineage buckets.
 function ownsRawIdBucket(
   state: MetadataLineageOperationsRuntime['state'],
   target: HostWorktreeTarget

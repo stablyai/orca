@@ -14,9 +14,7 @@ const scriptDir = import.meta.dirname
 const projectDir = dirname(dirname(scriptDir))
 const buildDir = join(projectDir, 'resources', 'build')
 
-// Why: Windows scales the largest ICO frame down for the taskbar/"Open with"
-// list, so the glyph must fill most of that frame to match native apps. The
-// macOS safe-area inset left it at ~83%, which is the visible defect (#5357).
+// Windows downscales largest frame, so match native fill rather than macOS safe-area’s ~83% (#5357).
 const MIN_GLYPH_FILL_FRACTION = 0.92
 
 function largestIcoFrame(icoBuffer) {

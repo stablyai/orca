@@ -102,16 +102,13 @@ describe('startHostWorktreeRefresh', () => {
 
   it('polls repo metadata on the interval while foregrounded and skips it while backgrounded', async () => {
     start()
-    // Mount force-fetch.
     expect(fetchRepoMetadata).toHaveBeenCalledTimes(1)
 
-    // Foregrounded: repo.list rides the interval as a convergence safety-net for hosts on an
-    // older build, whose Settings edits emit no runtime reposChanged (the callee self-throttles).
+    // Older desktops emit no reposChanged for settings edits, so retain the throttled foreground poll.
     await vi.advanceTimersByTimeAsync(9_000)
     expect(fetchWorktrees).toHaveBeenCalledTimes(4)
     expect(fetchRepoMetadata).toHaveBeenCalledTimes(4)
 
-    // Backgrounded: neither snapshot is polled.
     fetchWorktrees.mockClear()
     fetchRepoMetadata.mockClear()
     appState.currentState = 'background'

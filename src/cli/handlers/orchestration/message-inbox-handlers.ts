@@ -3,6 +3,7 @@ import { printResult } from '../../format'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getPresentStringFlag,
   getRequiredStringFlag
 } from '../../flags'
 import {
@@ -11,11 +12,14 @@ import {
 } from '../../../shared/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+import { withReceiptNext } from './receipt-next-text'
+import { printOrchestrationResult } from './agent-view'
+import { formatMessageViewText, toMessageView, type MessageView } from './message-agent-views'
 
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration reply': async ({ flags, client, cwd, json }) => {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const result = await callOrchestrationMutation<{ message: { id: string } }>(
+    const result = await callOrchestrationMutation<{ message: { id: string }; next?: string }>(
       client,
       flags,
       'orchestration.reply',
@@ -26,7 +30,16 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
         from
       }
     )
-    printResult(result, json, (value) => `Replied ${value.message.id}`)
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (value) => ({
+          messageId: value.message.id,
+          next: value.next
+        })
+      })
+      return
+    }
+    printResult(result, json, (value) => withReceiptNext(`Replied ${value.message.id}`, value))
   },
 
   'orchestration inbox': async ({ flags, client, json }) => {
@@ -36,8 +49,20 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
       count: number
     }>('orchestration.inbox', {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      terminal: getOptionalStringFlag(flags, 'terminal')
+      terminal: getPresentStringFlag(flags, 'terminal')
     })
+    if (!full) {
+      printOrchestrationResult(result, json, {
+        fields: (value): { messages: MessageView[] } => ({
+          messages: value.messages.map((message) => toMessageView(message, { recipient: true }))
+        }),
+        text: (fields) =>
+          fields.messages.length === 0
+            ? 'No messages.'
+            : fields.messages.map((view) => formatMessageViewText(view)).join('\n\n')
+      })
+      return
+    }
     printResult(result, json, (value) => {
       if (value.count === 0) {
         return 'No messages.'

@@ -39,7 +39,7 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 import { useAppStore } from '@/store'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { subscribeAcceptedWebSessionTerminalHandle } from './web-session-terminal-handle-events'
 import {
   _getWebSessionTabsReceiptTrackingCountsForTest,
@@ -652,8 +652,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       liveTabId
     ])
     expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(1)
-    // The retraction boundary outlives the recovery that was pending when it landed; it is what
-    // still fences the stale frame after the live republication overwrote the receipt slot.
+    // Retraction boundary must outlive recovery and receipt-slot overwrite to fence delayed pre-close frames.
     expect(_getWebSessionTabsReceiptTrackingCountsForTest()).toEqual({
       receipts: 1,
       removalWatermarks: 1
@@ -709,8 +708,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       recovery.resolve(makeTerminalSnapshot(index === 0 ? '-a' : '-b', index + 1))
     }
     await act(settle)
-    // The receipt slot is per worktree, so what repeated frames could grow is the tracking behind
-    // it; the watermark stays absent because nothing retracted, and the mirror holds one tab.
+    // Repeated frames may grow tracking despite one receipt slot; no retraction means no watermark and one mirrored tab.
     expect(_getWebSessionTabsReceiptTrackingCountsForTest()).toEqual({
       receipts: 1,
       removalWatermarks: 0

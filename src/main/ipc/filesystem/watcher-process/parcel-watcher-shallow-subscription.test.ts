@@ -77,6 +77,8 @@ describe('shallow watcher subscription', () => {
         }
       )
 
+      emit(root, 'unrelated')
+      emit(join(root, 'logs'), 'unrelated')
       emit(root, 'config')
       emit(join(root, 'logs'), 'HEAD')
       await promise
@@ -84,6 +86,7 @@ describe('shallow watcher subscription', () => {
       expect(events).toContain(join(root, 'config'))
       expect(events).toContain(join(root, 'logs', 'HEAD'))
       expect(events).not.toContain(join(root, 'unrelated'))
+      expect(events).not.toContain(join(root, 'logs', 'unrelated'))
       await subscription.unsubscribe()
     } finally {
       await rm(root, { recursive: true, force: true })

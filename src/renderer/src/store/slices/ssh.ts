@@ -28,42 +28,22 @@ export type SshCredentialRequest = {
 
 export type SshSlice = {
   sshConnectionStates: Map<string, SshConnectionState>
-  /** Maps target IDs to their user-facing labels. Populated during hydration
-   * so components can look up labels without per-component IPC calls. */
+  /** Hydrate labels once so components need no per-host IPC reads. */
   sshTargetLabels: Map<string, string>
-  /**
-   * Maps target IDs to their *registration* generations — the incarnation an
-   * owner is fenced against, not `SshConnectionState.connectionGeneration`.
-   *
-   * Mirrored here for the same reason as the labels, and mirrored by the runtime
-   * buckets already: only a generation makes a desktop SSH host fenceable, so a
-   * consumer without it degrades every such host to view-only. A target with no
-   * usable generation is simply absent — see `collectSshTargetGenerations`.
-   */
+  /** Registration incarnation for owner fences, independent of connectionGeneration; absent usable generation leaves the host view-only (collectSshTargetGenerations). */
   sshTargetGenerations: Map<string, number>
-  /** Maps REMOVED target IDs to their last known label (from re-adoption
-   * tombstones). Lets ghost-host UI show a friendly name instead of the raw id
-   * for a workspace still pinned to a deleted target. */
+  /** Retain removed-target labels from re-adoption tombstones for workspaces still pinned to them. */
   removedSshTargetLabels: Map<string, string>
-  /** True once a target list actually loaded (even an empty one). Distinguishes
-   * "this client knows the target set" from "never hydrated" (e.g. a paired
-   * client on a host without the ssh RPC), so absence from sshTargetLabels
-   * only counts as removal evidence when this is set. */
+  /** Absence proves removal only after a target list loads, including empty; legacy servers may never hydrate. */
   sshTargetsHydrated: boolean
   sshCredentialQueue: SshCredentialRequest[]
-  /** Incremented when an SSH target transitions to 'connected'. Allows
-   * components like the file explorer to re-trigger data loads that failed
-   * before the connection was established. */
+  /** Connected-transition epoch lets failed consumers retry loads. */
   sshConnectedGeneration: number
-  /** Port forwards keyed by connection ID. Updated via push events from main.
-   *  Why Record instead of Map: Zustand selectors use shallow-equality on plain
-   *  objects. Spreading a Record produces a new reference that Zustand can diff
-   *  by identity, whereas Map mutations are easy to get wrong. */
+  /** Use immutable Record updates for Zustand selector identity; per-connection forwards arrive via main push events. */
   portForwardsByConnection: Record<string, PortForwardEntry[]>
   /** Saved forwards that aren't open, keyed by connection ID, so one that can't start stays removable. */
   unrestoredPortForwardsByConnection: Record<string, UnrestoredPortForward[]>
-  /** Detected remote listening ports after main-process enrichment, keyed by
-   *  connection ID. Updated from SSH IPC snapshots and push events. */
+  /** Remote listening ports enriched by main, from SSH snapshots/push events. */
   detectedPortsByConnection: Record<string, EnrichedDetectedPort[]>
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
@@ -132,8 +112,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
         sshTargetLabelsEqual(s.sshTargetLabels, targets) &&
         sshTargetGenerationsEqual(s.sshTargetGenerations, sshTargetGenerations)
       ) {
-        // Why: an unchanged (even empty) list is still a successful load — the
-        // hydration flag must flip on the first fetch of an empty target set.
+        // An unchanged empty list still proves first hydration.
         return s.sshTargetsHydrated ? s : { sshTargetsHydrated: true }
       }
       return {

@@ -1,8 +1,4 @@
-/**
- * The commit fence is the whole point of this cache: an answer that was correct
- * when it was asked for may be wrong by the time it lands, and rendering it
- * would attribute one host's automations to another.
- */
+/** A formerly correct answer can arrive after host replacement; the commit fence must reject it instead of misattributing automations. */
 
 import { describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -233,10 +229,7 @@ function catalogOf(entries: AutomationHostCatalogEntry[]): AutomationHostCatalog
   }
 }
 
-/**
- * The fence is only as stable as the catalog generation feeding it, so this
- * covers Step 2's warning from the consumer's side.
- */
+/** Verify offline catalog changes do not invalidate requests through spurious generation churn. */
 describe('offline authority generation churn', () => {
   const withRegistry = (registry: AutomationCatalogGenerationRegistry) =>
     createAutomationHostCache({

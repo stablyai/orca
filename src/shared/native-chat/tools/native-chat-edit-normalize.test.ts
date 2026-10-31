@@ -7,8 +7,7 @@ import { unwrapBeginPatch } from './native-chat-begin-patch'
 const gutter = (files: ReturnType<typeof editFilesFromToolPair>): (number | null)[] =>
   (files ?? []).flatMap((file) => file.lines.map((line) => unifiedLineNumber(line)))
 
-/** A card takes evidence the edit landed, so these cases report the call as
- *  complete. Cases about the lifecycle itself pass their own state. */
+/** Cards require landed-edit evidence; default fixtures report completed calls, lifecycle cases supply their own state. */
 const settledFiles = (
   pair: Parameters<typeof editFilesFromToolPair>[0]
 ): ReturnType<typeof editFilesFromToolPair> =>
@@ -596,8 +595,7 @@ describe('editFilesFromToolPair', () => {
           'warning: something\ndiff --git a/one.ts b/one.ts\n--- a/one.ts\n+++ b/one.ts\n@@ -1,1 +1,1 @@\n-a\n+b'
       }
     })
-    // The preamble is its own nameless section, and must not make this look
-    // like a patch over several files.
+    // Unnamed preambles must not make single-file patches appear multi-file.
     expect(files?.map((file) => file.path)).toEqual(['/repo/one.ts'])
   })
 

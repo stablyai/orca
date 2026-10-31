@@ -1,3 +1,4 @@
+import { structuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 
@@ -18,7 +19,10 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { createStoppedClaudeDeadline } from './structured-agent-session-stop-deadline.test-fixture'
@@ -68,6 +72,7 @@ beforeEach(async () => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      cliFlag: async () => 'supported' as const,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
@@ -119,6 +124,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -356,3 +362,70 @@ it('keeps the note unconfirmed when the turn completes', async () => {
     expect(notes[0]?.body).toMatchObject({ failure: { kind: 'cancelUnconfirmed' } })
   })
 })
+
+it.each([false, true])(
+  'keeps only positively unwritten Claude input on Close (written: %s)',
+  async (written) => {
+    const connection = claude.connections[0]!
+    const held = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<void>()
+    const control = vi.spyOn(connection, 'setModel').mockImplementation(async () => {
+      entered.resolve()
+      await held.promise
+    })
+    const dispatch = vi.spyOn(adapter, 'dispatch')
+    const fields = { body: hostTestMessage('recover exact input'), options: { model: 'opus' } }
+    const sending = await host.send(CALLER, {
+      envelope: envelope('agentSession.send', fields),
+      userSend: true,
+      ...fields
+    })
+    if (!sending.ok) {
+      throw new Error(JSON.stringify(sending.refusal))
+    }
+    const id = sending.value.clientMessageId
+    const journal = host['sessions'].get(SESSION)!.journal
+    const waiting = host.waitForSendSettlement(SESSION, id)
+    try {
+      await entered.promise
+      expect(connection.sent).toHaveLength(0)
+      const original = structuredAgentSessionHandingOver(journal).get(id)?.input
+      if (written) {
+        held.resolve()
+        await eventually(() => expect(connection.sent).toHaveLength(1))
+      }
+      await host.close(SESSION, 'user-close')
+      held.resolve()
+      await Promise.allSettled(dispatch.mock.results.map((result) => result.value))
+      await original?.finalization.completion
+      await host.flushStreamedEvents(SESSION)
+      await journal['queue'].drain()
+      const row = journal.submission(id)
+      const cards = journal.queuedMessages.list()
+      expect(original).toBeDefined()
+      expect(structuredAgentSessionHandingOver(journal).has(id)).toBe(false)
+      expect(connection.sent).toHaveLength(written ? 1 : 0)
+      expect((await waiting)?.value).toEqual({ clientMessageId: id, submission: row })
+      expect(row).toMatchObject({
+        clientMessageId: id,
+        source: { kind: 'user' },
+        options: fields.options
+      })
+      expect(cards.map((card) => card.messageId)).toEqual(written ? [] : [id])
+      if (!written) {
+        expect(row).toMatchObject({
+          dispatchState: 'rejected',
+          keptAsQueuedMessageId: id,
+          rejection: { kind: 'chatClosed' }
+        })
+        expect(cards[0]).toMatchObject({ body: fields.body, options: fields.options, position: 0 })
+      } else {
+        expect(row).not.toHaveProperty('keptAsQueuedMessageId')
+      }
+    } finally {
+      held.resolve()
+      control.mockRestore()
+      dispatch.mockRestore()
+    }
+  }
+)

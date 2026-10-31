@@ -10,7 +10,7 @@ import type {
   AgentSessionBackgroundTaskState,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { mobileE2EETextPayloadAdmissionBytes } from '../../runtime/rpc/mobile-e2ee-outbound-admission'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -32,7 +32,7 @@ const LARGE_TEXT = 'x'.repeat(250 * 1024)
 
 let root: string
 let journal: AgentSessionJournal
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ legacyInputs: true })
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wire-admission-'))
@@ -181,7 +181,7 @@ async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentS
     }
     opened.db.exec('COMMIT')
   } finally {
-    opened.close()
+    await opened.close()
   }
   return journals.open({
     identity: {

@@ -63,7 +63,7 @@ export function makeStore() {
       badgeColor: 'blue',
       addedAt: 1
     },
-    // Why: a folder project reaches the same create-activation notifier without a real git worktree add.
+    // Folder projects exercise create activation without adding a Git worktree.
     {
       id: FOLDER_REPO_ID,
       path: '/tmp/folder-project',

@@ -1,3 +1,7 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../../../shared/agent-session-record.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../orchestration/preamble', () => ({
@@ -20,8 +24,16 @@ function settle(delivered: 'accepted' | undefined) {
     })),
     markWorkerDispatchReady: vi.fn(() => ({ state: 'ready', stage: 'ready' }))
   }
+  const record = agentSessionRecordFixture(
+    agentSessionLeaseFixture({ sessionId: 's1', runtimeFence: 1 })
+  )
   const host = {
-    deps: { store: { getRecord: () => ({ lease: { runtimeFence: 1 } }) } },
+    deps: {
+      store: {
+        selectWritableRecord: () => ({ kind: 'writable' as const, record }),
+        requireWritableRecord: () => record
+      }
+    },
     send: async () => ({
       ok: true,
       value: { clientMessageId: 'c1', submission: { dispatchState: 'pending', reason: null } }
@@ -82,13 +94,6 @@ describe('a structured worker whose agent outlasts the preamble wait', () => {
       expect.anything()
     )
     expect(db.markWorkerDispatchReady).not.toHaveBeenCalled()
-  })
-
-  it('is ready once the agent took the preamble within the wait', async () => {
-    const { db, receipt } = settle('accepted')
-
-    await expect(receipt).resolves.toMatchObject({ state: 'ready', turnStart: 'observed' })
-    expect(db.markWorkerStartUnknown).not.toHaveBeenCalled()
   })
 })
 

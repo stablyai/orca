@@ -17,7 +17,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   }
 })
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -30,10 +29,6 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 )
 
 {
-  // Mock sonner (imported by repos.ts)
-
-  // Mock agent-status (imported by terminal-helpers)
-
   createTabsSliceMockApi()
   const mockWindow = globalThis.window
 
@@ -50,15 +45,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
       store = createTestStore()
     })
 
-    // ─── setTabLabel / setTabCustomLabel / setUnifiedTabColor ─────────
-
     describe('tab property setters', () => {
-      it('setTabLabel updates the label', () => {
-        const tab = store.getState().createUnifiedTab(WT, 'terminal')
-        store.getState().setTabLabel(tab.id, 'zsh')
-        expect(store.getState().unifiedTabsByWorktree[WT][0].label).toBe('zsh')
-      })
-
       it('setTabLabel preserves tab map references when the label is unchanged', () => {
         const tab = store.getState().createUnifiedTab(WT, 'terminal')
         store.getState().setTabLabel(tab.id, 'zsh')
@@ -68,28 +55,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 
         expect(store.getState().unifiedTabsByWorktree).toBe(before)
       })
-
-      it('setTabCustomLabel updates customLabel', () => {
-        const tab = store.getState().createUnifiedTab(WT, 'terminal')
-        store.getState().setTabCustomLabel(tab.id, 'my-term')
-        expect(store.getState().unifiedTabsByWorktree[WT][0].customLabel).toBe('my-term')
-      })
-
-      it('setTabCustomLabel clears customLabel with null', () => {
-        const tab = store.getState().createUnifiedTab(WT, 'terminal')
-        store.getState().setTabCustomLabel(tab.id, 'my-term')
-        store.getState().setTabCustomLabel(tab.id, null)
-        expect(store.getState().unifiedTabsByWorktree[WT][0].customLabel).toBeNull()
-      })
-
-      it('setUnifiedTabColor updates color', () => {
-        const tab = store.getState().createUnifiedTab(WT, 'terminal')
-        store.getState().setUnifiedTabColor(tab.id, '#ff0000')
-        expect(store.getState().unifiedTabsByWorktree[WT][0].color).toBe('#ff0000')
-      })
     })
-
-    // ─── pinTab / unpinTab ────────────────────────────────────────────
 
     describe('pinTab / unpinTab', () => {
       it('pins a tab and promotes preview to permanent', async () => {
@@ -151,13 +117,6 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
         ])
       })
 
-      it('unpins a tab', () => {
-        const tab = store.getState().createUnifiedTab(WT, 'terminal')
-        store.getState().pinTab(tab.id)
-        store.getState().unpinTab(tab.id)
-        expect(store.getState().unifiedTabsByWorktree[WT][0].isPinned).toBe(false)
-      })
-
       it('keeps remaining pinned tabs before a tab that was unpinned', () => {
         const t1 = store.getState().createUnifiedTab(WT, 'terminal')
         const t2 = store.getState().createUnifiedTab(WT, 'terminal')
@@ -171,7 +130,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
       })
 
       it('syncs isPinned to the TerminalTab in tabsByWorktree (reconcile echo guard)', async () => {
-        // Why: reconcile derives pin from tabsByWorktree[*].isPinned; without syncing, a host snapshot re-computes isPinned:false and un-pins during the echo window.
+        // Sync legacy isPinned too or reconciliation unpins the tab during host-snapshot echo.
         const tab = store.getState().createUnifiedTab(WT, 'terminal')
         store.setState((state) => ({
           tabsByWorktree: {

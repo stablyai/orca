@@ -1,12 +1,10 @@
-import { createSetupCompletionObservation } from '../../orchestration/setup-completion-signal'
-import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalidation'
-import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
+import { OrcaRuntimeWithPtyRegistrationClaims } from './pty-registration-claims'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
 import type {
-  PtyRegistrationClaim,
   RuntimePtyRegistrationBinding,
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
@@ -16,7 +14,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { mainTerminalRegistered } from '../surface/main-terminal-surfaces'
 import { assertPaneBoundAtRegistration, isRuntimeHostedWorkspace } from './bind-first-registration'
 
-export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHandlesForPty {
+export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithPtyRegistrationClaims {
   protected abstract ensurePtyBackedMobileSurfaceForRendererTab(
     worktreeId: string,
     tabId: string
@@ -25,6 +23,8 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
   protected abstract getOrchestrationCompatibilityHostScope(
     pty: RuntimePtyWorktreeRecord
   ): OrchestrationCompatibilityTerminalAuthority['hostScope'] | null
+
+  protected abstract watchLaunchComposer(ptyId: string, agent: TuiAgent | null): void
 
   registerPty(
     ptyId: string,
@@ -91,9 +91,8 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       claim.previousSetupObservation?.fail(new Error('terminal_handle_stale'))
     }
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
-    this.terminalViewSubscribers.markSpawnPublished(ptyId)
-    // Why: record the renderer pane identity at spawn time so a stalled graph
-    // sync can't hide that a live PTY already backs a pending mobile create.
+    this.mainDaemonAttachments.markSpawnPublished(ptyId)
+    // Record spawn-time pane identity so stalled graph sync cannot hide the live PTY backing a pending mobile create.
     const paneKey =
       binding && isValidTerminalTabId(binding.tabId) && isTerminalLeafId(binding.leafId)
         ? makePaneKey(binding.tabId, binding.leafId)
@@ -114,8 +113,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
         : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
     })
-    // Switch point: bind-first; main's layout already names this pane (L80). A paired server's
-    // workspace is that server's layout, and a runtime with no session store (tests) has none.
+    // Bind-first applies to main-owned layouts; paired-server workspaces and storeless test runtimes have no local binding to assert (L80).
     if (
       ORCA_LAYOUT_OWNER_IS_MAIN &&
       paneKey &&
@@ -162,6 +160,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       pty.launchIncarnationId = binding.incarnationId
       pty.launchAgent = agentLaunchAuthority.launchAgent
     }
+    this.watchLaunchComposer(ptyId, binding?.launchedAgent ?? null)
     const providerReattachLaunchIdentity = binding?.providerReattachLaunchIdentity
     if (
       providerReattachLaunchIdentity &&
@@ -195,8 +194,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
     }
     // Why: a listed surface's pending-handle → ready flip must not wait on a later renderer graph change.
     this.touchMobileSessionSnapshotsForPty(ptyId)
-    // Why: the renderer's own PTY spawn is the reliable signal that the pending
-    // mobile create's tab is live; publish its surface main-side (#7587).
+    // Renderer spawn proves the pending mobile tab is live; publish without waiting for its graph (#7587).
     if (binding && paneKey) {
       if (
         replacementHandle?.startsWith('term_') &&
@@ -205,121 +203,6 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
         this.registerPreAllocatedHandleForPty(ptyId, replacementHandle)
       }
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
-    }
-  }
-
-  assertPtyRegistrationAllowed(ptyId: string, incarnationId?: PtyIncarnationId): void {
-    // Why: the controller must reject an early exit before persisting bindings or handles.
-    this.assertPtyDidNotExitBeforeRegistration(ptyId, incarnationId)
-  }
-
-  releaseRejectedPtyRegistrationFence(
-    ptyId: string,
-    candidateIncarnation?: PtyIncarnationId
-  ): void {
-    const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
-    if (pending?.exitedIncarnations.size) {
-      this.cancelPendingPtyRegistration(ptyId, candidateIncarnation, pending)
-    }
-  }
-
-  beginPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId, setupToken?: string) {
-    const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
-    if (
-      setupToken === undefined &&
-      incarnationId !== undefined &&
-      pending?.incarnationId === incarnationId &&
-      pending.setupObservation !== undefined &&
-      this.setupCompletionTokenByPtyId.get(ptyId) === pending.setupObservation
-    ) {
-      return pending
-    }
-    this.cancelPendingPtyRegistration(ptyId)
-    const claim: PtyRegistrationClaim = {
-      incarnationId: incarnationId ?? null,
-      exitedIncarnations: new Set()
-    }
-    this.pendingPtyRegistrationIncarnations.set(ptyId, claim)
-    if (setupToken?.startsWith('native:')) {
-      const previous = this.setupCompletionTokenByPtyId.get(ptyId)
-      if (previous) {
-        claim.previousSetupObservation = previous
-      }
-      claim.setupObservation = createSetupCompletionObservation(setupToken, true)
-      this.setupCompletionTokenByPtyId.set(ptyId, claim.setupObservation)
-    }
-    return claim
-  }
-
-  narrowPtyRegistration(
-    ptyId: string,
-    claim: PtyRegistrationClaim,
-    incarnationId?: PtyIncarnationId,
-    adopted = false
-  ): boolean {
-    if (this.pendingPtyRegistrationIncarnations.get(ptyId) !== claim) {
-      return false
-    }
-    if (adopted && claim.setupObservation) {
-      claim.setupObservation.noteGap()
-      if (claim.previousSetupObservation) {
-        this.setupCompletionTokenByPtyId.set(ptyId, claim.previousSetupObservation)
-      } else {
-        this.setupCompletionTokenByPtyId.delete(ptyId)
-      }
-      delete claim.setupObservation
-    }
-    claim.incarnationId = incarnationId ?? null
-    return true
-  }
-
-  acceptPtyIncarnationForExit(ptyId: string, incarnationId: PtyIncarnationId): void {
-    const pty = this.ptysById.get(ptyId)
-    if (pty) {
-      // Why: a reconnect attach reply can prove the exit generation after stale local proof was cleared.
-      pty.incarnationId = incarnationId
-    }
-  }
-
-  cancelPendingPtyRegistration(
-    ptyId: string,
-    incarnationId?: PtyIncarnationId,
-    claim?: PtyRegistrationClaim
-  ): void {
-    const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
-    if (
-      !pending ||
-      (claim !== undefined && pending !== claim) ||
-      (pending.incarnationId !== null &&
-        incarnationId !== undefined &&
-        pending.incarnationId !== incarnationId)
-    ) {
-      return
-    }
-    if (
-      pending.setupObservation &&
-      this.setupCompletionTokenByPtyId.get(ptyId) === pending.setupObservation
-    ) {
-      pending.setupObservation.noteGap()
-      if (pending.previousSetupObservation) {
-        this.setupCompletionTokenByPtyId.set(ptyId, pending.previousSetupObservation)
-      } else {
-        this.setupCompletionTokenByPtyId.delete(ptyId)
-      }
-    }
-    this.pendingPtyRegistrationIncarnations.delete(ptyId)
-  }
-
-  protected assertPtyDidNotExitBeforeRegistration(
-    ptyId: string,
-    candidateIncarnation?: PtyIncarnationId
-  ): void {
-    const exits = this.pendingPtyRegistrationIncarnations.get(ptyId)?.exitedIncarnations
-    if (
-      exits?.size &&
-      (candidateIncarnation === undefined || exits.has(null) || exits.has(candidateIncarnation))
-    ) {
-      throw new Error('agent_session_exited_during_start')
     }
   }
 }

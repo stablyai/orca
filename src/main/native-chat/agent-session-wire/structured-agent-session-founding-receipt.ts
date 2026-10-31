@@ -3,14 +3,14 @@ import type { HostFoundingAttempt } from '../../agent-launch/host-founding-attem
 import type { JournalTransactionObservation } from '../agent-session-journal/journal-database'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { reserveRequestFor, AgentSessionAttachParams } from './structured-agent-session-attach'
 
 import { performSend, type AgentSessionOperationReceipt } from './structured-agent-session-turns'
 
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import { openingMessageOptions } from './structured-agent-session-execution-options'
 
 import type { StructuredAgentSessionCreateOptions } from './structured-agent-session-create'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -48,11 +48,7 @@ export function createFoundingReceipt(
           row?.kind === 'submission' &&
           row.clientMessageId === openingMessage.clientMessageId &&
           row.payloadFingerprint ===
-            computeAgentSessionPayloadFingerprint({
-              method: 'agentSession.send',
-              sessionId,
-              fields: { body: openingMessage.body }
-            }) &&
+            agentSessionSendBodyFingerprint(sessionId, openingMessage.body) &&
           attempt.opening
         ) {
           attempt.opening.row = row
@@ -107,23 +103,10 @@ export function sendOpeningFoundingMessage(
     },
     {
       ...first,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.send',
-        sessionId,
-        fields: { body: first.body }
-      }),
+      payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, first.body),
       origin: 'client',
       source: { kind: 'user' },
-      ...openingMessageOptions(record.options)
+      ...(first.selection === undefined ? openingMessageOptions(record.options) : {})
     }
   )
-}
-
-/** The model and effort the chat was created with, which its opening message runs on as a send's
- *  carried ones do. */
-function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
-  options?: AgentSessionExecutionOptions
-} {
-  const { model, effort } = options ?? {}
-  return model ? { options: { model, ...(effort ? { effort } : {}) } } : {}
 }

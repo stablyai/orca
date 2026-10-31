@@ -4,11 +4,7 @@ type HostTerminalExitFacts = Partial<
   Pick<RuntimeTerminalSummary, 'verdict' | 'exitCause' | 'connected'>
 >
 
-/**
- * True only when the execution host itself recorded this terminal's exit. A host's verdict wins;
- * a host that sends no verdict still counts when it records an observed exit for a terminal
- * it reports disconnected. Anything else (no answer, unverifiable, an older host) proves nothing.
- */
+/** Trust host exit verdicts or recorded observed exit on a disconnected terminal; missing/unverifiable/legacy answers prove no death. */
 export function hostRecordsTerminalExit(
   terminal: HostTerminalExitFacts | null | undefined
 ): boolean {

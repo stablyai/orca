@@ -34,8 +34,7 @@ describe('direct SSH hydration fanout', () => {
   })
 
   it('does not let one wedged target stall hydration of every target behind it', async () => {
-    // More targets than the fanout width: the pool must drain past the wedged one, not just
-    // dispatch the first wave.
+    // Exceed pool width to prove it drains beyond the wedged first-wave target.
     const targets = ['ssh-wedged', 'ssh-b', 'ssh-c', 'ssh-d', 'ssh-e', 'ssh-f']
     const dispatched: string[] = []
     vi.stubGlobal('window', {

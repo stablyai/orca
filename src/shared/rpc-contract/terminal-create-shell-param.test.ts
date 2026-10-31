@@ -18,8 +18,7 @@ describe('TerminalCreateParams.shell', () => {
     )
   })
 
-  // The host canonicalizes even when a client did not, so the spawn path and the startup-command
-  // quoting only ever see the `.exe` spelling they exact-match.
+  // Host canonicalization must supply the .exe spellings exact-matched by spawn and command quoting.
   it('canonicalizes an accepted spelling before it reaches the runtime', () => {
     expect(TerminalCreateParams.parse({ worktree: 'path:/repo', shell: 'cmd' }).shell).toBe(
       'cmd.exe'
@@ -38,8 +37,7 @@ describe('TerminalCreateParams.shell', () => {
     expect(resolveWindowsShellStartupFamily(shell)).toBe('cmd')
   })
 
-  // The relay refuses these at spawn time; refusing here turns an opaque spawn failure into an
-  // answer the caller gets before the terminal exists.
+  // Refuse unsupported shells before terminal creation instead of returning an opaque relay spawn failure.
   it('refuses a shell the host will not spawn', () => {
     expect(() => TerminalCreateParams.parse({ worktree: 'path:/repo', shell: 'nu.exe' })).toThrow(
       /shell must be one of/

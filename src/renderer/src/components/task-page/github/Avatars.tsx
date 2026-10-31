@@ -1,4 +1,4 @@
-import type { GitHubPRPrimaryReviewer } from '@/components/github-pr-reviewer-display'
+import type { GitHubPRPrimaryReviewer } from '../../../../../shared/github/pr-reviewer-display'
 import React from 'react'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { Users } from 'lucide-react'

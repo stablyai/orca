@@ -44,8 +44,6 @@ describe('mobile quick-command launch', () => {
   })
 
   it('joins multiline runnable commands with "; " to match desktop', () => {
-    // Parity with desktop flattenTerminalQuickCommand: the same saved command
-    // must run identically on desktop and mobile.
     expect(
       buildMobileQuickCommandLaunch(command({ command: 'cd app\nnpm install\nnpm test' }))
     ).toEqual({

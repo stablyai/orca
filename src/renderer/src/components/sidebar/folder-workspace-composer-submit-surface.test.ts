@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
@@ -17,7 +18,7 @@ vi.mock('@/lib/worktree-activation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace
 }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.terminal }))
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTabWithOutcome: mocks.terminal }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: vi.fn(async () => ({ supported: false, reason: 'wsl' }))
 }))
@@ -65,7 +66,7 @@ function create(
 describe('submitFolderWorkspaceCreate surface pick', () => {
   it('starts the CLI in a terminal for a terminal pick even when chats are the default', async () => {
     useAppStore.setState({
-      settings: { ...getDefaultSettings('/home/test'), experimentalNativeChat: true }
+      settings: { ...getDefaultSettings('/home/test'), nativeChatProviders: EVERY_AGENT_CHAT }
     })
     mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
 
@@ -76,7 +77,7 @@ describe('submitFolderWorkspaceCreate surface pick', () => {
       vi.fn(() => materialization.promise)
     )
     useAppStore.setState({
-      settings: { ...getDefaultSettings('/home/test'), experimentalNativeChat: false }
+      settings: { ...getDefaultSettings('/home/test'), nativeChatProviders: {} }
     })
     materialization.resolve(makeFolderWorkspace())
     await creating
@@ -88,7 +89,7 @@ describe('submitFolderWorkspaceCreate surface pick', () => {
     })
 
     useAppStore.setState({
-      settings: { ...getDefaultSettings('/home/test'), experimentalNativeChat: true }
+      settings: { ...getDefaultSettings('/home/test'), nativeChatProviders: EVERY_AGENT_CHAT }
     })
     await create('terminal')
     expect(mocks.terminal).toHaveBeenCalledOnce()

@@ -28,11 +28,10 @@ vi.mock('react', async () => {
   return {
     ...actual,
     useEffect: () => {},
-    // Why: this shallow harness calls the component as a plain function (no React
-    // render), so ref/callback hooks must be stubbed like useState/useEffect. The
-    // favicon tests never fire pointer events, so non-persistent refs are fine.
+    // This shallow harness has no React dispatcher; favicon tests do not need persistent refs or event handlers.
     useRef: <T,>(initial: T) => ({ current: initial }),
     useCallback: <T,>(fn: T) => fn,
+    useSyncExternalStore: <T,>(_subscribe: unknown, getSnapshot: () => T) => getSnapshot(),
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
       if (!(stateIndex in reactHookRuntime.states)) {
@@ -116,36 +115,36 @@ vi.mock('lucide-react', () => ({
   }
 }))
 
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
-    return { type: 'DropdownMenu', props }
+vi.mock('@/components/ui/context-menu', () => ({
+  ContextMenu: function ContextMenu(props: { children?: unknown }) {
+    return { type: 'ContextMenu', props }
   },
-  DropdownMenuContent: function DropdownMenuContent(props: { children?: unknown }) {
-    return { type: 'DropdownMenuContent', props }
+  ContextMenuContent: function ContextMenuContent(props: { children?: unknown }) {
+    return { type: 'ContextMenuContent', props }
   },
-  DropdownMenuItem: function DropdownMenuItem(props: { children?: unknown }) {
-    return { type: 'DropdownMenuItem', props }
+  ContextMenuItem: function ContextMenuItem(props: { children?: unknown }) {
+    return { type: 'ContextMenuItem', props }
   },
-  DropdownMenuSeparator: function DropdownMenuSeparator() {
-    return { type: 'DropdownMenuSeparator', props: {} }
+  ContextMenuSeparator: function ContextMenuSeparator() {
+    return { type: 'ContextMenuSeparator', props: {} }
   },
-  DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
-    return { type: 'DropdownMenuShortcut', props }
+  ContextMenuShortcut: function ContextMenuShortcut(props: { children?: unknown }) {
+    return { type: 'ContextMenuShortcut', props }
   },
-  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
-    return { type: 'DropdownMenuLabel', props }
+  ContextMenuLabel: function ContextMenuLabel(props: { children?: unknown }) {
+    return { type: 'ContextMenuLabel', props }
   },
-  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
-    return { type: 'DropdownMenuSub', props }
+  ContextMenuSub: function ContextMenuSub(props: { children?: unknown }) {
+    return { type: 'ContextMenuSub', props }
   },
-  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
-    return { type: 'DropdownMenuSubContent', props }
+  ContextMenuSubContent: function ContextMenuSubContent(props: { children?: unknown }) {
+    return { type: 'ContextMenuSubContent', props }
   },
-  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
-    return { type: 'DropdownMenuSubTrigger', props }
+  ContextMenuSubTrigger: function ContextMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'ContextMenuSubTrigger', props }
   },
-  DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
-    return { type: 'DropdownMenuTrigger', props }
+  ContextMenuTrigger: function ContextMenuTrigger(props: { children?: unknown }) {
+    return { type: 'ContextMenuTrigger', props }
   }
 }))
 

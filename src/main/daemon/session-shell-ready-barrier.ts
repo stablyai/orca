@@ -28,7 +28,6 @@ import { basename } from 'node:path'
 import type { ShellReadyState } from './types'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
-export const CODEX_SHELL_READY_TIMEOUT_MS = 300
 
 export type SessionShellReadyBarrierDeps = {
   sessionId: string
@@ -44,7 +43,7 @@ export type SessionShellReadyBarrierDeps = {
   reportReadinessEvent?(event: string, details: Record<string, unknown>): void
 }
 
-/** Strip startup markers and gate stdin; hold DA1 authority until shell readiness resolves. */
+/** Strip startup markers and hold startup commands until shell readiness resolves. */
 export class SessionShellReadyBarrier {
   private _state: ShellReadyState
   private scanState: ShellStartupOutputScanState | null = null
@@ -63,7 +62,7 @@ export class SessionShellReadyBarrier {
     if (deps.shellReadySupported) {
       this._state = 'pending'
       this.scanState = createShellStartupOutputScanState()
-      // Answer DA1 past queued stdin, or a shell waiting for that reply can never emit its ready marker.
+      // Answer startup DA1 locally so shells waiting for it can reach their ready marker.
       this.releaseDeviceAttributesResponder = installDeviceAttributesResponder({
         parser: deps.responderParser,
         response: STARTUP_DA1_RESPONSE,
@@ -87,7 +86,7 @@ export class SessionShellReadyBarrier {
     return this._state
   }
 
-  /** Keep queuing through the post-marker flush window to preserve input order. */
+  /** Keep startup commands queued through the post-marker flush window. */
   get isGatingWrites(): boolean {
     return this._state === 'pending' || this.postReadyFlushGate.isPending
   }
@@ -252,8 +251,8 @@ export class SessionShellReadyBarrier {
 
   private transitionToReady(postMarkerBytesObserved = false): void {
     this._state = 'ready'
-    this.scanState = null
     this.disposePromptReadinessProbe()
+    this.scanState = null
     this.clearReadyTimer()
     if (this.preReadyStdinQueue.length === 0) {
       return

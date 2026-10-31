@@ -6,7 +6,7 @@ import {
   TASK_PAGE_GITHUB_RESUME_FRESH_MS
 } from '@/components/task-page/github/task-page-github-resume-cache'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 import { sortWorkItemsByNumber, taskPageToGitHubApiPage } from '../../../../../shared/work-items'
 import {
   materializeTaskPageItemList,
@@ -15,13 +15,14 @@ import {
 } from '@/components/task-page/github/task-page-github-work-item-mutation-pages'
 import { clearTaskPageGitHubAuthorityThroughGeneration } from '@/components/task-page/github/task-page-github-work-item-authority-refresh'
 import { getOrCreateQuietRevalidateState } from '@/components/task-page/github/task-page-github-work-item-quiet-state'
-import { resolveEmptyPageOutcome } from '@/components/task-page-work-item-pagination'
+import { resolveEmptyPageOutcome } from '../../../../../shared/work-item-empty-page'
 import {
   deriveTaskPageGitHubWorkItemsFetchOptions,
   shouldReplaceTaskPageItemsAfterRefresh,
   shouldResetTaskPagePaginationAfterLandingRefresh,
   reconcileTaskPagePagesAfterLandingRefresh
-} from '@/components/task-page-cache-selectors'
+} from '@/components/task-page/task-page-cache-selectors'
+import { translate } from '@/i18n/i18n'
 export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPaginationModel) {
   const {
     fetchWorkItemsAcrossRepos,
@@ -68,7 +69,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
   if (!taskResumeApplied) {
     return
   }
-  // Why: both early-return branches must clear retryingSourceKeys — if they fire, neither .then nor .catch runs and Retry stays stuck.
+  // Clear retry keys on early returns because no promise handler will run to release Retry.
   if (taskSource !== 'github' || githubMode !== 'items') {
     setRetryingSourceKeys(new Set())
     setTasksRefreshing(false)
@@ -159,11 +160,9 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
   setProvenPageLimit(null)
   setTasksError(null)
   setFailedCount(0) // reset so a prior failure banner doesn't linger
-  // reset so a prior failure banner doesn't linger
   setGithubUnavailable(false)
   setTasksLoading(targetPage > 0 ? cachedTargetPage === null : anyUncached)
 
-  // Preserve the existing nonce-gated force behavior.
   const forceRefresh = taskRefreshNonce !== lastFetchedNonceRef.current
   lastFetchedNonceRef.current = taskRefreshNonce
   // Why: treat a preference-flip nonce bump as a forced refresh so it bypasses the dedupe map and can't reuse pre-flip data.
@@ -171,6 +170,12 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
     workItemsInvalidationNonce !== lastFetchedInvalidationNonceRef.current
   lastFetchedInvalidationNonceRef.current = workItemsInvalidationNonce
   const forcedFetch = (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
+  // A Refresh, Retry or search in Tasks, or Tasks opened on one repo, is a user act that may start
+  // that repo's stopped WSL distro; opening a multi-repo fan-out is not (E9).
+  const wake =
+    (forceRefresh && taskRefreshNonce > 0) || selectedRepos.length === 1
+      ? { wakeWslDistro: true }
+      : {}
   if (forcedFetch) {
     hardRefreshEpochRef.current += 1
   }
@@ -208,7 +213,8 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
       githubPerRepoPageLimit,
       githubPageSize,
       q,
-      taskPageToGitHubApiPage(targetPage)
+      taskPageToGitHubApiPage(targetPage),
+      wake
     )
       .then(({ items, failedCount, errorTypes }) => {
         if (cancelled || paginationGenerationRef.current !== requestGeneration) {
@@ -258,6 +264,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
   const dispatchedRetrySourceKeys = retryingSourceKeys
   void fetchWorkItemsAcrossRepos(repoArgs, githubPerRepoPageLimit, githubPageSize, q, {
     ...deriveTaskPageGitHubWorkItemsFetchOptions(forcedFetch, shouldProbeOnLanding),
+    ...wake,
     ...(forcedFetch
       ? {
           requireComplete: true
@@ -280,9 +287,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
         if (cancelled) {
           return
         }
-        // Why: user hard refresh (force) is design tier-3 — drop confirmed
-        // authority so search can adopt for non-pending families. Pending ops
-        // still overlay. Quiet path must NOT clear authority.
+        // Hard refresh releases confirmed authority for non-pending fields; quiet refresh must retain it.
         if (
           forcedFetchAuthorityGeneration !== null &&
           failed === 0 &&
@@ -360,7 +365,14 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
       if (cancelled) {
         return
       }
-      setTasksError(err instanceof Error ? err.message : 'Failed to load GitHub work.')
+      setTasksError(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.TaskPage.loadGitHubWorkFailed',
+              'Failed to load GitHub work.'
+            )
+      )
       setFailedCount(0) // the per-repo banner would be misleading next to tasksError
       setGithubUnavailable(false)
       if (targetPage === 0 || cachedTargetPage) {
@@ -379,12 +391,11 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
       sourceContext: getTaskPageRepoSourceContext(r, 'github')
     })),
     q,
-    githubPerRepoPageLimit
+    githubPerRepoPageLimit,
+    wake
   ).then(({ totalPages: countedPages }) => {
     if (!cancelled) {
-      // Why: the count overwrites unconditionally — proven window limits live
-      // in provenPageLimit, so a late count can't be pinned by a speculative
-      // end-of-data withdrawal, and can't resurrect proven-dead pages either.
+      // Keep proven window limits separate so late real counts replace speculation without resurrecting unreachable pages.
       countedTotalPagesRef.current = countedPages
       setCountedTotalPages(countedPages)
     }

@@ -1,17 +1,7 @@
 #!/usr/bin/env node
-// Benchmark: cost of sorting the Source Control changed-file list.
-//
-// compareGitStatusEntries called `a.path.localeCompare(b.path, undefined, {numeric:true})`.
-// Passing an options object makes each call resolve a fresh ICU collator, so a
-// sort paid for one per O(n log n) comparison. The fix hoists a single
-// Intl.Collator, which is the idiom TaskPage.tsx already uses for Jira labels.
-//
-// The sort runs in a useMemo keyed on the entry list, so it re-runs on every git
-// refresh that changes the working tree.
-//
-// Both arms sort the same generated list and their outputs are compared before
-// timing, so a comparator that changed the order cannot be reported as a win.
+// Compare per-comparison localeCompare options with hoisted Intl.Collator on Source Control refresh; assert identical sorted output before timing.
 import { execFileSync } from 'node:child_process'
+import { build } from 'esbuild'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
@@ -37,28 +27,33 @@ function conflictRank(entry) {
   return 2
 }
 
-// Pre-fix: resolves a collator per comparison.
+// Per-call baseline preserves production's locale and deterministic numeric ties.
 function compareBefore(a, b) {
   return (
-    conflictRank(a) - conflictRank(b) || a.path.localeCompare(b.path, undefined, { numeric: true })
+    conflictRank(a) - conflictRank(b) ||
+    a.path.localeCompare(b.path, 'en', { numeric: true }) ||
+    (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
   )
 }
 
-// Post-fix: one hoisted collator, mirroring source-control-status-sort.ts.
-const collator = new Intl.Collator(undefined, { numeric: true })
-function compareAfter(a, b) {
-  return conflictRank(a) - conflictRank(b) || collator.compare(a.path, b.path)
-}
+const { outputFiles } = await build({
+  entryPoints: [fileURLToPath(new URL('../../src/shared/git-status-sort.ts', import.meta.url))],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  write: false
+})
+const { compareGitStatusEntries: compareAfter } = await import(
+  `data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`
+)
 
-// Why real repo paths in git's own order: `git status` emits byte-sorted paths,
-// and a shuffled fixture inflates the win — a nearly-sorted array is the case
-// this actually has to beat.
-const REPO_PATHS = execFileSync('git', ['ls-files'], {
+// Use real byte-sorted Git paths: shuffled input inflates win over nearly sorted production arrays.
+const REPO_PATHS = execFileSync('git', ['ls-files', '-z'], {
   cwd: fileURLToPath(new URL('../..', import.meta.url)),
   maxBuffer: 256 * 1024 * 1024
 })
   .toString()
-  .split('\n')
+  .split('\0')
   .filter(Boolean)
 
 function makeEntries(count) {
@@ -96,13 +91,12 @@ console.log('Source Control changed-file sort, per git refresh. Lower is better.
 console.log(`iterations=${ITERATIONS} warmup=${WARMUP} (median of 5 rounds)`)
 console.log(`${pad('files', 7)} ${pad('per-call', 11)} ${pad('hoisted', 11)} ${pad('speedup', 9)}`)
 
-// Sizes from the real distribution over 7,324 non-merge commits on this repo:
-// p50 3, p75 7, p90 17, p95 26, p99 63, max 1626.
+// Fixture sizes follow 7,324 non-merge commits: p50 3, p75 7, p90 17, p95 26, p99 63, max 1626.
 for (const count of [3, 17, 26, 63, 308, 1000]) {
   const entries = makeEntries(count)
   const before = [...entries].sort(compareBefore).map((entry) => entry.path)
   const after = [...entries].sort(compareAfter).map((entry) => entry.path)
-  if (before.join('\n') !== after.join('\n')) {
+  if (before.length !== after.length || before.some((path, index) => path !== after[index])) {
     throw new Error(`sort order differs at ${count} files`)
   }
   const beforeMs = measure(compareBefore, entries)

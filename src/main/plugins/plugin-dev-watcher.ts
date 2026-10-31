@@ -42,7 +42,6 @@ async function readPluginRootBinding(requestedRoot: string): Promise<PluginRootB
   }
 }
 
-/** Owns debounced manifest/panel refresh watchers for mutable dev plugins. */
 export class PluginDevWatcher {
   private readonly subscriptions: WatcherProcessSubscription[] = []
   private readonly physicalRoots = new Map<string, string>()
@@ -209,8 +208,7 @@ export class PluginDevWatcher {
           return
         }
         this.subscriptions.push(created)
-        // Why: the watcher reports only what changes after it is live, and discovery ran before
-        // that, so an edit made in between (a save right after adding the folder) would be lost.
+        // Catch edits between discovery and the native subscription becoming live.
         if (!parent) {
           this.scheduleRefresh(refresh)
         }

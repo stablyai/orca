@@ -28,7 +28,8 @@ import {
 import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { PtySubprocessOptions } from '../pty-subprocess'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/orcad-managed-launch-env'
+import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
+import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/orcad-server-launch-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -38,8 +39,10 @@ const PANE_IDENTITY_ENV_KEYS = [
   // Not identity but equally per-spawn: an inherited copy names another launch's CLI.
   'ORCA_WSL_CLI_DIR',
   'JCODE_RUNTIME_DIR',
-  // A server's own launch marker; a user's `orcad` in this shell is not client-managed.
-  ORCAD_MANAGED_ACTIVATION_ROOT_ENV
+  // Per-viewer: an Orca started from a remote viewer's pane must not mark its own local panes.
+  REMOTE_VIEWER_CLIPBOARD_ENV,
+  // A server's own launch env; a user's `orcad` in this shell is not that server.
+  ...ORCAD_SERVER_LAUNCH_ENV_KEYS
 ] as const
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
 

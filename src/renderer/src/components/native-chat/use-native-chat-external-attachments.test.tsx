@@ -26,8 +26,7 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => mocks.storeState }
 }))
 
-// Real notice strings, so the tests below assert what a user would actually read
-// and a newly added notice cannot go missing from this mock.
+// Keep real notice exports so mocks cannot hide wording regressions or newly added notices.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
   resolveNativeChatAttachmentOwner: mocks.resolveNativeChatAttachmentOwner,
@@ -287,9 +286,7 @@ describe('useNativeChatExternalAttachments', () => {
     )
   })
 
-  // The owner flipping during the LAST path has no next iteration to catch it,
-  // so the post-loop check is the only thing standing between a one-file drop
-  // and a path attached to a host that no longer owns it.
+  // Recheck after the final path too; otherwise a one-file drop can attach after its host owner changes.
   it('reports a one-file drop whose owner changes during its file check', async () => {
     const fileCheck = deferred<void>()
     let owner: { kind: 'local' } | { kind: 'remote' } = { kind: 'local' }
@@ -312,9 +309,7 @@ describe('useNativeChatExternalAttachments', () => {
     )
   })
 
-  // Both workspaces answer `local`, so the owner alone cannot tell them apart:
-  // only asking which workspace this composer serves now catches a tab that
-  // moved while the file check was still in flight.
+  // Two workspaces can share local ownership; recheck the pane’s workspace, not only host identity.
   it('does not attach when the pane changes workspace during the file check', async () => {
     const fileCheck = deferred<void>()
     mocks.stat.mockReturnValueOnce(fileCheck.promise)
@@ -402,7 +397,6 @@ describe('useNativeChatExternalAttachments', () => {
       expectedEnvironmentRuntimeId: 'runtime-a'
     }
 
-    /** `removed`: chips the user clicked away, which the composer no longer holds. */
     function trackingChips(): NativeChatPendingAttachmentChips & {
       begun: string[]
       removed: Set<string>
@@ -458,7 +452,6 @@ describe('useNativeChatExternalAttachments', () => {
       })
 
       act(() => probe.latest().attachExternalPaths(['/Users/me/shot.png', '/Users/me/notes.md']))
-      // Pending chips appear before the upload settles, so Send waits for both files.
       expect(chips.begun).toEqual(['shot.png', 'notes.md'])
       await act(async () =>
         upload.resolve(
@@ -623,7 +616,6 @@ describe('useNativeChatExternalAttachments', () => {
         [{ id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }],
         undefined
       )
-      // The cause, the size limit here, rides in the same notice.
       expect(notices).toEqual([
         "Couldn't attach huge.mov. 'huge.mov' is 60 MB, over the 50 MB chat attachment limit."
       ])

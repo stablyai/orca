@@ -5,10 +5,12 @@ import type { WorkspaceRunContext } from '../../shared/task-source-context'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import {
+  AUTOMATION_ORPHAN_ISSUES,
   projectAutomationSelector,
   type AutomationProjectionContext
 } from '../../shared/automation-list-scope'
 import { toAutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
+import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../shared/automation-owner-conflict'
 import { resolveAutomationRunTarget } from './run-target-resolution'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -111,6 +113,22 @@ function makeStore(
 }
 
 describe('resolveAutomationRunTarget owner projection', () => {
+  it.each([
+    { issue: AUTOMATION_ORPHAN_ISSUES.hostReselection },
+    { issue: AUTOMATION_ORPHAN_ISSUES.malformed },
+    { issue: AUTOMATION_ORPHAN_ISSUES.targetMissing, errorCode: 'targetMissing' },
+    { issue: AUTOMATION_ORPHAN_ISSUES.targetReplaced, errorCode: 'targetReplaced' },
+    { issue: AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous, errorCode: 'workspaceHostAmbiguous' }
+  ])('retains the captured host refusal: $issue', ({ issue, ...code }) => {
+    const store = makeStore([makeSetup()], [makeRepo()])
+    store.automationCapturedHostIssue = () => issue
+    expect(resolveAutomationRunTarget(store, makeAutomation(makeRunContext()))).toEqual({
+      ok: false,
+      error: AUTOMATION_CAPTURED_HOST_REFUSALS[issue],
+      ...code
+    })
+  })
+
   it('refuses a context-less local selector whose SSH-backed repo makes it malformed', () => {
     const repo = makeRepo({ connectionId: 'ssh-1' })
     const automation = makeAutomation(null)
@@ -118,7 +136,8 @@ describe('resolveAutomationRunTarget owner projection', () => {
 
     expect(resolveAutomationRunTarget(store, automation)).toEqual({
       ok: false,
-      error: 'This automation has no host to run on.'
+      error: 'This automation has no host to run on.',
+      errorCode: 'noRunnableHost'
     })
   })
 
@@ -147,15 +166,6 @@ describe('resolveAutomationRunTarget projectId drift', () => {
     expect(result).toMatchObject({ ok: true, cwd: '/repo' })
   })
 
-  it('resolves when the snapshot is at the git: tier and the setup climbed to github:', () => {
-    const store = makeStore([makeSetup()], [makeRepo()])
-    const automation = makeAutomation(makeRunContext({ projectId: 'git:github.com/o/r' }))
-
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({ ok: true, cwd: '/repo' })
-  })
-
   it('still blocks when the repoId no longer matches the setup', () => {
     const store = makeStore([makeSetup({ repoId: 'repo-2' })], [makeRepo()])
     const automation = makeAutomation(makeRunContext({ repoId: 'repo-1' }))
@@ -175,7 +185,7 @@ describe('resolveAutomationRunTarget projectId drift', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: 'Automation run target no longer matches the selected project host setup.'
+      error: 'Project is not set up on the selected automation host anymore.'
     })
   })
 
@@ -189,7 +199,7 @@ describe('resolveAutomationRunTarget projectId drift', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: 'Repository is no longer attached to the selected automation host.'
+      error: 'Repository for the selected automation host is no longer available.'
     })
   })
 
@@ -201,7 +211,8 @@ describe('resolveAutomationRunTarget projectId drift', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: 'Project path for the selected automation host has changed.'
+      error: 'Project path for the selected automation host has changed.',
+      errorCode: 'projectPathChanged'
     })
   })
 })

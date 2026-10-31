@@ -1,3 +1,9 @@
+import { readFileSync } from 'node:fs'
+import { acpLaunchSpecFor } from './acp-launch-specs'
+import {
+  NewSessionResponseSchema,
+  SessionNotificationSchema
+} from './generated/acp-protocol.generated'
 import { afterEach, describe, expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import {
@@ -6,8 +12,11 @@ import {
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
+import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
+import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import {
   GROK,
+  GROK_CONFIG_OPTIONS,
   openAcpAdapterRig,
   PID,
   PROVIDER_SESSION,
@@ -207,6 +216,151 @@ describe('ACP structured session adapter: turns', () => {
     })
   })
 
+  it.each([
+    ['composite', OPENCODE_ACP_DIALECT, 2],
+    ['independent', OMP_ACP_DIALECT, 1]
+  ] as const)(
+    'keeps applied model proof consistent with the %s dialect effort writer',
+    async (_name, dialect, modelWrites) => {
+      const rig = await openAcpAdapterRig({ spec: { ...GROK, dialect } })
+      await rig.acquire()
+      const inputs = [
+        { model: 'openai/gpt-5/high' },
+        { effort: 'low' },
+        { model: 'openai/gpt-5/high' }
+      ]
+      for (const [index, executionOptions] of inputs.entries()) {
+        await rig.adapter.dispatch({
+          sessionId: SESSION,
+          fence: 1,
+          clientMessageId: `variant-${index}`,
+          body: hello,
+          executionOptions
+        })
+        const prompt = await rig.frame('session/prompt', index)
+        rig.child().agent.notify('session/update', chunk(`prompt:variant-${index}`, 'Reply'))
+        rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+        await waitFor(async () => {
+          const turns = (await rig.rig.rows()).flatMap(
+            (row) => readAgentJournalTurn(row.body) ?? []
+          )
+          expect(turns.filter((turn) => turn.state === 'completed')).toHaveLength(index + 1)
+        })
+      }
+      const controls = rig
+        .child()
+        .agent.frames.filter((frame) => frame.method === 'session/set_config_option')
+      expect(
+        controls.filter(
+          (frame) =>
+            typeof frame.params === 'object' &&
+            frame.params !== null &&
+            'configId' in frame.params &&
+            frame.params.configId === 'model'
+        )
+      ).toHaveLength(modelWrites)
+      expect(
+        controls.filter(
+          (frame) =>
+            typeof frame.params === 'object' &&
+            frame.params !== null &&
+            'configId' in frame.params &&
+            frame.params.configId === 'reasoning_effort'
+        )
+      ).toHaveLength(1)
+    }
+  )
+
+  it('inherits omitted effort after acquired and applied high when OMP offers no default effort', async () => {
+    const configOptions = [
+      {
+        id: 'model',
+        name: 'Model',
+        category: 'model',
+        type: 'select',
+        currentValue: 'google/gemini-3.1-pro-preview',
+        options: [
+          { value: 'google/gemini-3.1-pro-preview', name: 'Gemini' },
+          { value: 'team_lb/gpt-6.1-sol', name: 'GPT' }
+        ]
+      },
+      {
+        id: 'reasoning_effort',
+        name: 'Effort',
+        category: 'thought_level',
+        type: 'select',
+        currentValue: 'high',
+        options: [{ value: 'high', name: 'High' }]
+      }
+    ]
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('omp')!,
+      script: (agent) => {
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions })
+        )
+        // The unchanged report does not echo or confirm the supplied control.
+        agent.on('session/set_config_option', (frame) => agent.reply(frame, { configOptions }))
+      }
+    })
+    await rig.acquire()
+    let promptIndex = 0
+    const dispatch = async (id: string, executionOptions: Record<string, string>) => {
+      await rig.adapter.dispatch({
+        sessionId: SESSION,
+        fence: 1,
+        clientMessageId: id,
+        executionOptions,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] }
+      })
+      const prompt = await rig.frame('session/prompt', promptIndex++)
+      rig.child().agent.notify('session/update', chunk(`prompt:${id}`, 'Reply'))
+      rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+      await waitFor(async () => {
+        const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
+        expect(turns.filter((turn) => turn.state === 'completed')).toHaveLength(promptIndex)
+      })
+    }
+    const observed = await rig.adapter.readOptions({ sessionId: SESSION, fence: 1 })
+    expect(observed.current).toMatchObject({
+      model: 'google/gemini-3.1-pro-preview',
+      effort: 'high'
+    })
+    expect(observed.models?.find((model) => model.id === 'team_lb/gpt-6.1-sol')).not.toHaveProperty(
+      'defaultEffort'
+    )
+    await dispatch('acquired', { model: 'team_lb/gpt-6.1-sol' })
+    expect(rig.sent('session/set_config_option').map((frame) => frame.params)).toEqual([
+      expect.objectContaining({ configId: 'model', value: 'team_lb/gpt-6.1-sol' })
+    ])
+    await dispatch('B', { model: 'unlisted-model', effort: 'high' })
+    await rig.frame('session/prompt')
+    let before = rig.child().agent.frames.length
+    await dispatch('A', { model: 'team_lb/gpt-6.1-sol' })
+    expect(
+      rig
+        .child()
+        .agent.frames.slice(before)
+        .map((frame) => frame.method)
+    ).toEqual(['session/set_config_option', 'session/prompt'])
+    before = rig.child().agent.frames.length
+    await dispatch('empty', {})
+    expect(
+      rig
+        .child()
+        .agent.frames.slice(before)
+        .map((frame) => frame.method)
+    ).toEqual(['session/prompt'])
+    before = rig.child().agent.frames.length
+    await dispatch('explicit', { effort: 'high' })
+    expect(
+      rig
+        .child()
+        .agent.frames.slice(before)
+        .map((frame) => frame.method)
+    ).toEqual(['session/set_config_option', 'session/prompt'])
+  })
+
   it('sends model-only choices away from the opening model, back, and away again', async () => {
     const rig = await openAcpAdapterRig()
     await rig.acquire()
@@ -227,13 +381,104 @@ describe('ACP structured session adapter: turns', () => {
       rig.child().agent.reply(await rig.frame('session/prompt', index), { stopReason: 'end_turn' })
       await waitFor(() => expect(rig.adapter.holdsDispatch(SESSION)).toBe(false))
     }
-    // Restore opening effort only when returning to the opening model.
+    // Model-only sends inherit native effort on each model.
     expect(rig.sent('session/set_config_option').map((frame) => frame.params)).toMatchObject([
       { configId: 'model', value: 'grok-4.6' },
       { configId: 'model', value: 'grok-4.7' },
-      { configId: 'reasoning_effort', value: 'high' },
       { configId: 'model', value: 'grok-4.6' }
     ])
+  })
+
+  it.each([
+    ['no choice', {}],
+    ['an effort choice', { effort: 'low' }]
+  ])(
+    'runs a message with %s on the model the agent moved to before Orca wrote one',
+    async (_name, executionOptions: { effort?: string }) => {
+      // As OpenCode 2: session/new answers before its catalog loads, then reports the configured model.
+      const rig = await openAcpAdapterRig()
+      await rig.acquire()
+      if (executionOptions.effort) {
+        await rig.adapter.setOption({
+          sessionId: SESSION,
+          key: 'effort',
+          value: executionOptions.effort,
+          fence: 1
+        })
+      }
+      rig.child().agent.notify('session/update', {
+        sessionId: PROVIDER_SESSION,
+        update: {
+          sessionUpdate: 'config_option_update',
+          configOptions: GROK_CONFIG_OPTIONS.map((option) =>
+            option.id === 'model'
+              ? { ...option, currentValue: 'grok-4.6' }
+              : { ...option, currentValue: executionOptions.effort ?? option.currentValue }
+          )
+        }
+      })
+      await waitFor(() =>
+        expect(rig.lifecycle).toContainEqual(
+          expect.objectContaining({
+            type: 'options-reported',
+            reportedOptions: expect.objectContaining({ model: 'grok-4.6' })
+          })
+        )
+      )
+      await rig.adapter.dispatch({
+        sessionId: SESSION,
+        fence: 1,
+        clientMessageId: 'unchosen-send',
+        body: hello,
+        executionOptions
+      })
+      await rig.frame('session/prompt')
+      expect(rig.sent('session/set_config_option').map((frame) => frame.params)).toEqual(
+        executionOptions.effort
+          ? [{ sessionId: PROVIDER_SESSION, configId: 'reasoning_effort', value: 'low' }]
+          : []
+      )
+    }
+  )
+
+  it('keeps recorded OpenCode startup identity inert when its own model arrives later', async () => {
+    const startup = NewSessionResponseSchema.parse(
+      JSON.parse(
+        readFileSync(new URL('./fixtures/opencode-v2-start-options.json', import.meta.url), 'utf8')
+      )
+    )
+    const frames = readFileSync(
+      new URL('./fixtures/opencode-v2-reopen.jsonl', import.meta.url),
+      'utf8'
+    )
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    const late = SessionNotificationSchema.parse(frames[1].message.params)
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('opencode2')!,
+      script: (agent) =>
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, { ...startup, sessionId: PROVIDER_SESSION })
+        )
+    })
+    await rig.acquire()
+    rig.child().agent.notify('session/update', { ...late, sessionId: PROVIDER_SESSION })
+    await waitFor(() =>
+      expect(rig.lifecycle.at(-1)).toMatchObject({
+        type: 'options-reported',
+        reportedOptions: { model: 'opencode/big-pickle' }
+      })
+    )
+    await rig.adapter.dispatch({
+      sessionId: SESSION,
+      fence: 1,
+      clientMessageId: 'own-model',
+      body: hello,
+      executionOptions: {}
+    })
+    await rig.frame('session/prompt')
+    expect(rig.sent('session/set_config_option')).toHaveLength(0)
   })
 
   it("sends Grok's prompt identity only to an agent whose dialect echoes it", async () => {

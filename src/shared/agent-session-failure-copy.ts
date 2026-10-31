@@ -1,5 +1,4 @@
-// The pieces every failure sentence is made of, in English. The host fills them in as they are;
-// desktop translates each piece whole with this as its fallback, so the two never differ.
+// Share whole English sentence pieces: the host interpolates them; desktop translates each with the same fallback.
 
 import {
   CLAUDE_PROFILE_MISSING_MESSAGE,
@@ -19,9 +18,7 @@ export const AGENT_STARTING = 'The agent is still starting.'
 export const WAIT_FOR_START = 'Wait for the agent to finish starting.'
 export const AGENT_STILL_WORKING = 'The agent is still working.'
 
-/** Every piece a failure sentence is made of, whole so desktop can translate each on its own.
- *  `{{agent}}` is the agent's name or `theAgent`, `{{command}}` a conversation command's name; the
- *  host fills them in English. */
+/** Whole translatable pieces; the host fills agent (name or theAgent) and command (conversation command name) in English. */
 export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
   providerStartFailed: '{{agent}} stopped before it finished starting.',
@@ -60,6 +57,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   agentNotSignedIn: 'Sign in to {{agent}}.',
   cliMissing:
     "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
+  cliMissingInWslDistro:
+    "{{agent}} isn't installed in the WSL distro {{distro}}. Install it inside {{distro}}, or check its Command in Settings → Agents.",
   signInFirst: 'Sign in first.',
   signInThenRunCommand: 'Sign in, then run /{{command}} again.',
   signInThenSend: 'Sign in, then send your message again.',
@@ -78,9 +77,17 @@ export const AGENT_SESSION_FAILURE_COPY = {
   claudeAccountFolderMissing: CLAUDE_PROFILE_MISSING_MESSAGE,
   claudeAccountSetupFailed: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
   agentCommandNotRunnable:
-    "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
+    "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
   runtimeNotInstalled:
     "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+  fullAccessAsRoot:
+    "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+  launchPreparationFailed:
+    "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
+  conversationOpenElsewhere:
+    'Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.',
+  conversationOpenInTerminal:
+    '{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.',
   chooseClaudeAccount: 'Choose or add one in Claude Accounts settings.',
   chooseClaudeAccountThenRunCommand:
     'Choose or add one in Claude Accounts settings, then run /{{command}} again.',
@@ -91,6 +98,9 @@ export const AGENT_SESSION_FAILURE_COPY = {
   providerExitedRejection: '{{agent}} stopped before this message was sent.',
   providerExitedAnswer:
     '{{agent}} has stopped, so your answer was not sent. Send a message to continue.',
+  claudeEffortInvalid:
+    'Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.',
+  modelUnavailable: "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
   providerRejected: "{{agent}} didn't accept this message.",
   providerRejectedQuoted: "{{agent}} didn't accept this message: {{detail}}.",
   attachmentEmpty: 'An image on this message is empty, so the message was not sent.',
@@ -166,7 +176,6 @@ export const AGENT_SESSION_FAILURE_COPY = {
 
 export type AgentSessionFailureCopyId = keyof typeof AGENT_SESSION_FAILURE_COPY
 
-/** What a piece's `{{name}}` placeholders stand for. */
 export type AgentSessionFailureCopyValues = {
   installedVersion?: string
   minimumVersion?: string
@@ -175,6 +184,8 @@ export type AgentSessionFailureCopyValues = {
   loginCommand?: string
   slashCommand?: string
   detail?: string
+  /** The WSL distro a WSL host runs in, as its host record names it. */
+  distro?: string
   /** A usage limit's name, from the `usageLimitWindow*` pieces. */
   window?: string
   /** When a usage limit resets, in the reader's clock. */
@@ -189,13 +200,11 @@ export type AgentSessionFailureCopyValues = {
   seconds?: string
 }
 
-/** One piece in the reader's language, placeholders filled. */
 export type AgentSessionFailureSay = (
   id: AgentSessionFailureCopyId,
   values?: AgentSessionFailureCopyValues
 ) => string
 
-/** The sentence for an agent binary too old for chats. */
 export function agentCliTooOldWords(
   { agent, installedVersion, minimumVersion }: AgentCliInstallationProblem,
   say: AgentSessionFailureSay

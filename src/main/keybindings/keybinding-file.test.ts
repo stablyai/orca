@@ -2,7 +2,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { LEGACY_TAB_SWITCH_BINDINGS } from '../../shared/keybindings'
+import {
+  getEffectiveKeybindingsForAction,
+  LEGACY_TAB_SWITCH_BINDINGS
+} from '../../shared/keybindings'
 import {
   getUserKeybindingsPath,
   migrateLegacyKeybindings,
@@ -22,6 +25,56 @@ describe('keybinding-file', () => {
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('roundtrips old arrays, new claims, explicit conflicts, masks/reset and pruning', () => {
+    const toggle = 'terminal.toggleNativeChat'
+    const navigation = 'worktree.navigateDown'
+    const aliases = ['Mod+Shift+J', 'Mod+Alt+Y']
+    const seed = (value: unknown) => writeFileSync(filePath, JSON.stringify(value))
+    const effective = () =>
+      getEffectiveKeybindingsForAction(
+        toggle,
+        'darwin',
+        readKeybindingFile(filePath, 'darwin').overrides
+      )
+    writeKeybindingOverride(filePath, 'darwin', navigation, aliases)
+    expect(effective()).toEqual([])
+    seed({ keybindings: { [navigation]: aliases } })
+    expect(readKeybindingFile(filePath, 'darwin').overrides).toEqual({ [navigation]: aliases })
+    writeKeybindingOverride(filePath, 'darwin', navigation, [])
+    expect(effective()).toEqual(['Mod+Shift+J'])
+    writeKeybindingOverride(filePath, 'darwin', toggle, [])
+    expect(effective()).toEqual([])
+    writeKeybindingOverride(filePath, 'darwin', toggle, null)
+    expect(effective()).toEqual(['Mod+Shift+J'])
+    writeKeybindingOverride(filePath, 'darwin', navigation, null)
+    expect(effective()).toEqual([])
+    expect(() => writeKeybindingOverride(filePath, 'darwin', toggle, aliases)).toThrow('conflicts')
+    seed({
+      version: 1,
+      keybindings: { [navigation]: ['Mod+Alt+Y'], [toggle]: ['Mod+Alt+Y'] },
+      platforms: { darwin: { [navigation]: [] } }
+    })
+    const unchanged = readFileSync(filePath, 'utf8')
+    expect(() => writeKeybindingOverride(filePath, 'darwin', navigation, null)).toThrow('conflicts')
+    expect(readFileSync(filePath, 'utf8')).toBe(unchanged)
+    seed({ keybindings: { [navigation]: ['Mod+Shift+J', 'Mod+P'] } })
+    expect(readKeybindingFile(filePath, 'darwin').overrides).toEqual({})
+    expect(effective()).toEqual(['Mod+Shift+J'])
+    seed({ keybindings: { 'worktree.palette': aliases } })
+    expect(
+      writeKeybindingOverride(filePath, 'win32', 'worktree.palette', aliases).overrides[
+        'worktree.palette'
+      ]
+    ).toEqual(aliases)
+    expect(
+      getEffectiveKeybindingsForAction(
+        toggle,
+        'win32',
+        readKeybindingFile(filePath, 'win32').overrides
+      )
+    ).toEqual(['Mod+Shift+J'])
   })
 
   it('resolves the user-facing keybindings path under ~/.orca', () => {
@@ -97,7 +150,7 @@ describe('keybinding-file', () => {
       filePath,
       JSON.stringify({
         keybindings: {
-          'plugin:orca-samples.tasks/open': 'Mod+Shift+T',
+          'plugin:samples.tasks/open': 'Mod+Shift+T',
           'plugin:tasks/open': 'Mod+Alt+T'
         }
       }),
@@ -106,15 +159,15 @@ describe('keybinding-file', () => {
 
     const snapshot = readKeybindingFile(filePath, 'linux')
     expect(snapshot.overrides).toEqual({
-      'plugin:orca-samples.tasks/open': ['Mod+Shift+T']
+      'plugin:samples.tasks/open': ['Mod+Shift+T']
     })
     expect(snapshot.diagnostics).toMatchObject([
       { severity: 'warning', actionId: 'plugin:tasks/open' }
     ])
 
-    writeKeybindingOverride(filePath, 'linux', 'plugin:orca-samples.tasks/open', [])
+    writeKeybindingOverride(filePath, 'linux', 'plugin:samples.tasks/open', [])
     expect(readKeybindingFile(filePath, 'linux').overrides).toEqual({
-      'plugin:orca-samples.tasks/open': []
+      'plugin:samples.tasks/open': []
     })
   })
 
@@ -138,6 +191,26 @@ describe('keybinding-file', () => {
       'warning',
       'error',
       'error'
+    ])
+    expect(snapshot.diagnostics[1]).toMatchObject({
+      message:
+        'Shortcut for "terminal.search" was ignored: Use a shortcut like Ctrl+Shift+P or Cmd+K.',
+      code: 'shortcutIgnored',
+      params: { actionId: 'terminal.search' },
+      reasonCode: 'invalidFormat'
+    })
+  })
+
+  it('keeps the English read failure and codes its nested reason', () => {
+    writeFileSync(filePath, '[]', 'utf8')
+    expect(readKeybindingFile(filePath, 'linux').diagnostics).toEqual([
+      {
+        severity: 'error',
+        message: 'Could not read keybindings file: Keybindings file must contain a JSON object.',
+        code: 'readFailed',
+        params: { reason: 'Keybindings file must contain a JSON object.' },
+        reasonCode: 'fileNotObject'
+      }
     ])
   })
 

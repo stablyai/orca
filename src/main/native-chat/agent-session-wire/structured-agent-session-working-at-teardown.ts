@@ -33,7 +33,7 @@ import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import {
   isStructuredAgentSessionCommandEntry,
   isStructuredAgentSessionCommandTurn
-} from '../../../shared/structured-agent-session-command-entry'
+} from '../../../shared/agent-session/structured-agent-session-command-entry'
 import {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn
@@ -163,7 +163,9 @@ type WorkingCandidateSession = {
 export function structuredAgentSessionWorkingAtStop(input: {
   sessionId: string
   session: WorkingCandidateSession | undefined
-  getRecord: (sessionId: string) => AgentSessionRecord | null
+  getRecord: (
+    sessionId: string
+  ) => Pick<AgentSessionRecord, 'providerHandleChain' | 'providerContextBoundary'> | null
   childWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   /** Include unrecorded live work rejected by bounded storage. */
   childWorkOpen: (sessionId: string) => boolean

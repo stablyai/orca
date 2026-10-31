@@ -47,20 +47,8 @@ import {
 
 export type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
 
-/**
- * The offered chats as a tree: machine, then project, then workspace (a child workspace is a node
- * inside its parent, after the parent's chats), then the chats.
- *
- * Every node's checkbox sits in one column at the left edge and covers every selectable chat under
- * it; levels read apart by icon and weight, nesting by indent and the disclosure arrows. The machine
- * level shows only when the machine is not obvious (a remote host, or chats on more than one), and
- * then it is what names the host, so no workspace repeats it.
- *
- * A workspace the store does not know yet (host connecting, or deleted) is named by its folder, the
- * name its id carries.
- */
+/** Group by machine/project/workspace/chat, nesting child workspaces after parent chats. Show machine nodes for remote/multiple hosts; name unknown workspaces by their encoded folder. */
 
-/** A group node: its row, then (while open) what is under it. */
 function GroupNode({
   nodeKey,
   depth,
@@ -192,14 +180,7 @@ function WorkspaceNode({
   )
 }
 
-/**
- * A git repo, or the project group a folder workspace belongs to.
- *
- * A folder workspace's synthetic worktree carries `repoId` of `folder-workspace:<projectGroupId>` —
- * never null — so "no repo" cannot be detected by testing for absence. `projectGroupIdFromRepoId`
- * is the only thing that separates the two, and the sidebar likewise titles these with the project
- * group's name.
- */
+/** Folder workspaces have synthetic folder-workspace:<projectGroupId> repo IDs. Decode with projectGroupIdFromRepoId; absence alone cannot distinguish them from Git repos. */
 function ProjectNode({
   repoId,
   hostId,
@@ -230,8 +211,7 @@ function ProjectNode({
       tree={tree}
       label={
         <>
-          {/* A repo shows its own configured glyph; a project group uses the FolderTree the
-              sidebar's own PROJECT_GROUP_META uses. */}
+          {/* Match the sidebar’s configured repo glyph or project-group FolderTree. */}
           {header.kind === 'project' ? (
             <FolderTree className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           ) : (
@@ -403,7 +383,7 @@ export function ResumeOnRestartGroups({
     renderStatus,
     selectableIds
   }
-  // Why: the machine is worth a level only when it is not obvious.
+  // Only remote/multiple hosts need an explicit machine level.
   const showMachines =
     machines.length > 1 || machines.some((machine) => machine.hostId !== LOCAL_EXECUTION_HOST_ID)
   return (

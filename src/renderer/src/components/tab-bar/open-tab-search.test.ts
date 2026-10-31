@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabContentType } from '../../../../shared/tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
-import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
+import { buildPaletteTabDocument } from '../../../../shared/palette-match/tab-document'
+import { PALETTE_QUERY_MAX_TOKENS } from '../../../../shared/palette-match/palette-query'
 import {
   buildSearchableBrowserPageDocument,
   type SearchableBrowserPage
@@ -21,7 +21,7 @@ import {
   type OpenTabSearchInput,
   type OpenTabSearchResult
 } from './open-tab-search'
-import { createPaletteSearchContext } from '@/lib/palette-match/palette-ranking'
+import { createPaletteSearchContext } from '../../../../shared/palette-match/palette-ranking'
 
 const worktree: Worktree = {
   id: 'wt-1',
@@ -309,8 +309,7 @@ describe('searchOpenTabs ranking', () => {
     ])
   })
 
-  // Both use secondary coverage, so match rank has to beat tab position: the
-  // agent tab sits earlier in the group and would win a position-only tie-break.
+  // Rank path matches above snippets before using tab position as a tie-breaker.
   it('ranks a path match above an agent-snippet match on tabs in the same group', () => {
     const results = search({
       query: 'zebra',
@@ -416,8 +415,7 @@ describe('searchOpenTabs ranking', () => {
 })
 
 describe('searchOpenTabs filtering', () => {
-  // The focused tab is only unreachable from its own column; hiding it here would
-  // make it unreachable from every other column's "+" too.
+  // Other columns must still be able to switch to the focused tab.
   it('still returns the focused tab, page and emulator', () => {
     const results = search({
       query: 'zebra',
@@ -509,8 +507,7 @@ describe('searchOpenTabs filtering', () => {
     ).toEqual([])
   })
 
-  // Both tokens land on the "ios simulator" alias, so the row fills no title or
-  // secondary range — the inverse test would drop it.
+  // Alias-only matches can span keywords without filling title or secondary highlight ranges.
   it('keeps a simulator alias match that spans two keywords', () => {
     const results = search({
       query: 'ios sim',

@@ -10,6 +10,7 @@ import {
   type OpenJournalDatabase
 } from './journal-database'
 import { journalOpenRefusalError } from './journal-open-failure'
+import { JournalCheckpointOwner } from './journal-checkpoint-owner'
 import { AgentSessionJournalError } from './journal-write-guards'
 
 const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
@@ -22,6 +23,8 @@ export class JournalHostDatabase {
   private connection: Database.Database | null
   readonly readOnly: boolean
   private stranded = false
+  private readonly checkpoint: JournalCheckpointOwner | undefined
+  private closing: Promise<void> | undefined
 
   private constructor(
     opened: OpenJournalDatabase,
@@ -29,6 +32,9 @@ export class JournalHostDatabase {
   ) {
     this.connection = opened.db
     this.readOnly = opened.readOnly
+    if (!this.readOnly) {
+      this.checkpoint = new JournalCheckpointOwner(opened.db, journalDatabasePath(stateDirectory))
+    }
   }
 
   static open(stateDirectory: string): JournalHostDatabase {
@@ -45,7 +51,7 @@ export class JournalHostDatabase {
 
   get db(): Database.Database {
     const connection = this.connection
-    if (!connection) {
+    if (!connection || this.closing) {
       throw new AgentSessionJournalError('journal_closed', 'the chat journal database is closed')
     }
     if (this.stranded) {
@@ -54,17 +60,16 @@ export class JournalHostDatabase {
     return connection
   }
 
-  /** One IMMEDIATE transaction; see `runJournalTransaction`. `streamed` commits without the per-commit
-   *  fsync: only for rows an OS crash may lose (`isJournalStreamedTextRevision`); the next FULL
-   *  commit makes them durable, so a crash can only lose a suffix of them. */
+  /** Streamed text may lose only its trailing suffix on OS crash; the next FULL commit makes it durable. */
   transaction<T>(
     run: (db: Database.Database) => T,
     streamed = false,
+    committed?: (result: T) => void,
     observation?: JournalTransactionObservation
   ): T {
     const db = this.db
     if (!streamed) {
-      return runJournalTransaction(
+      const result = runJournalTransaction(
         db,
         run,
         () => {
@@ -72,11 +77,15 @@ export class JournalHostDatabase {
         },
         observation
       )
+      committed?.(result)
+      this.checkpoint?.afterCommit()
+      return result
     }
     // Synchronous level changes require no transaction; stranded recovery restores FULL first.
     db.pragma('synchronous = NORMAL')
+    let result: T
     try {
-      return runJournalTransaction(
+      result = runJournalTransaction(
         db,
         run,
         () => {
@@ -84,15 +93,37 @@ export class JournalHostDatabase {
         },
         observation
       )
+      committed?.(result)
     } finally {
       if (!db.isTransaction) {
         db.pragma('synchronous = FULL')
       }
     }
+    this.checkpoint?.afterCommit()
+    return result
+  }
+
+  /** Autocommit maintenance may commit earlier statements even when a later statement fails. */
+  writeAutocommit<T>(run: (db: Database.Database) => T): T {
+    const db = this.db
+    try {
+      return run(db)
+    } finally {
+      this.checkpoint?.afterCommit()
+    }
   }
 
   /** Close after stores drain; preserve failed-close handles for teardown retry. */
-  close(): void {
+  close(): Promise<void> {
+    this.closing ??= this.finishClose().catch((error: unknown) => {
+      this.closing = undefined
+      throw error
+    })
+    return this.closing
+  }
+
+  private async finishClose(): Promise<void> {
+    await this.checkpoint?.close()
     this.connection?.close()
     this.connection = null
   }

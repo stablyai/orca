@@ -108,7 +108,6 @@ describe('useMobileDiffReviewDiffLoading', () => {
 
     await update('reconnecting')
     await update('connected')
-    // Why (F10): a failed refetch must not erase the diff (or hunk context) on screen.
     expect(diffState).toMatchObject({ kind: 'ready', lines: [{ text: 'before the drop' }] })
     expect(loadDiff).toHaveBeenCalledTimes(2)
     expect(activeHunkIndex).toBe(0)

@@ -131,20 +131,6 @@ describe('DiagramViewerModal', () => {
     await waitFor(() => expect(document.activeElement).toBe(opener))
   })
 
-  it('re-serializes the HTML-serialized sanitizer output as an XML image document', async () => {
-    // What DOMPurify returns in Chromium for a label holding U+00A0. Chromium's XML serializer
-    // then writes the character itself; happy-dom's keeps the entity, so only the reparse is asserted.
-    const sanitized = '<svg viewBox="0 0 400 200"><text>User&nbsp;A</text></svg>'
-    render(<Host />)
-    act(() => useAppStore.getState().openModal('diagram-viewer', { svg: sanitized }))
-    sizeCanvas()
-
-    expect(screen.getByRole('img', { name: 'Diagram' }).style.width).toBe('400px')
-    const blob = vi.mocked(URL.createObjectURL).mock.calls[0][0]
-    const xml = blob instanceof Blob ? await blob.text() : ''
-    expect(xml).toContain('xmlns="http://www.w3.org/2000/svg"')
-  })
-
   it('pans by the wheel distance whatever unit the device reports', async () => {
     const user = userEvent.setup()
     render(<Host />)

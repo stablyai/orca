@@ -18,7 +18,7 @@ import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '.
 import { encodePairingOffer, parsePairingCode } from '../../../shared/pairing'
 import { createPairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/paired-e2ee-node-primitives'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 
 const mocks = vi.hoisted(() => ({ isWebClient: false }))
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => mocks.isWebClient }))
@@ -104,8 +104,7 @@ async function recordingHost(): Promise<{
   return { pairing: pairedRuntimeConnectionFromOffer(pairing), auth }
 }
 
-// The route decides whether a paired host will admit a chat from these; a list that differs from
-// the handshake could open a chat the host refuses, or refuse one it would admit.
+// Launch admission must read the handshake’s exact capabilities or chat routing disagrees with host acceptance.
 describe("this client's capabilities as a paired host receives them", () => {
   it("are the desktop's handshake, as its transports send the Electron list", async () => {
     const host = await recordingHost()

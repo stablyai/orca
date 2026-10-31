@@ -18,7 +18,6 @@ describe('remapManuallyUnreadTurnPaneKeys', () => {
 
     expect(result.changed).toBe(true)
     expect(result.turns).toEqual({ [stableKey]: 50, 'tab-2:pane:9': 7 })
-    // Same remap contract as the cutoffs so the two never drift after a session restore.
     expect(remapActivityClearedAtPaneKeys(turns, remap).cutoffs).toEqual(result.turns)
   })
 
@@ -39,8 +38,7 @@ describe('remapManuallyUnreadTurnPaneKeys', () => {
 
     const result = remapAcknowledgedAgentPaneKeys(stable, remap)
 
-    // Why identity and not just equality: this runs on every session write against a map that
-    // grows with every pane ever opened, so a rebuilt-then-discarded copy is pure garbage.
+    // Preserve identity to avoid allocating this ever-growing map on every session write.
     expect(result.acknowledgements).toBe(stable)
     expect(result.changed).toBe(false)
   })

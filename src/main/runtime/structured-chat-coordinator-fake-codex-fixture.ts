@@ -1,6 +1,3 @@
-// A fake Codex app-server for the structured chat coordinator mail tests: it answers the JSON-RPC
-// calls the adapter makes, and misbehaves on the knobs in `providerFaults`.
-
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -177,7 +174,6 @@ export function attachParams(sessionId: string) {
   }
 }
 
-/** A healthy provider and a fresh id sequence, before each test. */
 export function resetProviderFaults(): void {
   operations = 0
   providerFaults.dieBeforeEveryEcho = false

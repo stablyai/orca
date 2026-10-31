@@ -1,4 +1,6 @@
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import { randomUUID } from 'node:crypto'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import {
   waitForStructuredAgentSessionStart,
   type StructuredAgentSessionStartReadiness
@@ -7,7 +9,7 @@ export type { StructuredAgentSessionStartReadiness } from './structured-agent-se
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import {
@@ -20,14 +22,16 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
   record: AgentSessionRecord
   identity: AgentSessionJournalIdentity
   spawnToken: string
-  permissionMode?: AgentChatPermissionMode
+  permissionMode?: AgentChatPermissionChoice
+  accountRecipe?: ClaudeAccountRecipe
   events?: StructuredAgentSessionEventSink
   signal?: AbortSignal
   startupOptions?: Readonly<Record<string, string>>
   attemptId?: string
 }): StructuredAgentSessionStartupAttempt {
   const { record } = input
-  const options = input.startupOptions ?? record.options
+  const selected = input.startupOptions ?? record.options
+  const options = record.provider === 'claude' ? { fastMode: 'false', ...selected } : selected
   return {
     attemptId: input.attemptId ?? randomUUID(),
     identity: input.identity,
@@ -40,6 +44,7 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
     },
     ...(options ? { options } : {}),
     ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
+    ...(input.accountRecipe ? { accountRecipe: input.accountRecipe } : {}),
     ...(input.events ? { events: input.events } : {}),
     ...(input.signal ? { signal: input.signal } : {})
   }
@@ -72,6 +77,8 @@ type Tracked = {
   expired: boolean
   /** Defer expiry reporting until aborted spawn settles; successful readiness overrides it. */
   expiry: StructuredAgentSessionStartupSettled | null
+  failure?: SubmissionRejectionFact
+  retry?: boolean
   readiness: PromiseWithResolvers<'ready' | 'ended'>
 }
 
@@ -95,17 +102,35 @@ export class StructuredAgentSessionStartupAttempts {
     this.now = deps.now ?? Date.now
   }
 
-  begin(sessionId: string, attemptId: string): void {
-    this.register(sessionId, attemptId)
+  /** A start registered before its first wait: its ceiling runs from now. */
+  begin(sessionId: string, attemptId: string, registeredAt = this.now()) {
+    const result = this.register(sessionId, attemptId, registeredAt)
+    return { ended: result.readiness.promise, result, registeredAt }
   }
 
-  private register(sessionId: string, attemptId: string): Tracked {
+  pastCeiling(registeredAt: number): boolean {
+    return this.now() - registeredAt >= this.limits.ceilingMs
+  }
+
+  childFailed(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity,
+    failure: SubmissionRejectionFact,
+    retry: boolean
+  ): void {
+    const tracked = this.open.get(sessionId)
+    if (tracked?.child && sameProviderChild(tracked.child, child)) {
+      Object.assign(tracked, { failure, retry })
+    }
+  }
+
+  private register(sessionId: string, attemptId: string, registeredAt = this.now()): Tracked {
     this.end(sessionId)
     const tracked: Tracked = {
       attemptId,
       attempt: null,
       child: null,
-      registeredAt: this.now(),
+      registeredAt,
       spawnedAt: null,
       timer: null,
       expired: false,
@@ -163,11 +188,11 @@ export class StructuredAgentSessionStartupAttempts {
     if (tracked?.attemptId !== attemptId) {
       return
     }
+    tracked.child = { generation: child.generation, fence: child.fence }
     if (child.phase === 'ready') {
       this.settle(sessionId, tracked, 'ready')
       return
     }
-    tracked.child = { generation: child.generation, fence: child.fence }
     if (tracked.expired) {
       this.expire(sessionId, tracked, null)
       return

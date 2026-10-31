@@ -45,13 +45,19 @@ describe('RelayAuthCoordinator', () => {
     coordinator.reconcile()
     await coordinator.waitForLiveBroker()
 
-    // Why: the broker announces its cell, then the coordinator republishes the
-    // same status; a republish without the cell would erase it immediately.
-    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://c27.relay.example.test')
+    expect(onStatus).toHaveBeenLastCalledWith(
+      'registered',
+      'https://c27.relay.example.test',
+      undefined
+    )
 
     coordinator.reconcile()
     await coordinator.waitForLiveBroker()
-    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://c27.relay.example.test')
+    expect(onStatus).toHaveBeenLastCalledWith(
+      'registered',
+      'https://c27.relay.example.test',
+      undefined
+    )
   })
 
   it('drops the cell from every status the host is not served on', async () => {
@@ -71,10 +77,10 @@ describe('RelayAuthCoordinator', () => {
     demanded = false
     coordinator.reconcile()
     await vi.advanceTimersByTimeAsync(0)
-    expect(onStatus).toHaveBeenLastCalledWith('standby', undefined)
+    expect(onStatus).toHaveBeenLastCalledWith('standby', undefined, undefined)
 
     coordinator.fenceAndCloseNow()
-    expect(onStatus).toHaveBeenLastCalledWith('offline', undefined)
+    expect(onStatus).toHaveBeenLastCalledWith('offline', undefined, undefined)
     for (const [status, cellUrl] of onStatus.mock.calls) {
       expect(status === 'registered' || cellUrl === undefined).toBe(true)
     }
@@ -298,8 +304,6 @@ describe('RelayAuthCoordinator', () => {
 
     const reopenedBroker = { closeNow: vi.fn() }
     const reopenedCoordinator = new RelayAuthCoordinator({
-      // Why: normal quit/relaunch preserves the session store, so a fresh
-      // process reads the same entitled identity and opens without new login.
       readContext: async () => context,
       openBroker: async () => reopenedBroker,
       onStatus: vi.fn()
@@ -339,8 +343,6 @@ describe('RelayAuthCoordinator', () => {
   })
 
   it('reopens instead of republishing registered for a dead broker', async () => {
-    // Why: a broker that lost its control without recovering must not keep
-    // reporting registered on every reconcile while phones get HOST_OFFLINE.
     let firstBrokerLive = true
     const brokers = [
       { closeNow: vi.fn(), isLive: () => firstBrokerLive },

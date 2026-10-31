@@ -1,11 +1,14 @@
+import type { AppState } from '@/store'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connection-phase'
+import { WORKTREE_OWNER_NOT_READY_ERROR } from './editor-panel-content-types'
 import type { Dispatch, SetStateAction } from 'react'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import type { FileContent } from './editor-panel-content-types'
 
-// Node's fs message names the syscall and the path; IPC and runtime RPC both carry it verbatim.
-// Greedy to the last quote: file names may contain apostrophes.
+// IPC/RPC preserve fs syscall/path text; match through the last quote because filenames can contain apostrophes.
 const MISSING_FILE_MESSAGE = /ENOENT: no such file or directory, \w+ '(.+)'/
 
 /** True only when the failure names this exact file as missing — never a worktree or host lookup. */
@@ -18,11 +21,7 @@ export function isPathSpecificMissingFileError(error: unknown, filePath: string)
   )
 }
 
-/**
- * Shows a failed read. A reload of a tab that already read the file (catch-up, watch event, stale reveal) found it gone:
- * mark the tab deleted as a watch event would, and keep its last content instead of an empty error.
- * Works without any existence probe, so hosts that predate one are covered too.
- */
+/** On proven file absence after a prior load, retain content and mark deleted; path-specific read errors support hosts without existence probes. */
 export function applyEditorFileLoadFailure(args: {
   error: unknown
   fileId: string
@@ -52,4 +51,33 @@ export function applyEditorFileLoadFailure(args: {
     }
     return existing.isStale ? { ...prev, [args.fileId]: { ...existing, isStale: false } } : prev
   })
+}
+
+export function getEditorFileLoadFailureContent(
+  state: AppState,
+  worktreeId: string | undefined,
+  readConnectionId: string | undefined,
+  err: unknown
+): FileContent {
+  const hostConnection = selectWorktreeHostConnectionPhase(state, worktreeId ?? null)
+  // Why: a read through an SSH host that is still connecting failed on the connection,
+  // not the file; the retry gate waits for it rather than showing "connection dropped".
+  const hostConnecting =
+    hostConnection.phase === 'connecting' &&
+    readConnectionId !== undefined &&
+    readConnectionId === hostConnection.targetId
+  const message = hostConnecting
+    ? WORKTREE_OWNER_NOT_READY_ERROR
+    : err instanceof Error
+      ? err.message
+      : String(err)
+  // Why: a host may put prose on the message and the machine token on `.code`;
+  // classifiers downstream must see the token, not only its rendering (#21041).
+  const loadErrorCode = !hostConnecting && err instanceof RuntimeRpcCallError ? err.code : undefined
+  return {
+    content: '',
+    isBinary: false,
+    loadError: message,
+    ...(loadErrorCode ? { loadErrorCode } : {})
+  }
 }

@@ -1,3 +1,4 @@
+import { terminalLaunchOpened } from '@/lib/launch-agent-in-new-tab-host-agents'
 import { toast } from 'sonner'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -120,7 +121,12 @@ function notifyHostUnreachable(agent: TuiAgent, executionHostId: ExecutionHostId
 /** What the caller's own terminal launch would have carried beyond the plan's agent and prompt. */
 export type DeclinedStructuredLaunchTerminalOptions = Pick<
   LaunchAgentInNewTabArgs,
-  'agentArgs' | 'launchPlatform' | 'launchSource' | 'initialCwd' | 'activate'
+  | 'agentArgs'
+  | 'sessionOptionsYieldToAgentArgs'
+  | 'launchPlatform'
+  | 'launchSource'
+  | 'initialCwd'
+  | 'activate'
 >
 
 /** A caller with no terminal path of its own gets the one a new agent tab would open. */
@@ -131,11 +137,13 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
   terminal?: DeclinedStructuredLaunchTerminalOptions
 }): Promise<StructuredLaunchTerminal> {
   // Loaded late: the new-tab launcher begins these launches.
-  const { launchAgentInNewTab } = await import('@/lib/launch-agent-in-new-tab')
-  const result = launchAgentInNewTab({
+  const { launchAgentInNewTabWithOutcome } = await import('@/lib/launch-agent-in-new-tab')
+  const result = launchAgentInNewTabWithOutcome({
     ...args.terminal,
     agent: args.plan.agent,
     worktreeId: args.worktreeId,
+    // The saved choice the chat would have seeded applies to its terminal as flags.
+    ...(args.plan.launchOptions ? { sessionOptions: args.plan.launchOptions } : {}),
     ...(args.targetGroupId ? { groupId: args.targetGroupId } : {}),
     ...(args.terminal?.activate !== false && args.plan.prompt ? { prompt: args.plan.prompt } : {}),
     ...(args.plan.promptDelivery ? { promptDelivery: args.plan.promptDelivery } : {}),
@@ -148,6 +156,9 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
       worktreeId: args.worktreeId
     })
   })
+  if (result && 'refused' in result) {
+    return { opened: false, promptDeliveryResult: Promise.resolve(result.refused) }
+  }
   return {
     opened: result !== null,
     ...(result?.surface.kind === 'local-terminal' ? { tabId: result.surface.tabId } : {}),
@@ -178,13 +189,7 @@ export function declinedTerminalCanOpen(
   return inventory.state !== 'successful' || inventory.ids?.includes(agent) !== false
 }
 
-/**
- * Asks the host that would run a chat, this machine or a paired server, before committing any of it
- * here: no tab, launch record, queued prompt or focus intent exists until it answers. Admitted opens
- * the chat; declined opens the caller's terminal (a resume, which has no terminal equivalent,
- * fails); an unreachable server opens nothing and says so. There is nothing to undo either way.
- * This machine's "can't answer" or "not resolvable yet" opens the chat, whose own create reports.
- */
+/** Ask the executing host before creating tabs/records/prompts/focus intent. Admission opens chat; refusal uses caller terminal (resume without equivalent fails); unreachable server opens nothing. Local unable-to-answer/unresolvable opens chat for its own create to report. */
 export function beginHostAdmittedStructuredLaunch(args: {
   plan: AgentSessionLaunchPlan & { agent: TuiAgent }
   hooks: StructuredAgentLaunchHooks
@@ -207,7 +212,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
   let admitted: AdmittedLaunch | null = null
   const isCancelled = (): boolean => cancelled || args.hooks.signal?.aborted === true
   let resolveDelivery: (result: StructuredPromptDeliveryResult) => void = () => undefined
-  const deliversPrompt = Boolean(plan.prompt?.trim()) && plan.promptDelivery !== 'draft'
+  const deliversPrompt = Boolean(plan.prompt?.trim())
   const promptDeliveryResult = deliversPrompt
     ? new Promise<StructuredPromptDeliveryResult>((resolve) => {
         resolveDelivery = resolve
@@ -241,8 +246,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
         resolveDelivery(NOT_DELIVERED)
         return { kind: 'cancelled', sessionId: null }
       }
-      // A server that cannot resolve the workspace yet keeps its terminal fallback; this machine has
-      // no connection to lose, so its "can't answer" leaves the report to the chat's own create.
+      // Unresolvable servers keep terminal fallback; local unable-to-answer can safely defer reporting to chat create.
       const admission: StructuredLaunchAdmission =
         asked.kind !== 'workspace-unresolved'
           ? asked
@@ -273,14 +277,13 @@ export function beginHostAdmittedStructuredLaunch(args: {
           )
         }
         const terminal = await args.onHostDeclined(args.target)
-        if (paired && terminal.opened) {
+        const opened = await terminalLaunchOpened(terminal)
+        if (paired && opened) {
           notifyHostDeclined(plan.agent)
         }
-        void (
-          terminal.promptDeliveryResult ??
-          Promise.resolve(terminal.opened ? DELIVERED : NOT_DELIVERED)
-        ).then(resolveDelivery, () => resolveDelivery(NOT_DELIVERED))
-        return terminal.opened ? { kind: 'terminal' } : { kind: 'cancelled', sessionId: null }
+        const delivery = terminal.promptDeliveryResult ?? (opened ? DELIVERED : NOT_DELIVERED)
+        void Promise.resolve(delivery).then(resolveDelivery, () => resolveDelivery(NOT_DELIVERED))
+        return opened ? { kind: 'terminal' } : { kind: 'cancelled', sessionId: null }
       }
       // A host that would run the chat with more access than asked for gets nothing to start.
       const permission = paired
@@ -309,7 +312,6 @@ export function beginHostAdmittedStructuredLaunch(args: {
       void (admitted.promptDeliveryResult ?? Promise.resolve(DELIVERED)).then(resolveDelivery, () =>
         resolveDelivery(NOT_DELIVERED)
       )
-      // Not awaited: the hold ends when the chat opens, not when it settles.
       return admitted.settlement
     } finally {
       releaseHold()

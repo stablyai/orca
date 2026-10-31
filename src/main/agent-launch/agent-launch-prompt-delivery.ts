@@ -1,3 +1,4 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 /**
  * What becomes of a launch's initial text, and what the receipt is allowed to say about it.
  *
@@ -55,25 +56,20 @@ export async function settleLaunchPromptDisposal(
   if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
   }
-  return deliverTerminalLaunchPrompt(execution, created.outcome.handle, { freshLaunch: true })
+  return deliverTerminalLaunchPrompt(execution, created.outcome.handle, {
+    freshLaunch: true,
+    terminalCreation: created.terminalCreation
+  })
 }
 
-/**
- * Writes the launch text into a terminal agent that is already running.
- *
- * The host owns the PTY, so it is better placed to write into one than the renderer that used to:
- * a pane owner can only deliver while its own window is open, which is why mobile and the CLI
- * never got a terminal prompt at all. What the host cannot see is what the agent then does with
- * it — a terminal keeps no transcript — so this reports `handed-to-terminal`, never `journaled`.
- *
- * `draft` stays `not-delivered`. A terminal draft is unsent text sitting in the TUI's own
- * composer; the host could paste it without a submit, but it has no way to observe that the
- * composer accepted it, so a receipt claiming delivery would be a guess.
- */
+/** PTY writes prove handoff, not consumption; drafts remain undelivered because acceptance is unobservable. */
 export async function deliverTerminalLaunchPrompt(
   execution: AgentLaunchSurfaceExecution,
   handle: string,
-  { freshLaunch }: { freshLaunch: boolean }
+  {
+    freshLaunch,
+    terminalCreation
+  }: { freshLaunch: boolean; terminalCreation?: RuntimeTerminalCreate }
 ): Promise<AgentLaunchPromptDisposal> {
   const { intent, surfaces, signal } = execution
   if (!intent.prompt || intent.prompt.delivery !== 'submit' || signal?.aborted) {
@@ -83,6 +79,7 @@ export async function deliverTerminalLaunchPrompt(
     handle,
     agent: intent.agent,
     freshLaunch,
+    terminalCreation,
     prompt: intent.prompt,
     ...(signal ? { signal } : {})
   })

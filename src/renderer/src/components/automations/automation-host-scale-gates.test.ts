@@ -1,17 +1,4 @@
-/**
- * The design doc's release gates at the scale it states them: 1,000 automations
- * across 50 hosts, driven through the real list client, cache, and scheduler.
- *
- * Every mechanism these gates rest on already has a unit test proving it works
- * in isolation. What only a fixture this size can show is that they *compose* —
- * that the four-slot pool still holds when each job also makes an unpooled
- * capability probe, that the one-call-per-authority budget survives a fan-out
- * over five entries, and that the commit fence still rejects everything stale
- * when the rejections happen under real concurrency rather than one at a time.
- *
- * The wire is mocked at the RPC boundary and nowhere above it, so response
- * validation, row projection, and legacy partitioning are all real work here.
- */
+/** Compose real validation, cache and scheduling over 1,000 automations/50 hosts; mock only RPC. Verify four pooled requests, deduped unpooled probes, one legacy call per authority and stale fences under concurrency. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -45,9 +32,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
-// 10 authorities x 5 entries = 50 hosts; 50 hosts x 20 = 1,000 automations.
-// Half the authorities are old servers, because the legacy fan-out is where the
-// per-authority call budget is easiest to lose.
+// Use 10 authorities × 5 entries × 20 automations; half are legacy to exercise per-authority fan-out budgets.
 const AUTHORITY_COUNT = 10
 const ENTRIES_PER_AUTHORITY = 5
 const AUTOMATIONS_PER_HOST = 20
@@ -76,9 +61,7 @@ function sshTargetId(authorityIndex: number, slot: number): string {
   return `ssh-${authorityIndex}-${slot}`
 }
 
-// Every authority carries all three selector kinds, because each takes a
-// different route: orphan scopes carry no owner, and the legacy partition has to
-// separate them from Self without any help from the server.
+// Include Self/SSH/orphan selectors so legacy partitioning proves ownership without server metadata.
 function refsForAuthority(authorityIndex: number): StableAutomationCatalogRef[] {
   const authority = stableAuthorityAt(authorityIndex)
   return [
@@ -122,8 +105,7 @@ function targetFor(ref: StableAutomationCatalogRef): AutomationHostFetchTarget {
   return {
     ref,
     authority,
-    // An orphan entry has no executable owner, which is the whole reason it is
-    // one; the scheduler still scopes the request by the selector alone.
+    // Orphans have no executable owner; the selector alone scopes their request.
     owner:
       ref.selector.kind === 'ssh'
         ? {
@@ -354,10 +336,7 @@ describe('one refresh of 50 hosts carrying 1,000 automations', () => {
 })
 
 describe('relay cost the request pool cannot see', () => {
-  // The probe is deliberate and unpooled, but it dedupes per authority
-  // incarnation: concurrent callers share the in-flight status.get and a
-  // confirmed capability is never re-asked, so a 50-host refresh probes each
-  // scoped authority once — not once per host.
+  // Capability probes sit outside the pool but dedupe per authority incarnation, not per host.
   it('counts one capability probe per scoped authority, and none for a legacy one', async () => {
     const { refresh } = harness()
 
@@ -394,8 +373,7 @@ describe('relay cost the request pool cannot see', () => {
 describe('the commit fence under real concurrency', () => {
   it('commits nothing from an authority invalidated while its answer was in flight', async () => {
     const { cache, refresh } = harness()
-    // One modern and one old server, so both the per-entry and the fan-out arm
-    // are fenced out while the other 40 hosts keep landing around them.
+    // Invalidate one scoped and one legacy authority while the other 40 hosts continue committing.
     const stale = new Set(['env-0', `env-${AUTHORITY_COUNT - 1}`])
     const invalidated = new Set<string>()
     onWireCall = (environmentId) => {
@@ -417,8 +395,7 @@ describe('the commit fence under real concurrency', () => {
       // The answer arrived and was thrown away, which is the gate's whole point.
       expect(authorityCounters(snap, index).discardedCommits).toBeGreaterThanOrEqual(1)
     }
-    // Everything else still landed: a fence that rejected the innocent would
-    // satisfy the stale-response gate and lose the user's rows doing it.
+    // Require unaffected rows to land too; blanket rejection could satisfy the stale-response gate while losing valid data.
     const survivors = ALL_REFS.filter(
       (ref) => !stale.has(ref.authority.kind === 'runtime' ? ref.authority.environmentId : '')
     )

@@ -1,3 +1,4 @@
+import type { CreateWorktreeProgressEvent } from '../../../../shared/worktree/create-types'
 import type { RuntimeRemoteFetchController } from '../../runtime-remote-fetch-controller'
 import type { TerminalSplitOptions } from '../../terminal/launch/terminal-split-surface'
 import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-contracts'
@@ -17,6 +18,10 @@ import {
 } from '../../../../shared/runtime-navigation'
 
 export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRuntimeWithActivateManagedWorktree {
+  notifyWorktreeCreationProgress(event: CreateWorktreeProgressEvent): void {
+    this.notifier?.worktreeCreationProgress?.(event)
+  }
+
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
 
   abstract splitTerminal(
@@ -61,8 +66,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         ),
       setTabTitle: async (handle, title) => {
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
-        // Why not renameTerminal: it writes the pane's title, stamped to outrank every later
-        // agent title, which would hide the agent's own titles and status for the pane's life.
+        // renameTerminal stamps a persistent pane title that would mask all later agent titles/status.
         this.notifier?.renameTerminal(tabId, title, { recordInteraction: false })
         if (!this.getAvailableAuthoritativeWindow()) {
           this.persistHeadlessTerminalTitle(worktreeId, tabId, title)
@@ -129,6 +133,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
           this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, { color })
         }
       },
+      getSetupTerminalTitle: () => this.getSetupTerminalTitle(),
       applyDefaultTabs: async (worktreeId, tabs) => {
         const reply = await this.applyLayoutCommand({
           type: 'applyDefaultTabs',
@@ -146,8 +151,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
     if (pty && recordedTabId) {
       return { worktreeId: pty.worktreeId, tabId: recordedTabId }
     }
-    // Why: once the window's graph sync adopts the handle it names the window's leaf, not the
-    // runtime's pty, as renameTerminal also resolves it.
+    // After graph adoption the handle names the window leaf, not the original runtime PTY.
     const { leaf } = this.getLiveLeafForHandle(handle)
     return { worktreeId: leaf.worktreeId, tabId: leaf.tabId }
   }

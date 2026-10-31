@@ -106,7 +106,6 @@ describe('WSL move journal', () => {
       userDataPath,
       cutover('move-2', 'prepared', { supersedesMigrationId: 'move-1' })
     )
-    // Rewriting the finished link unchanged is fine; nothing may restart it.
     writeWslMoveCutover(userDataPath, cutover('move-1', 'retained'))
   })
 
@@ -183,5 +182,105 @@ describe('WSL move journal', () => {
     mkdirSync(wslMoveJournalDirectory(userDataPath), { recursive: true })
     writeFileSync(journalPath('move-1'), JSON.stringify(edited))
     expect(() => listWslMoveCutovers(userDataPath)).toThrow('stay fenced')
+  })
+
+  it('refuses to remove a move a later move of its distro supersedes, so the chain stays readable', () => {
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'retained'))
+    seedWslMoveCutover(
+      userDataPath,
+      cutover('move-2', 'retained', { supersedesMigrationId: 'move-1' }, { repoIds: ['repo-2'] })
+    )
+    seedWslMoveCutover(
+      userDataPath,
+      cutover('move-3', 'retained', { supersedesMigrationId: 'move-2' }, { repoIds: ['repo-3'] })
+    )
+
+    expect(() => removeWslMoveCutover(userDataPath, 'move-2')).toThrow('wsl_move_superseded')
+    expect(() => removeWslMoveCutover(userDataPath, 'move-1')).toThrow('wsl_move_superseded')
+    expect(
+      listWslMoveCutoverChain(userDataPath, 'local-wsl:ubuntu').map((c) => c.migrationId)
+    ).toEqual(['move-1', 'move-2', 'move-3'])
+    // Newest first, one at a time, and the chain reads after every step.
+    removeWslMoveCutover(userDataPath, 'move-3')
+    expect(listWslMoveCutoverChain(userDataPath, 'local-wsl:ubuntu')).toHaveLength(2)
+    removeWslMoveCutover(userDataPath, 'move-2')
+    removeWslMoveCutover(userDataPath, 'move-1')
+    expect(listWslMoveCutovers(userDataPath)).toEqual([])
+  })
+  describe('restore hints', () => {
+    const hints = [{ paneKey: 'tab-1:11111111-1111-4111-8111-111111111111', cwd: '/home/dev/a' }]
+
+    it('records them once, with the quiesced record, and keeps them unchanged after', () => {
+      seedWslMoveCutover(userDataPath, cutover('move-1', 'source-fenced'))
+      writeWslMoveCutover(
+        userDataPath,
+        cutover('move-1', 'quiesced', { terminalRestoreHints: hints })
+      )
+      expect(listWslMoveCutovers(userDataPath)[0].terminalRestoreHints).toEqual(hints)
+      writeWslMoveCutover(
+        userDataPath,
+        cutover('move-1', 'destination-staged', { terminalRestoreHints: hints })
+      )
+      expect(() =>
+        writeWslMoveCutover(
+          userDataPath,
+          cutover('move-1', 'blobs-transferred', { terminalRestoreHints: [] })
+        )
+      ).toThrow('wsl_move_restore_hints_changed')
+      expect(() =>
+        writeWslMoveCutover(userDataPath, cutover('move-1', 'blobs-transferred'))
+      ).toThrow('wsl_move_restore_hints_changed')
+    })
+
+    it('refuses them on a new record or outside the quiesce step', () => {
+      expect(() =>
+        writeWslMoveCutover(
+          userDataPath,
+          cutover('move-1', 'prepared', { terminalRestoreHints: hints })
+        )
+      ).toThrow('wsl_move_restore_hints_changed')
+      writeWslMoveCutover(userDataPath, cutover('move-1', 'prepared'))
+      expect(() =>
+        writeWslMoveCutover(
+          userDataPath,
+          cutover('move-1', 'source-fenced', { terminalRestoreHints: hints })
+        )
+      ).toThrow('wsl_move_restore_hints_changed')
+    })
+
+    it('reads a record without them (an older build) and a malformed list as absent', () => {
+      mkdirSync(wslMoveJournalDirectory(userDataPath), { recursive: true })
+      writeFileSync(journalPath('move-1'), JSON.stringify(cutover('move-1', 'quiesced')))
+      expect(listWslMoveCutovers(userDataPath)[0].terminalRestoreHints).toBeUndefined()
+      writeFileSync(
+        journalPath('move-1'),
+        JSON.stringify({
+          ...cutover('move-1', 'quiesced'),
+          terminalRestoreHints: [{ paneKey: 'not a pane', cwd: 'relative' }]
+        })
+      )
+      expect(listWslMoveCutovers(userDataPath)[0].phase).toBe('quiesced')
+      expect(listWslMoveCutovers(userDataPath)[0].terminalRestoreHints).toBeUndefined()
+    })
+  })
+  it('keeps the automations to turn back on exactly as the move recorded them', () => {
+    writeWslMoveCutover(
+      userDataPath,
+      cutover('move-1', 'prepared', { automationsToReenable: ['auto-1'] })
+    )
+    expect(() =>
+      writeWslMoveCutover(
+        userDataPath,
+        cutover('move-1', 'source-fenced', { automationsToReenable: [] })
+      )
+    ).toThrow('wsl_move_binding_changed')
+    expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'source-fenced'))).toThrow(
+      'wsl_move_binding_changed'
+    )
+    writeWslMoveCutover(
+      userDataPath,
+      cutover('move-1', 'source-fenced', { automationsToReenable: ['auto-1'] })
+    )
+    expect(listWslMoveCutovers(userDataPath)[0].automationsToReenable).toEqual(['auto-1'])
   })
 })

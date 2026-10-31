@@ -1,47 +1,20 @@
 import { AgentLaunchDesktopCreateError } from './methods/agent-launch-execution-outcome'
-import { AGENT_LAUNCH_CANCELLED_CODE } from '../../../shared/agent-launch-cancellation'
-// Why: every RPC response needs the same runtimeId envelope, and the
-// runtime/browser error allowlists define the contract the CLI relies on to
-// format human-facing messages. Centralizing this mapping keeps the allowlist
-// auditable in one place instead of spread across per-method branches.
-import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch-surface'
+import { formatTerminalStartFailure } from '../../../shared/terminal-start-failure'
+// Centralize the runtimeId envelope and error-code contracts that clients use for decisions and display.
 import {
   agentSessionRefusalReference,
   isAgentSessionRefusalError,
   type AgentSessionRefusalError
 } from '../../../shared/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
-import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 import { TerminalSplitOutcomeError } from '../../../shared/terminal-split-outcome'
-import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
-import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
-import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
-import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../shared/agent-skill-sharing-gate'
-import {
-  AGENT_SKILL_NOT_SHAREABLE_CODE,
-  AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
-  AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
-  AGENT_SKILL_SHARING_BUSY_CODE,
-  AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
-  AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE
-} from '../../../shared/agent-skill-sharing-contract'
+import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
+import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
 import {
   SKILL_INSTALL_RPC_ERROR_CODE,
   classifySkillInstallFailureCode
 } from '../../../shared/skill-install-failure'
-import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
-import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
-import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
-import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
-import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../shared/project-runtime-repair-message'
-import { WORKTREE_CREATE_COLLISION_CODE } from '../../../shared/new-workspace/worktree-create-collision'
-import { WORKTREE_CREATE_SETUP_CHOICE_REQUIRED_CODE } from '../worktree-create-setup-choice-refusal'
-import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launch-pane-already-live'
-import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch-session-already-exists'
-import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
-import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../shared/agent-launch-target-forbidden'
 import {
   parseTerminalSpawnDeferral,
   TERMINAL_SPAWN_DEFERRED_CODE
@@ -71,124 +44,12 @@ export function errorResponse(
   }
 }
 
-// Why: the OrcaRuntimeService throws plain Error objects whose `message` is
-// actually a stable error code. This allowlist is the contract the CLI relies
-// on — expanding or renaming entries without updating the CLI would silently
-// change user-visible error codes.
-const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
-  WORKTREE_CREATE_COLLISION_CODE,
-  AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE,
-  AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE,
-  AGENT_LAUNCH_TAB_CLOSED_CODE,
-  AGENT_LAUNCH_CANCELLED_CODE,
-  AGENT_LAUNCH_TARGET_FORBIDDEN_CODE,
-  'agent_launch_replay_unsupported',
-  'runtime_unavailable',
-  'chat_fork_source_unavailable',
-  'chat_fork_runtime_incompatible',
-  'chat_fork_anchor_changed',
-  'selector_not_found',
-  'selector_ambiguous',
-  'terminal_handle_stale',
-  'terminal_not_writable',
-  'terminal_exited',
-  'terminal_gone',
-  'terminal_tab_close_timeout',
-  'terminal_tab_not_found',
-  'terminal_tab_pinned',
-  'agent_prompt_blocked',
-  'agent_prompt_stalled',
-  'no_active_terminal',
-  'repo_not_found',
-  'timeout',
-  'invalid_limit',
-  'request_aborted',
-  'remote_update_manual_required',
-  'remote_update_not_available',
-  'remote_update_not_downloaded',
-  'connectors_disabled',
-  'external_conversation_not_found',
-  ...AGENT_SESSION_RPC_ERROR_CODES
-])
-
-const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
-const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
-const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
-  WORKTREE_CREATE_COLLISION_CODE,
-  WORKTREE_CREATE_SETUP_CHOICE_REQUIRED_CODE,
-  AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
-  'worktree_id_requires_full_path',
-  'run_not_found',
-  'run_home_unreachable',
-  'run_required',
-  'stable_pane_required',
-  'consumer_fenced',
-  'task_not_found',
-  'task_not_startable',
-  'inject_rejected',
-  'dispatch_not_found',
-  'dispatch_run_mismatch',
-  'task_run_mismatch',
-  'terminal_not_found',
-  // A handle that names a live agent session with no terminal. Distinct from
-  // `terminal_handle_stale`, which claims the handle went dead — nothing went stale here.
-  'terminal_unsupported_for_agent_session',
-  'recipient_ambiguous',
-  'recipient_run_mismatch',
-  'dispatch_inactive',
-  'worker_identity_changed',
-  'cursor_invalid',
-  'cursor_dispatch_mismatch',
-  'source_changed',
-  'transcript_required',
-  'server_required',
-  'worktree_not_found_on_server',
-  'resource_server_mismatch',
-  'peer_changed',
-  'remote_runtime_unavailable',
-  'runtime_timeout',
-  'invalid_runtime_response',
-  'capability_unsupported',
-  'relay_quota_exceeded',
-  'dispatch_capability_invalid',
-  'agent_unconfigured',
-  'worker_prompt_too_large',
-  'terminal_worktree_mismatch',
-  'terminal_is_coordinator',
-  'request_mismatch',
-  'mutation_ledger_full',
-  'legacy_read_only',
-  'orchestration_migration_required',
-  'operation_unknown',
-  'dispatch_preamble_undelivered',
-  'question_not_found',
-  'answer_conflict',
-  'stale_delivery',
-  'waiter_exists',
-  'invalid_argument',
-  // Why (#19334): "your archive hook failed, nothing was deleted" is a distinct decision — retry,
-  // waive, or skip the hook. Flattened to runtime_error a caller can only pattern-match the text.
-  ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
-  // Why here and not only on the transport: a method that admits paired clients only refuses
-  // with the same code the mobile-allowlist check does, so a caller reads one answer either way.
-  'forbidden',
-  NESTED_WORKER_DEPTH_EXCEEDED_CODE,
-  PROJECT_RUNTIME_REPAIR_REQUIRED_CODE,
-  GIT_DIFF_TOO_LARGE_CODE,
-  ARTIFACT_SHARING_DISABLED_CODE,
-  AGENT_SKILL_SHARING_DISABLED_CODE,
-  AGENT_SKILL_NOT_SHAREABLE_CODE,
-  AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
-  AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
-  AGENT_SKILL_SHARING_BUSY_CODE,
-  AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
-  AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
-  SKILL_INSTALL_RPC_ERROR_CODE,
-  // Why: an owner conflict is a distinct client decision (reload the host, re-adopt,
-  // stop offering the action) — flattened to runtime_error it can only be guessed at.
-  ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
-  ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES)
-])
+import {
+  RUNTIME_PASSTHROUGH_CODES,
+  COMPUTER_PASSTHROUGH_CODES,
+  LINEAR_PASSTHROUGH_CODES,
+  STRUCTURED_RUNTIME_PASSTHROUGH_CODES
+} from './runtime-error-passthrough-codes'
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   if (error instanceof AgentLaunchDesktopCreateError) {
@@ -202,8 +63,11 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
   }
-  if (error instanceof TerminalSplitOutcomeError) {
-    // Keeps the code callers already match; the split's id rides in `data` for scripts.
+  if (
+    error instanceof TerminalSplitOutcomeError ||
+    error instanceof WslHostWindowsDriveRefusalError
+  ) {
+    // Keeps the code callers already match; the split's id or the refusal kind rides in `data`.
     return errorResponse(id, meta, 'runtime_error', message, error.data)
   }
   if (
@@ -258,7 +122,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     )
   }
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {
-    return errorResponse(id, meta, message, message)
+    return errorResponse(id, meta, message, formatTerminalStartFailure(error) ?? message)
   }
   const deferral = parseTerminalSpawnDeferral(message)
   if (deferral) {
@@ -275,18 +139,18 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
       skillInstallFailure
     )
   }
+  // Same code older clients match; people read the sentence, programs the hold in `data`.
+  const held = wslDistroHoldRpcFailure(message)
+  if (held) {
+    return errorResponse(id, meta, 'runtime_error', held.message, held.data)
+  }
   if (message === 'invalid_terminal_send') {
     return errorResponse(id, meta, 'invalid_argument', 'Missing terminal send payload')
   }
-  return errorResponse(id, meta, 'runtime_error', message)
+  return errorResponse(id, meta, 'runtime_error', formatTerminalStartFailure(error) ?? message)
 }
 
-/**
- * A thrown agent-session refusal, mapped before any `'code' in error` passthrough so no other
- * subsystem's code set can claim it. Wire code and message are exactly what the bare `Error(code)`
- * it replaced produced — released clients classify both — and the refusal's details ride only in
- * `data`, which they ignore.
- */
+/** Map agent-session refusals before generic code passthrough; preserve released clients' exact code/message and add ignored details only in data. */
 function agentSessionRefusalErrorResponse(
   id: string,
   meta: RpcEnvelopeMeta,
@@ -304,10 +168,7 @@ function agentSessionRefusalErrorResponse(
 
 export const computerErrorData = computerUseErrorRecoveryData
 
-// Why: browser errors carry a structured .code property (BrowserError from
-// cdp-bridge.ts) that maps directly to agent-facing error codes. We forward
-// that code rather than falling back to the runtime allowlist, because the
-// browser surface area uses its own code namespace (browser_no_tab, etc.).
+// BrowserError.code uses the browser namespace, separate from the runtime message-code allowlist.
 export function mapBrowserError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   if (
     error instanceof Error &&
@@ -319,8 +180,7 @@ export function mapBrowserError(id: string, meta: RpcEnvelopeMeta, error: unknow
   return mapRuntimeError(id, meta, error)
 }
 
-// Why: same as browser — emulator errors (EmulatorError) carry .code (emulator_no_active etc.)
-// so we forward the structured code instead of generic runtime_error.
+// EmulatorError.code likewise uses its own namespace rather than generic runtime_error.
 export function mapEmulatorError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   if (
     error instanceof Error &&

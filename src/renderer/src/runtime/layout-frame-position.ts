@@ -1,7 +1,4 @@
-// How far this window has read a layout stream (design phase E): a `layout.apply` reply names
-// the stream position holding its effect, and its outcome is shown once that frame is in, not
-// after a timer. One position per stream: this window's own main's, and each paired server's
-// (keyed by environment id), since a reply names a position in the stream of the main that sent it.
+// Apply replies wait for their named stream frame, never a timer. Track local main and each paired environment separately because reply positions belong to the issuing main.
 
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
@@ -66,8 +63,7 @@ export function noteLayoutFramePosition(
   release(entry, (waiter) => waiter.seq <= reached)
 }
 
-/** A frame's stream identity. A new one (the main restarted) starts its positions over, and a
- *  reply waiting on the old one shows now: its position will never come. */
+/** Main restart resets stream positions; waiters for the old stream run now because their frames cannot arrive. */
 export function noteLayoutFrameEpoch(
   epoch: string | undefined,
   key: string = LOCAL_LAYOUT_STREAM
@@ -101,11 +97,7 @@ export function endLayoutFramePositions(key: string = LOCAL_LAYOUT_STREAM): void
   release(entry, () => true)
 }
 
-/**
- * Runs `run` once this window holds the frame at `seq`: at once when it already does, when the
- * reply names no position (an older host), or while no stream is coming. An opened stream is
- * coming before its first frame too, so the wait holds until that frame or its end.
- */
+/** Run once the named frame arrives, immediately if already read, unpositioned (older host) or no stream is coming. Open streams wait even before first frame, until it or stream end. */
 export function afterLayoutFrame(
   seq: number | undefined,
   run: () => void,

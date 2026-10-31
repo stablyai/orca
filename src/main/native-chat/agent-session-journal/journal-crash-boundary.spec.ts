@@ -1,6 +1,4 @@
-// The crash boundary: the host wrote a submission row, dispatched, and died
-// before it learned whether the provider took the message. Replay keeps the message, once, in
-// doubt: it is neither re-sent nor guessed undelivered.
+// A crash after dispatch leaves delivery permanently unknown: replay preserves one message without resending or inferring refusal.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

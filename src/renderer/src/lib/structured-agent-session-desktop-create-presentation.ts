@@ -10,7 +10,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import {
   desktopCreateAcceptedTerminal,
   type DesktopCreateLaunchRecord
-} from './structured-agent-session-launch-record'
+} from './agent-session/launch/structured-agent-session-launch-record'
 import {
   deleteStructuredAgentLaunchRecords,
   desktopCreateIdentityKey,
@@ -20,13 +20,13 @@ import {
   readStructuredAgentLaunchRecord,
   readStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecords
-} from './structured-agent-session-launch-persistence'
+} from './agent-session/launch/structured-agent-session-launch-persistence'
 import {
   findStructuredLaunchTab,
   captureStructuredLaunchSurfaceAddress,
   openStructuredAgentSessionProvisionalTab
 } from './structured-agent-session-provisional-surface'
-import { notifyStructuredLaunchListeners } from './structured-agent-session-launch-registry'
+import { notifyStructuredLaunchListeners } from './agent-session/launch/structured-agent-session-launch-registry'
 
 onRuntimeEnvironmentsRetired((ids) => {
   if (!hasDesktopCreateLaunchRecords()) {

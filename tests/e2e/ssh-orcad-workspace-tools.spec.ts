@@ -1,8 +1,4 @@
-/**
- * Workspace tools on an orcad-managed SSH host: Quick Open over a monorepo-sized tree, the host's
- * port scan and an SSH port forward, an image outside the workspace opened from a terminal link, and
- * agent status reported from a remote terminal.
- */
+// Exercise managed SSH Quick Open at monorepo scale, ports/forwards, outside-workspace image links and remote agent status.
 import { expect, test } from './helpers/orca-app'
 import { reconnect } from './helpers/orcad-convert-flow'
 import { callEnvironment, createPairedHostTerminal } from './helpers/paired-host-terminal'

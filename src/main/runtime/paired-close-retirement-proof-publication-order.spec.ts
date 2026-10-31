@@ -11,13 +11,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { OrcaRuntimeService } from './orca-runtime'
 
 export function registerPairedCloseRetirementProofPublicationOrderTests(): void {
-  /**
-   * A paired client may only drop a mirrored terminal on host evidence: a `retiredTerminalSurfaces`
-   * proof naming the handle, or two authoritative `terminal.list` inventories that omit it. The
-   * second needs two host publications, and a quiet workspace produces one — so the proof is the
-   * only evidence that rides the frame carrying the retraction, and it has to be published whichever
-   * order the close's two halves (renderer republication, PTY exit) land in.
-   */
+  /** Mirrors need a retirement proof or two omitting inventories; quiet closes must publish proof regardless of renderer/exit ordering. */
 
   const WORKTREE_ID = 'repo::/worktree'
   const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -82,7 +76,6 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
           ptyIdsByLeafId: { [LEAF_ID]: 'pty-left' }
         }
       },
-      // The spawn commit's binding: the terminal's incarnation, as it registers below.
       terminalPtyIncarnationsByPaneKey: { [`tab:${LEAF_ID}`]: 'incarnation-a' }
     }
   }
@@ -98,12 +91,10 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
       withDurableRuntimeStore({
         getRepos: () => [LIVE_REPO],
         getWorkspaceSession: () => session,
-        // As a profile store: main's layout indexes the session under its host.
         getWorkspaceSessionHostIds: () => ['local'],
         setWorkspaceSession: (next: WorkspaceSessionState) => {
           session = next
         },
-        // Main's `layout.apply` on this partition, as the Store applies it.
         applyLayoutCommand: sessionLayoutApply({
           get: () => session,
           set: (next) => (session = next)
@@ -144,8 +135,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
     return {
       runtime,
       handle,
-      // The close de-persists the tab before the renderer republishes: switch-on main's layout
-      // close, switch-off the renderer's own close transaction.
+      // De-persist before renderer publication through whichever side owns the layout.
       retirePersistedSurface: async () => {
         if (ORCA_LAYOUT_OWNER_IS_MAIN) {
           await runtime.applyLayoutCommand({
@@ -208,8 +198,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
       ])
     })
 
-    // Why a subscriber and not just the stored snapshot: a mirror only ever sees frames. A proof
-    // that lands in state without a frame to carry it is the same silence from the client's side.
+    // Assert subscriber frames: a proof stored without publication is invisible to the mirror.
     it('fans the proof out to a paired subscriber, not just into stored state', async () => {
       const { runtime, handle, retirePersistedSurface } = createHost()
       const frames: RuntimeMobileSessionTabsResult[] = []

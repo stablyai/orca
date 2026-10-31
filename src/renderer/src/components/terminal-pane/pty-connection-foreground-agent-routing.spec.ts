@@ -248,7 +248,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     })
 
     it('confirms an Orca-launched Droid fresh spawn in a no-OSC shell (Git Bash)', async () => {
-      // Why: no-OSC shells (Git Bash/cmd) emit no command boundary, so without a fresh-spawn sample the pane never earns routing trust and Shift+Enter regresses to Esc+CR (#7620).
+      // No-OSC shells need fresh-spawn sampling to earn routing trust; otherwise Shift+Enter falls back to Esc+CR (#7620).
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
       vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('droid')
@@ -294,7 +294,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     })
 
     it('trusts a launched Droid whose no-OSC boot only becomes foreground after retries', async () => {
-      // Why: the confirmation ladder must span Droid's boot — the shell is still foreground on the first read(s) before Droid takes over.
+      // Retry across Droid boot while early foreground reads still see its shell.
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
       const foregroundResults = ['bash.exe', 'bash.exe', 'droid']
@@ -336,7 +336,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     })
 
     it('stays recoverable when a launched Droid outlasts the fresh-spawn confirmation window', async () => {
-      // Why: a missed ladder (slow boot) must stay recoverable — latching a shell-confirm would clear launch identity and poison Shift+Enter for the session.
+      // A slow-boot miss must remain recoverable; latching shell would erase launch identity and poison later routing.
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
       let foreground = 'bash.exe'
@@ -453,8 +453,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
         routingConfirmationPending: true,
         shellForeground: false
       })
-      // The provider read is asynchronous; keep the last known safe capability
-      // so a second Shift+Enter cannot become Pi's submit chord in the gap.
+      // Retain safe capability during provider reads so a second Pi Shift+Enter cannot become submit.
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
 
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)

@@ -1,5 +1,4 @@
-// Local actions reveal this pane at the press. Resume reveals once the host lifts the pause;
-// host delivery, queued drafts and Stop never move the reader.
+// Reveal local actions at press and Resume after confirmed unpause; host delivery, queued drafts and Stop preserve reader position.
 
 import { useCallback, useMemo } from 'react'
 import {
@@ -13,13 +12,11 @@ type StructuredController = ReturnType<typeof useStructuredAgentSession>
 
 export function useStructuredNativeChatSubmitReveal(
   controller: Pick<StructuredController, 'respond' | 'queuedMessages' | 'capturePresentation'>,
-  /** Relaunches a start that failed. */
   retryLaunch: () => void,
   /** The host may take no turn: no card is sent now or resumed, and no failed start retried. */
   startsHeld = false
 ): {
   messageListRef: React.RefObject<NativeChatMessageListHandle | null>
-  /** For the composer, which reveals as it sends. */
   revealLatest: () => void
   retryLaunch: () => void
   respond: StructuredController['respond']
@@ -56,7 +53,7 @@ export function useStructuredNativeChatSubmitReveal(
         ...queuedMessages,
         steer: async () => undefined,
         resume: async () => false,
-        steerNewest: () => false
+        steerHead: () => false
       }
     }
     return {
@@ -66,8 +63,8 @@ export function useStructuredNativeChatSubmitReveal(
         return queuedMessages.steer(messageId)
       },
       resume: revealing(queuedMessages.resume),
-      steerNewest: () => {
-        const steered = queuedMessages.steerNewest()
+      steerHead: () => {
+        const steered = queuedMessages.steerHead()
         if (steered) {
           revealLatest()
         }

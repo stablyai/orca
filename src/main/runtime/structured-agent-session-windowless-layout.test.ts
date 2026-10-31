@@ -1,9 +1,8 @@
-// A chat tab on a host with no window is saved in the host's layout, as a window saves its own:
-// opening a chat saves it, closing removes it, and a chat the index restores without one gets one.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
@@ -50,10 +49,17 @@ function runtimeStore(state: { session: WorkspaceSessionState }) {
 
 const settled = chatTabCommandsSettled
 
-/** A chat host with only the members a test's path reads. */
-function useChatHost(fake: Record<string, unknown>): void {
+function useChatHost(fake: Partial<StructuredAgentSessionHost>): void {
+  const index = () =>
+    typeof fake.getPersistedVisibleSessionTabIndex === 'function'
+      ? fake.getPersistedVisibleSessionTabIndex()
+      : { present: false, sessionIds: [] }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each test supplies every host member its path reads.
-  setStructuredAgentSessionHost(fake as never)
+  setStructuredAgentSessionHost({
+    deps: { store: { getConversation: () => null, isSessionUnreadable: () => false } },
+    isSessionTabVisible: (id: string) => index().sessionIds.includes(id),
+    ...fake
+  } as never)
 }
 
 function chat(sessionId: string) {
@@ -123,7 +129,6 @@ describe('a chat tab on a host with no window', () => {
     })
     await settled()
 
-    // A window opening the same chat reuses the tab with this id, content type and entity.
     expect(state.session.unifiedTabs?.[WT]).toEqual([
       expect.objectContaining({
         id: structuredAgentSessionTabId('chat-1'),
@@ -243,7 +248,7 @@ describe('a chat tab on a host with no window', () => {
     useChatHost({
       reconcileRestartLeases: async () => undefined,
       getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: ['chat-1'] }),
-      restoreReadableSessions: async () => undefined,
+      seedSessionTabs: async () => undefined,
       listSessionTabs: () => [{ sessionId: 'chat-1', workspaceId: WT, agent: 'codex' }]
     })
 
@@ -253,7 +258,6 @@ describe('a chat tab on a host with no window', () => {
     expect(savedChatIds(state)).toEqual(['chat-1'])
   })
 
-  // A layout-owner build's main places the chat's tab itself, window or not.
   it('is left to the window when one saves the layout, unless main owns the layout', async () => {
     const { runtime, state } = createRuntime()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime's own protected member; any non-null value is an attached window.
@@ -271,8 +275,7 @@ describe('a chat tab on a host with no window', () => {
     expect(savedChatIds(state)).toEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? ['chat-1'] : [])
   })
 
-  // Switch-on, a window's own launch reserves the chat's place and opens it there once the create
-  // answers; main's publish leaves the placing to that open, in either order.
+  // Window launches reserve their tab position; main publication must defer to that placement regardless of order.
   it.each(['publish first', 'window open first'])(
     "puts a window's chat where the window opens it: %s",
     async (order) => {

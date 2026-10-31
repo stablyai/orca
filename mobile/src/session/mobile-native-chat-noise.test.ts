@@ -38,7 +38,6 @@ describe('isNoiseMessage', () => {
 
   it('keeps real user messages', () => {
     expect(isNoiseMessage(msg('user', 'make it work for codex'))).toBe(false)
-    // A genuine custom tag is not a known harness tag, so it stays a user turn.
     expect(isNoiseMessage(msg('user', '<bash-brothers> is my band'))).toBe(false)
   })
 

@@ -1,30 +1,33 @@
 // Only queued work or provider operations start children. Run waits outside serialization;
 // fence each state commit so concurrent sends remain immediately acceptable.
 
-import {
-  providerDiagnosticOf,
-  type AgentSessionArgumentProblem,
-  type ProviderDiagnostic
+import type {
+  SubmissionRejectionFact,
+  ProviderDiagnostic
 } from '../../../shared/agent-session-failure'
+import type { AgentSessionArgumentProblem } from '../../../shared/agent-session/agent-session-argument-problem'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import {
   agentSessionRefusalFromReference,
-  readAgentSessionRefusalReference,
-  refuseUnclassified
+  isAgentSessionRefusalError,
+  readAgentSessionRefusalReference
 } from '../../../shared/agent-session-wire-refusals'
-import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session-refusal-notice'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { attachStructuredAgentSessionForStart } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
-import { registerStructuredAgentSessionStart } from './structured-agent-session-start-flight'
-import { isStructuredAgentSessionStartupExpired } from './structured-agent-session-startup-attempt-contract'
+import {
+  failedStructuredAgentSessionStart,
+  registerStructuredAgentSessionStart,
+  structuredAgentSessionStartStillQueued
+} from './structured-agent-session-start-attempts'
+import { retryableStructuredAgentSessionAcquisition } from './structured-agent-session-start-retry'
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
+import { startFailureDiagnosticOf } from './structured-agent-session-failure-text'
 import {
   joinClosingStructuredAgentSessionChild,
   releaseLeaseOfEndedStructuredAgentSessionChild
@@ -48,6 +51,9 @@ export type StructuredAgentSessionResumeOutcome =
       /** Startup silence/ceiling expiry means Orca stopped the start. */
       expired?: true
       argumentProblem?: AgentSessionArgumentProblem
+      retry?: boolean
+      failure?: SubmissionRejectionFact
+      startKey?: string | null
     }
 
 const AGENT_START_CALLER_KEY = 'trusted-local:agent-start'
@@ -62,26 +68,33 @@ export function claimStructuredAgentSessionAgent(
   sessionId: string,
   startedFor?: string
 ): StructuredAgentSessionStartClaim {
+  try {
+    context.deps.store.requireWritableRecord(sessionId)
+  } catch (error) {
+    if (isAgentSessionRefusalError(error)) {
+      return { outcome: Promise.resolve({ ok: false, refusal: error.refusal }) }
+    }
+    throw error
+  }
   const session = context.sessions.get(sessionId)
   const child = session?.child
-  if (
-    startedFor &&
-    !session?.journal
-      .submissions()
-      .some(
-        (submission) =>
-          submission.clientMessageId === startedFor && isQueuedAgentJournalSubmission(submission)
-      )
-  ) {
-    return { outcome: Promise.resolve({ ok: false, aborted: true, refusal: startFailedRefusal() }) }
+  if (!structuredAgentSessionStartStillQueued(session, startedFor)) {
+    return { outcome: Promise.resolve({ ...failedStructuredAgentSessionStart(), aborted: true }) }
+  }
+  const flight = context.runtimeState.startFlights.get(sessionId)
+  if (flight) {
+    return { outcome: flight.outcome }
   }
   if (child && !child.close) {
     return { outcome: Promise.resolve({ ok: true }) }
   }
   return {
-    outcome:
-      context.runtimeState.startFlights.get(sessionId)?.outcome ??
-      registerStart(context, sessionId, startedFor)
+    outcome: registerStructuredAgentSessionStart(
+      context,
+      sessionId,
+      startedFor,
+      (lock, attemptId) => runStart(context, sessionId, startedFor, lock, attemptId)
+    )
   }
 }
 
@@ -117,35 +130,9 @@ export function claimOperationStart(
         sessionId,
         error
       })
-      return { ok: false, refusal: startFailedRefusal() }
+      return failedStructuredAgentSessionStart()
     })
   }
-}
-
-/** Inside the register step, before any wait: the controller a Stop, close or quit aborts, the
- *  startup clock (once any setup hold ends), and quit's drain all cover the start from here. */
-function registerStart(
-  context: StructuredAgentSessionAttachContext,
-  sessionId: string,
-  startedFor: string | undefined
-): Promise<StructuredAgentSessionResumeOutcome> {
-  return registerStructuredAgentSessionStart(
-    context,
-    sessionId,
-    (lock, attemptId) =>
-      runStart(context, sessionId, startedFor, lock, attemptId).catch((error: unknown) => {
-        if (!lock.signal.aborted) {
-          throw error
-        }
-        const expired = isStructuredAgentSessionStartupExpired(lock.signal.reason)
-        return {
-          ok: false as const,
-          refusal: startFailedRefusal(),
-          ...(expired ? { expired: true as const } : { aborted: true as const })
-        }
-      }),
-    (result) => result
-  )
 }
 
 async function runStart(
@@ -226,19 +213,12 @@ async function runStart(
       )
 }
 
-function startFailedRefusal(): AgentSessionWireRefusal {
-  return refuseUnclassified(
-    'agent_session_owner_restart_failed',
-    agentSessionWriteNoticeEnglish(['restartFailed'])
-  )
-}
-
 function withDiagnostic(
   refusal: AgentSessionWireRefusal,
   error: unknown,
   { aborted, expired }: { aborted: boolean; expired: boolean }
 ): StructuredAgentSessionResumeOutcome {
-  const diagnostic = providerDiagnosticOf(error)
+  const diagnostic = startFailureDiagnosticOf(error)
   const argumentProblem = argumentProblemOf(error)
   return {
     ok: false,
@@ -246,7 +226,8 @@ function withDiagnostic(
     ...(diagnostic ? { diagnostic } : {}),
     ...(aborted ? { aborted: true as const } : {}),
     ...(expired ? { expired: true as const } : {}),
-    ...(argumentProblem ? { argumentProblem } : {})
+    ...(argumentProblem ? { argumentProblem } : {}),
+    retry: retryableStructuredAgentSessionAcquisition(error)
   }
 }
 

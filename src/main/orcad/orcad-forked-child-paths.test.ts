@@ -15,18 +15,13 @@ import {
 import { currentWorkerEntryLayout } from '../worker-thread-entry-path'
 import { installOrcadHostAdapters } from './orcad-host-adapters'
 
-/**
- * The composition, not the pieces: orcad's real host adapters against the real resolver
- * and a real deployment layout on disk. Both halves of this passed their own unit tests
- * while the running server forked a path that has never existed in an orcad deployment.
- */
+// Compose real adapters and deployment paths: isolated resolver tests missed nonexistent fork targets.
 describe('orcad forked-child paths', () => {
   let deployRoot: string
   let originalArgv: string[]
 
   beforeEach(() => {
     deployRoot = mkdtempSync(join(tmpdir(), 'orcad-deploy-'))
-    // The layout build-orcad.mjs emits: the bundle and its children side by side.
     writeFileSync(join(deployRoot, 'orcad.js'), '')
     writeFileSync(join(deployRoot, 'parcel-watcher-process-entry.js'), '')
     writeFileSync(join(deployRoot, FOREIGN_SQLITE_READER_ENTRY_FILENAME), '')
@@ -46,21 +41,17 @@ describe('orcad forked-child paths', () => {
   })
 
   it('forks the session scanner child shipped beside orcad.js', () => {
-    // orcad reports isPackaged with no asar, which used to send this lookup to out/main.
     expect(getAiVaultServiceEntryPath()).toBe(join(deployRoot, AI_VAULT_SERVICE_ENTRY_FILENAME))
   })
 
   it('starts the foreign SQLite reader worker shipped beside orcad.js', () => {
-    // orcad.js is one bundle, so its __dirname is the deploy root.
     expect(resolveForeignSqliteReaderEntryPath(currentWorkerEntryLayout(deployRoot))).toBe(
       join(deployRoot, FOREIGN_SQLITE_READER_ENTRY_FILENAME)
     )
   })
 
   it('ignores a decoy child under the working directory', () => {
-    // A cwd-derived app root finds the real child only when the operator happens to
-    // launch from the install directory, which a supervisor never does — and here it
-    // would find someone else's build instead.
+    // Cwd may hold an unrelated build; only the install root establishes shipped children.
     const elsewhere = mkdtempSync(join(tmpdir(), 'orcad-cwd-'))
     mkdirSync(join(elsewhere, 'out', 'main'), { recursive: true })
     writeFileSync(join(elsewhere, 'out', 'main', 'parcel-watcher-process-entry.js'), '')

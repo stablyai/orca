@@ -1,5 +1,4 @@
-// L80 (P3): a terminal record that arrives, or changes incarnation, after main composed its panes
-// re-composes them, so a pane its saved layout binds lists once, with that terminal.
+// Late terminal records and incarnation changes must recompose main-owned panes, listing each bound terminal once.
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
@@ -72,7 +71,6 @@ describe('a terminal record arriving after main composed its panes (switch on)',
     ])
     await hostTabRows(runtime)
 
-    // The same connected terminal adopts the stamped process: no connection change.
     incarnationId = 'inc-now'
 
     expect(await hostTabRows(runtime)).toEqual([
@@ -107,13 +105,11 @@ describe('a terminal record arriving after main composed its panes (switch on)',
 
     await new Promise((resolve) => setImmediate(resolve))
     const published = vi.spyOn(runtime, 'syncWindowGraph')
-    // A writer that resolves the terminal to another workspace (a worktree-identity migration).
+    // Simulate a worktree-identity migration.
     runtime['recordPtyWorktree']('persisted-pty', 'repo-1::/tmp/worktree-b')
     await new Promise((resolve) => setImmediate(resolve))
 
-    // The saved pane no longer holds a terminal of another workspace.
     expect(runtime['paneOfPty'](runtime['ptysById'].get('persisted-pty')).tabId).toBeNull()
-    // Main republished its panes: both workspaces' leaves re-compose against the moved record.
     expect(published).toHaveBeenCalled()
   })
 })

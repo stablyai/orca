@@ -6,8 +6,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { lockedVersion, lockfileRootImporter } from './pnpm-lockfile-root-importer.mjs'
 
-// The packages src/shared imports that mobile/tsconfig.json remaps to mobile's copy. TypeScript
-// merges two copies only at the same version; else zod-wrapped schemas infer `{}` (phone-feed-list.ts).
+// Shared tsconfig remaps to mobile copies; mismatched versions prevent TS merging Zod schemas, inferring {} (phone-feed-list.ts).
 export const SHARED_DEPENDENCIES = ['zod', 'tweetnacl', '@noble/hashes', '@types/ws']
 
 // Mobile typechecks through the root runner, whose Bun path accepts one TypeScript version, and

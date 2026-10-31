@@ -17,6 +17,7 @@ import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/list
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/opencode-startup-prompt'
+import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/claude-agent-view'
 
 type HookServerStartOptions = {
   env?: string
@@ -104,6 +105,11 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           res.end()
           return
         }
+        if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(JSON.stringify(this.claudeAgentViews.receive(body)))
+          return
+        }
         await this.initializeStatusHookOwner()
         if (!isStatusCurrent()) {
           res.writeHead(404)
@@ -174,7 +180,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             this.observations.rebind(event.paneKey)
           }
           this.recordCurrentAuthorityObservation(event)
-          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
+          const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
           if (enriched) {
             this.checkAgentPresenceAfterHook(event, enriched)
             this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
@@ -218,6 +224,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           if (address && typeof address === 'object') {
             this.port = address.port
           }
+          this.activateClaudeHelperObservations()
           this.maybeWriteEndpointFile()
         },
         (error) => console.error('[agent-hooks] server error', error)
@@ -242,6 +249,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   /** Quit retains status until chat teardown reads resumable child and background work. */
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
+    this.claudeAgentViews.clear()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {
       this.flushStatusPersistSync()

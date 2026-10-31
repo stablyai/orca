@@ -1,5 +1,4 @@
-// Desktop builds no longer compile the Windows relay addon, so every workflow that packages an
-// arbitrary ref must refuse one that still ships the relay rather than ship it without the addon.
+// Arbitrary-ref packaging must reject relay-era sources: desktop no longer builds the Windows relay addon they require.
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

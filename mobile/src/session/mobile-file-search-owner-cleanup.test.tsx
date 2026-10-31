@@ -2,10 +2,11 @@ import { createElement, StrictMode, type ReactNode } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { MobileNativeChatComposer } from './MobileNativeChatComposer'
+import { MobileNativeChatComposer } from './native-chat/composer/MobileNativeChatComposer'
 import { useMobileNativeChatFileSearch } from './native-chat/composer/use-mobile-native-chat-file-search'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
@@ -23,6 +24,8 @@ vi.mock('react-native', async () => {
 })
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  ListEnd: 'ListEnd',
+  CornerDownRight: 'CornerDownRight',
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',

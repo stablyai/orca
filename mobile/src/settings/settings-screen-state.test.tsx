@@ -1,21 +1,23 @@
-import { createElement, useEffect } from 'react'
+import { createElement, useEffect, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import NotificationsScreen from './notification-settings-screen'
 import VoiceSettingsScreen from './voice-settings-screen'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
+import { VoiceModelList } from '../components/VoiceModelList'
+import type { MobileSpeechModel, MobileSpeechSetup } from '../dictation/mobile-dictation-setup'
 
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',
   Pressable: 'Pressable',
-  Switch: 'Switch',
   ScrollView: 'ScrollView',
   ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   AppState: { addEventListener: () => ({ remove() {} }) }
 }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
@@ -23,7 +25,9 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback])
 }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', ChevronRight: 'Icon' }))
-vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
+vi.mock('../components/BottomDrawer', () => ({
+  BottomDrawer: ({ children }: { children: ReactNode }) => children
+}))
 vi.mock('../components/VoiceModelList', () => ({ VoiceModelList: () => null }))
 vi.mock('../dictation/use-dictation-setup-poller', () => ({
   useDictationSetupPoller: ({ refresh }: { refresh: () => Promise<unknown> }) => {
@@ -153,6 +157,152 @@ describe('shared settings screen state', () => {
     })
     // Without the request-epoch fence the stale read would flip the switch back on.
     expect(switchProps().value).toBe(false)
+  })
+  it('keeps the latest Voice switch choice while an older save replies', async () => {
+    const loaded = {
+      enabled: true,
+      dictationMode: 'toggle',
+      selectedModelId: '',
+      models: []
+    }
+    const replies: ((value: typeof loaded) => void)[] = []
+    const operations: VoiceSettingsOperations = {
+      load: vi.fn().mockResolvedValue(loaded),
+      configure: vi.fn(() => new Promise<typeof loaded>((resolve) => replies.push(resolve))),
+      download: vi.fn(),
+      delete: vi.fn()
+    }
+    await act(async () => {
+      renderer = create(
+        createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
+      )
+    })
+    const switchProps = () => renderer.root.findByProps({ testID: 'voice-enabled' }).props
+    await act(async () => {
+      switchProps().onValueChange(false)
+    })
+    await act(async () => {
+      switchProps().onValueChange(true)
+    })
+    await act(async () => {
+      replies[0]({ ...loaded, enabled: false })
+    })
+    expect(switchProps().value).toBe(true)
+    await act(async () => {
+      replies[1]({ ...loaded, enabled: true })
+    })
+    expect(switchProps().value).toBe(true)
+  })
+  describe('a model delete', () => {
+    const model: MobileSpeechModel = {
+      id: 'base',
+      label: 'Base',
+      provider: 'local',
+      sizeBytes: null,
+      recommended: true,
+      status: 'ready',
+      progress: null
+    }
+    const selected: MobileSpeechSetup = {
+      enabled: true,
+      dictationMode: 'toggle',
+      selectedModelId: 'base',
+      models: [model]
+    }
+    const deleted: MobileSpeechSetup = {
+      ...selected,
+      selectedModelId: '',
+      models: [{ ...model, status: 'not-downloaded' }]
+    }
+    async function deleteThenChangeMode() {
+      const pendingDelete = Promise.withResolvers<MobileSpeechSetup>()
+      const reads: (() => void)[] = []
+      const operations: VoiceSettingsOperations = {
+        load: vi
+          .fn()
+          .mockResolvedValueOnce(selected)
+          .mockImplementation(
+            () => new Promise<MobileSpeechSetup>((resolve) => reads.push(() => resolve(deleted)))
+          ),
+        configure: vi.fn().mockResolvedValue({ ...selected, dictationMode: 'hold' }),
+        download: vi.fn(),
+        delete: vi.fn(() => pendingDelete.promise)
+      }
+      await act(async () => {
+        renderer = create(
+          createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
+        )
+      })
+      await act(async () => {
+        renderer.root.findByType(VoiceModelList).props.onDelete(model)
+      })
+      await act(async () => {
+        renderer.root.findByProps({ testIDPrefix: 'voice-mode-' }).props.onSelect('hold')
+      })
+      const finishReads = async () => {
+        expect(reads.length).toBeGreaterThan(0)
+        await act(async () => {
+          reads.forEach((finishRead) => finishRead())
+        })
+      }
+      return { pendingDelete, finishReads }
+    }
+    it('re-reads when it succeeds after a newer change replied', async () => {
+      const { pendingDelete, finishReads } = await deleteThenChangeMode()
+      await act(async () => {
+        pendingDelete.resolve(deleted)
+      })
+      await finishReads()
+      expect(renderer.root.findByType(VoiceModelList).props.setup.selectedModelId).toBe('')
+    })
+    it('keeps its error through the re-read when it fails after a newer change', async () => {
+      const { pendingDelete, finishReads } = await deleteThenChangeMode()
+      await act(async () => {
+        pendingDelete.reject(new Error('voice_model_in_use'))
+      })
+      await finishReads()
+      expect(JSON.stringify(renderer.toJSON())).toContain('voice_model_in_use')
+    })
+    it('waits for it before re-reading for an older save', async () => {
+      let deleteFinished = false
+      const reads: (() => void)[] = []
+      const pendingSave = Promise.withResolvers<MobileSpeechSetup>()
+      const pendingDelete = Promise.withResolvers<MobileSpeechSetup>()
+      const operations: VoiceSettingsOperations = {
+        load: vi
+          .fn()
+          .mockResolvedValueOnce(selected)
+          .mockImplementation(() => {
+            const snapshot = deleteFinished ? deleted : selected
+            return new Promise<MobileSpeechSetup>((resolve) => reads.push(() => resolve(snapshot)))
+          }),
+        configure: vi.fn(() => pendingSave.promise),
+        download: vi.fn(),
+        delete: vi.fn(() => pendingDelete.promise)
+      }
+      await act(async () => {
+        renderer = create(
+          createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
+        )
+      })
+      await act(async () => {
+        renderer.root.findByProps({ testIDPrefix: 'voice-mode-' }).props.onSelect('hold')
+      })
+      await act(async () => {
+        renderer.root.findByType(VoiceModelList).props.onDelete(model)
+      })
+      await act(async () => {
+        pendingSave.resolve({ ...selected, dictationMode: 'hold' })
+      })
+      await act(async () => {
+        deleteFinished = true
+        pendingDelete.resolve(deleted)
+      })
+      await act(async () => {
+        reads.forEach((finishRead) => finishRead())
+      })
+      expect(renderer.root.findByType(VoiceModelList).props.setup.selectedModelId).toBe('')
+    })
   })
   it('does not enable notifications when permission is not granted', async () => {
     const denied = {

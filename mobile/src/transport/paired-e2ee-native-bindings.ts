@@ -8,19 +8,13 @@ declare global {
   var jsi_crypto_secretbox_open_easy: unknown
 }
 
-/**
- * Null when either native piece is missing from this binary. Only the app entry imports this file:
- * shared, desktop and e2e code reach the transport modules and must not load native-module types.
- */
+// Load only from app entry; shared/desktop/e2e transport imports must not load native types.
 export function loadPairedE2EENativeBindings(): PairedE2EENativeBindings | null {
   const sodium = installLibsodium()
   return sodium && OrcaGzipUtf8Codec ? { codec: OrcaGzipUtf8Codec, sodium } : null
 }
 
-/**
- * react-native-libsodium's JS entry installs its JSI functions on import, logs as it does, and
- * wraps every call; only its native install and two of the functions are needed here.
- */
+// Install JSI directly without the library entry’s logging/per-call wrappers; only two functions are needed.
 function installLibsodium(): LibsodiumBindings | null {
   const libsodium: { install?: unknown } | undefined = NativeModules.Libsodium
   if (typeof libsodium?.install !== 'function') {

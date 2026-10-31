@@ -152,9 +152,7 @@ describe('Codex real-account validation harness', () => {
   })
 
   it('builds via process.execPath and the repo-local electron-vite entry, not npx', () => {
-    // Why: raw `npx` resolves to a .cmd shim on Windows that execFileSync cannot
-    // launch (ENOENT), so the build command must use the current Node binary and
-    // the repository-local electron-vite JS entry to stay cross-platform.
+    // Build with current Node/local electron-vite JS because Windows npx.cmd is not directly executable.
     const { command, args, entry } = runValidationModule<{
       command: string
       args: string[]

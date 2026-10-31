@@ -1,5 +1,4 @@
-// Claude's scripted child for the registration matrix: the real Claude adapter over a scripted
-// stream-json connection. Its handshake is the CLI's initialize answer.
+// Registration fixture uses the real Claude adapter over scripted stream-json, including initialize handshake.
 
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -83,6 +82,7 @@ export const claudeScriptedChild: ScriptedAgentChildFactory = () => {
       exitVerdict: { root: 'live', tree: 'unverifiable' },
       initializationResult: () => init,
       getContextUsage: async () => ({}),
+      renameSession: async () => {},
       getSettings: async () => ({ effective: {} }),
       supportedModels: async () => [{ value: 'sonnet', displayName: 'Sonnet' }],
       setModel: async () => {},
@@ -148,7 +148,7 @@ export const claudeScriptedChild: ScriptedAgentChildFactory = () => {
         'exited'
           ? null
           : pid * 10,
-      resolveClaudeCommand: () => '/nonexistent/scripted-claude',
+      resolveClaudeCommand: () => ({ command: '/nonexistent/scripted-claude', prefixArgs: [] }),
       resolveClaudeAuthPolicy: () => ({ account: 'system' })
     },
     holdHandshakes: true,

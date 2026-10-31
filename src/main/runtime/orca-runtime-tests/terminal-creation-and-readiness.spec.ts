@@ -77,14 +77,13 @@ describe('OrcaRuntimeService', () => {
     })
     expect(result.handle).toMatch(/^term_/)
     expect(createTerminal).not.toHaveBeenCalled()
-    // Why: agent status keys off `${tabId}:${leafId}`; main pre-allocates the tabId, env-stamps it before spawn, and reuses it for adoption.
+    // Pre-mint and reuse the env-stamped pane key so agent status survives adoption.
     const spawnedEnv = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
     expectStablePaneKeyEnv(spawnedEnv)
     const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
     expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
     expect(spawnedEnv.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
-    // Why: the runtime spawn path must stamp the per-pane jcode runtime dir
-    // exactly like the renderer pty:spawn path (unix platforms only).
+    // Host spawns need the same Unix jcode runtime dir as renderer spawns.
     if (shouldInjectJcodeRuntimeDir(process.platform)) {
       expect(spawnedEnv[JCODE_RUNTIME_DIR_ENV_KEY]).toBe(
         buildJcodeRuntimeDir(spawnedEnv.ORCA_PANE_KEY)
@@ -126,9 +125,7 @@ describe('OrcaRuntimeService', () => {
         title: 'win shell'
       })
 
-      // The defect this pins: a caller asking for cmd could only pass it as `command`, which the
-      // provider types into whatever shell it spawned — so the pty stayed the default shell and
-      // leaving cmd dropped the handle back onto a prompt the caller never asked for.
+      // Passing cmd through command starts a child in the default shell; shellOverride selects the actual PTY shell.
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({ shellOverride: 'cmd.exe', command: undefined })
       )
@@ -187,9 +184,7 @@ describe('OrcaRuntimeService', () => {
         shellOverride: 'cmd.exe'
       })
 
-      // The setting alone still quotes for PowerShell; the requested shell is the one that will
-      // read the command, so it owns the quoting family. PowerShell quoting typed into cmd is a
-      // syntax error at the prompt.
+      // Quote for the selected shell, even when Settings names a different Windows default.
       expect(spawn).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({ command: "claude '--dangerously-skip-permissions'" })

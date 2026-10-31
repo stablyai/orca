@@ -1,5 +1,4 @@
-// Why: `agentSession.sleepWorkspace` params are strict, so only a host advertising this is sent
-// `markAsleep`; an older one stops the chats and marks nothing, leaving their workspace awake.
+// Strict sleepWorkspace params accept markAsleep only when advertised; older hosts stop chats without marking the workspace asleep.
 export const AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY =
   'agent-session.workspace-sleep-mark.v1' as const
 

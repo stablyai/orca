@@ -32,7 +32,6 @@ function bundledFile(id: string): Record<string, unknown> {
   return structuredClone(file)
 }
 
-// A Claude file whose title rule settles without quiet: visible through idleTitleRequiresQuiet.
 function claudeWithoutQuiet(): Record<string, unknown> {
   const claude = bundledFile('claude')
   return {
@@ -261,7 +260,7 @@ describe('agent state rules live updates', () => {
   })
 
   it("never reads the other channel's cache", async () => {
-    // Why: an RC build left next rules in the userData a stable build now shares.
+    // Stable and RC builds share userData.
     writeCache(bundleText(NEWEST), 'next')
     const h = harness()
     serve(h, bundleText(NEWER))
@@ -329,7 +328,7 @@ describe('agent state rules live updates', () => {
 
   it('ranks a local override over a download over the bundled rules', async () => {
     const overridePath = join(userData, 'override.json')
-    // Why gemini: the override may carry an agent a rules release cannot.
+    // User overrides may include agents excluded from published releases.
     writeFileSync(overridePath, bundleText(1, [bundledFile('gemini')]))
     writeCache(bundleText(NEWER))
     const h = harness()

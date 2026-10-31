@@ -14,6 +14,7 @@ import type {
 } from '../../runtime-terminal-state-records'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../runtime-mobile-agent-status-projection'
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
+import { createTerminalInputReservation } from '../../terminal-input-admission'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
 import { resolvePtyWriteHostPlatform } from '../input/pty-write-host-platform'
@@ -75,9 +76,10 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
   /** Undefined when the pane changed or exited during a screen read; the caller then has no answer. */
   protected readTerminalInteractiveWaitEvidence(
     handle: string,
-    ptyId: string
+    ptyId: string,
+    paneAgent: TerminalAgent | null = this.getPaneAgentForTuiIdle(ptyId)
   ): TerminalInteractiveWaitEvidence | Promise<TerminalInteractiveWaitEvidence | undefined> {
-    if (this.getPaneAgentForTuiIdle(ptyId) !== 'claude' || !this.headlessTerminals.has(ptyId)) {
+    if (paneAgent !== 'claude' || !this.headlessTerminals.has(ptyId)) {
       return this.buildTerminalInteractiveWaitEvidence(handle, ptyId, 'not-read')
     }
     return this.readCurrentTerminalWaitScreen(ptyId).then((screen) =>
@@ -163,11 +165,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       : null
   }
 
-  /**
-   * The title snapshot and prompt lifecycle the blocked-dialog check compares, both as display
-   * shows them, so the check reaches main's verdict: main compared the pair a stale-working clear
-   * left, and comparing a renderer's echoed clear with the native lifecycle hid a later dialog.
-   */
+  /** Compare display-projected title and lifecycle together; mixing an echoed stale-working clear with native lifecycle can hide a later dialog. */
   protected getTerminalWaitPermissionInputs(
     handle: string,
     ptyId: string,
@@ -279,7 +277,10 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     payload: string,
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
-    return this.terminalWriter.writeAction(ptyId, action, payload, options)
+    return this.terminalWriter.writeAction(ptyId, action, payload, {
+      ...options,
+      reserveWrite: createTerminalInputReservation(this, options.inputSource, options.reserveWrite)
+    })
   }
 
   protected writeTerminalInputChunks(
@@ -287,7 +288,10 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     text: string,
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
-    return this.terminalWriter.writeChunks(ptyId, text, options)
+    return this.terminalWriter.writeChunks(ptyId, text, {
+      ...options,
+      reserveWrite: createTerminalInputReservation(this, options.inputSource, options.reserveWrite)
+    })
   }
 
   protected getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform {

@@ -87,7 +87,7 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
     ...(jumpHost ? { jumpHost } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
     ...(systemSshProxyConnectionReuse ? { systemSshProxyConnectionReuse } : {}),
-    // Why explicit both ways: absent means on here, and off on a server from before the default flip.
+    // Send true/false explicitly because older servers interpret absence as disabled.
     allowRemoteCliControl: form.allowRemoteCliControl
   }
 
@@ -157,7 +157,6 @@ export async function prefillFormFromSshConfigHost(
   }
 }
 
-/** Bulk-load ~/.ssh/config hosts into Orca’s host list (sidebar targets). */
 export async function addAllSshConfigHostsToOrca({
   ssh,
   recordSshRepoReadoptions,
@@ -170,9 +169,7 @@ export async function addAllSshConfigHostsToOrca({
   recordFeatureInteraction: (feature: 'ssh') => void
 }): Promise<{ kind: 'added'; count: number } | { kind: 'already-synced' } | { kind: 'failed' }> {
   try {
-    // Why: no reAdopt — the button counts and promises only the *new* hosts the picker
-    // showed. Re-adopting would resurrect hosts the user deleted, which the count omits.
-    // Settings → Import stays the explicit re-adopt path.
+    // Import only newly counted hosts; re-adopting deleted aliases remains an explicit Settings action.
     const result = await ssh.importConfig()
     recordSshRepoReadoptions(result.repoReadoptions)
     setSshTargetsMetadata(await ssh.listTargets())
@@ -189,8 +186,8 @@ export async function addAllSshConfigHostsToOrca({
     toast.success(
       translate(
         'auto.components.sidebar.AddRemoteHostDialog.sshImportSynced',
-        'Added {{value0}} host{{value1}} to Orca.',
-        { value0: result.targets.length, value1: result.targets.length > 1 ? 's' : '' }
+        'Added {{count}} hosts to Orca.',
+        { count: result.targets.length, defaultValue_one: 'Added {{count}} host to Orca.' }
       )
     )
     return { kind: 'added', count: result.targets.length }
@@ -215,7 +212,12 @@ export async function loadSshConfigHostsForPicker(
     const listed: unknown = await ssh.listConfigHosts(args)
     const result = normalizeSshConfigHostListResult(listed)
     if (!result) {
-      throw new Error('Invalid SSH config host response')
+      throw new Error(
+        translate(
+          'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerInvalidResponse',
+          'Invalid SSH config host response'
+        )
+      )
     }
     return { ok: true, result }
   } catch (error) {

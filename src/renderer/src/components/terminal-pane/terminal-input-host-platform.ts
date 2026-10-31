@@ -57,8 +57,7 @@ export function resolveTerminalInputHostPlatform(args: {
     return args.state.sshConnectionStates.get(connectionId)?.remotePlatform ?? 'linux'
   }
 
-  // Why: a running pane keeps its spawn-time runtime even if the worktree's
-  // selected host changes later, so the live PTY identity is authoritative.
+  // The live binding retains its spawn-time runtime even if workspace host selection changes.
   const ptyId = args.transport?.getPtyId?.() ?? null
   const runtimeEnvironmentId =
     args.transport?.getRuntimeEnvironmentId?.() ??
@@ -72,9 +71,7 @@ export function resolveTerminalInputHostPlatform(args: {
     )
   }
   if (runtimeEnvironmentId) {
-    // Why last-verified: the host's platform is a fact about the host, and falling back to the
-    // client's silently re-points every keystroke and path at the wrong conventions -- a Windows
-    // host driven from a Mac. See docs/reference/ssh-execution-boundary.md.
+    // Retain last-verified host platform through outages; client fallback silently changes input/path conventions (ssh-execution-boundary.md).
     return (
       lastVerifiedRuntimeStatus(args.state.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId))
         ?.hostPlatform ?? args.clientPlatform

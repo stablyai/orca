@@ -118,7 +118,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-// Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
+// Stub eager-buffer lookup to exercise live adoption without the IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
@@ -131,8 +131,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
 }
 
-// A process-lifetime producer (OpenCode 2 `opencode run`) posts the run's Done after the
-// command-finished fact; the exited-agent drop must keep it, as it keeps a late hook Done.
+// OpenCode 2 posts Done after command-finished; exited-agent cleanup must preserve it like a late hook Done.
 describe('command-finished drop and a Done that lands after it', () => {
   beforeEach(async () => {
     vi.resetModules()

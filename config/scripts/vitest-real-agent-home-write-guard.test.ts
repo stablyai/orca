@@ -10,8 +10,7 @@ import {
   takeRealAgentHomeWriteViolations
 } from './vitest-real-agent-home-write-guard'
 
-// Why never-created paths: each sits under a missing folder or is a forced no-op removal, so even
-// with the guard off (the ablation) nothing lands in the real home.
+// Use missing-parent/no-op paths so guard ablation never writes real home either.
 const missingRealFolder = (entry: string) =>
   join(userInfo().homedir, entry, `orca-vitest-guard-${randomUUID()}`)
 

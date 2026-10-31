@@ -1,11 +1,6 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
-import type {
-  BrowserSlice,
-  BrowserSliceGet,
-  BrowserSliceSet,
-  CreateBrowserTabOptions
-} from './browser-slice-contract'
+import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
 import {
   assertManagedBrowserMaterializationAllowed,
   getClientCreationActionPolicy
@@ -27,13 +22,8 @@ import {
 import { findGroupAndWorktree } from '../tab-group-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { openBrowserTabThroughLayoutOwner } from './browser-tab-open-through-layout-owner'
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import {
-  FLOATING_TERMINAL_WORKTREE_ID,
-  ORCA_BROWSER_BLANK_URL
-} from '../../../../../shared/constants'
-import type { AppState } from '../../types'
-import { ownsGlobalSelection } from '../../global-selection-owner'
+import { browserTabOpenView } from './browser-tab-open-view'
+import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/web-runtime-browser-client-target-group'
 
 export function createBrowserTabActions(
   set: BrowserSliceSet,
@@ -46,6 +36,7 @@ export function createBrowserTabActions(
 > {
   return {
     createBrowserTab: (worktreeId, url, options) => {
+      options?.validateLinkPlacement?.(get())
       assertManagedBrowserMaterializationAllowed(get(), options?.browserRuntimeEnvironmentId)
       const workspaceId = createBrowserUuid()
       const browserPageId = options?.browserPageId
@@ -65,7 +56,11 @@ export function createBrowserTabActions(
         browserPageId,
         options?.docLocation
       )
-      if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
+      if (
+        !options?.browserRuntimeEnvironmentId &&
+        !options?.docLocation &&
+        !options?.validateLinkPlacement
+      ) {
         admitBrowserPageMount(page.id)
       }
       // Why: with no explicit profile, Settings decides, so the profile scope applies to every way a tab opens.
@@ -90,18 +85,31 @@ export function createBrowserTabActions(
         sessionPartition
       )
 
+      const admitLinkPageMount = (): void => {
+        if (
+          options?.validateLinkPlacement &&
+          !options.browserRuntimeEnvironmentId &&
+          !options.docLocation
+        ) {
+          admitBrowserPageMount(page.id)
+        }
+      }
+
       const drawHere = (): void => {
-        set((s) => ({
-          browserTabsByWorktree: {
-            ...s.browserTabsByWorktree,
-            [worktreeId]: [...(s.browserTabsByWorktree[worktreeId] ?? []), browserTab]
-          },
-          browserPagesByWorkspace: {
-            ...s.browserPagesByWorkspace,
-            [workspaceId]: [page]
-          },
-          ...browserTabOpenView(s, worktreeId, browserTab, page, options)
-        }))
+        set((s) => {
+          options?.validateLinkPlacement?.(s)
+          return {
+            browserTabsByWorktree: {
+              ...s.browserTabsByWorktree,
+              [worktreeId]: [...(s.browserTabsByWorktree[worktreeId] ?? []), browserTab]
+            },
+            browserPagesByWorkspace: {
+              ...s.browserPagesByWorkspace,
+              [workspaceId]: [page]
+            },
+            ...browserTabOpenView(s, worktreeId, browserTab, page, options)
+          }
+        })
 
         const state = get()
         const alreadyHasUnifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
@@ -109,21 +117,33 @@ export function createBrowserTabActions(
         )
         if (!alreadyHasUnifiedTab) {
           const shouldActivate = options?.activate ?? true
-          const created = state.createUnifiedTab(worktreeId, 'browser', {
-            entityId: workspaceId,
-            label: browserTab.title,
-            targetGroupId: options?.targetGroupId,
-            ...(options?.split ? { split: options.split } : {}),
-            ...(options?.afterTabId ? { afterTabId: options.afterTabId } : {}),
-            // Why no routing-host default: a substituted host would disown the wrapper from its worktree.
-            ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
-            activate: shouldActivate
-          })
+          let created
+          try {
+            created = state.createUnifiedTab(worktreeId, 'browser', {
+              ...(options?.validateLinkPlacement
+                ? { validatePlacement: options.validateLinkPlacement }
+                : {}),
+              entityId: workspaceId,
+              label: browserTab.title,
+              targetGroupId: options?.targetGroupId,
+              ...(options?.split ? { split: options.split } : {}),
+              ...(options?.afterTabId ? { afterTabId: options.afterTabId } : {}),
+              // Why no routing-host default: a substituted host would disown the wrapper from its worktree.
+              ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
+              activate: shouldActivate
+            })
+          } catch (error) {
+            if (options?.validateLinkPlacement) {
+              get().closeBrowserTab(workspaceId, { reason: 'cleanup' })
+            }
+            throw error
+          }
           // Why: unified creation already selected the tab and recorded the visit; only the group moves.
           if (shouldActivate && created) {
             get().focusGroup(worktreeId, created.groupId)
           }
         }
+        admitLinkPageMount()
       }
       // Switch point: main opens the tab under these ids and its frame draws it.
       if (
@@ -133,17 +153,30 @@ export function createBrowserTabActions(
           browserTab,
           page,
           options,
-          showView: () => set((s) => browserTabOpenView(s, worktreeId, browserTab, page, options)),
+          showView: () => {
+            set((s) => browserTabOpenView(s, worktreeId, browserTab, page, options))
+            admitLinkPageMount()
+          },
           drawHere
         })
       ) {
         return browserTab
       }
       drawHere()
+      // Why: activating by creation must reach main like a tab switch does, or main's active tab lags the UI.
+      // Main ignores a page id it never registered, so a paired-runtime page needs no owner lookup.
+      if (
+        (options?.activate ?? true) &&
+        !page.browserRuntimeEnvironmentId &&
+        typeof window !== 'undefined' &&
+        window.api?.browser
+      ) {
+        window.api.browser.notifyActiveTabChanged({ browserPageId: page.id }).catch(() => {})
+      }
       return browserTab
     },
 
-    openNewBrowserTabInActiveWorkspace: async (groupId) => {
+    openNewBrowserTabInActiveWorkspace: async (groupId, splitDirection) => {
       const state = get()
       // Why: the invoking group owns its workspace; global selection may already point elsewhere.
       const worktreeId =
@@ -158,6 +191,7 @@ export function createBrowserTabActions(
         throw new Error(browserAvailability.reason)
       }
       const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
+      const split = splitDirection ? { sourceGroupId: groupId, splitDirection } : undefined
       const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
       if (browserAvailability.provider === 'paired-runtime') {
         if (!runtimeEnvironmentId) {
@@ -171,10 +205,11 @@ export function createBrowserTabActions(
             worktreeId,
             environmentId: runtimeEnvironmentId,
             url: defaultUrl,
-            // Why: desktop pane groups are client-owned — the local reconciler only honors a
-            // recorded clientTargetGroupId; targetGroupId steers snapshot-driven clients instead.
-            targetGroupId: groupId,
-            clientTargetGroupId: groupId
+            ...resolveWebRuntimeBrowserClientTargetGroup(
+              get(),
+              { workspaceId: worktreeId, targetGroupId: groupId, split },
+              runtimeEnvironmentId
+            )
           })
           if (created) {
             get().recordFeatureInteraction('browser-tab-created')
@@ -194,7 +229,7 @@ export function createBrowserTabActions(
         title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
         focusAddressBar: true,
         browserRuntimeEnvironmentId: null,
-        targetGroupId: groupId
+        ...(split ? { split } : { targetGroupId: groupId })
       })
       get().recordFeatureInteraction('browser-tab-created')
     },
@@ -240,75 +275,5 @@ export function createBrowserTabActions(
       })
       return true
     }
-  }
-}
-
-// The window's own view of a browser tab it opens: its tab-bar order entry, browser selection and
-// the address-bar focus a blank New Tab asks for; a layout-owner build writes it once drawn.
-function browserTabOpenView(
-  s: AppState,
-  worktreeId: string,
-  browserTab: BrowserWorkspace,
-  page: BrowserPage,
-  options: CreateBrowserTabOptions | undefined
-): Partial<AppState> {
-  const workspaceId = browserTab.id
-  // Without this tab: a frame may already have drawn its record.
-  const existingTabs = (s.browserTabsByWorktree[worktreeId] ?? []).filter(
-    (tab) => tab.id !== workspaceId
-  )
-  const nextTabBarOrder = (() => {
-    const currentOrder = s.tabBarOrderByWorktree[worktreeId] ?? []
-    const terminalIds = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
-    const editorIds = s.openFiles
-      .filter((file) => file.worktreeId === worktreeId)
-      .map((file) => file.id)
-    const ids = [...terminalIds, ...editorIds, ...existingTabs.map((tab) => tab.id)]
-    const allExistingIds = new Set(ids)
-    const base = currentOrder.filter((entryId) => allExistingIds.has(entryId))
-    const inBase = new Set(base)
-    return [...base, ...[...allExistingIds].filter((entryId) => !inBase.has(entryId)), workspaceId]
-  })()
-
-  const shouldActivate = options?.activate ?? true
-  const shouldUpdateGlobalActiveSurface = shouldActivate && ownsGlobalSelection(s, worktreeId)
-  const shouldFocusFloatingTab = shouldActivate && worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-  const shouldFocusAddressBar =
-    (shouldUpdateGlobalActiveSurface || shouldFocusFloatingTab) &&
-    // Why the doc check and not just the url: a document page is blank by construction, and
-    // the blank url is exactly what marks a New Tab as wanting the address bar it does not have.
-    !page.docLocation &&
-    (options?.focusAddressBar ??
-      (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL))
-
-  return {
-    tabBarOrderByWorktree: {
-      ...s.tabBarOrderByWorktree,
-      [worktreeId]: nextTabBarOrder
-    },
-    activeBrowserTabId: shouldUpdateGlobalActiveSurface ? workspaceId : s.activeBrowserTabId,
-    activeBrowserTabIdByWorktree: {
-      ...s.activeBrowserTabIdByWorktree,
-      [worktreeId]: shouldActivate
-        ? workspaceId
-        : (s.activeBrowserTabIdByWorktree[worktreeId] ?? null)
-    },
-    activeTabType: shouldUpdateGlobalActiveSurface ? 'browser' : s.activeTabType,
-    activeTabTypeByWorktree: shouldActivate
-      ? { ...s.activeTabTypeByWorktree, [worktreeId]: 'browser' }
-      : s.activeTabTypeByWorktree,
-    pendingAddressBarFocusByPageId: shouldFocusAddressBar
-      ? {
-          ...s.pendingAddressBarFocusByPageId,
-          [page.id]: true
-        }
-      : s.pendingAddressBarFocusByPageId,
-    pendingAddressBarFocusByTabId: shouldFocusAddressBar
-      ? {
-          ...s.pendingAddressBarFocusByTabId,
-          [workspaceId]: true,
-          [page.id]: true
-        }
-      : s.pendingAddressBarFocusByTabId
   }
 }

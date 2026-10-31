@@ -16,6 +16,7 @@ vi.mock('./use-browser-chrome-tool-fold', () => ({
     'external',
     'devtools',
     'share',
+    'extensions',
     'import',
     'draw',
     'grab',
@@ -106,6 +107,26 @@ describe('BrowserChromeToolbar', () => {
     )
 
     expect(importControl).toHaveBeenCalledWith(true)
+  })
+
+  it('folds pinned extension buttons into the extensions menu only where a session runs them', () => {
+    const extensionActions = vi.fn(() => null)
+    const props = {
+      controls,
+      addressSlot: null,
+      elementTools: null,
+      markup: { active: false, disabled: false, onToggle: vi.fn(), canShowDiscoveryHint: false },
+      viewSource: null,
+      openExternal: null,
+      overflowMenu: emptyOverflowMenu
+    }
+    const view = render(<BrowserChromeToolbar {...props} extensionActions={null} />)
+    expect(mocks.stages).not.toContain('extensions')
+
+    mocks.folded = new Set(['extensions'])
+    view.rerender(<BrowserChromeToolbar {...props} extensionActions={extensionActions} />)
+    expect(mocks.stages).toContain('extensions')
+    expect(extensionActions).toHaveBeenLastCalledWith(true)
   })
 
   it('keeps the active tour control out of the fold sequence', () => {

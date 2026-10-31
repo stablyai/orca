@@ -39,11 +39,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-saved',
       effort: 'low',
-      serviceTier: 'priority'
+      serviceTier: 'priority',
+      reportedPermissionMode: null
     })
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'initialize',
       'thread/start',
+      'config/read',
       'skills/list'
     ])
   })
@@ -106,14 +108,16 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-live',
-      effort: 'medium'
+      effort: 'medium',
+      reportedPermissionMode: null
     })
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
-      current: { model: 'gpt-live', effort: 'medium' },
+      current: { model: 'gpt-live', effort: 'medium', reportedPermissionMode: null },
       models: [
         {
           id: 'gpt-live',
-          label: 'gpt-live',
+          label: 'GPT Live',
+          description: 'gpt-live',
           isDefault: false,
           efforts: [],
           effortsKnown: false
@@ -146,7 +150,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       resolveLaunch: createCodexStructuredLaunchResolver({
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => '/work/repo',
-        resolveCommand: () => 'codex',
+        resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
         resolveLaunchArgs: () => []
       })
     })
@@ -162,7 +166,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       params: {
         cwd: '/work/repo',
         approvalPolicy: 'on-request',
-        sandbox: 'workspace-write',
+        sandbox: 'read-only',
         approvalsReviewer: 'user',
         // Explicit values survive inherit = core.
         config: {
@@ -471,6 +475,9 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       {
         threadId: THREAD_ID,
         clientUserMessageId: 'client-1',
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        sandboxPolicy: { type: 'readOnly' },
         input: [
           { type: 'text', text: 'ship it' },
           { type: 'localImage', path: '/tmp/shot.png' },

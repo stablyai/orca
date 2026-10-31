@@ -8,7 +8,6 @@ import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspa
 type HostedRow = { hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
 type RowState = Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>
 
-/** Each repo id whose registration on these hosts a catalog write removed. */
 function droppedHostsByRepo(
   previousRepos: readonly Repo[],
   nextRepos: readonly Repo[]
@@ -48,12 +47,8 @@ function dropHostRows<T extends HostedRow>(
   return next ?? rowsByRepo
 }
 
-/**
- * Drops the worktree rows of every repo registration a catalog write removed. A host that relists
- * its checkouts under new repo ids (a project copied into another profile, then switched to) must
- * not leave the old rows beside the new ones with no project to group under. Rows only: tabs and
- * selection stay, so a registration that comes back relists into them, as after any listing.
- */
+/** Relisted checkouts under new project IDs must not leave orphan rows beside their replacements.
+ * Keep tabs and selection so returning registrations can relist into them. */
 export function dropWorktreeRowsOfDroppedRepos(
   state: RowState,
   previousRepos: readonly Repo[],

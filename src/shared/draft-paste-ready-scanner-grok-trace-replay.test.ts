@@ -1,15 +1,4 @@
-// Replays recorded grok startup PTY streams through the readiness scanner and
-// asserts when each signal would have delivered the launch draft.
-//
-// The bug this covers: grok shimmers its welcome logo at ~12fps from startup
-// until the session opens, so the default quiet window (1.5s of silence after
-// DECSET 2004) never settles. Draft delivery fell through to the caller's 8s
-// hard timeout, which is why pasting a GitHub issue URL into a fresh grok
-// worktree felt frozen next to Claude's argv prefill.
-//
-// Two traces, because grok has two rendering modes and the fix must not trade
-// one for the other: the default alternate-screen mode (fast marker path) and
-// the inline mode that emits no alt-screen switch (quiet-window floor).
+// Replay alt-screen and inline grok startup captures: ~12Hz logo shimmer defeats the 1.5s quiet window, causing 8s timeout delays/dropped drafts. Preserve both marker and quiet-floor paths.
 import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
 import type { DraftPasteReadySignal } from './tui-agent-config'
@@ -26,17 +15,7 @@ function chunkData(chunk: GrokStartupTraceChunk): string {
   return chunk.data ?? 'x'.repeat(chunk.bytes ?? 0)
 }
 
-/**
- * Replay `trace` against `signal` and return the ms offset at which the caller
- * would have pasted — the marker frame, or the first quiet window that elapses
- * without another chunk. `null` means the caller's hard timeout wins, which for
- * the main-process path means the draft is dropped entirely.
- *
- * Mirrors the callers in agent-draft-readiness.ts and orca-runtime.ts: the quiet
- * timer is re-armed on every chunk that asks for it, a chunk arriving before the
- * deadline cancels it, and the hard timeout outranks both — a marker that lands
- * after it is too late for the real waiters, which have already settled.
- */
+/** Replay caller timer semantics: re-arm quiet requests, cancel on earlier chunks, and let hard timeout outrank late markers. Null means timeout; main drops that draft. Mirrors agent-draft-readiness.ts/orca-runtime.ts. */
 function replayReadyAtMs(
   signal: DraftPasteReadySignal,
   trace: GrokStartupTraceChunk[]
@@ -69,8 +48,7 @@ describe('grok startup trace replay (alternate-screen mode)', () => {
   })
 
   it('never settles the quiet window under the shimmering logo (the old behavior)', () => {
-    // The recording runs 10s past launch; the default signal reaches the end
-    // still waiting, so delivery only happened at the caller's 8s hard timeout.
+    // The capture continues 10s; no quiet readiness means the 8s caller timeout wins.
     expect(replayReadyAtMs('render-quiet-after-bracketed-paste', GROK_STARTUP_PTY_TRACE)).toBeNull()
   })
 
@@ -83,10 +61,7 @@ describe('grok startup trace replay (alternate-screen mode)', () => {
 
 describe('grok startup trace replay (inline mode, no alternate screen)', () => {
   it('arms a quiet window before the inline trace reaches the modeled timeout', () => {
-    // Why: inline grok emits no \x1b[?1049h, so the composer glyph never counts.
-    // Anchoring the quiet window on the alt-screen switch too would leave this
-    // launch with NO delivery path — orca-runtime drops the draft when readiness
-    // resolves null, so the issue URL would vanish instead of arriving late.
+    // Inline grok emits no 1049h; retain a separate quiet anchor or main would drop the issue-URL draft.
     const readyAt = replayReadyAtMs('grok-composer-prompt', GROK_INLINE_STARTUP_PTY_TRACE)
     expect(readyAt).not.toBeNull()
     expect(readyAt).toBeLessThan(HARD_TIMEOUT_MS)

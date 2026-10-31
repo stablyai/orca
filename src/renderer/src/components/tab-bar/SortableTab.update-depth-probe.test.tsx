@@ -1,14 +1,14 @@
 // @vitest-environment happy-dom
 
-/** Exercises addressed rename updates, StrictMode effects, and menu completion ownership. */
 import type { ReactElement, ReactNode } from 'react'
 import { cloneElement, isValidElement, StrictMode } from 'react'
-import { act, render, cleanup, fireEvent } from '@testing-library/react'
+import { act, render, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store'
 import SortableTab from './SortableTab'
+import { ContextMenuContent } from '../ui/context-menu'
 import { requestTerminalTabRename } from './terminal-tab-rename-request'
 
 type ProbeState = {
@@ -71,25 +71,11 @@ vi.mock('@/components/ui/tooltip', () => ({
     )
 }))
 
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuContent: () => null,
-  DropdownMenuItem: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSeparator: () => null,
-  DropdownMenuShortcut: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuLabel: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSub: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSubContent: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSubTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
-}))
-
 vi.mock('@/components/ui/input', () => ({
   Input: (props: Record<string, unknown>) => <input {...props} />
 }))
 
-// Counts SortableTab's own renders: it is rendered unconditionally inside the tab body, so one
-// stub render == one SortableTab render, which the Harness counter above cannot see.
+// Count this unconditional child because the harness counter cannot observe internal SortableTab renders.
 vi.mock('./TerminalTabLeadingIcon', () => ({
   TerminalTabLeadingIcon: () => {
     tabRenderCount += 1
@@ -100,16 +86,16 @@ vi.mock('./TerminalTabLeadingIcon', () => ({
 const menuCompletions: (() => void)[] = []
 vi.mock('./SortableTabContextMenu', () => ({
   SortableTabContextMenu: ({
-    open,
     onSessionSwitchComplete
   }: {
-    open: boolean
     onSessionSwitchComplete: () => void
   }) => {
-    if (open) {
-      menuCompletions.push(onSessionSwitchComplete)
-    }
-    return open ? <div data-testid="open-menu" /> : null
+    menuCompletions.push(onSessionSwitchComplete)
+    return (
+      <ContextMenuContent>
+        <div data-testid="open-menu" />
+      </ContextMenuContent>
+    )
   }
 }))
 
@@ -189,8 +175,7 @@ describe('SortableTab update-depth probe', () => {
     expect(renderCount).toBeLessThan(20)
   })
 
-  // Regression: the shortcut used to arm a store field every tab subscribed to, so one rename
-  // re-rendered every mounted tab twice — once to notice the id, once when the tab cleared it.
+  // Address rename requests to one tab instead of broadcasting two store-driven renders to every tab.
   it('re-renders only the targeted tab, once, per rename request', () => {
     render(
       <>
@@ -234,14 +219,14 @@ it('retires completion ownership for repeated gestures and batched blur/reopen',
   const first = menuCompletions.at(-1)!
   act(() => fireEvent.contextMenu(slot))
   act(first)
-  expect(container.querySelector('[data-testid="open-menu"]')).not.toBeNull()
+  expect(screen.queryByTestId('open-menu')).not.toBeNull()
   const second = menuCompletions.at(-1)!
   act(() => {
     window.dispatchEvent(new Event('blur'))
     fireEvent.contextMenu(slot)
   })
   act(second)
-  expect(container.querySelector('[data-testid="open-menu"]')).not.toBeNull()
+  expect(screen.queryByTestId('open-menu')).not.toBeNull()
   act(menuCompletions.at(-1)!)
-  expect(container.querySelector('[data-testid="open-menu"]')).toBeNull()
+  expect(screen.queryByTestId('open-menu')).toBeNull()
 })

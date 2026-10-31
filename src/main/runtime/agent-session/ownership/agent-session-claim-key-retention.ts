@@ -1,5 +1,4 @@
-// Retired execution-claim keys. Split from the store on the same rule its ledger admission is:
-// the state transition lives here, the transaction stays in the store.
+// Keep retired-key state transitions here and transaction ownership in the store.
 
 import type { AgentSessionStoreState } from '../../agent-session-store-state'
 

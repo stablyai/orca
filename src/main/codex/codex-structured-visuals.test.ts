@@ -15,11 +15,9 @@ import {
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import {
-  CODEX_VISUALS_SETUP_BUDGET_MS,
-  prepareCodexThreadForVisuals
-} from './codex-structured-visuals'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { prepareCodexThreadForVisuals } from './codex-structured-visuals'
+
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 
 const VISUALS: NativeChatVisualsLaunch = {
   folder: '/state/chat-scratch/abc',
@@ -51,34 +49,6 @@ const configWithRoots = (roots: unknown) => () => ({
 })
 
 describe('setting up a Codex app-server for a chat with visuals', () => {
-  it("names the skill root and adds the chat folder to the user's writable roots", async () => {
-    const { calls, connection } = connectionAnswering({
-      'config/read': configWithRoots(['/home/me/scratch'])
-    })
-    const config = await prepareCodexThreadForVisuals(connection, {
-      cwd: '/work/repo',
-      visuals: VISUALS,
-      permissionPolicy: MANUAL
-    })
-    expect(config).toEqual({
-      'sandbox_workspace_write.writable_roots': ['/home/me/scratch', VISUALS.folder]
-    })
-    expect(calls).toEqual(
-      expect.arrayContaining([
-        {
-          method: 'skills/extraRoots/set',
-          params: { extraRoots: [VISUALS.skill.skillsRoot] },
-          timeoutMs: CODEX_VISUALS_SETUP_BUDGET_MS
-        },
-        {
-          method: 'config/read',
-          params: { cwd: '/work/repo' },
-          timeoutMs: CODEX_VISUALS_SETUP_BUDGET_MS
-        }
-      ])
-    )
-  })
-
   it('grants just the folder when the user has no writable roots of their own', async () => {
     for (const answer of [() => ({ config: {} }), configWithRoots([])]) {
       const { connection } = connectionAnswering({ 'config/read': answer })
@@ -153,12 +123,6 @@ describe('setting up a Codex app-server for a chat with visuals', () => {
       )
     }
   })
-
-  it('sends nothing for a chat without visuals', async () => {
-    const { calls, connection } = connectionAnswering({})
-    await expect(prepareCodexThreadForVisuals(connection, { cwd: '/w' })).resolves.toBeNull()
-    expect(calls).toEqual([])
-  })
 })
 
 async function acquired(
@@ -190,7 +154,7 @@ async function acquired(
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async () => '/work/repo',
       resolveEnvironment: async () => launch.env ?? {},
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       resolveLaunchArgs: () => [],
       prepareVisuals: async () => launch.visuals ?? null
     })

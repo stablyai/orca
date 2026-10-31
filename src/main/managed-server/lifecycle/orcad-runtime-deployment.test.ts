@@ -1,13 +1,17 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { writeOrcadMigrationSourceCutover } from '../../ssh/orcad-migration-cutover-journal'
 import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-fixture'
-import { listEnvironments, resolveEnvironment } from '../../../shared/runtime-environment-store'
+import {
+  getEnvironmentStorePath,
+  listEnvironments,
+  resolveEnvironment
+} from '../../../shared/runtime-environment-store'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { SshTargetOrcadClaims } from '../../ssh/targets/ssh-target-orcad-claims'
@@ -210,6 +214,15 @@ describe('createManagedOrcadEnvironment', () => {
       }
     )
     expect(mocks.closeTunnel).not.toHaveBeenCalled()
+  })
+
+  it('registers over a server list a crash left NUL-filled (#18766)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    onTestFinished(() => warn.mockRestore())
+    writeFileSync(getEnvironmentStorePath(userDataPath), Buffer.alloc(640))
+
+    await expect(deploy()).resolves.toMatchObject({ outcome: 'created' })
+    expect(listEnvironments(userDataPath)).toHaveLength(1)
   })
 
   it('tunnels to the port orcad bound when 6768 is taken, and keeps 6768 as its launch port', async () => {

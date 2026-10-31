@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 
-// A queue action still on its way to the host greys its controls until the host answers.
-
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 

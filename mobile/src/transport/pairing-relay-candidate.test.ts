@@ -242,8 +242,7 @@ describe('recovering pairing relay candidate', () => {
       now: () => 1
     })
 
-    // Why: 4429 is rejected after the cell reserves the invite credential, so a
-    // retry burns an attempt — and a director hop cannot relieve cell load.
+    // A 4429 consumes an invite reservation; retrying burns budget and director resolution cannot relieve cell load.
     await expect(candidate.sendRequest('status.get')).rejects.toEqual(new RelayOuterError(4429))
     expect(resolveDirector).not.toHaveBeenCalled()
     expect(connects).toBe(1)
@@ -292,7 +291,10 @@ describe('recovering pairing relay candidate', () => {
     })
 
     await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
-    expect(resolveDirector).toHaveBeenCalledOnce()
+    expect(resolveDirector).toHaveBeenCalledExactlyOnceWith({
+      ...journal.metadata.relay,
+      inviteToken: journal.secrets.inviteToken
+    })
   })
 
   it('bounds director recovery and applies full jitter to failures and target retries', async () => {

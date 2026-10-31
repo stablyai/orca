@@ -1,6 +1,4 @@
-// #11761: on a headless `orca serve` host the HTTP agent hook is the only carrier of
-// live agent state, so `session.tabs` must project the hook row's status fields — not
-// just its identity — while still refusing rows that only prove an agent once existed.
+// #11761: headless session.tabs must project live hook status while rejecting identity-only historical rows.
 import { describe, expect, it, vi } from 'vitest'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -19,8 +17,7 @@ vi.mock('electron', () => ({
 }))
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-// A leaf this runtime never minted: pane lookup recovers a reminted tab id by leaf id,
-// so only an unknown leaf id is genuinely unresolvable.
+// Pane lookup can remint tab ids by leaf; only an unknown leaf is unresolvable.
 const UNKNOWN_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const TAB_ID = 'ask-tab'
 const WORKTREE_ID = 'wt-1'
@@ -63,13 +60,12 @@ function hookRow(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpc
 
 async function createRuntimeWithHookRows(
   rows: AgentStatusIpcPayload[],
-  /** Pass a store to exercise the OSC producer; otherwise the rows stand in for it. */
   statusWiring?: ReturnType<typeof makeAgentStatusStoreWiring>
 ): Promise<OrcaRuntimeService> {
   const readRows = statusWiring
     ? (): AgentStatusIpcPayload[] => [...rows, ...statusWiring.deps.getAgentStatusSnapshot()]
     : (): AgentStatusIpcPayload[] => rows
-  // Switch-on, main's layout answers which pane holds the PTY, so the runtime needs a store.
+  // Main-owned layout requires a store to resolve PTY pane bindings.
   const store = ORCA_LAYOUT_OWNER_IS_MAIN
     ? partialRuntimeStore({
         getRepos: () => [],
@@ -131,8 +127,7 @@ async function projectAgentStatus(
     : undefined
 }
 
-/** Observe a pane title the way production does, so the recency stamps under test are
- *  the ones the OSC path actually writes (a sequence number *and* a wall clock). */
+/** Exercise production OSC stamping, including sequence and wall-clock recency. */
 function observePaneTitle(runtime: OrcaRuntimeService, title: string): void {
   runtime.onPtyData(PTY_ID, `\x1b]0;${title}\x07`, Date.now())
 }
@@ -228,8 +223,7 @@ describe('headless hook agent-status projection (#11761)', () => {
     expect(agentStatus).not.toHaveProperty('interactivePrompt')
   })
 
-  // Resume-identity rows carry transport placeholders, not status. `agentType`
-  // deliberately admits pi's flavour of them — `live` must not, either flavour.
+  // Resume rows are transport placeholders, including pi-flavored rows; never synthesize live status.
   it.each(['claude', 'pi'])('never fabricates live state from a %s resume row', async (agent) => {
     const agentStatus = await projectAgentStatus([
       hookRow({ agentType: agent, providerSessionOnly: true })
@@ -240,9 +234,7 @@ describe('headless hook agent-status projection (#11761)', () => {
     expect(agentStatus).not.toHaveProperty('interactivePrompt')
   })
 
-  // #12346: a row hydrated from last-status.json may describe a turn that ended while
-  // no receiver was up, so its recent `receivedAt` proves nothing. Publishing it would
-  // resurrect the question card on every restart, with no agent left to answer it.
+  // #12346: hydration receipt time proves no current turn; replaying it revives unanswerable question cards.
   it('refuses a hydrated unconfirmed row as live while keeping its resume identity', async () => {
     const agentStatus = await projectAgentStatus([hookRow({ restoredUnconfirmed: true })])
 
@@ -257,8 +249,7 @@ describe('headless hook agent-status projection (#11761)', () => {
     expect(agentStatus).not.toHaveProperty('toolName')
   })
 
-  // A managed server restart re-hydrates last-status.json while the daemon keeps the agent
-  // running: the turn is unverifiable, so it must not be published as finished.
+  // Daemon-surviving agents may still run after host restart; restored turns are unverifiable, not finished.
   it('keeps a restored working turn unverifiable instead of done', async () => {
     const receivedAt = Date.now() - 60_000
     const agentStatus = await projectAgentStatus([
@@ -284,8 +275,7 @@ describe('headless hook agent-status projection (#11761)', () => {
     )
   })
 
-  // The restored row lives as long as hydration keeps it (7 days); the 30-minute live window
-  // must not turn an unverifiable turn into a synthetic `done`.
+  // Seven-day hydrated retention must not become synthetic done after the 30-minute live window.
   it('keeps a restored turn older than the live freshness window unverifiable', async () => {
     const now = Date.UTC(2026, 9, 17, 12)
     vi.useFakeTimers({ toFake: ['Date'], now })
@@ -359,10 +349,8 @@ describe('headless hook agent-status projection (#11761)', () => {
     )
   })
 
-  // #7970: a retained OSC 9999 row is the pane's own report and keeps precedence.
   it('projects the OSC turn that replaced the hook row in the store', async () => {
-    // One store: an OSC turn is a write, not a competing copy, so the pane projects whatever
-    // the store holds now rather than a reader-side preference between two rows.
+    // OSC writes replace the hook row in one store; readers should project its current value.
     const statusWiring = makeAgentStatusStoreWiring()
     statusWiring.statusStore.ingestTerminalStatus({
       paneKey: PANE_KEY,
@@ -386,8 +374,7 @@ describe('headless hook agent-status projection (#11761)', () => {
     )
   })
 
-  // #1437: `toolName` is inherited across hook events, so it cannot reopen a pane
-  // the shell has reclaimed — only a pending question may survive the suppression.
+  // #1437: inherited toolName cannot reclaim a shell-owned pane; only pending questions survive suppression.
   it('keeps a shell-reclaimed pane identity-only when the hook row has just a toolName', async () => {
     const agentStatus = await projectAgentStatus(
       [hookRow({ state: 'working', toolName: 'Bash', interactivePrompt: undefined })],
@@ -400,7 +387,6 @@ describe('headless hook agent-status projection (#11761)', () => {
     expect(agentStatus).not.toHaveProperty('toolName')
   })
 
-  // A manual label change keeps the hook's transcript address (#20626).
   it('keeps the hook transcript address after a manual rename drops the agent glyph', async () => {
     const runtime = await createRuntimeWithHookRows([
       hookRow({
@@ -457,7 +443,7 @@ describe('headless hook agent-status projection (#11761)', () => {
     })
   })
 
-  // A rename is the tab's name, not process title evidence: the CLI status read keeps the agent.
+  // User labels are not process-title evidence and must not clear live status.
   it('keeps the terminal agent status running after the pane is renamed to a shell name', async () => {
     const runtime = await createRuntimeWithHookRows([
       hookRow({
@@ -735,7 +721,6 @@ describe('headless hook agent-status projection (#11761)', () => {
     expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('interactivePrompt')
   })
 
-  // The title path is refreshed live; an older hook `done` must not erase it.
   it('keeps the title-derived working state when the hook row predates the title', async () => {
     const now = Date.now()
     const agentStatus = await projectAgentStatus(
@@ -757,8 +742,6 @@ describe('headless hook agent-status projection (#11761)', () => {
     expect(agentStatus).toEqual(expect.objectContaining({ state: 'working', prompt: '' }))
   })
 
-  // The other direction of the same guard: once the hook reports after the last
-  // spinner frame, its state is the newest evidence and must be published.
   it('publishes a hook row received after the latest title observation', async () => {
     const rows = [hookRow()]
     const runtime = await createRuntimeWithHookRows(rows)
@@ -776,16 +759,14 @@ describe('headless hook agent-status projection (#11761)', () => {
     const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
     const tab = result.tabs[0]
 
-    // `updatedAt` pins the row's provenance: the identity-only fallback would
-    // publish `working` (the stale spinner title) stamped with its own clock.
+    // Hook updatedAt distinguishes its done from stale-spinner identity fallback.
     expect(tab?.type === 'terminal' && tab.agentStatus).toEqual(
       expect.objectContaining({ state: 'done', updatedAt: reportedAt })
     )
   })
 })
 
-// Nothing else republishes `session.tabs` when only a hook row changed, and a
-// re-emit at an unchanged `snapshotVersion` is dropped by the client's gate.
+// Hook-only changes must bump snapshotVersion or clients discard the frame.
 describe('hook-driven session tabs republish (#11761)', () => {
   it('bumps the snapshot version and emits through the coalescer', async () => {
     const rows = [hookRow({ state: 'working', toolName: undefined, interactivePrompt: undefined })]
@@ -802,8 +783,7 @@ describe('hook-driven session tabs republish (#11761)', () => {
     unsubscribe()
   })
 
-  // Proven by version arithmetic rather than a timed silence: a pane that wrongly
-  // resolved to this workspace would bump the version a second time.
+  // Version arithmetic proves the unknown pane did not cause a second bump without timing silence.
   it('ignores a pane with no resolvable workspace', async () => {
     const runtime = await createRuntimeWithHookRows([hookRow()])
     const before = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
@@ -818,8 +798,7 @@ describe('hook-driven session tabs republish (#11761)', () => {
     unsubscribe()
   })
 
-  // Without this the live state published above would outlive the agent as a
-  // question card no client could ever dismiss.
+  // Clearing status must remove question cards so they cannot outlive the agent.
   it('retires the question card after the pane status is cleared', async () => {
     const rows = [hookRow()]
     const runtime = await createRuntimeWithHookRows(rows)
@@ -827,7 +806,6 @@ describe('hook-driven session tabs republish (#11761)', () => {
     const events: { tabs: { type: string; agentStatus?: unknown }[] }[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
 
-    // What a pane-status clear leaves behind: the pane keeps no hook row at all.
     rows.length = 0
     runtime.touchMobileSessionTabsForPane(PANE_KEY, WORKTREE_ID)
 

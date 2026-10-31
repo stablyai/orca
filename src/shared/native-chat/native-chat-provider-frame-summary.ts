@@ -25,12 +25,8 @@ export type ProviderFrameRowText = {
   providerFrame?: { provider: string; kind: string }
 }
 
-/**
- * An unrecognised provider event stored with no words of its own: the host's fallback label is
- * its only text. Kept in the journal for readers of the frame (the Codex task list), never drawn.
- * A failure or notice (any tone) and a request Orca already answered stay visible. The host's
- * per-turn row cap reads this same rule, so a row no client draws never fills it.
- */
+// Hide wordless provider fallbacks while retaining structured data, toned notices and answered requests.
+// Share this predicate with the host row cap so invisible events cannot consume it.
 export function isWordlessProviderFrame(row: ProviderFrameRowText): boolean {
   const frame = row.providerFrame
   return (
@@ -49,7 +45,6 @@ export function isWordlessProviderFrameBlock(block: NativeChatBlock): boolean {
   return block.type === 'text' && isWordlessProviderFrame(block)
 }
 
-/** A row made only of wordless provider events: it draws nothing. */
 export function isWordlessProviderFrameMessage(message: NativeChatMessage): boolean {
   return message.blocks.length > 0 && message.blocks.every(isWordlessProviderFrameBlock)
 }

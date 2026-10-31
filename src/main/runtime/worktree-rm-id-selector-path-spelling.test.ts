@@ -1,8 +1,4 @@
-/**
- * Pins path-SPELLING parity between an `id:` selector and `path:`, deliberately not dedupe parity:
- * where two same-host rows spell one directory, `path:` collapses them to the first while `id:`
- * refuses as ambiguous, because this resolver also serves delete (#16243).
- */
+/** Preserve id/path spelling parity, while id remains ambiguous for same-host duplicate rows that path deduplicates. This resolver also deletes workspaces (#16243). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMocks = vi.hoisted(() => {
@@ -32,11 +28,9 @@ import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-id
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/srv/projects/app'
-/** The spelling `git worktree list` reports. */
 const WORKTREE_PATH = '/srv/projects/workspaces/plugin-host'
 const CANONICAL_ID = `${REPO_ID}::${WORKTREE_PATH}`
 
-/** One directory, other spellings a stored id can legitimately carry. */
 const ID_SPELLINGS: [label: string, worktreePath: string, repoPath?: string][] = [
   ['a trailing slash', `${WORKTREE_PATH}/`],
   ['a doubled separator', '/srv/projects//workspaces/plugin-host'],
@@ -45,7 +39,6 @@ const ID_SPELLINGS: [label: string, worktreePath: string, repoPath?: string][] =
   ['a backslash Windows spelling', 'D:\\Agentic\\game2\\battle-core', 'D:/Agentic/game2']
 ]
 
-/** What a scan reports for a stored id: the same directory, canonically spelled. */
 function scannedSpellingOf(storedPath: string): string {
   const slashed = /^[A-Za-z]:[\\/]/.test(storedPath) ? storedPath.replace(/\\/g, '/') : storedPath
   return slashed.normalize('NFC').replace(/\/+/g, '/').replace(/\/$/, '')
@@ -83,7 +76,6 @@ function makeStore(repoPath: string = REPO_PATH) {
   return store
 }
 
-/** `git worktree list` output: the main checkout plus one workspace at `worktreePath`. */
 function scanReports(worktreePath: string, repoPath: string = REPO_PATH): void {
   listWorktreesStrictMock.mockResolvedValue([
     { path: repoPath, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
@@ -109,9 +101,7 @@ describe('worktree id selectors vs. the path spelling git reports (#16243)', () 
       scanReports(scannedSpellingOf(storedPath), repoPath)
       const runtime = new OrcaRuntimeService(makeStore(repoPath) as never)
 
-      // The CLI's shape, and the live data point: `path:` already resolves it.
       const byPath = await runtime.showManagedWorktree(`path:${storedPath}`)
-      // The only shape the renderer can send must resolve the SAME workspace.
       await expect(
         runtime.showManagedWorktree(`id:${REPO_ID}::${storedPath}`)
       ).resolves.toMatchObject({ id: byPath.id, path: byPath.path })
@@ -125,7 +115,6 @@ describe('worktree id selectors vs. the path spelling git reports (#16243)', () 
       const runtime = new OrcaRuntimeService(makeStore(repoPath) as never)
       const internals = runtime as unknown as RemovalInternals
 
-      // The scoped path the UI's delete takes must agree with the fleet path above.
       await expect(
         internals.resolveWorktreeRemovalTarget(
           `id:${REPO_ID}::${storedPath}`,
@@ -177,9 +166,7 @@ describe('worktree id selectors vs. the path spelling git reports (#16243)', () 
     )
   })
 
-  // #15598/#15616: on Windows one checkout is recorded under both spellings, and git reports the
-  // forward-slash one. The backslash id itself rides the ID_SPELLINGS rows above; these pin the
-  // folding limits around it.
+  // Windows stores either slash spelling; the table above covers id folding, and these tests pin its limits (#15598/#15616).
   describe('Windows drive-letter spellings', () => {
     const WINDOWS_REPO = 'D:/Agentic/game2'
     const WINDOWS_WORKTREE = 'D:/Agentic/game2/battle-core'
@@ -212,8 +199,7 @@ describe('worktree id selectors vs. the path spelling git reports (#16243)', () 
     })
   })
 
-  // The fail-closed guard on a delete-capable resolver: two rows spelling one directory must not
-  // let a folded id pick one. `path:` collapses same-host duplicates; `id:` deliberately refuses.
+  // Delete-capable id resolution must refuse duplicates even when path resolution deduplicates them.
   it('refuses a folded id when two same-repo rows spell one directory', async () => {
     listWorktreesStrictMock.mockResolvedValue([
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
@@ -228,14 +214,12 @@ describe('worktree id selectors vs. the path spelling git reports (#16243)', () 
     ])
     const runtime = new OrcaRuntimeService(makeStore() as never)
 
-    // Matches neither row exactly, folds to both.
     await expect(runtime.showManagedWorktree(`id:${CANONICAL_ID}/`)).rejects.toThrow(
       'selector_ambiguous'
     )
   })
 
-  // Live-proof limit, pinned so nobody "fixes" the trimming: a folder-workspace id only trims a
-  // trailing slash at end of string, so one placed before the instance suffix stays exact-only.
+  // Folder-workspace ids trim only a terminal slash; one before the instance suffix stays exact-only.
   it('keeps a folder-workspace id exact when a slash precedes the instance suffix', async () => {
     const instanceSuffix = '::workspace:123e4567-e89b-12d3-a456-426614174000'
     scanReports(WORKTREE_PATH)
@@ -246,7 +230,6 @@ describe('worktree id selectors vs. the path spelling git reports (#16243)', () 
     ).rejects.toThrow('selector_not_found')
   })
 
-  // #15616 guarantees malformed ids keep exact-match behavior; both sites must honour that too.
   it.each([
     ['no repo boundary', 'not-an-id'],
     ['an empty path', `${REPO_ID}::`]

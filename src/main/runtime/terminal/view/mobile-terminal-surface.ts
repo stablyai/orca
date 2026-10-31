@@ -179,7 +179,7 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
     return { pty: live.pty, surface }
   }
 
-  // Why: publish an in-flight mobile create main-side from the live PTY so it can't stall on graph sync and destroy the session (#7587).
+  // Publish live-backed pending creates in main so graph-sync stalls cannot destroy sessions (#7587).
   protected ensurePtyBackedMobileSurfaceForRendererTab(
     worktreeId: string,
     tabId: string
@@ -216,7 +216,7 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
       selectIfNoActiveTab: pending.selectIfNoActiveTab,
       ...(pending.viewMode ? { viewMode: pending.viewMode } : {})
     })
-    // Why: check closures normally drain only inside syncWindowGraph; a main-side publish must drain them too or the pending wait misses the insertion.
+    // Main-side publication must wake graph callbacks too or pending waits miss the new surface.
     for (const cb of Array.from(this.graphSyncCallbacks)) {
       cb()
     }

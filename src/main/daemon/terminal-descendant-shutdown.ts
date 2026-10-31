@@ -35,6 +35,9 @@ const readShutdownProcessTable: ProcessTableReader = (timeoutMs) => {
   }, clear)
   return promise
 }
+// Wrapping the production reader keeps its in-process allowance, so a stalled native read still leaves ps the whole window.
+readShutdownProcessTable.deadlineAllowanceMs = (timeoutMs) =>
+  descendantTermination.readProcessTable.deadlineAllowanceMs?.(timeoutMs) ?? 0
 
 export function terminateShutdownDescendants(
   snapshot: DescendantSnapshot

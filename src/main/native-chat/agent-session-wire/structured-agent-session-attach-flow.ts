@@ -1,3 +1,4 @@
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import { refuse } from '../../../shared/agent-session-wire-refusals'
 import {
   settlePostAcquisitionAttachFailure,
@@ -16,7 +17,8 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import {
   admitAttachOrRefuse,
   attachJournal,
@@ -79,14 +81,17 @@ export type AttachFlowInput = {
     attempt: StructuredAgentSessionStartupAttempt
   ) => StructuredAgentSessionStartupProgress
   startupOptions?: Readonly<Record<string, string>>
+  launchAccountRecipe?: (record: AgentSessionRecord) => Promise<ClaudeAccountRecipe | undefined>
   launchPermissionMode?: (
     record: AgentSessionRecord
-  ) => Promise<AgentChatPermissionMode | undefined>
+  ) => Promise<AgentChatPermissionChoice | undefined>
   /** Publish journal before new-owner sends; distinguish newly starting, retained live and resting owners. */
   onAttached: (
     attached: AttachedJournal,
     acquisitionGeneration: string | null,
-    owner: AttachedOwner
+    owner: AttachedOwner,
+    /** The account home the spawned child launched under, when its adapter reports one. */
+    accountHome?: AgentSessionAccountHome
   ) => Promise<void> | void
   /** Wait outside commits for sink drains/provider reads. */
   beforePublish?: (owner: AttachedOwner) => Promise<void>
@@ -96,6 +101,8 @@ export type AttachFlowInput = {
   /** Prevent acquisition-window events from reaching superseded journals. */
   onAcquiring?: () => Promise<void> | void
   onReserved?: () => Promise<void>
+  /** Refuses the spawn while a terminal may still be writing the record's conversation. */
+  assertNoTerminalWriter?: (record: AgentSessionRecord) => Promise<void>
   /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
   /** Adopt the conversation’s journal; attach never owns its open. */
@@ -136,6 +143,7 @@ export async function performAttach(
 
   let record: AgentSessionRecord
   let acquisitionGeneration: string | null = null
+  let accountHome: AgentSessionAccountHome | undefined
   let owner: AttachedOwner = 'kept'
   let reservedRecord: AgentSessionRecord | null = null
   let unsupportedReservationSettlementAttempted = false
@@ -143,7 +151,7 @@ export async function performAttach(
   const lock = input.lock ?? heldStructuredAgentSessionAttachLock(input.acquireSignal)
   const preparedTranscript = store.getRecord(sessionId)
     ? { ok: true as const, items: null }
-    : await prepareAdoptedTranscript(params)
+    : await prepareAdoptedTranscript(params, lock.signal)
   if (!preparedTranscript.ok) {
     return preparedTranscript
   }
@@ -213,6 +221,7 @@ export async function performAttach(
       )
       record = acquired.record
       acquisitionGeneration = acquired.acquisitionGeneration
+      accountHome = acquired.accountHome
       owner = 'acquired'
     }
   } catch (error) {
@@ -270,7 +279,8 @@ export async function performAttach(
         record: acquired,
         openConversation: input.openConversation
       })
-      await input.onAttached(journal, acquisitionGeneration, owner)
+      await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items)
+      await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
       return journal
     })
     await lock.wait(input.beforePublish?.(owner) ?? Promise.resolve())

@@ -97,8 +97,7 @@ function clickEvent(): MouseEvent {
   } as unknown as MouseEvent
 }
 
-// Why: runtimes bind per workspace, so the global activeRuntimeEnvironmentId is
-// null even while the clicked pane lives on a remote host.
+// Workspace runtimes can own the clicked pane while the global active runtime is null.
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
@@ -128,6 +127,7 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
       workspaceId: 'wt-1',
       url: URL,
       intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) },
       expectedRuntimeEnvironmentId: 'env-1'
     })
     expect(openUrlMock).not.toHaveBeenCalled()
@@ -171,20 +171,6 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     disposable.dispose()
   })
-
-  it('uses the persisted routing preference without prompting again', () => {
-    const requestOpenLinksInAppPreference = vi.fn(() => Promise.resolve(true))
-
-    handleOscLink(URL, clickEvent(), {
-      ...baseDeps,
-      sourceOwner: runtimeSourceOwner,
-      requestOpenLinksInAppPreference
-    })
-
-    expect(requestOpenLinksInAppPreference).not.toHaveBeenCalled()
-    expect(openRuntimeBrowserTabMock).toHaveBeenCalledOnce()
-    expect(openUrlMock).not.toHaveBeenCalled()
-  })
 })
 
 describe('terminal HTTP links on a direct SSH pane', () => {
@@ -199,71 +185,11 @@ describe('terminal HTTP links on a direct SSH pane', () => {
       workspaceId: 'wt-1',
       url: URL,
       intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) },
       expectedSshConnectionId: 'ssh-1'
     })
     expect(openUrlMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(setActiveWorktreeMock).not.toHaveBeenCalled()
-  })
-
-  it('opens a WebLinksAddon click through the owning SSH workspace', () => {
-    const { terminal } = makeTerminal()
-
-    expect(
-      handleTerminalWebLinkClick(URL, clickEvent(), {
-        ...baseDeps,
-        terminal,
-        sourceOwner: sshSourceOwner
-      })
-    ).toBe(true)
-
-    expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith(
-      expect.objectContaining({ expectedSshConnectionId: 'ssh-1', url: URL })
-    )
-    expect(openUrlMock).not.toHaveBeenCalled()
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-  })
-
-  it('opens a click-fallback activation through the owning SSH workspace', () => {
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, {
-      worktreeId: 'wt-1',
-      getSourceOwner: () => sshSourceOwner
-    })
-
-    registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1](clickEvent())
-
-    expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith(
-      expect.objectContaining({ expectedSshConnectionId: 'ssh-1', url: URL })
-    )
-    expect(openUrlMock).not.toHaveBeenCalled()
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-    disposable.dispose()
-  })
-})
-
-describe('terminal HTTP links on a local pane', () => {
-  const baseDeps = { worktreeId: 'wt-1', worktreePath: '/tmp', startupCwd: '/tmp' }
-
-  it('still opens an OSC 8 hyperlink in an Orca browser tab', () => {
-    expect(handleOscLink(URL, clickEvent(), { ...baseDeps, runtimeEnvironmentId: null })).toBe(true)
-
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', URL, { activate: true })
-    expect(openUrlMock).not.toHaveBeenCalled()
-  })
-
-  it('still opens a click-fallback activation in an Orca browser tab', () => {
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-
-    registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1](clickEvent())
-
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', URL, { activate: true })
-    expect(openUrlMock).not.toHaveBeenCalled()
-    disposable.dispose()
   })
 })

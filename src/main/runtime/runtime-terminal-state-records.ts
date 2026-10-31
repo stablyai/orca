@@ -1,7 +1,10 @@
 import type { createSetupCompletionObservation } from './orchestration/setup-completion-signal'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { AgentStatusState } from '../../shared/agent-status-types'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type {
+  TerminalLaunchResult,
+  SleepingAgentLaunchConfig
+} from '../../shared/agent-session-resume'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
@@ -37,6 +40,7 @@ type RuntimeTerminalTailState = {
 export type RuntimePtyRegistrationBinding = {
   tabId: string
   leafId: string
+  launchedAgent?: TuiAgent
   setupCompletionToken?: string
   incarnationId?: PtyIncarnationId
   /** Handle allocated for the replacement incarnation, when one is known. */
@@ -82,18 +86,21 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   tabId?: string | null
   /** Window-owned builds only (L80): read through paneOfPty; layout-owner records never carry it. */
   paneKey?: string | null
-  /**
-   * Window-owned builds only (L80). `graphSequence` when `paneKey` was last written. A surface
-   * recorded since the last graph statement has not yet been offered one that could contradict
-   * it — see pty-recorded-surface-topology.ts.
-   */
+  /** Window-owned L80 graphSequence when paneKey was recorded; newer surfaces have no graph statement that could contradict them (pty-recorded-surface-topology.ts). */
   surfaceRecordedAtGraphSequence?: number
+  savedTerminalLaunchResult?: {
+    incarnationId: PtyIncarnationId | null
+    launchConfig: SleepingAgentLaunchConfig | null
+    launchToken: string | null
+    result: TerminalLaunchResult
+  }
+  /** The ORCA_PANE_KEY the execution host reports this PTY's env exported; absent when unreported. */
+  spawnPaneKey?: string | null
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
-  /** The agent a runtime-spawned `--command` names even when flags keep it unmanaged; names the
-   *  pane before any foreground-process read lands. Null for adopted or restored panes. */
+  /** Identify flagged unmanaged --command panes before foreground reads; null for adopted/restored panes. */
   launchCommandAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
   /** Conversations the `incarnationId` execution reported; a later row can't hide them. In memory only. */
@@ -108,16 +115,13 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   lastExitCause: TerminalExitCause | null
   lastAgentStatus: AgentStatus | null
   lastAgentStatusObservedLive: boolean
-  /** Latest first-party state from the agent's own OSC 9999 status stream — what the
-   *  agent SAYS it is doing, as opposed to `lastAgentStatus`, which is inferred from its
-   *  OSC title. Optional: absent until a payload lands. */
+  /** First-party OSC 9999 report, distinct from title-inferred lastAgentStatus; absent until one arrives. */
   lastExplicitAgentStatus?: {
     state: AgentStatusState
     updatedAt: number
     /** A `done` row that marks a new session owning the pane, not the end of a turn. */
     sessionBoundary?: boolean
-    /** OSC 7501 `done`: the program itself says it is at rest awaiting input, which a hook
-     *  `done` (possibly mid-turn) cannot claim. */
+    /** OSC 7501 done proves the program awaits input; hook done may occur mid-turn. */
     programAtRest?: boolean
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
@@ -127,9 +131,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   lastOscTitleEpochMs: number | null
-  /** The stale-working timer's cleared title, dated as a genuine title would be, while it stands
-   *  over `lastOscTitle`. Display readers project through it (getPtyDisplayRecord); evidence never
-   *  reads it. On the record so it lives as long as the native title it retires. In memory only. */
+  /** In-memory stale-working title clear follows native-title lifetime/clock; display projects it, evidence never reads it. */
   titleDisplayClear?: { title: string; observedAt: number; observedAtEpochMs: number } | null
   managementTitle: string | null
   managementTitleAt: number | null
@@ -141,6 +143,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   /** The name a rename gave this terminal: display only, never title evidence (#20626). */
   manualTitle?: string | null
   lastOutputAt: number | null
+  /** When main began receiving a stream that had printed nothing yet; silence since then is measured quiet. */
+  outputObservedSince?: number | null
   /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
   commandPaint?: TerminalCommandPaint
 }
@@ -174,6 +178,10 @@ export type RuntimeHeadlessTerminal = {
   outputSequence: number
   writeChain: Promise<void>
   ownership: PtyShellOwnershipMirror
+  /** Output seq a renderer hydration seed already painted; queued live chunks at/below it are not rewritten. */
+  rendererSeedSeq?: number
+  /** Unfinished escape from skipped seed-covered chunks, written before the next uncovered chunk. */
+  rendererSeedEscapeTail?: string
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
   unrepaintedReflowGrid?: { cols: number; rows: number }
 }
@@ -185,6 +193,11 @@ export type RuntimeVisibleTerminalState = {
   isAlternateScreen: boolean
   sequence: number
   generation: number
+}
+
+export type ProviderTerminalBufferWait = {
+  snapshot: PtyProviderBufferSnapshot | null
+  late: Promise<PtyProviderBufferSnapshot | null> | null
 }
 
 export type ProviderBufferAcquisition = {

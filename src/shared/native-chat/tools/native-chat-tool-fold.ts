@@ -40,9 +40,7 @@ function isHarnessSidecarToolMessage(message: NativeChatMessage): boolean {
   )
 }
 
-/** Activity rows land mid-turn, between the assistant's tool calls. They are
- *  chrome, not a new turn, so they must not end the run the following tool
- *  messages fold into. */
+/** Mid-turn roster chrome must not end the tool run that later messages join. */
 function isSubagentRosterMessage(message: NativeChatMessage): boolean {
   return message.blocks.some(isSubagentGroupBlock)
 }
@@ -51,8 +49,7 @@ function isBackgroundTaskMessage(message: NativeChatMessage): boolean {
   return message.blocks.some(isBackgroundTaskBlock)
 }
 
-/** A stored-only provider event draws nothing, so it must not split the run around it. A plan
- *  update still does: the desktop draws it in place as the task list. */
+/** Invisible stored events cannot split runs; plan updates do because desktop renders their task list in place. */
 export function isUndrawnProviderFrameMessage(message: NativeChatMessage): boolean {
   return (
     isWordlessProviderFrameMessage(message) &&

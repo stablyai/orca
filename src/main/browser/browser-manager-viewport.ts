@@ -7,31 +7,124 @@ import {
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
 import { sendGuestCdpCommand } from './guest-cdp-command'
-
-// Omit maxTouchPoints when disabling: Chromium rejects 0 even then (#22749).
-const TOUCH_EMULATION_DISABLED = { enabled: false } as const
+import { touchEmulationParams } from './guest-touch-emulation'
+import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
 
 export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifecycle {
-  async openDevTools(browserTabId: string, inspectAt?: { x: number; y: number }): Promise<boolean> {
+  async openDevTools(
+    browserTabId: string,
+    inspectAt?: { x: number; y: number },
+    options?: { detach?: boolean }
+  ): Promise<boolean> {
+    const guest = this.resolveDevToolsGuest(browserTabId)
+    if (!guest) {
+      return false
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserTabId)
+    const operation = this.devToolsDock.beginOpen(
+      guest,
+      () =>
+        this.webContentsIdByTabId.get(browserTabId) === guest.id &&
+        !this.offscreenGuestIds.has(guest.id) &&
+        (!renderer ||
+          (this.resolveRendererForBrowserTab(browserTabId) === renderer && !renderer.isDestroyed()))
+    )
+    const notify = (docked: boolean): void => {
+      const currentGuestId = this.webContentsIdByTabId.get(browserTabId)
+      if (
+        renderer &&
+        !renderer.isDestroyed() &&
+        (currentGuestId === undefined ||
+          currentGuestId === guest.id ||
+          (!docked && !this.devToolsDock.isDocked(currentGuestId)))
+      ) {
+        renderer.send('browser:devToolsDockChanged', { browserPageId: browserTabId, docked })
+      }
+    }
+    try {
+      let docked = false
+      if (!options?.detach && renderer) {
+        docked = await this.devToolsDock.open(guest, () => notify(false), operation)
+        if (!operation.isCurrent()) {
+          return false
+        }
+      }
+      if (!docked && !(await this.devToolsDock.openDetached(guest, operation))) {
+        return false
+      }
+      if (!operation.isCurrent()) {
+        return false
+      }
+      if (docked) {
+        notify(true)
+      }
+      if (!operation.isCurrent()) {
+        return false
+      }
+      if (inspectAt) {
+        // Open first: inspectElement alone opens Electron's own DevTools and bypasses the dock.
+        guest.inspectElement(inspectAt.x, inspectAt.y)
+      }
+      return true
+    } finally {
+      operation.finish()
+    }
+  }
+
+  closeDevTools(browserTabId: string): void {
+    const guest = this.resolveDevToolsGuest(browserTabId)
+    if (guest) {
+      this.closeGuestDevTools(guest)
+    }
+  }
+
+  /** Toggles the page DevTools of `focused` (the page or its DevTools); false if it is neither. */
+  toggleDevToolsOfFocusedPage(focused: Electron.WebContents): boolean {
+    for (const [browserTabId, guestId] of this.webContentsIdByTabId) {
+      const guest = webContents.fromId(guestId)
+      if (!guest || guest.isDestroyed()) {
+        continue
+      }
+      if (guest !== focused && guest.devToolsWebContents !== focused) {
+        continue
+      }
+      if (
+        this.devToolsDock.isOpening(guest.id) ||
+        this.devToolsDock.isDocked(guest.id) ||
+        guest.isDevToolsOpened()
+      ) {
+        this.closeGuestDevTools(guest)
+      } else {
+        void this.openDevTools(browserTabId)
+      }
+      return true
+    }
+    return false
+  }
+
+  setDevToolsDockBounds(
+    browserTabId: string,
+    bounds: BrowserDevToolsDockBounds | null,
+    snapshot: boolean
+  ): Promise<string | null> {
+    const guestId = this.webContentsIdByTabId.get(browserTabId)
+    return guestId === undefined
+      ? Promise.resolve(null)
+      : this.devToolsDock.setBounds(guestId, bounds, snapshot)
+  }
+
+  private resolveDevToolsGuest(browserTabId: string): Electron.WebContents | null {
     const webContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (!webContentsId) {
-      return false
+      return null
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
       this.unregisterGuest(browserTabId)
-      return false
+      return null
     }
     // Offscreen DevTools would open on the server desktop without a route back to the client.
-    if (this.offscreenGuestIds.has(webContentsId)) {
-      return false
-    }
-    guest.openDevTools({ mode: 'detach' })
-    if (inspectAt) {
-      // Open detached first: inspectElement alone uses the saved dock mode, unsupported by guests (#7399).
-      guest.inspectElement(inspectAt.x, inspectAt.y)
-    }
-    return true
+    return this.offscreenGuestIds.has(webContentsId) ? null : guest
   }
 
   // Never detach here: other CDP clients, including the agent bridge, would lose their state.
@@ -164,7 +257,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     const touchApplied = await this.runViewportEmulationStep(browserTabId, 'touch emulation', () =>
       dbg.sendCommand(
         'Emulation.setTouchEmulationEnabled',
-        override?.mobile ? { enabled: true, maxTouchPoints: 5 } : TOUCH_EMULATION_DISABLED
+        touchEmulationParams(override?.mobile === true)
       )
     )
     if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {

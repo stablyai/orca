@@ -11,10 +11,7 @@ export type MirroredEditorCloseState = WorktreeOperationRouteState & {
   unifiedTabsByWorktree: Record<string, Tab[]>
 }
 
-// A mirrored editor file is owned by the host, which republishes its open files, so a local-only close is undone by the next
-// snapshot. Tell the host to close its own tab; the RPC's close intent suppresses re-mirroring until the snapshot catches up.
-// Side-effecting only (callers still run their local close); no-op for a file neither mirrored nor in a workspace a
-// server's frames draw, so the host's own closes are untouched.
+// Mirrored editors republish after local-only close; host RPC retires its tab and intent suppresses stale snapshots. Callers still close locally; only mirrored/frame-drawn files notify the host.
 export function notifyHostOfMirroredEditorClose(
   state: MirroredEditorCloseState,
   worktreeId: string | null | undefined,
@@ -47,9 +44,7 @@ export function notifyHostOfMirroredEditorClose(
   if (unifiedTabs.length === 0) {
     return false
   }
-  // Record the close intent SYNCHRONOUSLY so a host snapshot landing before the dynamic import below resolves can't
-  // flash the old-path tab back. closeWebRuntimeSessionTab re-records it idempotently.
-  // Frames drop a closed tab themselves; the mirror's intent ledger skips a frame-drawn workspace.
+  // Record intent before dynamic import or intervening snapshots flash the old path back; RPC re-records idempotently.
   for (const tab of frameDrawn ? [] : unifiedTabs) {
     recordWebSessionCloseIntent(
       { environmentId: runtimeEnvironmentId },
@@ -58,8 +53,7 @@ export function notifyHostOfMirroredEditorClose(
       Date.now()
     )
   }
-  // Dynamic import: this helper is imported by the editor slice during store creation, so importing
-  // web-runtime-session eagerly imports the store back and trips cyclic init in full-suite import order.
+  // Lazy import avoids editor-slice → session → store cyclic initialization in full-suite order.
   void import('./web-runtime-session-tab-lifecycle').then(({ closeWebRuntimeSessionTab }) =>
     Promise.all(
       unifiedTabs.map((tab) =>

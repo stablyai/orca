@@ -42,10 +42,7 @@ function sweepStaleBundles(temporary, cache, key) {
   }
 }
 
-/**
- * Builds Zod into one ESM module that every Vitest worker aliases. The output is keyed by the
- * installed Zod, esbuild, and this builder, so repeat runs reuse it and a killed run leaks nothing.
- */
+// Reuse worker-shared ESM bundles keyed by installed Zod, esbuild and builder content; killed runs need no cleanup.
 export function createVitestZodBundle(root) {
   const entry = fileURLToPath(import.meta.resolve('zod'))
   const manifest = createRequire(entry).resolve('zod/package.json')

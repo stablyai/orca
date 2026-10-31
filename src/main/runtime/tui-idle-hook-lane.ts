@@ -7,11 +7,7 @@ import { terminalHostConnectionMatches } from './orchestration/worker-provider-s
 
 type HookTurnState = 'done' | 'working' | 'permission'
 
-/**
- * The main agent's turn as the hook server's store last saw it for one pane, and the permission
- * arbiter's verdict on the pane's blocked text with that turn as its explicit status (or, for a
- * wait the hook reports with no text the arbiter knows, a generic interactive prompt).
- */
+/** The main agent's hook turn plus permission-arbiter blocked verdict, with a generic prompt for hook waits lacking recognized text. */
 export type TuiIdleHookTurn = {
   state: HookTurnState
   blockedReason: RuntimeTerminalWaitBlockedReason | null
@@ -42,12 +38,7 @@ export function retainedTailIncludes(
   return false
 }
 
-/**
- * Reads the main agent's turn off its row. Why the main agent's own state: the row's combined
- * state folds child work in, and a subagent finishing must not end the lead turn (#6011); a
- * child's permission wait still blocks, since its prompt is on the pane. A lead turn that ended
- * reads done even while a subagent runs: its composer takes input then, as the screen rules read it.
- */
+/** Read the lead's own turn: child completion cannot end it, but child permission waits still block. An ended lead can accept input while children run. */
 export function hookLeadTurnState(
   row: Pick<AgentStatusIpcPayload, 'state' | 'mainAgent' | 'sessionBoundary'>
 ): HookTurnState | null {
@@ -88,11 +79,7 @@ export type TuiIdleHookTurnRead = {
   ): RuntimeTerminalWaitBlockedReason | null
 }
 
-/**
- * The pane's freshest hook row, joined on its pane keys and terminal handles. A pane neither
- * reaches (a PTY created with no pane key whose agent never posted under one) has no answer, and
- * neither does a row another agent or an earlier process wrote: the caller's other lanes decide.
- */
+/** Read the freshest pane/handle-joined hook row for this agent and process; unjoinable, stale or foreign rows leave other lanes to decide. */
 export function readTuiIdleHookTurn(read: TuiIdleHookTurnRead): TuiIdleHookTurn | null {
   const row = selectFreshExplicitAgentStatusRow(read)
   if (!row || row.agentType !== read.agent || row.receivedAt < (read.respawnedAt ?? -1)) {
@@ -143,13 +130,7 @@ export type TuiIdleHookVerdict =
   | { kind: 'blocked'; reason: RuntimeTerminalWaitBlockedReason }
   | { kind: 'pending'; quietForeground: 'closed'; recheckAt?: number }
 
-/**
- * Tier 0 of tui-idle-evidence.ts for an agent whose hooks are trusted (`profile.hooks`). Why ahead
- * of every rule: they reach a headless host, where the `<Agent> ready` titles the window writes
- * never appear (#16095). Why the arbiter judges the blocked text: a denied prompt's dialog lingers
- * in the line tail after the hook says the turn moved on. No fresh row (startup, before the first
- * prompt, or an unjoinable pane) leaves the other tiers.
- */
+/** Authoritative hooks work headless without window-ready titles (#16095). Arbitrate lingering denied-dialog text against the fresh turn; absent rows leave other tiers. */
 export function evaluateHookTurn(
   agent: TuiAgent | null | undefined,
   readHookTurn: () => TuiIdleHookTurn | null

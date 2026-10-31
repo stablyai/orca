@@ -27,9 +27,7 @@ export function useTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
     githubWorkItemMutationQueryKey
   ])
 
-  // Why: track true unmount only. The quiet-revalidate coalescing keys off the
-  // shared quietState (inFlight/trailingQueued), so a nonce-triggered re-render
-  // must NOT cancel the in-flight run's trailing bookkeeping.
+  // Nonce rerenders must not cancel shared in-flight/trailing bookkeeping; only true unmount does.
   return model
 }
 export type TaskPageGitHubLandingRefreshModel = ReturnType<typeof useTaskPageGitHubLandingRefresh>

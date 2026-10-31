@@ -83,9 +83,7 @@ const runtimeCall = vi.fn(async (_args: { method: string }) => ({
   _meta: { runtimeId: 'runtime-test' }
 }))
 
-/** Why: an inventory that publishes nothing now buys one `terminal.list`
- *  readiness probe before it may settle the mirror, so a bare call count no
- *  longer says which questions the client asked (STA-5377). */
+/** Empty inventories require terminal.list readiness probes before settling; classify calls by method rather than bare count (STA-5377). */
 function runtimeCallMethods(): string[] {
   return runtimeCall.mock.calls.map(([args]) => args.method).sort()
 }

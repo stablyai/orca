@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
+import { PROGRAM_STATUS_QUERY_REPLY } from '../../../src/shared/program-status/protocol'
 import { sendMobileTerminalQueryReply } from './mobile-terminal-query-reply'
 
 function createClient() {
@@ -34,6 +35,7 @@ describe('sendMobileTerminalQueryReply', () => {
         connected: true,
         handle: 'terminal-1',
         hostSupportsQueryReplyInput: true,
+        hostSupportsProgramStatus: true,
         subscribedTerminals: new Set(['terminal-1'])
       })
     ).resolves.toBe(true)
@@ -60,6 +62,7 @@ describe('sendMobileTerminalQueryReply', () => {
         connected: true,
         handle: 'terminal-1',
         hostSupportsQueryReplyInput: true,
+        hostSupportsProgramStatus: true,
         subscribedTerminals: new Set(['terminal-1'])
       })
     ).resolves.toBe(false)
@@ -82,14 +85,14 @@ describe('sendMobileTerminalQueryReply', () => {
         connected,
         handle,
         hostSupportsQueryReplyInput: true,
+        hostSupportsProgramStatus: true,
         subscribedTerminals
       })
     ).resolves.toBe(false)
     expect(client.sendRequest).not.toHaveBeenCalled()
   })
 
-  // Why: hosts without terminal.query-reply-input.v1 strip inputKind (zod drops
-  // unknown keys) and would treat the reply as floor-taking shell input.
+  // Older hosts strip inputKind and would treat query replies as floor-taking user input.
   it('does not send to a host that has not advertised query-reply input support', async () => {
     const client = createClient()
 
@@ -101,6 +104,25 @@ describe('sendMobileTerminalQueryReply', () => {
         connected: true,
         handle: 'terminal-1',
         hostSupportsQueryReplyInput: false,
+        hostSupportsProgramStatus: true,
+        subscribedTerminals: new Set(['terminal-1'])
+      })
+    ).resolves.toBe(false)
+    expect(client.sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('does not answer program status for a host that cannot read its reports', async () => {
+    const client = createClient()
+
+    await expect(
+      sendMobileTerminalQueryReply({
+        bytes: PROGRAM_STATUS_QUERY_REPLY,
+        client,
+        clientId: 'mobile-1',
+        connected: true,
+        handle: 'terminal-1',
+        hostSupportsQueryReplyInput: true,
+        hostSupportsProgramStatus: false,
         subscribedTerminals: new Set(['terminal-1'])
       })
     ).resolves.toBe(false)

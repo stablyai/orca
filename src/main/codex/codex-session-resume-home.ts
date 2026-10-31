@@ -31,14 +31,23 @@ function toCodexTrustedPathComparisonCopy(filePath: string): string | null {
   return filePath.match(/^\\\\\?\\([A-Za-z]:[\\/][\s\S]*)$/)?.[1] ?? null
 }
 
-function isCodexRolloutInsideSessionsRoot(sessionsRoot: string, filePath: string): boolean {
+/** Returns the `YYYY/MM/DD/rollout-*.jsonl` tail, or null outside the dated layout. */
+export function codexDatedRolloutRelativePath(
+  sessionsRoot: string,
+  filePath: string
+): string | null {
   const comparisonSessionsRoot = toCodexTrustedPathComparisonCopy(sessionsRoot)
   const comparisonFilePath = toCodexTrustedPathComparisonCopy(filePath)
   if (!comparisonSessionsRoot || !comparisonFilePath) {
-    return false
+    return null
   }
+  // Windows-syntax suffixes come back with `/` separators; POSIX keeps `\` as a name byte.
   const relativePath = relativePathInsideRoot(comparisonSessionsRoot, comparisonFilePath)
-  return Boolean(relativePath && ROLLOUT_RELATIVE_PATH.test(relativePath.replace(/\\/g, '/')))
+  return relativePath && ROLLOUT_RELATIVE_PATH.test(relativePath) ? relativePath : null
+}
+
+function isCodexRolloutInsideSessionsRoot(sessionsRoot: string, filePath: string): boolean {
+  return codexDatedRolloutRelativePath(sessionsRoot, filePath) !== null
 }
 
 function isRegularFile(filePath: string): boolean {

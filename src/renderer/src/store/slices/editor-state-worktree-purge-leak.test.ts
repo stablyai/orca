@@ -1,14 +1,4 @@
-/**
- * Memory-leak regression: per-file and per-worktree editor state must be purged
- * when a worktree is removed.
- *
- * `editorCursorLine` and `editorViewMode` are keyed by fileId and
- * `gitStatusHugeByWorktree` is keyed by worktreeId. Both worktree-removal paths
- * — the bulk `purgeWorktreeTerminalState` (used by the authoritative-scan
- * reconcile) and the single `removeWorktree` — failed to drop these entries, so
- * they accumulated one record per file/worktree for the lifetime of the
- * renderer session.
- */
+/** Both single/bulk worktree removal must evict editorCursorLine/editorViewMode by file and gitStatusHugeByWorktree; missed keys leak per removed file/worktree for renderer lifetime. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 

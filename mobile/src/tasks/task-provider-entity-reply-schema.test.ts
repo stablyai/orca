@@ -10,9 +10,6 @@ import {
   taskMutationEnvelopeSchema
 } from './task-provider-entity-reply-schema'
 
-// The entity claims the four tasks schema modules are built on: which member a row is identified
-// by, which arm sets are closed, and which members keep an explicit null.
-
 function reads<T>(schema: z.ZodType<T, unknown>, value: unknown): T {
   const parsed = schema.safeParse(value)
   if (!parsed.success) {
@@ -165,8 +162,7 @@ describe('a check row and a file row', () => {
     ]) {
       expect(reads(detailFileListSchema, [{ path: 'a', status }])[0]?.status).toBe(status)
     }
-    // Absent is what the call site turns into `'modified'`; the host's own params enum would
-    // refuse the arm itself.
+    // Absent status uses modified; forwarding an unknown arm would fail the host’s params validation.
     expect(reads(detailFileListSchema, [{ path: 'a', status: 'ADDED' }])[0]?.status).toBeUndefined()
   })
 

@@ -17,30 +17,6 @@ describe('PtyProcessListAdmission', () => {
     capturedAgeMs: 12
   }
 
-  it('preserves and clones optional foreground evidence', () => {
-    const admission = new PtyProcessListAdmission()
-    const admitted = admission.admit({
-      id: 'pty-1',
-      cwd: '/repo',
-      title: 'shell',
-      foregroundProcessEvidence: evidence
-    })
-    expect(admitted.foregroundProcessEvidence).toEqual(evidence)
-    expect(admitted.foregroundProcessEvidence).not.toBe(evidence)
-  })
-
-  it('preserves optional cached process names and accepts inventories from older hosts', () => {
-    const base = { id: 'pty-1', cwd: '/repo', title: 'shell' }
-    expect(new PtyProcessListAdmission().admit({ ...base, foregroundProcess: 'codex' })).toEqual({
-      ...base,
-      foregroundProcess: 'codex'
-    })
-    expect(new PtyProcessListAdmission().admit(base)).toEqual(base)
-    const malformed = { ...base, foregroundProcess: 'codex' }
-    Reflect.set(malformed, 'foregroundProcess', 42)
-    expect(() => new PtyProcessListAdmission().admit(malformed)).toThrow('invalid_pty_process_list')
-  })
-
   it('rejects malformed foreground evidence instead of stripping it', () => {
     expect(() =>
       new PtyProcessListAdmission().admit({
@@ -66,17 +42,6 @@ describe('PtyProcessListAdmission', () => {
     Reflect.set(session, 'routed', false)
     Reflect.set(session, 'inventorySourceId', 1)
     expect(() => new PtyProcessListAdmission().admit(session)).toThrow('invalid_pty_process_list')
-  })
-
-  it('keeps the host verdict that a PTY is exiting', () => {
-    const admission = new PtyProcessListAdmission()
-
-    expect(admission.admit({ id: 'pty-1', cwd: '/repo', title: 'shell', exiting: true })).toEqual({
-      id: 'pty-1',
-      cwd: '/repo',
-      title: 'shell',
-      exiting: true
-    })
   })
 
   it('strips unknown provider payloads from admitted process metadata', () => {

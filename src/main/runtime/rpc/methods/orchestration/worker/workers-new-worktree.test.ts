@@ -1,3 +1,4 @@
+import { mockWorkerCreatedWorktree } from './worker-created-worktree.test-fixture'
 import '../../../unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -11,7 +12,7 @@ import type { RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { prepareFederationWorkerLaunchOnHost } from './worker-opencode-model-preflight'
 import { FederationAttachStartParams } from '../federation/federation-start-schema'
-import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../../../../shared/worktree/meta-persisted-defaults'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 
 describe('orchestration new-worktree workers', () => {
   type CreateWorktreeResult = Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>
@@ -105,56 +106,8 @@ describe('orchestration new-worktree workers', () => {
     return { result, task }
   }
 
-  function mockCreatedWorktree(options?: {
-    hookFound?: boolean
-    startupPolicy?: 'start-immediately' | 'wait-for-setup'
-    state?: 'running' | 'skipped' | 'not_configured' | 'spawn_failed'
-    terminals?: { handle: string; title: string }[]
-    setupTerminalHandle?: string
-  }) {
-    const hookFound = options?.hookFound ?? true
-    const state = options?.state ?? (hookFound ? 'running' : 'not_configured')
-    vi.spyOn(runtime, 'createManagedWorktree').mockImplementation(async (args) => {
-      args.onWorkspaceCreated?.('repo::created')
-      return {
-        worktree: {
-          ...WORKTREE_META_PERSISTED_DEFAULTS,
-          id: 'repo::created',
-          repoId: 'repo',
-          displayName: '',
-          comment: '',
-          isUnread: false,
-          sortOrder: 0,
-          lastActivityAt: 0,
-          path: '/repo/created',
-          head: 'head',
-          branch: 'created',
-          isBare: false,
-          isMainWorktree: false
-        },
-        startupTerminal: { spawned: true, handle: 'term_worker' },
-        setupReceipt: {
-          requested: state === 'skipped' ? 'skip' : 'run',
-          hookFound,
-          startupPolicy: options?.startupPolicy ?? 'start-immediately',
-          state,
-          terminalHandle:
-            options?.setupTerminalHandle ??
-            options?.terminals?.find((terminal) => terminal.title === 'Setup')?.handle
-        }
-      }
-    })
-    if (options?.terminals) {
-      vi.mocked(runtime.listTerminals).mockResolvedValue({
-        terminals: options.terminals,
-        totalCount: options.terminals.length,
-        truncated: false
-      } as never)
-    }
-  }
-
   it('creates an independent top-level worktree and reuses its agent terminal', async () => {
-    mockCreatedWorktree()
+    mockWorkerCreatedWorktree(runtime)
 
     const { result } = await startWorker({ worktree: 'new-top-level' })
 
@@ -188,7 +141,7 @@ describe('orchestration new-worktree workers', () => {
   })
 
   it('passes launch preferences into agent-first worktree creation', async () => {
-    mockCreatedWorktree()
+    mockWorkerCreatedWorktree(runtime)
 
     const { result } = await startWorker({
       model: 'custom-codex-model',
@@ -213,7 +166,7 @@ describe('orchestration new-worktree workers', () => {
   it.each(['new-child', 'new-top-level'])(
     'refuses an OpenCode model for %s without probing',
     async (worktree) => {
-      mockCreatedWorktree()
+      mockWorkerCreatedWorktree(runtime)
       const probe = vi
         .spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport')
         .mockResolvedValue(true)
@@ -306,8 +259,50 @@ describe('orchestration new-worktree workers', () => {
     expect(db.getDispatchContext(task.id)).toBeUndefined()
   })
 
+  describe('from a terminal outside a managed git worktree', () => {
+    beforeEach(async () => {
+      const coordinator = await runtime.showTerminal('term_coord')
+      vi.mocked(runtime.showTerminal).mockResolvedValue({
+        ...coordinator,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      })
+      vi.mocked(runtime.showManagedWorktree).mockRejectedValue(new Error('selector_not_found'))
+    })
+
+    it('creates a new-top-level worktree in the explicit repo', async () => {
+      mockWorkerCreatedWorktree(runtime)
+
+      const { result } = await startWorker({ worktree: 'new-top-level', repo: 'repo' })
+
+      expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repoSelector: 'repo',
+          lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })
+        })
+      )
+      expect(result).toMatchObject({ state: 'ready' })
+    })
+
+    it.each([
+      ['new-child', { repo: 'repo' }],
+      ['new-top-level', {}]
+    ] as const)(
+      'refuses %s without a caller worktree before creating effects',
+      async (worktree, extra) => {
+        const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
+
+        await expect(startWorker({ worktree, ...extra })).rejects.toMatchObject({
+          code: 'invalid_argument',
+          message: expect.stringContaining('could not be resolved to a git worktree Orca manages')
+        })
+        expect(createWorktree).not.toHaveBeenCalled()
+        expect(db.getDispatchContext(db.listTasks()[0]!.id)).toBeUndefined()
+      }
+    )
+  })
+
   it('injects the execution host CLI command without a Dispatch capability', async () => {
-    mockCreatedWorktree()
+    mockWorkerCreatedWorktree(runtime)
     vi.mocked(runtime.getTerminalOrchestrationCliCommand).mockReturnValue('orca-ide')
 
     await startWorker({ worktree: 'new-top-level' })
@@ -318,7 +313,7 @@ describe('orchestration new-worktree workers', () => {
   })
 
   it('passes exact repo, base, metadata, lineage, and setup choices to worktree creation', async () => {
-    mockCreatedWorktree({ state: 'skipped' })
+    mockWorkerCreatedWorktree(runtime, { state: 'skipped' })
 
     await startWorker({
       worktree: 'new-top-level',
@@ -344,7 +339,7 @@ describe('orchestration new-worktree workers', () => {
   })
 
   it('reports an absent setup hook as not configured without failing the start', async () => {
-    mockCreatedWorktree({ hookFound: false })
+    mockWorkerCreatedWorktree(runtime, { hookFound: false })
 
     const { result } = await startWorker()
 
@@ -365,7 +360,7 @@ describe('orchestration new-worktree workers', () => {
     ['inherit', 'not_configured'],
     ['run', 'running']
   ] as const)('passes explicit setup=%s through with a truthful receipt', async (setup, state) => {
-    mockCreatedWorktree({ hookFound: setup === 'run', state })
+    mockWorkerCreatedWorktree(runtime, { hookFound: setup === 'run', state })
 
     const { result } = await startWorker({ setup })
 
@@ -379,7 +374,7 @@ describe('orchestration new-worktree workers', () => {
   })
 
   it('records a later setup failure without gating a start-immediately worker', async () => {
-    mockCreatedWorktree({
+    mockWorkerCreatedWorktree(runtime, {
       terminals: [
         { handle: 'term_worker', title: 'Codex' },
         { handle: 'term_setup', title: 'Setup' }
@@ -424,7 +419,7 @@ describe('orchestration new-worktree workers', () => {
   })
 
   it('uses the exact setup handle instead of a configured tab title', async () => {
-    mockCreatedWorktree({
+    mockWorkerCreatedWorktree(runtime, {
       setupTerminalHandle: 'term_actual_setup',
       terminals: [
         { handle: 'term_worker', title: 'Codex' },
@@ -449,7 +444,7 @@ describe('orchestration new-worktree workers', () => {
   })
 
   it('records wait-for-setup success before task input is accepted', async () => {
-    mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
+    mockWorkerCreatedWorktree(runtime, { startupPolicy: 'wait-for-setup', state: 'running' })
 
     const { result } = await startWorker()
     const dispatchId = (result as { dispatchId: string }).dispatchId
@@ -472,10 +467,9 @@ describe('orchestration new-worktree workers', () => {
     )
   })
 
-  // Why: a first dispatch the composer signal settles must record setup exactly as one the idle
-  // wait settles; the composer lane once returned nothing and skipped this record.
+  // Composer and idle readiness paths must both record setup evidence; the composer path previously dropped it.
   it('settles a fresh worker start on main’s idle wait, not the launch paste’s signal', async () => {
-    mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
+    mockWorkerCreatedWorktree(runtime, { startupPolicy: 'wait-for-setup', state: 'running' })
     const composerSignal = vi.spyOn(runtime, 'waitForFreshWorkerComposer')
 
     const { result } = await startWorker()
@@ -492,7 +486,7 @@ describe('orchestration new-worktree workers', () => {
   })
 
   it('does not inject task input when the gated setup terminal fails to start', async () => {
-    mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'spawn_failed' })
+    mockWorkerCreatedWorktree(runtime, { startupPolicy: 'wait-for-setup', state: 'spawn_failed' })
     vi.mocked(runtime.waitForTerminal).mockResolvedValue({
       handle: 'term_worker',
       condition: 'tui-idle',
@@ -516,7 +510,7 @@ describe('orchestration new-worktree workers', () => {
   })
 
   it('does not inject task input when the gated setup script fails', async () => {
-    mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
+    mockWorkerCreatedWorktree(runtime, { startupPolicy: 'wait-for-setup', state: 'running' })
     vi.mocked(runtime.waitForTerminal).mockResolvedValue({
       handle: 'term_worker',
       condition: 'tui-idle',
@@ -537,7 +531,7 @@ describe('orchestration new-worktree workers', () => {
   })
 
   it('does not mislabel a wait-for-setup timeout as setup failure', async () => {
-    mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
+    mockWorkerCreatedWorktree(runtime, { startupPolicy: 'wait-for-setup', state: 'running' })
     vi.mocked(runtime.waitForTerminal).mockResolvedValue({
       handle: 'term_worker',
       condition: 'tui-idle',
@@ -581,7 +575,7 @@ describe('orchestration new-worktree workers', () => {
       residualResources: []
     })
 
-    mockCreatedWorktree()
+    mockWorkerCreatedWorktree(runtime)
     vi.mocked(runtime.waitForTerminal).mockResolvedValueOnce({
       handle: 'term_worker',
       condition: 'tui-idle',
@@ -695,7 +689,7 @@ describe('orchestration new-worktree workers', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey
     }).id
-    mockCreatedWorktree({ hookFound: false })
+    mockWorkerCreatedWorktree(runtime, { hookFound: false })
     vi.mocked(runtime.sendTerminalAgentPrompt).mockRejectedValueOnce(
       new Error('connection closed before dispatch input was accepted')
     )
@@ -780,7 +774,7 @@ describe('orchestration new-worktree workers', () => {
   })
 
   it('persists pre-effect, post-effect, and post-input stages in order', async () => {
-    mockCreatedWorktree({ hookFound: false })
+    mockWorkerCreatedWorktree(runtime, { hookFound: false })
     let finishWait:
       | ((value: Awaited<ReturnType<OrcaRuntimeService['waitForTerminal']>>) => void)
       | undefined

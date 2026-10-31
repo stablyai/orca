@@ -8,18 +8,25 @@ import {
   nativeChatFileInventoryRead,
   nativeChatFileSearchRead
 } from '../../mobile-session-read-operations'
-import { rankSuggestions } from '../../mobile-native-chat-autocomplete'
+import {
+  getPreparedQuickOpenFiles,
+  rankQuickOpenFiles
+} from '../../../../../src/shared/quick-open-path-search'
 
 const FILE_SEARCH_DEBOUNCE_MS = 120
 const FILE_SEARCH_RESULT_LIMIT = 16
 const FILE_SEARCH_QUERY_CACHE_LIMIT = 20
 
+function rankInventory(paths: readonly string[], query: string): string[] {
+  return rankQuickOpenFiles(query, getPreparedQuickOpenFiles(paths), FILE_SEARCH_RESULT_LIMIT).map(
+    (result) => result.path
+  )
+}
+
 /** The legacy inventory is the whole workspace, so its request carries no further parameters. */
 type WorkspaceInventoryParameters = Readonly<Record<string, never>>
 const WHOLE_WORKSPACE: WorkspaceInventoryParameters = {}
 
-/** Debounces current-host path searches, bounds the mobile result/cache, and
- *  falls back to the legacy one-time full list when paired to an older host. */
 export function useMobileNativeChatFileSearch(args: {
   client: RpcClient | null
   worktreeId: string
@@ -50,8 +57,7 @@ export function useMobileNativeChatFileSearch(args: {
     searchSupportedRef.current = null
     setNativeChatFilePaths([])
     return () => {
-      // The owner retires itself the moment a call arrives under a scope it has not seen; this is
-      // the teardown path, where no such call is coming.
+      // Unmount must retire the owner too: no future call remains to notice a changed scope.
       inventory.reset()
       if (timerRef.current) {
         clearTimeout(timerRef.current)
@@ -75,8 +81,7 @@ export function useMobileNativeChatFileSearch(args: {
       const normalizedQuery = query.trim().toLowerCase().slice(0, 256)
       const cached = queryCacheRef.current.get(normalizedQuery)
       if (cached) {
-        // Why: cancel and stale-out any in-flight debounced query so an older
-        // request cannot later clobber this displayed cached result.
+        // Cancel and stale pending debounce work before cached results display so late queries cannot overwrite them.
         if (timerRef.current) {
           clearTimeout(timerRef.current)
           timerRef.current = null
@@ -102,8 +107,8 @@ export function useMobileNativeChatFileSearch(args: {
           }
           queryCacheRef.current.set(normalizedQuery, paths)
           while (queryCacheRef.current.size > FILE_SEARCH_QUERY_CACHE_LIMIT) {
-            const oldest = queryCacheRef.current.keys().next().value as string | undefined
-            if (!oldest) {
+            const oldest = queryCacheRef.current.keys().next().value
+            if (oldest === undefined) {
               break
             }
             queryCacheRef.current.delete(oldest)
@@ -114,18 +119,14 @@ export function useMobileNativeChatFileSearch(args: {
           if (!mountedRef.current) {
             return
           }
-          // What retires the inventory: this host, this workspace, this logical authority. A
-          // reconnect to the same host leaves the files on disk alone, so the physical session
-          // epoch is deliberately not in it. Read once, so a cutover between the two calls below
-          // cannot put one attempt in two scopes.
+          // Scope inventory to host/workspace/logical authority, not physical reconnect; capture once so cutover cannot split an attempt’s identity.
           const inventoryScope: RequestScope = [client, worktreeId, generation]
           const held = inventory.read(inventoryScope, WHOLE_WORKSPACE)
           if (held) {
-            applyPaths(rankSuggestions(held, normalizedQuery, FILE_SEARCH_RESULT_LIMIT))
+            applyPaths(rankInventory(held, normalizedQuery))
             return
           }
-          // Why: older hosts expose only the full inventory RPC; queries that
-          // overlap its slow local/SSH read must share one request.
+          // Share overlapping legacy full-inventory reads, especially across slow SSH.
           const loaded = await inventory.load(inventoryScope, WHOLE_WORKSPACE, async () => {
             const response = await nativeChatFileInventoryRead.request(client, {
               worktree: `id:${worktreeId}`
@@ -133,10 +134,14 @@ export function useMobileNativeChatFileSearch(args: {
             const accepted = nativeChatFileInventoryRead.interpret(response)
             return accepted.accepted ? accepted.value : null
           })
-          if (!loaded || inventory.commit(loaded.lease, loaded.value) !== 'committed') {
+          if (
+            !loaded ||
+            inventory.commit(loaded.lease, loaded.value) !== 'committed' ||
+            !isCurrentRequest()
+          ) {
             return
           }
-          applyPaths(rankSuggestions(loaded.value, normalizedQuery, FILE_SEARCH_RESULT_LIMIT))
+          applyPaths(rankInventory(loaded.value, normalizedQuery))
         }
         void (async () => {
           if (!isCurrentRequest()) {
@@ -160,8 +165,7 @@ export function useMobileNativeChatFileSearch(args: {
             applyPaths(accepted.value)
             return
           }
-          // Why the raw refusal: `method_not_found` is what makes the composer fall back to the
-          // full inventory, and no acceptance policy carries a code.
+          // Inspect method_not_found before policy interpretation to choose legacy inventory fallback.
           if (!response.ok && response.error.code === 'method_not_found') {
             searchSupportedRef.current = false
             await loadLegacyPaths()

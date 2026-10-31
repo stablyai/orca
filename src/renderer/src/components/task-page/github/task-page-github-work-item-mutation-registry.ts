@@ -25,10 +25,7 @@ const listeners = new Set<Listener>()
 const pendingByKey = new Map<string, PendingOp>()
 const generations = new Map<string, number>()
 const confirmedSnapshots = new Map<string, GitHubAssignableUser[]>()
-/**
- * Why: after confirm, pending ops are gone but lastConfirmed/snapshots stay keyed
- * by sourceScope. Overlay must still resolve the same scope or authority is lost.
- */
+/** Remember source scope after pending clears so overlays can still resolve confirmed authority. */
 const itemSourceScopeByItemKey = new Map<string, string | null>()
 const stickyHideByItemKey = new Map<string, StickyHideEntry>()
 const softHiddenItemKeys = new Set<string>()
@@ -60,20 +57,13 @@ export function getTaskPageGitHubConfirmedAuthorityItemKeys(): ReadonlySet<strin
   }
   return keys
 }
-/**
- * Drop confirmed-client authority (not in-flight pending). Used when the user
- * hard-refreshes so search can adopt for non-pending families (design tier 3).
- */
+/** Hard refresh drops confirmed authority while retaining in-flight operations. */
 export function clearTaskPageGitHubConfirmedAuthority(): void {
   confirmedSnapshots.clear()
   clearLastConfirmedClientValues()
   itemSourceScopeByItemKey.clear()
 }
-/**
- * Sticky hides + confirmed authority are query-scoped. Changing query/repo set
- * clears them so a new filter does not inherit membership exits / lastConfirmed
- * from a previous search.
- */
+/** Clear query-scoped sticky hides and confirmed authority when the query/repo set changes. */
 export function setTaskPageGitHubMutationQueryKey(queryKey: string): void {
   if (mutationQueryKey === queryKey) {
     return
@@ -81,13 +71,8 @@ export function setTaskPageGitHubMutationQueryKey(queryKey: string): void {
   mutationQueryKey = queryKey
   stickyHideByItemKey.clear()
   softHiddenItemKeys.clear()
-  // Why: lastConfirmed is for lag hold within one query; a new search should
-  // not permanently override rows with the previous filter's mutations.
   clearTaskPageGitHubConfirmedAuthority()
-  // Why: bound growth — quiet lag/dirty state and generation counters accumulate
-  // per queryKey/opKey over a session. A new query starts fresh, so drop the old
-  // quiet states and any generation counters with no in-flight pending op (keys
-  // with a live op must keep their counter so staleness detection stays valid).
+  // Bound per-query state growth; retain generation counters for live ops so staleness checks remain valid.
   clearTaskPageGitHubQuietStates()
   for (const serialized of generations.keys()) {
     if (!pendingByKey.has(serialized)) {
@@ -113,8 +98,7 @@ export function nextTaskPageGitHubMutationGeneration(key: TaskPageGitHubMutation
 }
 export function setPendingTaskPageGitHubOp(op: PendingOp): void {
   const serialized = serializeTaskPageGitHubMutationKey(op.key)
-  // Why: whole-field supersede abandons older pending without rollback; list
-  // ops share the same map entry only when opKey matches (per-login / batch).
+  // Whole-field supersession abandons old pending values without rollback; list ops share entries only for matching per-login/batch keys.
   pendingByKey.set(serialized, op)
   rememberItemSourceScope(op.key.repoId, op.key.itemId, op.key.sourceScope)
 }
@@ -127,10 +111,7 @@ export function rememberItemSourceScope(
   itemSourceScopeByItemKey.set(taskPageGitHubItemKey(repoId, itemId), sourceScope)
 }
 
-/**
- * Resolve the sourceScope used for lastConfirmed/snapshot lookups for an item.
- * Prefer live pending, then the remembered scope from the last begin/confirm.
- */
+/** Resolve confirmed authority from live pending scope, then the last remembered begin/confirm scope. */
 export function resolveItemSourceScope(repoId: string, itemId: string): string | null {
   const fromPending = getSourceScopeFromPendingOps(repoId, itemId)
   if (fromPending !== undefined) {
@@ -278,7 +259,6 @@ export function gcStickyHidesAbsentFromPages(
     }
   }
 }
-/** Test-only: wipe module state between unit cases. */
 export function resetTaskPageGitHubMutationRegistryForTests(): void {
   pendingByKey.clear()
   generations.clear()

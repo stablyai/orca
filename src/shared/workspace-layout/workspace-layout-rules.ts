@@ -1,5 +1,4 @@
-// Structural rules for the workspace tab layout the runtime holds. Pure: callers pass the runtime's
-// session partitions (and optionally the previous ones) and get every breach back.
+// Check structural rules on stored runtime partitions; optionally compare previous partitions for ID remounts.
 
 import type { ExecutionHostId } from '../execution-host'
 import type { Tab, TabGroup } from '../tab-types'
@@ -213,7 +212,7 @@ function checkTabBar({ hostId, session }: WorkspaceLayoutPartition): WorkspaceLa
   ])
   return [...worktreeIds].flatMap((worktreeId) => {
     const rows = session.tabsByWorktree?.[worktreeId] ?? []
-    // A headless runtime saves only the rows today; one finding per worktree, not one per tab.
+    // Headless runtimes may save rows alone; report once per workspace rather than once per tab.
     if (!session.unifiedTabs?.[worktreeId] && !session.tabGroups?.[worktreeId] && rows.length) {
       const violation: WorkspaceLayoutViolation = {
         rule: 'tab_bar_missing',
@@ -234,10 +233,7 @@ function checkTabBar({ hostId, session }: WorkspaceLayoutPartition): WorkspaceLa
   })
 }
 
-/**
- * Every structural breach in the runtime's layout. With `previous`, also flags ids that changed
- * for the same pane, tab or group across the update.
- */
+/** Report structural breaches and, with previous partitions, ID changes for unchanged entities. */
 export function checkWorkspaceLayoutRules(
   partitions: readonly WorkspaceLayoutPartition[],
   previous?: readonly WorkspaceLayoutPartition[]

@@ -1,17 +1,12 @@
 'use strict'
-// One dev-client build cache, keyed by Expo fingerprint, shared by every worktree on the machine.
-// app.config.js registers this module as Expo's `buildCacheProvider`, so `expo run:<platform>`
-// installs a cached build on a hit; scripts/native-client.mjs is the only writer. CommonJS because
-// Expo CLI loads providers with require().
+// Share fingerprint-keyed builds across worktrees; only native-client.mjs writes. Expo requires CommonJS.
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { createRequire } = require('node:module')
 
 const CACHE_DIR_ENV = 'ORCA_MOBILE_NATIVE_BUILD_CACHE_DIR'
-// `store` is set by native-client.mjs after it regenerated the native project for the current
-// fingerprint. Plain `expo run` never stores: a stale ios/ or android/ directory would otherwise be
-// cached under a fingerprint it was not built from.
+// Only native-client.mjs enables writes after regeneration, preventing stale native projects from poisoning the cache.
 const CACHE_MODE_ENV = 'ORCA_MOBILE_NATIVE_BUILD_CACHE_MODE'
 const ENTRIES_KEPT_PER_PLATFORM = 3
 const STAGING_PREFIX = '.staging-'

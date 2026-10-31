@@ -1,7 +1,4 @@
-// Browser, chat and simulator tabs in a layout-owner build (ORCA_LAYOUT_OWNER=main): the window
-// sends each open, close and page change to main first and draws the tab only from main's frame,
-// so nothing shows before main answers and a refused close leaves the tab. Switched off, the
-// window draws them itself and sends nothing.
+// Layout-owner browser/chat/simulator commands draw only from main’s answers; refusals preserve tabs. With switch off, window draws without sending main.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -309,8 +306,7 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('content tabs drawn from main’s fram
     expect(layoutApplyTestTransport.sent).toEqual([])
     expect(tabOf('chat-a')).toBeUndefined()
 
-    // Main places listed chats itself (chatTabLayoutCommand): in the active
-    // group, in listing order.
+    // Main places listed chats in active group, in listing order.
     const commands = ['chat-a', 'chat-b'].map((sessionId) => ({
       type: 'openAgentSessionTab' as const,
       workspace: WT,

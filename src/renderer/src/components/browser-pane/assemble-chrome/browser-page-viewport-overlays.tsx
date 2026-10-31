@@ -1,6 +1,16 @@
-import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
-import { BrowserPageZoomIndicator } from './browser-page-zoom-indicator'
+import {
+  useCallback,
+  type Dispatch,
+  type MutableRefObject,
+  type RefObject,
+  type SetStateAction
+} from 'react'
+import {
+  BrowserPageFeedbackBadge,
+  type BrowserPageFeedbackBadgeHandle
+} from './browser-page-feedback-badge'
 import { BrowserLinkStatusBubble } from './browser-link-status-bubble'
+import { useBrowserAgentCursor } from '../agent-cursor/use-browser-agent-cursor'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError,
@@ -23,8 +33,7 @@ import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page
 
 export function BrowserPageViewportOverlays({
   markup,
-  browserZoomIndicatorState,
-  browserZoomPercent,
+  feedbackBadgeRef,
   findOpen,
   setFindOpen,
   webviewRef,
@@ -48,8 +57,7 @@ export function BrowserPageViewportOverlays({
   grabAnnotations
 }: {
   markup: MarkupModeController
-  browserZoomIndicatorState: { ariaHidden: boolean; opacityClassName: string }
-  browserZoomPercent: number
+  feedbackBadgeRef: RefObject<BrowserPageFeedbackBadgeHandle | null>
   findOpen: boolean
   setFindOpen: Dispatch<SetStateAction<boolean>>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
@@ -72,6 +80,8 @@ export function BrowserPageViewportOverlays({
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
 }): React.JSX.Element {
+  const getAgentCursorHost = useCallback(() => containerRef.current, [containerRef])
+  useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
   return (
     <>
       <BrowserGuestAnnotateOverlays
@@ -87,7 +97,7 @@ export function BrowserPageViewportOverlays({
         worktreeId={worktreeId}
         currentUrl={browserTab.url}
       />
-      <BrowserPageZoomIndicator state={browserZoomIndicatorState} percent={browserZoomPercent} />
+      <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
       <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
       <BrowserLinkStatusBubble browserPageId={browserTab.id} />
       {showFailureOverlay && browserTab.loadError ? (

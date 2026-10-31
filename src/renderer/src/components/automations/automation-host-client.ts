@@ -1,6 +1,6 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
-import { assertEnvironmentSupportsExtraAgentArgs } from './automation-capability-probe'
+import { prepareAutomationLaunchSetup } from './automation-capability-probe'
 import type {
   Automation,
   AutomationCreateInput,
@@ -52,10 +52,7 @@ export function getAutomationTargetFromHostId(
     : { kind: 'local' }
 }
 
-/**
- * The authority a host id is listed under on this client. A paired web client's local and SSH
- * hosts are its server's, which the catalog lists only as that runtime.
- */
+/** Map paired web local/SSH hosts to the server runtime authority that the catalog lists. */
 export function getAutomationListedTargetFromHostId(
   hostId: string | null | undefined,
   state: { runtimeEnvironments?: readonly { id: string }[] }
@@ -128,20 +125,17 @@ export async function listAutomationsForTarget(
   return result.automations
 }
 
-/**
- * One automation's history, never a host's. Usage totals for the list come from
- * the authority's own list projection; fetching every run to compute them made
- * the page's cost scale with retained history rather than with what is on screen.
- */
+/** Fetch one automation’s history; list usage comes from authority projections so page cost cannot scale with all retained runs. */
 export async function listAutomationRunsForTarget(
   target: AutomationHostTarget,
-  automationId: string
+  automationId: string,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<AutomationRun[]> {
   const result = await callRuntimeRpc<{ runs: AutomationRun[] }>(
     target,
     'automation.runs',
     { automationId },
-    { timeoutMs: 15_000 }
+    { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
   )
   return result.runs
 }
@@ -152,13 +146,16 @@ export async function updateAutomationForTarget(
   sourceTarget?: AutomationHostTarget | null
 ): Promise<Automation> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
-  if (target.kind === 'environment') {
-    await assertEnvironmentSupportsExtraAgentArgs(target.environmentId, updates.extraAgentArgs)
-  }
+  const prepared = await prepareAutomationLaunchSetup(
+    target.kind === 'environment'
+      ? { kind: 'runtime', environmentId: target.environmentId, pairingRevision: 0 }
+      : { kind: 'desktop' },
+    updates
+  )
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,
     'automation.update',
-    { id: automation.id, updates: toRuntimeAutomationUpdateInput(updates) },
+    { id: automation.id, updates: toRuntimeAutomationUpdateInput(prepared) },
     { timeoutMs: 15_000 }
   )
   return result.automation

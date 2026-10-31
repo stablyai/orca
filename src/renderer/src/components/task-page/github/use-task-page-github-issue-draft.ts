@@ -7,8 +7,8 @@ import { useRepoLabels, useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import {
   resolveVanishedNewIssueRepoReset,
   isNewIssueDraftContentful
-} from '@/components/task-page-new-issue-draft'
-import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
+} from '@/components/task-page/task-page-new-issue-draft'
+import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconciliationModel) {
   const { settings, repos, selectedRepos } = model
   const [newIssueOpen, setNewIssueOpen] = useState(false)
@@ -18,7 +18,7 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
   const [newIssueAssignees, setNewIssueAssignees] = useState<GitHubAssignableUser[]>([])
   const [newIssueSubmitting, setNewIssueSubmitting] = useState(false)
   const [newIssueRepoId, setNewIssueRepoId] = useState<string | null>(null)
-  // Why: session-only draft recovers an in-progress issue across dismissal/remount; read imperatively (not subscribed) so per-keystroke writes don't re-render all of TaskPage.
+  // Read the session draft imperatively so per-keystroke recovery writes cannot rerender all of Tasks.
   const setNewIssueDraft = useAppStore((s) => s.setNewIssueDraft)
   const clearNewIssueDraft = useAppStore((s) => s.clearNewIssueDraft)
 
@@ -56,7 +56,7 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
     { target: newIssueOpen ? newIssueRuntimeTarget : null }
   )
 
-  // Why: only handles the "chosen repo vanished" case; a reactive clear keyed on target id can't tell a restore from a user switch and would wipe the recovery draft.
+  // Clear only vanished repo targets; reacting to every target change would also wipe restored drafts.
   useEffect(() => {
     const reset = resolveVanishedNewIssueRepoReset(
       newIssueRepoId,
@@ -70,7 +70,7 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
     setNewIssueRepoId(reset.repoId)
   }, [newIssueRepoId, selectedRepos])
 
-  // Why: content-gated mirror of live fields into the session draft while the modal is open, so dismissal doesn't lose input.
+  // Persist only contentful open drafts so dismissal preserves input without pinning an untouched form.
   useEffect(() => {
     if (!newIssueOpen) {
       return

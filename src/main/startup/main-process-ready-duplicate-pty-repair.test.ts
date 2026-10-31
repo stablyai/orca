@@ -167,7 +167,6 @@ function storedLeafIds(directory: string): string[] {
   }
 }
 
-// Ready services finish before the window opens and RPC starts (main-process-ready.ts:24-31).
 it('finishes the duplicate-terminal repair before ready services resolve, even behind a held write', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'desktop-duplicate-pty-repair-'))
   directories.push(directory)

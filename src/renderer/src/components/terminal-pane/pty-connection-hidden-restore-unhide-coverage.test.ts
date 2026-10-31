@@ -11,8 +11,7 @@ import {
   type MainSnapshot
 } from './pty-connection-test-hidden-restore-flood'
 
-// An unhide marker during an in-flight restore is retired by that snapshot when it covers
-// the marker's seq, instead of costing a second destructive replay.
+// An in-flight snapshot covering the unhide marker’s seq retires it without a second destructive replay.
 
 describe('hidden-output restore unhide coverage (STA-4869)', () => {
   installHiddenRestoreFloodSuiteHooks()

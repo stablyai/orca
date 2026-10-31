@@ -1,11 +1,15 @@
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
-import { AppState, View, Text, StyleSheet, Pressable, Switch, ScrollView } from 'react-native'
+import { AppState, View, Text, Pressable, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import type { NotificationSettingsOperations } from './notification-settings-operations'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { NotificationPermissionState } from '../notifications/notification-permissions'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { MobileSwitch } from '../components/MobileSwitch'
 
 const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
   granted: false,
@@ -25,6 +29,8 @@ export default function NotificationsScreen({
   description?: string
   children?: (enabled: boolean) => ReactNode
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
@@ -50,10 +56,15 @@ export default function NotificationsScreen({
       }
     } catch {
       if (revision === requestRevision.current) {
-        setError('Could not load notification settings. Try again.')
+        setError(
+          t(
+            'settings.notificationSettingsScreen.loadFailed',
+            'Could not load notification settings. Try again.'
+          )
+        )
       }
     }
-  }, [operations])
+  }, [operations, t])
 
   useFocusEffect(
     useCallback(() => {
@@ -87,7 +98,12 @@ export default function NotificationsScreen({
       const saved = await operations.preference(value && permission.granted)
       setPushEnabled(saved.enabled)
     } catch {
-      setError('Could not save notification settings. Try again.')
+      setError(
+        t(
+          'settings.notificationSettingsScreen.saveFailed',
+          'Could not save notification settings. Try again.'
+        )
+      )
     } finally {
       savingRef.current = false
       setSaving(false)
@@ -97,9 +113,15 @@ export default function NotificationsScreen({
   const switchEnabled = pushEnabled && permissionState.granted
   const notificationsBlocked = permissionState.status === 'denied'
   const hint = notificationsBlocked
-    ? 'Notifications are disabled in system settings.'
+    ? t(
+        'settings.notificationSettingsScreen.notificationsBlocked',
+        'Notifications are disabled in system settings.'
+      )
     : (description ??
-      'Get notified on this device when an agent needs your input or finishes a task.')
+      t(
+        'settings.notificationSettingsScreen.description',
+        'Get notified on this device when an agent needs your input or finishes a task.'
+      ))
 
   return (
     <ScrollView
@@ -112,13 +134,15 @@ export default function NotificationsScreen({
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('common.back', 'Back')}
           style={styles.backButton}
           onPress={onBack}
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Notifications</Text>
+        <Text style={styles.heading}>
+          {t('settings.notificationSettingsScreen.title', 'Notifications')}
+        </Text>
       </View>
 
       {error && (
@@ -128,15 +152,18 @@ export default function NotificationsScreen({
       )}
       <View style={styles.section}>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Enable notifications</Text>
-          <Switch
+          <Text style={styles.rowLabel}>
+            {t('settings.notificationSettingsScreen.enableNotifications', 'Enable notifications')}
+          </Text>
+          <MobileSwitch
             value={switchEnabled}
             testID="notification-enabled"
-            accessibilityLabel="Enable notifications"
+            accessibilityLabel={t(
+              'settings.notificationSettingsScreen.enableNotifications',
+              'Enable notifications'
+            )}
             disabled={notificationsBlocked || saving}
             onValueChange={(v) => void togglePush(v)}
-            trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-            thumbColor={colors.textPrimary}
           />
         </View>
         <Text style={styles.hint}>{hint}</Text>
@@ -150,10 +177,19 @@ export default function NotificationsScreen({
             onPress={() =>
               void operations
                 .openSettings()
-                .catch(() => setError('Could not open system settings. Try again.'))
+                .catch(() =>
+                  setError(
+                    t(
+                      'settings.notificationSettingsScreen.openSettingsFailed',
+                      'Could not open system settings. Try again.'
+                    )
+                  )
+                )
             }
           >
-            <Text style={styles.settingsButtonText}>Open Settings</Text>
+            <Text style={styles.settingsButtonText}>
+              {t('settings.notificationSettingsScreen.openSettings', 'Open Settings')}
+            </Text>
           </Pressable>
         )}
       </View>
@@ -162,7 +198,7 @@ export default function NotificationsScreen({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -176,7 +212,7 @@ const styles = StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm
@@ -188,7 +224,7 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   row: {
@@ -217,7 +253,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: 8,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   settingsButtonPressed: {
@@ -228,4 +264,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   }
-})
+}))

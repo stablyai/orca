@@ -7,7 +7,7 @@ import {
 } from './cmd-j-evaluation-fixture'
 import { searchWorktrees, type PaletteSearchResult } from './worktree-palette-search'
 import { buildWorktreePaletteDocuments } from './worktree-palette-document'
-import { preparePaletteQuery } from './palette-match/palette-query'
+import { preparePaletteQuery } from '../../../shared/palette-match/palette-query'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 
 function documentKey(worktreeId: string): string {
@@ -172,8 +172,7 @@ describe('document invalidation inputs', () => {
       repoMap: CMD_J_FIXTURE_REPO_MAP,
       workspacePortsByWorktreeId: CMD_J_FIXTURE_PORTS
     })
-    // Documents are keyed by host identity so two same-id workspaces on different hosts
-    // keep separate entries.
+    // Host-qualified documents keep same-ID twins distinct.
     const key = documentKey('wt-main-orca')
     expect(before.get(key)?.evidenceUnits.has('port:3000')).toBe(false)
     expect(after.get(key)?.evidenceUnits.has('port:3000')).toBe(true)

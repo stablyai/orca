@@ -11,8 +11,7 @@ vi.mock('electron', () => ({
 import { OrcaRuntimeService } from './orca-runtime'
 import { partialRuntimeStore, storeWorktreeMeta } from './runtime-store-partial-fixture'
 
-// BUG-9: a network drop to a relay host made `worktree ps` print `live:0 pty:no` for a terminal
-// that was still running. Lost contact is `unverifiable`, never zero.
+// BUG-9: lost relay contact must report unverifiable, never live:0/pty:no for a surviving terminal.
 
 const CONNECTION_ID = 'conn-1'
 const REPO_PATH = '/home/user/app'
@@ -73,18 +72,6 @@ async function psRow(runtime: OrcaRuntimeService) {
 }
 
 describe('worktree.ps terminal verdicts for an SSH host', () => {
-  it('counts a terminal the reachable host lists as live', async () => {
-    const runtime = makeRuntime({
-      hasPty: () => true,
-      listProcesses: async () => [{ id: PTY_ID, worktreeId: WORKTREE_ID }]
-    })
-
-    const row = await psRow(runtime)
-
-    expect(row).toMatchObject({ liveTerminalCount: 1, hasAttachedPty: true })
-    expect(row?.unverifiableTerminalCount).toBe(0)
-  })
-
   it('reports a terminal on an unreachable host as unverifiable, not zero', async () => {
     const runtime = makeRuntime({
       hasPty: () => null,

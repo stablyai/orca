@@ -89,7 +89,7 @@ describe('moving a pane to a new tab', () => {
 
   it('re-keys the SSH lease and moves within the partition that holds the tab', async () => {
     const dataFile = newDataFile()
-    // Leases now arrive only from a relay-era profile.
+    // Seed relay-era leases from disk.
     writeFileSync(
       dataFile,
       JSON.stringify({
@@ -248,8 +248,7 @@ describe('moving a pane to a new tab', () => {
   })
 })
 
-// After a restart the relay reattach writes the SSH pane into `local` as well as `ssh:`; a move
-// that left either copy behind refused the moved pane and the next relay reattach.
+// Relay reattach can duplicate SSH panes into local; all holders must move or future binds refuse.
 describe('moving an SSH pane held by both partitions', () => {
   it('moves every copy, so the target reattach and the next relay reattach both bind', async () => {
     const store = openStore(newDataFile())
@@ -280,7 +279,6 @@ describe('moving an SSH pane held by both partitions', () => {
     ).toBe(true)
   })
 
-  // Relay reattach into local, move, target reattach in ssh:, next-start relay reattach.
   it('keeps one holder per partition across a restart, and the next relay reattach binds', async () => {
     const dataFile = newDataFile()
     const store = openStore(dataFile)
@@ -369,20 +367,17 @@ describe('moving an SSH pane held by both partitions', () => {
   })
 })
 
-// STA-9259: detach, then the moved pane's reattach binding, then a renderer snapshot that still
-// shows the pre-move layout, then a restart. Before the move transaction this left one leaf and
-// one PTY in both tabs.
+// STA-9259: move, reattach, stale renderer save and restart must retain one leaf/PTY owner.
 describe('STA-9259 move sequence', () => {
   it('keeps one owner through reattach, a stale renderer save and a restart', async () => {
     const dataFile = newDataFile()
     const store = openStore(dataFile)
-    // Load sweeps sessions of unregistered repos, so the restart needs a real owner.
+    // Register the owner so restart pruning retains this workspace.
     store.addRepo(makeRepo({ id: 'repo-1', path: '/tmp/move-worktree' }))
     await seedSplitSource(store)
     const preMoveRendererSnapshot = structuredClone(store.getWorkspaceSession())
 
     await store.moveTerminalLeafToNewTab({ ...moveRequest, ptyId: 'pty-agent' })
-    // The moved pane mounts in the target tab and reattaches with its stable-owner fence.
     const reattached = await store.persistPtyBinding({
       worktreeId: WT,
       tabId: TARGET,
@@ -393,7 +388,7 @@ describe('STA-9259 move sequence', () => {
       origin: 'reattach'
     })
     expect(reattached).toBe(true)
-    // A debounced renderer save that predates the move must not resurrect the source copy.
+    // A pre-move renderer snapshot must not resurrect source membership.
     store.setWorkspaceSession(preMoveRendererSnapshot)
     expect(ownersOf(store.getWorkspaceSession(), 'pty-agent')).toEqual([TO])
     expect(tabsHoldingLeaf(store.getWorkspaceSession(), MOVED)).toEqual([TARGET])

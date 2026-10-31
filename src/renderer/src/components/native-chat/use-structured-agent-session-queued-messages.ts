@@ -1,6 +1,8 @@
-// Host-held drafts as this pane acts on them: the card list, Send-now (Steer),
-// Delete, in-place Edit, the Cmd/Ctrl+Enter steer chord, and a held queue's Resume and Clear all.
-// Everything durable lives on the host; an open editor holds only its own typing.
+import {
+  useStructuredAgentSessionQueuedReorder,
+  type QueuedMessageReorder
+} from './use-structured-agent-session-queued-reorder'
+// Host owns durable queued drafts; this pane routes card/header actions and holds only open-edit typing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -21,13 +23,15 @@ import {
 } from './use-structured-agent-session-queued-edit'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import {
-  newestSteerableQueuedMessageCard,
+  headSteerableQueuedMessageCard,
   projectQueuedMessageCards,
-  pendingQueueSendsOnTheirWay,
   queuedMessagesQueuePause,
-  sendingQueuedMessageCards,
   type QueuedMessageCard
-} from './structured-agent-session-queued-cards'
+} from '../../../../shared/structured-agent-session-queued-cards'
+import {
+  pendingQueueSendsOnTheirWay,
+  sendingQueuedMessageCards
+} from './structured-agent-session-sending-queued-cards'
 import type {
   AdmitStructuredAgentSessionAction,
   CaptureStructuredAgentSessionPresentation,
@@ -36,14 +40,12 @@ import type {
 
 export type StructuredAgentSessionQueuedMessagesController = {
   cards: QueuedMessageCard[]
-  /** The host queues sends. Without it a card can still show — a message the host kept unsent —
-   *  but queueing settings and the steer chord would do nothing. */
+  reorder?: QueuedMessageReorder
+  /** Cards can show unsent messages without host queue support; queue settings/steer then have no effect. */
   queueCapable: boolean
-  /** No card is still sending or has its own action in flight: Clear all waits those out
-   *  rather than clear fewer cards than it shows. */
+  /** Clear all waits for sends/actions so it cannot silently clear fewer cards than shown. */
   clearCapable: boolean
-  /** Why the queue holds cards Resume would send: the header row above them. A string reason: a
-   *  newer host may name one this build does not know. */
+  /** Host pause reason for sendable cards; accept future reason strings from newer hosts. */
   pause: { reason: string } | null
   /** Whether the host lifted the pause; a failure is a toast, and Resume is the retry. */
   resume: () => Promise<boolean>
@@ -51,23 +53,21 @@ export type StructuredAgentSessionQueuedMessagesController = {
   clear: () => Promise<boolean>
   /** Resume or Clear all on its way: both header actions grey, and the pressed one spins. */
   queuePending: QueuedMessagesPendingAction | null
-  /** The card's own action, or the Clear deleting it, in flight: the card greys, and the
-   *  pressed button spins. */
+  /** Card action or enclosing Clear in flight; disable the card and spin the pressed control. */
   pending: (messageId: string) => QueuedMessagesPendingAction | null
   /** Send-now into the running turn; the transcript shows it at delivery position. */
   steer: (messageId: string) => Promise<void>
   remove: (messageId: string) => Promise<void>
   /** The host edits cards in place; without it a card offers no Edit. */
   editCapable: boolean
-  /** The card being edited in this pane, at most one. */
   editor: QueuedMessageInlineEditor | undefined
-  /** Opens the card's inline editor. */
   edit: (messageId: string) => Promise<void>
-  /** Cmd/Ctrl+Enter: Send-now the newest card. False when there is none to steer. */
-  steerNewest: () => boolean
+  /** Cmd/Ctrl+Shift+Enter: steer the head card. False when it can't steer. */
+  steerHead: () => boolean
+  /** The agent is working, so a card's send steers into its turn. */
+  isWorking: boolean
 }
 
-/** Which control is on its way, so the button that was pressed is the one that spins. */
 export type QueuedMessagesPendingAction = 'send' | 'delete' | 'resume' | 'clear'
 
 const NO_SENDS: readonly StructuredAgentSessionPendingSend[] = []
@@ -82,7 +82,7 @@ function alreadySentNotice(): void {
 }
 
 export function useStructuredAgentSessionQueuedMessages(args: {
-  /** Host advertises `agent-session.queued-messages.v1` and the transport has a fence. */
+  /** Host advertises `agent-session.queued-messages.v2` and the transport has a fence. */
   enabled: boolean
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   queuePause: AgentSessionQueuePause | null
@@ -120,13 +120,17 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     ],
     [isWorking, sending, queuePause, queuedMessages, submissions]
   )
+  const reordered = useStructuredAgentSessionQueuedReorder(
+    cards,
+    args.editTransport,
+    capturePresentation
+  )
   const cardsRef = useRef(cards)
   useEffect(() => {
     cardsRef.current = cards
   }, [cards])
 
-  // One action per control at a time, drawn as busy until it settles. The ref closes the
-  // same-frame double click or chord repeat the disabled state cannot.
+  // Refs close same-frame double-click/chord races before disabled state renders.
   const inFlightRef = useRef(new Map<string, QueuedMessagesPendingAction>())
   const [inFlight, setInFlight] = useState<ReadonlyMap<string, QueuedMessagesPendingAction>>(
     () => new Map()
@@ -192,16 +196,15 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     promptOpen: hasPendingPrompt
   })
 
-  const steerNewest = useCallback((): boolean => {
+  const steerHead = useCallback((): boolean => {
     if (!enabled) {
       return false
     }
-    const newest = newestSteerableQueuedMessageCard(cardsRef.current)
-    // A card already on its way leaves the chord to the composer, as with no card.
-    if (!newest || inFlightRef.current.has(newest.messageId)) {
+    const head = headSteerableQueuedMessageCard(cardsRef.current)
+    if (!head || inFlightRef.current.has(head.messageId)) {
       return false
     }
-    void steer(newest.messageId)
+    void steer(head.messageId)
     return true
   }, [enabled, steer])
 
@@ -270,7 +273,8 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   }, [admit, capturePresentation, clearCapable, run])
 
   return {
-    cards,
+    cards: reordered.cards,
+    reorder: reordered.reorder,
     queueCapable: enabled,
     clearCapable,
     pause,
@@ -283,6 +287,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     edit: editing.begin,
     editCapable: editing.capable,
     editor: editing.editor,
-    steerNewest
+    steerHead,
+    isWorking
   }
 }

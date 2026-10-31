@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   claimsCodexRolloutLayout,
+  codexDatedRolloutRelativePath,
   findTrustedCodexSessionResume,
   resolveCodexSessionResumeProvenance,
   resolveTrustedCodexSessionResumeHome
@@ -538,6 +539,30 @@ describe('findTrustedCodexSessionResume legacy-rescan home ranking', () => {
       })
     ).resolves.toBeNull()
     expect(listSessionFiles).not.toHaveBeenCalled()
+  })
+})
+
+describe('codexDatedRolloutRelativePath', () => {
+  const sessionsRoot = String.raw`C:\Users\Example\AppData\Roaming\orca\codex-runtime-home\home\sessions`
+
+  it('folds the extended-length prefix Codex adds to Windows transcripts (#27200)', () => {
+    expect(
+      codexDatedRolloutRelativePath(
+        sessionsRoot,
+        String.raw`\\?\C:\Users\Example\AppData\Roaming\orca\codex-runtime-home\home\sessions\2026\10\01\rollout-example.jsonl`
+      )
+    ).toBe('2026/10/01/rollout-example.jsonl')
+  })
+
+  it('rejects device namespaces, extended UNC paths, and non-rollout layouts', () => {
+    for (const filePath of [
+      String.raw`\\.\C:\Users\Example\AppData\Roaming\orca\codex-runtime-home\home\sessions\2026\10\01\rollout-example.jsonl`,
+      String.raw`\\?\UNC\server\share\sessions\2026\10\01\rollout-example.jsonl`,
+      String.raw`C:\Users\Example\AppData\Roaming\orca\codex-runtime-home\home\sessions\2026\10\01\..\..\..\2026\10\01\rollout-example.jsonl`,
+      String.raw`C:\Users\Example\.codex\sessions\2026\10\01\rollout-example.jsonl`
+    ]) {
+      expect(codexDatedRolloutRelativePath(sessionsRoot, filePath)).toBeNull()
+    }
   })
 })
 

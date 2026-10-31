@@ -1,7 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-// The two in-place edit methods on the wire: registered and advertised apart from the dark
-// mid-turn queue, the caller taken from the authenticated transport, strict params, and a lease
-// release that cleanup admission always lets through.
+// Check independent edit capabilities, authenticated caller, strict params and unconditional cleanup lease release.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -45,9 +43,10 @@ beforeEach(() => {
 afterEach(clearStructuredHostStub)
 
 describe('queued edit methods', () => {
-  it('the host advertises editing on its own, with mid-turn queueing still dark', () => {
+  it('the host advertises editing and mid-turn queueing, never the v1 name released clients read', () => {
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY)
-    expect(RUNTIME_CAPABILITIES).not.toContain(AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).not.toContain('agent-session.queued-messages.v1')
   })
 
   it.each([

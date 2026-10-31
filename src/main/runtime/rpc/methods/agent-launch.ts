@@ -36,16 +36,14 @@ import { parseAgentSessionOperationTimestamp } from '../../../../shared/agent-se
  * harmless, and does nothing to reunite a caller with a surface a dead attempt left behind.
  */
 
-import {
-  AGENT_LAUNCH_DESKTOP_CREATE_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_DESKTOP_CREATE_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import {
   AGENT_LAUNCH_TAB_CLOSED_CODE,
   AgentLaunchTabClosedError
 } from '../../../../shared/agent-launch-tab-closed'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import { agentLaunchFeatureRequirement } from '../agent-launch-feature-requirement'
 import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
@@ -66,23 +64,15 @@ import {
   type AgentLaunchParams
 } from '../../../../shared/rpc-contract/agent-launch-params'
 
-import { assertAgentLaunchTargetAuthorized } from './agent-launch-target-authorization'
+import {
+  assertAgentLaunchTargetAuthorized,
+  supportsAgentLaunch
+} from './agent-launch-target-authorization'
 
-/**
- * Advertising `agent.launch.v2` is a client's statement that it understands EITHER outcome — a
- * structured session it can open, or a terminal agent. A client that can only render one of the
- * two must keep using the surface-specific methods instead. The `clientKind === undefined` branch
- * is not "whatever ships in this build": it is the `orca` CLI over the runtime socket and the
- * SSH-remote CLI bridges, which carry no capability list at all. The desktop renderer ships in
- * this build and still arrives as `clientKind: 'runtime'`, so it advertises like any other client.
- */
-export function supportsAgentLaunch(
-  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
-): boolean {
-  return (
-    context.clientKind === undefined ||
-    context.clientCapabilities?.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY) === true
-  )
+export { supportsAgentLaunch } from './agent-launch-target-authorization'
+
+export type HostLaunchContext = RpcContext & {
+  agentLaunchPolicy?: { onSurfacePublished?: (surface: AgentLaunchResult) => void }
 }
 
 export type ActiveAgentLaunch = {
@@ -109,7 +99,7 @@ function activeAgentLaunchesFor(runtime: OrcaRuntimeService): Map<string, Active
 
 function runReplaySafeAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
-  context: RpcContext
+  context: HostLaunchContext
 ): Promise<AgentLaunchResult> {
   const callerKey = agentLaunchOperationCallerKey(context)
   const key = agentSessionOperationKey(callerKey, params.operationId)
@@ -192,6 +182,7 @@ export const AGENT_LAUNCH_METHODS = [
   }),
   defineMethod({
     name: 'agent.launchReplay',
+    requires: agentLaunchFeatureRequirement,
     permission: 'workspace',
     params: AgentLaunchReplay,
     handler: async (params, context): Promise<AgentLaunchResult> => {
@@ -239,40 +230,42 @@ export const AGENT_LAUNCH_METHODS = [
   }),
   defineMethod({
     name: 'agent.launch',
+    requires: agentLaunchFeatureRequirement,
     permission: 'workspace',
     params: AgentLaunch,
-    handler: async (params, context): Promise<AgentLaunchResult> => {
-      if (!supportsAgentLaunch(context)) {
-        throw new Error('agent_launch_unsupported')
-      }
-      assertAgentLaunchTargetAuthorized(params.target, context)
-      const launched = !params.operationId
-        ? runLegacyAgentLaunch(params, context)
-        : runReplaySafeAgentLaunch(
-            {
-              ...params,
-              operationId: params.operationId
-            },
-            context
-          )
-      return launched
-        .then((result) => presentAgentLaunchResult(context, result))
-        .catch((error: unknown) => {
-          if (
-            error instanceof Error &&
-            'code' in error &&
-            error.code === AGENT_LAUNCH_TAB_CLOSED_CODE
-          ) {
-            throw agentLaunchTabClosedAnswer(context)
-          }
-          // Preserve the original error contract for callers of the optional-identity method.
-          if (error instanceof AgentLaunchExecutionError) {
-            throw error.cause instanceof AgentLaunchTabClosedError
-              ? agentLaunchTabClosedAnswer(context)
-              : error.cause
-          }
-          throw error
-        })
-    }
+    handler: (params, context) => launchAgentOnHost(params, context)
   })
 ]
+
+/** In-process schedules and RPC callers share admission, factories and prompt settlement. */
+export async function launchAgentOnHost(
+  { operationId, ...params }: AgentLaunchParams,
+  context: RpcContext,
+  policy?: HostLaunchContext['agentLaunchPolicy']
+): Promise<AgentLaunchResult> {
+  const host = { ...context, agentLaunchPolicy: policy }
+  if (!supportsAgentLaunch(host)) {
+    throw new Error('agent_launch_unsupported')
+  }
+  assertAgentLaunchTargetAuthorized(params.target, host)
+  const launched = !operationId
+    ? runLegacyAgentLaunch(params, host)
+    : runReplaySafeAgentLaunch({ ...params, operationId }, host)
+  return launched
+    .then((result) => presentAgentLaunchResult(host, result))
+    .catch((error: unknown) => {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === AGENT_LAUNCH_TAB_CLOSED_CODE
+      ) {
+        throw agentLaunchTabClosedAnswer(host)
+      }
+      if (error instanceof AgentLaunchExecutionError) {
+        throw error.cause instanceof AgentLaunchTabClosedError
+          ? agentLaunchTabClosedAnswer(host)
+          : error.cause
+      }
+      throw error
+    })
+}

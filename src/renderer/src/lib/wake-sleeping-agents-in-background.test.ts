@@ -21,12 +21,12 @@ vi.mock('./resume-sleeping-agent-session', () => ({
   ) => resumeSpy(worktreeId, options)
 }))
 
-// Why: control passive-vs-non-passive classification directly so the test asserts
-// the gating, not the predicate internals.
+// Control passive classification directly so assertions cover wake gates, not classifier internals.
 const isPassiveSpy = vi.fn()
 vi.mock('./sleeping-agent-pane-ownership', () => ({
   activationTreatsNoteAsFinished: (record: unknown) => isPassiveSpy(record),
   recordPaneIsOwnedByPreservedPane: () => false,
+  isStrandedWorkspaceSleepRecord: () => false,
   getProviderSessionClaimKey: (record: {
     worktreeId: string
     agent?: string
@@ -146,13 +146,9 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
-    // (a) pane-level wake of mounted hidden panes fires before (b) background-mount
-    // of not-yet-mounted panes.
     expect(rec.events).toEqual(['wake:wt-1', 'mount:wt-1'])
-    // Why: the mount targets only the sleeping record's tab, so one slept agent
-    // does not permanently mount every saved tab in the worktree.
+    // Target only sleeping tabs; one sleeper must not mount every saved workspace tab permanently.
     expect(rec.mountDetails[0]?.tabIds).toEqual(['tab-a'])
-    // (c) non-passive records resume with navigation suppressed (INV-2).
     expect(resumeSpy).toHaveBeenCalledWith(
       'wt-1',
       expect.objectContaining({ suppressNavigation: true })
@@ -302,8 +298,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
-    // Why: a phone opening a slept workspace must not respawn every agent the
-    // user just slept; each pane cold-restores when its own tab is opened.
+    // Phone workspace opens must not undo explicit agent sleep; cold-resume only when each tab opens.
     expect(rec.events).toEqual(['wake:wt-1'])
     expect(rec.mountDetails).toEqual([])
     expect(Object.keys(sleepingRecords)).toHaveLength(12)
@@ -390,8 +385,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
-    // Why: canonicalization deletes same-claim duplicates, so a lazy record must be filtered
-    // out before it can win the claim and strand the hibernated pane it deletes.
+    // Filter lazy records before claim canonicalization or they can win/delete the hibernated record needing mount.
     expect(rec.mountDetails).toEqual([{ worktreeId: 'wt-1', tabIds: ['tab-hibernated'] }])
     expect(clearSleepingAgentSessionsByPaneKey).not.toHaveBeenCalledWith(['tab-hibernated:leaf-1'])
     expect(sleepingRecords).toHaveProperty('tab-hibernated:leaf-1')
@@ -410,8 +404,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
-    // Why: the resume tab is created with activate:false, so nothing else
-    // mounts it — without this mount the queued --resume never gets a PTY.
+    // activate:false tabs never mount otherwise; explicit background mount must give queued --resume a PTY.
     expect(rec.events).toEqual(['wake:wt-1', 'mount:wt-1'])
     expect(rec.mountDetails[0]?.tabIds).toEqual(['tab-new'])
   })
@@ -424,8 +417,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
-    // Why: no passive record and no launched resume tab → nothing needs a
-    // mount (it would strand a plain shell / mount work).
+    // Without passive records or new resume tabs, mounting only strands a shell and creates unnecessary work.
     expect(rec.events).toEqual(['wake:wt-1'])
     expect(resumeSpy).toHaveBeenCalledWith(
       'wt-1',
@@ -462,8 +454,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
-    // Why: mobile browsing a worktree with nothing slept must not mount it (and
-    // its PTYs) on the desktop host.
+    // Mobile browsing without sleepers must not mount desktop workspaces/PTYS.
     expect(rec.events).toEqual([])
     expect(resumeSpy).not.toHaveBeenCalled()
     expect(isPassiveSpy).not.toHaveBeenCalled()

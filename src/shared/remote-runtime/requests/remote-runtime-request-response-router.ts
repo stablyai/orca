@@ -1,6 +1,6 @@
 import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
-import type { RemoteRuntimeHandshakeState } from '../../remote-runtime-client-handshake'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeHandshakeState } from '../remote-runtime-client-handshake'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   isKeepaliveFrame,
   RuntimeRpcEnvelopeSchema,
@@ -18,7 +18,7 @@ type RequestResponseRouterOptions<TResult> = {
   statusRequestId: string | null
   validateStatus?: (response: RuntimeRpcResponse<RuntimeStatus>) => void
   send: (frame: string) => void
-  sendRequestedRpc: () => void
+  sendRequestedRpc: (status?: unknown) => void
   refreshTimeout: () => void
   finishError: (error: Error) => void
   finishResponse: (response: RuntimeRpcResponse<TResult>) => void
@@ -170,7 +170,7 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
       this.awaitingStatus = false
       this.awaitingRequestId = this.options.requestId
       this.options.refreshTimeout()
-      this.options.sendRequestedRpc()
+      this.options.sendRequestedRpc(parsed.data.ok ? parsed.data.result : undefined)
       return
     }
     this.options.finishResponse(parsed.data as RuntimeRpcResponse<TResult>)

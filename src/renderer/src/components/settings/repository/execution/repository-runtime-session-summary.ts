@@ -18,9 +18,7 @@ type SessionSummaryCache = {
   byRepoId: Map<string, ProjectRuntimeSessionSummary>
 }
 
-// Why: one RepositoryPane per project reruns this on every store write, and each
-// run walked every worktree bucket plus every agent-status pane. Key on the three
-// input slices so unrelated writes reuse the answer instead of rescanning.
+// Cache by the three input slices; every project pane otherwise rescans all worktrees/status panes on unrelated store writes.
 const sessionSummaryCache = new WeakMap<AppState['tabsByWorktree'], SessionSummaryCache>()
 
 function getTabIdFromPaneKey(paneKey: string): string | null {
@@ -50,8 +48,7 @@ function computeProjectRuntimeSessionSummary(
     }
   }
 
-  // Rows outside this project resolve to a worktree the checks below reject, so
-  // the shared index answers the same question the repo-scoped map used to.
+  // Reuse the global tab index; project checks below reject unrelated worktree rows.
   const tabWorktreeIds = getTabIdToWorktreeId(state.tabsByWorktree)
   let activeTaskCount = 0
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {

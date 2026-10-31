@@ -1,5 +1,7 @@
-import type { TaskPageProviderMetadataModel } from '../../use-task-page-provider-metadata'
+import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { useEffect } from 'react'
+import { translate } from '@/i18n/i18n'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
 import type { Repo } from '../../../../../shared/repo-types'
@@ -10,10 +12,9 @@ import {
   getTaskPageRepoSourceContext,
   isGitLabIssueFilter,
   isGitLabMRFilter
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 
-// Why: "All projects" fans out one list call per repo; staying below the runtime RPC queue's
-// foreground concurrency (8) leaves headroom for other callers on the same selector, such as the sidebar.
+// Leave headroom below the runtime RPC foreground concurrency of eight for sidebar and other callers.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6
 
 function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
@@ -56,7 +57,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     setGitlabTodosLoading,
     activeGitlabFilter
   } = model
-  // Why: fetch GitLab Issues and MRs separately so errors stay isolated per tab (mirrors GitHub's split endpoints).
+  // Fetch issues and MRs separately so a failure stays scoped to its tab.
   useEffect(() => {
     if (taskSource !== 'gitlab') {
       return
@@ -74,7 +75,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     ) {
       return
     }
-    // Why: folder-mode repos lack remotes to derive a GitLab project from; each repo is read on the machine holding its GitLab sign-in.
+    // Exclude folder workspaces without project remotes; read each repo on the host holding its GitLab sign-in.
     const eligibleRepos = selectedRepos
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
@@ -105,7 +106,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                     message: string
                   }
                 }
-                // Why: not_found just means the repo isn't a GitLab project (mixed selection); drop it so the list shows no false errors.
+                // Non-GitLab repos in mixed selections return not_found; omit them without a false failure banner.
                 const error = typed.error?.type === 'not_found' ? undefined : typed.error
                 return {
                   repo,
@@ -151,7 +152,13 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
         const errs: string[] = []
         for (const r of results) {
           if (r.status !== 'fulfilled') {
-            errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
+            errs.push(
+              readIpcErrorDetail(r.reason) ??
+                translate(
+                  'auto.components.TaskPage.gitlabLoadFailed',
+                  'Could not load GitLab work items. Refresh to try again.'
+                )
+            )
             continue
           }
           // Why the host: a twin's two rows share the id, so only the stamp names the row that answered.
@@ -169,7 +176,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
         }
         merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
         setGitlabItems(merged)
-        // Why: only banner when every eligible repo failed; a partial one would hide working rows in a mixed (non-GitLab) selection.
+        // Show failures only when no usable rows remain; mixed selections may include non-GitLab repos.
         if (errs.length > 0 && merged.length === 0) {
           setGitlabError(errs[0])
         }
@@ -194,7 +201,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     setGitlabLoading
   ])
 
-  // Why: Todos fetch has its own effect — different trigger (no chip filter) and data path (gl.todos is user-scoped, not repo-scoped).
+  // Todos are user-scoped and ignore repo/chip filters, so fetch them independently.
   useEffect(() => {
     if (taskSource !== 'gitlab' || gitlabView !== 'todos') {
       return

@@ -1,16 +1,17 @@
-// The connected host's status stream, which every structured chat on that host reads the host's
-// "Stopping…" from. One per client, opened by the first chat that reads it and kept for the
-// client's life: a phone has no way to end just this stream, so one per chat would leave a host
-// subscriber behind each. The client replays it after a reconnect, and the host's fresh snapshot
-// then replaces what contact loss revoked.
+// Share one status stream per client lifetime because mobile cannot end individual host subscriptions; reconnect snapshots replace revoked liveness.
 
 import { worktreeIdentityKey } from '../../../src/shared/worktree/id'
 import {
+  AgentSessionAssociationObservation,
   foldAgentSessionStatusEvent,
   revokeAgentSessionStatusLive,
   type AgentSessionStatusSnapshot
 } from '../../../src/shared/agent-session-status-snapshot-fold'
 import type { AgentSessionStatusEvent } from '../../../src/shared/agent-session-wire'
+import {
+  foldAgentSessionConversationNames,
+  type AgentSessionConversationNames
+} from '../../../src/shared/agent-session-conversation-names'
 import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
 import type { RpcClient } from '../transport/rpc-client'
 
@@ -18,6 +19,8 @@ export type MobileStructuredSessionStatusFeed = {
   subscribe: (listener: () => void) => () => void
   getSnapshot: () => AgentSessionStatusSnapshot
   isWorkspaceSetupHeld: (workspaceId: string) => boolean | undefined
+  getNamingSnapshot: () => AgentSessionConversationNames
+  getAssociationRevision: () => number
 }
 
 const feeds = new WeakMap<RpcClient, MobileStructuredSessionStatusFeed>()
@@ -38,7 +41,6 @@ function isStatusEvent(value: unknown): value is AgentSessionStatusEvent {
   }
 }
 
-/** The stream's refusal, as the client hands a failed opener to its listener. */
 function streamRefusal(value: unknown): { code?: string; message?: string } | null {
   if (typeof value !== 'object' || value === null || !('type' in value) || value.type !== 'error') {
     return null
@@ -53,9 +55,11 @@ function streamRefusal(value: unknown): { code?: string; message?: string } | nu
 function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
   let snapshot: AgentSessionStatusSnapshot = new Map()
   let setupHeldWorkspaceIds: Set<string> | null = null
+  let names: AgentSessionConversationNames = new Map()
+  const associations = new AgentSessionAssociationObservation()
   // `unavailable`: the host refused the method to phones; asked again only on a new connection.
   let stream: 'closed' | 'open' | 'unavailable' = 'closed'
-  // Released once the host ends the stream, so the client never replays it on a later session.
+  // Release ended streams so the client cannot replay them into later sessions.
   let releaseStream = (): void => {}
   const release = (): void => {
     const pending = releaseStream
@@ -63,17 +67,24 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
     pending()
   }
   const listeners = new Set<() => void>()
-  const notify = (): void => {
+  const setSnapshot = (
+    next: AgentSessionStatusSnapshot,
+    nextNames = names,
+    associationChanged = false
+  ): void => {
+    if (!associationChanged && next === snapshot && nextNames === names) {
+      return
+    }
+    snapshot = next
+    names = nextNames
     for (const listener of listeners) {
       listener()
     }
   }
-  const setSnapshot = (next: AgentSessionStatusSnapshot): void => {
-    if (next === snapshot) {
-      return
+  const notify = (): void => {
+    for (const listener of listeners) {
+      listener()
     }
-    snapshot = next
-    notify()
   }
   const revokeLive = (): void => {
     setupHeldWorkspaceIds = null
@@ -99,10 +110,17 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
         raw.setupHeldWorkspaceIds !== undefined &&
         raw.sessions.length === 0
       ) {
+        names = foldAgentSessionConversationNames(names, raw)
         notify()
         return
       }
-      setSnapshot(foldAgentSessionStatusEvent(snapshot, raw))
+
+      const associationChanged = associations.observe(raw)
+      setSnapshot(
+        foldAgentSessionStatusEvent(snapshot, raw),
+        foldAgentSessionConversationNames(names, raw),
+        associationChanged
+      )
       return
     }
     const refusal = streamRefusal(raw)
@@ -121,6 +139,7 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
   }
   const open = (): void => {
     if (stream === 'closed' && listeners.size > 0) {
+      associations.renew()
       stream = 'open'
       const dispose = client.subscribe('agentSession.subscribeStatus', {}, onFrame)
       // A stream that ended inside `subscribe` is released at once.
@@ -131,7 +150,7 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
       }
     }
   }
-  // Losing contact is never exit: only what a live host vouches for goes until it answers again.
+  // Contact loss revokes host-vouched liveness, not process existence.
   client.onStateChange((state) => {
     if (state === 'connected') {
       open()
@@ -141,6 +160,7 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
     if (stream === 'unavailable') {
       stream = 'closed'
     }
+    associations.renew()
     revokeLive()
   })
   return {
@@ -153,7 +173,9 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
     },
     getSnapshot: () => snapshot,
     isWorkspaceSetupHeld: (workspaceId) =>
-      setupHeldWorkspaceIds?.has(worktreeIdentityKey(workspaceId))
+      setupHeldWorkspaceIds?.has(worktreeIdentityKey(workspaceId)),
+    getNamingSnapshot: () => names,
+    getAssociationRevision: () => associations.revision
   }
 }
 

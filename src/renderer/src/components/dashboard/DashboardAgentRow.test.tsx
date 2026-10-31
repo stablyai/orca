@@ -334,7 +334,6 @@ describe('DashboardAgentRow', () => {
       const promptIndex = markup.indexOf('Give me a quick update')
       const interruptedIndex = markup.indexOf('>interrupted<')
 
-      // Why: the plain text belongs on the response line so it does not compete with the prompt.
       expect(markup).toContain('data-slot="tooltip-trigger"')
       expect(markup).toContain('aria-label="Interrupted by user"')
       expect(markup).not.toContain('data-slot="badge"')
@@ -362,9 +361,7 @@ describe('DashboardAgentRow', () => {
       makeAgent({}, { toolName: 'ListDir', toolInput: '/Users/nwparker/orca' })
     )
 
-    // Why: Antigravity emits working hooks without tool metadata between
-    // tool-specific hooks; a whitespace placeholder collapses and makes the
-    // sidebar row jump from one secondary line to two.
+    // Antigravity working hooks can omit tool metadata; preserve the second-line slot to prevent height jumps.
     expect(emptyToolMarkup).toContain('data-agent-row-tool-slot=""')
     expect(activeToolMarkup).toContain('data-agent-row-tool-slot=""')
     expect(
@@ -423,8 +420,7 @@ describe('DashboardAgentRow', () => {
       )
     )
 
-    // Why: a permission request parks the row on 'waiting'; without the tool line the row
-    // is a bare amber dot that cannot say what the user is being asked to approve.
+    // Waiting approvals need the tool line to explain what the amber state asks the reader to approve.
     expect(markup).toContain('lucide-wrench')
     expect(markup).toContain('bash')
     expect(markup).toContain('rm -rf build/')
@@ -433,8 +429,7 @@ describe('DashboardAgentRow', () => {
   it('leaves a wait without tool metadata unchanged', () => {
     const markup = renderRow(makeAgent({ state: 'waiting' }, { state: 'waiting' }))
 
-    // Why: the height placeholder exists because a working row's tool line is imminent.
-    // A question-style wait has nothing coming, so reserving the row would just add a gap.
+    // Question waits expect no tool metadata; reserve height only for imminent working details.
     expect(markup).not.toContain('data-agent-row-tool-slot=""')
     expect(markup).not.toContain('lucide-wrench')
   })

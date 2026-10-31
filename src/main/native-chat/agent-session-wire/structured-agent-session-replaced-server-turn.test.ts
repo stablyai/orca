@@ -1,3 +1,5 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
@@ -11,7 +13,7 @@ import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
 } from '../../../shared/structured-agent-session-turn-timing'
-import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { beginAgentSessionRuntimeIncarnationForTest } from '../../runtime/agent-session-runtime-attribution'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
@@ -52,7 +54,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await rig.dispose()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
 })
 
 async function streamThenServerKilled(): Promise<void> {
@@ -102,12 +104,12 @@ async function startServer(options: { newProcess: boolean }): Promise<void> {
   await runtimeState.stopLeaseRenewal()
   runtimeState.currentEventSink(SESSION)?.close()
   await sessions.get(SESSION)?.journal.close()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   if (options.newProcess) {
     beginAgentSessionRuntimeIncarnationForTest()
   }
   rig.clock.now = RESTARTED_AT
-  rig.store = await openTestAgentSessionRecordStore(rig.root)
+  rig.store = await openTestAgentSessionRecordStore(rig.root, { legacySessionTabIds: [SESSION] })
   rig.host = new StructuredAgentSessionHost({
     ...old.deps,
     store: rig.store,
@@ -149,7 +151,7 @@ describe('a server replaced mid-turn on the same execution host', () => {
   it('interrupts the cut turn at its last saved output with no provider identity left', async () => {
     await streamThenServerKilled()
     await startServer({ newProcess: true })
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     await expectCutTurnSettledOnce()
 
     await rig.host.reconcileRestartLeases()
@@ -209,19 +211,19 @@ describe('a server replaced mid-turn on the same execution host', () => {
     await streamThenServerKilled()
     // Reopening in the same process replaces no runtime and proves no turn end.
     await startServer({ newProcess: false })
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     await rig.host.reconcileRestartLeases()
     await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
     const left = turnsOf((await rig.host.journalSnapshot(SESSION)).items)
     expect(left).toEqual([expect.objectContaining({ state: 'unverifiable' })])
 
     await startServer({ newProcess: true })
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     await expectCutTurnSettledOnce()
 
     const settled = await rig.host.journalSnapshot(SESSION)
     await startServer({ newProcess: true })
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     expect((await rig.host.journalSnapshot(SESSION)).items).toEqual(settled.items)
   })
 
@@ -230,9 +232,13 @@ describe('a server replaced mid-turn on the same execution host', () => {
       deps: Omit<StructuredAgentSessionConversationOpenDeps, 'store'>,
       record: AgentSessionRecord
     ) => {
-      void openStructuredAgentSessionConversationJournal(deps, record, { acquisition: true })
+      void openStructuredAgentSessionConversationJournal(
+        deps,
+        agentSessionConversationView(record),
+        { acquisition: true }
+      )
       // @ts-expect-error a reader open settles, so without the store its turns would stay unverifiable
-      void openStructuredAgentSessionConversationJournal(deps, record)
+      void openStructuredAgentSessionConversationJournal(deps, agentSessionConversationView(record))
     }
     expect(open).toBeTypeOf('function')
   })

@@ -4,7 +4,7 @@ import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
   resolveNativeChatSessionOptionDefaults,
   updateNativeChatSessionOptionDefaults
-} from './native-chat-session-option-defaults'
+} from './native-chat/input/native-chat-session-option-defaults'
 
 describe('agent session option catalog', () => {
   it('returns no catalog for unknown agents', () => {
@@ -188,8 +188,7 @@ describe('agent session option catalog', () => {
   })
 
   it('spawns vanilla when the user has not explicitly selected a model', () => {
-    // Regression (#9085): a fresh launch must not force the catalog default
-    // model/effort — the agent must spawn exactly as its own CLI would.
+    // Fresh launches must preserve CLI defaults instead of forcing catalog model/effort (#9085).
     expect(resolveNativeChatSessionOptionDefaults(undefined, 'claude')).toBeUndefined()
     expect(resolveNativeChatSessionOptionDefaults({}, 'claude')).toBeUndefined()
     expect(resolveNativeChatSessionOptionDefaults({}, 'future-agent')).toBeUndefined()

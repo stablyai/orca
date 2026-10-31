@@ -8,7 +8,7 @@ import {
   writeStructuredAgentLaunchRecord,
   deleteStructuredAgentLaunchRecord,
   hasStructuredAgentLaunchCancellationTombstonePersisted
-} from './structured-agent-session-launch-persistence'
+} from './agent-session/launch/structured-agent-session-launch-persistence'
 
 import { useAppStore } from '@/store'
 import { completeHostWorktreeCreation } from '@/lib/worktree-creation-host-completion'

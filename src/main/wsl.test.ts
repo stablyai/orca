@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '@orca/process-host/process-spec'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 
 const { runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
   runProcessMock: vi.fn(),
@@ -12,6 +13,14 @@ vi.mock('@orca/process-host', () => ({
 }))
 vi.mock('./wsl-interop-spawn-directory', () => ({
   resolveWslInteropSpawnCwd: () => 'C:\\Windows'
+}))
+// These cases model hosts with no registered distro; the lost-output fallback has its own suite.
+vi.mock('./wsl-registered-distro-fallback', () => ({
+  listedOrRegisteredWslDistros: async (listed: string[]) => listed,
+  readRegisteredWslDistrosLater: () => {},
+  isWslListOutputLost: () => false,
+  resetWslListOutputLost: () => {},
+  runningWhenListedNone: async () => []
 }))
 
 function exited(stdout: string, code: number | null = 0): ProcessResult {
@@ -306,6 +315,30 @@ describe('WSL home cache', () => {
       expect(runProcessSyncMock).toHaveBeenCalledTimes(68)
       expect(getWslHome('Distro-0')).toContain('Distro-0')
       expect(runProcessSyncMock).toHaveBeenCalledTimes(69)
+    })
+  })
+})
+
+describe('WSL probes under the internal distro allowlist', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    runProcessMock.mockReset()
+    _resetWslCachesForTests()
+  })
+
+  it('still lists distros, and an excluded distro home probe fails like any other probe', async () => {
+    vi.stubEnv('ORCA_INTERNAL_WSL_DISTRO_ALLOWLIST', 'orca-test-a')
+    // Stands in for process-host: the real check runs before a child would start.
+    runProcessMock.mockImplementation(async (spec: { program: string; args: string[] }) => {
+      assertWslDistroAllowed(spec.program, spec.args)
+      return spec.args.includes('--list')
+        ? exited('Ubuntu\norca-test-a\n')
+        : exited('/home/alice\n')
+    })
+    await withPlatformAsync('win32', async () => {
+      await expect(listWslDistrosAsync()).resolves.toEqual(['Ubuntu', 'orca-test-a'])
+      await expect(getWslHomeAsync('Ubuntu')).resolves.toBeNull()
+      await expect(getWslHomeAsync('orca-test-a')).resolves.toContain('alice')
     })
   })
 })

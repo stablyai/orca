@@ -22,7 +22,6 @@ export function WorktreeCardSecondaryRows({
     repo,
     settings,
     isActive,
-    newCardStyle,
     lineageCollapsed,
     onLineageToggle,
     remoteBranchConflict,
@@ -54,8 +53,7 @@ export function WorktreeCardSecondaryRows({
         </div>
       )}
 
-      {/* Why from the row: the host lists a failed delete until it is retried, forgotten or gone.
-          Why a tooltip: the error leads with the path; the Delete dialog shows it inline too. */}
+      {/* The host retains failed deletes until resolved; show its path-leading error in a tooltip. */}
       {worktree.removalError && !isDeleting ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -95,7 +93,7 @@ export function WorktreeCardSecondaryRows({
 
       {showLineageChildChip && (
         <div
-          className={cn('relative mt-1 flex min-w-0 justify-start', !newCardStyle && '-ml-1')}
+          className="relative mt-1 flex min-w-0 justify-start"
           style={{
             color: 'color-mix(in srgb, var(--muted-foreground) 42%, var(--worktree-sidebar))'
           }}

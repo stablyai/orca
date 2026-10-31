@@ -1,18 +1,6 @@
-// Which result belongs to which call inside one run.
-//
-// A run's blocks arrive as a flat stream of calls and results, and the renderer
-// used to draw both: every call line was followed by a `Result` line of its own.
-// That doubles the height of an opened run and puts the least interesting row —
-// a result whose preview is usually the first line of stdout — at the same level
-// as the command that produced it. Pairing lets the call own its output, so the
-// run reads as the work it did.
-//
-// A result that names its call answers that call, and no other: one naming a call
-// that is not waiting (outside a bounded window, say) stays unpaired. One that names
-// none is paired positionally, the same FIFO rule `dropUnattributableToolResults`
-// already uses to decide a result is attributable at all: it answers the oldest call
-// that has not been answered yet. Position alone misattributes every later result once
-// one call finishes with no output, which is why a producer that knows the call names it.
+// Pair named results only with their waiting call; missing named calls stay unpaired. Unnamed results use oldest-unanswered FIFO,
+// matching dropUnattributableToolResults. Producers must name calls when possible: outputless calls shift positional matches.
+// Call-owned output avoids duplicate Result rows in expanded runs.
 
 import { pairToolBlocks } from './native-chat-tool-pairs'
 import type {

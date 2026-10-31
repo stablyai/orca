@@ -96,10 +96,7 @@ export function materializeTaskPageItemList(args: {
     if (byKey.has(k)) {
       continue
     }
-    // Why: retain in-flight pending rows for rollback visibility; also retain
-    // confirmed rows soft-hidden by a sticky hide scoped to THIS query while
-    // search lag omits them. Requiring the query-scoped sticky avoids retaining
-    // non-membership confirms (e.g. auto-merge) as stale ghosts across refetch.
+    // Retain pending rows for rollback and query-sticky confirmed exits for search lag; other confirms must not become stale ghosts.
     const hasPending = hasPendingTaskPageGitHubOpsForItem(item.repoId, item.id)
     const sticky = getStickyHideEntry(k)
     const hasConfirmedStickyHide =

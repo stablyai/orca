@@ -17,7 +17,6 @@ import { ClearPaneTitleMenuItem } from '@/components/terminal-pane/ClearPaneTitl
 import { translate } from '@/i18n/i18n'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
 
-/** The terminal pane's layout and identity rows, for a chat that sits in a terminal pane. */
 export function NativeChatPaneMenuItems({
   actions,
   splitShortcutLabels

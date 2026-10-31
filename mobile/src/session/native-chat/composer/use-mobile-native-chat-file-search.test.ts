@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
+import * as ranking from '../../../../../src/shared/quick-open-path-search'
 
 type SearchState = ReturnType<typeof useMobileNativeChatFileSearch>
 
@@ -15,7 +16,6 @@ function rpcSuccess(files: string[]): Awaited<ReturnType<RpcClient['sendRequest'
   }
 }
 
-/** The hook reaches only the two members each case supplies, so the rest of the client is a fake. */
 type FileSearchClientParts = { sendRequest: unknown; getGeneration?: () => number }
 
 function fakeClient(parts: FileSearchClientParts): RpcClient {
@@ -45,6 +45,7 @@ describe('useMobileNativeChatFileSearch', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    vi.restoreAllMocks()
     vi.useRealTimers()
   })
 
@@ -93,7 +94,7 @@ describe('useMobileNativeChatFileSearch', () => {
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/apple.ts'])
 
-    act(() => state?.loadNativeChatFiles('readme'))
+    act(() => state?.loadNativeChatFiles('drm'))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120)
     })
@@ -114,21 +115,18 @@ describe('useMobileNativeChatFileSearch', () => {
     )
     await mount(fakeClient({ sendRequest }))
 
-    // Populate the cache for 'app'.
     act(() => state?.loadNativeChatFiles('app'))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120)
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
 
-    // Schedule 'beta' (debounced, unresolved), then hit the cache for 'app'.
     act(() => {
       state?.loadNativeChatFiles('beta')
       state?.loadNativeChatFiles('app')
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
 
-    // The cancelled 'beta' request must never fire and overwrite the cached result.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120)
     })
@@ -148,6 +146,29 @@ describe('useMobileNativeChatFileSearch', () => {
       await betaReply
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+  })
+
+  it('evicts the oldest queries even when the empty query is the oldest entry', async () => {
+    const sendRequest = vi.fn(async (_method: string, params: { query: string }) =>
+      rpcSuccess([`${params.query || 'empty'}.ts`])
+    )
+    await mount(fakeClient({ sendRequest }))
+    async function search(query: string): Promise<void> {
+      act(() => state?.loadNativeChatFiles(query))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120)
+      })
+    }
+
+    for (const query of ['', ...Array.from({ length: 21 }, (_, index) => `file-${index}`)]) {
+      await search(query)
+    }
+    await search('file-0')
+    await search('')
+    const queries = sendRequest.mock.calls.map(([, params]) => params.query)
+    expect(queries.filter((query) => query === 'file-0')).toHaveLength(2)
+    expect(queries.filter((query) => query === '')).toHaveLength(2)
+    expect(state?.nativeChatFilePaths).toEqual(['empty.ts'])
   })
 
   it('reloads the legacy inventory when the logical authority epoch advances', async () => {
@@ -175,16 +196,13 @@ describe('useMobileNativeChatFileSearch', () => {
     expect(state?.nativeChatFilePaths).toEqual(['src/apple.ts'])
     expect(listCalls()).toBe(1)
 
-    // Control: a fresh query under the same epoch is answered from the inventory already held.
     act(() => state?.loadNativeChatFiles('readme'))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120)
     })
     expect(listCalls()).toBe(1)
 
-    // `migrateTo` advanced the logical authority epoch. The client is the same object and the
-    // workspace did not change, so the epoch in the scope is the only thing that can retire the
-    // inventory the host under the old authority gave us.
+    // Logical authority can change behind the same client/workspace; its epoch must invalidate the old host inventory.
     generation = 2
     act(() => state?.loadNativeChatFiles('guide'))
     await act(async () => {
@@ -266,16 +284,15 @@ describe('useMobileNativeChatFileSearch', () => {
       }
       return listResponse
     })
+    const rank = vi.spyOn(ranking, 'rankQuickOpenFiles')
     await mount(fakeClient({ sendRequest }))
 
-    act(() => state?.loadNativeChatFiles('apple'))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(120)
-    })
-    act(() => state?.loadNativeChatFiles('readme'))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(120)
-    })
+    for (const query of ['apple', 'app', 'docs', 'readme']) {
+      act(() => state?.loadNativeChatFiles(query))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120)
+      })
+    }
     expect(sendRequest.mock.calls.filter(([method]) => method === 'files.list')).toHaveLength(1)
 
     await act(async () => {
@@ -284,5 +301,6 @@ describe('useMobileNativeChatFileSearch', () => {
       await Promise.resolve()
     })
     expect(state?.nativeChatFilePaths).toEqual(['docs/readme.md'])
+    expect(rank).toHaveBeenCalledTimes(1)
   })
 })

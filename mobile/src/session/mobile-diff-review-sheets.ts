@@ -1,10 +1,7 @@
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ComposerState, SendSheetState } from './mobile-diff-review-screen-model'
 
-// Which review sheet the user wants; the screen's one keyed drawer decides when it can be shown.
-
 export type ReviewSheet =
-  | { kind: 'actions' }
   | { kind: 'send'; load: SendSheetState }
   | { kind: 'discard'; target: MobileDiffReviewQueueItem }
   | { kind: 'composer'; composer: ComposerState }
@@ -68,7 +65,6 @@ export function reviewComposer(state: ReviewSheetsState): ComposerState | null {
   return state.requested?.kind === 'composer' ? state.requested.composer : null
 }
 
-/** The only ways callers change the review screen's sheets. */
 export function reviewSheetIntents(dispatch: (action: ReviewSheetsAction) => void) {
   return {
     openSheet: (sheet: ReviewSheet) => dispatch({ type: 'open', sheet }),

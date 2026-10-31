@@ -4,11 +4,7 @@ export type WorktreePtyHostFence = {
   resolvedRuntimeEnvironmentId?: string
 }
 
-/**
- * Also fences the structured sweep, through `structuredSessionTeardownHostId`, which reuses this
- * exact type so the two cannot drift. That helper narrows ABSENT to local — the one deliberate
- * difference, documented where it is made.
- */
+/** Structured teardown reuses this fence type, deliberately narrowing an absent fence to local at its call site. */
 export function worktreePtyBelongsToHost(
   ptyId: string,
   connectionId: string | null | undefined,

@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -12,7 +13,7 @@ export function openTestAttachConversation(
     (
       await openStructuredAgentSessionConversationJournal(
         { journalDatabase, logger: recordingStructuredAgentSessionLogger().logger },
-        record,
+        agentSessionConversationView(record),
         {
           acquisition: true
         }

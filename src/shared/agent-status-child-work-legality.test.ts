@@ -127,8 +127,7 @@ describe('child-work descriptive fields', () => {
     expect(parseAgentChildWorkInput(value)).toEqual(value)
   })
 
-  // Admission drops bad provider facts before they reach the codec, so each of these is a writer
-  // bug: the codec refuses the record rather than repairing it.
+  // Admission drops bad provider facts first; codec failures are writer bugs, never silently repaired data.
   it.each([
     ['an operation that is not an object', { operation: 'Bash' }],
     ['an operation with an unknown key', { operation: { ...OPERATION, raw: {} } }],

@@ -12,7 +12,7 @@ vi.mock('@/store/selectors', () => ({
   useWorktreeById: () => ({ path: '/repo', repoId: 'repo-1' })
 }))
 
-// Why: the reveal owner is confirmed against the catalog, which this test does not seed.
+// Stub owner resolution because this suite does not seed the execution-host catalog.
 vi.mock('@/lib/resolved-worktree-execution-host', () => ({
   getResolvedExecutionHostIdForWorktree: () => 'local'
 }))

@@ -487,14 +487,14 @@ it('bounds accepted snapshot prompt work at N and 10N, with no traversal when th
 
 it('replaces the catalog chat placeholder with the exact accepted terminal while the outer reply is pending, then notices a lost reply without paste', async () => {
   const { parseDesktopCreateLaunchRecord } =
-    await import('../lib/structured-agent-session-launch-record')
+    await import('../lib/agent-session/launch/structured-agent-session-launch-record')
   const { issueDesktopCreateLaunch, acceptDesktopCreateCatalog } =
     await import('../lib/structured-agent-session-desktop-create')
   const {
     writeStructuredAgentLaunchRecord,
     readStructuredAgentLaunchRecord,
     resetStructuredAgentLaunchPersistenceForTests
-  } = await import('../lib/structured-agent-session-launch-persistence')
+  } = await import('../lib/agent-session/launch/structured-agent-session-launch-persistence')
   const rpcModule = await import('./runtime-rpc-client')
   const { makeWorktree } = await import('../store/slices/worktrees-slice-test-fixtures')
   const sessionId = 'claude_11111111_2222_4333_8444_555555555555'

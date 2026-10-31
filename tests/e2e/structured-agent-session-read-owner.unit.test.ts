@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult,
@@ -40,6 +41,7 @@ import { codexProviderHandle } from '../../src/shared/agent-session-provider-han
 
 const SESSION = 'cursor-body-regression'
 const target = { kind: 'local' } as const
+const effects = { getState: useAppStore.getState, subscribeRetryNow: () => () => {} }
 const journals = createTrackedJournalOpener()
 let root: string
 
@@ -148,7 +150,7 @@ describe('structured session cursor/body regression', () => {
             }
           ]
         ]),
-        getRecord: () => null,
+        getConversation: () => null,
         now: () => 1_000,
         onStatusChanged: (summary) => {
           hostSummary = summary
@@ -195,7 +197,7 @@ describe('structured session cursor/body regression', () => {
       )
       const owner = getStructuredAgentSessionReadOwner(SESSION, target)
       const unlisten = owner.subscribe(() => {})
-      const deactivate = owner.activate()
+      const deactivate = owner.activate(effects)
       await vi.waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
       expect(owner.getSnapshot().state.cursor?.sequence).toBe(100)
       expect(owner.getSnapshot().state.items.at(-1)?.body).toMatchObject({ role: 'user' })
@@ -220,7 +222,7 @@ describe('structured session cursor/body regression', () => {
       // IPC/RPC copies values; the journal mutates its own submission records in place.
       expect(owner.getSnapshot().state.submissions[0]?.dispatchState).toBe('pending')
       warm = true
-      const stop = owner.activate()
+      const stop = owner.activate(effects)
 
       await vi.waitFor(() => expect(owner.getSnapshot().state.cursor).toEqual(journal.cursor()))
       const caughtUp = owner.getSnapshot().state

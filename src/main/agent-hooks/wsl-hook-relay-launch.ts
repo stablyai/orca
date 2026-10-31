@@ -1,7 +1,10 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { spawnProcess } from '@orca/process-host'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
+import { withWslGuestLauncherRevision } from '../wsl/wsl-guest-launcher-revision'
+import { orcadPosixNodeRuntimeGlobs } from '../managed-server/install/orcad-node-runtime-globs'
 
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import {
@@ -11,6 +14,8 @@ import {
 } from './wsl-hook-relay-sentinel'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
+import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import {
   WSL_HOOK_RELAY_BUNDLE_NAME,
@@ -34,7 +39,7 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
       const version = readFileSync(versionPath, 'utf8').trim()
       // Versions become shell literals and path segments; accept only a safe alphabet.
       if (/^[A-Za-z0-9+.-]+$/.test(version)) {
-        return { jsPath, version }
+        return { jsPath, version: withWslGuestLauncherRevision(version, buildGuestLaunchScript) }
       }
     }
   }
@@ -49,13 +54,15 @@ function guestRelayDirExpr(version: string): string {
 /** Probe candidate Node versions: noninteractive sh may miss a newer nvm installation. */
 export function buildGuestLaunchScript(version: string): string {
   const dir = guestRelayDirExpr(version)
+  // A WSL host distro may have no system node but usually has orcad's pinned runtime.
+  const [orcadRuntime, orcadMachineRuntimes] = orcadPosixNodeRuntimeGlobs()
   return [
     '#!/bin/sh',
     `d="${dir}"`,
     `v="$(cat "$d/${WSL_HOOK_RELAY_VERSION_FILE}" 2>/dev/null || true)"`,
     `[ -n "$${WSL_HOOK_RELAY_VERSION_ENV}" ] && [ "$v" = "$${WSL_HOOK_RELAY_VERSION_ENV}" ] || exit ${WSL_HOOK_RELAY_STALE_EXIT_CODE}`,
     'n=""',
-    'for c in "$(command -v node 2>/dev/null || true)" "$HOME/.nvm/versions/node"/*/bin/node /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node"; do',
+    `for c in "$(command -v node 2>/dev/null || true)" "$HOME/.nvm/versions/node"/*/bin/node /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node" ${orcadRuntime} ${orcadMachineRuntimes}; do`,
     '  [ -n "$c" ] && [ -x "$c" ] || continue',
     `  if "$c" -e 'process.exit(Number(process.versions.node.split(".")[0])>=18?0:1)' 2>/dev/null; then`,
     '    n="$c"',
@@ -95,13 +102,14 @@ export function spawnWslRelayProcess(
   distro: string,
   env: NodeJS.ProcessEnv,
   version: string
-): ChildProcessWithoutNullStreams {
+): PipedChildProcess {
   // --exec bypasses login-shell rewriting and passes $HOME verbatim for guest-side expansion.
   const command = `exec sh "${guestRelayDirExpr(version)}/launch.sh"`
-  return spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-c', command], {
+  return spawnProcess({
+    program: resolveWslExecutablePath(),
+    args: buildWslExecArgs(distro, ['sh', '-c', command]),
     env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true,
+    stdio: 'pipe',
     // Use a stable Windows cwd so deleting the current worktree cannot break later relay launches.
     cwd: resolveWslInteropSpawnCwd()
   })
@@ -145,10 +153,10 @@ export async function launchWslRelayWithInstall(options: {
   version: string
   io: WslRelayLaunchIo
   isDisposed: () => boolean
-  onChild: (child: ChildProcessWithoutNullStreams) => void
+  onChild: (child: PipedChildProcess) => void
   onNoNode: () => void
   onFailure: (message: string) => void
-  connect: (transport: MultiplexerTransport, child: ChildProcessWithoutNullStreams) => Promise<void>
+  connect: (transport: MultiplexerTransport, child: PipedChildProcess) => Promise<void>
 }): Promise<void> {
   const { distro, env, bundleJsPath, version, io } = options
   let installTried = false

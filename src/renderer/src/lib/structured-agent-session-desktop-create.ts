@@ -26,15 +26,15 @@ import {
 import {
   desktopCreateAcceptedTerminal,
   type DesktopCreateLaunchRecord
-} from './structured-agent-session-launch-record'
+} from './agent-session/launch/structured-agent-session-launch-record'
 import {
   deleteStructuredAgentLaunchRecord,
   hasStructuredAgentLaunchCancellationTombstonePersisted,
   readStructuredAgentLaunchRecord,
   writeStructuredAgentLaunchRecords
-} from './structured-agent-session-launch-persistence'
+} from './agent-session/launch/structured-agent-session-launch-persistence'
 
-import { notifyStructuredLaunchListeners } from './structured-agent-session-launch-registry'
+import { notifyStructuredLaunchListeners } from './agent-session/launch/structured-agent-session-launch-registry'
 
 import {
   currentDesktopCreate,

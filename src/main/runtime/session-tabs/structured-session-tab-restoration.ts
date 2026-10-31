@@ -5,9 +5,7 @@ import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileS
 
 import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './structured-session-create-support'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { seedStructuredAgentSessionTabIndex } from '../agent-session/structured-agent-session-tab-index-seed'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type {
@@ -47,15 +45,15 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
   protected async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
     await this.prepareStructuredAgentSessionStartupRestoration()
     const host = getStructuredAgentSessionHost()
-    const persistedVisibleIndex =
-      typeof host?.getPersistedVisibleSessionTabIndex === 'function'
-        ? host.getPersistedVisibleSessionTabIndex()
-        : { present: false, sessionIds: [] }
-    const profileIds = collectSavedStructuredAgentSessionIds(
-      this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
-    )
-    const targets = persistedVisibleIndex.present ? persistedVisibleIndex.sessionIds : profileIds
-    await host?.restoreReadableSessions(targets)
+    if (host?.getPersistedVisibleSessionTabIndex?.().present !== true) {
+      await host?.deps?.store?.initializeSessionTabs?.().catch((error: unknown) =>
+        host.deps.logger.warn('recording restored chat tabs failed', {
+          scope: 'tab-index-seed',
+          error
+        })
+      )
+    }
+    await host?.seedSessionTabs()
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
@@ -71,21 +69,21 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       }
       return [{ ...session, agent: session.agent, sessionId }]
     })
-    await seedStructuredAgentSessionTabIndex(
-      host,
-      targets,
-      restored.map((session) => session.sessionId)
-    )
     const changes = restoredChatTabChanges(
       this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.unifiedTabs ?? {},
       host,
-      restored
+      restored,
+      (id) => this.hasCurrentLocalStructuredSessionTab(id)
     )
     for (const [worktreeId, worktreeChanges] of changes) {
-      this.changeWindowlessChatTabs(worktreeId, worktreeChanges)
+      this.changeWindowlessChatTabs(worktreeId, worktreeChanges, (change) =>
+        this.passiveStructuredSessionTabChangeEligible(change)
+      )
     }
     for (const session of restored) {
-      this.projectStructuredAgentSessionTab({ ...session, activate: false, notify: false })
+      if (host?.isSessionTabVisible(session.sessionId)) {
+        this.projectStructuredAgentSessionTab({ ...session, activate: false, notify: false })
+      }
     }
     const wasUnverifiable = this.structuredAgentSessionInventoryUnverifiable
     // No host means no one can say which chats exist; with none on disk, empty is the answer.
@@ -115,8 +113,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     input = initialChatSelection(this, input, this.mobileSessionTabsByWorktree)
     const host = getStructuredAgentSessionHost()
     if (typeof host?.setSessionTabVisibility === 'function') {
-      // The restore index is bookkeeping: one that cannot be written (a newer Orca's records, a
-      // failing disk) is reported, and the tab still opens.
+      // Restore-index failures (newer records/disk errors) are reported without preventing tab open.
       await host
         .setSessionTabVisibility(input.sessionId, true, ...(input.tabId ? [input.tabId] : []))
         .catch((error: unknown) => {
@@ -127,7 +124,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
           })
         })
     }
-    // Switch point: main leaves a window's chat to the window's open, the one placement decision.
+    // Window creates retain the window's own placement decision.
     if (!(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)) {
       this.saveWindowlessAgentSessionTab(input.workspaceId, input)
     }
@@ -146,8 +143,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
     if (existing?.tabs.some((tab) => tab.id === id)) {
-      // A background re-publish is a no-op — no store write, no emit — so it cannot re-surface a
-      // client whose mirror lost the tab; healing one needs `activate` or an explicit republish.
+      // Background republish does not write/emit; healing missing client mirrors needs activate or explicit republish.
       if (!input.activate) {
         if (
           input.foundingAttempt?.adopted?.sessionId === input.sessionId &&
@@ -217,9 +213,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       throw new Error('terminal_gone')
     }
     if (this.ptyController.inspectProcess) {
-      // Preserve the legacy one-argument call shape when no incarnation
-      // fence was requested; some providers use arity to distinguish the
-      // compatibility path from the fenced remote inspection.
+      // Preserve one-argument unfenced calls; providers may use arity to select legacy versus fenced inspection.
       const inspection =
         options === undefined
           ? await this.ptyController.inspectProcess(leaf.ptyId)
@@ -257,7 +251,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       return { repo, repoPath: repo.path }
     }
 
-    const worktree = await this.resolveWorktreeSelector(args.worktreeSelector)
+    const worktree = await this.resolveGitWorktreeSelector(args.worktreeSelector)
     if (worktree.repoId !== repo.id) {
       throw new Error('Access denied: worktree does not belong to repository')
     }

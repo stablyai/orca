@@ -4,6 +4,7 @@ import { vi, type Mock } from 'vitest'
 type NetFetchResponse = {
   ok?: boolean
   status?: number
+  headers?: { get: (name: string) => string | null }
 }
 
 export function installNetRequestFetchAdapter(netRequestMock: Mock, netFetchMock: Mock): void {
@@ -21,7 +22,13 @@ export function installNetRequestFetchAdapter(netRequestMock: Mock, netFetchMock
           (response: NetFetchResponse) => {
             const status = response.status ?? (response.ok ? 200 : 503)
             if (options.redirect === 'manual' && status >= 300 && status < 400) {
-              request.emit('redirect', status, options.method ?? 'GET', 'https://redirect.test', {})
+              request.emit(
+                'redirect',
+                status,
+                options.method ?? 'GET',
+                response.headers?.get('location') ?? 'https://redirect.test',
+                {}
+              )
               // Electron emits an error after cancelling an unfollowed manual redirect.
               request.emit('error', new Error('Redirect was cancelled'))
             } else {

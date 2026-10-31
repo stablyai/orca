@@ -22,7 +22,7 @@ const {
   netFetchMock: vi.fn()
 }))
 
-vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
+vi.mock('../network/http-client', () => ({ getMainHttpClient: () => ({ fetch: netFetchMock }) }))
 
 vi.mock('./serve-sim-execution', async (importOriginal) => ({
   execServeSimCommand: execServeSimCommandMock,
@@ -90,6 +90,33 @@ describe('EmulatorBridge helper ownership', () => {
     shutdownSimulatorDeviceMock.mockReset()
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
     netFetchMock.mockReset()
+  })
+
+  it('routes a registered explicit device without inventory and rediscovers after kill', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+
+    await bridge.tap(0.25, 0.75, { device: 'device-1' })
+    expect(execServeSimCommandMock).toHaveBeenCalledWith(
+      { command: '/serve-sim', env: {} },
+      ['tap', '0.25', '0.75', '-d', 'device-1'],
+      undefined
+    )
+    expect(listSimulatorDevicesMock).not.toHaveBeenCalled()
+
+    await bridge.kill('device-1')
+    expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
+    expect(listSimulatorDevicesMock).not.toHaveBeenCalled()
+    listSimulatorDevicesMock.mockResolvedValue([
+      { udid: 'device-1', name: 'iPhone', state: 'Booted', runtime: 'iOS' }
+    ])
+    await bridge.tap(0.5, 0.5, { device: 'device-1' })
+    expect(listSimulatorDevicesMock).toHaveBeenCalledOnce()
+    expect(execServeSimCommandMock).toHaveBeenLastCalledWith(
+      { command: '/serve-sim', env: {} },
+      ['tap', '0.5', '0.5', '-d', 'device-1'],
+      undefined
+    )
   })
 
   it('stops the previous Orca-managed helper when a worktree switches devices', async () => {

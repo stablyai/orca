@@ -9,7 +9,6 @@ const CELL_W = 8
 const CELL_H = 15
 const COLS = 40
 const ROW = 5
-// 'beta' is columns 6-9 and 'delta' starts at column 17.
 const LINE = 'alpha beta gamma delta'
 
 const cellPoint = (col: number, row: number) => ({
@@ -20,6 +19,7 @@ const cellPoint = (col: number, row: number) => ({
 function textLine(text: string): TerminalDocumentLine {
   return {
     length: text.length,
+    isWrapped: false,
     translateToString: (_trimRight, start, end) => text.slice(start ?? 0, end ?? text.length)
   }
 }
@@ -87,7 +87,6 @@ async function startTuiDocument() {
     frame: { width: 412, height: 600 }
   })
   await vi.advanceTimersByTimeAsync(160)
-  // Only what the gesture itself produces is under test.
   posted.length = 0
   selections.length = 0
   const surface = host.querySelector<HTMLElement>('#terminal-surface')!
@@ -100,7 +99,13 @@ async function startTuiDocument() {
     surface.dispatchEvent(event)
   }
   const ofType = (type: string) => posted.filter((message) => message.type === type)
-  return { touch, ofType, selections, clears: () => clears }
+  return {
+    touch,
+    ofType,
+    selections,
+    clears: () => clears,
+    setActive: (active: boolean) => started.send({ type: 'set-interaction-active', active })
+  }
 }
 
 describe('long press then drag on the terminal surface', () => {
@@ -110,12 +115,10 @@ describe('long press then drag on the terminal surface', () => {
     doc.touch('touchstart', cellPoint(7, ROW))
     vi.advanceTimersByTime(500)
     expect(doc.ofType('set-select-mode').at(-1)).toMatchObject({ enabled: true })
-    // The press seeds the word under the finger: 'beta'.
     expect(doc.selections.at(-1)).toEqual([6, ROW, 4])
 
     doc.touch('touchmove', cellPoint(18, ROW))
     expect(doc.selections.at(-1)).toEqual([6, ROW, 13])
-    // Down two rows: the vertical travel the surface would have turned into two arrow keys.
     doc.touch('touchmove', cellPoint(2, ROW + 2))
     expect(doc.selections.at(-1)).toEqual([6, ROW, COLS - 6 + COLS + 3])
     expect(doc.ofType('terminal-input')).toEqual([])
@@ -149,4 +152,19 @@ describe('long press then drag on the terminal surface', () => {
     expect(doc.ofType('set-select-mode')).toEqual([])
     expect(doc.selections).toEqual([])
   })
+})
+
+it('requires a new touch after a hide/show interruption before scrolling resumes', async () => {
+  const doc = await startTuiDocument()
+  doc.touch('touchstart', cellPoint(7, ROW))
+  doc.setActive(false)
+  doc.setActive(true)
+  doc.touch('touchmove', cellPoint(7, ROW + 3))
+  doc.touch('touchend')
+  vi.advanceTimersByTime(600)
+  expect(doc.ofType('terminal-input')).toEqual([])
+  expect(doc.ofType('set-select-mode')).toEqual([])
+  doc.touch('touchstart', cellPoint(7, ROW))
+  doc.touch('touchmove', cellPoint(7, ROW + 3))
+  expect(doc.ofType('terminal-input').length).toBeGreaterThan(0)
 })

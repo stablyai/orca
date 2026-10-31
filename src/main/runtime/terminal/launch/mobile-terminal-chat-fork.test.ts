@@ -206,7 +206,6 @@ it.each([true, false])(
         expect.arrayContaining([expect.objectContaining({ id: canonical, entityId: source })])
       )
     } else if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main placed the published chat's tab itself, so the fork opens beside it.
       expect(admit.mock.calls[0]?.[0]).toMatchObject({
         afterTabId: structuredAgentSessionTabId(source)
       })

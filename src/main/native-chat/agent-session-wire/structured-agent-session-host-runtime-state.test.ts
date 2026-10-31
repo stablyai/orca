@@ -6,7 +6,7 @@ import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
 } from '../../../shared/agent-session-record'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
@@ -19,8 +19,8 @@ import { createStructuredAgentSessionLogger } from './structured-agent-session-l
 const NOW = 1_800_000_000_000
 
 const stateDirectory = mkdtempSync(join(tmpdir(), 'orca-host-runtime-state-'))
-afterAll(() => {
-  closeTestJournalHostDatabases()
+afterAll(async () => {
+  await closeTestJournalHostDatabases()
   rmSync(stateDirectory, { recursive: true, force: true })
 })
 
@@ -60,15 +60,27 @@ function reservedRecord(): AgentSessionRecord {
 
 function runtimeState(
   record: AgentSessionRecord | null,
-  probeOwner: NonNullable<StructuredAgentSessionHostDeps['probeOwner']>
+  probeOwner: NonNullable<StructuredAgentSessionHostDeps['probeOwner']>,
+  options: {
+    store?: Partial<AgentSessionRecordStore>
+    probeOwners?: StructuredAgentSessionHostDeps['probeOwners']
+    now?: StructuredAgentSessionHostDeps['now']
+  } = {}
 ) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime state reads only store, probeOwner and optional deps; the rest of the host's deps are unused here.
+  const journalDatabase = openTestJournalHostDatabase(stateDirectory)
+  const store = Object.assign(
+    AgentSessionRecordStore.open({ journalDatabase, hostId: 'local', legacySessionTabIds: [] }),
+    { getRecord: () => record, ...options.store }
+  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these runtime-state cases supply every store/probe/clock dependency they invoke; other host dependencies are unused.
   const deps = {
-    store: { getRecord: () => record } as unknown as AgentSessionRecordStore,
+    store,
     adapter: {},
-    journalDatabase: openTestJournalHostDatabase(stateDirectory),
+    journalDatabase,
     claimKeyId: 'key-1',
     probeOwner,
+    probeOwners: options.probeOwners,
+    now: options.now,
     logger: createStructuredAgentSessionLogger()
   } as StructuredAgentSessionHostDeps
   return new StructuredAgentSessionHostRuntimeState(deps, new Map())
@@ -103,28 +115,68 @@ describe('host runtime-state owner probe', () => {
     expect(probeOwner).toHaveBeenCalledTimes(1)
   })
 
-  it('skips the probe for a released ownerless record acquisition never consults it for', async () => {
-    const released = reservedRecord()
-    released.lease.claimStatus = 'released'
-    released.lease.handoffStage = null
-    released.lease.reservedSpawnToken = null
-    const probeOwner = vi.fn(async () => ({ outcome: 'indeterminate' as const, reason: 'x' }))
-    const state = runtimeState(released, probeOwner)
-
-    await expect(state.probeOwner('session-probe')).resolves.toEqual({
-      outcome: 'reservation-unused'
+  it('constructs inert per-state reconcilers sharing only their own addressed in-flight work', async () => {
+    const record = liveRecord()
+    record.lease.unreconciled = true
+    const pending = Promise.withResolvers<void>()
+    const getRecord = vi.fn((_sessionId: string) => record)
+    const reconcileOnRestart = vi.fn(
+      async (args: Parameters<AgentSessionRecordStore['reconcileOnRestart']>[0]) => {
+        await pending.promise
+        await args.probe(record)
+        await args.probeMany?.([record])
+        record.lease.unreconciled = false
+        return new Map()
+      }
+    )
+    const probeOwner = vi.fn(async () => ({ outcome: 'pid-absent' as const }))
+    const otherProbeOwner = vi.fn(async () => ({ outcome: 'pid-absent' as const }))
+    const probeOwners = vi.fn(async () => new Map())
+    const otherProbeOwners = vi.fn(async () => new Map())
+    const now = vi.fn(() => NOW)
+    const otherNow = vi.fn(() => NOW + 1)
+    const store = { getRecord, reconcileOnRestart }
+    const state = runtimeState(record, probeOwner, { store, probeOwners, now })
+    const other = runtimeState(record, otherProbeOwner, {
+      store,
+      probeOwners: otherProbeOwners,
+      now: otherNow
     })
-    expect(probeOwner).not.toHaveBeenCalled()
-  })
+    for (const dependency of [
+      getRecord,
+      reconcileOnRestart,
+      probeOwner,
+      otherProbeOwner,
+      probeOwners,
+      otherProbeOwners,
+      now,
+      otherNow
+    ]) {
+      expect(dependency).not.toHaveBeenCalled()
+    }
 
-  it('treats a session with no record at all as an unused reservation', async () => {
-    const probeOwner = vi.fn(async () => ({ outcome: 'indeterminate' as const, reason: 'x' }))
-    const state = runtimeState(null, probeOwner)
-
-    await expect(state.probeOwner('session-probe')).resolves.toEqual({
-      outcome: 'reservation-unused'
-    })
-    expect(probeOwner).not.toHaveBeenCalled()
+    const first = state.reconcileLeases(record.sessionId)
+    const repeated = state.reconcileLeases(record.sessionId)
+    expect(reconcileOnRestart).toHaveBeenCalledTimes(1)
+    const separate = other.reconcileLeases(record.sessionId)
+    expect(reconcileOnRestart).toHaveBeenCalledTimes(2)
+    expect(
+      reconcileOnRestart.mock.calls.map(([args]) => ({ sessionId: args.sessionId, now: args.now }))
+    ).toEqual([
+      { sessionId: record.sessionId, now: NOW },
+      { sessionId: record.sessionId, now: NOW + 1 }
+    ])
+    pending.resolve()
+    expect(await Promise.all([first, repeated, separate])).toEqual([null, null, null])
+    for (const probe of [probeOwner, otherProbeOwner]) {
+      expect(probe).toHaveBeenCalledExactlyOnceWith(record)
+    }
+    for (const probe of [probeOwners, otherProbeOwners]) {
+      expect(probe).toHaveBeenCalledExactlyOnceWith([record])
+    }
+    expect(now).toHaveBeenCalledOnce()
+    expect(otherNow).toHaveBeenCalledOnce()
+    expect(getRecord.mock.calls.every((args) => args[0] === record.sessionId)).toBe(true)
   })
 
   it('does not force-close a provider for transient lease probe errors', async () => {

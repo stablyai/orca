@@ -1,3 +1,4 @@
+import { providerTimelineExecutionItems } from '../agent-session-timeline/provider-timeline-history'
 // Plan against queued journal state; death/replacement proof interrupts only matching owners,
 // otherwise settle unverifiable and revise when later proof arrives.
 
@@ -87,7 +88,9 @@ export function planStaleStructuredAgentSessionState(
   const { journal, below } = input
   const ended = (fence: number | undefined) =>
     below === undefined || (fence !== undefined && fence < below)
-  const items = journal.snapshot().items.filter((item) => ended(journal.itemFence(item.itemId)))
+  const items = providerTimelineExecutionItems(journal.snapshot().items).filter((item) =>
+    ended(journal.itemFence(item.itemId))
+  )
   const dispatches =
     below === undefined
       ? []

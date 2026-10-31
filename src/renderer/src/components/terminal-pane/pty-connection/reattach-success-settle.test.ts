@@ -2,20 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { bindHandleReattachResult } from './reattach-result-handler'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/**
- * `handleReattachResult` holds the only `success` settle in the recovery state
- * machine. Without it every attempt stays `pending` until the 31s settlement
- * bound ages out, so the entire "observed success" half of the gate — the thing
- * that distinguishes this design from the counting budget it replaces — can be
- * deleted with no other test noticing.
- *
- * Placement is load-bearing too. Settling at the `authoritativeReattachGeneration`
- * bump instead would mark a failure path (`reattach returned no PTY id`) as a
- * success and reopen the loop, so the negative cases below are as important as
- * the positive one.
- */
+/** Success must settle after no-ID/expiry rejection; otherwise healed attempts stay pending for 31s or failed attaches falsely reopen recovery budgets. */
 const mocks = vi.hoisted(() => ({
-  state: { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  state: {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
 }))
 
 vi.mock('@/store', () => ({
@@ -75,7 +69,12 @@ function setPaneTransports(session: ConnectPanePtySession, transports: Map<strin
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.state = { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  mocks.state = {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
 })
 
 describe('handleReattachResult recovery settle', () => {
@@ -98,8 +97,7 @@ describe('handleReattachResult recovery settle', () => {
   })
 
   it('does not report success for a reattach that returned no PTY id', async () => {
-    // Settling this as success would clear the ledger the cold restore is about
-    // to replace, and the chain would restart.
+    // No-ID fallback cannot settle success before cold restore replaces its recovery ledger.
     const { session, settlePaneAttachAttempt } = buildSession({
       transport: {
         getPtyId: () => null,

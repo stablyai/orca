@@ -35,9 +35,7 @@ describe('killWorkspacePort', () => {
   })
 
   it('reports success when the listener exited before the signal landed', async () => {
-    // Why: the re-scan authorizes the pid, then the dev server exits on its own
-    // before `kill` runs. The port is free -- which is what Stop asked for --
-    // but the raw ESRCH surfaced as "Stop failed" on a port that was gone.
+    // ESRCH after authorization means the listener exited before SIGTERM arrived.
     vi.spyOn(process, 'kill').mockImplementation(() => {
       throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' })
     })
@@ -59,9 +57,7 @@ describe('killWorkspacePort', () => {
   })
 
   it('signals the pid the socket scan named, which is the listener itself', async () => {
-    // Why pinned: netstat -ano / lsof report the process that owns the socket,
-    // not a supervising wrapper, so escalating this to a tree kill would reach
-    // descendants nobody asked to stop without freeing anything extra.
+    // Socket scans name the listener itself; tree kill would reach unrelated descendants.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     scanWorkspacePortsMock.mockResolvedValue(workspacePortScan(123, 5173))
 
@@ -69,9 +65,6 @@ describe('killWorkspacePort', () => {
     expect(killSpy).toHaveBeenCalledExactlyOnceWith(123, 'SIGTERM')
   })
 
-  // Regression for #11161 review: on an EDR-hooked host the background poller
-  // alternates the metadata skip, so an unscoped skip would fail Stop with
-  // "Only workspace-owned local processes can be stopped here" every other try.
   it('requires owner metadata from the authorizing re-scan', async () => {
     scanWorkspacePortsMock.mockResolvedValue({ platform: 'darwin', scannedAt: 0, ports: [] })
 

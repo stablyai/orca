@@ -18,7 +18,6 @@ vi.mock('../git-bash', async (importOriginal) => ({
 
 import type { SFTPWrapper } from 'ssh2'
 import { createManagedCommandMatcher, WINDOWS_CMD_SAFE_PATH } from '../agent-hooks/installer-utils'
-import { WINDOWS_HOOK_STDIN_DRAIN_LABEL } from '../agent-hooks/hook-stdin-contract'
 import { ClaudeHookService } from './hook-service'
 import { CLAUDE_EVENTS } from './claude-managed-hook-events'
 import { getWindowsManagedLifecycleHook, OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
@@ -656,7 +655,7 @@ describe('backgrounded-session pane guard (#9236)', () => {
         expect(guard).toBeDefined()
         expect(script.indexOf('CLAUDE_JOB_DIR')).toBeLessThan(script.indexOf('curl'))
         if (target === 'win32') {
-          expect(guard).not.toContain(WINDOWS_HOOK_STDIN_DRAIN_LABEL)
+          expect(guard).toBe('if not "%CLAUDE_JOB_DIR%"=="" exit /b 0')
         }
       } finally {
         Object.defineProperty(process, 'platform', platform)
@@ -680,7 +679,6 @@ describe('backgrounded-session pane guard (#9236)', () => {
       )
       const guard = script.split('\r\n').find((line) => line.includes('CLAUDE_JOB_DIR'))
       expect(guard).toBe('if not "%CLAUDE_JOB_DIR%"=="" exit /b 0')
-      expect(guard).not.toContain(WINDOWS_HOOK_STDIN_DRAIN_LABEL)
     } finally {
       Object.defineProperty(process, 'platform', platform)
       vi.unstubAllEnvs()

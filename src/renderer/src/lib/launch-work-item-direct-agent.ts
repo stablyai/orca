@@ -11,16 +11,15 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv,
-  type AgentLaunchProfileSettings
-} from '../../../shared/tui-agent-launch-defaults'
+import type { AgentLaunchProfileSettings } from '../../../shared/tui-agent-launch-defaults'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
 import { translate } from '@/i18n/i18n'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
   agentArgs?: string | null
+  sessionOptions?: Readonly<Record<string, string>>
+  sessionOptionsYieldToAgentArgs?: true
   draftContent: string
   promptDelivery: 'draft' | 'submit-after-ready'
   settings:
@@ -42,23 +41,22 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     return { startupPlan: null, draftLaunchedNatively: false, startupPlanFailed: false }
   }
 
-  const effectiveAgentArgs =
-    args.agentArgs === undefined
-      ? resolveTuiAgentLaunchArgs(args.agent, args.settings)
-      : args.agentArgs
-  const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings, args.launchPlatform)
+  const startupInputs = resolveAgentStartupPlanInputs({
+    agent: args.agent,
+    settings: args.settings ?? {},
+    agentArgs: args.agentArgs,
+    sessionOptions: args.sessionOptions,
+    sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+    platform: args.launchPlatform,
+    shell: args.shell,
+    isRemote: args.isRemote ?? false
+  })
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null
       : buildAgentDraftLaunchPlan({
-          agent: args.agent,
-          draft: args.draftContent,
-          cmdOverrides: args.settings?.agentCmdOverrides ?? {},
-          platform: args.launchPlatform,
-          ...(args.shell ? { shell: args.shell } : {}),
-          isRemote: args.isRemote,
-          agentArgs: effectiveAgentArgs,
-          agentEnv: effectiveAgentEnv
+          ...startupInputs,
+          draft: args.draftContent
         })
 
   if (draftLaunchPlan) {
@@ -69,6 +67,9 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
         launchConfig: draftLaunchPlan.launchConfig,
+        ...(draftLaunchPlan.sessionOptions
+          ? { sessionOptions: draftLaunchPlan.sessionOptions }
+          : {}),
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),
@@ -80,14 +81,8 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
   }
 
   const startupPlan = buildAgentStartupPlan({
-    agent: args.agent,
+    ...startupInputs,
     prompt: '',
-    cmdOverrides: args.settings?.agentCmdOverrides ?? {},
-    platform: args.launchPlatform,
-    ...(args.shell ? { shell: args.shell } : {}),
-    isRemote: args.isRemote,
-    agentArgs: effectiveAgentArgs,
-    agentEnv: effectiveAgentEnv,
     allowEmptyPromptLaunch: true,
     ...(args.promptDelivery === 'submit-after-ready' ? { suppressStartupUpdatePrompt: true } : {})
   })
@@ -149,7 +144,6 @@ export function notifyDirectWorkItemAgentStartTimeout(agent: TuiAgent, submit: b
       { value0: submit ? 'prompt' : 'work item context' }
     )
   )
-  // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
-  // on the dashboard is the trigger to add one.
+  // Process-startup timeout has no v1 telemetry slot; unknown counts signal when to add one.
   track('agent_error', { error_class: 'unknown', agent_kind: tuiAgentToAgentKind(agent) })
 }

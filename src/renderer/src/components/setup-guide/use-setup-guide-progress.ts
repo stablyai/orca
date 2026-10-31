@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { hasEffectiveSetupCommand } from '@/lib/setup-script-status'
@@ -18,7 +17,7 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import {
-  getFeatureWallSetupProgress,
+  getSetupGuideProgressSnapshot,
   type FeatureWallSetupProgress
 } from '../feature-wall/feature-wall-setup-progress'
 import { deriveIntegrationConnectionStatus } from '../feature-wall/use-integration-connection-status'
@@ -154,8 +153,7 @@ export function useSetupGuideProgress(
     }
     const signature = setupScriptProbeSignature
     let stale = false
-    // Why: setup-script checks can cross SSH/runtime streams. Bound sidebar
-    // visibility readiness so a wedged read cannot hide the checklist forever.
+    // Bound SSH/runtime setup probes so a wedged read cannot hide the checklist forever.
     const timeoutId = window.setTimeout(() => {
       if (activeSetupScriptProbeSignatureRef.current === signature) {
         setSetupScriptProbeCache({ signature, ready: true, hasSetupScript: false })
@@ -171,9 +169,9 @@ export function useSetupGuideProgress(
 
     async function refreshSetupScriptState(): Promise<void> {
       for (const repo of orderedGitRepos) {
-        const hooksResult = await checkRuntimeHooks(getRepoExecutionHostId(repo), repo.id).catch(
-          () => null
-        )
+        const hooksResult = await checkRuntimeHooks(getRepoExecutionHostId(repo), repo.id, {
+          background: true
+        }).catch(() => null)
         if (stale) {
           return
         }
@@ -205,8 +203,7 @@ export function useSetupGuideProgress(
 
   useEffect(() => {
     if (!shouldRefreshCoreState || !computerUseSkillInstalled) {
-      // Why: unavailable setup-guide steps must clear stale permission state before
-      // readiness is derived for the visible checklist.
+      // Unavailable steps must clear stale permission state before readiness is derived.
       setComputerUsePermissionStatusChecked(false)
       setComputerUsePermissionsReady(false)
       setComputerUseUnavailable(false)
@@ -225,8 +222,7 @@ export function useSetupGuideProgress(
         void refreshComputerUsePermissions()
       }
     }
-    // Why: users grant Computer Use permissions outside the setup guide. Refresh
-    // on return so the checklist updates without requiring a remount.
+    // Users grant OS permissions elsewhere; refresh on return without remounting.
     window.addEventListener('focus', handleFocus)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => {
@@ -266,8 +262,7 @@ export function useSetupGuideProgress(
   const ready = getSetupGuideProgressReady({
     refreshEnabled: shouldRefreshCoreState,
     settingsLoaded: settings !== null,
-    // Why: task-source readiness is a capability group. Once any provider is
-    // usable, unrelated stale provider checks should not hide setup progress.
+    // Any usable task provider settles this capability group; unrelated stale checks must not hide progress.
     preflightStatusChecked: !taskSourceStatus.checking,
     linearStatusChecked: true,
     jiraStatusChecked: true,
@@ -279,9 +274,9 @@ export function useSetupGuideProgress(
     computerUsePermissionStatusChecked: currentComputerUsePermissionStatusChecked
   })
 
-  const rawProgress = useMemo(
+  const { rawProgress, preBrowserSetupComplete } = useMemo(
     () =>
-      getFeatureWallSetupProgress({
+      getSetupGuideProgressSnapshot({
         ready,
         settings,
         featureInteractions,
@@ -313,9 +308,5 @@ export function useSetupGuideProgress(
       worktreesByRepo
     ]
   )
-  const historicalSplitTerminalDone = hasFeatureInteraction(
-    featureInteractions,
-    'terminal-pane-split'
-  )
-  return useSetupGuideBrowserMilestoneProgress(rawProgress, historicalSplitTerminalDone)
+  return useSetupGuideBrowserMilestoneProgress(rawProgress, preBrowserSetupComplete)
 }

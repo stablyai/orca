@@ -10,15 +10,15 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { useAppStore } from '@/store'
-import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import {
   readStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecord
-} from './structured-agent-session-launch-persistence'
+} from './agent-session/launch/structured-agent-session-launch-persistence'
 import {
   getStructuredAgentSessionLaunchOwner,
   getStructuredLaunchStateBySessionId
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
 import type { OpenedAgentSessionTab } from './structured-agent-session-tab-open-through-layout-owner'
 import {

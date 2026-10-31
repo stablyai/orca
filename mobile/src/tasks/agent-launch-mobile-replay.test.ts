@@ -10,6 +10,7 @@ import {
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 } from '../../../src/shared/agent-session-host-authority'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import { closeTestJournalHostDatabases } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
@@ -47,6 +48,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   setAgentLaunchRecordStore(null)
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -213,7 +215,6 @@ describe('a + menu launch into an open workspace', () => {
       kind: 'launched',
       result: { outcome: { kind: 'terminal', handle: 'term_1' } }
     })
-    // The replay carries the same ids, so the host answers it from its ledger.
     expect(attempts).toHaveLength(2)
     expect(attempts[1]).toEqual(attempts[0])
     expect(runtime.createTerminal).toHaveBeenCalledTimes(1)

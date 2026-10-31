@@ -1,4 +1,12 @@
+import type { GoogleCookieClearLocalTarget } from '../../shared/browser-google-cookie-clear'
 import { ipcRenderer } from 'electron'
+import {
+  BROWSER_AGENT_ACTIVITY_CHANNEL,
+  BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
+  BROWSER_AGENT_CURSOR_CHANNEL,
+  type BrowserAgentActivityEvent,
+  type BrowserAgentCursorEvent
+} from '../../shared/browser-agent-activity-contract'
 import type { PreloadApi } from '../api-types'
 import type { BrowserUserAgentMode } from '../../shared/browser-user-agent-mode'
 import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
@@ -75,6 +83,21 @@ export const browserPageInteractionAndSessionsApi = {
   },
   agentInputFocusGuardReady: (token: string, composing: boolean): void => {
     ipcRenderer.send('browser:agentInputFocusGuardReady', { token, composing })
+  },
+  onAgentActivity: (callback: (data: BrowserAgentActivityEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserAgentActivityEvent) =>
+      callback(data)
+    ipcRenderer.on(BROWSER_AGENT_ACTIVITY_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(BROWSER_AGENT_ACTIVITY_CHANNEL, listener)
+  },
+  onAgentCursor: (callback: (data: BrowserAgentCursorEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserAgentCursorEvent) =>
+      callback(data)
+    ipcRenderer.on(BROWSER_AGENT_CURSOR_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(BROWSER_AGENT_CURSOR_CHANNEL, listener)
+  },
+  agentCursorArrived: (sequence: number): void => {
+    ipcRenderer.send(BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL, { sequence })
   },
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
@@ -154,6 +177,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:session:deleteProfile', args),
   sessionImportCookies: (args: { profileId: string }) =>
     ipcRenderer.invoke('browser:session:importCookies', args),
+  sessionImportCookiesForClientHost: (args: { environmentId: string; profileId: string }) =>
+    ipcRenderer.invoke('browser:session:importCookiesForClientHost', args),
   sessionResolvePartition: (args: { profileId: string | null }): Promise<string | null> =>
     ipcRenderer.invoke('browser:session:resolvePartition', args),
   sessionDetectBrowsers: () => ipcRenderer.invoke('browser:session:detectBrowsers'),
@@ -169,6 +194,10 @@ export const browserPageInteractionAndSessionsApi = {
   }) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
   sessionClientRouteImportSources: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
+  sessionGoogleCookieClearTarget: (args: { profileId: string; environmentId: string | null }) =>
+    ipcRenderer.invoke('browser:session:googleCookieClearTarget', args),
+  sessionClearGoogleCookies: (target: GoogleCookieClearLocalTarget) =>
+    ipcRenderer.invoke('browser:session:clearGoogleCookies', target),
   sessionClearDefaultCookies: (): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:clearDefaultCookies'),
   sitePermissionsList: (args: { profileId: string }) =>

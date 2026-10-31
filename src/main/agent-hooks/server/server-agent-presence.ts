@@ -1,5 +1,12 @@
 import { cliWriterTopology, type CliWriterObservation } from './cli-writer-observation'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type {
+  AgentStatusIpcPayload,
+  ParsedAgentStatusPayload
+} from '../../../shared/agent-status-types'
+import {
+  ClaudeSessionContinuationTracker,
+  resolvePaneClaudeContinuation
+} from '../../../shared/agent-hook-listener/claude-session-continuation'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {
   isSameAgentProcess,
@@ -17,6 +24,7 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
       promise: Promise<AgentProcessVerdict | null>
     }
   >()
+  private readonly claudeContinuations = new ClaudeSessionContinuationTracker()
 
   /** A hook proves its sender alive; only another process can challenge the owner. */
   checkAgentPresenceAfterHook(event: AgentHookEventPayload, row: AgentHookEventPayload): void {
@@ -96,6 +104,7 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
 
   checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
+    this.followClaudeSessionContinuation(resolved)
     const row = this.state.lastStatusByPaneKey.get(resolved)
     if (!row?.agentPresence?.process || row.agentPresence.ended) {
       return Promise.resolve(null)
@@ -136,6 +145,7 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
           const { suspended: _suspended, ...unsuspended } = presence
           this.applyNormalizedStatus({
             ...row,
+            isReplay: undefined,
             hookEventName: undefined,
             hasExplicitPrompt: undefined,
             agentPresence: suspended ? { ...unsuspended, suspended: true } : unsuspended
@@ -150,5 +160,58 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
       })
     this.presenceChecks.set(row, { token, statusHookGeneration, promise: check })
     return check
+  }
+
+  /** A Claude session forked into a daemon job keeps running in this pane, but #15304 declines
+   *  the job's hooks; the pane's own transcript names the fork, so rebind the row to it. */
+  private followClaudeSessionContinuation(paneKey: string): void {
+    const row = this.state.lastStatusByPaneKey.get(paneKey)
+    if (!row || row.connectionId !== null) {
+      return
+    }
+    const next = resolvePaneClaudeContinuation(
+      this.claudeContinuations,
+      this.state.lastStatusByPaneKey,
+      paneKey
+    )
+    if (next) {
+      this.applyNormalizedStatus(
+        {
+          ...row,
+          providerSession: next,
+          // Why: only the identity moved; the state is unchanged, so keep its evidence clock.
+          isReplay: true,
+          hookEventName: undefined,
+          hasExplicitPrompt: undefined
+        },
+        undefined,
+        'process'
+      )
+    }
+  }
+
+  /** The last report of this pane's local agent, restored from disk or replayed from the offline
+   *  spool. A report naming its process counts only while that process runs. */
+  async readRestoredAgentStatus(
+    paneKey: string
+  ): Promise<Pick<ParsedAgentStatusPayload, 'state' | 'mainAgent' | 'sessionBoundary'> | null> {
+    if (!this.statusHooksEnabled) {
+      return null
+    }
+    const generation = this.statusHookGeneration
+    await this.initializeStatusHookOwner()
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    const row = this.state.lastStatusByPaneKey.get(resolved)
+    if (!row || row.connectionId !== null || row.agentPresence?.ended) {
+      return null
+    }
+    if (row.agentPresence?.process && (await this.checkAgentPresence(resolved)) !== 'live') {
+      return null
+    }
+    // Each await may have seen hooks turned off or a newer report replace this one.
+    return this.statusHookGeneration === generation &&
+      this.state.lastStatusByPaneKey.get(resolved) === row
+      ? row.payload
+      : null
   }
 }

@@ -21,8 +21,7 @@ import {
   useEditorPanelFileLoadRetry
 } from './useEditorPanelFileLoadRetry'
 
-// Why: the real setFileContents replaces the map; a key the hook deletes must
-// disappear. A merge (Object.assign) would silently keep a stale loadError.
+// Replace maps like the real setter; merging would retain deleted loadError entries and hide bugs.
 function replaceFileContents(
   target: Record<string, FileContent>,
   next: Record<string, FileContent>
@@ -46,8 +45,6 @@ function makeFile(overrides: Partial<OpenFile> = {}): OpenFile {
   }
 }
 
-// Drives the real hook with a controllable fileContents store, mirroring how
-// useEditorPanelContentState wires it up.
 function Harness({
   file,
   fileContents,
@@ -83,8 +80,7 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
 
   beforeEach(() => {
     vi.useFakeTimers()
-    // Run scheduled retries immediately so we can exhaust the budget without
-    // waiting ~2 minutes of real time.
+    // Run retries immediately to exercise the two-minute budget without real-time waits.
     setTimeoutSpy = vi.spyOn(window, 'setTimeout').mockImplementation(((fn: () => void) => {
       fn()
       return 0 as unknown as ReturnType<typeof setTimeout>
@@ -106,6 +102,11 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_NOT_READY_ERROR)).toBe(true)
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_UNREACHABLE_ERROR)).toBe(false)
     expect(shouldRetryFileLoadError('Access denied: outside allowed directories')).toBe(false)
+    // A size refusal will not change on its own, whichever host or reader reported it.
+    expect(shouldRetryFileLoadError('file_too_large')).toBe(false)
+    expect(
+      shouldRetryFileLoadError('Remote file is too large to open in the editor (60000000 bytes)')
+    ).toBe(false)
   })
 
   it('does not spend retry budget when hiding cancels a pending retry', () => {
@@ -172,7 +173,6 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
   it('stops after the budget and shows a truthful terminal message', () => {
     const file = makeFile()
     const attemptsRef = { current: {} as Record<string, number> }
-    // The owner never hydrates: every retry re-fails with owner-not-ready.
     const fileContents: Record<string, FileContent> = {
       [file.id]: { content: '', isBinary: false, loadError: WORKTREE_OWNER_NOT_READY_ERROR }
     }
@@ -181,7 +181,6 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     ): void => {
       replaceFileContents(fileContents, updater(fileContents))
     }
-    // loadFileContent (the retry callback) clears then re-fails as owner-not-ready.
     const loadFileContent = vi.fn(async (_filePath: string, id: string) => {
       fileContents[id] = { content: '', isBinary: false, loadError: WORKTREE_OWNER_NOT_READY_ERROR }
     })
@@ -190,8 +189,7 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     document.body.appendChild(container)
     root = createRoot(container)
 
-    // Re-render the hook repeatedly; each render that still sees the
-    // owner-not-ready error schedules (and our spy immediately runs) one retry.
+    // Each render with a transient error schedules one retry, which the timer spy runs immediately.
     for (let i = 0; i < OWNER_NOT_READY_RETRY_LIMIT + 2; i++) {
       act(() => {
         root?.render(
@@ -209,7 +207,6 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
       }
     }
 
-    // Budget honored: retried at most the limit, then went terminal.
     expect(loadFileContent.mock.calls.length).toBeLessThanOrEqual(OWNER_NOT_READY_RETRY_LIMIT)
     expect(fileContents[file.id]?.loadError).toBe(WORKTREE_OWNER_UNREACHABLE_ERROR)
 
@@ -240,7 +237,6 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     ): void => {
       replaceFileContents(fileContents, updater(fileContents))
     }
-    // The repo hydrates on the first retry: the read now succeeds.
     const loadFileContent = vi.fn(async (_filePath: string, id: string) => {
       fileContents[id] = { content: 'remote', isBinary: false }
     })
@@ -313,7 +309,6 @@ describe('useEditorPanelFileLoadRetry — selector_not_found bounding (#21041)',
     expect(
       isHostSelectorNotFoundError({ loadError: 'relay call failed: selector_not_found\n' })
     ).toBe(true)
-    // Near misses: not the defined token, must not classify.
     expect(isHostSelectorNotFoundError({ loadError: 'Selector_Not_Found' })).toBe(false)
     expect(isHostSelectorNotFoundError({ loadError: 'SELECTOR_NOT_FOUND' })).toBe(false)
     expect(isHostSelectorNotFoundError({ loadError: 'selector_not_found_v2' })).toBe(false)
@@ -334,9 +329,7 @@ describe('useEditorPanelFileLoadRetry — selector_not_found bounding (#21041)',
     ).toBe(false)
   })
 
-  // Why both host answers: a host may put the bare code on the message, or the code on
-  // `.code` with prose on `.message` (runtime-rpc-result.test.ts). Either must reach the
-  // same terminal state — matching only the rendered text would strand the second forever.
+  // Exercise machine codes on message and code fields; prose-only matching would leave the latter retrying forever.
   it.each([
     ['bare code as message', { loadError: WORKTREE_HOST_SELECTOR_NOT_FOUND_CODE }],
     [
@@ -389,8 +382,7 @@ describe('useEditorPanelFileLoadRetry — selector_not_found bounding (#21041)',
         }
       }
 
-      // Budget honored, then a truthful terminal state: the raw code is gone and the
-      // tab is still there for the user to retry or close.
+      // Exhaustion must preserve the tab while replacing transient raw codes with terminal retry guidance.
       expect(loadFileContent).toHaveBeenCalledTimes(FILE_LOAD_RETRY_DELAYS_MS.length)
       expect(fileContents[file.id]?.loadError).toBe(WORKTREE_HOST_UNRESOLVED_ERROR)
       expect(fileContents[file.id]?.loadErrorCode).toBe(WORKTREE_HOST_UNRESOLVED_CODE)

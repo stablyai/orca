@@ -24,9 +24,9 @@ import {
   deleteStructuredAgentLaunchRecord,
   markStructuredAgentLaunchCancelledPersisted,
   readStructuredAgentLaunchRecord
-} from './structured-agent-session-launch-persistence'
+} from './agent-session/launch/structured-agent-session-launch-persistence'
 
-import { notifyStructuredLaunchListeners } from './structured-agent-session-launch-registry'
+import { notifyStructuredLaunchListeners } from './agent-session/launch/structured-agent-session-launch-registry'
 
 import {
   currentDesktopCreate,

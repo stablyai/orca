@@ -292,10 +292,7 @@ test.describe('Codex hidden startup composer background', () => {
         message: 'Hidden Codex startup background never reached the main buffer snapshot'
       })
       .toBe(true)
-    // Why: the renderer skip counter is dead under the Phase-4 main-side delivery
-    // gate (#7214) — hidden bytes are dropped in main before reaching the renderer.
-    // The main-buffer snapshot above proves the hidden output was handled; the
-    // reveal restore below proves it repaints when the worktree first shows.
+    // #7214: main ingests then withholds hidden output before renderer delivery; main snapshot and first reveal prove handling/restoration.
 
     await switchToWorktree(orcaPage, secondWorktreeId)
     await expect

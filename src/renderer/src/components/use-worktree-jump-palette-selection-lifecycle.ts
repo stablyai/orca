@@ -104,8 +104,11 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
           ? document.activeElement
           : null
       skipRestoreFocusRef.current = false
-      latestQueryRef.current = ''
-      setQuery('')
+      // Why: an opener may seed the search, e.g. a plugin's Try it shows its commands.
+      const seededQuery = appState.modalData.query
+      const initialQuery = typeof seededQuery === 'string' ? seededQuery : ''
+      latestQueryRef.current = initialQuery
+      setQuery(initialQuery)
       setSelectedItemId('')
       setExpandedSectionCaps({})
       selectionMovedByUserRef.current = false
@@ -163,8 +166,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     },
     [setSelectedItemId]
   )
-  // A late cmdk callback can restore the old cursor after handleQueryChange clears it.
-  // Commit the new list head explicitly when the deferred query changes.
+  // Late cmdk callbacks can restore stale cursors; commit the new list head when deferred query changes.
   useLayoutEffect(() => {
     setSelectedItemId(
       getNextWorktreePaletteSelection({

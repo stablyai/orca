@@ -110,14 +110,14 @@ export function RuntimeServerRow({
   const row = useRuntimeServerRowState(environment, details)
   const actionBusy = connecting || switching || disconnecting || removing
   const repairable = row.repairRoute === 'access-link'
-  // Why: the revoked host rejects this token on every Connect; Re-pair is the only way back.
+  // Revoked access-link tokens fail every Connect; only Re-pair can restore access.
   const canConnect = !(row.accessRevoked && repairable)
   const updateActionable = remoteUpdate?.phase === 'available' || remoteUpdate?.phase === 'failed'
   const deployment = getOrcadSshDeployment(environment)
   const sshAccess = environment.sshAccess
   const pendingSshAccess = environment.pendingSshAccessOperation
 
-  // Why: the transport is up but Orca didn't answer; only a fresh probe can tell more.
+  // Connected transport with no runtime answer needs a fresh probe.
   const needsRecheck =
     row.connectionState === 'runtime-unavailable' ||
     row.connectionState === 'workspace-window-closed'
@@ -128,7 +128,7 @@ export function RuntimeServerRow({
         ? 'repair'
         : updateActionable
           ? 'update'
-          : // Why: the first probe hasn't answered yet; Connect would race it.
+          : // Do not race the unanswered initial probe with Connect.
             !row.isReachable && canConnect && row.connectionState !== 'checking'
             ? row.probeFailed
               ? 'retry'

@@ -13,21 +13,22 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
-  // Renders every row through the list's own renderItem, as a mounted SectionList would.
-  SectionList: ({
-    sections,
-    keyExtractor,
-    renderItem
-  }: {
-    sections: Section[]
-    keyExtractor: (item: Worktree) => string
-    renderItem: (info: { item: Worktree }) => ReactNode
-  }) =>
-    sections.flatMap((section) =>
-      section.data.map((item) =>
-        createElement(Fragment, { key: keyExtractor(item) }, renderItem({ item }))
+  Animated: {
+    SectionList: ({
+      sections,
+      keyExtractor,
+      renderItem
+    }: {
+      sections: Section[]
+      keyExtractor: (item: Worktree) => string
+      renderItem: (info: { item: Worktree }) => ReactNode
+    }) =>
+      sections.flatMap((section) =>
+        section.data.map((item) =>
+          createElement(Fragment, { key: keyExtractor(item) }, renderItem({ item }))
+        )
       )
-    ),
+  },
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
   View: 'View'
@@ -42,7 +43,7 @@ vi.mock('../components/WorktreeAgentList', () => ({
     return null
   }
 }))
-// The row always renders the glyphs, so each call is one row render.
+// Each row always renders glyphs, so glyph calls count row renders.
 vi.mock('../components/WorktreeMetaGlyphs', () => ({
   prStateColor: () => '#000000',
   WorktreeMetaGlyphs: () => {
@@ -50,9 +51,6 @@ vi.mock('../components/WorktreeMetaGlyphs', () => ({
     return null
   }
 }))
-// Off this embedded path; mocked for their native imports.
-vi.mock('../components/MobileSearchField', () => ({}))
-vi.mock('../components/NewWorkspaceFab', () => ({ FAB_SIZE: 56 }))
 
 import { buildSections } from '../worktree/workspace-list-sections'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
@@ -96,13 +94,14 @@ const noop = () => {}
 const stable = { ref: { current: null }, repoById: new Map() }
 
 function listProps(worktrees: Worktree[]) {
-  // Each poll re-parses the payload, so rows are fresh objects even when nothing changed.
+  // Reparse like every poll, producing fresh row objects even for unchanged data.
   const polled: Worktree[] = JSON.parse(JSON.stringify(worktrees))
   const sections = buildSections(polled, 'name', NO_WORKSPACE_ROW_FILTERS, '', 'none', new Set())
   const controller = {
     actions: { openWorktreeSession: noop, openNewWorktreeModal: noop },
     activeWorktreeScroll: { sectionListRef: stable.ref, onScrollToIndexFailed: noop },
     catalog: { refreshing: false, onRefresh: noop },
+    connectionVerdict: { kind: 'normal', label: 'Connected' },
     connState: 'connected',
     displayWorktrees: polled,
     embedded: true,
@@ -122,12 +121,11 @@ function listProps(worktrees: Worktree[]) {
       setActionTarget: noop,
       view: { ...INITIAL_MOBILE_VIEW, groupBy: 'none' },
       search: '',
-      showSearch: false,
       worktreesLoaded: true
     }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list reads only the controller fields above on this connected, embedded, error-free path.
-  return { controller } as unknown as Parameters<typeof HostWorkspaceList>[0]
+  return { controller, bottomBarHeight: 0 } as unknown as Parameters<typeof HostWorkspaceList>[0]
 }
 
 describe('host list rows across polls', () => {

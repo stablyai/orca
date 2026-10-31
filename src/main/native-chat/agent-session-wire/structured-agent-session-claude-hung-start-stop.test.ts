@@ -16,7 +16,10 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
@@ -41,7 +44,7 @@ let answerInitialize: () => void = () => {}
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-hung-start-stop-'))
   resetHostTestOperationIds()
-  claude = fakeClaude({ initProof: 'none', replayUuid: null })
+  claude = fakeClaude({ initProof: 'none', replayUuid: null, holdInit: true })
   const openConnection = claude.openConnection
   adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -52,6 +55,7 @@ beforeEach(async () => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false
     }),
     onEvent: (event) => {
@@ -63,13 +67,8 @@ beforeEach(async () => {
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     openConnection: async (...args) => {
       const connection = await openConnection(...args)
-      const fake = claude.connections.at(-1)
-      connection.initializationResult = () => {
-        fake?.calls.push({ subtype: 'initialize' })
-        return new Promise((resolve) => {
-          answerInitialize = () => resolve({ models: [] })
-        })
-      }
+      const fake = claude.connections.find((candidate) => candidate === connection)
+      answerInitialize = () => fake?.initialization.resolve({ models: [] })
       return connection
     },
     readProcessStartTime: async () => 1_700_000_000_000,
@@ -96,8 +95,11 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  host.stopDelivery()
+  claude.dispose()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

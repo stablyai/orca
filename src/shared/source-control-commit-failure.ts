@@ -213,7 +213,6 @@ export function appendCommitFailureCustomInstruction(
     return `${prompt}${customInstructionBlock}`
   }
 
-  // Why: keep ad hoc user guidance before the required response format so the
-  // final line remains the agent's reporting contract.
+  // Keep custom guidance before the final reporting contract.
   return `${prompt.slice(0, -COMMIT_FAILURE_REPLY_INSTRUCTION.length)}${customInstructionBlock}${COMMIT_FAILURE_REPLY_INSTRUCTION}`
 }

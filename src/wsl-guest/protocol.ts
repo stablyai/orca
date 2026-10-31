@@ -1,5 +1,4 @@
-// Self-contained relay protocol — mirrors src/main/ssh/remote-exec/remote-frame-protocol.ts
-// but has no Electron dependencies. Deployed standalone to remote hosts.
+// Standalone Electron-free protocol; mirror src/main/ssh/remote-exec/remote-frame-protocol.ts.
 
 import {
   FrameDecoder,
@@ -33,18 +32,13 @@ export const MessageType = {
   KeepAlive: 9
 } as const
 
-// Why: a pre-dispatcher envelope on a freshly-accepted Unix socket. The daemon
-// reads exactly one Handshake frame before attaching the JSON-RPC dispatcher,
-// to refuse mismatched-version --connect bridges that would otherwise drive a
-// stale daemon.
+// Read one handshake before dispatch so stale --connect bridges cannot drive a mismatched daemon.
 export type HandshakeMessage =
   | { type: 'orca-relay-handshake'; version: string; endpointCredential?: string }
-  // Why optional and informational: bridge and daemon already match exactly on `version`;
-  // this only names the runtime executing the daemon (design D8.1).
+  // Informational only; bridge/daemon compatibility already requires matching version.
   | { type: 'orca-relay-handshake-ok'; version: string; runtime?: RelayHandshakeRuntime }
   | { type: 'orca-relay-handshake-mismatch'; expected: string; got: string }
-  // Why a distinct reply: the bridge exits with its own code so the client can tell a refused
-  // credential from a crashed relay. Old bridges reject the unknown type and exit 1 pre-sentinel.
+  // A distinct exit distinguishes refused credentials from relay crashes; older bridges reject this type before sentinel.
   | { type: 'orca-relay-handshake-credential-mismatch' }
 
 export type RelayHandshakeRuntime = { kind: string; version: string }
@@ -54,9 +48,7 @@ export function encodeHandshakeFrame(msg: HandshakeMessage): Buffer {
   return encodeFrame(MessageType.Handshake, 0, 0, payload)
 }
 
-// Why the fields are checked and not just the type: this frame arrives before any credential, and
-// both sides interpolate its version fields into log lines. `JSON.parse` can produce values a
-// template literal throws on, so anything that reaches a reader must already be a string.
+// Validate pre-auth version strings before any reader interpolates hostile JSON into logs.
 const HANDSHAKE_STRING_FIELDS: Readonly<Record<HandshakeMessage['type'], readonly string[]>> = {
   'orca-relay-handshake': ['version'],
   'orca-relay-handshake-ok': ['version'],
@@ -64,11 +56,7 @@ const HANDSHAKE_STRING_FIELDS: Readonly<Record<HandshakeMessage['type'], readonl
   'orca-relay-handshake-credential-mismatch': []
 }
 
-// Optional fields are peer-supplied too, so the parser only proves the type of what it returns if
-// it refuses a present-but-wrong one. `endpointCredential` survives today only because its single
-// reader compares it and never interpolates it; the next reader to log it would restore the bug
-// this function exists to stop. Absent stays absent — refusing that would break a bridge that
-// legitimately presents no credential.
+// Reject present non-string optional fields while preserving legitimate credential omission.
 const HANDSHAKE_OPTIONAL_STRING_FIELDS: Readonly<
   Record<HandshakeMessage['type'], readonly string[]>
 > = {
@@ -91,9 +79,7 @@ export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
   const msg = parsed as Record<string, unknown>
   const t = msg.type
   if (!isHandshakeType(t)) {
-    // Why typeof and not String(t): a peer-supplied `{ "type": { "toString": 1 } }` makes String()
-    // itself throw "Cannot convert object to primitive value", replacing the one diagnostic this
-    // line exists to produce.
+    // Avoid String(t): hostile peer objects can throw during conversion and mask the refusal.
     throw new Error(`Unknown handshake type: ${typeof t === 'string' ? t : typeof t}`)
   }
   for (const field of HANDSHAKE_STRING_FIELDS[t]) {
@@ -130,9 +116,7 @@ export const STREAM_CHUNK_SIZE = 256 * 1024
 export const MAX_CONCURRENT_STREAMS = 16
 export const STREAM_ACK_WINDOW_CHUNKS = 4
 
-/** Sentinel result returned in place of a large git response: the real payload
- * follows as git.responseChunk frames on the bulk lane. Old relays never emit
- * this, so a new client falls back to the plain result they return. */
+// Large git results follow as bulk-lane git.responseChunk frames; older relays return plain results.
 export type GitResponseStreamMarker = {
   __orcaGitResponseStream: { streamId: number; totalBytes: number; chunkCount: number }
 }
@@ -140,8 +124,7 @@ export type GitResponseStreamMarker = {
 export const RelayErrorCode = {
   TooManyStreams: -33006,
   StreamProtocolError: -33007,
-  /** Substituted for a response too large for the sink's frame capacity; the request fails
-   *  instead of the whole link, so a caller can retry with a narrower scope. */
+  // Fail only the over-capacity request so callers can narrow scope without losing the link.
   ResponseOverCapacity: -33008,
   GitGrepRecordCapacity: -33009,
   MarkdownListingCapacity: -33010,

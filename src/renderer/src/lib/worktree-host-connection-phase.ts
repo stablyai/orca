@@ -62,9 +62,7 @@ function derivePhase(
   if (isConnectingSshStatus(publishedStatus)) {
     return 'connecting'
   }
-  // Why: startup restoration dials the targets that were live at shutdown; until it publishes,
-  // a missing entry means "not dialed yet", not "disconnected". Restoration finishing (or
-  // degrading) ends this on its own.
+  // Missing startup SSH state means not dialed yet until restoration finishes or degrades.
   if (
     environmentId === null &&
     !state.terminalStartupRestorationReady &&
@@ -87,7 +85,7 @@ export function resolveWorktreeHostConnection(
   }
   const environmentId =
     environmentIdOverride === undefined
-      ? // Why: the phase only reads SSH state; a twin reads the direct connection.
+      ? // This phase reads only SSH state; its twin reads the direct connection.
         runtimeEnvironmentIdUnlessTwin(state, worktreeId)
       : environmentIdOverride
   const publishedStatus = selectRuntimeAwareSshStatus(state, environmentId, targetId)

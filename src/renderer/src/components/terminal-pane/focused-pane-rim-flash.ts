@@ -9,8 +9,7 @@ export function flashFocusedPaneRim(paneElement: HTMLElement): void {
     clearTimeout(existingTimer)
   }
 
-  // Why: remove before add restarts the CSS animation when the same agent row
-  // is clicked repeatedly while the previous rim flash is still active.
+  // Remove then add to restart an in-progress rim animation on repeated clicks.
   paneElement.classList.remove(FOCUSED_PANE_FLASH_CLASS)
   void paneElement.offsetWidth
   paneElement.classList.add(FOCUSED_PANE_FLASH_CLASS)

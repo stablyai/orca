@@ -76,10 +76,10 @@ describe('file explorer selection', () => {
       node('/repo/c.ts', 'c.ts')
     ]
 
-    expect(formatFileExplorerPathsForClipboard(rows, 'absolute')).toBe(
+    expect(formatFileExplorerPathsForClipboard(rows, 'absolute', 'local')).toBe(
       '/repo/b.ts\n/repo/a.ts\n/repo/c.ts'
     )
-    expect(formatFileExplorerPathsForClipboard(rows, 'relative')).toBe('b.ts\na.ts\nc.ts')
+    expect(formatFileExplorerPathsForClipboard(rows, 'relative', 'local')).toBe('b.ts\na.ts\nc.ts')
   })
 
   it('applies legacy path cleanup across the selected set', () => {

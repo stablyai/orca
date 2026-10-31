@@ -1,14 +1,5 @@
-// The host-side runtime-source fence, paired across two builds over a real socket: current code
-// against the last release host without the fence. Release checkouts carry no CLI sources, and an old
-// CLI's frame is exactly the current one without the field, so the old client is the current
-// transport sending none.
-//
-// A new CLI adds an optional `expectedRuntimeSource` to its request frame. Each skew must hold:
-//
-//  - an old CLI sends no expectation, and a new host runs its request as before;
-//  - an old host ignores the field and runs the request (the CLI's pre-send probe is then the only
-//    fence), so a new CLI never breaks against it;
-//  - a new host refuses a request meant for another runtime before its handler runs.
+// Pair the runtime-source fence over real sockets: old clients omit expectedRuntimeSource; old hosts ignore it.
+// New hosts must reject mismatched expectations before dispatch; old hosts rely on the CLI pre-send probe.
 
 import { createServer, type Server } from 'node:net'
 import { randomUUID } from 'node:crypto'
@@ -31,7 +22,6 @@ import {
   releaseModuleExport
 } from './release-checkout'
 
-// Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
 // The last release without the fence; a newer baseline would refuse like the current host.
 const PRE_FENCE_REF = 'v1.4.224'

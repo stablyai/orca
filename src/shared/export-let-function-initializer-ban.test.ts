@@ -12,15 +12,9 @@ beforeAll(async () => {
   ;({ parseAst } = await import('vite'))
 })
 
-/**
- * Ban `export let fn = <function>` tree-wide: rolldown const-folds the
- * initializer into call sites and drops the setter's reassignment, so the
- * bridged closure silently never runs in the built app (dev is fine). Use a
- * module-local null-initialized impl var behind exported wrapper functions
- * instead (see src/main/ipc/pty/delivery/debug.ts); null-initialized
- * `export let` slots compile correctly and stay allowed. Detection uses
- * vite/rolldown's own oxc parser so this test sees exactly what the bundler sees.
- */
+/** Rolldown folds function-initialized export let bindings into callers, ignoring setter reassignments in built apps.
+ * Use local null-initialized impl slots behind exported wrappers (src/main/ipc/pty/delivery/debug.ts); null-initialized exports remain allowed.
+ * Use the bundler’s own Oxc parser to detect this hazard. */
 
 type AstNode = {
   type: string
@@ -54,7 +48,6 @@ function unwrapInitializer(node: AstNode): AstNode {
       current = current.expression
       continue
     }
-    // A sequence evaluates to its last expression — that's what gets folded.
     const sequenceTail =
       current.type === 'SequenceExpression' ? current.expressions?.at(-1) : undefined
     if (sequenceTail) {
@@ -155,8 +148,7 @@ describe('function-initialized export let ban', () => {
   })
 
   const repoRoot = resolve(__dirname, '..', '..')
-  // Tests are not rolldown-bundled (scanSourceTree excludes them by default);
-  // several drive the banned shape on purpose.
+  // Tests deliberately exercise banned shapes and are not Rolldown-bundled; scanSourceTree excludes them.
   const files = scanSourceTree(join(repoRoot, 'src'))
 
   it('scans shipped sources and excludes hazardous test fixtures', () => {

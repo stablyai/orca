@@ -70,8 +70,7 @@ export function runGHEditStateChange({
     return
   }
   const prevState = localState
-  // Why: without registry authority a search-lagged Tasks refetch silently
-  // reverts this row to its pre-mutation state (STA-3343).
+  // Keep registry authority so search-lagged Tasks refetches cannot revert this mutation.
   let authority: { revert: () => boolean } | null = null
   void run('state', {
     mutate: () =>

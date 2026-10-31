@@ -1,4 +1,5 @@
 import { isTerminalQueryReply } from '../../../src/shared/terminal-query-reply'
+import { PROGRAM_STATUS_OSC_PREFIX } from '../../../src/shared/program-status/protocol'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { terminalInputSend } from './mobile-terminal-operations'
 
@@ -13,6 +14,7 @@ type MobileTerminalQueryReplyOptions = {
   connected: boolean
   handle: string
   hostSupportsQueryReplyInput: boolean
+  hostSupportsProgramStatus: boolean
   subscribedTerminals: TerminalSubscriptionRegistry
 }
 
@@ -23,18 +25,19 @@ export function sendMobileTerminalQueryReply({
   connected,
   handle,
   hostSupportsQueryReplyInput,
+  hostSupportsProgramStatus,
   subscribedTerminals
 }: MobileTerminalQueryReplyOptions): Promise<boolean> {
-  // Why: every subscribed mobile xterm suppresses main's responder, including
-  // hidden panes, so ownership follows the subscription rather than focus.
-  // Hosts without terminal.query-reply-input.v1 strip inputKind and would take
-  // reply bytes as floor-stealing shell input, so drop (pre-fix behavior).
+  // Subscriptions, including hidden panes, suppress the desktop responder and own replies.
+  // Drop on older hosts that strip inputKind, or reply bytes would take the input floor.
   if (
     !client ||
     !connected ||
     !hostSupportsQueryReplyInput ||
     !subscribedTerminals.has(handle) ||
-    !isTerminalQueryReply(bytes)
+    !isTerminalQueryReply(bytes) ||
+    // Like desktop: answering OSC 7501 makes agents drop title glyphs, so only for hosts that read reports.
+    (!hostSupportsProgramStatus && bytes.startsWith(PROGRAM_STATUS_OSC_PREFIX))
   ) {
     return Promise.resolve(false)
   }

@@ -18,7 +18,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
@@ -29,7 +32,7 @@ const EXIT_REASON = 'Claude Code is not signed in. Sign in with the Claude CLI'
 const EXIT_TEXT = 'Codex stopped before it finished starting. Send your message to try again.'
 const START_ROW = agentJournalItemKey({
   provider: 'orca',
-  clientMessageId: 'start-failure:generation-2'
+  clientMessageId: 'start-failure:generation-6'
 })
 
 function eventually(assertion: () => void | Promise<void>): Promise<void> {
@@ -162,6 +165,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -172,7 +176,15 @@ describe('a start that fails before it proves itself', () => {
       expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
     )
 
-    await exitBeforeProof()
+    for (let attempt = 2; attempt <= 6; attempt++) {
+      await eventually(() => expect(generation).toBe(attempt))
+      await eventually(() =>
+        expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
+      )
+      expect(await startRows()).toEqual([])
+      expect(await submission(sent)).toMatchObject({ dispatchState: 'pending' })
+      await exitBeforeProof()
+    }
     await eventually(async () =>
       expect(await submission(sent)).toMatchObject({ dispatchState: 'rejected', reason: EXIT_TEXT })
     )
@@ -180,10 +192,11 @@ describe('a start that fails before it proves itself', () => {
 
     expect(await startRows()).toEqual([EXIT_TEXT])
     expect(publishedStartRows()).toEqual([EXIT_TEXT])
+    expect(generation).toBe(6)
     expect(dispatch).not.toHaveBeenCalled()
   })
 
-  it('leaves the row to the loop when the exit lands while the message still waits', async () => {
+  it('writes one final row when all five attempts exit while the message waits', async () => {
     exitOnStart = true
     const queued = await send('hello')
 
@@ -192,6 +205,7 @@ describe('a start that fails before it proves itself', () => {
     )
     await host.flushStreamedEvents(SESSION)
 
+    expect(generation).toBe(6)
     expect(dispatch).not.toHaveBeenCalled()
     expect(await startRows()).toEqual([EXIT_TEXT])
     expect(publishedStartRows()).toEqual([EXIT_TEXT])

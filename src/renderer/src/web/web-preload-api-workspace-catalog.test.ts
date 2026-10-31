@@ -209,7 +209,7 @@ describe('web worktree preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    await globals.window.api.worktrees.remove({
+    const removed = await globals.window.api.worktrees.remove({
       worktreeId: 'repo-1::/workspace/locked',
       force: true,
       skipArchive: false
@@ -220,6 +220,7 @@ describe('web worktree preload API', () => {
       skipArchive: true
     })
 
+    expect(removed).toEqual({ removed: true })
     expect(runtimeCalls).toEqual([
       {
         method: 'worktree.rm',
@@ -642,12 +643,11 @@ describe('web worktree preload API', () => {
         params: expect.objectContaining({ repo: 'repo-1', nameWasGenerated: true })
       }
     ])
-    // Why: this client hand-enumerates create params, so a new optional field silently vanishes.
-    // Absent must mean user-typed — the host neither skips a retired candidate nor retires it.
+    // Hand-enumerated params can drop new fields; absence must retain user-typed semantics for retired names.
     expect(runtimeCalls[0]?.params).not.toHaveProperty('nameWasGenerated')
   })
 
-  // Why: without it the host records the app's parent pick as a CLI flag, which cleans up differently.
+  // Without origin, the host treats an app parent pick as a CLI flag with different cleanup.
   it('marks a parent-picked create as a manual action', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({

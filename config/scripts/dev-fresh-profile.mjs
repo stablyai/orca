@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Launch `pnpm dev` on a fresh, isolated userData profile so the app behaves like a first-time
-// install (onboarding paints, no persisted repos or sessions). Other dev profiles stay untouched.
+// Isolate first-run onboarding from persisted dev profiles.
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'

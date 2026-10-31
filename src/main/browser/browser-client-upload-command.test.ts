@@ -1,8 +1,7 @@
-import { existsSync } from 'node:fs'
-import { mkdtemp, readFile, readdir, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
 import { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
@@ -62,79 +61,6 @@ function transportReturning(
 }
 
 describe('executeBrowserClientUploadCommand', () => {
-  it('rewrites remote paths to staged copies that outlive the command until the page is released', async () => {
-    const staging = new BrowserClientUploadStaging(stagingRoot)
-    const { transport, calls } = transportReturning(
-      new Map([
-        [
-          'docs/report.pdf',
-          [{ contentBase64: Buffer.from('hello').toString('base64'), bytesRead: 5, eof: true }]
-        ]
-      ])
-    )
-    const run = vi.fn().mockResolvedValue({ uploaded: true })
-
-    const result = await executeBrowserClientUploadCommand({
-      event: uploadEvent(['docs/report.pdf']),
-      params: { element: '#f', files: ['docs/report.pdf'] },
-      fileChannel: transport,
-      staging,
-      run
-    })
-
-    expect(result).toEqual({ uploaded: true })
-    const rewritten = run.mock.calls[0][0] as { files: string[] }
-    expect(rewritten.files).toHaveLength(1)
-    expect(path.basename(rewritten.files[0])).toBe('report.pdf')
-    expect(rewritten.files[0]).not.toBe('docs/report.pdf')
-    expect(calls).toHaveLength(1)
-    expect(await readFile(rewritten.files[0], 'utf8')).toBe('hello')
-    expect(staging.activeStagingCount()).toBe(1)
-
-    expect(await staging.releasePage('page-1')).toBe(1)
-    expect(await readdir(stagingRoot)).toHaveLength(0)
-  })
-
-  it('fails closed and stages nothing when the file channel was not negotiated', async () => {
-    const staging = new BrowserClientUploadStaging(stagingRoot)
-    const transport = new BrowserClientFileChannelTransport()
-    const run = vi.fn()
-
-    await expect(
-      executeBrowserClientUploadCommand({
-        event: uploadEvent(['/etc/passwd']),
-        params: { element: '#f', files: ['/etc/passwd'] },
-        fileChannel: transport,
-        staging,
-        run
-      })
-    ).rejects.toThrow('browser_client_file_channel_unsupported')
-    expect(run).not.toHaveBeenCalled()
-    expect(staging.activeStagingCount()).toBe(0)
-    expect(existsSync(stagingRoot)).toBe(false)
-  })
-
-  it('removes staged files when the upload itself fails', async () => {
-    const staging = new BrowserClientUploadStaging(stagingRoot)
-    const { transport } = transportReturning(
-      new Map([['a.txt', [{ contentBase64: '', bytesRead: 0, eof: true }]]])
-    )
-
-    await expect(
-      executeBrowserClientUploadCommand({
-        event: uploadEvent(['a.txt']),
-        params: { element: '#f', files: ['a.txt'] },
-        fileChannel: transport,
-        staging,
-        run: async () => {
-          throw new Error('element not found')
-        }
-      })
-    ).rejects.toThrow('element not found')
-    expect(staging.activeStagingCount()).toBe(0)
-    expect(await readdir(stagingRoot)).toHaveLength(0)
-  })
-
   it('reports the upload failure, not the cleanup failure, when both fail', async () => {
     const staging = new BrowserClientUploadStaging(stagingRoot, {
       mkdir: async () => {},

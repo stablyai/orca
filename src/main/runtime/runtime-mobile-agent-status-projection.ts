@@ -161,9 +161,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
       return status
     }
     if (pty.lastAgentStatus === null && !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle)) {
-      // Why: an earlier title-only `working` was published at a later stamp; returning the
-      // older hook stamp makes clients keep that `working` forever (#28102). updatedAt is
-      // the ordering clock, so advance it while evidenceObservedAt keeps freshness honest.
+      // Advance updatedAt past prior title-only working so clients accept the hook; preserve evidenceObservedAt for freshness (#28102).
       return status.state !== 'working' && titleEvidenceAt > status.updatedAt
         ? {
             ...status,
@@ -303,8 +301,7 @@ export function resolveRuntimeHookLiveAgentRow(
   if (workingHookOwnsIdleTitleInterval(live.payload, agentStatusAuthorityObservedAt(live), pty)) {
     return live
   }
-  // This is the pane's only wall-clock title timestamp comparable to when the hook evidence
-  // was observed; replay delivery order must not make old evidence outrank a newer title.
+  // Compare hook evidence against the pane's PTY wall-clock title, never replay delivery order.
   return !nonAgentTitle &&
     agentStatusAuthorityObservedAt({
       updatedAt: live.updatedAt,

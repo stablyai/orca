@@ -94,8 +94,7 @@ function getCreatePRComposer(page: Page): Locator {
 }
 
 function getCreatePRComposerSubmitButton(page: Page): Locator {
-  // Why: the header and composer currently share the same accessible name.
-  // Anchor to the field container so this submits the editable composer.
+  // Scope to the editable composer’s field container because its header shares the accessible name.
   return getCreatePRComposer(page).getByRole('button', { name: 'Create PR' })
 }
 
@@ -116,8 +115,7 @@ async function seedCreatePREligibleBranch(
     if (!worktree) {
       throw new Error('seeded e2e-secondary worktree not found')
     }
-    // Why: the worker-scoped test repo can accumulate extra non-main
-    // worktrees; use the seeded secondary worktree as the stable PR target.
+    // Use the seeded secondary worktree because other workers can grow this repo’s checkout list.
     state.setActiveWorktree(worktree.id)
     const repo = state.repos.find((entry) => entry.id === worktree.repoId)
     if (!repo) {

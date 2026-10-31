@@ -1,10 +1,7 @@
 import type { Repo } from '../../../shared/repo-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 
-// Display-name matches must always outrank path-only matches. This offset is
-// added to every path-match score so that even a path hit at index 0 scores
-// higher than the worst possible display-name hit. The value must exceed any
-// realistic displayName length.
+// Path scores must exceed every display-name score; choose an offset above realistic display-name lengths.
 const PATH_SCORE_OFFSET = 1000
 export const REPO_SEARCH_QUERY_MAX_BYTES = 2 * 1024
 
@@ -29,9 +26,7 @@ function matchScore(repo: Repo, query: string): number | null {
 
   const pathIndex = repo.path.toLowerCase().indexOf(query)
   if (pathIndex !== -1) {
-    // Why: repo-name matches are what issue #379 is about. Path search only
-    // exists as a fallback disambiguator, so it should never outrank an actual
-    // display-name match for the same query.
+    // Name hits outrank paths (#379); paths only disambiguate fallback matches.
     return PATH_SCORE_OFFSET + pathIndex
   }
 

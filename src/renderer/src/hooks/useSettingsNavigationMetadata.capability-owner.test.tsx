@@ -10,6 +10,7 @@ import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-typ
 import type { Repo } from '../../../shared/repo-types'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../shared/agent-session-runtime-capabilities'
 
 const testState = vi.hoisted(() => ({
   settings: null as GlobalSettings | null,
@@ -17,7 +18,6 @@ const testState = vi.hoisted(() => ({
   runtimeEnvironments: [] as { id: string; createdAt: number; pairingRevision?: number }[]
 }))
 
-/** Only the store fields this screen's selectors read; the mock supplies nothing else. */
 type MockedSettingsNavState = {
   settings: GlobalSettings | null
   repos: Repo[]
@@ -143,5 +143,30 @@ describe('settings navigation capability ownership', () => {
     expect(gitBashIsAvailable).toHaveBeenCalledTimes(2)
     expect(runtimeGetStatus).toHaveBeenCalledTimes(2)
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { name: 'advertises', capabilities: AGENT_SESSION_RUNTIME_CAPABILITIES, found: true },
+    { name: 'does not advertise', capabilities: [], found: false }
+  ])('finds Queue follow-ups in search only when this host $name queueing', async (args) => {
+    setLocalRuntimeCapabilitiesForTests([...args.capabilities])
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        wsl: { isAvailable: vi.fn().mockResolvedValue(false), listDistros: vi.fn() },
+        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
+        runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'darwin' }) },
+        runtimeEnvironments: { call: vi.fn() }
+      }
+    })
+    await act(async () => {
+      root.render(createElement(Probe))
+      await Promise.resolve()
+    })
+    const chat = testState.sections?.find((section) => section.id === 'chat')
+    expect(
+      chat?.searchEntries.some((entry) => entry.targetSectionId === 'chat-queue-follow-ups')
+    ).toBe(args.found)
   })
 })

@@ -30,11 +30,7 @@ on:
       runner:
         description: Runner override for GitHub-hosted signing provenance.
         type: string
-        default: blacksmith-4vcpu-ubuntu-2404
-    secrets:
-      SLACK_WEBHOOK_URL:
-        description: Existing orca-releases incoming webhook
-        required: false
+        default: ubuntu-24.04
   workflow_dispatch:
 
 permissions:
@@ -50,10 +46,8 @@ env:
 jobs:
   javascript:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    runs-on: ${{ inputs.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
     timeout-minutes: 15
-    outputs:
-      audit_result: ${{ steps.audit.outcome }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -85,10 +79,8 @@ jobs:
 
   rust:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    runs-on: ${{ inputs.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
     timeout-minutes: 20
-    outputs:
-      audit_result: ${{ steps.audit.outcome }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -126,53 +118,3 @@ jobs:
           name: dependency-security-rust
           path: tmp/dependency-security/*.log
           if-no-files-found: error
-
-  notify:
-    needs: [javascript, rust]
-    if: >-
-      !cancelled() && github.repository == 'stablyai/orca' &&
-      (needs.javascript.outputs.audit_result == 'failure' ||
-      needs.rust.outputs.audit_result == 'failure' ||
-      needs.javascript.result == 'failure' || needs.rust.result == 'failure')
-    runs-on: ${{ inputs.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
-    timeout-minutes: 5
-    steps:
-      - name: Send dependency review to orca-releases
-        uses: actions/github-script@v8
-        continue-on-error: true
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          RELEASE_REF: ${{ inputs.ref }}
-          AUDIT_RESULTS: ${{ toJSON(needs) }}
-        with:
-          script: |
-            if (!process.env.SLACK_WEBHOOK_URL) {
-              core.notice('Slack notification unavailable for this run; see the dependency reports in Actions.')
-              return
-            }
-            const results = JSON.parse(process.env.AUDIT_RESULTS)
-            const checks = [['javascript', 'JavaScript'], ['rust', 'Rust']].map(([job, label]) => {
-              const result = results[job]
-              const status = result.result !== 'success' ? 'scan incomplete'
-                : result.outputs.audit_result === 'success' ? 'passed' : 'review suggested'
-              return `${label}: ${status}`
-            })
-            const target = context.payload.pull_request
-              ? `PR #${context.payload.pull_request.number}`
-              : process.env.RELEASE_REF || context.ref
-            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
-            const text = `Orca dependency review for ${target}\n${checks.join(' · ')}\nReports and logs: ${runUrl}`
-            let response
-            try {
-              response = await fetch(process.env.SLACK_WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, mrkdwn: false, unfurl_links: false, unfurl_media: false }),
-                signal: AbortSignal.timeout(15000)
-              })
-            } catch {
-              throw new Error('Slack dependency review notification could not be sent')
-            }
-            if (!response.ok) {
-              throw new Error(`Slack dependency review notification returned HTTP ${response.status}`)
-            }

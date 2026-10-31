@@ -61,7 +61,12 @@ export function captureChatStopTarget(
     return { ...target, reach: 'starting', marks: true }
   }
   // An aborted send remains this Stop's work even after its rejected answer reaches the fold.
-  if (!child || (turnId === undefined && !input.stoppedSend && !isMainAgentWorking(ctx))) {
+  const canHaveGoal =
+    ctx.agent !== undefined && ctx.agents.capabilities(ctx.agent)?.threadGoal === true
+  if (
+    !child ||
+    (turnId === undefined && !input.stoppedSend && !isMainAgentWorking(ctx) && !canHaveGoal)
+  ) {
     return queued || input.stoppedPrePrompt ? { ...target, reach: 'withdraw', marks: true } : null
   }
   // Repeated Stop must not pause cards queued after the first press.

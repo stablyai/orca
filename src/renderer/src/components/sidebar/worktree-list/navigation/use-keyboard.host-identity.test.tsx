@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
 import { act, useRef } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -18,9 +17,15 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 const state: {
   keybindings: undefined
+  revealWorktreeInSidebar: ReturnType<typeof vi.fn>
   worktreeNavHistory: WorktreeNavHistoryEntry[]
   worktreeNavHistoryIndex: number
-} = { keybindings: undefined, worktreeNavHistory: [], worktreeNavHistoryIndex: -1 }
+} = {
+  keybindings: undefined,
+  revealWorktreeInSidebar: vi.fn(),
+  worktreeNavHistory: [],
+  worktreeNavHistoryIndex: -1
+}
 vi.mock('@/store', () => ({
   useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
     getState: () => state
@@ -75,18 +80,12 @@ function Probe({
   activeHostId: ExecutionHostId | null
 }): null {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 30
-  })
+
   useWorktreeListKeyboardNavigation({
     rows,
-    renderRows: rows,
     activeWorktreeId,
     activeWorkspaceExecutionHostId: activeHostId,
     pinnedDisplayPolicy: 'single-location',
-    virtualizer,
     scrollRef,
     activeModal: 'none',
     markDirectScrollInput: () => {}
@@ -115,15 +114,15 @@ afterEach(() => {
 
 describe('worktree keyboard cycling with a resolved active host', () => {
   it('steps to the next row when the active host resolved to local but rows are unqualified', () => {
-    // Why: a sidebar click activates with the repo-resolved host (`local`), while
-    // local rows carry no hostId; a raw identity compare misses and wraps to the top.
+    // Clicks resolve local host ownership; raw hostless identities would miss the active row and wrap to the top.
     renderProbe('b', 'local')
 
     press('down')
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {
       navigationIntent: 'user-open',
-      revealInSidebar: false
+      revealInSidebar: false,
+      executionHostId: 'local'
     })
   })
 
@@ -134,7 +133,8 @@ describe('worktree keyboard cycling with a resolved active host', () => {
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('a', {
       navigationIntent: 'user-open',
-      revealInSidebar: false
+      revealInSidebar: false,
+      executionHostId: 'local'
     })
   })
 
@@ -145,7 +145,8 @@ describe('worktree keyboard cycling with a resolved active host', () => {
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {
       navigationIntent: 'user-open',
-      revealInSidebar: false
+      revealInSidebar: false,
+      executionHostId: 'local'
     })
   })
 })
@@ -164,7 +165,8 @@ describe('workspace keyboard cycling after closing the final tab', () => {
 
     expect(activateAndRevealWorktree).toHaveBeenLastCalledWith(expected, {
       navigationIntent: 'user-open',
-      revealInSidebar: false
+      revealInSidebar: false,
+      executionHostId: 'local'
     })
   })
 
@@ -193,7 +195,8 @@ describe('workspace keyboard cycling after closing the final tab', () => {
 
     expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('c', {
       navigationIntent: 'user-open',
-      revealInSidebar: false
+      revealInSidebar: false,
+      executionHostId: 'local'
     })
   })
 
@@ -206,7 +209,8 @@ describe('workspace keyboard cycling after closing the final tab', () => {
 
     expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('a', {
       navigationIntent: 'user-open',
-      revealInSidebar: false
+      revealInSidebar: false,
+      executionHostId: 'local'
     })
   })
 })

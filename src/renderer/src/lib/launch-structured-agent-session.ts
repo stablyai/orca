@@ -1,4 +1,4 @@
-import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   createStructuredAgentSessionId,
@@ -7,7 +7,7 @@ import {
   type StructuredAgentSessionFirstMessage,
   type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
-import { structuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
+import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
 import {
@@ -38,36 +38,41 @@ export {
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
   worktreeId: string
-  /** The host that owns the chat, fixed when the launch begins and persisted with it: worktree ids
-   *  repeat across hosts, so it is never re-derived. */
+  /** Fix/persist execution host when launch begins; same workspace IDs on other hosts must never alter ownership. */
   executionHostId: ExecutionHostId
-  /** The runtime serving `executionHostId`. */
   target: RuntimeClientTarget
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
+  sendSelectionSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
-  prepareCreate?: () => void
+  prepareCreate?: (hostTakesExplicitOptions: boolean) => void
   beforeCreate?: () => boolean
   surfaceAddress?: StructuredLaunchSurfaceAddress
   /** The saved selection create seeds, read when the intent is built. */
+  explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
 }
 
 type LaunchSeed = Readonly<Record<string, string>> | undefined
 
-/** What create will seed: this machine's saved selection for its own chats; for a paired server's,
- *  the server's own, which it reports when it admits the chat (absent from an older server). */
+/** Seed local saved selection for local chats; paired hosts report their own admitted seed, absent on older servers. */
 function launchSeedOptions(
   state: ReturnType<typeof useAppStore.getState>,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
   agent: TuiAgent,
-  hostSeedOptions: LaunchSeed
+  hostSeedOptions: LaunchSeed,
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): { seedOptions?: Readonly<Record<string, string>> } {
   const seedOptions =
     owner.target.kind === 'local'
-      ? structuredLaunchSeedOptions(state.settings, agent)
-      : hostSeedOptions
+      ? structuredLaunchSeedOptions(
+          resumeFrom ? { ...state.settings, agentLaunchChoices: undefined } : state.settings,
+          agent
+        )
+      : resumeFrom
+        ? undefined
+        : hostSeedOptions
   return seedOptions ? { seedOptions } : {}
 }
 
@@ -82,8 +87,7 @@ function structuredAgentSessionOwnerTarget(
   return { executionHostId, target }
 }
 
-/** `executionHostId` is the host the launch was routed to; absent, the catalog must name exactly
- *  one, or the launch is refused rather than sent to whichever host a fallback picks. */
+/** Use routed executionHostId or require exactly one catalog owner; never choose a launch host by fallback. */
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
   agent: TuiAgent,
@@ -138,7 +142,7 @@ function buildStructuredAgentSessionLaunchIntent(
       ...(resumeFrom ? { resumeFrom } : {}),
       randomUuid: createBrowserUuid
     }),
-    ...launchSeedOptions(state, owner, agent, hostSeedOptions)
+    ...launchSeedOptions(state, owner, agent, hostSeedOptions, resumeFrom)
   }
 }
 
@@ -146,17 +150,19 @@ function buildStructuredAgentSessionLaunchIntent(
 export function retryStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent
 ): StructuredAgentSessionLaunchIntent {
-  return buildStructuredAgentSessionLaunchIntent(
-    intent.worktreeId,
-    intent,
-    intent.agent,
-    intent.sessionId,
-    intent.params.resumeFrom,
-    intent.seedOptions
-  )
+  return {
+    ...buildStructuredAgentSessionLaunchIntent(
+      intent.worktreeId,
+      intent,
+      intent.agent,
+      intent.sessionId,
+      intent.params.resumeFrom,
+      intent.seedOptions
+    ),
+    explicitLaunchOptions: intent.explicitLaunchOptions
+  }
 }
 
-/** Rebuild a reload-surviving intent with the caller's current worktree selector. */
 export function restoreStructuredAgentSessionLaunchIntent(args: {
   worktreeId: string
   executionHostId: ExecutionHostId
@@ -167,9 +173,12 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
+  explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
   firstMessage?: StructuredAgentSessionFirstMessage
+  optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  sendSelectionSupport?: boolean
   createMessageSupport?: boolean
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
@@ -191,13 +200,19 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+      ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
       ...(args.options ? { options: args.options } : {})
     },
     ...(args.createMessageSupport === undefined
       ? {}
       : { createMessageSupport: args.createMessageSupport }),
     ...(args.createMessageSupport === undefined ? {} : { createPrepared: true as const }),
-    ...launchSeedOptions(state, { target }, args.agent, args.seedOptions)
+    ...(args.explicitLaunchOptions ? { explicitLaunchOptions: args.explicitLaunchOptions } : {}),
+    ...(args.createMessageSupport !== undefined
+      ? args.seedOptions
+        ? { seedOptions: args.seedOptions }
+        : {}
+      : launchSeedOptions(state, { target }, args.agent, args.seedOptions, args.resumeFrom))
   }
 }
 

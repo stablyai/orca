@@ -1,8 +1,12 @@
+import { createMockSubprocess } from './session-subprocess.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session } from './session'
 import { createSetupCompletionObservation } from '../runtime/orchestration/setup-completion-signal'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
-import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
+import {
+  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
+  SESSION_FORCE_KILL_RETRY_MS
+} from './session-termination-controller'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import {
@@ -14,73 +18,6 @@ const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
-
-function createMockSubprocess() {
-  const written: string[] = []
-  const signals: string[] = []
-  let onData: ((data: string) => void) | null = null
-  let onExit: ((code: number) => void) | null = null
-  let killed = false
-  let pauseCalls = 0
-  let resumeCalls = 0
-
-  return {
-    written,
-    signals,
-    get killed() {
-      return killed
-    },
-    get pid() {
-      return 12345
-    },
-    get pauseCalls() {
-      return pauseCalls
-    },
-    get resumeCalls() {
-      return resumeCalls
-    },
-    foregroundProcess: null as string | null,
-    getForegroundProcess(): string | null {
-      return this.foregroundProcess
-    },
-    confirmShellForeground: vi.fn(async () => true),
-    write(data: string) {
-      written.push(data)
-    },
-    resize(_cols: number, _rows: number) {},
-    pause() {
-      pauseCalls++
-    },
-    resume() {
-      resumeCalls++
-    },
-    clear() {},
-    kill() {
-      killed = true
-      setTimeout(() => onExit?.(0), 5)
-    },
-    terminateOwnedTree: () => 'terminated' as const,
-    forceKill() {
-      killed = true
-    },
-    signal(sig: string) {
-      signals.push(sig)
-    },
-    onData(cb: (data: string) => void) {
-      onData = cb
-    },
-    onExit(cb: (code: number) => void) {
-      onExit = cb
-    },
-    dispose() {},
-    simulateData(data: string) {
-      onData?.(data)
-    },
-    simulateExit(code: number) {
-      onExit?.(code)
-    }
-  }
-}
 
 type MockSubprocess = ReturnType<typeof createMockSubprocess>
 
@@ -417,20 +354,20 @@ describe('Session', () => {
       expect(subprocess.written).toEqual(['\x1b[?1;2c'])
     })
 
-    // Precmd can precede raw mode; keep startup input ordered until the flush gate releases it.
-    it('defers flush past the shell-ready marker and preserves write order', () => {
+    // Precmd can precede raw mode; only startup commands wait for the flush gate.
+    it('holds the startup command while user input reaches the current reader', () => {
       createSession({ shellReadySupported: true })
       expect(session.shellState).toBe('pending')
 
-      session.write('first\n')
+      session.writeStartupCommand('first\n')
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
       session.write('second\n')
-      expect(subprocess.written).toEqual([])
+      expect(subprocess.written).toEqual(['second\n'])
 
       subprocess.simulateData('\r\nuser@host $ ')
       vi.advanceTimersByTime(30)
-      expect(subprocess.written).toEqual(['first\n', 'second\n'])
+      expect(subprocess.written).toEqual(['second\n', 'first\n'])
     })
 
     it.each([
@@ -438,7 +375,7 @@ describe('Session', () => {
       ['XTVERSION', '\x1bP>|xterm.js(6.1.0)\x1b\\']
     ])('contains live %s replies without releasing queued startup input', async (_, reply) => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       session.write(reply)
       await vi.advanceTimersByTimeAsync(0)
@@ -450,7 +387,7 @@ describe('Session', () => {
 
     it('uses the short settle path when marker and prompt bytes arrive together', () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -463,7 +400,7 @@ describe('Session', () => {
 
     it('does not treat bytes before the marker as post-marker prompt output', () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('last login\r\n\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -542,7 +479,7 @@ describe('Session', () => {
       })
 
       subprocess.simulateData('\x1b]777;orca-shell-ready')
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
       vi.advanceTimersByTime(100)
 
       expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
@@ -585,7 +522,7 @@ describe('Session', () => {
 
     it('keeps held marker-prefix bytes during live take-with-snapshot', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready')
       const taken = session.takePendingOutput(true)
@@ -611,7 +548,7 @@ describe('Session', () => {
 
     it('cancels the post-ready flush gate when force-disposing the subprocess', async () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -625,7 +562,7 @@ describe('Session', () => {
 
     it('transitions to timed_out after 15 seconds', () => {
       createSession({ shellReadySupported: true })
-      session.write('waiting input')
+      session.writeStartupCommand('waiting input')
 
       vi.advanceTimersByTime(15_000)
 
@@ -657,7 +594,7 @@ describe('Session', () => {
           throw new Error('log sink unavailable')
         }
       })
-      session.write('waiting input')
+      session.writeStartupCommand('waiting input')
 
       vi.advanceTimersByTime(15_000)
 
@@ -665,9 +602,9 @@ describe('Session', () => {
       expect(subprocess.written).toEqual(['waiting input'])
     })
 
-    it('honors a shorter shell-ready timeout for Codex startup sessions', () => {
+    it('honors an injected shell-ready timeout', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 300 })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       vi.advanceTimersByTime(299)
       expect(subprocess.written).toEqual([])
@@ -778,6 +715,48 @@ describe('Session', () => {
       await shutdown
 
       expect(session.state).toBe('exited')
+    })
+
+    it('starts a joining caller’s exit budget only after the shared force kill is sent', async () => {
+      const signalsSent = Promise.withResolvers<void>()
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        return signalsSent.promise
+      }
+      createSession()
+
+      const first = session.forceKillAndWaitForExit()
+      const joined = session.forceKillAndWaitForExit()
+      let joinedSettled = false
+      void joined.then(
+        () => (joinedSettled = true),
+        () => (joinedSettled = true)
+      )
+      await vi.advanceTimersByTimeAsync(IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS)
+      expect(joinedSettled).toBe(false)
+
+      signalsSent.resolve()
+      subprocess.simulateExit(137)
+      await Promise.all([first, joined])
+      expect(forceKillAttempts).toBe(1)
+    })
+
+    it('lets dispose join an in-flight force kill instead of starting a second sweep', async () => {
+      const signalsSent = Promise.withResolvers<void>()
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        return signalsSent.promise
+      }
+      createSession()
+
+      // Dispose ends the session without a physical exit, so this waiter is not the subject here.
+      void session.forceKillAndWaitForExit().catch(() => {})
+      session.dispose()
+      signalsSent.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(forceKillAttempts).toBe(1)
     })
 
     it('retries a rejected graceful-deadline force kill', async () => {

@@ -1,18 +1,14 @@
-import { runProcessSync } from '@orca/process-host'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolvePinnedBunExecutable } from '../../config/scripts/pinned-bun-executable.mjs'
 import {
+  resolveTypecheckBunExecutable,
   resolveTypecheckCommand,
   selectTypecheckCompiler
 } from '../../config/scripts/run-typecheck-projects-in-parallel.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 
-/**
- * The root runner's compiler command for a mobile project, run from `cwd` so diagnostics name
- * files relative to it. Compiler: ORCA_MOBILE_TYPECHECK_COMPILER (auto|tsrs|bun|native).
- */
+// Run from the mobile cwd for relative diagnostics; ORCA_MOBILE_TYPECHECK_COMPILER selects auto|tsrs|bun|native.
 export function resolveMobileTypecheckCommand(project, cwd = process.cwd()) {
   const requested = process.env.ORCA_MOBILE_TYPECHECK_COMPILER ?? 'auto'
   if (!/^(auto|tsrs|bun|native)$/.test(requested)) {
@@ -20,7 +16,8 @@ export function resolveMobileTypecheckCommand(project, cwd = process.cwd()) {
   }
   const selection = selectTypecheckCompiler(requested, {
     root,
-    resolveBunExecutable: (repoRoot) => resolvePinnedBunExecutable(repoRoot, runProcessSync)
+    resolveBunExecutable: resolveTypecheckBunExecutable,
+    fallbackHint: 'set ORCA_MOBILE_TYPECHECK_COMPILER=native'
   })
   const command = resolveTypecheckCommand(resolve(cwd, project), {
     ...selection,

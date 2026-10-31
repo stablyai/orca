@@ -3,15 +3,17 @@ import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { usePluginCommands } from '@/store/plugin-panels'
+import { usePluginNewFiles } from '@/store/plugin-new-files'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { dedupePaletteWorktrees } from '@/lib/palette-repo-resolution'
-import { getFolderWorkspaceWorktree } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
   selectPaletteIndexStatusSnapshot,
   selectPaletteStatusInputs
 } from './worktree-jump-palette-status-inputs'
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
 import {
+  getFolderWorkspaceWorktree,
+  resolveQualifiedIndexedFolderWorkspace,
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -36,21 +38,33 @@ export function useWorktreeJumpPaletteStoreState({
   const revealSidebarRow = useAppStore((state) => state.revealSidebarRow)
   const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
   const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
+  const repos = useAppStore((state) => state.repos)
+  const projectGroups = useAppStore((state) => state.projectGroups)
   const workspaces = useMemo(
     () =>
       dedupePaletteWorktrees([
         ...Object.values(worktreesByRepo).flat(),
-        ...folderWorkspaces.map(getFolderWorkspaceWorktree)
+        ...folderWorkspaces.map((folder) => {
+          const result = resolveQualifiedIndexedFolderWorkspace(
+            { folderWorkspaces, repos, projectGroups },
+            folder.id
+          )
+          return getFolderWorkspaceWorktree(
+            folder,
+            result.kind === 'selected' && result.value.workspace === folder
+              ? result.value
+              : undefined
+          )
+        })
       ]),
-    [folderWorkspaces, worktreesByRepo]
+    [folderWorkspaces, projectGroups, repos, worktreesByRepo]
   )
-  const repos = useAppStore((state) => state.repos)
-  const projectGroups = useAppStore((state) => state.projectGroups)
   const projects = useAppStore((state) => state.projects)
   const projectHostSetups = useAppStore((state) => state.projectHostSetups)
   const detectedWorktreesByRepo = useAppStore((state) => selectDetectedWorktreesByRepo(state))
   const pendingWorktreeCreations = useAppStore((state) => state.pendingWorktreeCreations)
   const pluginCommands = usePluginCommands()
+  const pluginNewFiles = usePluginNewFiles()
   const paletteStatusInputsActive = visible || lingering
   const { ptyIdsByTabId, terminalLayoutsByTabId, tabsByWorktree } = useAppStore(
     useShallow((state) => selectPaletteStatusInputs(state, paletteStatusInputsActive))
@@ -148,6 +162,7 @@ export function useWorktreeJumpPaletteStoreState({
     detectedWorktreesByRepo,
     pendingWorktreeCreations,
     pluginCommands,
+    pluginNewFiles,
     paletteStatusInputsActive,
     ptyIdsByTabId,
     terminalLayoutsByTabId,

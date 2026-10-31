@@ -95,7 +95,6 @@ describe('getWarpThemeDirectories', () => {
       expect(getWarpThemeDirectories().slice(6)).toEqual(
         expected.map((name) => `/Users/alice/${name}/themes`)
       )
-      // Filtering first keeps the crowd out of ICU: only Warp names are collated.
       expect(compares.flat().every((name) => name.startsWith('.warp'))).toBe(true)
       expect(compares.length).toBeLessThan(10)
     } finally {

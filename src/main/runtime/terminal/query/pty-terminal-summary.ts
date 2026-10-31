@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithGetPtyRecordForPaneKey } from '../../orchestration/terminal-pane-mail-routing'
+import { OrcaRuntimeWithMailboxTerminalIdentity } from '../../orchestration/mailbox-terminal-identity'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -20,7 +20,7 @@ import { structuredWorkerTerminalRefusal } from '../../structured-worker-termina
 import { randomUUID } from 'node:crypto'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPtyRecordForPaneKey {
+export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithMailboxTerminalIdentity {
   protected abstract bindPtyIncarnationHandle(
     retained: PtyIncarnationHandleRecord,
     leaf: RuntimeLeafRecord
@@ -104,10 +104,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     this.assertGraphReady()
     const record = this.handles.get(handle)
     if (!record || record.runtimeId !== this.runtimeId) {
-      // A structured worker's handle is not stale — nothing went dead. It names a live agent
-      // session that simply has no terminal, and saying `terminal_handle_stale` sent callers
-      // hunting for a remint that will never exist. Read paths (`terminal read`,
-      // `isTerminalRunningAgent`, the identity probe) answer for it BEFORE reaching here.
+      // Structured workers are live sessions without terminals; read paths answer before this refusal, and stale-handle errors would send callers hunting nonexistent remints.
       throw structuredWorkerTerminalRefusal(handle, this._orchestrationDb)
     }
     if (record.rendererGraphEpoch !== this.rendererGraphEpoch) {
@@ -119,6 +116,34 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
       throw new Error('terminal_handle_stale')
     }
     return { record, leaf }
+  }
+
+  /** The terminal a handle names: its runtime PTY, the PTY its retained handle was issued for, or the PTY its window pane shows. */
+  protected getTerminalPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord } {
+    const pty =
+      this.getLivePtyForHandle(handle)?.pty ??
+      this.getRetainedHandlePty(handle) ??
+      this.ptysById.get(this.getLiveLeafForHandle(handle).leaf.ptyId ?? '')
+    if (!pty) {
+      throw new Error('terminal_handle_stale')
+    }
+    return { pty }
+  }
+
+  /** A pane-issued handle outlives the graph (a reload) while its PTY keeps the incarnation it was issued for. */
+  protected getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined {
+    const [ptyId, retained] =
+      [...this.handleByPtyIncarnation].find(([, r]) => r.handle === handle) ?? []
+    const pty = ptyId ? this.ptysById.get(ptyId) : undefined
+    return retained?.incarnationId && pty?.incarnationId === retained.incarnationId
+      ? pty
+      : undefined
+  }
+
+  /** Whether a handle names a terminal, including one a graph reload cleared the record of. */
+  protected hasMailboxTerminalHandle(handle: string): boolean {
+    const named = this.getLivePtyForHandle(handle)?.pty ?? this.getRetainedHandlePty(handle)
+    return this.handles.has(handle) || named !== undefined
   }
 
   protected getLivePtyForHandle(handle: string): {
@@ -152,15 +177,11 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
       return null
     }
     // Why: renderer adoption can race with CLI reads; keep ptyId → handle populated so summaries don't mint a second handle for the same terminal.
-    this.handleByPtyId.set(record.ptyId, handle)
+    this.setPtyHandle(record.ptyId, handle)
     return { record, pty }
   }
 
-  /**
-   * Layout-owner builds: the pane main binds a terminal to adopts the terminal's own handle (the
-   * one it was created under), and that handle keeps naming the terminal, with or without a window.
-   * The own-handle check stands in for the pane's epoch fence: a new incarnation drops it.
-   */
+  /** Main-owned panes adopt the terminal's original handle; own-handle checks fence epochs because replacement incarnations drop that handle. */
   private mainPaneOwnHandle(handle: string, record: TerminalHandleRecord): boolean {
     if (
       !ORCA_LAYOUT_OWNER_IS_MAIN ||
@@ -178,15 +199,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
   }
 
   protected assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void {
-    const runtimePty = this.getLivePtyForHandle(handle)
-    if (runtimePty) {
-      if (runtimePty.pty.ptyId !== expectedPtyId) {
-        throw new Error('terminal_handle_stale')
-      }
-      return
-    }
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (leaf.ptyId !== expectedPtyId) {
+    if (this.getTerminalPtyForHandle(handle).pty.ptyId !== expectedPtyId) {
       throw new Error('terminal_handle_stale')
     }
   }
@@ -251,6 +264,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     this.handleByLeafKey.set(leafKey, handle)
     if (leaf.ptyId) {
       this.handleByPtyIncarnation.set(leaf.ptyId, { handle, incarnationId, leafKey })
+      this.wakeMailForNewPtyHandle(leaf.ptyId)
     }
     return handle
   }

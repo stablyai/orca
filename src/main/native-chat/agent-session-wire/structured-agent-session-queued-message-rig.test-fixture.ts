@@ -1,3 +1,4 @@
+import type { RigSendOptions } from './structured-agent-session-queued-rig-send.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +10,6 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
@@ -19,14 +19,18 @@ import {
 } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
-  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_SESSION as DEFAULT_SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
+import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-legacy-journal.test-fixture'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   createQueuedRigProvider,
@@ -35,12 +39,6 @@ import {
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 export const QUEUED_RIG_CALLER = { callerKey: 'client-1' }
-type RigSendOptions = {
-  internal?: true
-  from?: AgentMessageSource
-  carried?: Readonly<Record<string, string>>
-}
-
 export function eventually(assertion: () => void | Promise<void>): Promise<void> {
   return vi.waitFor(assertion, { timeout: 10_000 })
 }
@@ -49,6 +47,8 @@ export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessage
 
 export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
+    sessionId?: string
+    legacyInputs?: true
     idleSweep?: { idleMs: number; intervalMs: number }
     now?: () => number
     /** Teardown records its restart offers, which `restartOffers` lists. */
@@ -59,6 +59,7 @@ export async function createQueuedMessageTestRig(
     setupHold?: StructuredAgentSessionHostDeps['setupHold']
   } = {}
 ) {
+  const SESSION = options.sessionId ?? DEFAULT_SESSION
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
   const store = await openTestAgentSessionRecordStore(root)
@@ -80,11 +81,28 @@ export async function createQueuedMessageTestRig(
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
     })
   let host = makeHost()
-  const firstAttach = hostTestAttachParams(
-    null,
-    options.location ? { location: options.location } : {}
-  )
+  const firstAttach = hostTestAttachParams(null, {
+    ...(options.location ? { location: options.location } : {}),
+    envelope: {
+      sessionId: SESSION,
+      clientOperationId: hostTestOperationId(),
+      expectedRuntimeFence: null,
+      payloadFingerprint: ''
+    },
+    ...(options.agent === 'claude'
+      ? ({
+          provider: 'claude',
+          agent: 'claude',
+          providerHandle: { kind: 'claude', sessionId: THREAD, leafUuid: null },
+          accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/private-fixture/claude' }
+        } as const)
+      : {})
+  })
+  const pinLegacy = options.legacyInputs && seedQueuedRigLegacyJournal(root, SESSION, options.agent)
   expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
+  if (pinLegacy) {
+    pinLegacy(host)
+  }
 
   function envelope(
     fields: Record<string, unknown>,
@@ -268,6 +286,7 @@ export async function createQueuedMessageTestRig(
 
   async function dispose(): Promise<void> {
     await host.flushAllStreamedEvents()
+    await closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   }
 

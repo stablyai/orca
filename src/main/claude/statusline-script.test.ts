@@ -82,16 +82,13 @@ describe('getManagedStatusLineScript (win32 local)', () => {
     expect(script).not.toContain('"configDir=%CLAUDE_CONFIG_DIR%"')
   })
 
-  it('drains stdin before exiting when the pane key is missing', () => {
+  it('exits without reading stdin when the pane key is missing (#24907)', () => {
     stubPlatform('win32')
     const script = getManagedStatusLineScript('local')
-    const paneGuardIndex = script.indexOf(
-      'if "%ORCA_PANE_KEY%"=="" goto :orca_agent_hook_drain_stdin'
-    )
-    const captureIndex = script.indexOf('more.com')
+    const paneGuardIndex = script.indexOf('if "%ORCA_PANE_KEY%"=="" exit /b 0')
     expect(paneGuardIndex).toBeGreaterThan(-1)
-    expect(paneGuardIndex).toBeLessThan(captureIndex)
-    expect(script).toContain(':orca_agent_hook_drain_stdin')
+    expect(paneGuardIndex).toBeLessThan(script.indexOf('more.com'))
+    expect(script.match(/more\.com/g)).toHaveLength(1)
   })
 
   it('throttles with an all-builtin seconds-of-day stamp that fails open to posting', () => {

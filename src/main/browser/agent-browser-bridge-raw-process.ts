@@ -1,7 +1,8 @@
 import { execFile, type ChildProcess } from 'node:child_process'
 import { BrowserError } from './cdp-bridge'
 import { classifyErrorCode } from './agent-browser-bridge-process'
-import { AgentBrowserBridgeExecution } from './agent-browser-bridge-execution'
+import { parseAgentBrowserJsonOutput } from './agent-browser-batch-command'
+import { AgentBrowserBridgeElementCalls } from './agent-browser-bridge-element-calls'
 import {
   AGENT_BROWSER_EXIT_DRAIN_MS,
   CONSECUTIVE_TIMEOUT_LIMIT,
@@ -9,7 +10,7 @@ import {
   type AgentBrowserExecOptions
 } from './agent-browser-bridge-types'
 
-export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExecution {
+export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeElementCalls {
   protected abstract destroySession(
     sessionName: string,
     options?: { closeTimeoutMs?: number }
@@ -75,7 +76,12 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
             // Failed helpers can still return a structured error on stdout.
             if (stdout) {
               try {
-                const parsed = JSON.parse(stdout)
+                const parsed = parseAgentBrowserJsonOutput(stdout, execOptions)
+                // A batch exits 1 when any step failed; its reply carries each step's outcome.
+                if (parsed.success) {
+                  resolve(stdout)
+                  return
+                }
                 if (parsed.error) {
                   const code = classifyErrorCode(parsed.error)
                   reject(
@@ -104,9 +110,10 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
       if (session) {
         session.activeProcess = child
       }
-      if (execOptions?.stdinText !== undefined && child?.stdin) {
+      if (child?.stdin) {
         child.stdin.on('error', () => {})
-        child.stdin.end(execOptions.stdinText)
+        // A command that reads stdin, like bare `batch`, would otherwise wait out the exec timeout.
+        child.stdin.end(execOptions?.stdinText)
       }
     })
   }

@@ -18,11 +18,8 @@ function hasCursoredOptionList(lines: readonly string[]): boolean {
   )
 }
 
-/**
- * Whether a Claude dialog still holds the pane: Claude keeps its rest-glyph title under it, so
- * without OSC 7501 only the hook row shows it. Esc dismisses it without a hook, so the screen
- * decides whenever it can be read, and the cap bounds a row nothing else retires.
- */
+/** Claude keeps its rest-glyph title during dialogs without OSC 7501; Esc emits no dismissal hook.
+ * Trust readable screen evidence and cap otherwise-unretired hook rows. */
 export function isClaudeDialogHoldingPane(args: {
   row: AgentStatusIpcPayload | null
   respawnedAt: number | undefined

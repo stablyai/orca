@@ -1,9 +1,9 @@
+import { NativeChatQueuedMessageRows } from './NativeChatQueuedMessageRows'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { AlertCircle, ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import {
   NativeChatQueuedMessageCard,
@@ -17,14 +17,13 @@ import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { NATIVE_CHAT_ROOT_SELECTOR } from '@/lib/native-chat-paste-request'
 import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
-import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session-wire'
-import type { QueuedEditAttachTarget } from './use-native-chat-queued-edit-image-intake'
+import {
+  headSteerableQueuedMessageCard,
+  queuedMessageCardNeedsAttention
+} from '../../../../shared/structured-agent-session-queued-cards'
+import type { QueuedEditAttachTarget } from './NativeChatQueuedMessageComposer'
 
-/**
- * Host-held drafts stacked between the transcript and the composer — never in
- * the transcript: a draft only becomes a bubble once the host consumes it into
- * a submission. The live region stays mounted while empty, so the first card is announced.
- */
+/** Keep host-held drafts outside the transcript until consumed; keep the live region mounted for the first card. */
 export function NativeChatQueuedMessageList({
   controller,
   chatWorktreeId,
@@ -46,7 +45,6 @@ export function NativeChatQueuedMessageList({
   /** The chat files added in a card's editor attach to, as its chat box attaches them. */
   editAttachTo?: QueuedEditAttachTarget
 }): React.JSX.Element {
-  const updateSettings = useAppStore((store) => store.updateSettings)
   const regionRef = useRef<HTMLDivElement>(null)
   const queueRef = useRef<HTMLDivElement>(null)
   const { cards, pause } = controller
@@ -57,35 +55,28 @@ export function NativeChatQueuedMessageList({
     setExpanded(true)
   }
   const newest = cards.at(-1)
-  const attentionCard = !expanded
-    ? cards.find(
-        (card) =>
-          card.state === 'returned' || card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED
-      )
-    : undefined
+  const steerableHead = controller.queueCapable ? headSteerableQueuedMessageCard(cards) : null
+  const attentionCard = !expanded ? cards.find(queuedMessageCardNeedsAttention) : undefined
   const attentionCaption = attentionCard
     ? queuedMessageCardCaption(attentionCard, agentName, statedFailures)
     : null
   const listRef = useRef<HTMLUListElement>(null)
-  const newestPosition = newest?.position ?? 0
   const newestIsPersons = newest !== undefined && !newest.from
-  const shownPosition = useRef(newestPosition)
+  const shownIds = useRef<ReadonlySet<string> | null>(null)
   // Before paint, so the new card never shows a frame before the scroll.
   useLayoutEffect(() => {
-    // From 0 the queue is loading or holds one card: nothing to scroll to.
-    const appended = shownPosition.current > 0 && newestPosition > shownPosition.current
-    shownPosition.current = newestPosition
+    const appended =
+      shownIds.current !== null &&
+      shownIds.current.size > 0 &&
+      newest !== undefined &&
+      !shownIds.current.has(newest.messageId)
+    shownIds.current = new Set(cards.map((card) => card.messageId))
     // The list opens on the next card to send; a card the person just queued is shown instead.
     if (appended && newestIsPersons && listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight
     }
-  }, [newestPosition, newestIsPersons])
-  // Only a host that queues sends has queueing to turn off; a kept card shows without it.
-  const turnOffQueueing = controller.queueCapable
-    ? () => void updateSettings({ nativeChatQueueFollowUps: false })
-    : undefined
-  // Only when focus was on the queue (a card, or the header) — never pull it from wherever the user
-  // moved on to. A question or approval holding the composer's slot takes it instead.
+  }, [cards, newest, newestIsPersons])
+  // Refocus only if focus stayed on the queue; an active prompt card takes priority over the composer.
   const refocusAfter = (action: Promise<unknown>): void => {
     void action.then(() => {
       const active = document.activeElement
@@ -110,7 +101,6 @@ export function NativeChatQueuedMessageList({
     <div ref={regionRef} aria-live="polite">
       {cards.length > 0 ? (
         <div ref={queueRef} className="mx-auto w-full max-w-(--chat-content-max-width) px-4 py-1">
-          {/* One box: the header is its first row, and each card a row below it. */}
           <div className="divide-y divide-border rounded-md border border-border bg-card text-card-foreground">
             <NativeChatQueueHeader
               count={cards.length}
@@ -133,36 +123,44 @@ export function NativeChatQueuedMessageList({
                 'components.native-chat.queuedMessages.listLabel',
                 'Queued messages'
               )}
-              // Scrolls on its own so a long queue never squeezes the transcript or the composer;
-              // taller while an edit shows thumbnails, so they and the field fit.
+              // Bound queue height to preserve transcript/composer space; allow extra room for edit thumbnails.
               className={cn(
                 'scrollbar-sleek divide-y divide-border overflow-y-auto',
-                controller.editor?.images?.chips.length ? 'max-h-72' : 'max-h-40'
+                controller.editor ? 'max-h-72' : 'max-h-40'
               )}
             >
-              {cards.map((card) => (
-                <NativeChatQueuedMessageCard
-                  key={card.messageId}
-                  card={card}
-                  chatWorktreeId={chatWorktreeId}
-                  agentName={agentName}
-                  statedFailures={statedFailures}
-                  showsSteerShortcut={controller.queueCapable && card === newest}
-                  steerHeld={steerHeld}
-                  pending={controller.pending(card.messageId)}
-                  onSteer={() => refocusAfter(controller.steer(card.messageId))}
-                  onDelete={() => refocusAfter(controller.remove(card.messageId))}
-                  onEdit={
-                    controller.editCapable ? () => void controller.edit(card.messageId) : undefined
-                  }
-                  editor={
-                    controller.editor?.messageId === card.messageId ? controller.editor : undefined
-                  }
-                  editAttachTo={editAttachTo}
-                  editDisabled={controller.editor !== undefined}
-                  onTurnOffQueueing={turnOffQueueing}
-                />
-              ))}
+              <NativeChatQueuedMessageRows
+                cards={cards}
+                reorder={controller.editor ? undefined : controller.reorder}
+                renderCard={(card, drag) => (
+                  <NativeChatQueuedMessageCard
+                    key={card.messageId}
+                    card={card}
+                    drag={drag}
+                    chatWorktreeId={chatWorktreeId}
+                    agentName={agentName}
+                    statedFailures={statedFailures}
+                    showsSteerShortcut={card === steerableHead}
+                    agentWorking={controller.isWorking}
+                    steerHeld={steerHeld}
+                    pending={controller.pending(card.messageId)}
+                    onSteer={() => refocusAfter(controller.steer(card.messageId))}
+                    onDelete={() => refocusAfter(controller.remove(card.messageId))}
+                    onEdit={
+                      controller.editCapable
+                        ? () => void controller.edit(card.messageId)
+                        : undefined
+                    }
+                    editor={
+                      controller.editor?.messageId === card.messageId
+                        ? controller.editor
+                        : undefined
+                    }
+                    editAttachTo={editAttachTo}
+                    editDisabled={controller.editor !== undefined}
+                  />
+                )}
+              />
             </ul>
           </div>
         </div>
@@ -171,8 +169,6 @@ export function NativeChatQueuedMessageList({
   )
 }
 
-/** "Queued" and the count; while the host holds the queue after a Stop, "Paused" with Clear all
- *  and Resume. Collapsing hides only the cards. */
 function NativeChatQueueHeader({
   count,
   attentionCaption,

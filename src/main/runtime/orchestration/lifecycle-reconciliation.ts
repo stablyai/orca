@@ -3,8 +3,7 @@ import type { MessageRow, WorkerReportOutcome } from './types'
 import { workerReportObservation } from './worker-report-observation'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 
-// Why: the tab half can change on pane break-out, while opaque legacy keys
-// have no safe equivalence beyond exact equality.
+// Pane break-out changes tab ids; unparseable legacy keys support exact equality only.
 function isSamePane(assigneePaneKey: string, senderPaneKey: string): boolean {
   if (assigneePaneKey === senderPaneKey) {
     return true
@@ -23,20 +22,17 @@ function hasLifecycleAuthority(
       msg.sender_pane_key && isSamePane(dispatch.assignee_pane_key, msg.sender_pane_key)
     )
   }
-  // Why: rows created before pane identity existed can only use the exact
-  // handle recorded at dispatch; payload knowledge alone is not authority.
+  // Legacy rows require the recorded handle; payload knowledge alone grants no authority.
   return dispatch.assignee_handle === msg.from_handle
 }
 
 export type LifecycleReconciliationResult =
   | { action: 'ignored' }
-  // Why: `suppressed` means the message was consumed at reconcile time (marked
-  // read); senders must not wake waiters for it, unlike `ignored` rows that
-  // stay unread and still need delivery.
+  // Suppressed mail is already read and must not wake waiters; ignored mail still needs delivery.
   | { action: 'suppressed' }
   | LifecycleRejectionResult
-  | { action: 'completed'; taskId: string; dispatchId: string }
-  | { action: 'failed'; taskId: string; dispatchId: string }
+  | { action: 'completed'; taskId: string; dispatchId: string; autoReleaseAt?: string }
+  | { action: 'failed'; taskId: string; dispatchId: string; autoReleaseAt?: string }
   | { action: 'heartbeat_recorded'; dispatchId: string }
 
 export type LifecycleRejectionCode =
@@ -91,8 +87,7 @@ function getPersistedLifecycleRejection(
   ) {
     return undefined
   }
-  // Why: the marker is reserved persistence state; treating it as a rejection
-  // also prevents caller-supplied markers from turning lifecycle sends into success.
+  // Reject the reserved persistence marker even when a caller supplies it.
   return {
     action: 'rejected',
     code: (rejection as { code: LifecycleRejectionCode }).code,
@@ -136,8 +131,7 @@ function reconcileHeartbeatMessage(
   })
   const persistedRejection = getPersistedLifecycleRejection(payload)
   if (persistedRejection) {
-    // Why: the send-path reconcile converts with a no-op logger, so the
-    // coordinator's re-read is the only chance to surface the rejection.
+    // Send-path reconciliation has no logger, so reread must surface the rejection.
     onLog(`Heartbeat rejected: ${persistedRejection.reason}`)
     return persistedRejection
   }
@@ -149,24 +143,20 @@ function reconcileHeartbeatMessage(
 
   const dispatch = db.getDispatchContextById(dispatchId)
   if (!dispatch || dispatch.status !== 'dispatched') {
-    // Why: an in-flight heartbeat can arrive after completion; retain it for
-    // audit history without surfacing obsolete liveness to the coordinator.
-    db.markAsReadAndDelivered([msg.id])
+    // Late heartbeats remain auditable but must not advertise obsolete liveness.
     onLog(`Heartbeat for inactive dispatch ${dispatchId} suppressed`)
     return { action: 'suppressed' }
   }
 
   if (!hasLifecycleAuthority(dispatch, msg)) {
-    // Why: a wrong-pane heartbeat must not refresh liveness — it would mask
-    // a hung assignee behind another agent's timer.
+    // A wrong-pane timer must not mask the actual assignee's stall.
     const reason = buildLifecycleAuthorityRejectionReason(dispatchId, dispatch, msg)
     onLog(`Heartbeat rejected: ${reason}`)
     db.convertLifecycleMessageToRejection(msg.id, 'sender_not_assignee', reason)
     return { action: 'rejected', code: 'sender_not_assignee', reason }
   }
 
-  // Why: dispatchId-specific writes let the DB ignore late heartbeats for
-  // completed/failed retries without masking a newer hung dispatch.
+  // Update only this Dispatch so old heartbeats cannot mask a hung retry.
   db.recordHeartbeat(dispatchId, msg.created_at)
   return { action: 'heartbeat_recorded', dispatchId }
 }
@@ -185,8 +175,7 @@ function reconcileWorkerDoneMessage(
   })
   const persistedRejection = getPersistedLifecycleRejection(payload)
   if (persistedRejection) {
-    // Why: the send-path reconcile converts with a no-op logger, so the
-    // coordinator's re-read is the only chance to surface the rejection.
+    // Send-path reconciliation has no logger, so reread must surface the rejection.
     onLog(`Warning: worker_done rejected: ${persistedRejection.reason}`)
     return persistedRejection
   }
@@ -238,8 +227,7 @@ function reconcileWorkerDoneMessage(
     )
   }
 
-  // Why: taskId alone is not a completion authority; retried tasks can have
-  // stale worker_done messages racing the current active dispatch.
+  // Task id alone cannot authorize completion across racing retries.
   const dispatch = db.getDispatchContextById(dispatchId)
   if (!dispatch) {
     return rejectLifecycleMessage(
@@ -265,8 +253,7 @@ function reconcileWorkerDoneMessage(
     db.convertLifecycleMessageToRejection(msg.id, 'sender_not_assignee', reason)
     return { action: 'rejected', code: 'sender_not_assignee', reason }
   }
-  // Why: `orchestration.send` can release the DB lock before waking the
-  // coordinator; the later coordinator read still needs to observe completion.
+  // The send may release the DB lock before coordinator wake; reread must still observe completion.
   const filesModified =
     Array.isArray(payload.filesModified) &&
     payload.filesModified.every((file) => typeof file === 'string')
@@ -295,14 +282,14 @@ function reconcileWorkerDoneMessage(
   if (settlement.action === 'rejected') {
     return rejectLifecycleMessage(db, msg, settlement.code, settlement.reason, onLog)
   }
-  suppressEarlierHeartbeats(db, msg, dispatchId)
+  const autoReleaseAt = db.getLiveWorkerTerminalAutoReleaseAt(dispatchId) ?? undefined
 
   if (outcome === 'failed') {
     onLog(`Task ${taskId} failed by worker report`)
-    return { action: 'failed', taskId, dispatchId }
+    return { action: 'failed', taskId, dispatchId, autoReleaseAt }
   }
   onLog(`Task ${taskId} completed by worker report`)
-  return { action: 'completed', taskId, dispatchId }
+  return { action: 'completed', taskId, dispatchId, autoReleaseAt }
 }
 
 function rejectLifecycleMessage(
@@ -327,22 +314,4 @@ function buildLifecycleAuthorityRejectionReason(
     `pane ${dispatch.assignee_pane_key ?? '<legacy>'}; received handle ${msg.from_handle}, ` +
     `pane ${msg.sender_pane_key ?? '<missing>'}`
   )
-}
-
-function suppressEarlierHeartbeats(
-  db: OrchestrationDb,
-  workerDone: MessageRow,
-  dispatchId: string
-): void {
-  const heartbeatIds = db
-    .getUnreadMessages(workerDone.to_handle, ['heartbeat'])
-    .filter((message) => {
-      if (message.sequence >= workerDone.sequence) {
-        return false
-      }
-      const payload = parseObjectPayload(message, () => undefined)
-      return payload.dispatchId === dispatchId
-    })
-    .map((message) => message.id)
-  db.markAsReadAndDelivered(heartbeatIds)
 }

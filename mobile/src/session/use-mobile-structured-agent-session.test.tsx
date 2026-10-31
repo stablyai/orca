@@ -1,17 +1,21 @@
 import { createElement } from 'react'
-import { snapshotEvent as publishedSnapshot } from './use-mobile-structured-agent-session-queued.test-fixture'
+import {
+  snapshotEvent as publishedSnapshot,
+  fieldsOf,
+  mutationOk,
+  ok
+} from './use-mobile-structured-agent-session-queued.test-fixture'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
-  AgentJournalDispatchState,
   AgentJournalRenderItem,
   AgentJournalResolution
 } from '../../../src/shared/agent-session-journal-types'
-import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import { formatQuestionFreeTextAnswer } from './native-chat/input/mobile-native-chat-question'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -26,10 +30,6 @@ vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStor
 function listedModelIds(snapshot: readonly SessionOptionDescriptor[]): string[] {
   const model = snapshot.find((descriptor) => descriptor.id === 'model')
   return model?.kind.type === 'select' ? model.kind.choices.map((choice) => choice.value) : []
-}
-
-function ok(result: unknown) {
-  return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
 function snapshotEvent(fence = 3, items: AgentJournalRenderItem[] = []) {
@@ -121,19 +121,9 @@ function runningStatusItem(): AgentJournalRenderItem {
   }
 }
 
-function sendResult(dispatchState: AgentJournalDispatchState, reason: string | null = null) {
-  return ok({
-    ok: true,
-    replayed: false,
-    fence: 3,
-    cursor: { epoch: 'epoch-1', sequence: 1 },
-    value: structuredSendResultFixture(dispatchState, reason)
-  })
-}
-
-async function defaultSendRequest(method: string, params?: Record<string, unknown>) {
+async function defaultSendRequest(method: string, params?: unknown) {
   if (method === 'agentSession.send') {
-    return sendResult('accepted')
+    return mutationOk(structuredSendResultFixture('accepted'))
   }
   if (method === 'agentSession.options') {
     return ok({
@@ -185,11 +175,11 @@ async function defaultSendRequest(method: string, params?: Record<string, unknow
       fence: 3,
       cursor: { epoch: 'epoch-1', sequence: 3 },
       value: {
-        itemId: String(params?.itemId ?? ''),
+        itemId: String(fieldsOf(params).itemId ?? ''),
         revision: 2,
         resolution: {
           state: 'resolved',
-          selectedOptionId: String(params?.optionId ?? ''),
+          selectedOptionId: String(fieldsOf(params).optionId ?? ''),
           resolvedBy: 'mobile',
           resolvedAt: 123
         }
@@ -205,15 +195,26 @@ describe('useMobileStructuredAgentSession', () => {
   let listener: ((value: unknown) => void) | null = null
   const onSendError = vi.fn()
   const unsubscribe = vi.fn()
+  const unsubscribePreference = vi.fn()
   const sendRequest = vi.fn(defaultSendRequest)
   const subscribe = vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
-    listener = onData
-    return unsubscribe
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+      return unsubscribe
+    }
+    return unsubscribePreference
   })
-  const client = {
+  const client: RpcClient = {
     sendRequest,
-    subscribe
-  } as unknown as RpcClient
+    subscribe,
+    getState: () => 'connected',
+    onStateChange: () => () => {},
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    updateTerminalSubscriptionViewport: () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
   let storedOperations: Map<string, string>
 
   function Harness({
@@ -288,6 +289,49 @@ describe('useMobileStructuredAgentSession', () => {
     )
   })
 
+  it('keeps creation facts out of the current phone conversation', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'before',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Coordinate' }] }
+      },
+      {
+        itemId: 'start',
+        revision: 1,
+        sequence: 2,
+        observedAt: 2,
+        body: {
+          kind: 'agent-start',
+          dispatchId: 'dispatch',
+          task: 'Worker assignment',
+          worker: {
+            party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+            name: 'Worker'
+          }
+        }
+      },
+      {
+        itemId: 'after',
+        revision: 1,
+        sequence: 3,
+        observedAt: 3,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answer' }] }
+      }
+    ]
+    await act(async () => listener?.(snapshotEvent(3, items)))
+    expect(hook?.session.messages.map(({ blocks }) => blocks)).toEqual([
+      [{ type: 'text', text: 'Coordinate' }],
+      [{ type: 'text', text: 'Answer' }]
+    ])
+  })
+
   it('re-holds before resubscribing after a reconnect', async () => {
     act(() => {
       renderer = create(createElement(Harness, { connected: true }))
@@ -297,13 +341,17 @@ describe('useMobileStructuredAgentSession', () => {
         sendRequest.mock.calls.filter(([method]) => method === 'agentSession.hold')
       ).toHaveLength(1)
     )
-    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() =>
+      expect(
+        subscribe.mock.calls.filter(([method]) => method === 'agentSession.subscribe')
+      ).toHaveLength(1)
+    )
 
     // Reconnect must acquire the connection-scoped hold before replaying the stream.
     await act(async () => {
       renderer?.update(createElement(Harness, { connected: false }))
     })
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect([unsubscribe.mock.calls.length, unsubscribePreference.mock.calls.length]).toEqual([1, 1])
     await act(async () => {
       renderer?.update(createElement(Harness, { connected: true }))
     })
@@ -313,19 +361,28 @@ describe('useMobileStructuredAgentSession', () => {
         sendRequest.mock.calls.filter(([method]) => method === 'agentSession.hold')
       ).toHaveLength(2)
     )
-    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() =>
+      expect(
+        subscribe.mock.calls.filter(([method]) => method === 'agentSession.subscribe')
+      ).toHaveLength(2)
+    )
     const holdOrders = sendRequest.mock.calls
       .map((call, index) =>
         call[0] === 'agentSession.hold' ? sendRequest.mock.invocationCallOrder[index] : null
       )
       .filter((order): order is number => order !== null)
-    const subscribeOrders = subscribe.mock.invocationCallOrder
+    const subscribeOrders = subscribe.mock.calls.flatMap(([method], index) =>
+      method === 'agentSession.subscribe' ? [subscribe.mock.invocationCallOrder[index]] : []
+    )
     const secondHoldOrder = holdOrders[1]
     const secondSubscribeOrder = subscribeOrders[1]
     if (secondHoldOrder === undefined || secondSubscribeOrder === undefined) {
       throw new Error('reconnect calls were not recorded')
     }
     expect(secondHoldOrder).toBeLessThan(secondSubscribeOrder)
+    await act(async () => renderer?.unmount())
+    renderer = null
+    expect([unsubscribe.mock.calls.length, unsubscribePreference.mock.calls.length]).toEqual([2, 2])
   })
 
   it('sends with the shared structured mutation envelope after the stream fence lands', async () => {
@@ -375,7 +432,6 @@ describe('useMobileStructuredAgentSession', () => {
 
     await vi.waitFor(() => expect(hook!.permission).not.toBeNull())
     await vi.waitFor(() => expect(hook!.question).not.toBeNull())
-    // The seed paints first; the session's own list is what a pick is checked against.
     await vi.waitFor(() => {
       expect(listedModelIds(hook!.optionSnapshot)).toContain('gpt-slow')
       expect(hook!.optionSnapshot.find((descriptor) => descriptor.id === 'model')).toMatchObject({
@@ -648,7 +704,7 @@ describe('useMobileStructuredAgentSession', () => {
     expect(retryId).not.toBe(firstId)
   })
 
-  it('keeps structured option changes dispatched after unknown delivery', async () => {
+  it('keeps unknown intent until a current query, without accepted memory or resend', async () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -660,9 +716,15 @@ describe('useMobileStructuredAgentSession', () => {
         settable: true
       })
     })
+    let reconcile!: (response: Awaited<ReturnType<typeof defaultSendRequest>>) => void
     sendRequest.mockImplementation(async (method, params) => {
       if (method === 'agentSession.setOption') {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
+      }
+      if (method === 'agentSession.options') {
+        return new Promise<Awaited<ReturnType<typeof defaultSendRequest>>>((resolve) => {
+          reconcile = resolve
+        })
       }
       return defaultSendRequest(method, params)
     })
@@ -673,9 +735,18 @@ describe('useMobileStructuredAgentSession', () => {
     })
 
     const model = hook!.optionSnapshot.find((descriptor) => descriptor.id === 'model')
-    expect(model).toMatchObject({
-      valueSource: 'dispatched',
-      kind: expect.objectContaining({ currentValue: 'gpt-slow' })
+    expect(model?.kind).toMatchObject({ currentValue: 'gpt-slow' })
+    expect(
+      sendRequest.mock.calls.filter(([method]) => method === 'agentSession.setOption')
+    ).toHaveLength(1)
+    expect(
+      sendRequest.mock.calls.filter(
+        ([method]) => method === 'settings.mutateNativeChatSessionOptions'
+      )
+    ).toHaveLength(0)
+    await act(async () => reconcile(await defaultSendRequest('agentSession.options')))
+    expect(hook!.optionSnapshot.find((row) => row.id === 'model')?.kind).toMatchObject({
+      currentValue: 'gpt-fast'
     })
     expect(onSendError).not.toHaveBeenCalled()
   })

@@ -1,10 +1,11 @@
+import './worktrees-local-create-module-mocks.test-fixture'
 import { withoutInFlightWorktreeCreates } from '../worktree-create-in-flight'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../shared/setup-agent-sequencing'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { computeWorkspaceRootAsync } from './worktree-logic'
-import type * as WorktreeLogic from './worktree-logic'
 import {
   listWorktreesMock,
   describeCreatedWorktreeMock,
@@ -27,85 +28,6 @@ import {
   hostWorktreeTarget,
   type HostWorktreeTarget
 } from '../../shared/worktree/host-qualified-identity'
-
-vi.mock('electron', async () =>
-  (await import('./worktrees-test-module-mocks')).electronModuleMock()
-)
-vi.mock('../git/worktree', async () =>
-  (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
-)
-vi.mock('../git/runner', async () =>
-  (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
-)
-vi.mock('../git/repo', async () =>
-  (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
-)
-vi.mock('../git/git-username', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
-    .resolveLocalGitUsernameMock
-}))
-vi.mock('../github/client', async () =>
-  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
-)
-vi.mock('../source-control/hosted-review', async () =>
-  (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('./worktree-symlinks', async () =>
-  (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
-vi.mock('../setup-runner-script-text', async (importOriginal) =>
-  (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
-    (await importOriginal()) as Record<string, unknown>
-  )
-)
-vi.mock('../worktree-runner-script', async (importOriginal) =>
-  (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
-    (await importOriginal()) as Record<string, unknown>
-  )
-)
-vi.mock('../effective-hook-config', async (importOriginal) =>
-  (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
-    (await importOriginal()) as Record<string, unknown>
-  )
-)
-vi.mock('../setup-hook-env-vars', async (importOriginal) =>
-  (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
-    (await importOriginal()) as Record<string, unknown>
-  )
-)
-vi.mock('./worktree-logic', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeLogic>()
-  return {
-    ...(await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(actual),
-    computeWorkspaceRootAsync: vi.fn(actual.computeWorkspaceRootAsync)
-  }
-})
-vi.mock('../terminal-history-deletion', async () =>
-  (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
-)
-vi.mock('../ports/advertised-url-watcher', async () =>
-  (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
-)
-vi.mock('../workspace-cleanup-scan-snapshot', async () =>
-  (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
-)
-vi.mock('../workspace-space-analysis-snapshot', async () =>
-  (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
-)
-vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
-  (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
-)
-vi.mock('../runtime/worktree-teardown', async () =>
-  (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
-)
-vi.mock('./pty/provider/registry', async () =>
-  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
-)
-vi.mock('./pty/provider/state-cleanup', async () =>
-  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
-)
 
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
@@ -346,10 +268,18 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
 
-    const result = (await handlers['worktrees:create'](null, {
+    addWorktreeMock.mockImplementationOnce(async () => {
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('createWorktree:progress', {
+        phase: 'creating',
+        creationId: 'creation-1',
+        worktreeId: 'repo-1::/workspace/improve-dashboard-2'
+      })
+    })
+    const result = await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
-      name: 'improve-dashboard'
-    })) as CreateWorktreeResult
+      name: 'improve-dashboard',
+      creationId: 'creation-1'
+    })
 
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -358,7 +288,7 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       false,
       false,
-      {}
+      { onCheckoutProgress: expect.any(Function) }
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
@@ -684,7 +614,9 @@ describe('registerWorktreeHandlers', () => {
           launch_source: 'new_workspace_composer',
           request_kind: 'new'
         },
-        surfaceOwner: false
+        surfaceOwner: false,
+        // The window's own create is the user's act (E9).
+        wslUserAct: true
       },
       expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
@@ -699,7 +631,8 @@ describe('registerWorktreeHandlers', () => {
           ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
         },
         activate: false,
-        surfaceOwner: false
+        surfaceOwner: false,
+        wslUserAct: true
       },
       expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
@@ -778,17 +711,20 @@ describe('registerWorktreeHandlers', () => {
           request_kind: 'new'
         }
       }
-    })) as { setup?: { command?: string; runnerScriptPath: string } }
+    })) as { setup?: CreateWorktreeResult['setup'] }
 
     expect(result.setup).toEqual(
       expect.objectContaining({
         runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
-        command: expect.stringContaining('bash /mnt/c/workspace/repo/.git/orca/setup-runner.sh')
+        command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`
       })
     )
     expect(result.setup?.command).toContain('printf')
     const holds = runtimeStub.workspaceSetupAgentStarts
     expect(holds.pending('repo-1::/workspace/improve-dashboard')).not.toBeNull()
+    expect(result.setup?.envVars[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain(
+      'bash /mnt/c/workspace/repo/.git/orca/setup-runner.sh'
+    )
   })
 
   it('opens Setup beside the startup terminal without surfacing the workspace', async () => {
@@ -823,15 +759,10 @@ describe('registerWorktreeHandlers', () => {
 
     expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(2)
     expect(runtimeStub.splitTerminal).not.toHaveBeenCalled()
+    // The setup command itself is pinned in the startup-and-setup test above.
     expect(runtimeStub.createTerminal).toHaveBeenLastCalledWith(
       'id:repo-1::/workspace/improve-dashboard',
-      {
-        title: 'Setup',
-        command: expect.stringContaining('setup-runner.sh'),
-        env: expect.any(Object),
-        activate: false,
-        surfaceOwner: false
-      },
+      expect.objectContaining({ title: 'Setup', activate: false, surfaceOwner: false }),
       expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
   })

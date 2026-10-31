@@ -106,8 +106,7 @@ export async function preparePendingSplitClose(
     retireAgentPaneAuthority: vi.fn(),
     suppressPtyExit: vi.fn()
   }) as unknown as AppState
-  // Main answers the window's layout commands (a layout-owner build): the only local runtime call
-  // these closes make. The transport refuses anything that carries no command.
+  // Only main’s layout commands may close panes in this build; the transport refuses uncommanded calls.
   const { layoutApplyTestTransport: main } =
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   const runtimeCall = async ({ params }: { params?: unknown }) => ({

@@ -26,7 +26,7 @@ import {
   LAG_BACKOFF_MS
 } from '@/components/task-page/github/task-page-github-work-item-quiet-adopt'
 import { stripRepoQualifiers } from '../../../../../shared/task-query'
-import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { taskPageToGitHubApiPage } from '../../../../../shared/work-items'
 import { useAppStore } from '@/store/index'
@@ -153,8 +153,7 @@ export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshP
   let networkRetryDelay: number | null = null
   void quietFetch
     .then(async ({ authorityItems, visibleItems }) => {
-      // Why: skip renderer state writes after unmount, but still let .finally
-      // settle the shared quietState so a queued trailing is never stranded.
+      // Skip unmounted/stale renderer writes but settle shared quietState so trailing work cannot be stranded.
       if (!quietRevalidateMountedRef.current || !isCurrentScope()) {
         return
       }
@@ -251,9 +250,7 @@ export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshP
       const attempts = getTaskPageQuietRevalidateBackoffAttempt(quietState.lagSkipAttempts.values())
       const wallExceeded =
         quietState.lastConfirmAt > 0 && Date.now() - quietState.lastConfirmAt > LAG_WALL_BUDGET_MS
-      // Why: a new mutation confirmed while this fetch was in flight (queued) is
-      // fresh work and must always revalidate — only lag *retries* (needTrailing)
-      // are bounded by attempts/wall so a stuck server can't spin forever.
+      // Always revalidate new queued mutations; attempt/time budgets bound lag retries only.
       const hasQueuedWork =
         quietState.trailingQueued ||
         [...getTaskPageGitHubRevalidatableAuthorityItemKeys(githubWorkItemMutationQueryKey)].some(
@@ -297,9 +294,7 @@ export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshP
       ) {
         return
       }
-      // Why: drain a trailing queued from the shared quietState — not the old
-      // per-render cancelled flag, which stranded the retry when a new nonce
-      // arrived mid-flight. Gate the renderer bump on mount only.
+      // Drain shared trailing work despite nonce changes; update the renderer only while this query remains mounted/current.
       if (quietState.trailingQueued && quietRevalidateMountedRef.current && isCurrentQueryScope()) {
         quietState.trailingQueued = false
         setQuietRefreshNonce((current) => current + 1)

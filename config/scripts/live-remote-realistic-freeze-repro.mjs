@@ -1,23 +1,7 @@
 #!/usr/bin/env node
-/**
- * Naturalistic freeze repro — idle/reconnect recovery stories on large remotes.
- *
- * Unlike the bulk parallel-switch amplifier, this models:
- *   1) agents streaming on remote while user is idle (backlog builds)
- *   2) user returns and opens sessions one-by-one (or after reconnect refresh)
- *
- * Scenarios:
- *   idle-backlog-open            — idle with flood, then human-paced sequential open
- *   idle-backlog-reconnect-open  — same + wake-like metadata refresh storm, then open
- *   restart-proxy                — idle, then orca open + status/list storm + open
- *                                  (does NOT kill the desktop; proxies restore work)
- *
- * Usage:
- *   ORCA_FREEZE_ENV=paired-remote ORCA_FREEZE_SCENARIO=idle-backlog-open \
- *     node config/scripts/live-remote-realistic-freeze-repro.mjs
- *
- *   pnpm run repro:live-remote-realistic-freeze
- */
+// Model idle output backlog, sequential return/open and reconnect storms on large paired remotes.
+// restart-proxy uses orca open plus status/list storm; it does not kill desktop.
+// Run: ORCA_FREEZE_ENV=paired-remote ORCA_FREEZE_SCENARIO=idle-backlog-open node config/scripts/live-remote-realistic-freeze-repro.mjs
 import { spawnSync } from 'node:child_process'
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -164,7 +148,6 @@ async function main() {
   notes.push(`remote worktrees=${wtList.length}`)
   phases.push({ phase: 'baseline', worktrees: wtList.length })
 
-  // --- Phase: seed flood terminals (agent-like backlog sources) ---
   const created = []
   if (createCount > 0) {
     const targets = wtList.slice(0, Math.min(createWorktreeSpan, wtList.length))
@@ -231,7 +214,6 @@ async function main() {
 
   const openList = openTargets.slice(0, Math.min(openCount, openTargets.length))
 
-  // --- Phase: park — leave one session focused, rest accumulate flood while "away" ---
   try {
     const parkHandle = openList[0]
     const parked = await orcaJsonAsync(['terminal', 'switch', '--terminal', parkHandle], {
@@ -247,7 +229,6 @@ async function main() {
   await sleep(idleMs)
   phases.push({ phase: 'idle', idleMs, actualMs: performance.now() - idleStarted })
 
-  // --- Phase: recovery trigger ---
   let reconnectRefreshMs = 0
   let timedOutOps = 0
   let consecutiveSwitchFailures = 0
@@ -275,9 +256,7 @@ async function main() {
     })
   }
 
-  // --- Phase: open sessions ---
-  // lockup-storm: overlap a second reconnect storm with concurrent switch fan-out
-  // (models wake + bulk session restore, not human serial clicks).
+  // lockup-storm overlaps reconnect storm with concurrent opens, modeling wake/bulk restore instead of serial clicks.
   let maxOpenMs = 0
   let firstOpenMs = 0
   let sumOpenMs = 0

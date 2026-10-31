@@ -17,10 +17,9 @@ import {
 } from '../windows/windows-process-table'
 import { WindowsProcessTableTimeoutError } from '../windows/windows-process-table-timeout-error'
 
-// A cold first conpty spawn on a slow (arm64, AV-scanned) Windows host can outlast the steady-state budget.
+// Antivirus and cold arm64 conpty startup can exceed the steady-state budget.
 const WINDOWS_FIRST_PTY_PROBE_TIMEOUT_MS = 15_000
 
-/** The candidate process owns disposable PTY and watcher probes before it touches user state. */
 export async function preflightOrcadNativeRuntime(
   options: { nativeFeatures?: boolean } = {}
 ): Promise<void> {
@@ -47,7 +46,7 @@ export async function preflightOrcadNativeRuntime(
       resolveDelivery = resolve
       rejectDelivery = reject
     })
-    // A native callback can fail while subscribe is pending.
+    // Observe early rejection while subscribe is still pending.
     void delivered.catch(() => {})
     timer = setTimeout(() => {
       const error = new Error('Bundled file watcher readiness timed out')
@@ -79,7 +78,6 @@ export async function preflightOrcadNativeRuntime(
   }
 }
 
-/** Retries once only after a timeout; a spawn error or non-zero exit fails immediately. */
 async function probePtySpawn(): Promise<void> {
   const firstTimeoutMs =
     process.platform === 'win32' ? WINDOWS_FIRST_PTY_PROBE_TIMEOUT_MS : PTY_SPAWN_HEALTH_TIMEOUT_MS
@@ -102,12 +100,10 @@ async function preflightWindowsProcessIdentity(): Promise<void> {
     const rows = await readWindowsProcessIdentityTableFresh()
     created = rows.find((row) => row.pid === process.pid)?.creationTimeMs
   } catch (error) {
-    // Only slowness falls back: an unreadable table (EDR hook, restricted token) must still
-    // fail qualification, or every later liveness verdict on this host reads unverifiable.
+    // Only timeouts may fall back; permission failures would invalidate later liveness checks.
     if (!(error instanceof WindowsProcessTableTimeoutError)) {
       throw error
     }
-    // The addon's one-PID query proves this runtime can identify a process without a snapshot.
     created = readWindowsProcessCreationTime(process.pid)
     if (created === null) {
       throw error

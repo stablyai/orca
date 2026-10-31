@@ -212,9 +212,7 @@ describe('host credential cleanup', () => {
     await vi.waitFor(() => expect(deleteCredential).toHaveBeenCalledOnce())
     readShouldFail = false
 
-    // Durable queue is untouched (not clobbered); the failed-to-record host-b is
-    // still surfaced via the session-scoped fallback so its orphaned token keeps
-    // a retry affordance instead of being silently lost.
+    // Preserve the durable queue and expose failed-to-record cleanup through the session fallback.
     expect(deleteCredential).toHaveBeenCalledOnce()
     expect(listener).toHaveBeenCalled()
     await expect(loadPendingHostCredentialCleanupIds()).resolves.toEqual(['host-a', 'host-b'])

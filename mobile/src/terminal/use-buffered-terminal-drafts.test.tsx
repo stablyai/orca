@@ -227,9 +227,7 @@ describe('useBufferedTerminalDrafts', () => {
     expect(hook().settleBufferedTerminalDraftSend).toBe(callbacks.settle)
   })
 
-  // Why the handle set the session sweep passes matters: terminal.list omits a
-  // chat-covered handle while the desktop graph reloads, so the raw list and the
-  // retained set disagree exactly there, and only the retained set keeps the draft.
+  // Use retained handles, not transient inventory: chat-covered terminals may disappear from list while the desktop graph reloads.
   it('keeps a chat-covered draft against the retained set and drops it against the raw list', () => {
     const listedHandles = new Set(['other-terminal'])
     const retainedHandles = resolveRetainedTerminalHandles({

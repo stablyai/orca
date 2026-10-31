@@ -33,8 +33,8 @@ describe('execution host structured launch settings wiring', () => {
     await runtime.ensureStructuredAgentSessionHost()
     const deps = installed.mock.calls[0]?.[0]
     expect(deps).toBeDefined()
-    expect(deps?.resolveClaudeCommand?.()).toBe(process.execPath)
-    expect(deps?.resolveCodexCommand?.()).toBe(process.execPath)
+    expect(deps?.resolveClaudeCommand?.()).toEqual({ command: process.execPath, prefixArgs: [] })
+    expect(deps?.resolveCodexCommand?.()).toEqual({ command: process.execPath, prefixArgs: [] })
     expect(await deps?.resolveLaunchArgs?.('claude')).toEqual(['--model', 'model one'])
     expect(await deps?.resolveLaunchArgs?.('codex')).toEqual(['-c', 'model_reasoning_effort=high'])
     settings.agentDefaultArgs = { claude: '--model second', codex: '' }
@@ -43,22 +43,28 @@ describe('execution host structured launch settings wiring', () => {
     settings.agentDefaultArgs = { claude: '--dangerously-skip-permissions', codex: '' }
     expect(deps?.resolveAgentFullAccess?.('claude')).toBe(true)
     expect(deps?.resolveAgentFullAccess?.('codex')).toBe(false)
-    // OMP has no bypass argument, so its chats from before modes take the new-chat setting.
+    // OMP lacks bypass arguments; legacy chats inherit the new-chat permission setting.
     settings.nativeChatPermissionMode = 'full-access'
     expect(deps?.resolveAgentFullAccess?.('omp')).toBe(true)
     settings.nativeChatPermissionMode = 'ask'
     expect(deps?.resolveAgentFullAccess?.('omp')).toBe(false)
     const notRunnable = expect.objectContaining({ reason: 'agentCommandNotRunnable' })
-    settings.agentCmdOverrides = { claude: 'wrapper --arg' }
+    settings.agentCmdOverrides = { claude: 'wrapper $SECRET' }
     expect(() => deps?.resolveClaudeCommand?.()).toThrow(notRunnable)
     settings.agentCmdOverrides = { codex: '/missing/codex' }
     expect(() => deps?.resolveCodexCommand?.()).toThrow(notRunnable)
     settings.agentCmdOverrides = {}
-    expect(deps?.resolveClaudeCommand?.()).toBe(resolveCliCommand('claude'))
-    expect(deps?.resolveCodexCommand?.()).toBe(resolveCliCommand('codex'))
+    expect(deps?.resolveClaudeCommand?.()).toEqual({
+      command: resolveCliCommand('claude'),
+      prefixArgs: []
+    })
+    expect(deps?.resolveCodexCommand?.()).toEqual({
+      command: resolveCliCommand('codex'),
+      prefixArgs: []
+    })
   })
 
-  // The chat child's PATH and home decide which binary runs, for a saved bare command and the stock one.
+  // Both stock and bare saved commands must resolve in the chat child's PATH/home.
   it.skipIf(process.platform === 'win32')(
     'resolves both agents against the PATH and home the chat child will run with',
     async () => {
@@ -76,11 +82,23 @@ describe('execution host structured launch settings wiring', () => {
         await runtime.ensureStructuredAgentSessionHost()
         const deps = installed.mock.calls[0]?.[0]
         const childLookup = { pathEnv: bin, homePath: bin }
-        expect(deps?.resolveClaudeCommand?.(childLookup)).toBe(join(bin, 'custom-claude'))
-        expect(deps?.resolveCodexCommand?.(childLookup)).toBe(join(bin, 'custom-codex'))
+        expect(deps?.resolveClaudeCommand?.(childLookup)).toEqual({
+          command: join(bin, 'custom-claude'),
+          prefixArgs: []
+        })
+        expect(deps?.resolveCodexCommand?.(childLookup)).toEqual({
+          command: join(bin, 'custom-codex'),
+          prefixArgs: []
+        })
         settings.agentCmdOverrides = {}
-        expect(deps?.resolveClaudeCommand?.(childLookup)).toBe(join(bin, 'claude'))
-        expect(deps?.resolveCodexCommand?.(childLookup)).toBe(join(bin, 'codex'))
+        expect(deps?.resolveClaudeCommand?.(childLookup)).toEqual({
+          command: join(bin, 'claude'),
+          prefixArgs: []
+        })
+        expect(deps?.resolveCodexCommand?.(childLookup)).toEqual({
+          command: join(bin, 'codex'),
+          prefixArgs: []
+        })
       } finally {
         rmSync(bin, { recursive: true, force: true })
       }

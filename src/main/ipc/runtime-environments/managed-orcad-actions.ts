@@ -43,7 +43,12 @@ export function createManagedOrcadActions(
     isActiveEnvironment: (environmentId: string) =>
       options.getActiveEnvironmentId() === environmentId,
     retireLocalState: (environmentId: string) =>
-      retireRemovedRuntimeEnvironment(environmentId, options.invalidateTransport, options.store)
+      retireRemovedRuntimeEnvironment(
+        environmentId,
+        options.invalidateTransport,
+        options.store,
+        userDataPath()
+      )
   }
   return {
     status: (selector) => getManagedOrcadRuntimeStatus(userDataPath(), selector),

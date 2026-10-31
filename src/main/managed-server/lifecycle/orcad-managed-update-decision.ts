@@ -95,11 +95,7 @@ export function orcadUpdateSkipRefusal(
         `Orca (${appVersion}). Update Orca to start it.`
 }
 
-/**
- * The bundled build to advertise as an update for a running host, or null. Content hashes don't
- * order, so it needs the host's Orca version and never offers one to a newer host. A host from
- * before that field existed is offered only the build this desktop already tried to activate.
- */
+/** Content hashes cannot order updates: compare Orca versions, or for legacy hosts offer only this desktop's previously deferred build. */
 export function availableManagedOrcadUpdate(input: {
   record: OrcadActivationRecord
   candidateVersion: string | null

@@ -1,4 +1,8 @@
 import {
+  TERMINAL_CTRL_BACKSPACE_INPUT,
+  TERMINAL_KITTY_SHIFT_ENTER_INPUT
+} from '../../../src/shared/terminal-modified-enter-encoding'
+import {
   SPECIAL_KEY_LABELS,
   TERMINAL_ACCESSORY_KEY_DEFINITIONS,
   TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS
@@ -158,8 +162,7 @@ function buildShortcutBytes(key: string, modifiers: TerminalShortcutModifier[]):
   }
   const csiFinal = CSI_FINAL_SPECIAL_KEYS[key]
   if (csiFinal) {
-    // Why: xterm encodes unmodified F1-F4 as SS3 (ESC O P/S). Once a
-    // modifier is present it switches to the CSI 1;N form like arrows.
+    // Modifiers switch F1–F4 from SS3 to CSI 1;N, matching xterm.
     if (SS3_BASE_SPECIAL_KEYS.has(key) && csiModifierParameter(modifiers) === 1) {
       return `${ESC}O${csiFinal}`
     }
@@ -181,10 +184,17 @@ function buildShortcutBytes(key: string, modifiers: TerminalShortcutModifier[]):
     return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (key === 'enter') {
+    // Saved keys carry no pane; the send path encodes this for the pane's negotiated keyboard modes.
+    if (hasOnlyModifier(modifiers, 'shift')) {
+      return TERMINAL_KITTY_SHIFT_ENTER_INPUT
+    }
     const bytes = '\r'
     return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (key === 'backspace') {
+    if (hasOnlyModifier(modifiers, 'ctrl')) {
+      return TERMINAL_CTRL_BACKSPACE_INPUT
+    }
     const bytes = modifiers.includes('ctrl') ? '\b' : '\x7f'
     return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
@@ -192,6 +202,13 @@ function buildShortcutBytes(key: string, modifiers: TerminalShortcutModifier[]):
     return buildPrintableShortcutBytes(key, modifiers)
   }
   return null
+}
+
+function hasOnlyModifier(
+  modifiers: TerminalShortcutModifier[],
+  modifier: TerminalShortcutModifier
+): boolean {
+  return modifiers.length === 1 && modifiers[0] === modifier
 }
 
 function buildPrintableShortcutBytes(

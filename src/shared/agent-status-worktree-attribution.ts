@@ -1,3 +1,5 @@
+import type { Tab } from './tab-types'
+import { structuredAgentSessionPaneKey } from './structured-agent-session-projection'
 import type { AgentStatusEntry, AgentStatusOrchestrationContext } from './agent-status-types'
 import { isWebTerminalSurfaceTabId } from './terminal-surface-id'
 import { parseLegacyNumericPaneKey, parsePaneKey } from './stable-pane-id'
@@ -5,10 +7,17 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from './stable-pane-id'
 export type AgentStatusPaneIdentity = { tabId: string; paneId: string }
 
 export function parseAgentStatusPaneIdentity(
-  paneKey: string | undefined
+  paneKey: string | undefined,
+  representedTab?: Pick<Tab, 'id' | 'entityId' | 'contentType'>
 ): AgentStatusPaneIdentity | null {
   if (!paneKey) {
     return null
+  }
+  if (
+    representedTab?.contentType === 'agent-session' &&
+    structuredAgentSessionPaneKey(representedTab.id, representedTab.entityId) === paneKey
+  ) {
+    return { tabId: representedTab.id, paneId: paneKey.slice(representedTab.id.length + 1) }
   }
   const parsed = parsePaneKey(paneKey)
   if (parsed) {

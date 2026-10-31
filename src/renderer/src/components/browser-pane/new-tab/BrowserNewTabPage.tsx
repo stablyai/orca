@@ -28,7 +28,6 @@ type BrowserNewTabServerContext = {
   openInPlace: boolean
 }
 
-/** The page a blank browser tab shows: this workspace's servers and links, then the sites you visit most. */
 export function BrowserNewTabPage({
   worktreeId,
   onOpenUrl,

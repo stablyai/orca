@@ -8,8 +8,7 @@ import { posixCurlCommand } from '../agent-hooks/hook-post-command'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 import {
   buildPosixGrokReplayGuardLines,
@@ -59,7 +58,6 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ...buildWindowsGrokReplayGuardLines(),
       buildWindowsAgentHookPostCommand('cursor'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }

@@ -32,10 +32,7 @@ import { worktree as worktreeFixture } from './worktree-list-groups-test-fixture
 import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
 import { getProjectSectionCatalogFromState } from '../../runtime/sync-runtime-graph/project-section-catalog'
 
-// Why: the phone's Project sections must be the desktop sidebar's by construction. The desktop
-// half answers the renderer's own catalog fetch and runs its merge, selector, repo order and
-// buildRows; the phone half groups what main serves from the renderer's published catalog, and
-// mobile/src/worktree/workspace-list-sections-desktop-parity.test.ts runs buildSections on it.
+// Compare the window’s fetched/merged catalog with main’s phone feed; the mobile parity test also runs buildSections.
 
 const { rpc, assertCapability } = vi.hoisted(() => ({ rpc: vi.fn(), assertCapability: vi.fn() }))
 vi.mock('../../runtime/runtime-rpc-client', () => ({
@@ -141,10 +138,7 @@ async function desktopHeaders(projectOrderBy: ProjectOrderBy) {
   ).flatMap((row) => (row.type === 'header' ? [{ key: row.key, label: row.label }] : []))
 }
 
-/**
- * What main serves the phone: the renderer's published catalog as JSON crosses the wire. Main
- * stores and answers it unchanged (src/main/ipc/runtime.test.ts, mobile-project-sections.test.ts).
- */
+/** Round-trip the published catalog through JSON as main serves it to the phone. */
 async function servedCatalog(projectOrderBy: ProjectOrderBy): Promise<MobileProjectSectionCatalog> {
   const { repos, rows } = await desktopCatalog()
   const published = getProjectSectionCatalogFromState({ repos, ...rows, projectOrderBy })

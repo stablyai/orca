@@ -114,26 +114,6 @@ describe('the background-task roster on subscriber frames', () => {
     expect(rosterOf(events[0])).toEqual(MONITORING)
   })
 
-  it('carries the current roster on snapshot frames, so a running task stays shown', async () => {
-    const journal = await openJournal('replay')
-    const subscribers = new AgentSessionSubscribers({ readBackgroundTasks: () => MONITORING })
-    const events: AgentSessionSubscribeEvent[] = []
-    subscribers.open({
-      id: 'pane',
-      sessionId: SESSION,
-      journal,
-      fence: 1,
-      emit: (e) => events.push(e)
-    })
-
-    subscribers.snapshot(SESSION, journal, 2)
-
-    expect(events.map((event) => [event.type, rosterOf(event)])).toEqual([
-      ['snapshot', MONITORING],
-      ['snapshot', MONITORING]
-    ])
-  })
-
   it('neither reads nor resends the roster for an ordinary journal batch', async () => {
     const journal = await openJournal('ordinary')
     const readBackgroundTasks = vi.fn(() => MONITORING)

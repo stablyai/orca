@@ -103,7 +103,6 @@ describe('computeActiveTerminalKeyboardLift', () => {
       terminalFrameHeight: FRAME_HEIGHT
     })
     expect(lift).toBeLessThanOrEqual(KEYBOARD_LIFT)
-    // With the drawn row pitch too, and a grid drawn taller than the frame it is lifted in.
     const taller = computeActiveTerminalKeyboardLift({
       keyboardLift: KEYBOARD_LIFT,
       metrics: metrics({ rows: 60, rowPitch: 18, cursorY: 59, contentBottomRow: 59 }),
@@ -136,21 +135,17 @@ describe('computeActiveTerminalKeyboardLift', () => {
       })
 
     it('keeps base in phone mode, where the fit fills the frame to within a row', () => {
-      // Pixel_API_37: 47 rows of 15 px in a 713.7 px frame under a 312 px keyboard.
       const phone = metrics({ rows: 47, rowPitch: 15, cursorY: 46, contentBottomRow: 46 })
       expect(lift(312, phone)).toBe(312)
     })
 
     it('lifts a desktop-mode grid only by what the keyboard hides of it', () => {
-      // Pixel_API_37, measured blank: 40 desktop rows drawn 270 px tall, lifted 312 under the header.
       const drawn270 = metrics({ rows: 40, rowPitch: 6.75, cursorY: 39, contentBottomRow: 39 })
       expect(lift(312, drawn270)).toBe(0)
       expect(lift(312, { ...drawn270, altScreen: true })).toBe(0)
-      // 425 px drawn, the dock at 401.7: the caret row's bottom lands on the dock.
       const drawn425 = metrics({ rows: 50, rowPitch: 8.5, cursorY: 49, contentBottomRow: 49 })
       expect(lift(312, drawn425)).toBeCloseTo(23.3, 5)
       expect(lift(312, { ...drawn425, altScreen: true })).toBeCloseTo(23.3, 5)
-      // A caret mid-grid lifts only enough to clear its row plus one: 47 x 8.5 + 8.5 - 401.7.
       expect(lift(312, { ...drawn425, cursorY: 46, contentBottomRow: 46 })).toBeCloseTo(6.3, 5)
       expect(lift(312, { ...drawn425, cursorY: 45, contentBottomRow: 45 })).toBe(0)
     })

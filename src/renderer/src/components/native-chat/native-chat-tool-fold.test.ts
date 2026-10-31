@@ -50,8 +50,7 @@ describe('foldToolMessages', () => {
     expect(folded[0]?.blocks).toHaveLength(3)
   })
 
-  // A stored-only provider event draws nothing; splitting a run around it would show two runs
-  // back to back with no visible reason. A plan update does split: it draws as the task list.
+  // Invisible provider events must not split visible runs; rendered plan updates do.
   it('keeps one run across a wordless provider event, but not across a plan update', () => {
     const frameRow = (id: string, kind: string): NativeChatMessage =>
       msg({

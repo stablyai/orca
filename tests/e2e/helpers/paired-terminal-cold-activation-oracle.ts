@@ -162,10 +162,7 @@ export async function runPairedTerminalColdActivationOracle(
       originalPtyId: originalPtyIds[index]!
     }))
     const tabIds = tabs.map((tab) => tab.tabId)
-    // Why: background tabs park eagerly (parking delay is 100ms while tab
-    // creation plus the PTY-id poll above takes far longer), so a one-shot
-    // read races the sweeper. Parked-but-unmounted is the cold resting state
-    // this oracle asserts again after first activation (1 mounted + 7 parked).
+    // Poll for the stable cold state because tabs park within 100ms while creation/readiness takes longer.
     await expectStableColdActivationMountState(page, tabIds, {
       mounted: 0,
       parked: TARGET_TAB_COUNT

@@ -1,4 +1,11 @@
+import { deepStrictEqual } from 'node:assert/strict'
 import { describe, expect, it } from 'vitest'
+import { projectRelationsTableFixture } from '../../../src/shared/github/project-relations.test-fixture'
+import { sortRows, groupRows } from '../../../src/shared/github/project-group-sort'
+import {
+  normalizeProjectTableForMobileSort,
+  projectFieldDisplayLabel
+} from './mobile-tasks-project-fields'
 import {
   taskProjectAccessibleListSchema,
   taskProjectAssignableUserListSchema,
@@ -12,9 +19,6 @@ import {
   taskProjectViewListSchema,
   taskProjectViewTableSchema
 } from './task-project-board-reply-schema'
-
-// Pins the decisions task-project-board-reply-schema.ts documents: the one closed enum, the one
-// open-vocabulary string beside it, the row drops, and the tri-state the detail pane forwards.
 
 describe('project envelopes', () => {
   it('reads the representative accessible-project list whole', () => {
@@ -124,6 +128,34 @@ describe('the board table', () => {
     expect(parsed.success).toBe(true)
   })
 
+  it('preserves new and legacy content through schema, mobile projection and visible labels', () => {
+    const table = projectRelationsTableFixture()
+    const parsed = taskProjectViewTableSchema.parse(
+      JSON.parse(JSON.stringify({ ok: true, data: table }))
+    )
+    if (!parsed.ok) {
+      throw new Error('Expected accepted table')
+    }
+    const decoded = parsed.data
+    deepStrictEqual(decoded, table)
+    const projected = normalizeProjectTableForMobileSort(decoded, decoded.rows, null)
+    const groups = groupRows(projected, sortRows(projected, projected.rows))
+    expect(groups.map((group) => group.label)).toEqual(['1', '2'])
+    const rows = groups.flatMap((group) => group.rows)
+    expect(rows.map((row) => row.id)).toEqual(['legacy', 'populated'])
+    expect(rows[1].content).toEqual(table.rows[0].content)
+    expect(rows[0].content).not.toHaveProperty('linkedPullRequests')
+    expect(rows[0].content).not.toHaveProperty('subIssuesProgress')
+    expect(
+      rows.map((row) =>
+        projected.selectedView.fields.map((field) => projectFieldDisplayLabel(row, field))
+      )
+    ).toEqual([
+      ['1', 'Empty', 'Empty'],
+      ['2', 'Empty', 'Empty']
+    ])
+  })
+
   it('refuses a table with no selectedView, which was a read on undefined', () => {
     const parsed = taskProjectViewTableSchema.safeParse({
       ok: true,
@@ -142,7 +174,7 @@ describe('the row detail pane preserves reviewDecision as a tri-state', () => {
     expect(parsed.success && parsed.data).toMatchObject({
       details: { item: { reviewDecision: null } }
     })
-    // JSON drops an absent key and keeps an explicit null, which is the whole distinction here.
+    // JSON distinguishes explicit null from an omitted key.
     expect(JSON.stringify(parsed)).toContain('"reviewDecision":null')
   })
 
@@ -212,10 +244,7 @@ describe('the comment replies', () => {
   })
 })
 
-// The five collections and the assignee list are typed by the item half's entity schemas now, so a
-// row the pane would have crashed on drops instead of reaching a consumer as the declared type.
-// No scenario reply carries any of them non-empty, so these pins are the only thing that observes
-// the change — the goldens cannot.
+// Exercise nonempty collections directly; recorded board replies are empty and cannot verify malformed-row salvage.
 describe('the detail collections are the shared entity rows', () => {
   const details = (value: Record<string, unknown>) =>
     taskProjectRowDetailSchema.safeParse({ ok: true, details: value })

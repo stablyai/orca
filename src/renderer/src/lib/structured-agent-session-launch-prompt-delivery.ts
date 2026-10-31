@@ -4,7 +4,7 @@ import { sendStructuredAgentSessionMessage } from '@/components/native-chat/stru
 import { noteStructuredAgentSessionFence } from '@/components/native-chat/structured-agent-session-send-attempt'
 import { publishStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-pending-sends'
 import { agentSessionWriteNoticeText } from '@/components/native-chat/agent-session-write-notice-text'
-import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
+import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type {
   StagedStructuredLaunchPrompt,

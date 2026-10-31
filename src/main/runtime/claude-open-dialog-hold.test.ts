@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
-import { USER_INPUT_HOLD_CAP_MS, isClaudeDialogHoldingPane } from './claude-open-dialog-hold'
+import { isClaudeDialogHoldingPane } from './claude-open-dialog-hold'
 
 const NOW = 1_000_000_000
 
@@ -63,7 +63,9 @@ describe('isClaudeDialogHoldingPane', () => {
 
   it('holds an unreadable screen only until the cap, which also ends a visible dialog hold', () => {
     expect(holds(60_000, null)).toBe(true)
-    expect(holds(USER_INPUT_HOLD_CAP_MS + 1, null)).toBe(false)
-    expect(holds(USER_INPUT_HOLD_CAP_MS + 1, PERMISSION)).toBe(false)
+    expect(holds(600_000, null)).toBe(true)
+    expect(holds(600_000, PERMISSION)).toBe(true)
+    expect(holds(600_001, null)).toBe(false)
+    expect(holds(600_001, PERMISSION)).toBe(false)
   })
 })

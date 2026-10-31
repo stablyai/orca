@@ -21,8 +21,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-// Why it matters: the desktop installs Chromium's session-backed client, so the download follows
-// system, PAC and Orca proxy settings (and proxy login). A plain undici fetch would bypass them.
 describe('pinned Node runtime download', () => {
   it('goes through the installed main HTTP client when the deploy passes no fetcher', async () => {
     const body = new TextEncoder().encode('node runtime archive bytes')
@@ -33,7 +31,6 @@ describe('pinned Node runtime download', () => {
     const globalFetch = vi.spyOn(globalThis, 'fetch')
     setMainHttpClient({ fetch, proxySession: () => null })
 
-    // The deploy paths (SSH, WSL host, Windows host) all call it with only a signal.
     const cached = await materializeNodeRuntimeArchive(TARGET, join(root, 'cache'), {})
 
     expect(cached.endsWith(originalAsset.archive)).toBe(true)

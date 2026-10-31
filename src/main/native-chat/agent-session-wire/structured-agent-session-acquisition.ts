@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
 import { abortSignalReason } from '../../../shared/abort-signal-reason'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord
@@ -30,6 +31,7 @@ export async function acquireOwner(
 ): Promise<{
   record: AgentSessionRecord
   acquisitionGeneration: string
+  accountHome?: AgentSessionAccountHome
 }> {
   const fence = record.lease.runtimeFence
   const spawnToken = record.lease.reservedSpawnToken
@@ -43,7 +45,17 @@ export async function acquireOwner(
       throw new AgentSessionPreSpawnError(error)
     }
     const permissionMode = await input.launchPermissionMode?.(record)
-    // Recheck after waits so Stop/close/quit cannot spawn a late child.
+    const accountRecipe = await input.launchAccountRecipe?.(record)
+    try {
+      await input.assertNoTerminalWriter?.(record)
+    } catch (error) {
+      // Not a code: a code message would travel as the census's own conflict, not this reason.
+      throw new AgentSessionPreSpawnError(error, {
+        reason: 'conversationOpenInTerminal',
+        message: 'a terminal may still be writing this conversation'
+      })
+    }
+    // Right before the spawn: a close, Stop or quit that landed during any wait above launches nothing.
     if (input.acquireSignal?.aborted) {
       throw new AgentSessionPreSpawnError(abortSignalReason(input.acquireSignal))
     }
@@ -53,6 +65,7 @@ export async function acquireOwner(
       // Retry the existing reservation instead of spawning a second child.
       spawnToken,
       ...(permissionMode ? { permissionMode } : {}),
+      ...(accountRecipe ? { accountRecipe } : {}),
       ...(input.eventSink ? { events: input.eventSink } : {}),
       ...(input.acquireSignal ? { signal: input.acquireSignal } : {}),
       ...(input.startupOptions ? { startupOptions: input.startupOptions } : {}),
@@ -86,9 +99,21 @@ export async function acquireOwner(
       sessionId: record.sessionId,
       fence,
       ...(acquired.link ? { link: acquired.link } : {}),
+      ...(acquired.accountRecipe
+        ? {
+            accountAcquisition: {
+              generation: acquired.acquisitionGeneration,
+              recipe: acquired.accountRecipe
+            }
+          }
+        : {}),
       now: input.now()
     })
-    return { record: proved, acquisitionGeneration: acquired.acquisitionGeneration }
+    return {
+      record: proved,
+      acquisitionGeneration: acquired.acquisitionGeneration,
+      ...(acquired.accountHome ? { accountHome: acquired.accountHome } : {})
+    }
   } catch (error) {
     if (isAgentSessionPreSpawnError(error)) {
       throw error

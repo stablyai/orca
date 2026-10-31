@@ -1,4 +1,5 @@
 import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachment-mutation'
+import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
@@ -177,6 +178,10 @@ export class RuntimeProjectGroupController {
     if (!group || !folderPath) {
       throw new FolderWorkspaceCreateRefusedError('folder_workspace_project_group_not_found')
     }
+    if (folderPath === input.folderPath) {
+      // An explicit folder on a WSL host must not be a Windows drive; refused before any store write.
+      await refuseWslHostWindowsDrivePath(folderPath)
+    }
     const status = await getFolderWorkspacePathStatusForPath({
       folderPath,
       projectGroupId: group.id,
@@ -260,8 +265,7 @@ export class RuntimeProjectGroupController {
     }
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
-      // Why: a mixed-host group has no single PTY target; forgetting the
-      // workspace must still succeed, so skip the sweep instead of failing.
+      // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
       let connectionId: string | null | undefined
       try {
         connectionId = this.deps.resolveFolderConnectionId(workspace)

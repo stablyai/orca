@@ -1,12 +1,13 @@
 import { waitForInFlightWorktreeCreate } from '../../worktree-create-in-flight'
+import { detectProjectLaunchContext } from '../../preflight/workspace-agent-detection'
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
 import { branchSelectorMatches, runtimePathsEqual } from '../runtime-worktree-path-identity'
 import {
   getRepoExecutionHostId,
-  getRepoRoutingConnectionId,
-  getWorktreeExecutionHostId
+  getSshTargetIdForExecutionHost,
+  type ExecutionHostId
 } from '../../../shared/execution-host'
 import {
   runtimeRepoSelectorHostId,
@@ -19,13 +20,15 @@ import type {
 } from '../runtime-worktree-lineage-resolution'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
-import { chatWorkerErrorEscalationEnabled } from '../orchestration/chat-worker-error-escalation'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
 import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
+import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
+import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 
 export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree {
@@ -41,7 +44,11 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     ...args: Parameters<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
   ): ReturnType<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
 
-  protected async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
+  /** The repo-backed catalog only: project-group folder workspaces never match. Resolve a workspace with resolveWorkspaceSelector. */
+  protected async resolveGitWorktreeSelector(
+    selector: string,
+    requiredHostId?: ExecutionHostId
+  ): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
     const parsed = splitWorktreeIdForFilesystem(explicitWorktreeId ?? selector)
     await waitForInFlightWorktreeCreate(
@@ -52,12 +59,25 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     // `selector_ambiguous` contract is defined over all repos. Scoping those would silently pick a
     // winner where today they correctly refuse. An `id:` selector already names its repo.
     if (explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
-      const scoped = await this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
+      const scoped = await (requiredHostId === undefined
+        ? this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
+        : this.resolveExplicitWorktreeIdScoped(explicitWorktreeId, requiredHostId))
       if (scoped) {
         return scoped
       }
     }
-    const worktrees = await this.listResolvedWorktrees()
+    const worktrees = (await this.listResolvedWorktrees()).filter(
+      (row) => requiredHostId === undefined || row.hostId === requiredHostId
+    )
+    return this.matchWorktreeSelector(selector, worktrees, explicitWorktreeId, requiredHostId)
+  }
+
+  protected matchWorktreeSelector(
+    selector: string,
+    worktrees: ResolvedWorktree[],
+    explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector),
+    requiredHostId?: ExecutionHostId
+  ): ResolvedWorktree {
     let candidates: ResolvedWorktree[]
 
     if (selector === 'active') {
@@ -78,9 +98,13 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
       }
       if (candidates.length === 0) {
         const parsed = splitWorktreeIdForFilesystem(worktreeId)
-        const repo = parsed ? this.store?.getRepo(parsed.repoId) : null
+        const owner = this.store && resolveWorktreeMetaOwner(this.store, worktreeId)
         const fallback =
-          repo && getRepoRoutingConnectionId(repo) && this.store?.getWorktreeMeta(worktreeId)
+          requiredHostId === undefined &&
+          parsed &&
+          owner &&
+          getSshTargetIdForExecutionHost(owner.hostId) &&
+          this.store?.getWorktreeMeta(worktreeId)
             ? this.buildResolvedWorktreeFromId(worktreeId)
             : null
         if (fallback !== null) {
@@ -92,14 +116,16 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
         runtimePathsEqual(worktree.path, selector.slice(5))
       )
       if (candidates.length > 1) {
+        const repos = this.store?.getRepos() ?? []
+        const lookup = createRepoRowExecutionHostLookup(repos)
+        const routes = candidates.map((worktree) =>
+          resolveWorktreeHostRouting(repos, worktree, lookup)
+        )
         const hostIds = new Set(
-          candidates.map((worktree) => {
-            const repo = this.store?.getRepo(worktree.repoId)
-            return getWorktreeExecutionHostId(worktree, repo)
-          })
+          routes.flatMap((route) => (route.kind === 'resolved' ? [route.hostId] : []))
         )
         // Why: duplicate registrations on one host describe one path; identical paths on different hosts do not.
-        if (hostIds.size === 1) {
+        if (routes.every((route) => route.kind === 'resolved') && hostIds.size === 1) {
           candidates = [candidates[0]]
         }
       }
@@ -149,10 +175,6 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     return this._orchestrationDb
   }
 
-  isChatWorkerErrorEscalationEnabled(): boolean {
-    return chatWorkerErrorEscalationEnabled(this.store?.getSettings?.())
-  }
-
   getNestedWorkerMaxDepth(): number {
     return resolveNestedWorkerMaxDepth({
       nestedWorkerMaxDepth: this.store?.getSettings?.()?.nestedWorkerMaxDepth
@@ -171,8 +193,7 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     return this.worktreeLineage.listWorkspaceLineage()
   }
 
-  // Why: one selector grammar, so connection-scoped resolution can narrow the same
-  // candidate set instead of reimplementing (and diverging from) the matching rules.
+  // Reuse the selector grammar when narrowing connection scope so matching cannot diverge.
   protected selectReposBySelector(selector: string): Repo[] {
     const repos = this.store?.getRepos() ?? []
     if (selector.startsWith('id:')) {
@@ -211,6 +232,11 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     throw new Error('repo_not_found')
   }
 
+  async detectProjectLaunchContext(repoSelector: string) {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return detectProjectLaunchContext(this.requireStore(), repo)
+  }
+
   requireStore(): RuntimeStore {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -223,7 +249,14 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     if (!parsed?.repoId || !parsed.worktreePath) {
       return null
     }
-    const repo = this.store?.getRepos?.()?.find((entry) => entry.id === parsed.repoId)
+    const owner = this.store && resolveWorktreeMetaOwner(this.store, worktreeId)
+    if (!owner) {
+      return null
+    }
+    const repo = createRepoRowExecutionHostLookup(this.store?.getRepos() ?? []).byHost(
+      parsed.repoId,
+      owner.hostId
+    )
     const git = {
       path: parsed.worktreePath,
       head: '',
@@ -234,7 +267,7 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     const meta = this.store?.getWorktreeMeta(worktreeId)
     const merged = {
       ...mergeWorktree(parsed.repoId, git, meta, repo?.displayName),
-      ...(repo ? { hostId: meta?.hostId ?? getRepoExecutionHostId(repo) } : {})
+      hostId: owner.hostId
     }
     return {
       ...merged,

@@ -17,8 +17,7 @@ describe('reconcileTeamSelection', () => {
     expect([...reconcileTeamSelection([team('a'), team('b')], ['b'])]).toEqual(['b'])
   })
 
-  // Why: an older host projects its raw store value, which reached 1.4.207
-  // desktops as a string (0a2b6e7f); the mobile list must not fail on it.
+  // Older hosts may publish persisted selection as a string; keep that compatible.
   it('reads a saved value of the wrong shape as sticky-all instead of throwing', () => {
     expect([...reconcileTeamSelection([team('a'), team('b')], 'a')]).toEqual(['a', 'b'])
     expect([...reconcileTeamSelection([team('a'), team('b')], { 0: 'a' })]).toEqual(['a', 'b'])

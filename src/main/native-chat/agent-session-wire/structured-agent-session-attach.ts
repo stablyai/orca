@@ -36,6 +36,7 @@ import {
 } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { AdoptedTranscriptSource } from '../agent-session-journal/adopted-transcript-source'
 import { structuredAgentSessionRefusalMessage } from './structured-agent-session-refusal-message'
 
 /** Clients cannot assert spawn tokens, claim keys or owner death; only host observations grant authority. */
@@ -59,7 +60,7 @@ export type AgentSessionAttachParams = {
     providerHandle: AgentSessionProviderHandle
     /** Omit only for exact replay of an already-imported journal. */
     transcriptPath?: string
-    source?: { providerSessionId: string; workspaceCwd: string }
+    source?: AdoptedTranscriptSource
   }
 }
 
@@ -128,7 +129,7 @@ export function admitAttachOrRefuse(
 }
 
 export function journalIdentityFor(
-  record: AgentSessionRecord,
+  record: Pick<AgentSessionRecord, 'sessionId' | 'providerHandleChain' | 'providerContextBoundary'>,
   params: AgentSessionAttachParams
 ): AgentSessionJournalIdentity {
   const active = activeProviderContext(record)
@@ -153,11 +154,7 @@ export type AttachedJournal = {
   unconfirmedClientMessageIds: string[]
 }
 
-/**
- * The conversation's journal, opened — and its crash boundary settled — by the conversation's own
- * open. A send the boundary could only doubt stays `unknown`: whether the provider took it is never
- * inferred from provider history, since absence from a log Orca does not own proves nothing.
- */
+/** Open settles the crash boundary; missing provider history cannot turn unknown delivery into proven refusal. */
 export async function attachJournal(input: {
   record: AgentSessionRecord
   /** The host's open conversation, whose journal the attach adopts. */
@@ -173,14 +170,7 @@ export async function attachJournal(input: {
   }
 }
 
-/**
- * The first link of an adopting session's chain.
- *
- * `adopted` is the only origin besides `created` a chain will accept at its head, and it is the
- * honest one here: this session did not create the conversation. The adapter appends its own
- * `resumed` link once the provider proves the same identity root — or, when it proves the identical
- * handle at the same fence, the validator elides that as a retry and this link stays the head.
- */
+/** Adopted conversations start with adopted, never created; provider proof appends resumed unless identical handle/fence makes it a retry. */
 const ADOPTED_HANDLE_FENCE = 1
 
 function adoptedProviderHandleLink(

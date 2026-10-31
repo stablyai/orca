@@ -1,7 +1,6 @@
 import type { ReactTestInstance } from 'react-test-renderer'
 
-// Mocked react-native modules render host components as bare names ('Pressable', 'Text'), which
-// findAllByType's ElementType parameter cannot express.
+// Mock native host names ('Pressable', 'Text') are outside findAllByType’s ElementType.
 export function findAllByHostType(root: ReactTestInstance, hostType: string): ReactTestInstance[] {
   return root.findAll((node) => node.type === hostType)
 }

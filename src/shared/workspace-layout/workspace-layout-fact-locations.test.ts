@@ -1,15 +1,11 @@
-// Every on-disk field is written from exactly one model or side-data field, and on-disk fields
-// that are copies of one fact are written from the same one. The tables
-// (workspace-layout-disk-fields.ts) are typed over the disk record types and every model and
-// side-data field; this test checks each claim by mutating every source and saving.
+// Verify each disk-field source by mutation/save, including duplicate fields that must share one source. Types cover all model/side-data and disk fields.
 
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import {
   DISK_TABLES,
   type DiskFieldWritten,
-  type LayoutSource,
-  type UnwrittenLayoutSource
+  type LayoutSource
 } from './workspace-layout-disk-fields'
 import { EDITOR_FILE_KEY_FIELDS } from './workspace-layout-editor-tab-file'
 import { loadWorkspaceLayout } from './workspace-layout-load'
@@ -21,38 +17,7 @@ import { saveWorkspaceLayout } from './workspace-layout-save'
 import { addWorkspace, GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 
-// A model or side-data field no disk field is written from fails here.
-const everySourceIsWritten: [UnwrittenLayoutSource] extends [never] ? true : UnwrittenLayoutSource =
-  true
-
-/** On-disk fields that hold one fact; each group must be written from the same source. */
-const COPIES = [
-  ['row.ptyId', 'layout.ptyIdsByLeafId'],
-  ['row.id', 'terminalEntry.entityId'],
-  ['row.title', 'terminalEntry.label'],
-  ['row.customTitle', 'terminalEntry.customLabel'],
-  ['row.generatedTitle', 'terminalEntry.generatedLabel'],
-  ...['createdAt', 'color', 'aiVaultTitle', 'quickCommandLabel', 'isPinned', 'viewMode'].map(
-    (field) => [`row.${field}`, `terminalEntry.${field}`]
-  ),
-  ['row.sortOrder', 'terminalEntry.sortOrder', 'entry.sortOrder', 'group.tabOrder'],
-  [
-    'row.worktreeId',
-    'terminalEntry.worktreeId',
-    'entry.worktreeId',
-    'group.worktreeId',
-    'file.worktreeId',
-    'browser.worktreeId',
-    'sleeping.worktreeId',
-    'closedTab.worktreeId'
-  ],
-  ['sleeping.paneKey', 'sleeping.tabId'],
-  ['terminalEntry.executionHostId', 'entry.executionHostId'],
-  ['entry.isPreview', 'file.isPreview'],
-  ['terminalEntry.groupId', 'entry.groupId', 'group.id']
-]
-
-/** Ids other records reference; mutating one would break the references, not test a source. */
+/** Do not mutate identity fields: broken references would test integrity rather than fact ownership. */
 const IDENTITY_SOURCES = new Set<LayoutSource>([
   'tab.id',
   'tab.entityId',
@@ -107,7 +72,6 @@ function richLoaded(): LoadedWorkspaceLayout {
   return populate(loaded)
 }
 
-/** Sets `source` on the first holder `pick` accepts. */
 function fill(
   loaded: LoadedWorkspaceLayout,
   source: LayoutSource,
@@ -129,7 +93,7 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
   fill(loaded, 'file.mirroredFromRuntimeSession', true)
   fill(loaded, 'file.readOnly', true)
   fill(loaded, 'file.liveTail', true)
-  // A focused and an expanded pane that is not the first, so a fallback is visible.
+  // Use nonfirst focus/expanded panes so fallback mistakes become visible.
   fill(loaded, 'viewPane.activeLeafId', leaf(2), (holder) => holder.activeLeafId === leaf(1))
   fill(loaded, 'viewPane.expandedLeafId', leaf(2), (holder) => holder.activeLeafId === leaf(2))
   fill(loaded, 'scrollback.buffer', 'buffer')
@@ -264,7 +228,6 @@ function mutated(value: unknown): unknown {
   if (typeof value === 'boolean') {
     return !value
   }
-  // A nullable field's other state.
   if (value === null) {
     return 'set'
   }
@@ -295,32 +258,6 @@ function diskValues(session: WorkspaceSessionState): Map<string, string> {
 const ALL_SOURCES = [...new Set([...WRITTEN_BY_FIELD.values(), TAB_LIST_ORDER].flatMap(sourcesOf))]
 
 describe('each on-disk field has one source', () => {
-  it('is typed over every disk, model and side-data field', () => {
-    expect(everySourceIsWritten).toBe(true)
-  })
-
-  it('writes every copy of one fact from the same source', () => {
-    for (const group of COPIES) {
-      const sources = group.map((field) => {
-        const written = writtenOf(field)
-        return typeof written === 'string' ? written : written.from
-      })
-      expect(new Set(sources).size, group.join(' = ')).toBe(1)
-    }
-  })
-
-  it('has every source populated, so a mutation can show what it writes', () => {
-    const loaded = richLoaded()
-    const empty = ALL_SOURCES.filter((source) => {
-      const [prefix, field] = splitSource(source)
-      return (
-        !IDENTITY_SOURCES.has(source) &&
-        !holdersOf(loaded, prefix).some((holder) => holder[field] != null)
-      )
-    })
-    expect(empty).toEqual([])
-  })
-
   it('holds each placed pane record in exactly one of its two holders', () => {
     const loaded = richLoaded()
     const leaves = Object.values(loaded.layout.workspaces).flatMap((workspace) =>

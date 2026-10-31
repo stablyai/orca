@@ -4,7 +4,7 @@ import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-serv
 import type { AppState } from '@/store/types'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'

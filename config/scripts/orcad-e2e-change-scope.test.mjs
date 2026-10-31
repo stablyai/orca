@@ -38,7 +38,6 @@ const cases = {
   windows: {
     excluded: [
       'src/main/daemon/daemon-server.test.ts',
-      'src/main/orcad/orcad-native-preflight.test.ts',
       'src/main/orcad/nested/orcad-launch.test.ts',
       'src/cli/runtime/serve.test.ts',
       'src/cli/runtime/nested/serve.test.ts'
@@ -161,10 +160,19 @@ it('re-includes the real WSL distro root after excluding unit tests', () => {
   expect(paths.indexOf('src/main/wsl/wsl-orcad-real-distro-lane.test.ts')).toBeGreaterThan(exclude)
   const steps = workflows.wsl.jobs.wsl2.steps
   const phases = steps.filter((step) => step.env?.ORCA_RUN_WSL_ORCAD_LANE === '1')
-  expect(phases.map((step) => step.env.ORCA_WSL_ORCAD_LANE_PHASE)).toEqual(['launch', 'survive'])
+  expect(phases.map((step) => step.env.ORCA_WSL_ORCAD_LANE_PHASE)).toEqual([
+    'launch',
+    'survive',
+    'idle-release'
+  ])
   for (const phase of phases) {
-    expect(phase.run).toContain('src/main/wsl/wsl-orcad-real-distro-lane.test.ts')
+    expect(phase.run).toMatch(
+      /src\/main\/wsl\/wsl-orcad-real-distro-(idle-release-)?lane\.test\.ts/
+    )
   }
+  expect(
+    paths.indexOf('src/main/wsl/wsl-orcad-real-distro-idle-release-lane.test.ts')
+  ).toBeGreaterThan(exclude)
 })
 
 // Each remote host lane executes these sources, so a change to one must start the lane.

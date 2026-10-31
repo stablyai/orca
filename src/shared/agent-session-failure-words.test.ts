@@ -31,9 +31,11 @@ const LEGACY_MARKER_KINDS: ReadonlySet<SubmissionRejectionKind> = new Set([
   'queueFull'
 ])
 
-/** Every fact shape a kind can carry: bare, with a person or a log detail, with a refusal, and
- *  for an attachment each reason with and without its limit. */
+/** Cover every fact shape, with person/log/refusal details and every attachment reason with/without a limit. */
 function factsFor(kind: AgentSessionFailureKind): AgentSessionFailureFact[] {
+  if (kind === 'modelUnavailable') {
+    return [{ kind }, { kind, detail: { text: 'retired-model', audience: 'log' } }]
+  }
   const facts: AgentSessionFailureFact[] = [
     { kind },
     { kind, detail: { text: 'Context window exceeded.', audience: 'person' } },

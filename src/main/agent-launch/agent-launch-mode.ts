@@ -9,7 +9,7 @@ import type {
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/structured-agent-runtime-metadata'
 import {
-  isNativeChatDefaultFor,
+  nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
@@ -38,7 +38,7 @@ export const DEFAULT_LAUNCH_VOCABULARY: AgentLaunchModeVocabulary = {
   terminal: 'a terminal agent'
 }
 
-export type AgentLaunchModeSettings = Partial<NativeChatDefaultSettings>
+export type AgentLaunchModeSettings = NativeChatDefaultSettings
 
 export type AgentLaunchModePlacement = {
   agent?: string
@@ -68,7 +68,9 @@ const DOWNGRADE_DETAIL: Record<AgentLaunchDowngradeReason, string> = {
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
-  structured_unsupported_on_host: 'the execution host cannot create one here'
+  structured_unsupported_on_host: 'the execution host cannot create one here',
+  chat_runtime_not_installed:
+    "its chat runtime isn't installed on this host (install it from a new chat tab in Orca)"
 }
 
 const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeReason> = {
@@ -82,10 +84,14 @@ const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeRe
   'client-capability': 'structured_sessions_unavailable'
 }
 
-const HOST_SUPPORT_REASON: Record<'agent' | 'remote' | 'wsl', AgentLaunchDowngradeReason> = {
+type HostSupportReason = 'agent' | 'remote' | 'wsl' | 'chat-program'
+type HostLaunchSupport = { supported: boolean; reason?: HostSupportReason }
+
+const HOST_SUPPORT_REASON: Record<HostSupportReason, AgentLaunchDowngradeReason> = {
   agent: 'structured_unsupported_on_host',
   remote: 'remote_execution_host',
-  wsl: 'wsl_execution_runtime'
+  wsl: 'wsl_execution_runtime',
+  'chat-program': 'chat_runtime_not_installed'
 }
 
 /** Apply shared feasibility policy to facts available before resolving the workspace. */
@@ -113,7 +119,7 @@ export function decideAgentLaunchMode(args: {
       agent,
       phase: 'before-effects'
     })
-  if (args.terminalOnly || (surface !== 'chat' && !isNativeChatDefaultFor(settings, agent))) {
+  if (args.terminalOnly || (surface !== 'chat' && !nativeChatPreferenceFor(settings, agent))) {
     return {
       mode: 'terminal',
       preferred: 'terminal',
@@ -195,12 +201,15 @@ async function readStructuredCreateSupport(
   runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
   worktreeId: string,
   agent: TuiAgent | undefined
-): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null> {
+): Promise<HostLaunchSupport | null> {
   if (!agent || !REGISTERED_STRUCTURED_AGENTS.includes(agent)) {
     return { supported: false, reason: 'agent' }
   }
   try {
-    return await runtime.getStructuredAgentSessionCreateSupport(`id:${worktreeId}`, agent)
+    // These launches have no chat tab to offer the install, so they keep the agent's own CLI.
+    return await runtime.getStructuredAgentSessionCreateSupport(`id:${worktreeId}`, agent, {
+      requireInstalledChatProgram: true
+    })
   } catch {
     return null
   }
@@ -208,7 +217,7 @@ async function readStructuredCreateSupport(
 
 export function downgradeAgentLaunchModeForHost(
   receipt: AgentLaunchModeReceipt,
-  support: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null,
+  support: HostLaunchSupport | null,
   vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY,
   context?: AgentLaunchModeSettlement
 ): AgentLaunchModeReceipt {
@@ -300,13 +309,15 @@ export function warnStructuredLaunchDowngrade(
   }
 }
 
-/** A desktop stamp supplies the resolved preference; other callers read the host’s settings. */
+/** A desktop stamp supplies its resolved preference for the launched agent; other callers read the host’s settings. */
 export function readAgentLaunchModeSettings(
   runtime: { requireStore(): { getSettings(): AgentLaunchModeSettings | null } },
-  nativeChatDefault?: boolean
+  caller?: { agent?: string; nativeChatDefault?: boolean }
 ): AgentLaunchModeSettings | null {
-  if (nativeChatDefault !== undefined) {
-    return { experimentalNativeChat: nativeChatDefault }
+  if (caller?.nativeChatDefault !== undefined) {
+    return caller.agent === undefined
+      ? {}
+      : { nativeChatProviders: { [caller.agent]: caller.nativeChatDefault } }
   }
   try {
     return runtime.requireStore().getSettings()

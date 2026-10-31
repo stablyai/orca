@@ -57,8 +57,7 @@ function closeState(
     recordClientHostedBrowserCloseIntents,
     browserPagesByWorkspace: {
       [WORKSPACE_ID]: [browserPage(PAGE_ID, WORKSPACE_ID)],
-      // Why a second workspace is always in the store here: a release that walks every workspace's
-      // pages reads identically to one scoped to the closing tab until something else is open.
+      // Keep another workspace open or an incorrectly unscoped page release passes too.
       [OTHER_WORKSPACE_ID]: [browserPage(OTHER_PAGE_ID, OTHER_WORKSPACE_ID)]
     },
     remoteBrowserPageHandlesByPageId: {
@@ -153,8 +152,7 @@ afterEach(() => {
 })
 
 describe('closeBrowserWorkspaceTabOnHosts releases parked page chrome', () => {
-  // Why staged specifically: a URL only gets parked because the host had not minted the page yet,
-  // and that same tab is the one whose X unwinds a create the user gave up on.
+  // Parked URLs belong to staged, not-yet-host-minted pages; closing must unwind their pending creation.
   it('drops a URL submitted against a staged page that is then closed', () => {
     deferBrowserPageNavigation(PAGE_ID, 'https://example.internal/never-arrived')
 
@@ -220,8 +218,7 @@ describe('closeBrowserWorkspaceTabOnHosts when the owning host cannot settle the
   })
 
   it('leaves the tab standing while any owner still knows the page', async () => {
-    // Two hosts hold pages of this one workspace. The one that still knows it removes the mirror
-    // through tab sync, so tearing down here on the other one's disavowal would race that.
+    // Two hosts own pages; one disavowal must not race the other’s tab-sync removal.
     closeWebRuntimeSessionTab.mockResolvedValueOnce('unknown-tab').mockResolvedValueOnce('applied')
 
     closeWorkspace(false, twoOwnerClientHostedHandles())

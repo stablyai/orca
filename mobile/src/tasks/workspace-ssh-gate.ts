@@ -1,15 +1,8 @@
 import type { SshConnectionState, SshConnectionStatus } from '../../../src/shared/ssh-types'
 import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../../src/shared/orcad-stale-lock-reclaim'
+import { translate } from '../i18n/mobile-i18n'
 
-/**
- * What mobile stores for an SSH connection.
- *
- * SshConnectionState with the two members no mobile reader touches left optional. The host always
- * sends them (public-ssh-state.ts:8 writes `error` explicitly and `reconnectAttempt` has been on
- * the type since #590), so this widens nothing on the wire; it exists so a reply that omits one
- * keeps its `status` instead of dropping the whole record into the connect path's `'connected'`
- * fallback.
- */
+// Keep unread SSH fields optional so an omitted member cannot drop auth-failed state into connected fallback.
 export type WorkspaceSshRecord = Omit<
   SshConnectionState,
   'error' | 'reconnectAttempt' | 'managedServer'
@@ -24,7 +17,6 @@ export type WorkspaceSshGate = {
   requiresConnection: boolean
   connectInProgress: boolean
   error: string | null
-  /** The host's server refused to start on a possibly stale lock; only the desktop can clear it. */
   needsDesktopServerRecovery: boolean
 }
 
@@ -34,27 +26,27 @@ function isWorkspaceSshConnectInProgress(status: SshConnectionStatus | null): bo
 
 export function workspaceSshStatusLabel(status: SshConnectionStatus | null): string {
   if (status === 'connected') {
-    return 'Connected'
+    return translate('tasks.workspaceSshGate.connected', 'Connected')
   }
   if (status === 'connecting') {
-    return 'Connecting'
+    return translate('tasks.workspaceSshGate.connecting', 'Connecting')
   }
   if (status === 'deploying-relay') {
-    return 'Deploying relay'
+    return translate('tasks.workspaceSshGate.deployingRelay', 'Deploying relay')
   }
   if (status === 'reconnecting') {
-    return 'Reconnecting'
+    return translate('tasks.workspaceSshGate.reconnecting', 'Reconnecting')
   }
   if (status === 'auth-failed') {
-    return 'Authentication failed'
+    return translate('tasks.workspaceSshGate.authenticationFailed', 'Authentication failed')
   }
   if (status === 'reconnection-failed') {
-    return 'Reconnect failed'
+    return translate('tasks.workspaceSshGate.reconnectFailed', 'Reconnect failed')
   }
   if (status === 'error') {
-    return 'Connection failed'
+    return translate('tasks.workspaceSshGate.connectionFailed', 'Connection failed')
   }
-  return 'Disconnected'
+  return translate('tasks.workspaceSshGate.disconnected', 'Disconnected')
 }
 
 export function deriveWorkspaceSshGate(args: {
@@ -74,7 +66,6 @@ export function deriveWorkspaceSshGate(args: {
   }
 }
 
-/** The desktop's own gate for Recover server (canRecoverSshHostServer), read from a lenient record. */
 function needsDesktopServerRecovery(server: WorkspaceSshRecord['managedServer']): boolean {
   return (
     server?.kind === 'managed' &&

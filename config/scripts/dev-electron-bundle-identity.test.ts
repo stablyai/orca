@@ -15,9 +15,7 @@ const BRANCH_ENV_KEYS = [
 
 /** Collect the patch set as it would be computed on a given branch. */
 function patchesUnder(dockTitle: string, branch: string) {
-  // Restores individual keys rather than reassigning process.env: that swaps Node's native env
-  // object for a plain one, which stops coercing assigned values to strings (`env.X = 5` stays a
-  // number). Vitest reuses a worker across files, so every later test would inherit the plain object.
+  // Restore env keys individually: replacing process.env loses Node’s string coercion and leaks a plain object into later worker tests.
   const saved = BRANCH_ENV_KEYS.map((key) => [key, process.env[key]] as const)
   Object.assign(process.env, {
     ORCA_DEV_DOCK_TITLE: dockTitle,
@@ -49,21 +47,12 @@ describe('dev-electron-bundle-identity', () => {
   })
 
   it('keeps the bundle display name in step with the name safeStorage keys off', () => {
-    // Two independently hardcoded 'Orca Dev' strings: this one names the bundle (notifications,
-    // System Settings), and getDevInstanceIdentity().appName drives app.setName, which decides the
-    // Keychain service name. Drift would split the two without anything else failing.
+    // Keep fixed bundle name aligned with app.setName’s Keychain service identity.
     expect(DEV_BUNDLE_DISPLAY_NAME).toBe(getDevInstanceIdentity(true, {}).appName)
   })
 
   it('produces byte-identical patches on two different branches', () => {
-    // The invariant the whole fix rests on. Info.plist is inside the signature seal, so any
-    // branch-derived value moves the ad-hoc cdhash — and macOS Keychain ACLs match on that cdhash,
-    // which is what made every branch re-prompt for a password.
-    //
-    // Compared across two simulated branch environments rather than pattern-matched against
-    // suspicious substrings: a denylist only catches branches whose names happen to contain the
-    // banned words, and would miss the likeliest regression of all — re-adding
-    // `{ key: 'CFBundleName', value: title }` for an ordinary branch like "fix-login-crash".
+    // Compare full patches across branches: any signed Info.plist drift changes cdhash/Keychain ACL; substring denylists miss ordinary branch names.
     expect(patchesUnder('Orca: fix-login-crash', 'fix-login-crash')).toEqual(
       patchesUnder('Orca: perf-2', 'perf-2')
     )

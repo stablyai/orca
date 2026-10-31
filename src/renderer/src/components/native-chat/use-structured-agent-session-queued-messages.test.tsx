@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-// The queued-message controller: which RPC each card action issues, and that a host which cannot
-// edit in place gets no Edit at all, never the old copy-and-delete.
+// Exercise card RPCs; hosts without in-place editing must offer no Edit action.
 
 import { toast } from 'sonner'
 import { act, renderHook, waitFor } from '@testing-library/react'
@@ -185,20 +184,20 @@ describe('queued message actions', () => {
     )
   })
 
-  it('Cmd/Ctrl+Enter steers the newest card and reports when there is none', async () => {
+  it('Cmd/Ctrl+Shift+Enter steers the head card and reports when there is none', async () => {
     const harness = createHarness()
-    expect(harness.result.current.steerNewest()).toBe(true)
+    expect(harness.result.current.steerHead()).toBe(true)
     await waitFor(() =>
       expect(harness.mutate).toHaveBeenCalledWith(
         'agentSession.queuedMessageSend',
         'agentSession.queuedMessageSend',
-        { messageId: 'draft-2' }
+        { messageId: 'draft-1' }
       )
     )
     const empty = createHarness({ queuedMessages: [] })
-    expect(empty.result.current.steerNewest()).toBe(false)
+    expect(empty.result.current.steerHead()).toBe(false)
     const disabled = createHarness({ enabled: false })
-    expect(disabled.result.current.steerNewest()).toBe(false)
+    expect(disabled.result.current.steerHead()).toBe(false)
   })
 
   it.each(['current', 'obsolete'])('Delete already sent: %s', async (presentation) => {

@@ -6,9 +6,7 @@ import { MACHINE_NAME_PUBLISH_WAIT_MS } from '../../runtime-machine-name'
 import { STATUS_METHODS } from './status'
 import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 
-// Why its own file: the lookup memo is process-wide, and `status.test.ts` already lands it; this
-// case needs a process whose first lookup is still running when the publish budget runs out.
-// Why mocked: the friendly-name lookup is the one path that spawns `scutil`; the test decides when it lands.
+// Use a fresh process before its memoized scutil lookup completes; control completion to exercise the publish deadline.
 const runProcessMock = vi.hoisted(() => vi.fn())
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
@@ -28,7 +26,7 @@ describe('status.get publish budget', () => {
   })
 
   it('stops waiting at the budget and carries the friendly name on the next read', async () => {
-    // Why darwin: only macOS has a lookup to wait for; elsewhere the hostname is the detected name.
+    // Only macOS needs an async friendly-name lookup; other platforms use hostname.
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     vi.useFakeTimers()
     let finishLookup: ((value: unknown) => void) | undefined

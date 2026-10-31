@@ -1,41 +1,23 @@
+import type { HostLaunchContext } from './agent-launch'
 import type { HostFoundingAttempt } from '../../../agent-launch/host-founding-attempt'
 
-import type { AgentLaunchIntent, AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
-
-import type { RpcContext } from '../core'
 
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 
 import {
   agentLaunchCallerNavigationId,
+  callerRendersLaunchedChat,
   selectAgentLaunchTabForCaller
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceCreation } from './agent-launch-worktree-creation'
 
-import { clientRendersStructuredAgent } from './structured-agent-session-policy'
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
 import { withPlacement, type AgentLaunchView } from './agent-launch-tab-publication'
-
-/**
- * `agent.launch.v2` was defined when Claude and Codex were the only chats, so it vouches for those
- * two. Any other agent's chat needs the client to say it reads it, by the rule tabs and restart
- * offers use; a client that does not gets that agent as a terminal.
- */
-function callerRendersLaunchedChat(
-  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>,
-  agent: string
-): boolean {
-  return (
-    context.clientKind === undefined ||
-    agent === 'claude' ||
-    agent === 'codex' ||
-    clientRendersStructuredAgent(context.clientCapabilities, agent)
-  )
-}
 
 /** What a launch admitted under an operation id carries into its execution. */
 type ReplaySafeLaunch = {
@@ -49,8 +31,8 @@ type ReplaySafeLaunch = {
 }
 
 export async function runAgentLaunch(
-  intent: AgentLaunchIntent,
-  context: RpcContext,
+  { intent, decidedMode }: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>,
+  context: HostLaunchContext,
   view: AgentLaunchView,
   replaySafe?: ReplaySafeLaunch,
   hostFoundingAttempt: HostFoundingAttempt = {}
@@ -59,6 +41,7 @@ export async function runAgentLaunch(
   const result = await executeAgentLaunch({
     runtime: context.runtime,
     intent,
+    decidedMode,
     hostFoundingAttempt,
     onSurfaceAdmitted: (surface) => replaySafe?.recordSurface(withPlacement(surface, view)),
     surfaces: agentLaunchSurfaceFactory(
@@ -71,9 +54,13 @@ export async function runAgentLaunch(
       hostFoundingAttempt
     ),
     ...agentLaunchWorkspaceCreation(context, intent),
-    ...(callerRendersLaunchedChat(context, intent.agent) ? {} : { callerRendersStructured: false }),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
     onSurfacePublished: (surface) => {
+      try {
+        context.agentLaunchPolicy?.onSurfacePublished?.(surface)
+      } catch (error) {
+        console.warn('[agent-launch] publication bookkeeping failed', error)
+      }
       view.early?.surfacePublished(surface)
       if (callerNavigationId !== null && view.presentation !== 'background') {
         selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
@@ -95,14 +82,20 @@ export async function runAgentLaunch(
  */
 export function runLegacyAgentLaunch(
   params: AgentLaunchParams,
-  context: RpcContext
+  context: HostLaunchContext
 ): Promise<AgentLaunchResult> {
   // No early tab, as before: only a replay-safe launch shows its tab before its agent exists.
   const execute = async () =>
-    runAgentLaunch(await resolveUnlaunchedIntent(params, context.runtime, null), context, {
-      early: null,
-      presentation: params.presentation
-    })
+    runAgentLaunch(
+      await resolveUnlaunchedIntent(params, context.runtime, null, {
+        callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
+      }),
+      context,
+      {
+        early: null,
+        presentation: params.presentation
+      }
+    )
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
     const { repo, repoHostId } = params.target.create
     return context.runtime.dedupeWorktreeCreate(

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, View } from 'react-native'
 import {
   CircleDot,
   ExternalLink,
@@ -9,39 +9,45 @@ import {
 } from 'lucide-react-native'
 import type { SmartNameSelection } from '../tasks/mobile-composer-source-types'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { TaskProviderLogo } from './TaskProviderLogo'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { TextField } from './composer-input/TextField'
+import { LIST_LEADING_INSET, ListGroup } from './list/ListGroup'
+import { ListRow } from './list/ListRow'
+import { SectionHeader } from './list/SectionHeader'
 
 type Props = {
   composer: MobileComposerSource
   label: string
   disabled?: boolean
   onOpenExternalUrl: (url: string) => void
-  // Why: only the active form view may focus this field. While the source drawer
-  // is open/closing this stays non-focusable so the drawer's dismiss (which
-  // restores native focus back here) can't re-fire onFocus and reopen the drawer.
+  // Disable form focus while drawer opens/closes; native focus restoration must not reopen it via onFocus.
   interactive: boolean
   onBeforeOpen?: () => void
   onOpenDrawer: () => void
 }
 
 function SelectionIcon({ kind }: { kind: SmartNameSelection['kind'] }) {
+  useMobileColorScheme()
   if (kind === 'github-pr') {
-    return <GitPullRequest size={15} color={colors.textSecondary} />
+    return <GitPullRequest size={18} color={colors.textSecondary} />
   }
   if (kind === 'gitlab-mr') {
-    return <GitMerge size={15} color={colors.textSecondary} />
+    return <GitMerge size={18} color={colors.textSecondary} />
   }
   if (kind === 'github-issue' || kind === 'gitlab-issue') {
-    return <CircleDot size={15} color={colors.textSecondary} />
+    return <CircleDot size={18} color={colors.textSecondary} />
   }
   if (kind === 'branch') {
-    return <GitBranch size={15} color={colors.textSecondary} />
+    return <GitBranch size={18} color={colors.textSecondary} />
   }
-  return <TaskProviderLogo provider="linear" size={15} color={colors.textSecondary} />
+  return <TaskProviderLogo provider="linear" size={18} color={colors.textSecondary} />
 }
 
+/** The form's "Start from" section: a name, or the source a workspace is created from. */
 export function SmartWorkspaceSourceField({
   composer,
   label,
@@ -51,6 +57,8 @@ export function SmartWorkspaceSourceField({
   onBeforeOpen,
   onOpenDrawer
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const selection = composer.smartNameSelection
 
   function openDrawer(): void {
@@ -62,99 +70,92 @@ export function SmartWorkspaceSourceField({
   }
 
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>
-        {label} <Text style={styles.labelHint}>[Optional]</Text>
-      </Text>
+    <>
+      <SectionHeader
+        title={label}
+        trailing={t('components.smartWorkspaceSourceField.optionalLabel', 'Optional')}
+      />
       {selection ? (
-        <View style={styles.pill}>
-          <SelectionIcon kind={selection.kind} />
-          <Text style={styles.pillLabel} numberOfLines={1}>
-            {selection.label}
-          </Text>
-          {selection.url ? (
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel="Open selected source"
-              hitSlop={6}
-              onPress={() => {
-                if (selection.url) {
-                  onOpenExternalUrl(selection.url)
-                }
-              }}
-            >
-              <ExternalLink size={15} color={colors.textMuted} />
-            </Pressable>
-          ) : null}
-          <Pressable hitSlop={6} onPress={composer.handleClearSmartNameSelection}>
-            <X size={15} color={colors.textMuted} />
-          </Pressable>
-        </View>
+        <ListGroup separatorInset={LIST_LEADING_INSET}>
+          <ListRow
+            key="selection"
+            title={selection.label}
+            leading={<SelectionIcon kind={selection.kind} />}
+            accessory={
+              <View style={styles.actions}>
+                {selection.url ? (
+                  <Pressable
+                    style={styles.action}
+                    accessibilityRole="link"
+                    accessibilityLabel={t(
+                      'components.smartWorkspaceSourceField.openSelectedSource',
+                      'Open selected source'
+                    )}
+                    hitSlop={6}
+                    onPress={() => {
+                      if (selection.url) {
+                        onOpenExternalUrl(selection.url)
+                      }
+                    }}
+                  >
+                    <ExternalLink size={17} color={colors.textSecondary} />
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  style={styles.action}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(
+                    'components.smartWorkspaceSourceField.clearSelectedSource',
+                    'Clear selected source'
+                  )}
+                  hitSlop={6}
+                  onPress={composer.handleClearSmartNameSelection}
+                >
+                  <X size={17} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+            }
+          />
+        </ListGroup>
       ) : (
-        // Why: real TextInput (not a Pressable fake) so the typed value is the
-        // same composer.name the source drawer docks — focus handoff keeps the
-        // string continuous even though native focus moves to the docked field.
-        <TextInput
-          style={[styles.input, disabled && styles.disabled]}
+        // Use real TextInput sharing composer.name with docked picker field so typed text survives native focus handoff.
+        <TextField
+          // A non-interactive sheet is mid-swap, not disabled, so it stays undimmed.
+          style={disabled ? undefined : styles.enabled}
           value={composer.name}
           onChangeText={composer.setName}
           onFocus={openDrawer}
           editable={!disabled && interactive}
-          placeholder="Type a name or search a source"
-          placeholderTextColor={colors.textMuted}
+          placeholder={t(
+            'components.smartWorkspaceSourceField.searchPlaceholder',
+            'Type a name or search a source'
+          )}
+          accessibilityLabel={label}
           autoCapitalize="none"
           autoCorrect={false}
-          // Why: form field is a portal into the picker; return should not
-          // submit the create form while the drawer is about to open.
+          // Return opens picker, never submits create form during focus handoff.
           blurOnSubmit={false}
           showSoftInputOnFocus={false}
         />
       )}
-    </View>
+    </>
   )
 }
 
-const styles = StyleSheet.create({
-  field: {
-    marginBottom: spacing.md
+const styles = themedStyleSheet(() => ({
+  enabled: {
+    opacity: 1
   },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs
-  },
-  labelHint: {
-    fontWeight: '400',
-    color: colors.textMuted
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    color: colors.textPrimary
-  },
-  disabled: {
-    opacity: 0.55
-  },
-  pill: {
+  // The 36 pt hit boxes reach into the row's padding so the glyphs line up with its edge.
+  actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
+    marginRight: -spacing.sm
   },
-  pillLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
+  action: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center'
   }
-})
+}))

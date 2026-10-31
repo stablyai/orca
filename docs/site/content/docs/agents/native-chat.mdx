@@ -5,17 +5,15 @@ description: Open supported agents in structured chat and continue conversations
 
 import { Callout } from '@/components/docs/prose'
 
-Chat UI is an experimental conversation view with a transcript, composer, and agent controls. Supported new agent sessions open in **structured chat**, which communicates directly with the agent rather than displaying a terminal session. Other agents and unsupported execution environments open in the terminal.
+Chat UI is a conversation view with a transcript, composer, and agent controls. Supported agents you choose to open as chats start new sessions in **structured chat**, which communicates directly with the agent rather than displaying a terminal session. Other agents and unsupported execution environments open in the terminal.
 
-Existing terminal-backed chats use a transcript view over an agent running in a terminal. These keep their original form; turning Chat UI on or off does not convert existing sessions.
+Existing terminal-backed chats use a transcript view over an agent running in a terminal. These keep their original form; changing an agent's Chat or CLI choice does not convert existing sessions.
 
-## Enable
+## Choose chat or terminal
 
-1. Open **Settings → Experimental → Chat UI**.
-1. Turn **Chat UI** on.
-1. Open a new supported agent tab to start in structured chat. Turn **Chat UI** off to open new agents in the terminal instead. Existing chats stay available.
+Chat UI is available to everyone. Supported agents inherit your global Chat or Terminal default unless you choose differently for an agent. Fresh installs default to Terminal:
 
-You can also choose which supported agents open as chats under **Settings → Chat → Providers**. Turning an agent off there makes its new sessions open in the terminal.
+You can also choose whether each supported agent opens as a chat in **Settings → Agents**: each agent's row in the **Installed** list has a **Chat | CLI** choice. Choosing **CLI** makes its new sessions open in the terminal. Agents whose chat runs on a program Orca downloads, such as Antigravity, show that download and their chat sign-in when you expand their row.
 
 ## Continue a conversation in chat or the terminal
 
@@ -32,11 +30,17 @@ You can also right-click an open agent tab:
 - On a structured chat tab, **Continue with Terminal Agent** starts a new terminal agent with a copy of the conversation.
 - On a supported terminal agent tab, **Continue in Chat UI** opens the conversation in a new structured chat. The terminal pane header shows the same action as a chat button.
 
+These continuation actions also work for conversations on a paired **Remote Orca Server** that supports conversation-history resume. The chat and its history stay on that server. Direct SSH workspaces without an Orca runtime do not support this action. If the action is unavailable on an older server, update that server as well as the client.
+
+If the terminal agent still owns the conversation, Orca asks you to stop or exit it before continuing from **Agent Session History**. Continuing in Chat does not forcibly terminate the terminal agent.
+
 ## Switch an existing terminal-backed chat
 
 Structured chat tabs have no in-place terminal view; use **Continue with Terminal Agent** above instead.
 
 A terminal-backed chat is a view over a running terminal agent, so switching it does not create a new session. Use the pane header's **Show terminal** button, or **Continue with Terminal Agent** in its tab menu, to return to the terminal. Right-clicking inside a supported terminal pane offers **Continue in Chat UI**, which shows that same terminal session as a transcript instead of creating a structured chat.
+
+You can also switch the same terminal-backed session with **Switch between Chat UI and terminal** in **Settings → Shortcuts** (`Cmd+Shift+J` by default on macOS, `Ctrl+Shift+J` on Windows/Linux). On Windows/Linux, **Switch worktree** takes precedence when it uses the same chord. Remap either shortcut to remove the overlap, or use the terminal-first shortcut policy while terminal input is focused. Terminal-first does not free the chord in native-chat input.
 
 ## Composer
 
@@ -52,7 +56,8 @@ When Claude shows an **AskUserQuestion** (or similar structured permission/quest
 
 Chat UI ships on desktop for supported local and remote (paired server) agent sessions. The available agents and actions depend on the execution host and client capabilities; an older paired host or an unsupported launch can still open in the terminal. The [mobile companion](/docs/mobile) reuses chat-style transcript patterns for paired sessions; the desktop menu steps above describe the desktop app.
 
-<Callout title="Experimental">
-  Transcript fidelity, streaming, and terminal parity are still under active tuning. Prefer the raw
-  TUI when you need every OSC/status detail.
+<Callout title="Chat or terminal">
+  Chat shows the conversation: messages, tool activity, visuals and file links. The terminal shows
+  everything the agent prints, including every status line. Both are fully supported, and you can
+  switch any agent between them in **Settings → Agents**.
 </Callout>

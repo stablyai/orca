@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildTabAgentLaunchOptions,
+  buildAgentPickerLaunchOptions,
   buildTabAgentLaunchOptionsFromRows,
   findMatchingTabAgentLaunchOptions,
   orderTabLaunchAgents
 } from './tab-agent-launch-options'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 
 describe('tab agent launch options', () => {
   it('orders detected agents by the configured default first', () => {
@@ -59,7 +61,6 @@ describe('tab agent launch options', () => {
   it('matches agents on a partial prefix so the launcher actually searches', () => {
     const options = buildTabAgentLaunchOptions(['claude', 'codex', 'gemini', 'antigravity'])
 
-    // Each is one character short of the full agent name.
     expect(findMatchingTabAgentLaunchOptions('gemin', options).map((o) => o.agent)).toEqual([
       'gemini'
     ])
@@ -86,8 +87,7 @@ describe('tab agent launch options', () => {
   it('does not match on a mid-string substring that would hijack file results', () => {
     const options = buildTabAgentLaunchOptions(['opencode', 'claude'])
 
-    // "ode" is inside "opencode" but not a prefix — agents rank above files, so
-    // a noisy mid-string hit must not surface.
+    // Agent rows outrank files, so broad mid-string hits must not hijack the result list.
     expect(findMatchingTabAgentLaunchOptions('ode', options)).toEqual([])
   })
 
@@ -96,7 +96,6 @@ describe('tab agent launch options', () => {
 
     // A lone "c" must not surface (and auto-launch) an agent.
     expect(findMatchingTabAgentLaunchOptions('c', options)).toEqual([])
-    // Two characters is enough to start searching.
     expect(findMatchingTabAgentLaunchOptions('co', options).map((o) => o.agent)).toEqual(
       expect.arrayContaining(['codex', 'copilot'])
     )
@@ -106,12 +105,49 @@ describe('tab agent launch options', () => {
 it('projects the same CLI label, unavailable reason and stable chat ID as static rows', () => {
   const unavailable = buildTabAgentLaunchOptionsFromRows([
     { kind: 'chat-unavailable', agent: 'claude', reason: 'ssh' },
-    { kind: 'cli', agent: 'claude' }
+    { kind: 'cli', agent: 'claude' },
+    { kind: 'cli', agent: 'codex', chat: true }
   ])
   expect(unavailable).toMatchObject([
     { id: 'chat:claude', label: 'Claude', reason: 'No chat over SSH', disabled: true },
-    { id: 'cli:claude', label: 'Claude (CLI)', disabled: false }
+    { id: 'cli:claude', label: 'Claude (CLI)', disabled: false },
+    { id: 'cli:codex', label: 'Codex (CLI)', disabled: false }
   ])
   // Typing the agent's name and pressing Enter launches its CLI, not the disabled chat.
   expect(findMatchingTabAgentLaunchOptions('claude', unavailable)[0]?.id).toBe('cli:claude')
+  expect(
+    findMatchingTabAgentLaunchOptions('codex', unavailable).map((option) => [
+      option.id,
+      option.row?.kind
+    ])
+  ).toEqual([['cli:codex', 'cli']])
 })
+
+it.each(['chat', 'terminal'] as const)(
+  'offers only the %s default row while preserving custom command aliases and host identity',
+  (surface) => {
+    const entry: AgentPickerEntry = {
+      agent: 'codex',
+      label: 'Codex',
+      rows: [
+        { agent: 'codex', kind: 'chat', executionHostId: 'runtime:paired' },
+        { agent: 'codex', kind: 'cli', executionHostId: 'runtime:paired' }
+      ],
+      surfaces: ['chat', 'terminal'],
+      defaultSurface: surface,
+      terminal: {},
+      structured: {},
+      catalog: { origin: 'unknown' }
+    }
+    const options = buildAgentPickerLaunchOptions([entry], { codex: 'cx' })
+    expect(findMatchingTabAgentLaunchOptions('cx', options)).toEqual(options)
+    expect(findMatchingTabAgentLaunchOptions('codex', options)).toEqual(options)
+    expect(options).toHaveLength(1)
+    expect(options[0]).toMatchObject({
+      label: 'Codex',
+      row: { kind: surface === 'chat' ? 'chat' : 'cli', executionHostId: 'runtime:paired' },
+      pickerEntry: entry
+    })
+    expect(options[0].setup).toBeUndefined()
+  }
+)

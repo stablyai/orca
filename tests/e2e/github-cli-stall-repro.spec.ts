@@ -115,15 +115,13 @@ test('GitHub Tasks drawer recovers when gh stalls on issue details', async ({
     return { repoId: repo.id }
   }, testRepoPath)
 
-  // The item detail opens as an inline task-detail page (no longer a modal
-  // dialog): the item title heading proves it mounted.
+  // Use the detail heading to prove the inline task page mounted.
   const detailHeading = orcaPage.getByRole('heading', {
     name: /Issue detail fetch that hangs in gh/
   })
   await expect(detailHeading).toBeVisible({ timeout: 10_000 })
 
-  // Why: the bounded gh timeout rejects instead of hanging, so this terminal
-  // error text (replacing the body, not a spinner) proves the stall recovered.
+  // Require terminal error text to prove bounded gh timeout recovery, not a persistent spinner.
   await expect(orcaPage.getByText('Unable to load details for this GitHub item.')).toBeVisible({
     timeout: 5_000
   })

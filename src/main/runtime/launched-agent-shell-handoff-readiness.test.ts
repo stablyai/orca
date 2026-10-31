@@ -1,11 +1,4 @@
-/**
- * A launched agent's ready signal must come from the agent, not from the shell that ran it.
- *
- * Replayed from captures: zsh turns bracketed paste on at its prompt and off when it runs the
- * typed command, then on again at its next prompt (`zsh-prompt-runs-command.txt`); Claude turns it
- * on when it draws (`claude-dialog-trust-workspace-answered.txt`). Read as the agent's, the shell's
- * prompt settled the quiet window before Claude had drawn anything, and after an agent that exited.
- */
+/** Shells toggle bracketed paste around commands too; use post-handoff agent output, never shell prompts, for readiness. */
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -20,14 +13,12 @@ function readFixture(name: string): string {
   return readFileSync(join(__dirname, '__fixtures__', `${name}.txt`), 'utf8')
 }
 
-/** The shell's prompt and the launch line it runs, up to where it hands the terminal over. */
 function shellRunsLaunchLine(): string {
   const zsh = readFixture('zsh-prompt-runs-command')
   const handoff = zsh.indexOf(SHELL_HANDOFF)
   return zsh.slice(0, zsh.indexOf('\n', handoff) + 1)
 }
 
-/** The prompt the shell draws again once the command it ran has exited. */
 function shellPromptAfterCommandExits(): string {
   const zsh = readFixture('zsh-prompt-runs-command')
   return zsh.slice(zsh.indexOf('\n', zsh.indexOf(SHELL_HANDOFF)) + 1)
@@ -89,11 +80,9 @@ describe('a launched agent’s ready signal, after the shell that ran it', () =>
     vi.useFakeTimers()
     const pane = launchedPane()
     const launchLine = shellRunsLaunchLine()
-    // Presence precondition: the shell enabled bracketed paste before it handed the terminal over.
     expect(launchLine).toContain('\x1b[?2004h')
 
     pane.emit(launchLine)
-    // The agent's process takes the terminal, then draws nothing for 3 s while it starts.
     pane.setForeground('claude')
     await vi.advanceTimersByTimeAsync(3_000)
     expect(pane.settled).not.toHaveBeenCalled()
@@ -109,18 +98,15 @@ describe('a launched agent’s ready signal, after the shell that ran it', () =>
     const pane = launchedPane()
 
     pane.emit(shellRunsLaunchLine())
-    // The agent exits at startup: its shell is back in the foreground and draws its prompt.
     pane.emit('claude: failed to start\r\n')
     pane.emit(shellPromptAfterCommandExits())
     await vi.advanceTimersByTimeAsync(8_000)
 
     expect(pane.settled).toHaveBeenCalledWith(null)
-    // The refused signal is dropped, not retried until the budget ends.
     expect(pane.reads).toBe(1)
   })
 
-  // Why: a quiet agent never signals again, so only a proven shell may drop its signal. Requiring
-  // proof of the agent left Claude idle until the 8 s fallback wherever the read could not answer.
+  // Unknown must retain the one-shot signal; only proven shell may discard it.
   it('settles on the signal when the check cannot prove a shell, with one read', async () => {
     vi.useFakeTimers()
     const pane = launchedPane({ provesShell: () => false })
@@ -162,8 +148,7 @@ describe('a launched agent’s ready signal, after the shell that ran it', () =>
     expect(pane.reads).toBe(1)
   })
 
-  // A startup file's subprocess (a conda or pyenv hook) in front before the prompt proves nothing
-  // about the agent, so the shell's prompt after it must not settle the wait.
+  // conda/pyenv startup subprocesses prove no agent; their following shell prompt must not settle readiness.
   it('does not settle while Claude is still silent after a startup-file subprocess ran', async () => {
     vi.useFakeTimers()
     const pane = launchedPane()
@@ -182,7 +167,6 @@ describe('a launched agent’s ready signal, after the shell that ran it', () =>
     vi.useFakeTimers()
     const pane = launchedPane({ provesShell: () => false })
 
-    // A first command runs and the prompt comes back, as separate chunks, before the launch line.
     pane.emit(shellRunsLaunchLine())
     pane.emit(shellPromptAfterCommandExits())
     await vi.advanceTimersByTimeAsync(100)
@@ -215,12 +199,10 @@ describe('a launched agent’s ready signal, after the shell that ran it', () =>
 
   it('never settles a shell signal whose check was still running when the shell handed over', async () => {
     vi.useFakeTimers()
-    // The check answers after the launch line ran, when the agent is in front.
     const pane = launchedPane({ provesShell: () => false, checkDelayMs: 400 })
     const zsh = readFixture('zsh-prompt-runs-command')
     const handoff = zsh.indexOf(SHELL_HANDOFF)
 
-    // The prompt with its launch line typed, then quiet long enough to fire on the shell's 2004.
     pane.emit(zsh.slice(0, handoff))
     await vi.advanceTimersByTimeAsync(QUIET_WINDOW_MS + 100)
     expect(pane.reads).toBe(1)
@@ -234,7 +216,6 @@ describe('a launched agent’s ready signal, after the shell that ran it', () =>
   it('settles Codex 0.157 on its marker although it turns bracketed paste off and on as it starts', async () => {
     vi.useFakeTimers()
     const codex = readFixture('codex-0157-plain-ready')
-    // Presence precondition: the capture hands bracketed paste off mid-startup.
     expect(codex).toContain(SHELL_HANDOFF)
     const pane = launchedPane({ agent: 'codex' })
 

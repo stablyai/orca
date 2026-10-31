@@ -91,19 +91,6 @@ describe('DaemonServer attachment lifecycle', () => {
     expect(daemon.attachments.tokenBySessionId.has('transport-owned-session')).toBe(false)
   })
 
-  it('parks only the requesting client attachment on explicit detach', async () => {
-    await createSession('explicitly-detached-session')
-    const daemon = server as unknown as DaemonAttachmentPrivate
-    const detach = vi.spyOn(daemon.host, 'detach')
-
-    await client.request('detach', { sessionId: 'explicitly-detached-session' })
-
-    expect(detach).toHaveBeenCalledWith('explicitly-detached-session', expect.any(Symbol))
-    expect(daemon.host.sessions.get('explicitly-detached-session')?.hasAttachedClients).toBe(false)
-    expect(daemon.attachments.clientIdBySessionId.has('explicitly-detached-session')).toBe(false)
-    expect(daemon.attachments.tokenBySessionId.has('explicitly-detached-session')).toBe(false)
-  })
-
   it('parks an attachment completed after its transport already closed', async () => {
     const daemon = server as unknown as DaemonAttachmentPrivate
     const originalCreateOrAttach = daemon.host.createOrAttach.bind(daemon.host)

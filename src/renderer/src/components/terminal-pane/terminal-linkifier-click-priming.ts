@@ -42,8 +42,7 @@ export function installTerminalLinkifierClickPriming(terminal: Terminal): IDispo
     if (!isTerminalOwnedLinkGesture(event)) {
       return
     }
-    // Why: xterm snapshots its current link on mousedown but otherwise resolves
-    // links only on mousemove, so output painted under a still pointer misses its first click.
+    // Prime on mousedown: xterm normally resolves on mousemove, missing first clicks on output painted under a still pointer.
     primeTerminalLinkifier(terminal, event)
   }
 

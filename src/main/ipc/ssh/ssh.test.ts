@@ -68,6 +68,7 @@ describe('SSH IPC handlers', () => {
       'env-test',
       undefined,
       undefined,
+      undefined,
       undefined
     )
     expect(mockConnectionManager.connect).not.toHaveBeenCalled()
@@ -146,8 +147,7 @@ describe('SSH IPC handlers', () => {
     }
   })
 
-  // #32484: at startup the managed server's tunnel brings the host up and its status arrives
-  // without any SSH connect, so restoring only from the connect path left saved forwards off.
+  // Tunnel startup can serve a host without an SSH connect, so connect-only restoration left saved forwards off (#32484).
   it.each([
     { kind: 'managed', environmentId: 'env-test' } as const,
     { kind: 'relay', reason: 'orcad_unavailable', bridged: true } as const

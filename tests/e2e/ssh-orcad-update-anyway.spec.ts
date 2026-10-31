@@ -1,8 +1,4 @@
-/**
- * Updating a managed SSH host from its Remote Orca Servers row while an agent-like process runs:
- * Update defers on the running terminal, Update anyway activates the new build, and the process,
- * its pane output and keyboard input all survive the server restart.
- */
+/** Prove Update defers on a running process and Update anyway preserves that process, its output, and keyboard input across restart. */
 import { cpSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

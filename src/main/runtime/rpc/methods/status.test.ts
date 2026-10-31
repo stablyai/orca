@@ -5,7 +5,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { STATUS_METHODS } from './status'
 import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 
-// Why mocked: the friendly-name lookup is the one path that spawns `scutil`; the test decides when it lands.
+// Control scutil completion to test the in-flight friendly-name lookup.
 const runProcessMock = vi.hoisted(() => vi.fn())
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
@@ -24,7 +24,7 @@ describe('status.get', () => {
   })
 
   it('waits for the machine-name lookup instead of publishing the bare hostname', async () => {
-    // Why darwin: only macOS has a lookup to wait for; elsewhere the hostname is the detected name.
+    // Only macOS waits for a friendly-name lookup; other platforms already have hostname.
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     let finishLookup: ((value: unknown) => void) | undefined
     runProcessMock.mockImplementation(

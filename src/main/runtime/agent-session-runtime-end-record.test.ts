@@ -1,5 +1,4 @@
-// What a runtime records about itself: a start when its store opens, and its end on a graceful exit.
-// A crash is only a runtime known to have started and never ended; anything else names no cause.
+// Record starts and graceful ends; only a known start without an end implies crash, never an unreadable record.
 
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises'
@@ -93,7 +92,6 @@ describe('what a runtime records about itself', () => {
 
   it('keeps only the newest records, so a pruned runtime names no cause', async () => {
     beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 1)
-    // The oldest record by far.
     await utimes(join(runtimesDirectory(), `${RUNTIME_A}.json`), 1, 1)
     for (let index = 0; index < 16; index += 1) {
       beginAgentSessionRuntimeRecord(
@@ -128,7 +126,7 @@ describe('what a runtime records about itself', () => {
   it('keeps its end when the same runtime records its start again during the quit', () => {
     beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 1)
     recordAgentSessionRuntimeEnd('update', 2)
-    // A host reinstalled by a request that landed during the quit opens its store again.
+    // Reinstallation during quit must not erase the already-recorded end.
     beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 3)
     expect(readAgentSessionRuntimeEnds(directory)?.get(RUNTIME_A)).toBe('update')
   })
@@ -163,7 +161,7 @@ describe('a quit', () => {
       host: { stopDelivery: vi.fn(), flushAllStreamedEvents: vi.fn() },
       adapter: { closeAll: vi.fn() },
       journalDatabase: { stateDirectory: directory, close: vi.fn() },
-      // A recovery that never drains: the quit's deadline ends the process here.
+      // A stuck recovery reaches the process quit deadline.
       waitForRecovery: () => new Promise<void>(() => {})
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown reads only the members stubbed above before it parks on the recovery wait.

@@ -284,8 +284,6 @@ describe('UpdateCard local builds', () => {
   })
 })
 
-// ── Linux package-install recovery routing ───────────────────────────
-
 async function flushActions(): Promise<void> {
   await act(async () => {
     for (let i = 0; i < 8; i += 1) {
@@ -467,8 +465,7 @@ describe('UpdateCard Linux package-install recovery', () => {
         .setUpdateStatus({ state: 'error', message: 'net::ERR_HTTP2_PROTOCOL_ERROR' })
     )
 
-    // Why: the shared card marks the pending action aria-disabled, so the second click still
-    // reaches the handler and only its own guard can stop a double relaunch.
+    // aria-disabled still dispatches clicks; the handler guard must prevent duplicate relaunch.
     const enable = screen.getByRole('button', { name: 'Enable & Restart' })
     fireEvent.click(enable)
 

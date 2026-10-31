@@ -1,3 +1,11 @@
+import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import type { SpawnRequestFacts } from '../../../shared/host-spawn-admission'
+import {
+  createSpawnAdmissionState,
+  DEFAULT_SPAWN_ADMISSION_LIMITS,
+  decideSpawnAdmission,
+  resolveSpawnCharge
+} from '../../../shared/host-spawn-admission'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
@@ -13,10 +21,9 @@ import {
 import type { RuntimeStore } from '../runtime-store-contract'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
-// The host's own pane-owned capture form (#11598), which no wake resumes a second time.
+// Pane-owned captures must not be resumed twice (#11598).
 const PANE_OWNED = { origin: 'worktree-sleep', state: 'done', restoreOnTabOpenOnly: true }
 
-// An older window capture of a running agent's workspace sleep, which main resumes in its pane.
 function makeWorkingSleepStore(overrides: Partial<SleepingAgentSessionRecord> = {}) {
   const record: SleepingAgentSessionRecord = {
     paneKey: PANE_KEY,
@@ -37,7 +44,7 @@ function makeWorkingSleepStore(overrides: Partial<SleepingAgentSessionRecord> = 
     })
   )
   const baseSettings = fixture.runtimeStore.getSettings
-  // Why: a resume must not inherit a permission-widening default the launch never used.
+  // Resume must preserve permissions rather than inherit wider launch defaults.
   fixture.runtimeStore.getSettings = () => ({
     ...baseSettings(),
     agentDefaultArgs: { claude: '--dangerously-skip-permissions' }
@@ -45,7 +52,6 @@ function makeWorkingSleepStore(overrides: Partial<SleepingAgentSessionRecord> = 
   return fixture
 }
 
-// Why: the review's repro tab was launched as Claude, so a missed resume became a fresh agent.
 function withClaudeLaunchedTab(fixture: ReturnType<typeof makeWorkingSleepStore>): void {
   const session = structuredClone(fixture.getSession())
   const tab = session.tabsByWorktree[TEST_WORKTREE_ID]?.[0]
@@ -78,7 +84,6 @@ function openPane(
       runtime.attachWindow(TEST_WINDOW_ID)
       runtime.markGraphReady(TEST_WINDOW_ID)
       electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
-      // A paired desktop client opening the worktree hydrates the host's tabs without a wake.
       await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
         notifyClients: false,
         clientKind: 'runtime'
@@ -146,7 +151,6 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     expect(spawnedCommand(spawn)).not.toContain('provider-session-1')
   })
 
-  // Review repro: a host that could open a window but had none fell back to a fresh launch.
   it('resumes in the pane on a host that can open a window but has none', async () => {
     const fixture = makeWorkingSleepStore({
       launchConfig: { agentArgs: '--permission-mode plan', agentEnv: {} }
@@ -160,8 +164,7 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     expect(command).toContain('provider-session-1')
     expect(command).toMatch(/--permission-mode'? '?plan/)
     expect(command).not.toContain('--dangerously-skip-permissions')
-    // Why: a later window wake relaunches a running record (a second writer), never a pane-owned one.
-    // Layout-owner build: the resumed agent runs, so main marks its record a running agent's (L254).
+    // Keep the record pane-owned to prevent a second wake; main also marks the resumed agent live.
     await vi.waitFor(() =>
       expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject({
         ...PANE_OWNED,
@@ -170,7 +173,7 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     )
   })
 
-  // Codex repro: deleting the record left a restarted host nothing to resume a lost PTY from.
+  // A restart that loses the PTY still needs the saved resume flags.
   it('still resumes with the recorded flags after a host restart loses the PTY', async () => {
     const fixture = makeWorkingSleepStore({
       launchConfig: { agentArgs: '--permission-mode plan', agentEnv: {} }
@@ -186,7 +189,6 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     expect(command).not.toContain('--dangerously-skip-permissions')
   })
 
-  // Codex repro: spending the record before the spawn let an overlapping reconnect probe fresh-launch.
   it('keeps an automatic probe parked while the resume spawn is in flight', async () => {
     const fixture = makeWorkingSleepStore()
     withClaudeLaunchedTab(fixture)
@@ -204,7 +206,6 @@ describe('opening a workspace-slept running agent on a host with no window', () 
       }
     })
     await started
-    // Codex repro: a window attaching mid-spawn must already see the record as the pane's.
     expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject(
       PANE_OWNED
     )
@@ -220,7 +221,6 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     expect(spawnedCommand(spawn)).toContain('provider-session-1')
   })
 
-  // Codex repro: the open that lost the claim spawned a plain shell that could swallow the resume.
   it('resumes from both of two overlapping opens of the pane, never a plain shell', async () => {
     const fixture = makeWorkingSleepStore()
     withClaudeLaunchedTab(fixture)
@@ -271,7 +271,6 @@ describe('opening a workspace-slept running agent on a host with no window', () 
   it("resumes on a phone's open of the workspace, and its queued wake ends with the resume", async () => {
     const fixture = makeWorkingSleepStore()
     let landSpawn!: (pty: { id: string }) => void
-    // No tap: only the phone's open of the workspace starts the resume.
     const { runtime, spawn } = openPane(fixture.runtimeStore, 'blocked', {
       spawn: () => new Promise((resolve) => (landSpawn = resolve)),
       tap: false
@@ -285,7 +284,6 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     })
     await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
     expect(spawnedCommand(spawn)).toContain('provider-session-1')
-    // Rule 3: the wake's queue step is still running until the resume spawn lands.
     expect(resumeSleepingAgents).not.toHaveBeenCalled()
     landSpawn({ id: 'persisted-pty' })
     await vi.waitFor(() => expect(resumeSleepingAgents).toHaveBeenCalledWith(TEST_WORKTREE_ID))
@@ -293,6 +291,88 @@ describe('opening a workspace-slept running agent on a host with no window', () 
 
   describe("the window's open of a slept pane (worktrees:resumeSleptPane)", () => {
     const pane = { worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }
+
+    it('keeps the original provider and current retry intent through a refused main start', async () => {
+      const fixture = makeWorkingSleepStore()
+      const { runtime, spawn, opened } = openPane(fixture.runtimeStore, 'openable', {
+        withWindow: true,
+        tap: false
+      })
+      await opened
+      const limits = DEFAULT_SPAWN_ADMISSION_LIMITS
+      const state = createSpawnAdmissionState(limits, 0)
+      state.liveAutomatic = limits.maxLiveAutomatic
+      spawn.mockImplementation(async (...args: unknown[]) => {
+        const request = args[0]
+        if (typeof request !== 'object' || request === null || !('spawnIntent' in request)) {
+          throw new Error('missing intent')
+        }
+        const declaredIntent = request.spawnIntent
+        if (declaredIntent !== 'user-resume' && declaredIntent !== 'automatic-restore') {
+          throw new Error('wrong intent')
+        }
+        const release = await runtime.acquireWorktreeTerminalSpawn(
+          spawnWorktreeTarget(TEST_WORKTREE_ID, null),
+          {
+            refuseSleptWorktree:
+              'refuseSleptWorktree' in request && request.refuseSleptWorktree === true
+          }
+        )
+        try {
+          const facts = {
+            clientId: 'resume-test',
+            declaredIntent,
+            hasAgentSessionClaim: false,
+            hasHistorySeed: false,
+            deadlineAt: 1000
+          } satisfies SpawnRequestFacts
+          const decision = decideSpawnAdmission({
+            state,
+            facts,
+            charge: resolveSpawnCharge(state, facts, limits, 0),
+            pressure: 'ok',
+            mode: { kind: 'normal' },
+            limits,
+            now: 0
+          })
+          if (spawn.mock.calls.length === 1 || decision.kind === 'defer') {
+            throw new Error('terminal_spawn_deferred:live_cap')
+          }
+          return { id: 'persisted-pty' }
+        } finally {
+          release()
+        }
+      })
+      await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
+      await expect(runtime.resumeSleptPane(pane)).rejects.toThrow(
+        'terminal_spawn_deferred:live_cap'
+      )
+      expect(spawn).toHaveBeenLastCalledWith(
+        expect.objectContaining({ spawnIntent: 'user-resume' })
+      )
+      await expect(runtime.resumeSleptPane(pane, true)).rejects.toThrow(
+        'terminal_spawn_deferred:live_cap'
+      )
+      expect(spawn).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          spawnIntent: 'automatic-restore',
+          refuseSleptWorktree: true
+        })
+      )
+      await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
+      await expect(runtime.resumeSleptPane(pane, true)).rejects.toThrow(
+        'worktree_terminals_sleeping'
+      )
+      expect(spawn).toHaveBeenCalledTimes(3)
+      await expect(runtime.resumeSleptPane(pane, false)).resolves.toBe(true)
+      for (let call = 0; call < 4; call += 1) {
+        expect(spawnedCommand(spawn, call)).toContain('provider-session-1')
+        expect(spawnedCommand(spawn, call)).not.toContain('--dangerously-skip-permissions')
+      }
+      expect(spawn).toHaveBeenLastCalledWith(
+        expect.objectContaining({ spawnIntent: 'user-resume' })
+      )
+    })
 
     it('resumes once; a second open after it finished attaches to the same terminal', async () => {
       const fixture = makeWorkingSleepStore()
@@ -317,7 +397,6 @@ describe('opening a workspace-slept running agent on a host with no window', () 
       })
       await opened
       await runtime.resumeSleptPane(pane)
-      // The reload: the window's graph restarts and its panes ask again.
       runtime.attachWindow(TEST_WINDOW_ID)
       runtime.markGraphReady(TEST_WINDOW_ID)
       await expect(runtime.resumeSleptPane(pane)).resolves.toBe(true)

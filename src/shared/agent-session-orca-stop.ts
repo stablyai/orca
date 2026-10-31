@@ -1,6 +1,4 @@
-// Why the Orca running a chat stopped in the middle of a reply: a quit, an update, or a crash. The
-// host states it on its row about the cut turn (`orcaStop`); a client names it, and offers Continue.
-// Open on the wire: a cause this build does not know reads as none, and the row keeps its words.
+// The host records quit/update/crash on the cut-turn row for Continue. Unknown wire causes retain the row's words without a named cause.
 
 export const AGENT_SESSION_ORCA_STOP_CAUSES = ['update', 'quit', 'crash'] as const
 /** The row's presentation, so a client that re-words host rows it can't name passes it through. */

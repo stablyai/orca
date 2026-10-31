@@ -21,6 +21,7 @@ import {
   SAVED_BY_NEWER_ORCA
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
+import type { JournalReadRow } from '../../../src/main/native-chat/agent-session-journal/journal-read-row'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -35,12 +36,10 @@ import {
   renderJournalState
 } from '../../../src/main/native-chat/agent-session-journal/journal-reducer'
 
-// A release that knows none of the Stop event, the Resume marker and the reopen mark: an unknown
-// row kind would make it delete the journal from that row on, so each rides a tombstone it reads.
+// Old readers would truncate at unknown row kinds; encode Stop/Resume/reopen evidence in tombstones they understand.
 const BASELINE_REF = 'v1.4.218'
 const JOURNAL = 'src/main/native-chat/agent-session-journal'
-// A main build that shares this one's host database and schema version, so a downgrade to it opens
-// the journal writable. No release tag has that database yet; move to the first one that does.
+// Pin a main build sharing this database/schema for writable downgrade; move to the first release that ships it.
 const WRITABLE_BASELINE_REF = '3727100cc9dbcea6201f8a3e506676a3c4b53b18'
 
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -61,11 +60,20 @@ const OLDER_IDENTITY: OlderJournalIdentity = {
   providerHandle: { kind: 'codex', threadId: 'thread-1' }
 }
 
+// Old builds fold input rows; an outcome row here means the probe opened a converted chat by mistake.
+function inputRows(rows: readonly JournalReadRow[]): JournalRow[] {
+  return rows.map((row) => {
+    if (row.kind === 'outcome') {
+      throw new Error('expected input rows')
+    }
+    return row
+  })
+}
 test.each(['v1.4.219', 'v1.4.220', WRITABLE_BASELINE_REF])(
   '%s replays current raw rows with the unconfirmed failure intact',
   async (ref) => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-stop-note-raw-skew-'))
-    const journals = createTrackedJournalOpener()
+    const journals = createTrackedJournalOpener({ legacyInputs: true })
     try {
       const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
       const turn = { provider: 'orca', clientMessageId: 'turn-raw-skew' } as const
@@ -105,10 +113,10 @@ test.each(['v1.4.219', 'v1.4.220', WRITABLE_BASELINE_REF])(
         'applyJournalRow'
       )
       const old = create(IDENTITY.sessionId, journal.epoch)
-      since.rows.forEach((row) => fold(old, row))
+      inputRows(since.rows).forEach((row) => fold(old, row))
       expect(old.items.get(agentJournalItemKey(note))).toMatchObject({ body: unconfirmed })
       const current = createJournalReducerState(IDENTITY.sessionId, journal.epoch)
-      since.rows.forEach((row) => applyJournalRow(current, row))
+      inputRows(since.rows).forEach((row) => applyJournalRow(current, row))
       expect(current.items.get(agentJournalItemKey(note))?.body).toEqual(unconfirmed)
       expect(
         renderJournalState(current).items.find((item) => item.itemId === agentJournalItemKey(note))
@@ -139,7 +147,7 @@ type OldReplay = {
 // Both downgrade probes load real old builds, including cold extraction and transforms.
 test("an older build keeps every row around a Stop's event, a Resume and a reopen mark, and folds the rows after them", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-stop-event-downgrade-'))
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
   try {
     // This build: history, a person's Stop, a Resume, then more history.
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
@@ -255,7 +263,7 @@ function storedRows(directory: string): string[] {
 
 test("an older build opens this build's journal writable and appends to it; the pause survives the round trip", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-stop-event-writable-downgrade-'))
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
   const itemIds = (journal: Pick<OlderJournal, 'snapshot'>) =>
     journal.snapshot().items.map((entry) => entry.itemId)
   try {
@@ -299,15 +307,11 @@ test("an older build opens this build's journal writable and appends to it; the 
   }
 }, 120_000)
 
-// Why a Stop's event cannot have a row kind of its own yet: this build keeps a kind it does not know
-// and refuses the load as a newer Orca's chat, but a build from before that deletes the journal from
-// it. So a Stop kind ships
-// its reader first and is written once no supported build lacks that reader, or is written at a
-// bumped `v`. Move the baseline to the first release with this rule, and the older build keeps the
-// row too.
+// Write a new Stop row kind only after supported readers know it, or bump v; earlier hosts truncate unknown kinds.
+// Move the pinned baseline once a released reader preserves them.
 test("this build keeps a newer build's row kind and refuses the load; a build before it deletes it", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-newer-kind-downgrade-'))
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
   const newerKinds = () => storedRows(directory).filter((row) => row.includes('"future-mark"'))
   try {
     const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
@@ -331,7 +335,7 @@ test("this build keeps a newer build's row kind and refuses the load; a build be
       at,
       newer
     )
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabase(directory)
     const rowsBefore = storedRows(directory)
 
     await expect(

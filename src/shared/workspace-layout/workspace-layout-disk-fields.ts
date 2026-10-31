@@ -1,6 +1,4 @@
-// Every on-disk field and the one model or side-data field it is written from. The Loader's
-// change report diffs stored and saved sessions field by field over these tables, and the
-// fact-location test checks each claim by mutating its source.
+// Map every disk field to one source; Loader diffs through these tables and fact-location tests mutate each source to verify ownership.
 
 import type { SleepingAgentSessionRecord } from '../agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
@@ -38,7 +36,6 @@ import type {
 type Prefixed<Prefix extends string, Key> = Key extends string ? `${Prefix}.${Key}` : never
 type Inner<Map> = Map extends Record<string, Record<string, infer Value>> ? Value : never
 
-/** Each part of a loaded layout, as `holder.field`; a list or map field is its own holder. */
 type PartSources = {
   layout:
     | Prefixed<'model', Exclude<keyof WorkspaceLayoutModel, 'workspaces' | 'records' | 'legacy'>>
@@ -94,10 +91,7 @@ export type LayoutSource = {
   [Part in keyof LoadedWorkspaceLayout]: PartSources[Part]
 }[keyof LoadedWorkspaceLayout]
 
-/**
- * `from`: the one source. `via`: sources that only select or validate (a fallback, a filter).
- * `orFrom`: a second holder of the same fact; each record is held by exactly one of the two.
- */
+/** from names the writer; via only selects/validates. orFrom permits a second holder, but each record belongs to exactly one. */
 export type DiskFieldWritten =
   | { from: LayoutSource; orFrom?: LayoutSource; via?: readonly LayoutSource[] }
   | 'unwritten'
@@ -134,9 +128,7 @@ const ROW = {
   forceHostRuntime: own('tab.terminal', 'forceHostRuntime'),
   startupCwd: own('tab.terminal', 'startupCwd'),
   launchAgent: own('tab.terminal', 'launchAgent'),
-  // Transient handoffs, never restored; the window strips them, but older builds' minimal row mint
-  // stored `pendingActivationSpawn`, so the Loader drops it. A launch pane is this session's: the
-  // window saves only a pending one, for a reload, and after a restart its pane spawns like any other.
+  // Drop transient legacy pendingActivationSpawn writes. agentLaunchPane may survive a window reload while pending, but restart treats the pane as ordinary.
   agentLaunchPane: 'unwritten',
   pendingActivationSpawn: 'unwritten',
   recovery: 'unwritten',
@@ -227,8 +219,7 @@ const BROWSER = {
   docLocation: own('browserLive', 'docLocation')
 } as const satisfies Record<keyof BrowserWorkspace, DiskFieldWritten>
 
-// A pane's records are written for the panes its tab's tree holds, under a key derived from
-// where it sits: its tab's id and its leaf id.
+// Write records only for mounted tree panes; derive keys from tab and leaf IDs.
 const PANE_KEY = { from: 'leaf.$key', via: ['tab.entityId', 'tab.panes.root'] } as const
 const paneRecord = <Source extends `leaf.${string}`>(from: Source) =>
   ({ from, via: ['tab.panes.root'] }) as const
@@ -256,7 +247,6 @@ const SLEEPING = {
   restoreOnTabOpenOnly: resumeRecord('restoreOnTabOpenOnly')
 } as const satisfies Record<keyof SleepingAgentSessionRecord, DiskFieldWritten>
 
-/** One entry of today's incarnation map, by pane key. */
 const INCARNATION = {
   incarnationId: paneRecord('leaf.incarnationId')
 } as const satisfies Record<'incarnationId', DiskFieldWritten>

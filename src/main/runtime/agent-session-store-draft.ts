@@ -1,7 +1,4 @@
-/**
- * A transaction applies to a draft of the published store state, and the store publishes the draft
- * only once its rows have committed, so no reader ever sees a change that might still roll back.
- */
+// Publish drafts only after row commit so readers never see changes that can roll back.
 
 import { encodeAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
 import type {
@@ -29,13 +26,12 @@ export function draftAgentSessionStoreState(state: AgentSessionStoreState): Agen
 
 type KeyedRowWrites = { upsert: [key: string, json: string][]; remove: string[] }
 
-/** Exactly the rows a draft changed, each serialized as it will be stored. */
 export type AgentSessionStoreRowWrites = {
   records: KeyedRowWrites
   operations: KeyedRowWrites
   /** The whole list when it changed, else null. */
   retiredClaimKeys: RetiredAgentSessionClaimKey[] | null
-  /** The whole index when it changed: `recorded: false` is a store that has never recorded one. */
+  /** Complete changed index; recorded: false distinguishes a never-recorded index. */
   sessionTabs: { recorded: boolean; tabs: PersistedAgentSessionTab[] } | null
 }
 
@@ -78,11 +74,7 @@ function retiredClaimKeysChanged(
   return published.length !== next.length || published.some((entry, index) => entry !== next[index])
 }
 
-/**
- * The rows a draft changed relative to the published state, by identity, or null when it changed
- * none. Each changed row is checked as written against the rules a load applies, so a row a later
- * load would refuse rejects its own transaction instead of living in memory unreadable.
- */
+/** Diff rows by identity; validate their serialized form with load rules before committing. */
 export function agentSessionStoreDraftRowWrites(
   published: AgentSessionStoreState,
   draft: AgentSessionStoreState

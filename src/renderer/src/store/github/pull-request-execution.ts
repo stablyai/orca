@@ -7,28 +7,36 @@ import type { GitHubSlice } from './slice-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { CacheEntry, GitHubPRFallbackSource } from './cache-model'
-import type { PRRefreshStateClearToken } from './pr-refresh-state'
+import { withDirectPRRefreshSettlement, type PRRefreshStateClearToken } from './pr-refresh-state'
 
 import type {
   GitHubPRRefreshCandidate,
   PRRefreshOutcome
 } from '../../../../shared/github/pull-request-refresh-types'
-import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github/pull-request-for-branch-outcome'
+import {
+  normalizeGitHubPRForBranchOutcome,
+  githubPRTransportFailureOutcome
+} from '../../../../shared/github/pull-request-for-branch-outcome'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
 import { getRuntimeRepoTarget } from './repository-routing'
 import { applyCachedChecksStatus } from './pr-check-status-cache'
+import { isWslHostOffForForge, withForgeHostOffSkip } from './wsl-host-off-forge'
+import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
+import { lookupPRForBranchOverIpc } from './pr-for-branch-ipc-fallback'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
 import {
   findUniqueWorktreeById,
   findWorktreeById,
-  isStaleExactLinkedPRLookup,
+  isStaleExactLinkedPRLookup
+} from './worktree-refresh'
+import {
   shouldApplyBranchMismatchedLinkedPRClear,
   shouldApplyDivergedLinkedPRClear,
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from './worktree-refresh'
+} from '../../../../shared/github/linked-pr-staleness'
 export function startPullRequestLookup(args: {
   set: Parameters<StateCreator<AppState>>[0]
   get: Parameters<StateCreator<AppState>>[1]
@@ -72,12 +80,19 @@ export function startPullRequestLookup(args: {
   const request = (async () => {
     try {
       const runtimeRepo = getRuntimeRepoTarget(get(), { repoId, repoPath }, requestTarget)
+      if (runtimeRepo && isWslHostOffForForge(get(), runtimeRepo.target.environmentId)) {
+        if (prRequestGenerations.get(cacheKey) === generation) {
+          set((s) => withForgeHostOffSkip(s.prRefreshStates, cacheKey))
+        }
+        return cached?.data ?? null
+      }
       const candidateWorktree = options?.worktreeId
         ? findWorktreeById(get(), options.worktreeId)
         : null
       const requestHeadOid = candidateWorktree?.head ?? null
-      const outcome = runtimeRepo
-        ? await callRuntimeRpc<PRRefreshOutcome | PRInfo | null>(
+      let transportFailed = false
+      const response = runtimeRepo
+        ? callRuntimeRpc<PRRefreshOutcome | PRInfo | null>(
             runtimeRepo.target,
             'github.prForBranch',
             {
@@ -86,13 +101,14 @@ export function startPullRequestLookup(args: {
               linkedPRNumber,
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
+              ...(options?.userRefresh === true ? { userRefresh: true } : {}),
               ...(fallbackPRNumber !== null
                 ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                 : {})
             },
             { timeoutMs: 30_000 }
           ).then((result) => normalizeGitHubPRForBranchOutcome(result))
-        : await (async () => {
+        : (async () => {
             const candidate: GitHubPRRefreshCandidate = {
               repoId: repoId ?? '',
               repoPath,
@@ -106,50 +122,30 @@ export function startPullRequestLookup(args: {
               fallbackPRSource,
               connectionId: repo?.connectionId ?? null,
               executionHostId: repo?.executionHostId ?? null,
-              cachedFetchedAt: cached?.fetchedAt ?? null,
-              cachedHeadOid: cached?.fetchedHeadOid ?? cached?.data?.headSha ?? null,
               isSelected: options?.worktreeId === get().activeWorktreeId,
-              cachedHasPR: cached?.data ? true : cached ? false : null,
-              cachedPRState: cached?.data?.state ?? null,
-              cachedChecksStatus: cached?.data?.checksStatus ?? null,
-              cachedMergeable: cached?.data?.mergeable ?? null,
-              cachedMergeStateStatus: cached?.data?.mergeStateStatus ?? null
+              ...cachedPRCandidateFields(cached)
             }
+            const reason = options?.reason ?? 'manual'
+            const requestOptions = options?.userRefresh === true ? { userRefresh: true } : {}
             const response = window.api.gh.refreshPRNow
-              ? await window.api.gh.refreshPRNow({
-                  candidate,
-                  reason: options?.reason ?? 'manual'
-                })
-              : await window.api.gh.prForBranch({
-                  repoPath,
-                  repoId,
-                  branch,
-                  linkedPRNumber,
-                  fallbackPRNumber,
-                  acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null,
-                  currentHeadOid: requestHeadOid
-                })
+              ? await window.api.gh.refreshPRNow({ candidate, reason, ...requestOptions })
+              : await lookupPRForBranchOverIpc(candidate, reason, requestOptions)
             return normalizeGitHubPRForBranchOutcome(response)
           })()
+      const outcome = await response.catch(() => {
+        transportFailed = true
+        return githubPRTransportFailureOutcome()
+      })
       const pr = outcome.kind === 'found' ? outcome.pr : null
+      // RPC and lost IPC replies get no coordinator settlement; a lost reply is reported only to the click that asked, so polls stay silent.
+      if (
+        prRequestGenerations.get(cacheKey) === generation &&
+        (outcome.kind !== 'upstream-error' ||
+          (transportFailed ? options?.userRefresh === true : runtimeRepo))
+      ) {
+        set((s) => withDirectPRRefreshSettlement(s, cacheKey, outcome, requestStartedAt))
+      }
       if (outcome.kind === 'upstream-error') {
-        // Why: the runtime RPC path skips the coordinator broadcast that fills prRefreshStates on native, so record the classified error here for Checks parity with native (design criterion 2).
-        if (runtimeRepo && prRequestGenerations.get(cacheKey) === generation) {
-          set((s) => {
-            const nextStates = { ...s.prRefreshStates }
-            delete nextStates[cacheKey]
-            nextStates[cacheKey] = {
-              status: 'error',
-              reason: 'swr',
-              updatedAt: Date.now(),
-              message: outcome.message,
-              errorType: outcome.errorType,
-              nextAutoRetryAt: outcome.nextAutoRetryAt,
-              retryDisabledUntil: outcome.retryDisabledUntil
-            }
-            return { prRefreshStates: nextStates }
-          })
-        }
         return cached?.data ?? null
       }
       if (prRequestGenerations.get(cacheKey) === generation) {
@@ -265,7 +261,8 @@ export function startPullRequestLookup(args: {
             force: true,
             repoId,
             worktreeId: options.worktreeId,
-            reason: options.reason
+            reason: options.reason,
+            ...(options.userRefresh === true ? { userRefresh: true } : {})
           })
         }
       }

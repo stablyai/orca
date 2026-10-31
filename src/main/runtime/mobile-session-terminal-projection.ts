@@ -13,10 +13,7 @@ import {
   isPersistedTerminalLeafActive
 } from './mobile-session-layout-projection'
 
-/**
- * Drops a legacy row with no tab-bar entry whose every terminal a tab-bar tab of this workspace
- * holds (the shared Loader's rule; the window hides it too), and moves a selection on it to that tab.
- */
+/** Match the window Loader: remove legacy rows wholly absorbed by tab-bar tabs and move their selection. */
 function withoutAbsorbedLegacyRows(
   worktreeId: string,
   persistedTabs: readonly TerminalTab[],
@@ -57,7 +54,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
       if (leafIds.length === 0) {
         leafIds.push(deriveHeadlessLegacyTerminalLeafId(tab.id))
       }
-      // As the window publishes them: tab-wide names and the launch agent describe a sole pane.
+      // Tab-wide names and launch identity apply only to sole panes, matching window publications.
       const tabWide = leafIds.length === 1
       return leafIds.flatMap((leafId) => {
         const ptyId = layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)

@@ -46,6 +46,12 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         relativePath: file.relativePath
       })
     },
+    // No orca-media protocol in a browser; audio and video keep the binary placeholder.
+    grantRuntimeFilePreview: async () => null,
+    // Never minted here, so no viewer asks.
+    readPreviewRange: async () => {
+      throw new Error('Preview ranges are not available in the web client')
+    },
     readFile: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.readPreview', {
@@ -125,7 +131,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       return result.files.map((entry) => entry.relativePath)
     },
     cancelListFiles: async () => {
-      // Why: paired-web lists files over runtime RPC with its own timeout; there's no host-side scan to abort here.
+      // Runtime RPC owns its timeout; no host-side search cancellation exists here.
     },
     cancelSearch: async ({ requestToken }) => {
       searches.get(requestToken)?.abort()

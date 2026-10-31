@@ -12,15 +12,20 @@ const {
   verifyPackagedNodePtyJobOwnership,
   verifyPackagedWindowsNodePty
 } = require('./verify-packaged-node-pty-job-ownership.cjs')
-const { CYGWIN_BREAKAWAY_MARKER } = require('./node-pty-job-ownership.cjs')
+const { CYGWIN_BREAKAWAY_MARKER, NATIVE_HOST_JOB_MARKER } = require('./node-pty-job-ownership.cjs')
 
 const fixtureDir = mkdtempSync(join(tmpdir(), 'packaged-node-pty-job-'))
 
 /** A real enough addon: a machine field the arch check reads, and the marker. */
-function conptyImage({ arch = 'x64', cygwinBreakawayDenied = true } = {}) {
+function conptyImage({
+  arch = 'x64',
+  cygwinBreakawayDenied = true,
+  nativeHostJobOwned = true
+} = {}) {
   return Buffer.concat([
     peImage({ arch }),
-    cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+    cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+    nativeHostJobOwned ? NATIVE_HOST_JOB_MARKER : Buffer.alloc(0)
   ])
 }
 
@@ -50,13 +55,23 @@ const PATCHED = {
   module: {
     listJobProcessIds: () => [],
     terminateJob: () => true,
-    assignCurrentProcessToJob: () => true
+    assignCurrentProcessToJob: () => true,
+    assignCurrentProcessToStrictJob: () => true
   }
 }
 
 const packaged = (native, addonPath = CURRENT_ADDON) => ({
   platform: 'win32',
   loadNative: () => ({ native, addonPath })
+})
+
+it('rejects a cross-host package whose addon predates strict native-host ownership', () => {
+  const resourcesDir = packagedResources({
+    'build/Release/conpty.node': { nativeHostJobOwned: false }
+  })
+  expect(() =>
+    verifyPackagedWindowsNodePty(resourcesDir, 'x64', { hostPlatform: 'darwin' })
+  ).toThrow(/lacks strict native-host process ownership/)
 })
 
 describe('verifyPackagedNodePtyJobOwnership', () => {
@@ -73,8 +88,7 @@ describe('verifyPackagedNodePtyJobOwnership', () => {
     ).toThrow(/missing listJobProcessIds, terminateJob, assignCurrentProcessToJob/)
   })
 
-  // A release built against a stale native cache ships the MSYS orphan bug
-  // while exporting every job function, so packaging has to read the binary.
+  // Stale native cache can export all job functions while leaking MSYS children; packaging must inspect marker bytes.
   it('rejects a packaged build that predates the Cygwin/MSYS breakaway denial', () => {
     expect(() =>
       verifyPackagedNodePtyJobOwnership('resources', packaged(PATCHED, PRE_MSYS_ADDON))
@@ -98,8 +112,7 @@ describe('verifyPackagedNodePtyJobOwnership', () => {
 })
 
 describe('packagedConptyCandidates', () => {
-  // Pinned because the gate resolves the addon by walking this list in order:
-  // a wrong order blesses a binary the app would never reach.
+  // Pin loader order: wrong order could bless binary app never reaches.
   it('walks the paths node-pty tries, in node-pty order', () => {
     expect(packagedConptyCandidates('RES', 'arm64').map((candidate) => candidate.path)).toEqual([
       join('RES', 'node_modules', 'node-pty', 'build', 'Release', 'conpty.node'),
@@ -125,16 +138,13 @@ describe('packagedConptyCandidates', () => {
 })
 
 describe('verifyPackagedConptyBreakawayMarker', () => {
-  // The release as built today: prunePackagedNodePty already dropped the
-  // same-arch prebuild because a patched source build replaced it.
+  // Normal same-arch source rebuild replaces prebuild, which pruning already removed.
   it('passes a package whose only ConPTY load path carries the denial', () => {
     const resourcesDir = packagedResources({ 'build/Release/conpty.node': {} })
     expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).not.toThrow()
   })
 
-  // The cross-host package. No host but Windows can build conpty.node, so there
-  // is no build/Release for prune to have replaced the prebuild with -- and the
-  // published prebuild is exactly the binary that leaks every MSYS pane child.
+  // Cross-host package may have only upstream prebuild because non-Windows cannot compile conpty; this is the MSYS-leaking candidate gate must reject.
   it('rejects an unpatched published prebuild and explains both host remedies', () => {
     const resourcesDir = packagedResources({
       'prebuilds/win32-x64/conpty.node': { cygwinBreakawayDenied: false }
@@ -147,10 +157,7 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
     expect(verify).toThrow(/If this IS a Windows x64 host, the rebuild did not leave one/)
   })
 
-  // The cross-arch package that worked: beforeBuild rebuilds node-pty for the
-  // TARGET arch, so build/Release is patched and loadable and the prebuild
-  // prune left behind is never reached. Failing this would be a false positive
-  // whose advice -- change hosts -- is both wrong and impossible.
+  // Correct target-arch source build wins even if unused prebuild survives; blaming host would reject valid package.
   it('passes a cross-arch package whose build/Release really is the target arch', () => {
     const resourcesDir = packagedResources({
       'build/Release/conpty.node': { arch: 'arm64' },
@@ -159,9 +166,7 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
     expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')).not.toThrow()
   })
 
-  // The cross-arch package that silently did not: build/Release is the
-  // packaging host's own arch, the target cannot load it, and the loader falls
-  // through to the unpatched prebuild underneath.
+  // Wrong-arch source rebuild falls through to unpatched target prebuild.
   it('rejects a wrong-arch source build with the target rebuild command', () => {
     const resourcesDir = packagedResources({
       'build/Release/conpty.node': { arch: 'x64' },
@@ -198,8 +203,7 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
     expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).toThrow(/not a PE image/)
   })
 
-  // A truncated or quarantined artifact reaches the gate looking exactly like a
-  // cross-arch build, and "re-run with --arch" is not the command that fixes it.
+  // Truncated/quarantined image resembles cross-arch build but re-running --arch is wrong remedy.
   it('does not blame --arch for a source build that is not a PE image', () => {
     const resourcesDir = packagedResources({
       'prebuilds/win32-x64/conpty.node': { cygwinBreakawayDenied: false }
@@ -227,8 +231,7 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
     expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).not.toThrow()
   })
 
-  // build/Debug sits between Release and the prebuilds in the load order, and
-  // nothing prunes it, so it wins whenever Release cannot be loaded.
+  // Debug wins after unloadable Release and before prebuild; it is never pruned.
   it('resolves past a Release build the target cannot load', () => {
     const resourcesDir = packagedResources({
       'build/Release/conpty.node': { arch: 'x64' },
@@ -239,8 +242,7 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
     )
   })
 
-  // A stale source build is the packaging host's own to rebuild, so it gets the
-  // advice that actually works rather than the cross-host one.
+  // Stale source output needs local rebuild advice, distinct from cross-host upstream prebuild.
   it('tells a stale source build to rebuild, not to change hosts', () => {
     const resourcesDir = packagedResources({
       'build/Release/conpty.node': { cygwinBreakawayDenied: false }
@@ -250,8 +252,7 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
     )
   })
 
-  // Nothing to load is not "a layout we do not recognise", it is a package with
-  // no ConPTY backend, and a gate that cannot see its subject is not a gate.
+  // No loadable candidate means package has no ConPTY backend; gate must fail.
   it('rejects a package with no ConPTY backend and lists the searched paths', () => {
     const resourcesDir = packagedResources({})
     const verify = () => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')
@@ -259,8 +260,7 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
     expect(verify).toThrow(/build[\\/]Release[\s\S]*build[\\/]Debug[\s\S]*prebuilds[\\/]win32-x64/)
   })
 
-  // Present but unreadable is the state that used to pass, so it must not warn.
-  // The read error itself is the message; the point is that it does not return.
+  // Unreadable candidate used to pass; propagate read error instead of warning.
   it('fails rather than pass a candidate it cannot read', () => {
     const resourcesDir = packagedResources({})
     mkdirSync(join(resourcesDir, 'node_modules', 'node-pty', 'build', 'Release', 'conpty.node'), {
@@ -308,8 +308,7 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
 describe('verifyPackagedWindowsNodePty', () => {
   const spies = () => ({ verifyMarker: vi.fn(), verifyExports: vi.fn() })
 
-  // The bug this replaced: the marker check sat in the else of the host gate, so
-  // the cross-host package it exists for was the one package it never checked.
+  // Marker check must survive host gate: old else nesting skipped the very cross-host packages it protects.
   it.each([
     ['a cross-platform host', { hostPlatform: 'darwin', canExecuteTargetArch: true }],
     ['a cross-arch slice', { hostPlatform: 'win32', canExecuteTargetArch: false }],
@@ -341,8 +340,7 @@ describe('verifyPackagedWindowsNodePty', () => {
     expect(verifyExports).not.toHaveBeenCalled()
   })
 
-  // Swallowing the marker verdict would leave a gate that runs and decides
-  // nothing, which is the failure mode this whole change is about.
+  // Propagate marker verdict; swallowing it leaves gate running without enforcing anything.
   it('lets the marker verdict fail the package', () => {
     const verifyMarker = vi.fn(() => {
       throw new Error('predates the Cygwin/MSYS job-breakaway denial')

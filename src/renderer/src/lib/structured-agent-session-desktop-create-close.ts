@@ -5,7 +5,7 @@ import {
   getRuntimeEnvironmentRevision,
   isRuntimeEnvironmentContinuationPending
 } from '@/runtime/runtime-environment-revision'
-import type { DesktopCreateLaunchRecord } from './structured-agent-session-launch-record'
+import type { DesktopCreateLaunchRecord } from './agent-session/launch/structured-agent-session-launch-record'
 
 /** Explicit surface close abandons presentation now, independently of host prevention bookkeeping. */
 export function cancelDesktopCreateOnClose(record: DesktopCreateLaunchRecord): void {

@@ -10,12 +10,12 @@ export type ProfileStateWriterSlowWarningOptions = {
   warningMs: number
   phase: ProfileStateWriterSlowPhase
   request: ProfileStateWriterDiagnosticRequest
-  /** Monotonic milliseconds; tests replace it to model a stalled main loop. */
+  /** Monotonic clock; replace in tests to model stalled main loops. */
   now?: () => number
   onSlow?: () => void
 }
 
-/** Elapsed time cannot prove failure; warn once without settling the request. */
+/** Time alone cannot prove failure; warn once without settling. */
 export function startProfileStateWriterSlowWarning({
   warningMs,
   phase,

@@ -8,14 +8,7 @@ import {
   rowFiltersForView
 } from './workspace-view-settings'
 
-// Regression guard for "host page shows lots of worktrees, repo shows only a
-// few". The removed getHostScopedWorktrees filtered the list to worktrees whose
-// repoId appeared in the repo.list result — a map keyed by repo DISPLAY NAME.
-// Same-named repos on different hosts (a local "orca" and a runtime "orca")
-// collapsed to one id, so every worktree under the other id vanished. These
-// tests assert the user-visible outcome — every worktree from worktree.ps stays
-// in the list — regardless of repo.list contents or desktop host scope, so they
-// hold even if the plumbing is refactored, as long as workspaces stop vanishing.
+// Repo display names can collide across hosts; an incomplete/name-keyed repo catalog must never drop workspace rows.
 
 function worktree(repoId: string, id: string, repo = repoId): Worktree {
   return {
@@ -38,9 +31,7 @@ function worktree(repoId: string, id: string, repo = repoId): Worktree {
 
 const base: MobileViewState = { ...INITIAL_MOBILE_VIEW, sharesOtherClientFilter: true }
 
-// Reconstruct the list the host screen renders: apply the synced desktop
-// settings, then build sections exactly as the screen does. `catalogRepos` are
-// [displayName, id] rows of the repo.list catalog the screen groups by.
+// Build the host screen’s list from synced view settings and catalog [displayName, id] pairs.
 function visibleWorktreeIds(
   worktrees: Worktree[],
   catalogRepos: readonly (readonly [string, string])[],
@@ -66,7 +57,6 @@ function visibleWorktreeIds(
 
 describe('every worktree stays visible regardless of repo.list contents', () => {
   it('shows worktrees whose repoId is missing from repo.list', () => {
-    // repo.list only echoes one of the repos the worktrees belong to.
     const worktrees = [
       worktree('orca-local', 'a'),
       worktree('orca-local', 'b'),
@@ -78,21 +68,18 @@ describe('every worktree stays visible regardless of repo.list contents', () => 
   })
 
   it('shows every worktree when the same repo name maps to two host-specific ids', () => {
-    // The exact trigger: a local "orca" and a runtime "orca". repo.list returns
-    // both under the same displayName; a name-keyed map keeps only the last id.
+    // Same-name local/runtime repos expose any name-keyed map that discards an owner id.
     const worktrees = [
       worktree('orca-local', 'local-1', 'orca'),
       worktree('orca-local', 'local-2', 'orca'),
       worktree('orca-runtime', 'runtime-1', 'orca')
     ]
-    // The catalog names only one of the two "orca" repos.
     const catalogRepos = [['orca', 'orca-runtime']] as const
 
     expect(visibleWorktreeIds(worktrees, catalogRepos)).toEqual(['local-1', 'local-2', 'runtime-1'])
   })
 
   it("narrows to the desktop's shown hosts, and its legacy scope alone narrows too", () => {
-    // The phone's host filter is the desktop's: rows on hosts it hides are hidden here as well.
     const worktrees = [
       { ...worktree('local-repo', 'x'), hostId: 'local' as const },
       { ...worktree('runtime-repo', 'y'), hostId: 'runtime:devbox' as const }

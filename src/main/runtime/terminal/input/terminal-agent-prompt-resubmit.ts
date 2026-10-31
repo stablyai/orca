@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission } from '../wait/terminal-wait-permission'
+import { OrcaRuntimeWithTitlelessPaneAgentIdentity } from '../wait/titleless-pane-agent-identity'
 import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
 import {
   AGENT_PROMPT_SUBMIT,
@@ -18,13 +18,8 @@ type HeldAgentPrompt = {
   heldBudgetMs: number
 }
 
-export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
-  /**
-   * Presses Enter again for agents that can drop the first one (`submitRetryDelayMs`): once blind
-   * into a launch composer drawn before Enter is live, and while the composer still shows this
-   * prompt: on Windows, which an input-record paste burst kept as a newline, or on a dsh launchpad
-   * whose session has not opened. Best effort: it never fails a prompt the first Enter submitted.
-   */
+export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntimeWithTitlelessPaneAgentIdentity {
+  /** Retry blind Enter and drafts held by Windows input-record pastes or unopened dsh launchpads; retries cannot fail a submitted prompt. */
   protected async resubmitHeldAgentPrompt(
     ptyId: string,
     generation: number,
@@ -51,8 +46,7 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
           return resubmits
         }
         this.assertAgentPromptGeneration(ptyId, generation)
-        // Why our prompt only: a rotating placeholder, a question overlay or the user's own text
-        // also reads as a draft, and Enter would submit or answer it.
+        // Retry only our prompt: Enter could submit user text or answer an overlay.
         const holdsPrompt = async (): Promise<boolean> =>
           prompt !== undefined &&
           isHeldAgentPromptDraft(
@@ -69,9 +63,7 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
           continue
         }
         await options.beforeWrite?.(ptyId)
-        // Why again: the guard can yield while the agent takes the prompt, opens an approval or
-        // the user types, so the decision is remade right before the write — the slow screen
-        // read first, then the deadline and turn checks with nothing awaited after them.
+        // Recheck after yielding: read the screen before the synchronous deadline/turn checks to avoid stale writes.
         if (!blind && (!(await holdsPrompt()) || Date.now() >= deadline)) {
           return resubmits
         }

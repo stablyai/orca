@@ -103,6 +103,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.cancelGrabOp(browserTabId, 'evicted')
     cancelBrowserPagePrompts(browserTabId)
     this.notifyAudioStateChanged(browserTabId, false)
+    this.agentActivity.end(browserTabId)
 
     const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (guestWebContentsId !== undefined) {

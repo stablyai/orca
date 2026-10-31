@@ -51,8 +51,7 @@ export function writeStartupCommandWhenShellReady(
       clearTimeout(postReadyTimer)
       postReadyTimer = null
     }
-    // Why: run in the same interactive shell (not `shell -c`) so the session survives after the agent exits.
-    // Why: single write after the ready barrier avoids incremental-paste char drops; multiline is bracketed-paste wrapped so newlines don't submit early.
+    // Keep the interactive shell alive after agent exit; write once past readiness to avoid incremental-paste drops.
     proc.write(
       buildStartupCommandSubmission(
         appendNativeSetupCompletion(startupCommand, options.nativeSetupToken, nativeSetupShell),
@@ -72,7 +71,7 @@ export function writeStartupCommandWhenShellReady(
     if (sent) {
       return
     }
-    // Why: marker fires from precmd before the line editor takes the PTY out of ECHO; writing now double-echoes the command, so settle first.
+    // precmd can fire before the line editor disables ECHO; wait for post-marker activity to prevent double echo.
     if (signal?.postMarkerBytesObserved === true) {
       schedulePostReadyFlush()
       return

@@ -13,7 +13,6 @@ import { browserUrlForPortForwardEntry } from '@/lib/workspace-port-urls'
 const NO_FORWARDS: readonly PortForwardEntry[] = []
 const NO_UNRESTORED: readonly UnrestoredPortForward[] = []
 
-/** This client's forwards through an SSH host whose ports another endpoint scans. */
 export function SshForwardedPortsSection({
   connectionId
 }: {
@@ -67,8 +66,7 @@ export function SshForwardedPortsSection({
                 key={entry.id}
                 entry={entry}
                 onEdit={() => setDialogState({ mode: 'edit', entry })}
-                // Why the system browser: the forward listens on this machine, while the workspace's
-                // Orca browser may be the server's or routed through the SSH host.
+                // Use the system browser: this forward listens locally, while Orca’s browser may run on another host.
                 onOpenInBrowser={() =>
                   void window.api.shell.openUrl(browserUrlForPortForwardEntry(entry))
                 }

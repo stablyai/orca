@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { MobileGenerateCommitMessageResult } from './mobile-commit-message-ai'
 
-// Why: react-native is Flow source vitest will not parse; haptics reaches expo-haptics through it.
+// Mock haptics because react-native is Flow source Vitest cannot parse.
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios },
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }

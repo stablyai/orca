@@ -5,7 +5,7 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session-journ
 import type { AgentSessionBackgroundTask } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentChildWorkViewsEqual } from '../../../shared/agent-status-child-work-view-wire'
-import { structuredChildWorkLegacyTasks } from '../../../shared/structured-agent-session-child-work-legacy'
+import { structuredChildWorkLegacyTasks } from '../../../shared/agent-session/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
 
 /** Summary readers show minute-level staleness; index-wise comparison requires stable insertion order. */
@@ -29,6 +29,20 @@ export function structuredStatusChildWork(
   // Old clients treat failed blocked tasks as live, so legacy lists must contain running records only.
   const { tasks } = structuredChildWorkLegacyTasks(children, provider)
   return { children, ...(tasks ? { backgroundTasks: tasks } : {}) }
+}
+
+/** Exclude per-tick usage from global broadcasts; chat background channels retain it. */
+export function structuredStatusChildWorkFields(
+  views: readonly AgentChildWorkView[] | undefined,
+  provider: StructuredAgentId
+): StructuredStatusChildWork {
+  const { children, backgroundTasks } = structuredStatusChildWork(views, provider)
+  return {
+    ...(backgroundTasks && backgroundTasks.length > 0
+      ? { backgroundTasks: backgroundTasks.map(({ totalTokens: _tokens, ...task }) => task) }
+      : {}),
+    ...(children ? { children } : {})
+  }
 }
 
 export function structuredStatusChildrenEqual(

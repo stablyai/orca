@@ -7,6 +7,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
 import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
+import { reportedWorkerOutcome } from './worker-start-receipt'
 import { chatAssigneeSessionId } from '../../../../orchestration/chat-assignee'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import {
@@ -21,11 +22,7 @@ import {
   type WorkerSetupReceipt
 } from './worker-topology'
 
-/**
- * Delivers the dispatch preamble and settles the worker's start state on the strongest
- * evidence available: `ready` only with a positive turn-start (or a provider that cannot
- * prove one), `start_unknown` when observation is supported and nothing started.
- */
+/** Claim ready only for proven turn start or unsupported observation; supported-but-unobserved starts remain start_unknown. */
 export async function deliverAndSettleWorkerStartReadiness(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -81,10 +78,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   })
 
   args.onStage('turn_observation')
-  // The write above was accepted without waiting on provider hooks; now demand the positive
-  // evidence the receipt claims is observable. A worker whose turn never starts must not be
-  // reported ready — a wedged agent and a working one looked identical before this gate.
-  // A structured preamble send is its own evidence: acknowledged, or still held for its agent.
+  // Accepted writes need positive turn-start evidence when supported; structured sends prove acceptance or remain held.
   const promptDelivery = delivery.prompt
   const turnStart: WorkerTurnStartObservation =
     delivery.structuredTurnStart ??
@@ -110,10 +104,12 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   // A worker report can settle the dispatch while turn observation is outstanding.
   const currentWorker = db.getWorkerDispatch(args.dispatchId)
   const alreadySettled = currentWorker && currentWorker.state !== 'starting'
-  if (turnStart.verdict === 'unobserved' && !alreadySettled) {
-    // Honest `unverifiable`: keep lifecycle authority and the terminal — the worker may
-    // still recover and report (worker-report settlement reconnects a start_unknown worker) —
-    // but never claim ready for a turn nobody observed.
+  // Only Orca's own worker chat queues behind its own turn, so its card is sure to run; a user's chat may drop it.
+  const queuedOnOwnWorker =
+    turnStart.queued === true &&
+    db.getWorkerTerminalResourceByOwner(args.dispatchId)?.ownership_state === 'owned'
+  if (turnStart.verdict === 'unobserved' && !queuedOnOwnWorker && !alreadySettled) {
+    // Keep authority and terminal for recovery reports, but never claim ready for an unobserved turn.
     effects.push({
       kind: 'dispatch_input',
       role: 'agent',
@@ -156,11 +152,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const worker = alreadySettled
     ? currentWorker
     : db.markWorkerDispatchReady(args.dispatchId, effects)
-  // A completed task proves start succeeded; older callers use only 'ready' as start success.
-  const reportedOutcome =
-    worker.stage === 'settled' && (worker.state === 'succeeded' || worker.state === 'failed')
-      ? worker.state
-      : undefined
+  const reportedOutcome = reportedWorkerOutcome(worker)
   return {
     runId: run.id,
     taskId: task.id,
@@ -168,7 +160,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     state: reportedOutcome ? 'ready' : worker.state,
     stage: worker.stage,
     ...(reportedOutcome ? { workerOutcome: reportedOutcome } : {}),
-    turnStart: turnStart.verdict,
+    turnStart: queuedOnOwnWorker ? 'queued' : turnStart.verdict,
     setup: args.setupReceipt,
     launch: args.launchReceipt,
     mode: args.mode,

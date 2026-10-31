@@ -19,7 +19,9 @@ import {
 import { REMOTE_NODE_RUNTIME_READY } from '../ssh/orcad-remote-node-runtime-report'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { runWslProcess, type WslSpec } from '../wsl/wsl-runner'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
+import { describeWslProcessFailure } from '../wsl/wsl-process-failure'
+import { admitWslTranscriptPath } from '../native-chat/wsl-transcript-running-admission'
+import { AI_VAULT_SCAN_ISSUE_COPY } from '../../shared/ai-vault-scan-issue-copy'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 const preparation = new Map<string, { value: OpenCodeWslRuntime; expires: number }>()
@@ -57,7 +59,7 @@ export async function prepareOpenCodeWslReaders(
         ? previous.value
         : {
             distro,
-            error: 'Preparing the WSL SQLite reader. Refresh Vault after setup finishes.'
+            error: AI_VAULT_SCAN_ISSUE_COPY.openCodeWslReaderPreparing
           }
     }
     preparation.set(key, entry)
@@ -80,15 +82,8 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
   const signal = AbortSignal.timeout(PREPARATION_TIMEOUT_MS)
   const run = async (spec: WslSpec, timeoutMs = 15_000): Promise<string> => {
     signal.throwIfAborted()
-    const running = await waitForPromiseWithSignal(
-      filterPathsToRunningWslDistrosAsync([toWindowsWslUncPath('/', distro)], {
-        requireConfirmed: true
-      }),
-      signal
-    )
-    if (running.length === 0) {
-      throw new Error(`WSL distro ${distro} is not running. Start it to read its history.`)
-    }
+    // Each `--exec` would boot a distro that stopped since the roots were listed.
+    await waitForPromiseWithSignal(admitWslTranscriptPath(toWindowsWslUncPath('/', distro)), signal)
     signal.throwIfAborted()
     const result = await runWslProcess({
       ...spec,
@@ -97,7 +92,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
       maxOutputBytes: 16 * 1024
     })
     if (result.code !== 0 || result.timedOut) {
-      throw new Error(`WSL SQLite reader setup failed: ${result.stderr.trim() || 'command failed'}`)
+      throw new Error(`WSL SQLite reader setup failed: ${describeWslProcessFailure(result)}`)
     }
     return result.stdout.trim()
   }

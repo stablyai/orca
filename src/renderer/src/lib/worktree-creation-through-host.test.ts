@@ -87,11 +87,11 @@ import {
 } from './structured-agent-session-launch-prompt'
 import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
 import { cancelDesktopCreateLaunch } from './structured-agent-session-desktop-create'
-import { markStructuredAgentSessionLaunchCancelled } from './structured-agent-session-launch-registry'
+import { markStructuredAgentSessionLaunchCancelled } from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   readStructuredAgentLaunchRecord,
   hasStructuredAgentLaunchCancellationTombstonePersisted
-} from './structured-agent-session-launch-persistence'
+} from './agent-session/launch/structured-agent-session-launch-persistence'
 import { deriveAgentLaunchChildOperationId } from '../../../shared/agent-launch-child-operation'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 import { createWorktreeThroughHost } from './worktree-creation-through-host'
@@ -368,7 +368,7 @@ describe('desktop shared worktree create', () => {
       12
     )
     const { markStructuredAgentLaunchCancelledPersisted } =
-      await import('./structured-agent-session-launch-persistence')
+      await import('./agent-session/launch/structured-agent-session-launch-persistence')
     for (const retire of ['revision', 'close']) {
       let release!: () => void
       let entered!: () => void

@@ -1,5 +1,3 @@
-import { abortSignalReason } from '../../shared/abort-signal-reason'
-
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice,
@@ -51,7 +49,10 @@ function isSelect(option: SessionConfigOption): option is SelectOption {
 
 export class AcpStructuredOptions {
   constructor(
-    private readonly dialect: Pick<AcpDialect, 'modelEfforts' | 'withheldCommands'> = {}
+    private readonly dialect: Pick<
+      AcpDialect,
+      'modelEfforts' | 'withheldCommands' | 'effortChangesModel' | 'clampsUnlistedEffort'
+    > = {}
   ) {}
 
   private configOptions: SessionConfigOption[] = []
@@ -60,12 +61,21 @@ export class AcpStructuredOptions {
   // Only new sessions resolve configured defaults; loaded sessions retain their saved choices.
   private resolvesConfig = false
   readonly picked = new Set<string>()
-  /** Last successful Orca writes, distinct from agent-reported values. */
+  readonly appliedInput = new Map<string, string>()
   readonly applied = new Map<string, string>()
-  private initialChoice: Readonly<Record<string, string>> = {}
-  currentProof = new Set<string>()
   writeRevision = 0
 
+  invalidateInput(key: string): void {
+    this.appliedInput.delete(key)
+    if (key === 'model') {
+      this.appliedInput.delete('effort')
+    }
+    if (key === 'effort' && this.dialect.effortChangesModel) {
+      this.appliedInput.delete('model')
+    }
+  }
+
+  /** The session state a new, load or resume response reported. */
   adoptSession(
     response: {
       configOptions?: SessionConfigOption[] | null
@@ -76,13 +86,7 @@ export class AcpStructuredOptions {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
     this.resolvesConfig = origin === 'new'
-    this.initialChoice = this.reported()
-    this.currentProof = new Set(Object.keys(this.initialChoice))
-  }
-
-  /** Native selection before any message changed this child. */
-  messageDefault(): Readonly<Record<string, string>> {
-    return this.initialChoice
+    this.appliedInput.clear()
   }
 
   notePick(key: string): void {
@@ -132,7 +136,7 @@ export class AcpStructuredOptions {
     return null
   }
 
-  /** Effort menus describe models; current session values never establish catalog defaults. */
+  /** Native choices never establish an unobserved model's capability or configured default. */
   read(): Pick<AgentSessionOptionsResult, 'models' | 'current'> {
     const modelOption = this.select('model')
     const effortOption = this.select('thought_level')
@@ -158,12 +162,26 @@ export class AcpStructuredOptions {
     const models: AgentSessionModelOption[] = listed.map((model) => {
       const info = this.models?.availableModels.find((entry) => entry.modelId === model.id)
       const advertised = info ? this.dialect.modelEfforts?.(info) : undefined
-      const sessionMenu = { efforts: model.id === currentModel ? sessionEfforts : [] }
+      // A current-session menu supplies no negative evidence about an unobserved model.
+      const sessionMenu =
+        model.id === currentModel
+          ? { efforts: sessionEfforts }
+          : (modelOption || effortOption) && !advertised
+            ? {
+                efforts: this.dialect.clampsUnlistedEffort ? sessionEfforts : [],
+                effortsKnown: false as const
+              }
+            : { efforts: [] }
       return {
         ...model,
         isDefault: false,
         // Fall back to the running session's menu when the advertised menu is empty.
-        ...(advertised && advertised.efforts.length > 0 ? advertised : sessionMenu)
+        ...(advertised && (advertised.efforts.length > 0 || model.id !== currentModel)
+          ? advertised
+          : sessionMenu),
+        ...(advertised?.declaredDefaultEffort !== undefined
+          ? { declaredDefaultEffort: advertised.declaredDefaultEffort }
+          : {})
       }
     })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
@@ -200,6 +218,22 @@ export class AcpStructuredOptions {
     }
   }
 
+  observedCurrent(values?: Readonly<Partial<Record<string, string>>>) {
+    return { ...this.read().current, reportedPermissionMode: this.reportedPermissionMode(values) }
+  }
+
+  reportedPermissionMode(
+    values: Readonly<Partial<Record<string, string>>> | undefined
+  ): string | null {
+    if (!values) {
+      return this.applied.get('permissionMode') ?? null
+    }
+    const current = this.select('mode')?.currentValue
+    return current
+      ? (Object.entries(values).find(([, value]) => value === current)?.[0] ?? null)
+      : null
+  }
+
   // Match the mode category rather than assuming an agent's config ID.
   modeConfigId(): string {
     return this.select('mode')?.id ?? 'mode'
@@ -222,70 +256,18 @@ export async function acpSessionAcceptsImages(session: {
 }
 
 export async function readAcpLiveOptions(
-  session: Parameters<typeof acpSessionAcceptsImages>[0] & { options: AcpStructuredOptions }
+  session: Parameters<typeof acpSessionAcceptsImages>[0] & { options: AcpStructuredOptions },
+  permissionModes?: Readonly<Partial<Record<string, string>>>
 ) {
   const acceptsImages = await acpSessionAcceptsImages(session)
   // Only startup establishes config resolution; later reads may reflect changed picks.
-  return { ...withLiveCatalogListing(session.options.read()), acceptsImages }
-}
-
-/** Only the current, still-awaited write may establish reusable option proof. */
-export function writeAcpSessionOption(
-  connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel'>,
-  options: AcpStructuredOptions,
-  write: AcpOptionWrite,
-  bound: { agent: string; timeoutMs: number; signal?: AbortSignal; key: string; value: string }
-): Promise<void> {
-  const { agent, timeoutMs, signal } = bound
-  if (signal?.aborted) {
-    return Promise.reject(abortSignalReason(signal))
+  const options = withLiveCatalogListing(session.options.read())
+  return {
+    ...options,
+    current: {
+      ...options.current,
+      reportedPermissionMode: session.options.reportedPermissionMode(permissionModes)
+    },
+    acceptsImages
   }
-  const revision = ++options.writeRevision
-  options.currentProof.delete(bound.key)
-  if (bound.key === 'model') {
-    options.currentProof.delete('effort')
-  }
-  const adopt = (apply: () => void): void => {
-    if (options.writeRevision !== revision) {
-      throw new Error(`${agent} option write was superseded`)
-    }
-    apply()
-    options.currentProof.add(bound.key)
-    options.applied.set(bound.key, bound.value)
-  }
-  const applied =
-    write.method === 'config'
-      ? connection
-          .setConfigOption(write.configId, write.value)
-          .then((result) => adopt(() => options.adoptConfigOptions(result.configOptions)))
-      : connection
-          .setModel(write.modelId)
-          .then(() => adopt(() => options.adoptModel(write.modelId)))
-  return new Promise<void>((resolve, reject) => {
-    const fail = (error: Error): void => {
-      if (options.writeRevision === revision) {
-        options.writeRevision += 1
-      }
-      settle()
-      reject(error)
-    }
-    const onAbort = (): void => {
-      if (signal) {
-        fail(abortSignalReason(signal))
-      }
-    }
-    const timer = setTimeout(
-      () => fail(new Error(`${agent} did not answer an option write within ${timeoutMs}ms`)),
-      timeoutMs
-    )
-    const settle = (): void => {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
-    }
-    signal?.addEventListener('abort', onAbort, { once: true })
-    applied.then(() => {
-      settle()
-      resolve()
-    }, fail)
-  })
 }

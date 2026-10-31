@@ -18,8 +18,7 @@ vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
-// The reason travels from the cell's close frame to the screens. This covers
-// the production wiring between them: the supervisor's own openRelay callback.
+// Exercise reason propagation through the supervisor’s real openRelay wiring.
 describe('a signed-out desktop reaches the phone verdict', () => {
   beforeEach(() => {
     vi.useFakeTimers()

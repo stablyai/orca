@@ -1,5 +1,9 @@
 import { noteHostCreatedLaunchRead } from '@/lib/structured-agent-session-launch-prompt'
 import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
+import type {
+  StructuredAgentSessionSendControl,
+  StructuredAgentSessionAttachment
+} from '../../../../shared/structured-agent-session-send-mutation'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
 import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
@@ -8,7 +12,6 @@ import type {
   AgentJournalCursor,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionAttachment } from '../../../../shared/structured-agent-session-send-mutation'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   structuredAgentSessionQueueRequest,
@@ -27,7 +30,7 @@ import {
 } from './structured-agent-session-pending-sends'
 import { noteStructuredAgentSessionFence } from './structured-agent-session-send-attempt'
 import { recoverLegacyStructuredAgentSessionOutbox } from './structured-agent-session-legacy-outbox'
-import { pendingSendsOutsideQueuedCards } from './structured-agent-session-queued-cards'
+import { pendingSendsOutsideQueuedCards } from './structured-agent-session-sending-queued-cards'
 
 /** The open chat's view of its sends: they live in the sender, which works without this view. */
 export function useStructuredAgentSessionSends(args: {
@@ -45,6 +48,7 @@ export function useStructuredAgentSessionSends(args: {
   /** The chat reads Stopping: a send made now is drawn after the turn being stopped. */
   stopping?: boolean
   /** The composer's model and effort each send carries; undefined to a host that takes none. */
+  sendSelection?: () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'>
   sendOptions?: () => Readonly<Record<string, string>> | undefined
 }) {
   const {
@@ -55,6 +59,7 @@ export function useStructuredAgentSessionSends(args: {
     queue,
     queuedMessageIds,
     sendOptions,
+    sendSelection,
     sessionId,
     stopping,
     submissions,
@@ -115,8 +120,8 @@ export function useStructuredAgentSessionSends(args: {
       if (!text.trim() && attachments.length === 0) {
         return false
       }
-      const delivery = structuredAgentSessionQueueRequest(queue)
-      const options = sendOptions?.()
+      const delivery = structuredAgentSessionQueueRequest(queue, request?.alternate)
+      const captured = sendSelection?.() ?? { options: sendOptions?.() }
       const sent = sendStructuredAgentSessionMessage({
         sessionId,
         target,
@@ -127,11 +132,10 @@ export function useStructuredAgentSessionSends(args: {
           ? { usageLimitContinuationOfTurnItemId: request.usageLimitContinuationOfTurnItemId }
           : {}),
         ...(delivery ? { delivery } : {}),
-        ...(options ? { options } : {}),
+        ...captured,
         ...(takesSkills && request?.skills?.length ? { skills: request.skills } : {}),
         ...(stopping ? { sentWhileStopping: true as const } : {})
       })
-      // Refused while the chat's send is out: the text stays in the box.
       if (!sent) {
         return false
       }
@@ -147,7 +151,17 @@ export function useStructuredAgentSessionSends(args: {
         ? 'queued'
         : true
     },
-    [isWorking, queue, queuedMessageIds, sendOptions, sessionId, stopping, takesSkills, target]
+    [
+      isWorking,
+      queue,
+      queuedMessageIds,
+      sendSelection,
+      sendOptions,
+      sessionId,
+      stopping,
+      takesSkills,
+      target
+    ]
   )
 
   return {

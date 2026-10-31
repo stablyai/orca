@@ -1,5 +1,8 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 
 type ContentProps = {
@@ -27,12 +30,14 @@ export function ConfirmModal({ visible, ...content }: Props) {
 export function ConfirmContent({
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   destructive = false,
   onConfirm,
   onCancel
 }: ContentProps) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <>
       <View style={styles.content}>
@@ -45,7 +50,7 @@ export function ConfirmContent({
             style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
             onPress={onCancel}
           >
-            <Text style={styles.cancelText}>{cancelLabel}</Text>
+            <Text style={styles.cancelText}>{cancelLabel ?? t('common.cancel', 'Cancel')}</Text>
           </Pressable>
         )}
         <Pressable
@@ -60,7 +65,7 @@ export function ConfirmContent({
           }}
         >
           <Text style={destructive ? styles.destructiveText : styles.confirmText}>
-            {confirmLabel}
+            {confirmLabel ?? t('common.confirm', 'Confirm')}
           </Text>
         </Pressable>
       </View>
@@ -68,7 +73,7 @@ export function ConfirmContent({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   content: {
     paddingBottom: spacing.lg
   },
@@ -90,11 +95,11 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   cancelButton: {
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.sheetGroup
   },
   confirmButton: {
     backgroundColor: colors.textPrimary
@@ -120,4 +125,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff'
   }
-})
+}))

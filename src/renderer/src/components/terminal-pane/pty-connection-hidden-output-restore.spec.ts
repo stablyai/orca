@@ -468,8 +468,7 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
           state: 'working',
           prompt: 'paired task',
           agentType: 'claude',
-          // Why: the renderer parsed these OSC 9999 bytes itself for a remote-runtime pane, so it
-          // is the sequencing authority for the row (STA-4293).
+          // Renderer-parsed OSC 9999 owns remote-runtime row sequencing (STA-4293).
           observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
         },
         undefined,

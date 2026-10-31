@@ -1,7 +1,6 @@
 import type { AgentGenerationFailureOutput } from '../text-generation/agent-failure-output'
 
-// Why: every "working" event re-runs a failed name generation, so an agent stuck on a usage limit
-// spawned hundreds of sessions (#9705); space retries out, repeating the last delay until it recovers.
+// Usage-limit failures spawned hundreds of sessions on repeated working events (#9705); back off until recovery.
 export const FIRST_WORK_GENERATION_RETRY_DELAYS_MS: readonly number[] = [30_000, 120_000, 1_800_000]
 
 type GenerationFailures = { count: number; retryAt: number }
@@ -28,7 +27,6 @@ export function clearFirstWorkGenerationFailures(workspaceId: string): void {
   failuresByWorkspace.delete(workspaceId)
 }
 
-/** Failed generations stay retryable but only on the backoff schedule. */
 export function retryFailedGeneration(
   worktreeId: string,
   generated: { error: string; canceled?: boolean; failureOutput?: AgentGenerationFailureOutput },

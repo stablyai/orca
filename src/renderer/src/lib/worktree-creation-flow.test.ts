@@ -15,7 +15,7 @@ const store = {
   settings: {
     activeRuntimeEnvironmentId: null as string | null,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture mutates this setting across test cases.
-    experimentalNativeChat: undefined as boolean | undefined
+    nativeChatProviders: { claude: false, codex: false } as Record<string, boolean>
   },
   activeView: 'terminal' as TestActiveView,
   activePendingCreationId: 'creation-1' as string | null,
@@ -100,7 +100,7 @@ import {
 beforeEach(() => {
   vi.clearAllMocks()
   store.settings.activeRuntimeEnvironmentId = null
-  store.settings.experimentalNativeChat = undefined
+  store.settings.nativeChatProviders = { claude: false, codex: false }
   store.activeView = 'terminal'
   store.activePendingCreationId = 'creation-1'
   store.repos = []
@@ -524,7 +524,7 @@ describe('staged background worktree creation', () => {
       undefined,
       undefined,
       undefined,
-      { activateCreatedTabs: false, backendStartupTerminalSpawned: true }
+      expect.objectContaining({ activateCreatedTabs: false, backendStartupTerminalSpawned: true })
     )
     expect(queueWorkspaceActivationTerminalFocus).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
@@ -533,9 +533,7 @@ describe('staged background worktree creation', () => {
     })
   })
 
-  // Why: one-click "Start workspace from issue" commonly backgrounds, so the
-  // user-moved-on path is the common delivery for the repo's issue command; it
-  // must thread through as the 5th positional arg, not be dropped to undefined.
+  // Background issue launches must retain the fifth positional issueCommand; this is the common one-click path.
   it('threads the request issue command into the background terminal seed', async () => {
     store.activeView = 'tasks'
     store.createWorktree.mockResolvedValueOnce({
@@ -552,9 +550,7 @@ describe('staged background worktree creation', () => {
     )
 
     expect(started).toBe(true)
-    // Why: vi.waitFor instead of a fixed microtask flush — the await count in
-    // executeWorktreeCreation grows over time (e.g. VM preflight), and a fixed
-    // flush silently starves this assertion in merged builds.
+    // Wait on the condition; fixed microtask counts drift as async preflight grows and silently starve assertions.
     await vi.waitFor(() =>
       expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
         store,
@@ -563,7 +559,7 @@ describe('staged background worktree creation', () => {
         undefined,
         { command: 'gh issue view 42' },
         undefined,
-        { activateCreatedTabs: false }
+        { activateCreatedTabs: false, worktreeCreationId: 'creation-1' }
       )
     )
   })
@@ -659,7 +655,7 @@ describe('staged background worktree creation', () => {
         setup,
         undefined,
         undefined,
-        { activateCreatedTabs: false, callerProvidesSurface: true }
+        expect.objectContaining({ activateCreatedTabs: false, callerProvidesSurface: true })
       )
     )
   })
@@ -699,8 +695,7 @@ describe('staged background worktree creation', () => {
   })
 
   it('seeds the backend-spawned agent tab, not the worktree default terminal tab', async () => {
-    // Repo default tabs ("dev server", "logs", …) make activation's primaryTabId
-    // a tab that runs no agent; main's startup terminal is the agent's own tab.
+    // Default tabs can be dev/log shells; backend startup terminal, not activation primaryTabId, identifies the agent.
     store.activeView = 'terminal'
     store.activePendingCreationId = 'creation-1'
     store.tabsByWorktree = { 'wt-1': [{ id: 'dev-server' }, { id: 'agent-tab' }] }
@@ -739,7 +734,7 @@ describe('staged background worktree creation', () => {
     ['mirrorable local Grok', 'grok', 'https://github.com/o/r/issues/12', 'terminal'],
     ['multi-line Claude', 'claude', 'note\nhttps://github.com/o/r/issues/12', 'terminal']
   ] as const)('passes %s draft mode to backend startup', async (_label, agent, draft, viewMode) => {
-    store.settings.experimentalNativeChat = true
+    store.settings.nativeChatProviders = { claude: true, codex: true }
     store.repos = [{ id: 'repo-1', connectionId: null }]
     continueBackgroundWorktreeCreation(
       'creation-1',

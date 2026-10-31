@@ -224,4 +224,20 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
       ? { ...result, historySeeded: false }
       : result
   }
+
+  /** Records a spawn result's WSL distro (and its boot id), or clears it when `clear`. */
+  protected noteSpawnWslDistro(
+    sessionId: string,
+    wslDistro: string | undefined,
+    clear: boolean,
+    incarnationId?: string
+  ): void {
+    if (wslDistro) {
+      this.wslDistrosBySessionId.set(sessionId, wslDistro)
+      this.wslBridgeBootIdentity.noteSpawn(sessionId, wslDistro, incarnationId)
+    } else if (clear) {
+      this.wslDistrosBySessionId.delete(sessionId)
+      this.wslBridgeBootIdentity.forget(sessionId)
+    }
+  }
 }

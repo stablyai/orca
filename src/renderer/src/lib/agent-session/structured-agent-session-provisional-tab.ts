@@ -1,3 +1,10 @@
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
+import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type {
   AgentSessionLaunchPlan,
@@ -34,13 +41,11 @@ import {
 
 type LocalProvisionalLaunch = StructuredAgentLaunchHandle & { tab: OpenedAgentSessionTab }
 
-/** A chat's tab opens once its host admits it; a launch with no host to ask takes the direct path. */
 export type StructuredAgentSessionProvisionalLaunch =
   | LocalProvisionalLaunch
   | HostAdmittedStructuredLaunch
   | (StructuredAgentLaunchHandle & { tab: null })
 
-/** The host a structured launch would run on, which admits the chat before it exists. */
 export function structuredLaunchOwner(
   plan: Pick<AgentSessionLaunchPlan, 'route' | 'executionHostId'>,
   worktreeId: string,
@@ -68,13 +73,11 @@ export type ProvisionalLaunchArgs = {
   focusIntent?: NativeChatComposerFocusIntent
   target?: AgentSessionLaunchTarget
   targetGroupId?: string
-  /** The tab the chat opens right after, in that tab's group. */
   afterTabId?: string
   activate?: boolean
   /** Identity-only resumes publish on commit; unknown outcomes keep their recovery tab. */
   deferPublication?: true
-  /** Lets workspace flows reveal before the chat's tab is owned: before its host is asked, when no
-   *  session id exists yet. */
+  /** Allow workspace reveal before host acquisition, when the launch has no session ID or owned chat tab yet. */
   beforeOpen?: (sessionId?: string) => boolean | void
   /** The terminal the host's "no" opens; a caller without one gets a new agent tab's. */
   onHostDeclined?: (
@@ -87,8 +90,6 @@ export type ProvisionalLaunchArgs = {
   declinedOpensCallerSurface?: true
 }
 
-/** Binds the launch to a chat tab: at once for a New Chat the user asked for, otherwise once its
- *  host, this machine included, admits the chat. */
 export function beginStructuredAgentSessionProvisionalLaunch(
   args: ProvisionalLaunchArgs
 ): StructuredAgentSessionProvisionalLaunch | null {
@@ -123,7 +124,6 @@ export function beginStructuredAgentSessionProvisionalLaunch(
       return null
     }
     if (!owner || !worktreeId) {
-      // No host to ask: the launch path refuses it with its own message.
       return open(beginLocalProvisionalLaunch(args))
     }
     if (opensAtAction(args)) {
@@ -199,8 +199,16 @@ function beginLocalProvisionalLaunch(
   if (!worktreeId) {
     throw new Error('A provisional structured launch needs its workspace.')
   }
+  const draft = readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(handle.sessionId))
+  const position = nativeChatDraftPositions.get(draft)
+  const retirePosition = (target = structuredAgentSessionTabId(handle.sessionId)) => {
+    if (position?.at === 'end' && position.target === target) {
+      position.pending = false
+    }
+  }
   try {
     if (args.beforeOpen?.(handle.sessionId) === false) {
+      retirePosition()
       handle.cancel()
       return null
     }
@@ -213,8 +221,14 @@ function beginLocalProvisionalLaunch(
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       ...(args.activate !== undefined ? { activate: args.activate } : {})
     })
+    afterPendingTab(tab.id, (shown) => {
+      if (!shown || !useAppStore.getState().getTab(shown)) {
+        retirePosition(tab.id)
+      }
+    })
     return { ...handle, tab }
   } catch (error) {
+    retirePosition()
     // Why: a launch without its owning surface would strand a late publication.
     handle.cancel()
     throw error

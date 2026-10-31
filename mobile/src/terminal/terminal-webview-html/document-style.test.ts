@@ -3,18 +3,7 @@ import { documentLevelRules, scopeStyleToHost } from '../../style-scoping/docume
 import { XTERM_ENGINE_CSS } from '../terminal-webview-engine-css.generated'
 import { TERMINAL_DOCUMENT_ELEMENT_STYLE, TERMINAL_DOCUMENT_ROOT_STYLE } from './document-style'
 
-/**
- * What the page is allowed to inject, and what the split leaves the WebView.
- *
- * The document's sheet says `*`, `html` and `body` because inside a WebView it owns the page.
- * Appended to the head of a React Native Web application it owns nothing and restyles everything,
- * including after the terminal is gone. So the page takes the element half and holds every
- * selector under its host; these are the two halves of that claim, measured rather than asserted
- * in prose.
- *
- * The rewrite's own contract — which selectors read as the document's, and the sheet shapes it
- * refuses — is held beside it in `style-scoping/document-style-scoping.test.ts`.
- */
+// Verify native root rules remain separate while page-injected rules can reach only terminal-owned elements.
 const PREFIX = '.orca-terminal-document-host'
 
 function selectorsOf(css: string): string[] {
@@ -25,8 +14,6 @@ function selectorsOf(css: string): string[] {
 
 describe('the terminal document stylesheet', () => {
   it('keeps every document-level rule out of the half the page takes', () => {
-    // The root half is the precondition for the empty list beside it: the reader does find these
-    // rules when a sheet has them.
     expect(documentLevelRules(TERMINAL_DOCUMENT_ROOT_STYLE)).toEqual(['*', 'html, body'])
     expect(documentLevelRules(TERMINAL_DOCUMENT_ELEMENT_STYLE)).toEqual([])
   })
@@ -41,7 +28,6 @@ describe('the terminal document stylesheet', () => {
   })
 
   it('drops a document-level rule rather than prefixing it', () => {
-    // `.host *` is not what `*` meant, and a page has no use for either reading.
     const scoped = scopeStyleToHost(TERMINAL_DOCUMENT_ROOT_STYLE, PREFIX)
     expect(scoped.trim()).toBe('')
   })

@@ -33,7 +33,6 @@ function deferred<T>(): {
 vi.mock('expo-router', async () => {
   const react = await import('react')
   return {
-    // Run the focus callback once on mount, mirroring a focus.
     useFocusEffect: (cb: () => undefined | (() => void)) => {
       focusEffectRuntime.callback = cb
       react.useEffect(() => cb(), [cb])
@@ -199,7 +198,6 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
     })
     expect(controller?.isTabChatView('same-tab-id')).toBe(false)
-    // The next workspace's surface waits for its own overrides, not the last one's.
     expect(controller?.ready).toBe(false)
 
     await act(async () => {

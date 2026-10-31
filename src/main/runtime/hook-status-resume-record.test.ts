@@ -1,5 +1,4 @@
-// A layout-owner build: main keeps the resume record of a pane it holds from the hook status it
-// accepts, so an agent in a tab no window holds still resumes after a quit.
+// Main-owned panes retain hook resume identity even when no window holds their tabs.
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -7,7 +6,7 @@ import type { LayoutApplyOutcome } from '../../shared/workspace-layout/workspace
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const {
@@ -39,7 +38,6 @@ function makeRuntime() {
     }
   )
   const runtime = new OrcaRuntimeService(Object.assign(runtimeStore, { applyLayoutCommand }))
-  // No window holds any tab.
   runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return { runtime, getSession, applyLayoutCommand }
 }

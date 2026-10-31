@@ -212,7 +212,6 @@ describe('RepositoryHostSetupsSection', () => {
       openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    // The single project pane switches host in place — no navigation.
     expect(setSettingsProjectHostSelection).toHaveBeenCalledWith(
       'github:stablyai/orca',
       toSshExecutionHostId('openclaw 2'),
@@ -408,7 +407,10 @@ describe('RepositoryHostSetupsSection', () => {
       removeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'gpu-setup' })
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({
+      setupId: 'gpu-setup',
+      hostId: 'runtime:gpu'
+    })
     expect(openSettingsPage).not.toHaveBeenCalled()
     expect(openSettingsTarget).not.toHaveBeenCalled()
   })
@@ -468,11 +470,11 @@ describe('RepositoryHostSetupsSection', () => {
     expect(pathInput).toBeTruthy()
     typeIntoInput(pathInput!, '/home/alice/orca')
 
-    const importButton = findButton('Import')
-    expect(importButton).toBeTruthy()
+    const addProjectButton = findButton('Add project')
+    expect(addProjectButton).toBeTruthy()
 
     await act(async () => {
-      importButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      addProjectButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(setupProjectExistingFolder).toHaveBeenCalledWith({

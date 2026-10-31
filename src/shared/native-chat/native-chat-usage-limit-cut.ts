@@ -1,5 +1,4 @@
-// A turn one of the agent's usage limits ended, as its row says, and whether the chat still sits on
-// it. Derived from the journal each time, never stored; the chat offers Continue from it.
+// Derive usage-limit cuts from journal rows on each read for Continue; never store derived state.
 
 import { isRootAgentJournalItem } from '../agent-session-journal-producer'
 import { readAgentSessionFailureFact } from '../agent-session-failure'

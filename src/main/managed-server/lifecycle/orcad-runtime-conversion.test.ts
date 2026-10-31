@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -24,7 +24,12 @@ import { reconcileManagedOrcadSshTargets, visibleRepos } from '../../ssh/orcad-r
 import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
-import { makeTerminalScrollbackSnapshotRef } from '../../terminal-scrollback-snapshots'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal-scrollback-limits'
+import {
+  getProfileTerminalScrollbackSnapshotRoot,
+  getTerminalScrollbackSnapshotPath,
+  makeTerminalScrollbackSnapshotRef
+} from '../../terminal-scrollback-snapshots'
 
 const mocks = vi.hoisted(() => {
   const state: { targetStore: unknown } = { targetStore: null }
@@ -183,6 +188,11 @@ describe('converting an SSH host into a managed server', () => {
       mkdirSync(reportDirectory)
       const dataFile = join(reportDirectory, 'orca-data.json')
       writeFileSync(dataFile, JSON.stringify(profile))
+      const snapshotRoot = getProfileTerminalScrollbackSnapshotRoot(dataFile)
+      mkdirSync(snapshotRoot)
+      const snapshotPath = getTerminalScrollbackSnapshotPath(ref, { snapshotRoot })!
+      writeFileSync(snapshotPath, '')
+      truncateSync(snapshotPath, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT + 1)
       store = createSqliteTestStore(Store, { dataFile })
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registry wraps this real test store.
       mocks.state.targetStore = new SshConnectionStore(store as never)

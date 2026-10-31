@@ -1,7 +1,7 @@
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { StructuredAgentLaunchPersistedRecord } from './structured-agent-session-launch-record'
+import type { StructuredAgentLaunchPersistedRecord } from './agent-session/launch/structured-agent-session-launch-record'
 
 export function desktopCreateWorktreeKey(hostId: ExecutionHostId, worktreeId: string): string {
   return `desktop-worktree:${hostId}:${worktreeId}`

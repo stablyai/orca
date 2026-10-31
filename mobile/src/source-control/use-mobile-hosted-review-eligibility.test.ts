@@ -103,8 +103,7 @@ describe('mobile hosted review eligibility loader core', () => {
   })
 })
 
-// #8411: what the hook returns is what paints. A fetch-imminent frame must not
-// render as `idle` (hidden row) or the Create PR row pops in a frame later.
+// Fetch-imminent must render loading immediately; an idle frame would shift the list when Create PR appears.
 describe('rendered eligibility state', () => {
   it('renders fetch-imminent idle as an in-flight load', () => {
     const key = buildMobileHostedReviewEligibilityLoadKey({

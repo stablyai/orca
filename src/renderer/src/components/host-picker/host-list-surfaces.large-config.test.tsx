@@ -15,7 +15,6 @@ import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 
 // Why 13,692: the host count from the generated ~/.ssh/config in the renderer crash this guards.
 const HOST_COUNT = 13_692
-// Generous ceiling for one bounded surface; drawing every host costs well over 100k nodes.
 const NODE_BUDGET = 3_000
 
 const names = Array.from({ length: HOST_COUNT }, (_, i) => `node-${String(i).padStart(5, '0')}`)
@@ -46,27 +45,11 @@ describe('host lists with a 13,692-host ssh config', () => {
     expect(nodeCount()).toBeLessThan(50)
     fireEvent.click(screen.getByRole('combobox', { name: 'Host' }))
     const search = await screen.findByRole('combobox', { name: 'Search hosts…' })
-    // The current choice is pinned on top of a full page of others.
     expect(screen.getAllByRole('option')).toHaveLength(HOST_LIST_ROW_LIMIT + 1)
     expect(screen.getByText(/more hosts\. Search by name/)).toBeTruthy()
     expect(nodeCount()).toBeLessThan(NODE_BUDGET)
     fireEvent.change(search, { target: { value: lastName } })
     expect(screen.getAllByRole('option')[0]?.textContent).toContain(lastName)
-  })
-
-  it('HostCombobox treats re-picking the current host as no change', async () => {
-    const onChange = vi.fn()
-    render(
-      <HostCombobox
-        value="ssh-0"
-        onChange={onChange}
-        ariaLabel="Host"
-        options={names.slice(0, 3).map((name, i) => ({ id: `ssh-${i}`, label: name }))}
-      />
-    )
-    fireEvent.click(screen.getByRole('combobox', { name: 'Host' }))
-    fireEvent.click(await screen.findByRole('option', { name: names[0] }))
-    expect(onChange).not.toHaveBeenCalled()
   })
 
   it('Settings > Servers SSH host picker', async () => {

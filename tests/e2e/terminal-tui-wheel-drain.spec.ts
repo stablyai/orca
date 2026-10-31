@@ -17,19 +17,9 @@ const VISIBLE_TUI_FIXTURE_PATH = path.join(
   'tests/e2e/fixtures/visible-tui-scroll-fixture.cjs'
 )
 
-// Reports must stop reaching the PTY shortly after the gesture ends. Before
-// the input-write-queue coalescing fix, each SGR report drained in its own
-// >=4ms-clamped macrotask turn; a dense trackpad stream delivered through the
-// real input pipeline (which outprioritizes timers) plus TUI-scale redraw
-// output starved that drain, and the backlog replayed for seconds after the
-// fingers left the trackpad.
+// Require reports to stop promptly after gesture: old ≥4ms per-report macrotasks starved behind prioritized input/TUI redraw and replayed seconds later.
 const MAX_ARRIVAL_LAG_MS = 900
-// Why: each event is a serial CDP mouse.wheel round-trip that competes with the
-// heavy TUI's per-report full-screen redraw, so under loaded CI a round-trip can
-// take ~2.7s — 120 of them overran even the tripled test.slow() budget (360s).
-// 60 back-to-back events (no inter-event sleep) is still a dense burst that
-// exercises the drain/coalesce path while keeping the dispatch loop well inside
-// the timeout.
+// Use 60 uninterrupted events: serial CDP/redraw round-trips can take ~2.7s on loaded CI, making 120 overrun even 360s.
 const WHEEL_EVENTS = 60
 
 type WheelStreamResult = {
@@ -104,12 +94,7 @@ async function terminalWheelTarget(
   })
 }
 
-/**
- * Drives real wheel input (CDP mouse events through the compositor input
- * pipeline — the same priority class as physical trackpad input) rather than
- * synthetic DOM dispatchEvent, so input can genuinely compete with the
- * renderer's timer-based PTY input drain the way a physical gesture does.
- */
+// Use compositor CDP wheel events, not DOM dispatch, to compete with timer-based input drain at physical-input priority.
 async function dispatchTrackpadWheelStream(
   page: Page,
   options: { alternate: boolean; events: number; deltaY: number }
@@ -118,8 +103,7 @@ async function dispatchTrackpadWheelStream(
   await page.mouse.move(target.x, target.y)
   for (let i = 0; i < options.events; i += 1) {
     const direction = options.alternate && Math.floor(i / 18) % 2 === 1 ? -1 : 1
-    // No artificial sleep: CDP round-trips pace this near real trackpad rates
-    // while keeping the renderer's input queue continuously occupied.
+    // No sleep: CDP round-trips pace input while continuously occupying its queue.
     await page.mouse.wheel(0, direction * options.deltaY)
   }
   const inputEndWallClockMs = await page.evaluate(() => Date.now())
@@ -178,11 +162,9 @@ test.describe('terminal TUI wheel report drain', () => {
       const summary = summarizeArrivals(readReportArrivalLog(logPath), input)
       console.log(`[tui-wheel-drain] dense: ${JSON.stringify(summary)}`)
 
-      // The full gesture distance must reach the TUI (no dead/eaten scrolls)...
       expect(summary.totalReports, JSON.stringify(summary)).toBeGreaterThanOrEqual(
         WHEEL_EVENTS - 10
       )
-      // ...while the gesture happens, not replayed 1-by-1 afterwards.
       expect(summary.arrivalLagMs, JSON.stringify(summary)).toBeLessThanOrEqual(MAX_ARRIVAL_LAG_MS)
     } finally {
       await stopFrameCapture()

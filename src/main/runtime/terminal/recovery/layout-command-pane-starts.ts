@@ -1,5 +1,4 @@
-// Layout-owner build: what main runs after a client's startPane, wake or restartPane is written.
-// Every start goes through main's one restored-pane starter, so racing triggers start one terminal.
+// Route start/wake/restart effects through the one restored-pane starter so racing triggers share a terminal.
 
 import type {
   LayoutEffects,
@@ -22,10 +21,7 @@ export function startsPanes(command: Pick<LayoutCommand, 'type'>): boolean {
   return STARTING_COMMANDS.has(command.type)
 }
 
-/**
- * Stops the terminals a command replaces, before its write, through the existing stop path. Never
- * silent: a terminal that would not stop is logged, and its pane keeps it and starts nothing.
- */
+/** Stop replacements before layout writes; log failures and retain the old binding without starting another terminal. */
 export function stopReplacedTerminals(
   ptyIds: readonly string[],
   stop: (ptyId: string) => boolean
@@ -38,11 +34,7 @@ export function stopReplacedTerminals(
   return true
 }
 
-/**
- * Starts each pane the written command names; its replaced terminals stopped before the write.
- * Never silent: the starter shows a failed start on the pane. A wake keeps its records: the start
- * resumes from them and keeps them in the pane-owned form, so a host crash resumes the agent again.
- */
+/** Start written panes through the failure-reporting starter; retain wake records in pane-owned form so host crashes can resume again. */
 export function runLayoutPaneStarts(
   command: Pick<LayoutCommand, 'type' | 'workspace'>,
   effects: LayoutEffects,

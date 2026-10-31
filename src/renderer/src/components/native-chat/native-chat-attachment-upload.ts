@@ -3,10 +3,7 @@ import {
   isRuntimeHostContactRevoked
 } from '../../../../shared/runtime-host-status'
 import { useAppStore } from '@/store'
-// Host-aware resolution for composer attachments (STA-1465). The composer's
-// attach surfaces (file drop, file picker, image paste) receive client-local
-// paths. A structured chat on a paired server uploads into that server's
-// attachment store; any other remote chat refuses client files.
+// Upload structured-chat client paths to their paired host; other remote chats cannot read client-local files.
 
 import { translate } from '@/i18n/i18n'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
@@ -33,8 +30,7 @@ import type { AppState } from '@/store/types'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import { findTerminalTabWorktreeId } from './native-chat-file-link'
 
-/** A structured chat on a paired server: files upload into that server's attachment store, which
- *  checks every stored path a message names when it admits the message. */
+/** The paired host validates every stored attachment path when admitting a structured send. */
 export type NativeChatRuntimeSessionAttachmentOwner = {
   kind: 'runtime-session'
   environmentId: string
@@ -46,18 +42,13 @@ export type NativeChatAttachmentOwner =
   /** `structuredSessionId`: a structured chat on this machine, whose sends claim its pastes. */
   | { kind: 'local'; structuredSessionId?: string }
   | NativeChatRuntimeSessionAttachmentOwner
-  /** Refuses client files: a terminal-backed chat on a paired server (its agent may run on that
-   *  server's SSH or WSL host, which the server's store cannot reach), or an `ssh:` host, which
-   *  only its paired server serves. */
+  /** Refuse client paths for terminal-backed remote or nested SSH/WSL chats; the paired store may not reach their agent. */
   | {
       kind: 'remote'
-      /** The paired server whose own host runs this terminal's agent, so a clipboard image
-       *  saved there is readable to it, as a terminal paste is. Absent for a nested SSH host. */
+      /** Save clipboard images on this paired host only when it directly runs the agent, never for nested SSH. */
       clipboardImageEnvironmentId?: string
     }
-  /** Store not hydrated / worktree unknown. Callers must not attach local
-   *  paths in this window — the worktree may turn out to be remote, and the
-   *  agent would silently receive paths it cannot read (see #6648). */
+  /** Unknown ownership must not admit local paths: hydration may reveal a remote agent that cannot read them. */
   | { kind: 'not-ready'; notice?: string }
 
 type NativeChatAttachmentOwnerState = Pick<
@@ -74,8 +65,7 @@ type NativeChatAttachmentOwnerState = Pick<
   | 'worktreesByRepo'
 >
 
-/** Resolve who owns the composer's backing worktree at attach time. Mirrors the
- *  terminal drop resolver's order: runtime owner first, then SSH vs local. */
+/** Resolve at attach time in terminal-drop order: runtime owner before SSH/local routing. */
 export function resolveNativeChatAttachmentOwner(
   state: NativeChatAttachmentOwnerState,
   terminalTabId: string
@@ -129,7 +119,6 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
   return { kind: 'remote' }
 }
 
-/** The chat behind a structured composer, as the attachment owner needs it. */
 export type NativeChatStructuredAttachmentSession = {
   sessionId: string
   /** Null: the chat runs on this machine. */
@@ -177,8 +166,7 @@ export function nativeChatAttachmentUnreadableNotice(): string {
   )
 }
 
-/** One notice for every file of a drop or pick that did not attach, by name, with the cause they
- *  share when there is one. */
+/** Name every failed attachment and include their common cause when available. */
 export function nativeChatAttachFailedNotice(names: readonly string[], cause = ''): string {
   const files = names.join(', ')
   const reason = cause.trim().replace(/[^.!?。！？]$/u, '$&.')
@@ -203,11 +191,7 @@ export function nativeChatTooManyAttachmentsNotice(): string {
 
 export { nativeChatLocalAttachmentUnsupportedNotice } from './native-chat-composer-target'
 
-/**
- * Ask the chat's server, right before uploading, whether it keeps chat attachments, and which
- * server process will receive the bytes. An older server gets the update notice instead of an
- * upload: a path from this machine would mean nothing to its agent.
- */
+/** Check attachment capability and receiving process before uploading; older hosts need an update, never a client-local path. */
 export async function prepareNativeChatSessionAttachmentUpload(
   owner: NativeChatRuntimeSessionAttachmentOwner
 ): Promise<
@@ -240,10 +224,7 @@ export async function prepareNativeChatSessionAttachmentUpload(
   }
 }
 
-/**
- * Upload client-local files into the chat's store on its paired server. The chips show progress,
- * so nothing else does; the caller reports what did not attach.
- */
+/** Upload to the paired chat store; chips own progress display and callers report failures. */
 export function uploadNativeChatSessionAttachmentPaths(
   paths: string[],
   target: AgentSessionAttachmentUploadTarget

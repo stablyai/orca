@@ -38,12 +38,7 @@ type Connection = {
   abort: AbortController
 }
 
-/**
- * An in-process remote-runtime socket between the real renderer multiplexer and the real host
- * RPC dispatcher, with the faults a silent outage causes: buffered or lost frames in either
- * direction, a dead connection whose buffered input reaches the host late, and a host runtime
- * that restarts with the PTY surviving.
- */
+// Fault the real renderer-multiplexer/host-dispatcher link with buffered/lost/late frames and runtime restart while PTYs survive.
 export function createModelLink(writeInput: (text: string) => Promise<unknown>) {
   let host = newHost()
   let live: Connection | null = null

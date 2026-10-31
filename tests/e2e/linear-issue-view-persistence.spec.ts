@@ -1,12 +1,5 @@
-/**
- * Linear issue list view persistence.
- *
- * Layout (list/board), grouping, ordering, and per-workspace attribute filters are
- * a per-device preference: they persist to renderer localStorage, NOT through
- * `ui.set`, so a paired host that predates the field cannot discard the resume
- * state around it. Unit tests cover serialize/sanitize; these specs prove the
- * user-visible round-trip with a mocked Linear IPC backend.
- */
+// Persist per-device Linear view/filter preferences in renderer localStorage so older paired hosts cannot discard resume state.
+// Mock Linear IPC to verify visible remount/restart behavior; units cover serialization.
 
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -15,8 +8,7 @@ import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-
 import { getStoreState, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 
-// Mirrors src/renderer/src/components/linear-issue-view-storage.ts; hardcoded so a
-// silent key rename shows up here as a failing round-trip.
+// Pin the storage key independently so renames fail the roundtrip.
 const LINEAR_ISSUE_VIEW_STORAGE_KEY = 'orca.linear.issue-view.v1'
 
 const WORKSPACE_A = {
@@ -261,10 +253,7 @@ async function openViewMenu(page: Page): Promise<void> {
 }
 
 async function dismissOverlayChrome(page: Page): Promise<void> {
-  // Why: open Radix menus aria-hide/inert page chrome so later getByRole for
-  // Filters/chips fails. Outside force-clicks on inert chrome do not close modal
-  // menus in headless Electron, and the open portal covers the View trigger.
-  // Esc closes the menu/popover (TaskPage leaves Esc alone while those are open).
+  // Escape Radix overlays: inert chrome ignores outside clicks and open portals hide the View trigger.
   if (
     (await page.getByRole('menuitemradio', { name: 'Board' }).count()) > 0 ||
     (await page.locator('[data-slot="popover-content"]').count()) > 0
@@ -287,8 +276,7 @@ async function setLinearViewPreferences(
   page: Page,
   options: { viewMode: 'List' | 'Board'; groupBy: string; orderBy: string }
 ): Promise<void> {
-  // Why: grouping/ordering first, then Board last — Board remounts the issue
-  // surface and would detach an open menu if applied earlier.
+  // Set grouping/order before Board, which remounts the surface and detaches its menu.
   await selectViewMenuRadio(page, options.groupBy)
   await selectViewMenuRadio(page, options.orderBy)
   await selectViewMenuRadio(page, options.viewMode)
@@ -374,7 +362,6 @@ async function expectRestoredLinearView(page: Page): Promise<void> {
 }
 
 async function switchLinearWorkspace(page: Page, organizationName: string): Promise<void> {
-  // Why: multi-workspace trigger label is "Org / All teams".
   const trigger = page
     .locator('button[role="combobox"]')
     .filter({ hasText: /All teams|Alpha|Beta|All workspaces/ })
@@ -425,7 +412,6 @@ test.describe('Linear issue view persistence', () => {
       return Boolean(filter?.stateIds?.includes(STATE_A.id))
     })
 
-    // User-visible before remount.
     await expectRestoredLinearView(orcaPage)
     const statusChip = orcaPage.getByRole('button', { name: 'Remove Status filter' }).locator('..')
     await expect(statusChip).toContainText(STATE_A.name)
@@ -438,7 +424,6 @@ test.describe('Linear issue view persistence', () => {
     await expect(
       orcaPage.getByRole('button', { name: 'Remove Status filter' }).locator('..')
     ).toContainText(STATE_A.name)
-    // Board surface, not the flat list column header.
     await expect(orcaPage.getByText(STATE_A.name, { exact: true }).first()).toBeVisible()
   })
 

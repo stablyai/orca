@@ -7,20 +7,20 @@ import {
   getNestedWorkerDepthTitle
 } from './nested-worker-depth-copy'
 import {
-  getChatErrorEscalationDescription,
-  getChatErrorEscalationSearchKeywords,
-  getChatErrorEscalationTitle
-} from './chat-error-escalation-copy'
+  getWorkerAutoReleaseDescription,
+  getWorkerAutoReleaseSearchKeywords,
+  getWorkerAutoReleaseTitle
+} from './worker-auto-release-copy'
 
 type OrchestrationPaneSearchOptions = {
   includeLocalRuntimeSettings?: boolean
 }
 
 const NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID = 'nested-worker-depth'
-const CHAT_ERROR_ESCALATION_SEARCH_ENTRY_ID = 'chat-error-escalation'
+const WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID = 'worker-auto-release'
 const LOCAL_RUNTIME_SEARCH_ENTRY_IDS: ReadonlySet<string | undefined> = new Set([
   NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID,
-  CHAT_ERROR_ESCALATION_SEARCH_ENTRY_ID
+  WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID
 ])
 
 const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
@@ -97,10 +97,10 @@ const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: getNestedWorkerDepthSearchKeywords()
   },
   {
-    id: CHAT_ERROR_ESCALATION_SEARCH_ENTRY_ID,
-    title: getChatErrorEscalationTitle(),
-    description: getChatErrorEscalationDescription(),
-    keywords: getChatErrorEscalationSearchKeywords()
+    id: WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID,
+    title: getWorkerAutoReleaseTitle(),
+    description: getWorkerAutoReleaseDescription(),
+    keywords: getWorkerAutoReleaseSearchKeywords()
   }
 ])
 

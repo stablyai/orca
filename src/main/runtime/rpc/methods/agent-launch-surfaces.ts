@@ -1,3 +1,4 @@
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import {
   AgentLaunchFoundingIncompleteError,
   assertHostFoundingNotCancelled,
@@ -5,25 +6,13 @@ import {
 } from '../../../agent-launch/host-founding-attempt'
 import { AgentLaunchCancelledError } from '../../../../shared/agent-launch-cancellation'
 import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
-/**
- * How `agent.launch` builds the surface the executor decided on.
- *
- * Both halves are deliberately the plain, user-facing forms: a structured session created for the
- * worktree exactly as `agentSession.create` creates one, and a terminal agent created exactly as a
- * new agent tab is. Orchestration's own factories are NOT reusable here — a worker's session
- * carries a redrive subscription, a mailbox and a background tab that a launch the user asked for
- * must not take — which is why the executor injects this rather than branching.
- *
- * Delivering the launch text is here for the same reason: it is the wire-shaped half. Each surface
- * takes it differently — a structured session commits it to a transcript, a terminal agent takes it
- * on its launch command or as a paste into its PTY — and which of those applies is the executor's
- * decision, carried in as `startupPrompt` or asked for through `deliverTerminalPrompt`.
- */
+/** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
+ * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
 
 import { randomUUID } from 'node:crypto'
 import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch-child-operation'
 import type { AgentLaunchPromptDisposal } from '../../../../shared/agent-launch-intent'
-import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat-session-option-defaults'
+import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import {
@@ -37,6 +26,7 @@ import type { RpcContext } from '../core'
 import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../shared/startup-cwd-fallback'
 import { structuredCallerFor } from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
+import { structuredAgentRuntimeMetadata } from '../../structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
 import { createStructuredAgentSessionId } from '../../../../shared/structured-agent-session-create'
@@ -73,13 +63,27 @@ export function agentLaunchSurfaceFactory(
       worktreeId,
       agent,
       options,
+      chatOptions,
       sessionId: requested,
       tabId,
+      withoutPrompt,
+      signal,
       firstMessage,
       hostFoundingAttempt = {}
     }) => {
       const sessionId = requested ?? createStructuredAgentSessionId(agent, randomUUID)
-      const seeded = narrowStructuredLaunchSeedOptions(options)
+      const definition = structuredAgentRuntimeMetadata(agent)?.definition
+      const supported = Object.fromEntries(
+        Object.entries(narrowStructuredLaunchSeedOptions(options) ?? {}).filter(([key]) =>
+          definition?.restingOptions.acceptsKey(key)
+        )
+      )
+      const seeded = chatOptions ?? (Object.keys(supported).length > 0 ? supported : undefined)
+      const atRest =
+        firstMessage !== undefined ||
+        (withoutPrompt === true &&
+          context.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) ===
+            true)
       const operationId = attachOperationId ?? createStructuredAgentSessionOperationId(randomUUID)
       const clientMessageId = deriveAgentLaunchChildOperationId(operationId)
       if (!clientMessageId) {
@@ -131,7 +135,9 @@ export function agentLaunchSurfaceFactory(
           ...(tabId ? { tabId } : {}),
           ...(firstMessage ? { firstMessage: { clientMessageId, body: firstMessage } } : {}),
           hostFoundingAttempt,
-          atRest: true,
+          ...(atRest ? { atRest: true as const } : {}),
+          ...(chatOptions?.model ? { optionsMode: 'replace-model-selection' as const } : {}),
+          ...(signal ? { signal } : {}),
           activate:
             !callerPresentsSurface &&
             (presentation === undefined || (presentation === 'focused' && movesHostWindow))
@@ -176,6 +182,7 @@ export function agentLaunchSurfaceFactory(
           : !firstMessage
             ? { outcome: 'not-delivered' }
             : (savedSurface()?.promptDisposal ?? { outcome: 'unconfirmed' }),
+        ...(created.value.firstMessage ? { firstMessage: created.value.firstMessage } : {}),
         ...(created.value.tabId ? { tabId: created.value.tabId } : {})
       }
       if (hostFoundingAttempt.disposition && !hostFoundingAttempt.publication) {
@@ -199,7 +206,7 @@ export function agentLaunchSurfaceFactory(
       viewMode,
       accountEnv
     }) => {
-      const launchPreferences = toAgentLaunchPreferences(options)
+      const launchPreferences = toAgentLaunchPreferences(options, agent)
       let promptRodeLaunchCommand = false
       const hasEarlyTab = earlyTab !== null
       if (earlyTab?.closedByUser()) {
@@ -210,11 +217,13 @@ export function agentLaunchSurfaceFactory(
         ...(attempt.cancellation ? { signal: attempt.cancellation.controller.signal } : {}),
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
         // `cursor-agent` — so the runtime builds the configured launcher.
+        // An agent launch the caller asked for (CLI, window or paired client) is the user's act.
+        wslUserAct: true,
+        // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
         startupAgent: agent,
         ...(sequenceTerminalCommand ? { sequenceTerminalCommand } : {}),
         terminalImageViewerSupported: terminalImageViewerSupported(context),
-        // Offered to that launcher's startup plan; it rides only when the typed line can carry it,
-        // and the runtime reports which so an uncarried prompt is pasted once the agent is ready.
+        // The runtime reports typed-line prompt carry; paste only when the command did not carry it.
         ...(startupPrompt
           ? {
               startupPrompt,
@@ -253,15 +262,14 @@ export function agentLaunchSurfaceFactory(
       const terminal = await created.catch(terminalSpawn.rethrow)
       attempt.terminalAdmitted = true
       if (earlyTab?.closedByUser()) {
-        // Closed while its terminal was being created: stopped before any prompt is pasted. A prompt
-        // that rode the command line reached the agent, which is stopped a moment after it starts.
+        // Close a terminal created after its tab was closed before pasting; command-line prompts may already have reached it.
         await context.runtime.closeTerminal(terminal.handle).catch(() => {})
         throw new AgentLaunchTabClosedError()
       }
       return {
         handle: terminal.handle,
-        // The runtime already minted this pane and baked it into the PTY's env and its own reveal;
-        // dropping it here was what left a client with no way to name the tab it just asked for.
+        terminalCreation: terminal,
+        // Keep the runtime-minted paneKey so the caller can identify the tab already created.
         ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
         // A caller that shows the tab itself reports a failed reveal; the fallback it can't know.
         ...launchWarning(
@@ -271,15 +279,33 @@ export function agentLaunchSurfaceFactory(
         ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {})
       }
     },
-    deliverTerminalPrompt: async ({ handle, agent, freshLaunch, prompt, signal }) =>
-      deliverTerminalAgentLaunchPrompt({
-        runtime: context.runtime,
+    deliverTerminalPrompt: async ({
+      handle,
+      agent,
+      freshLaunch,
+      terminalCreation,
+      prompt,
+      signal
+    }) => {
+      const { runtime } = context
+      // A stdin-after-start prompt cannot ride a Windows launch line, so it needs the startup path's Windows proof (#10336).
+      if (freshLaunch && typeof runtime.deliverStartupFollowup === 'function') {
+        return runtime.deliverStartupFollowup(
+          handle,
+          { agent, prompt: prompt.text },
+          { agentLaunch: true, terminalCreation, ...(signal ? { signal } : {}) }
+        )
+      }
+      return deliverTerminalAgentLaunchPrompt({
+        runtime,
         handle,
         agent,
         freshLaunch,
+        terminalCreation,
         text: prompt.text,
         ...(signal ? { signal } : {})
       })
+    }
   }
 }
 

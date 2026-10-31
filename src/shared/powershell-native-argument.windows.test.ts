@@ -44,8 +44,7 @@ it.skipIf(process.platform !== 'win32')(
       const plain = 'line one\r\nline two $HOME `tick\nO\u2019Brien \u201Cdouble\u201D end'
       expect(await capture(quotePowerShellLiteral(plain))).toEqual([plain])
 
-      // Why compare with the old raw single-quoted form: 5.1 drops embedded `"` from native argv
-      // either way, and the one-line form must not change what reaches the program.
+      // Compare old quoting too: 5.1 drops embedded quotes either way; the one-line change must preserve delivered argv.
       const withQuotes = 'say "hi"\nbye'
       const legacy = `'${withQuotes.replace(/'/g, "''")}'`
       expect(await capture(quotePowerShellLiteral(withQuotes))).toEqual(await capture(legacy))

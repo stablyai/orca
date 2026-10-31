@@ -26,30 +26,63 @@ const state = vi.hoisted(
 )
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   SectionList: 'SectionList',
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View',
+  Dimensions: { get: () => ({ width: 390, height: 844 }) },
+  Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => {} },
   Platform: { OS: 'web', select: (choices: Record<string, unknown>) => choices.web },
   AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
-  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
+  StyleSheet: { absoluteFill: {}, create: (value: unknown) => value, hairlineWidth: 1 }
 }))
 vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'SafeAreaView',
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
-vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Play: 'Icon', RefreshCw: 'Icon' }))
-const notifications = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), push: vi.fn() }))
+vi.mock('react-native-svg', () => ({
+  default: 'Svg',
+  Defs: 'Defs',
+  LinearGradient: 'LinearGradient',
+  Path: 'Path',
+  Rect: 'Rect',
+  Stop: 'Stop'
+}))
+vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'Icon',
+  ChevronLeft: 'Icon',
+  CircleAlert: 'Icon',
+  History: 'Icon',
+  RefreshCw: 'Icon',
+  Search: 'Icon',
+  SearchX: 'Icon',
+  TriangleAlert: 'Icon',
+  X: 'Icon'
+}))
+// Reanimated needs native modules; the eased height is not under test.
+vi.mock('../components/AutoHeight', () => ({
+  AutoHeight: ({ children }: { children: unknown }) => children
+}))
+const notifications = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+  replace: vi.fn(),
+  back: vi.fn()
+}))
 vi.mock('../platform/haptics', () => ({
   triggerError: notifications.error,
   triggerSuccess: notifications.success
 }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('../navigation/route-handoff', () => ({
-  useRouteHandoff: () => ({ push: notifications.push, back: vi.fn(), canGoBack: () => false })
+  useRouteHandoff: () => ({
+    replace: notifications.replace,
+    back: notifications.back,
+    canGoBack: () => false
+  })
 }))
 vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: state.client, state: state.connection }),
@@ -85,8 +118,34 @@ vi.mock('./MobileAgentSessionHistoryList', () => ({
   }
 }))
 import { MobileAgentSessionHistoryPanel } from './MobileAgentSessionHistoryPanel'
+import { useProvideSessionScreenHandlers } from '../session/session-screen-handlers'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+
+function ownedSession(): AiVaultSession {
+  return {
+    id: 'qoder:owned-session',
+    executionHostId: 'local',
+    agent: 'qoder',
+    sessionId: 'owned-session',
+    title: 'Owned session',
+    cwd: '/owned/workspace',
+    branch: null,
+    model: null,
+    filePath: '/owned/qoder-session.json',
+    codexHome: null,
+    createdAt: null,
+    updatedAt: null,
+    modifiedAt: '2026-10-04T00:00:00.000Z',
+    messageCount: 2,
+    totalTokens: 10,
+    previewMessages: [],
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 0,
+    resumeCommand: '',
+    subagent: null
+  }
+}
 it.each([
   ['stable', 'metadata'],
   ['generation', 'metadata'],
@@ -111,33 +170,12 @@ it.each([
   let hostId = 'owned-host'
   notifications.error.mockClear()
   notifications.success.mockClear()
-  notifications.push.mockClear()
+  notifications.replace.mockClear()
   state.legacy = boundary === 'accepted send'
   state.completedBoundary = state.legacy || boundary === 'owned create accepted'
   state.generation = 1
   state.connection = 'connected'
-  state.session = {
-    id: 'qoder:owned-session',
-    executionHostId: 'local',
-    agent: 'qoder',
-    sessionId: 'owned-session',
-    title: 'Owned session',
-    cwd: '/owned/workspace',
-    branch: null,
-    model: null,
-    filePath: '/owned/qoder-session.json',
-    codexHome: null,
-    createdAt: null,
-    updatedAt: null,
-    modifiedAt: '2026-10-04T00:00:00.000Z',
-    messageCount: 2,
-    totalTokens: 10,
-    previewMessages: [],
-    queuedMessageCount: 0,
-    subagentTranscriptCount: 0,
-    resumeCommand: '',
-    subagent: null
-  }
+  state.session = ownedSession()
   if (boundary === 'preparation' || boundary === 'terminal creation') {
     state.session.agent = 'codex'
     state.session.codexHome = '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
@@ -308,7 +346,7 @@ it.each([
       const completion = {
         errors: notifications.error.mock.calls.length,
         successes: notifications.success.mock.calls.length,
-        navigations: notifications.push.mock.calls.length
+        navigations: notifications.replace.mock.calls.length
       }
       if (scenario !== 'unmount') {
         await act(async () => {
@@ -346,5 +384,71 @@ it.each([
     }
   } finally {
     await act(async () => rendered.tree?.unmount())
+  }
+})
+
+it('resuming into the session it was opened from shows the resumed terminal there', async () => {
+  notifications.replace.mockClear()
+  notifications.back.mockClear()
+  state.legacy = false
+  state.generation = 1
+  state.connection = 'connected'
+  state.session = ownedSession()
+  const replies: Record<string, unknown> = {
+    'repo.list': { repos: [{ id: 'owned-repo', path: '/owned/workspace', connectionId: null }] },
+    'folderWorkspace.list': { workspaces: [] },
+    'projectGroup.list': { groups: [] },
+    'worktree.ps': {
+      worktrees: [{ worktreeId: 'owned-worktree', repoId: 'owned-repo', path: '/owned/workspace' }]
+    },
+    'settings.get': {},
+    'session.tabs.createTerminal': {
+      tab: { type: 'terminal', id: 'owned-tab', terminal: 'owned-pty', title: 'Terminal' }
+    }
+  }
+  state.client = {
+    ...createFakeRpcClient({ getGeneration: () => state.generation }),
+    sendRequest: vi.fn<RpcClient['sendRequest']>(async (method) => ({
+      id: 'owned-reply',
+      ok: true,
+      result: replies[method]
+    }))
+  }
+  const onResumedTerminal = vi.fn()
+  function SessionBelow() {
+    useProvideSessionScreenHandlers('owned-host', 'owned-worktree', {
+      onFileOpenStart: vi.fn(),
+      onOpenedFileDiff: vi.fn(),
+      onResumedTerminal
+    })
+    return null
+  }
+  let tree: ReactTestRenderer | null = null
+  await act(async () => {
+    tree = create(
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(SessionBelow),
+        React.createElement(MobileAgentSessionHistoryPanel, {
+          hostId: 'owned-host',
+          worktreeId: 'owned-worktree',
+          origin: 'session'
+        })
+      )
+    )
+  })
+  try {
+    await act(async () => {
+      if (!state.session || !state.onResume) {
+        throw new Error('missing resume callback')
+      }
+      await state.onResume(state.session)
+    })
+    expect(onResumedTerminal).toHaveBeenCalledExactlyOnceWith('owned-pty')
+    expect(notifications.back).toHaveBeenCalledTimes(1)
+    expect(notifications.replace).not.toHaveBeenCalled()
+  } finally {
+    await act(async () => tree?.unmount())
   }
 })

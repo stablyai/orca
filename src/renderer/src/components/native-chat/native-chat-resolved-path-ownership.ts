@@ -27,8 +27,7 @@ export function nativeChatWorkspaceAttachmentMismatchNotice(): string {
   )
 }
 
-/** Whether an attachment captured against `captured` may still land on `current`.
- *  `not-ready` never matches: an unknown owner is not evidence of the same one. */
+/** Unknown ownership cannot prove an attachment still targets the captured destination. */
 export function nativeChatAttachmentOwnerUnchanged(
   captured: NativeChatAttachmentOwner,
   current: NativeChatAttachmentOwner
@@ -50,7 +49,6 @@ export function nativeChatAttachmentOwnerUnchanged(
   return captured.kind === current.kind && captured.kind !== 'not-ready'
 }
 
-/** The pane a composer serves; an attach applies only while it still serves the same one. */
 export type ComposerWorkspace = {
   structuredWorktreeId?: string
   terminalTabId: string

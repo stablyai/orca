@@ -25,7 +25,7 @@ export function withoutLeaf(
   return { ...node, first, second }
 }
 
-export /** The desktop window's copy of the session: it authors tabs and layouts and saves them whole. */
+export /** Model the renderer copy, which authors and saves complete tab/layout state. */
 class WindowSession {
   constructor(public session: WorkspaceSessionState) {}
 
@@ -46,7 +46,6 @@ class WindowSession {
     this.addTabBarEntry(worktreeId, tabId)
   }
 
-  /** The window's tab bar: one group per worktree, new tabs appended to it. */
   addTabBarEntry(worktreeId: string, tabId: string): void {
     const groupId = `group-${worktreeId}`
     const entry: Tab = {
@@ -98,7 +97,7 @@ class WindowSession {
     this.setTabPtyId(tabId, ptyId)
   }
 
-  /** `clearTabPtyId` on exit: the tab's live id goes; the layout keeps the binding as a resume hint. */
+  /** Clear live IDs on exit while retaining layout bindings as resume hints. */
   setTabPtyId(tabId: string, ptyId: string | null): void {
     this.session.tabsByWorktree = Object.fromEntries(
       Object.entries(this.session.tabsByWorktree).map(([worktreeId, tabs]) => [

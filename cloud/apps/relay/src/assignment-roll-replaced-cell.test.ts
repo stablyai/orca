@@ -9,9 +9,7 @@ import {
 import type { RelayCellConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 
-// Production 2026-10-24, production-gce-c15: a same-cap roll isolates the cell, drains it,
-// then replaces its one VM. A host that was offline through the drain still names the cell,
-// and redialled in the ~45 s before the new process was ready.
+// 2026-10-24, production-gce-c15: offline hosts redialed during the ~45s gap between draining a same-cap roll and replacement readiness.
 const HEARTBEAT_TTL_MS = 45_000
 const START_MS = 100
 const IDENTITY = { userId: 'user-a', relayHostId: 'host000000000001' }

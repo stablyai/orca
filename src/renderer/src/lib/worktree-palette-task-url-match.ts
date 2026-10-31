@@ -22,7 +22,7 @@ import {
   worktreeMatchesGitLabUrl,
   type GitLabIssueOrMRLink
 } from './worktree-palette-gitlab-url-match'
-import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
+import { isWorktreePaletteQueryTooLarge } from '../../../shared/palette-match/worktree-palette-query-bounds'
 import { buildWorktreePaletteTaskUrlResult } from './worktree-palette-task-url-result'
 import type { PaletteSearchResult } from './worktree-palette-search'
 import { getPaletteWorktreeExecutionHostId } from './palette-repo-resolution'
@@ -103,9 +103,7 @@ function remoteIdentityMatchesGitHubSlug(repo: Repo, slug: RepoSlug): boolean | 
   if (verdict !== false) {
     return verdict
   }
-  // Why not false: identity keeps only one remote, so an `upstream` pick means a fork's `origin`
-  // existed and is invisible here, and rejecting would drop URLs from the fork itself. GitLab makes
-  // the opposite trade (STA-4450); aligning the two is left to a twin ticket.
+  // Single-remote identity can hide a fork’s origin behind upstream; remain permissive for fork URLs. GitLab makes the opposite trade (STA-4450); alignment needs a separate change.
   return identity?.remoteName === 'upstream' ? 'unknown' : false
 }
 
@@ -114,8 +112,7 @@ function repoMatchesGitHubSlug(repo: Repo | undefined, slug: RepoSlug): boolean 
   if (!repo) {
     return 'unknown'
   }
-  // Why displayName first: it is compared host-agnostically, so mirrors and host aliases of the
-  // same owner/repo keep matching; the probed remote only fills in where no name evidence exists.
+  // Host-agnostic displayName preserves mirror/alias matching; probed remote fills only missing name evidence.
   const fromName = parseOwnerRepoDisplayName(repo.displayName)
   if (fromName) {
     return githubIdentityKey({ ...fromName, host: slug.host }) === githubIdentityKey(slug)
@@ -123,8 +120,7 @@ function repoMatchesGitHubSlug(repo: Repo | undefined, slug: RepoSlug): boolean 
   if (repo.upstream?.owner && repo.upstream.repo) {
     return githubIdentityKey(repo.upstream) === githubIdentityKey(slug)
   }
-  // Why: a basename-only displayName is the common non-fork case, and issue/PR numbers are
-  // per-repo, so a bare number must still clear the remote the repo actually points at.
+  // Basename-only names are common; repo-scoped bare numbers still need the actual remote gate.
   return remoteIdentityMatchesGitHubSlug(repo, slug)
 }
 

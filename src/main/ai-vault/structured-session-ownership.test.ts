@@ -1,15 +1,31 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { agentSessionLeaseFixture } from '../../shared/agent-session-record.test-fixture'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { parseAiVaultListResult } from './session-list-result-validation'
+import { redactForTransport } from '../../shared/ai-vault-search-transport'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
+import {
+  acquiredAgentSessionAccount,
+  withAcquiredAgentSessionAccount
+} from '../../shared/agent-session-acquired-account'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   assertLegacyAiVaultResumeAllowed,
   assertLegacyAiVaultResumeCommandAllowed,
+  findResumeOwnership,
   OPENS_EVERY_STRUCTURED_CHAT,
   projectStructuredAiVaultSearchResponse,
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
 import type { AiVaultSearchHit, AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import {
+  codexChatHolding,
+  installChats,
   installOwnership,
   listResult,
   PROVIDER_SESSION
@@ -56,6 +72,8 @@ describe('structured AI Vault ownership', () => {
       {
         ...plain,
         title: 'auth/login',
+        accountHome: agentSessionRecordFixture().accountHome,
+        accountWslDistro: null,
         structuredSession: { sessionId: 'session-alpha', workspaceId: 'workspace-1' }
       },
       other
@@ -70,6 +88,131 @@ describe('structured AI Vault ownership', () => {
       () => false
     )
     expect(response.kind === 'results' && response.hits).toEqual([other])
+  })
+
+  it.each(['claude', 'codex'] as const)(
+    'projects %s recorded account evidence through history validation',
+    (provider) => {
+      const accountHome = {
+        variable: provider === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+        path: '/accounts/recorded'
+      }
+      installOwnership({ provider, accountHome, wslDistro: 'Ubuntu' })
+      const result = listResult()
+      result.sessions[0]!.agent = provider
+      const projected = projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT)
+      expect(parseAiVaultListResult(projected).sessions[0]).toMatchObject({
+        accountHome,
+        accountWslDistro: 'Ubuntu'
+      })
+      expect(
+        parseAiVaultListResult({
+          ...projected,
+          sessions: [{ ...projected.sessions[0], accountHome: { kind: 'future' } }]
+        }).sessions[0]?.accountHome
+      ).toBeUndefined()
+
+      installOwnership({
+        provider,
+        accountHome: { ...accountHome, path: join(homedir(), `.${provider}`) }
+      })
+      expect(
+        projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
+          ?.accountHome
+      ).toBeNull()
+      expect(parseAiVaultListResult(result).sessions[0]?.accountHome).toBeUndefined()
+    }
+  )
+
+  it('shows the account a Claude chat was last launched under, else its founding home', () => {
+    const founding = { variable: 'CLAUDE_CONFIG_DIR', path: '/accounts/founding' } as const
+    const launched = { variable: 'CLAUDE_CONFIG_DIR', path: '/accounts/launched/home' }
+    const record = withAcquiredAgentSessionAccount(
+      agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: 'session-alpha' })),
+      { generation: 'g-1', recipe: { route: 'managed', accountId: 'b', home: launched.path } }
+    )
+    const receipt = acquiredAgentSessionAccount(record)
+    if (!receipt) {
+      throw new Error('the fixture record did not accept its acquisition receipt')
+    }
+    const result = listResult()
+    result.sessions[0]!.agent = 'claude'
+    const shown = () =>
+      projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT).sessions[0]?.accountHome
+    installOwnership({ provider: 'claude', accountHome: founding, acquiredAccount: receipt })
+    expect(shown()).toEqual(launched)
+    // A receipt the current process generation did not write no longer describes this chat.
+    installOwnership({
+      provider: 'claude',
+      accountHome: founding,
+      acquiredAccount: { ...receipt, observedThroughFence: 1 }
+    })
+    expect(shown()).toEqual(founding)
+    installOwnership({ provider: 'claude', accountHome: founding })
+    expect(shown()).toEqual(founding)
+  })
+
+  it.each([10, 100])(
+    'projects %i owned History rows with one roster read and one record lookup per owned row',
+    (n) => {
+      const records = Array.from({ length: n }, (_, index) =>
+        codexChatHolding(`session-${index}`, [`thread-${index}`])
+      )
+      const store = installChats(records)
+      const base = listResult().sessions[0]!
+      const rows = records.map((_, index) => ({
+        ...base,
+        id: `local:codex:thread-${index}`,
+        sessionId: `thread-${index}`,
+        title: `Row ${index}`
+      }))
+      const unowned = { ...base, id: 'local:codex:unowned', sessionId: 'thread-unowned' }
+      const result = { ...listResult(), sessions: [...rows, unowned] }
+      const projected = projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT)
+      expect(projected.sessions.map((session) => session.structuredSession?.sessionId)).toEqual([
+        ...records.map((record) => record.sessionId),
+        undefined
+      ])
+      expect(projected.sessions.slice(0, n).map((session) => session.accountHome)).toEqual(
+        records.map((record) => record.accountHome)
+      )
+      // One roster read per projection; one record lookup per owned row, none for unowned rows.
+      expect(store.listConversations).toHaveBeenCalledTimes(1)
+      expect(store.getRecord).toHaveBeenCalledTimes(n)
+      expect(new Set(store.getRecord.mock.calls.map(([sessionId]) => sessionId)).size).toBe(n)
+    }
+  )
+
+  it('keeps the legacy shared Codex home unknown and redacts account homes over relay search', () => {
+    installOwnership({
+      accountHome: { variable: 'CODEX_HOME', path: resolveOrcaManagedCodexHomePath() }
+    })
+    expect(
+      projectStructuredAiVaultSessions(listResult(), OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
+        ?.accountHome
+    ).toBeUndefined()
+    const accountHome = { variable: 'CODEX_HOME', path: '/accounts/recorded' }
+    installOwnership({ accountHome })
+    const response = projectStructuredAiVaultSearchResponse(
+      searchResults([searchHit()]),
+      OPENS_EVERY_STRUCTURED_CHAT
+    )
+    if (response.kind !== 'results') {
+      throw new Error('Expected search results')
+    }
+    const hit = response.hits[0]!
+    expect(redactForTransport(hit, 'ipc').accountHome).toEqual(accountHome)
+    expect(redactForTransport(hit, 'relay')).not.toHaveProperty('accountHome')
+    expect(redactForTransport(hit, 'relay')).not.toHaveProperty('accountWslDistro')
+    const relayed = projectStructuredAiVaultSearchResponse(
+      searchResults([searchHit()]),
+      OPENS_EVERY_STRUCTURED_CHAT,
+      'relay'
+    )
+    if (relayed.kind !== 'results') {
+      throw new Error('Expected search results')
+    }
+    expect(relayed.hits[0]).not.toHaveProperty('accountHome')
   })
 
   it.each(['claude', 'codex'] as const)(
@@ -107,6 +250,39 @@ describe('structured AI Vault ownership', () => {
     }
   )
 
+  it('names the chat continuing a conversation first, while every link still refuses a terminal', async () => {
+    const movedOn = codexChatHolding('session-moved', [PROVIDER_SESSION, OTHER_SESSION])
+    const owned = (records: ReturnType<typeof codexChatHolding>[]) => {
+      installChats(records)
+      return projectStructuredAiVaultSessions(listResult(), OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
+        ?.structuredSession?.sessionId
+    }
+    expect(owned([movedOn, codexChatHolding('session-now', [PROVIDER_SESSION])])).toBe(
+      'session-now'
+    )
+    expect(owned([movedOn])).toBe('session-moved')
+    expect(
+      findResumeOwnership({ agent: 'codex', sessionId: PROVIDER_SESSION, filePath: '' })
+    ).toMatchObject({
+      sessionId: 'session-moved',
+      role: 'earlier'
+    })
+    expect(() =>
+      assertLegacyAiVaultResumeAllowed({
+        agent: 'codex',
+        filePath: `/sessions/rollout-${PROVIDER_SESSION}.jsonl`,
+        codexHome: null,
+        executionHostId: 'local'
+      })
+    ).toThrow('agent_session_conflict')
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `codex resume ${PROVIDER_SESSION}`,
+        async () => undefined
+      )
+    ).rejects.toThrow('agent_session_conflict')
+  })
+
   it('derives typed refusals from the single writer predicate for live and proving leases', async () => {
     installOwnership()
     expect(() =>
@@ -119,11 +295,15 @@ describe('structured AI Vault ownership', () => {
     ).toThrow('agent_session_conflict')
 
     installOwnership({
-      lease: agentSessionLeaseFixture({
-        handoffStage: 'new-owner-proving',
-        claimStatus: 'reserved',
-        ownerProcess: null
-      })
+      ownerObservation: agentSessionConversationView(
+        agentSessionRecordFixture(
+          agentSessionLeaseFixture({
+            handoffStage: 'new-owner-proving',
+            claimStatus: 'reserved',
+            ownerProcess: null
+          })
+        )
+      ).ownerObservation
     })
     await expect(
       assertLegacyAiVaultResumeCommandAllowed(

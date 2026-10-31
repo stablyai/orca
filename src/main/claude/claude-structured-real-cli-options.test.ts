@@ -15,17 +15,15 @@ import {
   claudeStructuredPermissionOptions
 } from './claude-structured-launch-resolution'
 import { listedModels } from './claude-structured-model-catalog'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   realClaudeAuthenticated,
   realClaudeAvailable,
   realClaudeCommand,
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
-import { claudeStartupSettled } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 import { journal } from './claude-context-usage-test-support'
 
 const SESSION_ID = 'real-cli-options'
@@ -92,6 +90,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI options', () =
                 ? claudeProviderHandleLeafUuid(launchIdentity.providerHandle)
                 : null,
             resumesTranscript: resumes,
+            cliFlag: async () => 'supported' as const,
             continuesChain: resumes
           }
         },

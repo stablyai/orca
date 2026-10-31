@@ -7,36 +7,32 @@ export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
   agent: TuiAgent
   processName: string
 }[] = [
-  // Why: Cursor's native Windows launcher runs a generic versioned index.js,
-  // so its install path is the only stable identity that avoids ordinary Node apps.
+  // Cursor's versioned index.js is generic; only its install path distinguishes ordinary Node apps.
   {
     pattern: /(?:^|\/)cursor-agent\/versions\/[^/]+\/index\.js$/,
     agent: 'cursor',
     processName: 'cursor-agent'
   },
-  // Why: Claude Code's npm package ran a generic cli.js before it shipped a native binary, and a
-  // pnpm or yarn shim or npx still launches it by that path.
+  // npm Claude's historical cli.js still appears behind pnpm/yarn/npx shims.
   {
     pattern: /(?:^|\/)node_modules\/@anthropic-ai\/claude-code\/cli\.js$/,
     agent: 'claude',
     processName: 'claude'
   },
-  // Why: Pi's npm shim launches a generic cli.js; only the exact package path is authoritative.
+  // Pi cli.js is generic; require the package path.
   {
     pattern:
       /(?:^|\/)node_modules\/@(?:earendil-works|mariozechner)\/pi-coding-agent\/dist\/(?:bundle\/)?cli\.js$/,
     agent: 'pi',
     processName: 'pi'
   },
-  // Why: same shape as Pi — Prime Agent's npm shim launches a generic bundled cli.js.
+  // Prime Agent also uses a generic bundled cli.js.
   {
     pattern: /(?:^|\/)node_modules\/prime-agent\/dist\/bundle\/cli\.js$/,
     agent: 'prime-agent',
     processName: 'prime-agent'
   },
-  // Why: DSH's npm shim launches a generic `lib/bin.js`, and the launcher re-execs it
-  // directly on Windows, so only the package path identifies it. The profile still decides
-  // whether the pane is the agent — `dsh web` resolves here too and is filtered after.
+  // DSH re-execs generic lib/bin.js on Windows; package identity still requires later profile filtering for dsh web.
   {
     pattern: /(?:^|\/)node_modules\/@deepseek-ai\/dsh\/lib\/bin\.js$/,
     agent: 'dsh',

@@ -118,8 +118,7 @@ export function GHStatusCell({
               state: newState
             }
       updateLocalState(newState)
-      // Why: coordinator owns durable patch + soft-hide + quiet revalidate; keep
-      // the status draft so one-frame flash is still covered until proven safe.
+      // Keep the draft through coordinator patch/revalidation to prevent a stale status flash.
       setStatusUpdating(true)
       try {
         await workItemMutation.run({
@@ -133,8 +132,7 @@ export function GHStatusCell({
           errorToast: translate('auto.components.TaskPage.1c893195ac', 'Failed to update state'),
           mutate: async () => {
             const target = ownerTarget
-            // Why: issue rows can be sourced by owner/repo URL instead of the local
-            // repo context; slug-aware writes preserve close reasons and duplicates.
+            // URL-sourced rows need slug-aware writes to preserve close reasons and duplicates.
             if (parsedOwnerRepo) {
               return target.kind === 'environment'
                 ? callRuntimeRpc<{
@@ -163,11 +161,17 @@ export function GHStatusCell({
                     repo: parsedOwnerRepo.repo,
                     host: githubProjectHost(parsedOwnerRepo.host),
                     number: item.number,
-                    updates
+                    updates,
+                    wakeWslDistro: true
                   })
             }
             if (!repo) {
-              throw new Error('No GitHub repository context available for this issue.')
+              throw new Error(
+                translate(
+                  'auto.components.TaskPage.noGitHubRepositoryContext',
+                  'No GitHub repository context available for this issue.'
+                )
+              )
             }
             const runtimeRepoId =
               sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
@@ -199,8 +203,7 @@ export function GHStatusCell({
       } finally {
         setStatusUpdating(false)
       }
-      // Why: draft realigns from item.state via resolveTaskPageGitHubStatusStateDraft
-      // when patchWorkItem (begin/rollback) updates the cache-backed row.
+      // Begin/rollback cache patches realign the draft through resolveTaskPageGitHubStatusStateDraft.
     },
     [
       item,

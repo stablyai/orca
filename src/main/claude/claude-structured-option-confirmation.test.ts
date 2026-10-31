@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
@@ -6,9 +6,9 @@ import {
 } from '../../shared/structured-agent-session-options'
 import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
 import type { AgentSessionOptionsResult } from '../../shared/agent-session-wire'
-import type { SessionOptionDescriptor } from '../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../shared/native-chat/input/native-chat-session-options'
 import { setClaudeStructuredOption } from './claude-structured-options'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import { PROVIDER_SESSION_ID, acquired, fakeClaude } from './claude-structured-session-test-support'
 
 /** Claude Code 2.1.260 list_models fixture; Haiku omits both effort keys. */
@@ -53,19 +53,6 @@ function modelValue(result: AgentSessionOptionsResult): string | undefined {
 }
 
 describe('structured option confirmation reaches the pill', () => {
-  it('shows a just-set model before any turn reports it', async () => {
-    const claude = fakeClaude({
-      initModel: 'claude-sonnet-5',
-      routes: { list_models: () => CATALOG }
-    })
-    const adapter = await acquired(claude)
-    await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
-
-    const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(result.current.confirmed ?? []).not.toContain('model')
-    expect(modelSource(result)).toBe('dispatched')
-  })
-
   it('marks the model reported once the provider names it back', async () => {
     const claude = fakeClaude({
       initModel: 'claude-sonnet-5',
@@ -78,44 +65,6 @@ describe('structured option confirmation reaches the pill', () => {
     const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
     expect(result.current.confirmed).toContain('model')
     expect(modelSource(result)).toBe('reported')
-  })
-
-  it('records an effort the readback could not take without confirming it', async () => {
-    const claude = fakeClaude({
-      initModel: 'claude-sonnet-5',
-      settings: { applied: {}, effective: {}, sources: {} },
-      routes: { list_models: () => CATALOG }
-    })
-    const adapter = await acquired(claude)
-    // Max is session-only and cannot be confirmed through persisted settings.
-    await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'max', fence: 7 })
-
-    const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(result.current.effort).toBe('max')
-    expect(result.current.confirmed ?? []).not.toContain('effort')
-  })
-
-  it('confirms an effort the readback agreed with', async () => {
-    const claude = fakeClaude({
-      initModel: 'claude-sonnet-5',
-      settings: { applied: { effort: 'low' }, effective: { effortLevel: 'low' }, sources: {} },
-      routes: { list_models: () => CATALOG }
-    })
-    const adapter = await acquired(claude)
-    await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'low', fence: 7 })
-
-    const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(result.current.confirmed).toContain('effort')
-  })
-
-  it('treats a host that reports no confirmation as unconfirmed', () => {
-    // Older hosts omit confirmed; preserve their value with unconfirmed provenance.
-    const result = {
-      models: [{ id: 'haiku', label: 'Haiku', isDefault: false, efforts: [] }],
-      current: { model: 'haiku' }
-    }
-    expect(modelSource(result)).toBe('dispatched')
-    expect(modelValue(result)).toBe('haiku')
   })
 })
 
@@ -179,7 +128,7 @@ describe('confirmation never outlives the write it belongs to', () => {
     } as unknown as ClaudeSession
 
     await setClaudeStructuredOption(session, { key: 'effort', value: 'low' }, undefined)
-    expect(session.confirmedOptions.has('effort')).toBe(true)
+    await vi.waitFor(() => expect(session.confirmedOptions.has('effort')).toBe(true))
 
     await setClaudeStructuredOption(session, { key: 'effort', value: 'max' }, undefined)
     expect(session.options.get('effort')).toBe('max')

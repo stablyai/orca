@@ -9,11 +9,7 @@ import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-sn
 
 export type PreviewTerminalPasteSource = 'keyboard' | 'app-menu' | 'right-click'
 
-/**
- * Clipboard paste for a standalone terminal, on the pane's coordinator: large
- * pastes stream as bounded IPC payloads, and the plan re-checks that the same
- * terminal still owns focus between chunks.
- */
+/** Stream bounded paste chunks through the pane coordinator, rechecking focus ownership between chunks. */
 export function createPreviewClipboardPaster(deps: {
   /** Names the session for paste planning; a remote-runtime pty id routes as remote. */
   ptyId: string
@@ -61,7 +57,6 @@ export function createPreviewClipboardPaster(deps: {
       terminalBracketedPasteMode: pasteTerminal.modes.bracketedPasteMode
     })
     await executeTerminalPastePlan(plan, {
-      // Why: stream large pastes so the renderer never emits one huge IPC payload.
       pasteText: (text, options) => pasteTerminalText(pasteTerminal, text, options),
       writePty: (data) => deps.writeInput(data),
       isTargetCurrent: targetIsCurrent,

@@ -63,8 +63,7 @@ describe('agent prompt injection bytes', () => {
   })
 
   it.each([
-    // The slower of the two measured Win11 hosts at each size. Dipping under any of these
-    // reopens the mid-paste Enter bug, so pin all of them, not just the top end.
+    // Pin the slower measured Win11 ingest samples so Enter cannot race incomplete paste.
     [2_000, 25],
     [8_000, 89],
     [40_000, 440],

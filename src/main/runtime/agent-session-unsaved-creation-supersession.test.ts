@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -43,7 +44,6 @@ function reserveRequest(
   }
 }
 
-/** Reserve, observe the spawn and prove the link the adapter reported, as the host does. */
 async function prove(
   store: AgentSessionRecordStore,
   request: AgentSessionReserveRequest,
@@ -65,7 +65,6 @@ async function prove(
   return store.proveOwner({ sessionId: SESSION, fence, link: link(fence), now: NOW })
 }
 
-/** A restart: the previous owner is gone and the reopened store adjudicates it. */
 async function restart(store: AgentSessionRecordStore) {
   const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
   await store.evictProvenDeadOwner({
@@ -87,6 +86,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

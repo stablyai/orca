@@ -10,7 +10,6 @@ import {
   remarkNativeChatVisuals
 } from './native-chat-visual-markdown-syntax'
 
-// These fixtures exercise markdown without rendering diagrams.
 const boundaryMocks = vi.hoisted(() => ({
   mermaid: vi.fn(() => {
     throw new Error('These fixtures must not render Mermaid diagrams')

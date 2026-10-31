@@ -2,8 +2,6 @@ import type { AgentSessionJournalIdentity } from '../../shared/agent-session-jou
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import { readProcessStartTimeMs } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
 
-// What the lease records about a provider child: the process a later owner probe re-proves.
-
 const START_TIME_READ_ATTEMPTS = 3
 
 type SpawnedIdentityInput = {
@@ -12,11 +10,7 @@ type SpawnedIdentityInput = {
   onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
 }
 
-/**
- * The child's identity, read once. A connection that reports its spawn before the handshake makes
- * it durable there through `onSpawned`, so a crash mid-start leaves an owner recovery can stop; one
- * that reports no spawn is identified once it is open.
- */
+/** Persist pre-handshake spawns through onSpawned so recovery can stop children after a mid-start crash. */
 export function providerSpawnedProcessIdentity(
   input: SpawnedIdentityInput,
   label: string,
@@ -52,8 +46,7 @@ export async function providerProcessIdentity(
     processStartTimeMs = await readStartTime(input.pid)
   }
   if (processStartTimeMs === null) {
-    // Why: recording null makes every later owner probe indeterminate — a durable latch.
-    // Failing here reaps the child and leaves a retryable refusal instead.
+    // A null start time would latch recovery as indeterminate; fail and reap now so it remains retryable.
     throw new Error(`${label} start time for pid ${input.pid} could not be read`)
   }
   return {

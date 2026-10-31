@@ -14,8 +14,6 @@ function scriptRange(): Buffer {
   return Buffer.from(text.slice(0, MOBILE_WEB_BUNDLE_RANGE_BYTES))
 }
 
-// The host deflates with node's zlib and the phone inflates with fflate: two implementations that
-// must agree on every range the host can send.
 describe('a host-encoded range decoded by the phone', () => {
   it('inflates node gzip output with fflate to the same bytes', async () => {
     const raw = scriptRange()

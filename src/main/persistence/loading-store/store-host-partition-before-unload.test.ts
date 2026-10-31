@@ -28,7 +28,6 @@ function openStore(): Store {
   return createSqliteTestStore(Store, { dataFile: join(directory, 'orca-data.json') })
 }
 
-/** The renderer's host split leaves out terminal maps for a host with only editor tabs. */
 function editorOnlySlice(worktreeId = WORKTREE): WorkspaceSessionState {
   const slice: WorkspaceSessionState = {
     ...getDefaultWorkspaceSession(),

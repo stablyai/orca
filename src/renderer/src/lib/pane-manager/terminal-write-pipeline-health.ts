@@ -1,16 +1,4 @@
-// Why this module exists: a pane's xterm write pipeline can die while its PTY
-// stays alive — a synchronous throw escaping an unguarded write callback wedges
-// WriteBuffer (issue #2836), and write() on a disposed terminal silently drops
-// its completion callback (verified against vendored xterm 6.1.0-beta.287). In
-// both states every later write queues forever: output stops rendering,
-// delivery ack credits leak, and the pane becomes a fossil the user can only
-// cure by reloading the window. Detection here is probe-certified (mirroring
-// replay-guard.ts): a stalled completion triggers an empty probe write; xterm
-// parses in FIFO order, so a completing probe proves preceding work drained. A
-// silent probe is only certified dead after a full interval without any parse
-// progress. Certification notifies a per-terminal handler (registered by the
-// pane's PTY connection) that requests pane recovery — a remount that rebuilds
-// the xterm and reattaches the live PTY.
+// WriteBuffer can wedge after callback throws (#2836), while disposed xterm silently drops completions (6.1.0-beta.287); both freeze output and leak ACKs despite live PTYs. Certify with an empty FIFO probe: completion proves prior work drained; silence across a full interval with no parse progress requests terminal remount/PTY reattach.
 
 import { writeXtermParseBarrier } from './xterm-parse-barrier'
 
@@ -24,9 +12,7 @@ type UndeliverableWriteHandler = (reason: UndeliverableWriteReason) => void
 
 const handlersByTerminal = new WeakMap<WriteTarget, UndeliverableWriteHandler>()
 const certifiedDeadTerminals = new WeakSet<WriteTarget>()
-// Why: wedge verdicts must distinguish "dead" from "alive but behind". A
-// generation avoids same-millisecond misses and wall-clock adjustments while
-// keeping the completion hot path constant-time and terminal-scoped.
+// Use terminal-scoped generations to distinguish dead from behind without clock adjustments/same-ms misses or hot-path cost.
 const parseProgressGenerationByTerminal = new WeakMap<WriteTarget, number>()
 
 /** Report one parsed write completion for this terminal. */
@@ -59,8 +45,7 @@ export const WRITE_PIPELINE_STALL_CHECK_MS = 10_000
 
 function certifyTerminalWritePipelineDead(terminal: WriteTarget, expectedWatch?: StallWatch): void {
   const watch = stallWatchByTerminal.get(terminal)
-  // Why: a real parse can settle and remove the watch before a stale probe
-  // deadline runs. Only the watch that armed that deadline may certify.
+  // Only the active watch may certify; real progress can remove it before a stale probe deadline runs.
   if (expectedWatch && watch !== expectedWatch) {
     return
   }
@@ -69,8 +54,7 @@ function certifyTerminalWritePipelineDead(terminal: WriteTarget, expectedWatch?:
     try {
       watch.onCertifiedDead?.()
     } catch {
-      // Why: discard can bottom out in a partial window.api surface; recovery
-      // notification must still run after cleanup fails.
+      // Discard can fail on partial IPC surfaces; still notify recovery after cleanup failure.
     }
   }
   notifyUndeliverableWrite(terminal, 'write-stalled')
@@ -88,8 +72,7 @@ export function registerUndeliverableWriteHandler(
   }
 }
 
-/** One notification per terminal instance: recovery replaces the xterm, so a
- *  second notification for the same object is always a duplicate. */
+/** Notify once per terminal instance; recovery replaces it, so further notifications duplicate work. */
 export function notifyUndeliverableWrite(
   terminal: WriteTarget,
   reason: UndeliverableWriteReason
@@ -101,9 +84,7 @@ export function notifyUndeliverableWrite(
   try {
     handlersByTerminal.get(terminal)?.(reason)
   } catch {
-    // Why: notify fires from timer and write-callback contexts where a throw
-    // becomes an unhandled error; recovery is best-effort by contract (see
-    // terminal-pane-recovery.ts).
+    // Contain notification throws from timer/write callbacks; recovery remains best-effort (terminal-pane-recovery.ts).
   }
 }
 
@@ -111,14 +92,7 @@ export function isTerminalWritePipelineCertifiedDead(terminal: WriteTarget): boo
   return certifiedDeadTerminals.has(terminal)
 }
 
-/**
- * Arm (or keep armed) the stall watch for a terminal that just had a write
- * issued. Cleared by settleTerminalWriteStallWatch from the write-completion
- * callback. If the completion never arrives, an empty probe write certifies
- * dead-vs-slow conservatively like replay-guard.ts: probe completes → pipeline
- * is alive (slow parse), re-arm and keep waiting; probe silent for another
- * interval without any parse progress → dead, notify.
- */
+/** Watch issued writes until completion; stall triggers an empty FIFO probe. Completed probes prove slow progress; another silent interval without parse progress certifies death and notifies recovery, as replay-guard.ts does. */
 function armTerminalWritePipelineWatch(
   terminal: WriteTarget,
   options: {
@@ -163,11 +137,9 @@ function armTerminalWritePipelineWatch(
     const probeQueuedAtGeneration = captureTerminalParseProgressGeneration(terminal)
     try {
       writeXtermParseBarrier(terminal, () => {
-        // Why: replay guards share this terminal-scoped generation; even an
-        // auxiliary FIFO probe proves the parser is alive and making progress.
+        // Auxiliary FIFO probes prove progress for terminal-scoped replay guards too.
         recordTerminalParseProgress(terminal)
-        // Why: a parsed probe proves the pipeline is alive — the stalled
-        // completion was just slow. Disarm; the next write re-arms.
+        // A parsed probe proves liveness; disarm and let the next write rearm.
         const current = stallWatchByTerminal.get(terminal)
         if (current === watch) {
           clearTimeout(current.timer)

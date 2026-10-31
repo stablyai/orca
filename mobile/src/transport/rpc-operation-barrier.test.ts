@@ -55,9 +55,7 @@ describe('the post-barrier combinator', () => {
     expect(verdicts).toEqual([rows, { terminals: [] }, false])
   })
 
-  // The bug class this exists to remove: whichever peer lost the race used to decide which
-  // error the user saw. Here the second request fails first in time and the first one refuses
-  // afterwards, and the declaration still decides.
+  // Make the second request fail first to prove declaration order controls the surfaced refusal.
   it('interprets in declared order rather than completion order', async () => {
     const lateRefusal = deferred<RpcResponse>()
     const refusing = new FakeSession('connected')

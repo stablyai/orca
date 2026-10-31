@@ -17,13 +17,7 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     { open: '<', close: '>', token: 'delimiter.angle' }
   ],
   tokenizer: {
-    // Entry state: the `start` state runs on the very first token and has no
-    // embed on the stack. Structural rules MUST NOT emit `nextEmbedded:
-    // '@pop'` from here (Monarch throws "cannot pop embedded language if not
-    // inside one"). The first non-structural character transitions into
-    // `markup`, activating the html embed — from then on every path that
-    // returns to `markup` routes through `markupReenter` so the invariant
-    // "markup has html embed active" always holds.
+    // File-start state has no embed to pop; enter HTML before markup and always return through markupReenter.
     root: [
       [/<script(?=\s|>)/, { token: 'tag', switchTo: '@scriptOpen.typescript' }],
       [/<style(?=\s|>)/, { token: 'tag', switchTo: '@styleOpen.css' }],
@@ -42,36 +36,17 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
         { token: 'keyword.control', switchTo: '@svelteExpressionEnter' }
       ],
       [/\{(?=[^#:/@])/, { token: 'delimiter.curly', switchTo: '@svelteExpressionEnter' }],
-      // `@rematch` is required: on a zero-width match Monarch's progress check
-      // `continue`s and silently drops a pending `nextEmbedded` for any other
-      // token, leaving `markup` without the html embed its pop rules assume.
+      // Use @rematch for zero-width transitions or Monarch drops nextEmbedded, leaving markup without the HTML its pop rules require.
       [
         restOfLineWithinEmbedBudget,
         { token: '@rematch', switchTo: '@markup', nextEmbedded: 'html' }
       ],
-      // Past the budget: same structure, no embed, so the rest of the line
-      // cannot deepen the recursion.
+      // Over-budget structure omits embeds so the rest of the line cannot deepen recursion.
       [/<\/?[A-Za-z][^>]*>/, 'tag'],
       [/[^<{]+/, ''],
       [/./, '']
     ],
-    // html-embedded markup state. INVARIANT: whenever we are in `markup`, the
-    // html embed is active. Every state that pops back to markup routes
-    // through `markupReenter` to re-enter html first. This means `_myTokenize`
-    // never sees `markup` with embed=null — which is what would trigger
-    // "cannot pop embedded language if not inside one" when a structural rule
-    // with `nextEmbedded: '@pop'` fires.
-    //
-    // Two tokenization paths use this state:
-    //   (1) `_nestedTokenize`: scans rules whose action pops the embed; the
-    //       structural rules below are those pop rules.
-    //   (2) `_myTokenize`: called on the substring starting at the popOffset;
-    //       the pop rule at position 0 is the first (and only) rule to match
-    //       before state transitions out of `markup`.
-    // All transitions use `switchTo` rather than `next` so the Monarch stack
-    // stays flat — otherwise re-entering markup via `markupReenter` would add
-    // a frame on every svelte expression close and eventually hit
-    // `maxStack` (100).
+    // Markup always owns HTML; parent pop rules handle exits before rematching. Use switchTo for flat state transitions or repeated reentry reaches Monarch maxStack.
     markup: [
       [
         /<script(?=\s|>)/,
@@ -101,12 +76,7 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
         { token: 'delimiter.curly', switchTo: '@svelteExpressionEnter', nextEmbedded: '@pop' }
       ]
     ],
-    // Re-entry shim: every state that finishes and returns to markup context
-    // switches to this state (with `nextEmbedded: '@pop'` if it had an embed
-    // to pop). A zero-width `@rematch` then re-enters the html embed and
-    // switches to `markup`. `@rematch` short-circuits Monarch's progress
-    // check — a zero-width match that stays in the same state and stack
-    // depth otherwise throws "no progress in tokenizer".
+    // Reentry pushes HTML through zero-width @rematch; any other token would fail Monarch’s progress check.
     markupReenter: [
       [
         restOfLineWithinEmbedBudget,
@@ -120,16 +90,9 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/[^-]+/, 'comment'],
       [/./, 'comment']
     ],
-    // Once the typescript embed is active inside an expression, Monaco only
-    // consults parent rules whose action ends the embed. That means a brace
-    // counter cannot run from inside the embed, so expressions containing
-    // nested braces (e.g. `class={{ active: foo }}` or `{foo({ bar: 1 })}`)
-    // close at the first inner `}` and the trailing `}` falls into markup.
-    // Matches the RFC's note that regex-based grammars have edge cases;
-    // the common single-brace case `{count}` works correctly.
+    // An active embed exposes only exit rules, preventing brace counting; nested expressions close at the first inner } (known regex-grammar limit).
     svelteExpressionEnter: [
-      // Empty expression `{}`: entry popped the html embed, but we never
-      // entered the typescript embed, so only the state needs to unwind.
+      // Empty expressions push no TypeScript; unwind only state.
       [/\}/, { token: 'delimiter.curly', switchTo: '@markupReenter' }],
       [
         restOfLineWithinEmbedBudget,
@@ -161,8 +124,7 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/[^}]+/, '']
     ],
     scriptOpen: [
-      // Self-closing `<script/>` didn't enter an embed, but it might have been
-      // entered from markup (which popped html on entry). Re-enter uniformly.
+      // Self-closing scripts push no embed but may pop markup’s HTML on entry; re-enter uniformly.
       [/\/>/, { token: 'tag', switchTo: '@markupReenter' }],
       [
         tagCloseWithinEmbedBudget,
@@ -198,8 +160,7 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     scriptBody: [
       [/<\/script\s*>/, { token: 'tag', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
     ],
-    // Over-budget mirror of the body: re-enters `$S2` as soon as the rest of
-    // the line fits, so a long opening line does not grey out the whole block.
+    // Re-enter $S2 once the remaining line fits so long openers cannot leave the entire block unhighlighted.
     scriptBodyPlain: [
       [/<\/script\s*>/, { token: 'tag', switchTo: '@markupReenter' }],
       [

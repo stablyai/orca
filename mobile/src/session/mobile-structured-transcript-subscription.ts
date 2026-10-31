@@ -10,10 +10,7 @@ function isSubscribeEvent(value: unknown): value is AgentSessionSubscribeEvent {
   return type === 'snapshot' || type === 'batch' || type === 'reset' || type === 'end'
 }
 
-/**
- * Each stream opens once the hold settles, either way: a refused hold is an older host saying it
- * could not start the agent — which the next send does — never a reason to hide the transcript.
- */
+// Subscribe after the hold settles even on refusal: older hosts can start on the next send, so their transcript must remain visible.
 export function subscribeTranscriptAfterHold(
   client: RpcClient,
   held: Promise<unknown>,

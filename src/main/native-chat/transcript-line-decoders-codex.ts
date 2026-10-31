@@ -3,6 +3,7 @@ import {
   type NativeChatBlock,
   type NativeChatMessage
 } from '../../shared/native-chat-types'
+import { NATIVE_CHAT_NOTICE_COPY } from '../../shared/native-chat/native-chat-notice'
 import {
   asRecord,
   extractString,
@@ -12,9 +13,27 @@ import {
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
 import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
 
+/** Paginated completed items own visible messages; response tools retain their legacy format. */
+export function isCodexVisibleHistoryRecord(
+  record: Record<string, unknown> | null,
+  paginated: boolean
+): boolean {
+  const payload = asRecord(record?.payload)
+  return (
+    !paginated ||
+    !(
+      (record?.type === 'response_item' &&
+        (payload?.type === 'message' || payload?.type === 'reasoning')) ||
+      (record?.type === 'event_msg' &&
+        (payload?.type === 'user_message' || payload?.type === 'agent_message'))
+    )
+  )
+}
+
 export function decodeCodexTranscriptLine(
   line: string,
-  fallbackId: string
+  fallbackId: string,
+  options?: { historyImport: true }
 ): NativeChatMessage | null {
   const record = parseJsonObject(line)
   if (!record) {
@@ -32,7 +51,7 @@ export function decodeCodexTranscriptLine(
     return codexResponseItem(payload, baseId, timestamp)
   }
   if (record.type === 'event_msg') {
-    return codexEventMessage(payload, baseId, timestamp)
+    return codexEventMessage(payload, baseId, timestamp, options?.historyImport === true)
   }
   return null
 }
@@ -121,7 +140,8 @@ function isSkillContext(block: NativeChatBlock): boolean {
 function codexEventMessage(
   payload: Record<string, unknown>,
   id: string,
-  timestamp: number | null
+  timestamp: number | null,
+  historyImport: boolean
 ): NativeChatMessage | null {
   if (payload.type === CODEX_EVENT_TURN_ABORTED) {
     return {
@@ -132,8 +152,12 @@ function codexEventMessage(
       source: 'transcript'
     }
   }
+  // Legacy rollouts persist this event; paginated rollouts persist a ContextCompaction item instead.
+  if (payload.type === 'context_compacted') {
+    return codexCompactionMarker(id, timestamp)
+  }
   if (payload.type === 'item_completed') {
-    return codexCompletedTurnItem(payload, id, timestamp)
+    return codexCompletedTurnItem(payload, id, timestamp, historyImport)
   }
   if (payload.type === 'user_message') {
     const text = extractString(payload.message)
@@ -153,13 +177,27 @@ function codexEventMessage(
 function codexCompletedTurnItem(
   payload: Record<string, unknown>,
   fallbackId: string,
-  timestamp: number | null
+  timestamp: number | null,
+  historyImport: boolean
 ): NativeChatMessage | null {
   const item = asRecord(payload.item)
   if (!item) {
     return null
   }
   const id = extractString(item.id) ?? fallbackId
+  if (historyImport && item.type === 'Reasoning') {
+    return codexResponseItem(
+      {
+        type: 'reasoning',
+        text: codexSummaryText(item.summary_text) ?? codexSummaryText(item.raw_content)
+      },
+      id,
+      timestamp
+    )
+  }
+  if (item.type === 'ContextCompaction') {
+    return codexCompactionMarker(id, timestamp)
+  }
   const blocks = codexTurnItemBlocks(item.content)
   if (blocks.length === 0) {
     return null
@@ -171,6 +209,18 @@ function codexCompletedTurnItem(
     return { id, role: 'assistant', blocks, timestamp, source: 'transcript' }
   }
   return null
+}
+
+function codexCompactionMarker(id: string, timestamp: number | null): NativeChatMessage {
+  return {
+    id,
+    role: 'system',
+    blocks: [
+      { type: 'text', text: NATIVE_CHAT_NOTICE_COPY.compaction, presentation: 'compaction' }
+    ],
+    timestamp,
+    source: 'transcript'
+  }
 }
 
 function codexTurnItemBlocks(content: unknown): NativeChatBlock[] {

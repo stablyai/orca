@@ -13,6 +13,7 @@ import { SCHEMA_VERSION } from './db/contract-constants'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './db/pane-key-match'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './db/reset/removed-orchestration-work-store'
 import {
   currentRunCoordinatorOrcaSessionId,
   currentRunCoordinatorOrcaSessionIdSql
@@ -33,7 +34,7 @@ const PTY_WORKER_PANE = 'tab_pty:22222222-2222-4222-8222-222222222222'
 const NESTED_PANE = 'tab_nested:33333333-3333-4333-8333-333333333333'
 const UNCAPPED = Number.MAX_SAFE_INTEGER
 
-// The coordinator-address triggers exactly as main stamped them at v41 and before.
+// Pre-v42 coordinator triggers remember handles only.
 const HANDLE_ONLY_COORDINATOR_TRIGGERS_SQL = `
   CREATE TRIGGER trg_runs_remember_coordinator_insert
   AFTER INSERT ON runs
@@ -50,7 +51,7 @@ const HANDLE_ONLY_COORDINATOR_TRIGGERS_SQL = `
     VALUES (NEW.id, NEW.coordinator_handle);
   END;`
 
-// The mail routing trigger as main recreated it on every open at v41 and before: handle-only.
+// Pre-v42 mail routing is handle-only.
 const HANDLE_ONLY_MAIL_ROUTING_TRIGGER_SQL = `
   CREATE TRIGGER trg_messages_route_coordinator_mail
   AFTER INSERT ON messages
@@ -133,7 +134,9 @@ function seedStructuredAndPtyRows(db: OrchestrationDb): SeededRows {
 function stripOrcaSessionSchema(path: string, version: number): void {
   const raw = new Database(path)
   raw.exec(`
+    ${DROP_REMOVED_WORK_TRIGGERS_SQL}
     DROP INDEX idx_runs_coordinator_orca_session_id;
+    DROP INDEX IF EXISTS idx_dispatch_session_presentation;
     DROP INDEX idx_dispatch_assignee_orca_session_id;
     DROP TRIGGER trg_runs_remember_coordinator_insert;
     DROP TRIGGER trg_runs_remember_coordinator_update;
@@ -222,7 +225,7 @@ describe('orchestration Orca session id column migration', () => {
 
     const probe = new Database(path)
     try {
-      // Why: a v42 skew entry registered under v41 makes this 6 and replays the whole chain.
+      // Registering v42 probes at v41 would wrongly replay from v6.
       expect(resolveOrchestrationMigrationStartVersion(probe, 41, SCHEMA_VERSION)).toBe(41)
     } finally {
       probe.close()
@@ -250,8 +253,6 @@ describe('orchestration Orca session id column migration', () => {
       ).toEqual([{ id: rows.structuredDispatchId }])
       expect(db.getRunRaw(rows.ptyRunId)?.coordinator_orca_session_id).toBeNull()
       expect(db.getRunRaw(rows.structuredRunId)?.coordinator_orca_session_id).toBe(SESSION_ID)
-      // Every address a coordinator has: the PTY one its handle, the structured worker its handle
-      // and the session address its backfilled id gives it.
       expect(coordinatorAddresses(db.db, [rows.ptyRunId, rows.structuredRunId])).toEqual(
         [
           `${rows.ptyRunId} term_coord`,
@@ -259,7 +260,7 @@ describe('orchestration Orca session id column migration', () => {
           `${rows.structuredRunId} ${formatOrcaSessionAddress(SESSION_ID)}`
         ].sort()
       )
-      // CREATE TRIGGER IF NOT EXISTS alone would have kept the handle-only form here.
+      // IF NOT EXISTS alone would preserve obsolete handle-only triggers.
       for (const sql of coordinatorTriggerSql(db.db)) {
         expect(sql).toContain(
           'NEW.coordinator_orca_session_id_generation = NEW.consumer_generation'
@@ -277,7 +278,6 @@ describe('orchestration Orca session id column migration', () => {
     seed.close()
     stripOrcaSessionSchema(path, 40)
     const raw = new Database(path)
-    // The v40 shape of the one object v41 changed: a unique outstanding-delivery index.
     raw.exec(`
       DROP TRIGGER trg_deliveries_one_outstanding;
       DROP VIEW outstanding_deliveries;
@@ -322,8 +322,7 @@ describe('orchestration Orca session id column migration', () => {
     `)
     raw.close()
 
-    // createTables installs its static triggers before this chain's v40 step inserts into runs, so
-    // a static form naming coordinator_orca_session_id would fail to prepare here.
+    // Static triggers must compile before migration adds session columns.
     const db = new OrchestrationDb(path)
     try {
       expect(db.db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
@@ -355,10 +354,9 @@ describe('orchestration Orca session id column migration', () => {
       .run(CHAT_SESSION_ID)
     upgraded.close()
 
-    // A raw connection stands in for the v41 binary; each statement below is v41's own SQL.
+    // Use a raw connection to execute the rolled-back v41 SQL.
     const v41 = new Database(path)
     try {
-      // v41's migrate returns early on a newer stamp, so nothing rewrites the v42 objects.
       expect(resolveOrchestrationMigrationStartVersion(v41, SCHEMA_VERSION, 41)).toBe(
         SCHEMA_VERSION
       )
@@ -368,13 +366,11 @@ describe('orchestration Orca session id column migration', () => {
       expect(
         v41.prepare(`SELECT ${V41_RUN_COLUMNS} FROM runs WHERE id = ?`).get(rows.ptyRunId)
       ).toMatchObject({ coordinator_handle: 'term_coord', coordinator_pane_key: COORDINATOR_PANE })
-      // v41's listRuns reads `SELECT *`; the extra column rides along and every v41 column is intact.
       const listed = v41.prepare('SELECT * FROM runs ORDER BY created_at DESC, id DESC').all()
       expect(listed.map((run) => run.id).sort()).toEqual(
         ['run_legacy_local', 'run_session', rows.ptyRunId, rows.structuredRunId].sort()
       )
 
-      // v41's createTables runs these on every open.
       v41.exec(
         HANDLE_ONLY_COORDINATOR_TRIGGERS_SQL.replaceAll(
           'CREATE TRIGGER',
@@ -387,7 +383,7 @@ describe('orchestration Orca session id column migration', () => {
            VALUES ('run_v41', 'written by v41', 'term_v41', 'tab_v41:44444444-4444-4444-8444-444444444444', 1, 0)`
         )
         .run()
-      // An older binary rebinding a structured-coordinated Run cannot clear an id it cannot see.
+      // An older rebind cannot clear a session-id column it cannot see.
       v41
         .prepare(
           `UPDATE runs SET coordinator_handle = ?, coordinator_pane_key = ?,
@@ -405,7 +401,7 @@ describe('orchestration Orca session id column migration', () => {
       expect(readOrcaSessionId.get(rows.structuredRunId)).toEqual({
         coordinator_orca_session_id: SESSION_ID
       })
-      // The session address was remembered by the v42 open, before v41's rebind made the id stale.
+      // The v42 address cache predates the v41 rebind that made its session id stale.
       expect(coordinatorAddresses(v41, ['run_v41', rows.structuredRunId])).toEqual(
         [
           `${rows.structuredRunId} ${rows.workerHandle}`,
@@ -414,7 +410,6 @@ describe('orchestration Orca session id column migration', () => {
           'run_v41 term_v41'
         ].sort()
       )
-      // The v42 trigger form survives v41's IF NOT EXISTS create.
       for (const sql of coordinatorTriggerSql(v41)) {
         expect(sql).toContain('coordinator_orca_session_id')
       }
@@ -429,7 +424,7 @@ describe('orchestration Orca session id column migration', () => {
       expect(rolledForward.getRunMailboxOwnerIdsForHandle(CHAT_SESSION_ADDRESS)).toEqual([
         'run_session'
       ])
-      // v41's rebind bumped the generation, so the id it could not clear no longer counts.
+      // The old rebind bumps generation, invalidating the id it could not clear.
       const rebound = rolledForward.getRunRaw(rows.structuredRunId)
       expect(rebound?.coordinator_orca_session_id).toBe(SESSION_ID)
       expect(rebound && currentRunCoordinatorOrcaSessionId(rebound)).toBeNull()
@@ -442,7 +437,6 @@ describe('orchestration Orca session id column migration', () => {
     const path = tempDbPath()
     const first = new OrchestrationDb(path)
     const rows = seedStructuredAndPtyRows(first)
-    // The shape a binary rolled back past v42 writes: its INSERTs name no Orca session id column.
     first.db.exec(
       'UPDATE dispatch_contexts SET assignee_orca_session_id = NULL, creator_orca_session_id = NULL; UPDATE runs SET coordinator_orca_session_id = NULL'
     )
@@ -475,7 +469,7 @@ describe('orchestration Orca session id column migration', () => {
     seed.close()
     stripOrcaSessionSchema(path, 41)
     const raw = new Database(path)
-    // An unmerged prototype stamped v42 with differently named columns and triggers over them.
+    // Model a dev prototype with stale principal columns and triggers.
     raw.exec(`
       ALTER TABLE runs ADD COLUMN coordinator_principal TEXT;
       ALTER TABLE dispatch_contexts ADD COLUMN assignee_principal TEXT;
@@ -535,13 +529,11 @@ describe('orchestration Orca session id column migration', () => {
          ) VALUES ('run_chat', 'chat coordinated', ?, 1, 1, 0)`
       )
       .run(CHAT_SESSION_ID)
-    // The cache row this binding wrote; a later open must not be able to write it back.
+    // Remove the cached address to prove reopening cannot resurrect it.
     seeded.db.prepare('DELETE FROM run_coordinator_handles WHERE run_id = ?').run('run_chat')
     seeded.close()
 
-    // Each statement below is v41's own SQL.
     const v41 = new Database(path)
-    // A terminal takes the Run over (bindRun)...
     v41
       .prepare(
         `UPDATE runs SET coordinator_handle = ?, coordinator_pane_key = ?,
@@ -549,7 +541,6 @@ describe('orchestration Orca session id column migration', () => {
          WHERE id = ?`
       )
       .run('term_taker', PTY_WORKER_PANE, 'run_chat')
-    // ...then claims another Run from the same pane, which unbinds this one (unbindOtherRunsForPane).
     v41
       .prepare(
         `UPDATE runs SET coordinator_handle = NULL, coordinator_pane_key = NULL,
@@ -557,7 +548,7 @@ describe('orchestration Orca session id column migration', () => {
          WHERE id = ?`
       )
       .run('run_chat')
-    // Without the generation this row is byte-identical to a live chat binding.
+    // Without its generation fence, this stale id is indistinguishable from a live chat binding.
     expect(
       v41
         .prepare(
@@ -617,8 +608,7 @@ describe('orchestration Orca session id column migration', () => {
     seed.close()
     stripOrcaSessionSchema(path, 41)
     const raw = new Database(path)
-    // An earlier build of this step stamped v42 with `session:<id>` values in differently named
-    // columns, their indexes, and address triggers over them.
+    // Model earlier v42 actor columns, indexes and triggers containing session: addresses.
     const earlierAddress = `COALESCE(NEW.coordinator_handle, (CASE WHEN
       NEW.coordinator_actor_generation = NEW.consumer_generation THEN NEW.coordinator_actor END))`
     raw.exec(`
@@ -654,7 +644,7 @@ describe('orchestration Orca session id column migration', () => {
          ) VALUES ('run_earlier_chat', 'chat coordinated', ?, 1, 1, 0)`
       )
       .run(CHAT_SESSION_ADDRESS)
-    // The cache row the earlier trigger wrote; only the stale column could write it back.
+    // Remove the cache entry so only the obsolete column could resurrect it.
     raw.prepare('DELETE FROM run_coordinator_handles WHERE run_id = ?').run('run_earlier_chat')
     raw.pragma('user_version = 42')
     try {
@@ -678,7 +668,6 @@ describe('orchestration Orca session id column migration', () => {
       )
       const run = db.getRunRaw(rows.structuredRunId)
       expect(run && currentRunCoordinatorOrcaSessionId(run)).toBe(SESSION_ID)
-      // The stale column stays where it was and nothing reads it.
       expect(
         db.db
           .prepare('SELECT coordinator_actor, coordinator_orca_session_id FROM runs WHERE id = ?')

@@ -51,10 +51,7 @@ function previewAt(args: {
   })
 }
 
-/**
- * Replay a drag where the pointer never moves while a card animates open, holding
- * the drop decision across frames exactly as the live drag loop does.
- */
+/** Replay a stationary-pointer drag through card expansion, holding decisions as the live loop does. */
 function replayStillPointer(args: {
   pointerY: number
   frames: readonly (readonly WorktreeSidebarDragRect[])[]
@@ -184,7 +181,8 @@ describe('worktree sidebar drag geometry under mid-drag card growth', () => {
         draggedIds: ['a'],
         draggedCopies: [],
         reorderDraggedIds: ['a'],
-        reorderUnitDraggedIds: ['a'],
+        reorderDraggedKeys: ['a'],
+        reorderUnitDraggedKeys: ['a'],
         rects: COLLAPSED,
         grab: GRAB,
         anchor: null

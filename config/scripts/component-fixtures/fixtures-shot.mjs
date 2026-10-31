@@ -52,6 +52,12 @@ async function main() {
     scale: Number(values.scale),
     outDir: values.out ? path.resolve(values.out) : undefined
   })
+  if (
+    payload.error ||
+    payload.results?.some((result) => result.error || result.pageErrors?.length)
+  ) {
+    process.exitCode = 1
+  }
   if (values.json) {
     console.log(JSON.stringify({ ...payload, totalMs: Math.round(performance.now() - startedAt) }))
     return

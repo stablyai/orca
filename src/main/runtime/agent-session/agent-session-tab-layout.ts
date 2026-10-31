@@ -1,5 +1,4 @@
-// A chat tab a host with no window shows, saved in its layout as a window saves its own, so the
-// layout is a complete record of the host's tabs.
+// Persist windowless chat tabs too, so the host layout remains complete.
 
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -14,24 +13,18 @@ import { randomUUID } from 'node:crypto'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 
-/** Where a paired client asked a chat it created to open, in this host's own group and tab ids. */
+/** Placement in the creating client's host-owned group/tab ids. */
 export type ChatTabPlacement = { groupId?: string; afterTabId?: string }
 
 export type ChatTabChange =
   | { open: { sessionId: string; agent: AgentType; tabId: string; placement?: ChatTabPlacement } }
   | { close: string }
 
-/** A chat tab change as main's layout command: a window's, which routes by the chat's tab. */
 export type ChatTabLayoutCommand =
   | (CommandOf<'openAgentSessionTab'> & { tabId: string })
   | (CommandOf<'closeTabs'> & { tabIds: [string] })
 
-/**
- * One change against the workspace's layout as loaded now: a chat opens where its creating client
- * asked, else in the active group (while the workspace still holds either), unless a tab shows it;
- * a close drops the chat's tab. Null when nothing changes. Main's queue and the windowless save both
- * decide through it.
- */
+/** Shared by main's queue and windowless saves; null means unchanged. */
 export function chatTabLayoutCommand(
   workspace: WorkspaceLayout | undefined,
   activeGroupId: string | undefined,
@@ -40,8 +33,7 @@ export function chatTabLayoutCommand(
 ): ChatTabLayoutCommand | null {
   const placement = 'open' in change ? change.open.placement : undefined
   const holds = (id: string | undefined) => workspace?.groups.some((group) => group.id === id)
-  // The client's group while the workspace still holds it, else the remembered active one; a group
-  // the workspace no longer holds names nothing, and the open mints its own.
+  // Prefer an existing client group, then the active group; otherwise open creates one.
   const groupId = holds(placement?.groupId)
     ? placement?.groupId
     : holds(activeGroupId)
@@ -75,7 +67,6 @@ export function chatTabLayoutCommand(
   }
 }
 
-/** The layout loaded from a partition, with the worktree's remembered active group. */
 export function loadChatTabLayout(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState,
@@ -85,7 +76,6 @@ export function loadChatTabLayout(
   return { loaded, activeGroupId: loaded.desktopView.activeGroupIdByWorktree?.[worktreeId] }
 }
 
-/** The partition with the worktree's chat tabs changed in one layout load; null when unchanged. */
 export function withChatTabChanges(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState,
@@ -115,7 +105,6 @@ export function withChatTabChanges(
   return layout === loaded.layout ? null : saveWorkspaceLayout({ ...loaded, layout })
 }
 
-/** The id the window, the index and status updates all address the chat's tab by. */
 export function chatTabId(sessionId: string): string {
   return (
     getStructuredAgentSessionHost()?.getSessionTabId?.(sessionId) ??

@@ -13,7 +13,7 @@ import type * as AgreementModule from '../terminal-topology/terminal-pane-placem
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'
 
 vi.mock('node:fs/promises', { spy: true })
-// rollback build (switch-off) — delete with the switch-off code post-flip
+// Retain switch-off coverage until layout ownership is permanently enabled.
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 const agreementCheck = vi.hoisted(() => ({ throws: false }))
@@ -57,9 +57,8 @@ type Scenario = {
   name: string
   hostId?: string
   binding: PersistPtyBindingArgs
-  /** Bound once before the measured write, so the measured write finds the leaf present. */
   prebind?: boolean
-  /** Each placement gets the existing tab's first leaf, whose id load normalization randomizes. */
+  /** Load normalization randomizes leaf IDs; derive placement from the loaded tab. */
   placements: (existingLeaf: string) => [TerminalPanePlacement, string][]
 }
 
@@ -211,7 +210,7 @@ async function bindAndSave(
   )
   await store.flushPendingOrThrowAsync()
   const state = readState()
-  // Load normalization gives each fixture's legacy leaves fresh random ids; compare everything else.
+  // Normalize randomized legacy leaf IDs before comparing persistence.
   const stable = (value: unknown): unknown => {
     let text = JSON.stringify(value)
     for (const tabId of ['tab-local', 'tab-remote']) {

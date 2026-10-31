@@ -213,6 +213,23 @@ describe('locale-translation-policy zh round 5', () => {
     ).toBe('no_proxy')
   })
 
+  it.each([
+    ['Configure proxy', '配置代理', '配置代理'],
+    ['Unmodified user agent', '未修改的用户代理', '未修改的用户代理'],
+    [
+      'Installed for {{value0}} agents',
+      '已为 {{value0}} 个代理安装',
+      '已为 {{value0}} 个智能体安装'
+    ],
+    ['Detecting agents...', '检测剂...', '正在检测智能体...'],
+    ['Repository not in Orca', '存储库不在 Orca 中', '仓库不在 Orca 中'],
+    ['Recent Workspaces', '最近的工作空间', '最近的工作区']
+  ])('applies the glossary boundary for %s', (enValue, localeValue, expected) => {
+    expect(
+      repairTranslatedValue({ key: 'auto.glossary.boundary', enValue, localeValue, locale: 'zh' })
+    ).toBe(expected)
+  })
+
   it('keeps repo terminology in English', () => {
     expect(
       repairTranslatedValue({

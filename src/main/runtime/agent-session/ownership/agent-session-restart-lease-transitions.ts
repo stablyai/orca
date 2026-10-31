@@ -1,10 +1,4 @@
-/**
- * Turning a restart adjudication into the next record.
- *
- * Applies one restart verdict to one loaded lease. Kept apart from the acquisition transitions
- * because it is the only one that moves a lease WITHOUT a new owner proving anything — which is
- * exactly the polarity that has to be read carefully.
- */
+/** Apply restart verdicts to loaded leases without a newly proving owner; evidence, never deadlines, governs release. */
 
 import {
   adjudicateAgentSessionRestart,
@@ -13,7 +7,6 @@ import {
 import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
 import { withLease } from './agent-session-lease-transitions'
 
-/** Apply one restart adjudication. Never consults deadlines — only proof moves a lease. */
 export function applyAgentSessionRestartAdjudication(args: {
   record: AgentSessionRecord
   probe: AgentSessionOwnerProbe
@@ -26,8 +19,7 @@ export function applyAgentSessionRestartAdjudication(args: {
     observedAt: args.now
   })
   if (adjudication.disposition === 'free') {
-    // Why: an already-free lease that reloads into `recovering` is unopenable forever; clearing
-    // the stage restores it without moving the fence or touching the recorded death evidence.
+    // Clearing recovery on an already-free lease restores access without moving its fence or death proof.
     return withLease(record, {
       ...record.lease,
       handoffStage: null,
@@ -37,8 +29,7 @@ export function applyAgentSessionRestartAdjudication(args: {
     })
   }
   if (adjudication.disposition === 'evicted') {
-    // What the dead generation left running is settled from `deathEvidence` when the journal is
-    // next opened, so nothing about it is owed here.
+    // Journal reopening settles dead-generation work from persisted deathEvidence.
     return withLease(record, {
       ...record.lease,
       runtimeFence: adjudication.nextFence,
@@ -52,7 +43,7 @@ export function applyAgentSessionRestartAdjudication(args: {
       deathEvidence: adjudication.evidence
     })
   }
-  // Parking in recovery proves nothing alive, so `lastRenewedAt` keeps the pre-crash proof.
+  // Recovery is not new liveness proof; preserve the pre-crash renewal.
   return {
     ...withLease(record, {
       ...record.lease,

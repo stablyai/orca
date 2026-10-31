@@ -11,6 +11,7 @@ const NON_TEST_FILES = new Set([
   'config/scripts/pr-package-test-paths.mjs',
   'config/scripts/pr-code-change-scope.test.mjs',
   'config/scripts/pr-layout-oracle-route.mjs',
+  'config/scripts/pr-shell-contract-prefixes.mjs',
   'config/scripts/mobile-release-check-scope.mjs',
   'config/scripts/mobile-release-check-scope.test.mjs'
 ])

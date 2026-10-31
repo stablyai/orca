@@ -15,13 +15,17 @@ import {
 } from './claude-stream-json-connection'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { claudeAuthDiagnostic } from './claude-structured-init-proof'
+import { claudeAuthDiagnostic } from './structured/claude-structured-init-proof'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 
 // Exercise the real SDK against a scripted child CLI.
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
@@ -46,6 +50,7 @@ afterEach(async () => {
   }
   await Promise.all(childClosures.splice(0))
   for (const dir of scratchDirs.splice(0)) {
+    await closeTestJournalHostDatabases()
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   }
   spawned.splice(0)
@@ -607,6 +612,24 @@ describe('Claude stream-json connection', () => {
     } else {
       expect(closed).toBe(connection.exitVerdict.tree === 'exited')
     }
+  })
+
+  it("names Claude's root refusal of Full access, keeping its words as the detail", async () => {
+    const refusal =
+      '--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons'
+    const scenario = scriptScenario([{ stderr: `${refusal}\n` }, { exit: 1 }])
+    let exit: Error | null = null
+    await open(launchFor(scenario), {
+      onExit: (error) => {
+        exit = error
+      }
+    })
+
+    await until(() => exit, 'the exit error')
+    expect(providerStartupFailureFact(exit)).toEqual({
+      kind: 'fullAccessAsRoot',
+      detail: { text: expect.stringContaining(refusal), audience: 'log' }
+    })
   })
 
   it.runIf(process.platform !== 'win32')(

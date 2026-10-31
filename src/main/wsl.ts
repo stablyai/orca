@@ -10,8 +10,16 @@ import {
 } from './wsl-availability'
 import { wslExeProcessSpec, wslExeStdout } from './wsl-exe-process'
 import {
+  isWslListOutputLost,
+  listedOrRegisteredWslDistros,
+  readRegisteredWslDistrosLater,
+  resetWslListOutputLost,
+  runningWhenListedNone
+} from './wsl-registered-distro-fallback'
+import {
   _resetRunningWslDistroCacheForTests,
-  resolveRunningWslDistros
+  resolveRunningWslDistros,
+  type RunningWslDistroReadOptions
 } from './wsl-running-distro-cache'
 import {
   getWslDirectoryProbeArgs,
@@ -136,7 +144,11 @@ export function listWslDistros(): string[] {
     const output = wslExeStdout(
       runProcessSync(wslExeProcessSpec(['--list', '--quiet'], WSL_PROBE_TIMEOUT_MS))
     )
-    return cacheWslDistroList(parseWslDistros(output), probeSequence)
+    const listed = parseWslDistros(output)
+    if (listed.length === 0) {
+      readRegisteredWslDistrosLater((found) => cacheWslDistroList(found, probeSequence))
+    }
+    return cacheWslDistroList(listed, probeSequence)
   } catch {
     armWslDistroListRetry()
     return wslDistroCache ?? []
@@ -168,7 +180,9 @@ export async function listWslDistrosAsync(): Promise<string[]> {
   // Catch before sharing the promise so all concurrent callers receive the same fallback.
   const probeSequence = ++wslDistroProbeSequence
   const probe = runWslExe(['--list', '--quiet'])
-    .then((output) => cacheWslDistroList(parseWslDistros(output), probeSequence))
+    .then(async (output) =>
+      cacheWslDistroList(await listedOrRegisteredWslDistros(parseWslDistros(output)), probeSequence)
+    )
     .catch(() => {
       armWslDistroListRetry()
       return wslDistroCache ?? []
@@ -184,19 +198,31 @@ export async function listWslDistrosAsync(): Promise<string[]> {
 }
 
 export async function listRunningWslDistrosAsync(
-  options: { requireConfirmed?: boolean } = {}
+  options: RunningWslDistroReadOptions = {}
 ): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []
   }
   return resolveRunningWslDistros(
     () =>
-      runWslExe(['--list', '--running', '--quiet'], {
-        ...process.env,
-        WSL_UTF8: '1'
-      }).then((output) => filterUserWslDistros(parseWslDistros(output))),
+      // A host known to lose redirected list output goes straight to the console.
+      isWslListOutputLost()
+        ? runningFromList('')
+        : runWslExe(['--list', '--running', '--quiet'], {
+            ...process.env,
+            WSL_UTF8: '1'
+          }).then(runningFromList),
     options
   )
+}
+
+// Empty means "none running" unless this host loses list output; then only a console can tell.
+async function runningFromList(output: string): Promise<string[]> {
+  const listed = parseWslDistros(output)
+  if (listed.length > 0) {
+    return filterUserWslDistros(listed)
+  }
+  return runningWhenListedNone(await listWslDistrosAsync(), WSL_PROBE_TIMEOUT_MS)
 }
 
 export function hasCachedWslDistros(): boolean {
@@ -269,6 +295,22 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
   return probe
 }
 
+/** Canonical guest path of a directory; Windows cannot follow guest symlinks over 9P. */
+export async function resolveWslGuestRealDirAsync(
+  distro: string,
+  guestDir: string
+): Promise<string | null> {
+  try {
+    // -m: a session's folder may not exist yet, but the profile symlink above it does.
+    const realDir = (
+      await runWslExe(buildWslExecArgs(distro, ['realpath', '-m', '--', guestDir]))
+    ).trim()
+    return realDir.startsWith('/') ? realDir : null
+  } catch {
+    return null
+  }
+}
+
 /** UNC home roots for distros that are running at discovery time. */
 export async function listRunningWslHomeDirsAsync(): Promise<string[]> {
   const homes = await Promise.all(
@@ -285,6 +327,7 @@ function resetWslDistroListState(): void {
   wslDistroListEmptyStreak = 0
   wslDistroProbeSequence = 0
   wslDistroCacheSequence = 0
+  resetWslListOutputLost()
 }
 
 export function _resetWslCachesForTests(): void {

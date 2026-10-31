@@ -163,8 +163,8 @@ describe('watcher native unsubscribe timeout', () => {
       await siblingPromise
 
       const result = firstSubscription.unsubscribe().catch((error: unknown) => error)
-      await vi.advanceTimersByTimeAsync(WATCHER_PROCESS_UNSUBSCRIBE_TIMEOUT_MS)
       const isSettled = trackPromiseSettlement(result)
+      await vi.advanceTimersByTimeAsync(WATCHER_PROCESS_UNSUBSCRIBE_TIMEOUT_MS)
       expect(isSettled()).toBe(false)
 
       await vi.advanceTimersByTimeAsync(WATCHER_PROCESS_EXIT_DEADLINE_MS)

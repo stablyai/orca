@@ -1,16 +1,16 @@
+import { journalInputOrder } from './journal-input-order'
+import type { JournalInputContext } from './journal-input-lineage'
 import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {
   AgentJournalSubmission,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
-  AgentJournalMessageItem,
   AgentJournalProducerLinkage,
   AgentJournalRowAttribution,
   AgentJournalTurnScope,
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
@@ -29,11 +29,15 @@ import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
-import { boundInlineText, JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
+import {
+  boundInlineText,
+  boundRunningToolOutput,
+  JOURNAL_DISPATCH_REASON_LIMITS
+} from './journal-payload-bounds'
 import { assertSubmissionIdUnused } from './journal-write-guards'
 import { turnEndAfterStop } from './journal-stop-turn-end'
 import { nextJournalItemRevision } from './journal-item-revision'
-import type { ResolveDispatchInput } from './journal-store-contracts'
+import type { ResolveDispatchInput, JournalSubmissionInput } from './journal-store-contracts'
 import {
   journalLifecycleMutationItemId,
   journalLifecycleMutationRow,
@@ -95,16 +99,7 @@ export function journalTombstoneRowBuilder(
 export function journalSubmissionRowBuilder(
   state: () => JournalReducerState,
   identity: Pick<AgentSessionJournalIdentity, 'providerHandle' | 'agent'>,
-  input: {
-    clientMessageId: string
-    payloadFingerprint: string
-    body: AgentJournalMessageItem
-    fence: number
-    handoverRecorded?: true
-    queuedMessageId?: string
-    origin?: 'client' | 'host'
-    options?: AgentSessionExecutionOptions
-  },
+  input: JournalSubmissionInput,
   /** Stamp queue links from consumption here so every handoff preserves them. */
   consume?: { messageId: string }
 ): RowBuilder<JournalSubmissionRow> {
@@ -116,6 +111,11 @@ export function journalSubmissionRowBuilder(
     const queuedMessageId = consume?.messageId ?? input.queuedMessageId
     return buildJournalSubmissionRow({
       state: state(),
+      inputOrderContext: {
+        source: { epoch: state().epoch, sequence: seq },
+        basis: 'observed',
+        cut: journalInputOrder(state()).lineage.at(seq)
+      },
       providerHandle: agentSessionJournalProviderHandle(identity),
       ...input,
       ...(queuedMessageId !== undefined ? { queuedMessageId } : {}),
@@ -249,7 +249,7 @@ export function buildJournalItemRow(
   const resolved = input.state.aliases.get(itemId) ?? itemId
   // Recreated items must outrank tombstones or the reducer will discard them.
   const revision = nextJournalItemRevision(input.state, itemId, input.revisions)
-  const body = turnEndAfterStop(input.state, resolved, input.body)
+  const body = boundRunningToolOutput(turnEndAfterStop(input.state, resolved, input.body))
   return {
     kind: 'item',
     ...journalItemEchoFields(input),
@@ -282,23 +282,19 @@ export function buildJournalTombstoneRow(input: {
   }
 }
 
-export function buildJournalSubmissionRow(input: {
-  state: JournalReducerState
-  clientMessageId: string
-  payloadFingerprint: string
-  providerHandle: AgentSessionJournalProviderHandle
-  body: AgentJournalMessageItem
-  seq: number
-  fence: number
-  ts: number
-  handoverRecorded?: true
-  queuedMessageId?: string
-  origin?: 'client' | 'host'
-  source?: AgentJournalSubmission['source']
-  options?: AgentSessionExecutionOptions
-}): JournalSubmissionRow {
+export function buildJournalSubmissionRow(
+  input: Omit<JournalSubmissionInput, 'source'> &
+    Pick<AgentJournalSubmission, 'source'> & {
+      state: JournalReducerState
+      providerHandle: AgentSessionJournalProviderHandle
+      seq: number
+      ts: number
+      inputOrderContext?: JournalInputContext
+    }
+): JournalSubmissionRow {
   return {
     kind: 'submission',
+    ...(input.inputOrderContext ? { inputOrderContext: input.inputOrderContext } : {}),
     clientMessageId: input.clientMessageId,
     payloadFingerprint: input.payloadFingerprint,
     providerHandle: input.providerHandle,

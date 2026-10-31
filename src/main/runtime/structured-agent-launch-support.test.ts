@@ -5,7 +5,12 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
-import { structuredAgentSupportsLaunch } from './structured-agent-launch-support'
+import {
+  resolveHostStructuredAgentCreateSupport,
+  structuredAgentSupportsLaunch,
+  structuredAgentHostLaunchSources,
+  resolveHostStructuredAgentLaunchEnvironment
+} from './structured-agent-launch-support'
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type * as LoginShellModule from '../startup/login-shell-environment'
 import type * as VersionProbeModule from '../agent-cli-version-probe'
@@ -189,3 +194,81 @@ describe('structuredAgentSupportsLaunch', () => {
     }
   )
 })
+
+it('uses the same configured launch profile for a checking session as the ordinary host launch', async () => {
+  const configured = {
+    ...settings,
+    agentPermissionDefault: 'own' as const,
+    agentDefaultEnv: { goose: { GOOSE_MODE: 'manual', CATALOG_OWNER: 'configured' } }
+  }
+  const controller = new AbortController()
+  try {
+    const ordinary = await resolveHostStructuredAgentLaunchEnvironment('goose', configured)
+    const checking = await structuredAgentHostLaunchSources(
+      'goose',
+      {
+        requireStore: () => ({ getSettings: () => configured }),
+        resolveStructuredAgentAccountHome: async () => ({ variable: 'HOME', path: '/fixture-home' })
+      },
+      controller.signal
+    )
+    expect(checking.env).toEqual(ordinary)
+    expect(checking.env).toMatchObject({ GOOSE_MODE: 'manual', CATALOG_OWNER: 'configured' })
+    expect(checking.commandSettings).toBe(configured)
+  } finally {
+    controller.abort()
+  }
+})
+
+it.each([20, 200])(
+  'completes %i real create-support setup/version owners while a successor finishes independently',
+  async (count) => {
+    const targetReady = Promise.withResolvers<void>()
+    const versionReady = Promise.withResolvers<void>()
+    const targets = vi.fn(async (selector: string) => {
+      if (selector !== 'live-successor') {
+        await targetReady.promise
+      }
+      return { worktree: { path: `/repo/${selector}` } }
+    })
+    const completions: string[] = []
+    readVersion.mockImplementation(async (input) => {
+      asked.push(input)
+      if (input.cwd !== '/repo/live-successor') {
+        await versionReady.promise
+      }
+      return { version: '1.18.31' }
+    })
+    const checking = { ...runtime, resolveRuntimeFileTarget: targets }
+    const location = {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace',
+      workspaceKind: 'git-worktree'
+    } as const
+    const check = (id: string) =>
+      resolveHostStructuredAgentCreateSupport({
+        agent: 'opencode',
+        worktreeSelector: id,
+        location,
+        runtime: checking
+      }).then((result) => {
+        completions.push(id)
+        return result
+      })
+    const predecessors = Array.from({ length: count }, (_, i) => check(`predecessor-${i}`))
+    await vi.waitFor(() => expect(targets).toHaveBeenCalledTimes(count))
+    expect(asked).toHaveLength(0)
+    const successor = await check('live-successor')
+    expect(successor).toMatchObject({ supported: true })
+    expect(completions).toEqual(['live-successor'])
+    targetReady.resolve()
+    await vi.waitFor(() => expect(asked).toHaveLength(count + 1))
+    expect(completions).toEqual(['live-successor'])
+    versionReady.resolve()
+    expect((await Promise.all(predecessors)).every((result) => result.supported)).toBe(true)
+    expect(completions).toHaveLength(count + 1)
+    expect(loginShell.spawn).toHaveBeenCalledOnce()
+    expect(targets).toHaveBeenCalledTimes(count + 1)
+  }
+)

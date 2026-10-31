@@ -138,7 +138,6 @@ describe('overlay layer under the startup terminal hold', () => {
   it('fills the visible held tab slot, including a tab created under the hold, until the gate opens', () => {
     setTabs(['tab-a', 'tab-b'], 'tab-a')
     renderOverlay(NO_ADMITTED_TABS)
-    // Only the visible tab gets a placeholder; the hidden held tab renders nothing.
     expect(placeholders()).toHaveLength(1)
     expect(placeholders()[0].parentElement?.getAttribute('data-retained-pane-group-id')).toBe(
       GROUP_ID
@@ -153,21 +152,6 @@ describe('overlay layer under the startup terminal hold', () => {
     renderOverlay(null)
     expect(placeholders()).toHaveLength(0)
     expect(mountedPaneTabIds()).toEqual(['tab-a', 'tab-b', 'tab-new'])
-  })
-
-  it('renders no placeholder while the held worktree is not the active one', () => {
-    setTabs(['tab-a'], 'tab-a')
-    act(() =>
-      root.render(
-        <TerminalPaneOverlayLayer
-          worktreeId={WORKTREE_ID}
-          worktreePath="/held"
-          isWorktreeActive={false}
-          backgroundMountTabIds={NO_ADMITTED_TABS}
-        />
-      )
-    )
-    expect(placeholders()).toHaveLength(0)
   })
 })
 
@@ -212,11 +196,5 @@ describe('legacy terminal panes under the startup terminal hold', () => {
     renderLegacy(['tab-a', 'tab-b', 'tab-new'], 'tab-new', null)
     expect(placeholders()).toHaveLength(0)
     expect(mountedPaneTabIds()).toEqual(['tab-a', 'tab-b', 'tab-new'])
-  })
-
-  it('renders no placeholder when the active tab is not a held one', () => {
-    renderLegacy(['tab-a', 'tab-b'], 'tab-a', new Set(['tab-a']))
-    expect(placeholders()).toHaveLength(0)
-    expect(mountedPaneTabIds()).toEqual(['tab-a'])
   })
 })

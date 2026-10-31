@@ -197,11 +197,8 @@ function resolveBurstWheelDistanceRows(
   return TUI_WHEEL_BURST_MAX_BONUS_ROWS * cadence * (state.fastStreak / TUI_WHEEL_BURST_RAMP_EVENTS)
 }
 
-// Why: continuous pixel streams map 1:1 to physical distance: one report per
-// terminal row scrolled, fractional remainder carried. No per-event cap and
-// no momentum-tail suppression: the input write queue batches whatever a
-// busy frame accumulates into a single PTY write, so the TUI applies it at
-// once instead of replaying it, and inertial scrolling stays real-time.
+// Map continuous pixels to rows with fractional carry, without caps or tail suppression.
+// Queue batches busy-frame reports into one PTY write so inertia stays real-time.
 function resolveContinuousWheelReportCount(
   state: TerminalTuiMouseWheelDistanceState,
   distanceRows: number

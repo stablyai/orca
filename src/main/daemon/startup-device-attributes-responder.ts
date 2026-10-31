@@ -1,10 +1,9 @@
 import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 /** Answer DA1 when ConPTY startup or shell-ready gating prevents a renderer reply; bypass queued stdin. */
 import type { Terminal } from '@xterm/headless'
+import { PRIMARY_DEVICE_ATTRIBUTES_QUERY_SEQUENCES } from '../../shared/terminal-reply-query-extraction'
 
 type DeviceAttributesParser = Pick<Terminal['parser'], 'registerCsiHandler'>
-
-const PRIMARY_DEVICE_ATTRIBUTES_QUERIES = ['\x1b[c', '\x1b[0c'] as const
 
 /** Match renderer attributes so startup gating does not change TUI capabilities. */
 export const STARTUP_DA1_RESPONSE = '\x1b[?1;2c'
@@ -44,7 +43,7 @@ export class StartupDeviceAttributesQueryFilter {
         break
       }
       emit(offset, candidate)
-      const query = PRIMARY_DEVICE_ATTRIBUTES_QUERIES.find((value) =>
+      const query = PRIMARY_DEVICE_ATTRIBUTES_QUERY_SEQUENCES.find((value) =>
         input.data.startsWith(value, candidate)
       )
       if (query) {
@@ -53,7 +52,7 @@ export class StartupDeviceAttributesQueryFilter {
         continue
       }
       const tail = input.data.slice(candidate)
-      if (PRIMARY_DEVICE_ATTRIBUTES_QUERIES.some((value) => value.startsWith(tail))) {
+      if (PRIMARY_DEVICE_ATTRIBUTES_QUERY_SEQUENCES.some((value) => value.startsWith(tail))) {
         this.pending = { ...input, data: tail, rawStartSeq: input.rawStartSeq + candidate }
         break
       }

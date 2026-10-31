@@ -1,7 +1,7 @@
 import { createElement, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeChatComposer'
+import { MobileNativeChatComposer as NativeChatComposer } from './native-chat/composer/MobileNativeChatComposer'
 
 const getNoComposerEditGeneration = () => 0
 

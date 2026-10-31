@@ -1,5 +1,6 @@
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
+import { readNoChoiceOptionResult } from './structured-agent-session-option-observation'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
@@ -33,6 +34,7 @@ import {
   performPrompt,
   performSend,
   type AgentSessionTurnContext,
+  type AgentSessionReplayContext,
   type TurnOutcome
 } from './structured-agent-session-turns'
 import {
@@ -58,11 +60,11 @@ export type MutationPlan<TValue> = {
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
   /** receipt is the accepted command receipt result, when declared. */
   replay: (
-    ctx: AgentSessionTurnContext,
+    ctx: AgentSessionReplayContext,
     outcome: AgentSessionOperationOutcome,
     receipt?: CommandReceiptResult
   ) => TValue | null
-  rerunWhenReplayMissing?: (ctx: AgentSessionTurnContext) => boolean
+  rerunWhenReplayMissing?: (ctx: AgentSessionReplayContext) => boolean
   recoverUnknownFromDurableState?: boolean
 } & (
   | {
@@ -151,6 +153,8 @@ export function sendPlan(
         ...(source ? { source } : {}),
         clientMessageId,
         ...(params.options ? { options: params.options } : {}),
+        ...(params.selection !== undefined ? { selection: params.selection } : {}),
+        // Body-only, so the reducer's echo aliasing never sees control fields or the sender.
         payloadFingerprint: agentSessionSendBodyFingerprint(params.envelope.sessionId, params.body),
         body: params.body
       })
@@ -300,10 +304,7 @@ export function promptPlan(
   }
 }
 
-export function setOptionPlan(params: {
-  key: string
-  value: string
-}): MutationPlan<AgentSessionOptionResult> {
+export function setOptionPlan(params: { key: string; value: string }) {
   return {
     method: 'agentSession.setOption',
     fields: { key: params.key, value: params.value },
@@ -313,14 +314,19 @@ export function setOptionPlan(params: {
       ctx.publish()
       return { ok: true, value: { ...params, options } }
     },
-    // Only settled success replays directly; unsettled picks must run again.
-    replay: (ctx, outcome) =>
-      outcome.status === 'succeeded'
-        ? {
-            key: params.key,
-            value: params.value,
-            ...(ctx.persistedOptions ? { options: { ...ctx.persistedOptions } } : {})
-          }
-        : null
-  }
+    // Reapply unsettled picks; only a settled success can be replayed directly.
+    replay: (ctx, outcome) => {
+      if (outcome.status !== 'succeeded') {
+        return null
+      }
+      if (Object.hasOwn(outcome, 'optionResult')) {
+        return readNoChoiceOptionResult(outcome.optionResult, params)
+      }
+      return {
+        key: params.key,
+        value: params.value,
+        ...(ctx.persistedOptions ? { options: { ...ctx.persistedOptions } } : {})
+      }
+    }
+  } satisfies MutationPlan<AgentSessionOptionResult>
 }

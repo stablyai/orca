@@ -15,7 +15,6 @@ const unexpectedHostRead = (): never => {
 const host = {
   getRuntimeId: () => 'artifact-facade',
   requireStore: unexpectedHostRead,
-  resolveWorktreeSelector: async () => unexpectedHostRead(),
   resolveRuntimeFileTarget: async () => unexpectedHostRead(),
   resolveRuntimeGitTarget: async () => unexpectedHostRead(),
   openFile: unexpectedHostRead,

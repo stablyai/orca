@@ -1,3 +1,5 @@
+import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
+import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import type { Worktree } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
@@ -77,7 +79,9 @@ export function appendWorktreeTerminalFailure(
   kind: 'startup' | 'initial',
   error: unknown
 ): string {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = readableWslDistroHoldText(
+    formatTerminalStartFailure(error) ?? (error instanceof Error ? error.message : String(error))
+  )
   const failure = `failed to create the ${kind} terminal for ${path}: ${message}`
   const combined = warning
     ? `${warning} Also ${failure}`

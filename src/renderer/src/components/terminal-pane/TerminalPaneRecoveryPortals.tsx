@@ -13,13 +13,14 @@ import {
   useRemoteServerNoticeClaim
 } from './remote-server-notice-claims'
 import { RemoteServerOutageNotice } from './RemoteServerOutageNotice'
+import { WslHostStoppedCard } from './WslHostStoppedCard'
+import { useRetryPanesWhenWslHostReturns } from './use-wsl-host-return-retry'
 import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
+import { useAppStore } from '@/store'
+import { paneShowsWslHostStoppedCard } from '@/lib/wsl-host-stopped-status'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 
-/**
- * What a pane's Reconnect does: pair again first when the server refused us, sign in first when
- * the SSH host waits for it, and otherwise retry the pane.
- */
+/** Reconnect pairs refused servers, signs in SSH hosts awaiting credentials, or otherwise retries the pane. */
 export function createPaneRecoveryReconnect(
   getTransport: () => PtyTransport | undefined,
   pairingRefusedEnvironmentId: string | null,
@@ -39,8 +40,7 @@ export function createPaneRecoveryReconnect(
     }
     const signInEnvironmentId = awaitingSignIn ? getTransport()?.getRuntimeEnvironmentId?.() : null
     if (signInEnvironmentId) {
-      // Why no retry on failure: a rejected password must not re-dial into a second prompt;
-      // the control-ready revival starts the pane once sign-in succeeds.
+      // Do not retry rejected sign-in into another prompt; successful control-ready revival starts the pane.
       void window.api.runtimeEnvironments
         .connect({ selector: signInEnvironmentId })
         .then((response) => {
@@ -65,6 +65,12 @@ export function TerminalPaneRecoveryPortals({
   const wslHostUnavailable = useWslHostUnavailableReason(controller.worktreeId)
   const pairingRefusedEnvironmentId = useManagedPairingRefusedEnvironmentId(controller.worktreeId)
   const ownerEnvironmentId = useWorkspaceRuntimeEnvironmentId(controller.worktreeId)
+  // One subscription for both the card and the retry: one listener per mounted surface.
+  const ownerWslHost = useAppStore((state) =>
+    ownerEnvironmentId ? state.wslHostStatuses[ownerEnvironmentId] : undefined
+  )
+  const stoppedWslDistro = ownerWslHost?.state === 'distro-stopped' ? ownerWslHost.distro : null
+  useRetryPanesWhenWslHostReturns(ownerEnvironmentId, ownerWslHost?.state, paneTransportsRef)
   const retryingOutageEnvironmentId = useRetryingOutageEnvironmentId(controller.worktreeId)
   const isolated = controller.isolatedPaneKey !== null
   // Why: a pane waiting for SSH sign-in says so itself; "reconnecting" over it would be false.
@@ -78,6 +84,8 @@ export function TerminalPaneRecoveryPortals({
     !showSshReconnectOverlay &&
     !awaitingSignInHere &&
     !wslHostUnavailable &&
+    // Why: "retrying automatically" would be false; each pane offers Start instead.
+    stoppedWslDistro === null &&
     pairingRefusedEnvironmentId === null
   const serverDown = retryingOutageEnvironmentId !== null
   const notice = useRemoteServerNoticeClaim(ownerEnvironmentId, serverDown, canSpeak)
@@ -86,10 +94,7 @@ export function TerminalPaneRecoveryPortals({
     setNoticeEnvironmentId(ownerEnvironmentId)
   }
   const revealed = useCalmStatusReveal(notice.speaks, false, notice.since)
-  // Why gated on canSpeak: the hold is for a server that answered, not for a surface that lost its
-  // turn (hidden, sign-in, WSL), whose own cards must not land under a lingering notice.
-  // Why: a surface that lost the lead while the server is still down handed its notice to
-  // another; only the leader when the outage ends may hold, so a handoff never shows two.
+  // Hold only on the eligible outage leader; hidden/sign-in/WSL surfaces and handoffs must not overlap another notice or card.
   const [handedOff, setHandedOff] = useState(false)
   if (notice.speaks && handedOff) {
     setHandedOff(false)
@@ -121,6 +126,32 @@ export function TerminalPaneRecoveryPortals({
         const paneEnvironmentId = transport?.getRuntimeEnvironmentId
           ? transport.getRuntimeEnvironmentId()
           : ownerEnvironmentId
+        const onReconnect = createPaneRecoveryReconnect(
+          () => paneTransportsRef.current.get(pane.id),
+          pairingRefusedEnvironmentId,
+          awaitingSignIn
+        )
+        // Why with or without a recovery: a stopped distro's pane is dead either way, and only Start revives it.
+        if (
+          stoppedWslDistro !== null &&
+          ownerEnvironmentId !== null &&
+          paneShowsWslHostStoppedCard({
+            wslHostUnavailable: wslHostUnavailable !== null,
+            stoppedWslDistro,
+            ownerEnvironmentId,
+            paneEnvironmentId
+          })
+        ) {
+          return createPortal(
+            <WslHostStoppedCard
+              environmentId={ownerEnvironmentId}
+              distro={stoppedWslDistro}
+              onStarted={onReconnect}
+            />,
+            pane.container,
+            `wsl-host-stopped-${pane.id}`
+          )
+        }
         // Why mounted with no recovery: the banner's minimum time and hold outlive the recovery itself.
         return createPortal(
           <CalmRemoteRuntimeReconnectBanner
@@ -137,11 +168,7 @@ export function TerminalPaneRecoveryPortals({
               notice.quiet &&
               paneEnvironmentId === ownerEnvironmentId
             }
-            onReconnect={createPaneRecoveryReconnect(
-              () => paneTransportsRef.current.get(pane.id),
-              pairingRefusedEnvironmentId,
-              awaitingSignIn
-            )}
+            onReconnect={onReconnect}
             wslHostUnavailable={wslHostUnavailable}
             pairingRefused={pairingRefusedEnvironmentId !== null}
             awaitingSignIn={awaitingSignIn}

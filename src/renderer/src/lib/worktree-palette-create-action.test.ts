@@ -200,9 +200,7 @@ describe('worktree-palette-create-action', () => {
   })
 
   it('names the rendered render key so a duplicate row is reachable by keyboard', () => {
-    // Why: rows render under de-duplicated keys, and cmdk selects by that rendered value.
-    // Naming the bare id here left the duplicate absent from the allow-list, so arrowing
-    // onto it failed the `includes` check and snapped the highlight back to the top.
+    // cmdk selects deduplicated render keys; bare IDs omit duplicate rows and snap keyboard highlight back to top.
     expect(
       getWorktreePaletteSelectionItemIds(
         [

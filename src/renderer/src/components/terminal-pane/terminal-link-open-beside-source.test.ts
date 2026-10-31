@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { openRoutedHttpLink } from '@/lib/http-link-destinations'
+import * as browserLinkOpen from './terminal-file-link-browser-open'
+import * as editorRevealFlash from '@/components/tab-group/editor-reveal-flash'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -122,6 +125,26 @@ describe('terminal file links carry their source tab', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
+  it('reports a refused HTML placement for the internal Open in this group action', async () => {
+    seedSourceTab()
+    const stat = createDeferred<{ isDirectory: boolean }>()
+    statMock.mockImplementationOnce(() => stat.promise)
+
+    openDetectedFilePath('/tmp/report.html', null, null, {
+      ...sourceDeps,
+      openInSourceGroupSurface: 'internal'
+    })
+    storeState.groupsByWorktree = {}
+    stat.resolve({ isDirectory: false })
+    await flushAsyncWork()
+
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(openFileForLinkMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledExactlyOnceWith(
+      "Couldn't open /tmp/report.html in this group"
+    )
+  })
+
   it('refuses a closed explicit group before activating its workspace', async () => {
     setPlatform('Macintosh')
     seedSourceTab()
@@ -187,15 +210,57 @@ describe('terminal file links carry their source tab', () => {
     storeState.settings = { openLinksInApp: true }
     seedSourceTab()
 
+    const browserOpen = vi
+      .spyOn(browserLinkOpen, 'openTerminalHtmlFileInBrowser')
+      .mockReturnValueOnce(true)
     openDetectedFilePath('/tmp/report.html', null, null, sourceDeps)
     await flushAsyncWork()
 
-    expect(createBrowserTabMock).toHaveBeenCalledTimes(1)
+    expect(browserOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/report.html',
+        worktreeId: 'wt-1',
+        fileExecutionHostId: 'local',
+        linkContext: expect.objectContaining({
+          linkIntent: expect.objectContaining({ sourceTabId: 'unified-term' })
+        })
+      })
+    )
+    browserOpen.mockRestore()
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 })
 
 describe('terminal file link reveals target the opened view', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it.each([
+    { existingFileId: null, flashes: false, label: 'a newly opened file' },
+    { existingFileId: '/tmp/src/a.ts', flashes: true, label: 'an existing document view' },
+    { existingFileId: '/tmp/src/b.ts', flashes: false, label: 'a reused preview for another file' }
+  ])('only flashes existing documents: $label', async ({ existingFileId, flashes }) => {
+    setPlatform('Macintosh')
+    const flash = vi
+      .spyOn(editorRevealFlash, 'flashRevealedEditorView')
+      .mockImplementation(() => {})
+    if (existingFileId) {
+      storeState.unifiedTabsByWorktree = {
+        'wt-1': [{ id: 'view:/tmp/src/a.ts', entityId: existingFileId, groupId: 'group-1' }]
+      }
+    }
+
+    openDetectedFilePath('/tmp/src/a.ts', 12, 3, deps)
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(flash).toHaveBeenCalledTimes(flashes ? 1 : 0)
+    if (flashes) {
+      expect(flash).toHaveBeenCalledWith('view:/tmp/src/a.ts')
+    }
+    expect(lastReveal()).toMatchObject({ viewStateId: 'view:/tmp/src/a.ts', line: 12, column: 3 })
+    expect(lastReveal().canApply?.()).toBe(true)
+  })
+
   it('scopes the reveal to the returned view', async () => {
     setPlatform('Macintosh')
 
@@ -211,6 +276,16 @@ describe('terminal file link reveals target the opened view', () => {
       column: 3
     })
     expect(reveal.canApply?.()).toBe(true)
+  })
+
+  it('invalidates an editor line reveal when a browser link is activated', async () => {
+    setPlatform('Macintosh')
+    openDetectedFilePath('/tmp/src/a.ts', 12, 3, deps)
+    await flushAsyncWork()
+    await flushDoubleRaf()
+    const reveal = lastReveal()
+    openRoutedHttpLink('https://example.com/', { worktreeId: 'wt-1', forceDestination: 'orca' })
+    expect(reveal.canApply?.()).toBe(false)
   })
 
   it('invalidates a published reveal when a newer click has no line', async () => {

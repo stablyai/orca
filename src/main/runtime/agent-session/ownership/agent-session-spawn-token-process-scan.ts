@@ -1,12 +1,5 @@
-/**
- * Host scan for processes carrying an Orca agent-session spawn token.
- *
- * The token is the only PID-reuse-safe identity element a child is guaranteed to carry, and it
- * lives in the child's environment — which only Linux lets another process read (`/proc/<pid>/environ`).
- * macOS and Windows answer `null`, meaning "this host cannot enumerate", NEVER "no process carries
- * it": reporting an empty result there would free a reservation whose child is alive and hand a
- * second writer to the same provider session.
- */
+/** Linux /proc exposes PID-reuse-safe spawn tokens; macOS/Windows return unknown (null).
+ * An empty result there could release a live reservation and admit a second writer. */
 
 import { readFile, readdir } from 'node:fs/promises'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-session-caller-env'
@@ -14,7 +7,7 @@ import { spawnTokenFromEnvironBlock } from './agent-session-spawn-token-readback
 
 export type AgentSessionSpawnTokenScan = ReadonlyMap<string, readonly number[]>
 
-/** Tokens observed on this host, or null when the platform cannot answer at all. */
+/** Observed tokens, or null when enumeration is unavailable. */
 export async function scanAgentSessionSpawnTokenProcesses(
   platform: NodeJS.Platform = process.platform,
   variable: string = ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
@@ -49,7 +42,7 @@ export async function scanAgentSessionSpawnTokenProcesses(
   return observed
 }
 
-/** Pids carrying one specific token, or null when the host could not enumerate. */
+/** Matching PIDs, or null when enumeration is unavailable. */
 export async function findAgentSessionSpawnTokenProcesses(
   spawnToken: string,
   scan: () => Promise<AgentSessionSpawnTokenScan | null> = scanAgentSessionSpawnTokenProcesses

@@ -130,8 +130,7 @@ describe('Electron Vite output contract', () => {
   })
 
   it('emits hidden main source maps that packaging strips from app.asar', () => {
-    // Hidden maps decode minified crash traces without the bundle referencing
-    // files that the packaged app never ships.
+    // Hidden maps decode minified crashes without referencing maps omitted from the package.
     expect(electronViteConfig.main?.build?.sourcemap).toBe('hidden')
     expect(electronBuilderConfig.files).toContain('!out/**/*.map')
   })
@@ -198,6 +197,7 @@ describe('Electron Vite output contract', () => {
       'persistence/profile-state/legacy-json/profile-state-recovery',
       'persistence/profile-state/profile-state-recovery-command',
       'persistence/profile-state/profile-state-storage-classification',
+      'plugins/plugin-authoring-checks',
       'skills/bundled-skill-install/cli-entry',
       'startup/http1-compatibility-marker'
     ]) {

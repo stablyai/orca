@@ -1,4 +1,4 @@
-import { freezeDesktopCreateParams } from './structured-agent-session-launch-record'
+import { freezeDesktopCreateParams } from './agent-session/launch/structured-agent-session-launch-record'
 import type { useAppStore } from '@/store'
 
 import { createBrowserUuid } from '@/lib/browser-uuid'

@@ -3,6 +3,7 @@ import '../assets/main.css'
 import ReactDOM from 'react-dom/client'
 import { getDefaultSettings } from '../../../shared/constants'
 import { applyDocumentTheme } from '../lib/document-theme'
+import { installBodyOverlayAttributes } from '../lib/body-overlay-attributes'
 import { useAppStore } from '../store'
 import { installWebPreloadApi } from '../web/web-preload-api'
 import type { ComponentFixtureTheme } from './component-fixture'
@@ -29,8 +30,7 @@ const params = new URLSearchParams(window.location.search)
 const pageTheme = parseTheme(params.get('theme'))
 
 markComponentFixtureState('loading')
-// Why: reuse the web client's preload shims so components get the same
-// `window.api` defaults the browser build ships, with no runtime paired.
+// Reuse browser-build window.api defaults without pairing a runtime.
 installWebPreloadApi()
 // Fixtures preview the desktop renderer; keep web-only component branches off.
 Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
@@ -38,6 +38,7 @@ const defaultSettings = getDefaultSettings('/home/fixture')
 useAppStore.setState({ settings: { ...defaultSettings, theme: pageTheme } })
 const baseStoreState = useAppStore.getState()
 document.body.classList.add('bg-background')
+installBodyOverlayAttributes()
 
 function requireRootElement(): HTMLElement {
   const element = document.getElementById('root')

@@ -1,4 +1,3 @@
-// Matching across non-QWERTY, non-Latin, JIS, AltGr, and composed layouts.
 import { describe, expect, it } from 'vitest'
 import {
   getEffectiveKeybindingsForAction,
@@ -133,9 +132,7 @@ describe('keybindings', () => {
   })
 
   it('matches letter shortcuts on non-Latin layouts via the physical code (issue #6274)', () => {
-    // Cyrillic ЙЦУКЕН: physical C produces the logical key 'с' (Cyrillic es,
-    // U+0441) while code stays 'KeyC'. The produced character is not a Latin
-    // shortcut letter, so the chord must still match through the physical code.
+    // Cyrillic physical C produces с (U+0441), not Latin C; preserve Ctrl/Meta shortcuts through code fallback.
     const cyrillicCtrlC = {
       key: 'с',
       code: 'KeyC',
@@ -161,8 +158,7 @@ describe('keybindings', () => {
       )
     ).toBe(true)
 
-    // The fallback must not steal a different physical key: Ctrl+V (physical V,
-    // Cyrillic 'м') is not Ctrl+C, so grabElement must stay unmatched.
+    // Physical V produces Cyrillic м; fallback must not match Ctrl+C.
     expect(
       keybindingMatchesAction(
         'browser.grabElement',
@@ -173,10 +169,7 @@ describe('keybindings', () => {
   })
 
   it('does not let non-Latin physical fallback hijack AltGr text input (issue #6274)', () => {
-    // Windows/Linux AltGr arrives as Ctrl+Alt. A composed character typed via
-    // AltGr (e.g. AltGr+C) must remain text input, never an app shortcut.
-    // editor.copyContext is Mod+Alt+C, so the modifier state otherwise matches —
-    // only the AltGr key gating may keep this from firing.
+    // AltGr reports Ctrl+Alt on Windows/Linux and must stay text; editor.copyContext otherwise matches its modifiers.
     expect(
       keybindingMatchesAction(
         'editor.copyContext',
@@ -346,8 +339,7 @@ describe('keybindings', () => {
   })
 
   it('matches macOS Option-composed bracket shortcuts for same-type tab switching', () => {
-    // Cmd+Alt+bracket is the fresh-install same-type default after the swap, so
-    // Option-composed dead keys (\u2325[ -> "\u201c") must still resolve to that action.
+    // Fresh Cmd+Alt+bracket defaults must resolve Option-composed dead keys via code fallback.
     const macOptionLeftBracket = {
       key: '\u201c',
       code: 'BracketLeft',

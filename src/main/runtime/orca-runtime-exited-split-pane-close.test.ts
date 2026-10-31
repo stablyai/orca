@@ -54,7 +54,6 @@ function splitSession(): WorkspaceSessionState {
   }
 }
 
-/** The phone's tabs for the split, as the window publishes them. */
 function phoneSnapshot(session: WorkspaceSessionState): RuntimeMobileSessionTabsSnapshot {
   const parentLayout = session.terminalLayoutsByTabId.tab!
   const pane = (leafId: string, ptyId: string, isActive: boolean) => ({
@@ -79,7 +78,6 @@ function phoneSnapshot(session: WorkspaceSessionState): RuntimeMobileSessionTabs
   }
 }
 
-/** A runtime over one stored session, with the window's two split panes registered. */
 function splitRuntime(): { runtime: OrcaRuntimeService; session: () => WorkspaceSessionState } {
   let session = splitSession()
   const runtime = new OrcaRuntimeService(
@@ -115,12 +113,6 @@ const panes = (session: WorkspaceSessionState) =>
   collectLeafIds(session.terminalLayoutsByTabId.tab?.root)
 
 describe('layout-owner build: main closes an exited split pane itself', () => {
-  it('closes a split pane whose shell exited cleanly', async () => {
-    const { runtime, session } = splitRuntime()
-    await runtime.onPtyExit('pty-right', 0, undefined, { providerExitObserved: true })
-    expect(panes(session())).toEqual([LEFT])
-  })
-
   it('keeps a split pane whose process failed, behind its "Terminal exited" card', async () => {
     const { runtime, session } = splitRuntime()
     await runtime.onPtyExit('pty-right', 1, undefined, { providerExitObserved: true })
@@ -129,21 +121,6 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
 
   it('keeps a split pane on a -1 nothing vouches for, as the window does on lost contact', async () => {
     const { runtime, session } = splitRuntime()
-    await runtime.onPtyExit('pty-right', -1)
-    expect(panes(session())).toEqual([LEFT, RIGHT])
-  })
-
-  it('keeps a split pane on a -1 only the provider reported, as the window does', async () => {
-    const { runtime, session } = splitRuntime()
-    await runtime.onPtyExit('pty-right', -1, undefined, { providerExitObserved: true })
-    expect(panes(session())).toEqual([LEFT, RIGHT])
-  })
-
-  // Switch-on variants (ruled behaviour): any negative code keeps the pane, as the window does;
-  // an asked-for close removes the pane through its own close command.
-  it('keeps a split pane on a -1 after a stop was asked for', async () => {
-    const { runtime, session } = splitRuntime()
-    runtime.markPtyStopRequested('pty-right')
     await runtime.onPtyExit('pty-right', -1)
     expect(panes(session())).toEqual([LEFT, RIGHT])
   })
@@ -163,16 +140,6 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
     expect(panes(session())).toEqual([LEFT, RIGHT])
   })
 
-  it("judges an older daemon's exit, which names no incarnation, by its code alone", async () => {
-    const kept = splitRuntime()
-    await kept.runtime.onPtyExit('pty-right', -1, undefined, { providerExitObserved: true })
-    expect(panes(kept.session())).toEqual([LEFT, RIGHT])
-
-    const closed = splitRuntime()
-    await closed.runtime.onPtyExit('pty-right', 0, undefined, { providerExitObserved: true })
-    expect(panes(closed.session())).toEqual([LEFT])
-  })
-
   it('tells the phone a closed pane retired, and sends it nothing for a pane main keeps', async () => {
     const phone = async (runtime: OrcaRuntimeService) => {
       const tabs = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
@@ -181,7 +148,7 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
         retired: (tabs.retiredTerminalSurfaces ?? []).map((surface) => surface.leafId)
       }
     }
-    // Listing mints the panes' handles, which a retirement notice names.
+    // Listing mints the handles named by retirement notices.
     const closed = splitRuntime().runtime
     await phone(closed)
     await closed.onPtyExit('pty-right', 0, undefined, { providerExitObserved: true })

@@ -1,12 +1,9 @@
 import { saveMobileClipboardImageAsTempFile } from '../../mobile-clipboard-image'
 import type { MobileClipboardImageRpcSender } from '../../mobile-clipboard-image-operations'
-// Type-only import so this module (and its unit test) stays free of the expo/
-// react-native picker chain; the concrete `pickImage` is injected by the hook.
+// Keep picker dependencies type-only so this upload module stays free of Expo/React Native at runtime.
 import type { MobileImageSource, PickedMobileImage } from '../../../platform/media-picker-contract'
 
-/** A picked-and-uploaded image held in the native-chat composer until submit.
- *  `path` is the host temp file pasted into the agent on send; `previewUri` is a
- *  local URI used only to render the composer thumbnail. */
+// path belongs to the host for sending; previewUri belongs to the phone for display.
 export type PendingNativeChatImage = {
   readonly id: string
   readonly path: string
@@ -28,31 +25,26 @@ export function appendPendingNativeChatImages(
 }
 
 export type UploadNativeChatImagesDeps = {
+  readonly canContinue?: () => boolean
   readonly client: MobileClipboardImageRpcSender
   readonly getConnectionId: () => Promise<string | null>
-  // Injected so this module stays free of expo/react-native imports (unit-testable).
   readonly pickImages: (
     source: MobileImageSource
   ) =>
     | Iterable<PickedMobileImage>
     | AsyncIterable<PickedMobileImage>
     | Promise<Iterable<PickedMobileImage> | AsyncIterable<PickedMobileImage>>
-  // Fired once the user has picked an image and the host upload is about to start —
-  // lets the UI show the attach spinner only for the transfer, not the picker.
   readonly onUploadStart?: () => void
   /** Retains each completed upload if a later image in the same selection fails. */
   readonly onImageUploaded?: (image: Omit<PendingNativeChatImage, 'id'>) => void
 }
 
-/** Picks an image and uploads it to the host, returning the host path + a local
- *  preview URI — but does NOT paste it into the terminal. Unlike the terminal
- *  attach flow, native chat holds the image as a composer chip and rides it along
- *  on submit (desktop parity), so the chip and the agent input never diverge.
- *  Returns an empty array when the user cancels the picker. */
+// Upload without pasting: chat holds composer chips until submit so visible attachments cannot diverge from agent input.
 export async function uploadMobileNativeChatImages(
   source: MobileImageSource,
   {
     client,
+    canContinue,
     getConnectionId,
     pickImages,
     onUploadStart,
@@ -62,14 +54,21 @@ export async function uploadMobileNativeChatImages(
   const picked = await pickImages(source)
   const uploaded: Omit<PendingNativeChatImage, 'id'>[] = []
   let connectionId: string | null = null
+  if (canContinue?.() === false) {
+    return uploaded
+  }
   for await (const image of picked) {
+    if (canContinue?.() === false) {
+      break
+    }
     if (uploaded.length === 0) {
       onUploadStart?.()
       connectionId = await getConnectionId()
     }
+    if (canContinue?.() === false) {
+      break
+    }
     const path = await saveMobileClipboardImageAsTempFile(client, image.base64, { connectionId })
-    // Prefer the picker's local URI for the thumbnail; fall back to an inline data
-    // URI when the source omitted one (RN <Image> renders both).
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
     const result = {
       path,
@@ -77,6 +76,9 @@ export async function uploadMobileNativeChatImages(
     }
     uploaded.push(result)
     onImageUploaded?.(result)
+    if (canContinue?.() === false) {
+      break
+    }
   }
   return uploaded
 }

@@ -68,9 +68,7 @@ describe('copyScriptWithLocalModules', () => {
     ).toEqual(['dep.mjs', 'entry.mjs'])
   })
 
-  // The Windows addon gates are .cjs and reach each other by require. A module
-  // pulled in only that way used to be left behind, and the subprocess then
-  // failed with a resolution error that looks nothing like the defect it hides.
+  // Cover require-only CJS gate dependencies so copied fixture fails for target defect, not missing module.
   it('follows a co-located require, not only an import', () => {
     expect(
       copiedNames(

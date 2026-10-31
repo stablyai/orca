@@ -1,5 +1,6 @@
 import { AGENT_TYPE_MAX_LENGTH } from './agent-status-field-normalization'
 import type { AgentType } from './agent-status-types'
+import { extractAgentProviderSession } from './agent-session-resume'
 
 export type AgentProcessIdentity = {
   pid: number
@@ -11,6 +12,8 @@ export type AgentProcessIdentity = {
 export type AgentProcessPresence = {
   agent: AgentType
   process?: AgentProcessIdentity
+  /** Provider session that claimed the pane; later turns of the owner reuse it. */
+  session?: string
   ended?: true
   /** This host verifies process ownership before accepting a different provider. */
   sessionOwner?: true
@@ -70,9 +73,19 @@ export function readAgentProcessPresence(value: unknown): AgentProcessPresence |
     return undefined
   }
   const process = 'process' in value ? readAgentProcessIdentity(value.process) : undefined
+  const session =
+    value.agent === 'hermes' || value.agent === 'antigravity'
+      ? extractAgentProviderSession(value.agent, {
+          session_id: 'session' in value ? value.session : undefined,
+          conversationId: 'session' in value ? value.session : undefined
+        })?.id
+      : 'session' in value && typeof value.session === 'string' && value.session.length <= 256
+        ? value.session
+        : undefined
   return {
     agent: value.agent,
     ...(process ? { process } : {}),
+    ...(session ? { session } : {}),
     ...('ended' in value && value.ended === true ? { ended: true as const } : {}),
     ...('sessionOwner' in value && value.sessionOwner === true
       ? { sessionOwner: true as const }

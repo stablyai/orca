@@ -130,6 +130,32 @@ describe('mapGitLabIssueInfo', () => {
 })
 
 describe('mapMRInfo', () => {
+  it('settles mergeable manual pipelines without claiming they passed, while preserving blockers', () => {
+    for (const pipelineField of ['head_pipeline', 'pipeline']) {
+      for (const [status, detailed_merge_status, expected] of [
+        ['manual', 'mergeable', 'neutral'],
+        ['manual', 'ci_must_pass', 'pending'],
+        ['manual', 'merge_request_blocked', 'pending'],
+        ['manual', 'draft_status', 'pending'],
+        ['manual', undefined, 'pending'],
+        ['running', 'mergeable', 'pending'],
+        ['failed', 'mergeable', 'failure']
+      ] as const) {
+        const raw = {
+          iid: 1,
+          title: 'Manual release stage',
+          state: 'opened',
+          [pipelineField]: { status },
+          detailed_merge_status
+        }
+        const info = mapMRInfo(raw, derivePipelineStatus({ status }))
+        expect(info.pipelineStatus, `${pipelineField}: ${status} / ${detailed_merge_status}`).toBe(
+          expected
+        )
+      }
+    }
+  })
+
   it('builds an MRInfo from a typical glab payload', () => {
     expect(
       mapMRInfo(
@@ -166,12 +192,14 @@ describe('mapMRInfo', () => {
         title: 't',
         state: 'opened',
         has_conflicts: true,
+        head_pipeline: { status: 'manual' },
         detailed_merge_status: 'mergeable'
       },
       'pending'
     )
     expect(info.mergeable).toBe('CONFLICTING')
     expect(info.mergeStateStatus).toBe('conflict')
+    expect(info.pipelineStatus).toBe('pending')
   })
 
   it('marks UNKNOWN when detailed_merge_status is non-mergeable but not a conflict', () => {
@@ -186,10 +214,17 @@ describe('mapMRInfo', () => {
   // GitLab <15.6 lacks detailed_merge_status; legacy positive mergeability keeps actions usable.
   it('falls back to legacy merge_status when detailed_merge_status is absent', () => {
     const info = mapMRInfo(
-      { iid: 1, title: 't', state: 'opened', merge_status: 'can_be_merged' },
-      'success'
+      {
+        iid: 1,
+        title: 't',
+        state: 'opened',
+        merge_status: 'can_be_merged',
+        head_pipeline: { status: 'manual' }
+      },
+      'pending'
     )
     expect(info.mergeable).toBe('MERGEABLE')
+    expect(info.pipelineStatus).toBe('pending')
   })
 
   it('does not let legacy merge_status override a present detailed_merge_status', () => {

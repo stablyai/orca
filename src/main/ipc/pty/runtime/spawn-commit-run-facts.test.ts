@@ -8,6 +8,12 @@ import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { commitRuntimePtySpawn } from './spawn-commit'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import {
+  formatTerminalStartFailure,
+  terminalExitError
+} from '../../../../shared/terminal-start-failure'
+import { requireAcceptedSpawn } from '../spawn-outcome'
+import type { AgentSessionClaimedSpawnResult } from '../../../../shared/agent-session-host-authority'
 
 const PTY_ID = 'orca-pty-run-facts'
 const INCARNATION_ID = 'inc-run-facts'
@@ -15,13 +21,19 @@ const INCARNATION_ID = 'inc-run-facts'
 const ADOPTED = {
   disposition: 'adopted',
   owner: {
-    claim: { kind: 'terminal' },
+    claim: {
+      digestVersion: 1,
+      keyId: 'run-facts',
+      identityDigest: 'a'.repeat(43),
+      worktreeScopeDigest: 'b'.repeat(43),
+      agent: 'codex'
+    },
     generation: 'g1',
     phase: 'live',
     ptyId: PTY_ID,
     surface: { worktreeId: 'wt-1', tabId: 'tab-1', leafId: 'leaf-1', terminalHandle: 'h1' }
   }
-}
+} satisfies AgentSessionClaimedSpawnResult
 
 async function commit(
   result: Record<string, unknown>,
@@ -130,33 +142,39 @@ describe('runtime spawn commit: run facts', () => {
     expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual([])
   })
 
-  it('reports the resumed agent before the bind can publish its first frame', async () => {
-    const onResumeOutcome = vi.fn()
-    const persistPtyBinding = vi.fn(async () => {
-      expect(onResumeOutcome.mock.calls).toEqual(
-        ORCA_LAYOUT_OWNER_IS_MAIN ? [[PTY_ID, 'resume-unavailable']] : []
-      )
-      return true
-    })
+  it.each([false, true])(
+    'reports unavailable before binding even when the request was erased (%s)',
+    async (erased) => {
+      const onResumeOutcome = vi.fn()
+      const persistPtyBinding = vi.fn(async () => {
+        expect(onResumeOutcome.mock.calls).toEqual(
+          ORCA_LAYOUT_OWNER_IS_MAIN ? [[PTY_ID, 'resume-unavailable']] : []
+        )
+        return true
+      })
 
-    await commit({}, undefined, undefined, (ctx) => {
-      ctx.args.resumeProviderSession = { key: 'session_id', id: 'codex-session-1' }
-      ctx.args.onResumeOutcome = onResumeOutcome
-      ctx.codexResumeUnavailable = true
-      ctx.codexResumeArgvDropped = true
-      ctx.hostSessionBinding = {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this boundary pin observes the bind write without invoking its stored callback.
-        store: { persistPtyBinding } as unknown as NonNullable<
-          typeof ctx.hostSessionBinding
-        >['store'],
-        worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId: 'leaf-1'
-      }
-    })
+      await commit({}, undefined, undefined, (ctx) => {
+        ctx.args.resumeProviderSession = erased
+          ? undefined
+          : { key: 'session_id', id: 'codex-session-1' }
+        ctx.result.agentResumeUnavailable = erased ? true : undefined
+        ctx.args.onResumeOutcome = onResumeOutcome
+        ctx.codexResumeUnavailable = !erased
+        ctx.codexResumeArgvDropped = true
+        ctx.hostSessionBinding = {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this boundary pin observes the bind write without invoking its stored callback.
+          store: { persistPtyBinding } as unknown as NonNullable<
+            typeof ctx.hostSessionBinding
+          >['store'],
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          leafId: 'leaf-1'
+        }
+      })
 
-    expect(persistPtyBinding).toHaveBeenCalledOnce()
-  })
+      expect(persistPtyBinding).toHaveBeenCalledOnce()
+    }
+  )
 
   it('records nothing for a spawn discarded because its binding save failed', async () => {
     const facts = new TerminalRunFactsRegister()
@@ -187,21 +205,53 @@ describe('runtime spawn commit: run facts', () => {
   it.each([
     { spawn: 'new process', result: {} },
     { spawn: 'adoption', result: { agentSessionEnsure: ADOPTED } }
-  ])('records nothing for a $spawn that exited during start', async ({ result }) => {
+  ])('records nothing for a $spawn that exited during start', async ({ result, spawn }) => {
     const facts = new TerminalRunFactsRegister()
     const stops = new TerminalIntentionalStops()
     stops.mark(PTY_ID, 'reversible', null)(true)
 
-    await expect(
-      commit(result, facts, stops, (ctx) => {
-        ctx.args.worktreeId = 'wt-1'
-        ctx.deps.runtime!.registerPty = vi.fn(() => {
-          throw new Error('agent_session_exited_during_start')
-        })
+    const error = await commit(result, facts, stops, (ctx) => {
+      ctx.args.worktreeId = 'wt-1'
+      ctx.deps.runtime!.registerPty = vi.fn(() => {
+        throw terminalExitError(
+          'agent_session_exited_during_start',
+          { kind: 'exited', exitCode: 256, initialOutputDiagnostic: 'git-bash-console-capacity' },
+          INCARNATION_ID
+        )
       })
-    ).rejects.toThrow('agent_session_exited_during_start')
+    }).catch((caught: unknown) => caught)
+    expect(error).toMatchObject({ message: 'agent_session_exited_during_start' })
+    expect(formatTerminalStartFailure(error) !== undefined).toBe(spawn === 'new process')
 
     expect(facts.read(PTY_ID, INCARNATION_ID).freshSpawn).toBe(false)
     expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual(['reversible'])
+  })
+
+  it.each([
+    { context: 'fresh', result: {} },
+    { context: 'reattach', result: { isReattach: true } },
+    { context: 'adopted without reattach flag', result: { agentSessionEnsure: ADOPTED } }
+  ])('preserves an already-classified registration-exited outcome ($context)', ({ result }) => {
+    const outcome = {
+      kind: 'registration-exited' as const,
+      result: { id: PTY_ID, incarnationId: INCARNATION_ID, ...result },
+      terminalStartFailure: {
+        incarnationId: INCARNATION_ID,
+        cause: {
+          kind: 'exited' as const,
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity' as const
+        }
+      }
+    }
+    let error: unknown
+    try {
+      requireAcceptedSpawn(outcome)
+    } catch (caught) {
+      error = caught
+    }
+    expect(error).toMatchObject({ message: 'agent_session_exited_during_start' })
+    expect(formatTerminalStartFailure(error)).toContain('Close some Git Bash terminals')
+    expect(outcome.kind).toBe('registration-exited')
   })
 })

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session-journal-schemas'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
@@ -131,7 +132,6 @@ describe('the row an Orca stop leaves', () => {
       'Orca on studio-mac was closed while this response was in progress.'
     )
     const button = screen.getByRole('button', { name: 'Continue' })
-    // Beside the words that say why, in the same card.
     expect(sentence.parentElement).toContainElement(button)
     fireEvent.click(button)
     expect(continueNow).toHaveBeenCalledOnce()
@@ -168,9 +168,7 @@ describe('the row an Orca stop leaves', () => {
     expect(screen.getByText(sentence)).toBeInTheDocument()
   })
 
-  // A client that re-words unnamed host rows keeps this row's presentation and cause, neutral.
   it('stays neutral, naming the cause, as a reader that re-presented it neutral hands it on', () => {
-    // Its words and tone replaced, and the failure fact the old words came from dropped with them.
     const represented: AgentJournalStatusItem = {
       kind: 'status',
       text: 'This response was interrupted. You can continue in this conversation.',
@@ -225,41 +223,89 @@ describe('the row an Orca stop leaves', () => {
 
 describe('the row a usage limit leaves', () => {
   const resetsAt = new Date(2026, 9, 18, 15, 0).getTime()
-  const row: AgentJournalStatusItem = {
+  const row = {
     kind: 'status',
     tone: 'warning',
-    ...agentSessionFailureWords(
-      agentSessionFailureFact('usageLimitReached', {
-        usageLimit: { window: 'session', resetsAt }
-      }),
-      { agentName: 'Claude', surface: 'row' }
-    )
-  }
+    text: 'Claude hit its session limit. Send a message once it resets to continue.',
+    failure: { kind: 'usageLimitReached', usageLimit: { window: 'session', resetsAt } }
+  } as const
 
-  it('says when the limit resets in this clock, and continues the turn it ended', () => {
+  it.each([
+    ['future', resetsAt],
+    ['past', new Date(2026, 9, 18, 10, 0).getTime()],
+    ['unknown', undefined]
+  ] as const)('shows a %s reset without a continuation action or instruction', (_state, reset) => {
     vi.useFakeTimers({ now: new Date(2026, 9, 18, 12, 30), toFake: ['Date'] })
-    const continueUsageLimit = vi.fn()
-    renderStatus(row, null, false, false, 'Claude', {
-      ...NO_OFFER,
-      usageLimitTurnItemId: 'cut-turn',
-      continueUsageLimit
-    })
-    vi.useRealTimers()
-    const clock = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(
-      resetsAt
-    )
-    expect(
-      screen.getByText(`Claude hit its session limit. It resets at ${clock}.`)
-    ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(continueUsageLimit).toHaveBeenCalledTimes(1)
+    try {
+      renderStatus(
+        {
+          kind: 'status',
+          tone: 'warning',
+          ...agentSessionFailureWords(
+            agentSessionFailureFact('usageLimitReached', {
+              usageLimit: { window: 'session', ...(reset === undefined ? {} : { resetsAt: reset }) }
+            }),
+            { agentName: 'Claude', surface: 'row' }
+          )
+        },
+        null,
+        false,
+        false,
+        'Claude',
+        { ...NO_OFFER, usageLimitTurnItemId: 'cut-turn', continueUsageLimit: vi.fn() }
+      )
+      const clock =
+        reset === undefined
+          ? null
+          : new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(reset)
+      expect(
+        screen.getByText(
+          clock === null
+            ? 'Claude hit its session limit.'
+            : `Claude hit its session limit. It resets at ${clock}.`
+        )
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+      expect(screen.queryByText(/Send a message once it resets/)).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('tells a chat that has no Continue to send a message', () => {
-    renderStatus(row, null, false, false, 'Claude')
-    expect(screen.getByText(/Send a message once it resets to continue\.$/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
-  })
+  it.each(['typed', 'text-only', 'unknown'] as const)(
+    'renders historical usage-limit text with a %s fact',
+    (fact) => {
+      const historicalRow: unknown =
+        fact === 'text-only'
+          ? { ...row, failure: undefined }
+          : fact === 'unknown'
+            ? {
+                ...row,
+                failure: {
+                  ...row.failure,
+                  kind: 'usageLimitReached' as const,
+                  futureLimit: true
+                }
+              }
+            : row
+      if (!isAdmissibleAgentJournalItemBody(historicalRow) || historicalRow.kind !== 'status') {
+        throw new Error('Historical status fixture was not admitted')
+      }
+      if (fact === 'unknown') {
+        expect(historicalRow.failure).toEqual({ ...row.failure, futureLimit: true })
+      }
+      renderStatus(historicalRow, null, false, false, 'Claude')
+      if (fact === 'typed') {
+        expect(
+          screen.getByText(/^Claude hit its session limit\. It resets at \S.*\.$/u)
+        ).toBeInTheDocument()
+        expect(screen.queryByText(/Send a message once it resets/)).toBeNull()
+      } else {
+        expect(screen.getByText(row.text)).toBeInTheDocument()
+      }
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    }
+  )
 })
 
 describe('notice rows', () => {
@@ -601,3 +647,73 @@ it('opens Antigravity accounts from its signed-out notice, and offers no link fo
     })
   }
 })
+
+it('renders the localized unacknowledged goal pause through the existing Stop notice', async () => {
+  await i18n.changeLanguage('ja')
+  renderStatus({
+    kind: 'status',
+    tone: 'warning',
+    ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), {
+      surface: 'row',
+      stopNotice: 'pauseUnconfirmed'
+    })
+  })
+  expect(
+    screen.getByText(
+      'Codex の実行は停止しましたが、目標の一時停止は確認されていません。続行する前に目標を確認してください。'
+    )
+  ).toBeInTheDocument()
+})
+
+// Protocol-shaped synthetic notices; no exact recorded review/denial capture is available.
+it.each([
+  [
+    'codex',
+    'notification:guardianWarning',
+    'warning',
+    'Codex reported a safety review warning. View details.',
+    'Codex a signalé un avertissement de sécurité. Voir les détails.'
+  ],
+  [
+    'claude',
+    'message:system:permission_denied',
+    'error',
+    'Claude denied permission. View details.',
+    'Claude a refusé la permission. Voir les détails.'
+  ]
+] as const)(
+  'compacts the declared %s notice while retaining every available diagnostic',
+  async (provider, kind, tone, heading, french) => {
+    const text = `${'安全 '.repeat(1500)}EXPLANATION_SENTINEL`
+    const head = `{"partial":"${'é'.repeat(4500)}PAYLOAD_SENTINEL`
+    renderStatus({
+      kind: 'status',
+      tone,
+      text,
+      providerFrame: {
+        provider,
+        kind,
+        payload: { head, byteLength: 99999, digest: 'synthetic', truncated: true }
+      }
+    })
+    const summary = screen.getByText(heading).closest('summary')!
+    const disclosure = summary.closest('details')!
+    expect(disclosure.open).toBe(false)
+    expect(summary).not.toHaveTextContent(/SENTINEL|99999/)
+    expect(disclosure.parentElement).not.toHaveClass('text-destructive', 'text-chat-warning')
+    fireEvent.click(summary)
+    expect(disclosure.open).toBe(true)
+    const detail = disclosure.querySelector('pre')!
+    expect(detail.textContent).toContain(text)
+    expect(detail.textContent).toContain(head)
+    expect(detail).toHaveTextContent('Provider response truncated (original size: 99999 bytes).')
+    expect(detail).toHaveClass(tone === 'error' ? 'text-destructive' : 'text-chat-warning')
+    expect(screen.queryByText('Show full output')).toBeNull()
+    await act(() => i18n.changeLanguage('fr'))
+    expect(summary).toHaveTextContent(french)
+    expect(detail).toHaveTextContent(
+      'Réponse du fournisseur tronquée (taille d’origine : 99999 octets).'
+    )
+    expect(disclosure.open).toBe(true)
+  }
+)

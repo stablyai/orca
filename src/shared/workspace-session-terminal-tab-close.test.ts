@@ -261,8 +261,7 @@ describe('closeTerminalTabInWorkspaceSession', () => {
     expect(result.session.tabGroups![WORKTREE_ID][0].tabOrder).toEqual(['a', 'a', 'b'])
     expect(result.session.tabGroups![WORKTREE_ID][0].recentTabIds).toEqual([])
   })
-  // Preserve the pre-index selection as an independent oracle: which tab takes focus after a
-  // close is directly user-visible, so the indexed form must agree on every shape.
+  // Keep the pre-index selection as an independent oracle for user-visible focus after close.
   it('matches the pre-index next-active selection across random orders, duplicates and MRU stacks', () => {
     function referenceNextActive(
       tabOrder: readonly string[],
@@ -288,7 +287,7 @@ describe('closeTerminalTabInWorkspaceSession', () => {
     const pool = ['a', 'b', 'c', 'd', 'terminal-1']
     for (let sample = 0; sample < 500; sample++) {
       const tabOrder = Array.from({ length: 1 + random(6) }, () => pool[random(pool.length)]!)
-      // Keep the closed tab present and at least one survivor, or the group is dropped entirely.
+      // Keep a survivor and the closing tab; otherwise the group disappears.
       tabOrder.splice(random(tabOrder.length + 1), 0, 'terminal-1')
       if (!tabOrder.some((id) => id !== 'terminal-1')) {
         tabOrder.push('a')

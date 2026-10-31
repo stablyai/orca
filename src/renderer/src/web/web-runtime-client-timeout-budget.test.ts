@@ -48,8 +48,7 @@ describe('WebRuntimeClient timeout budget', () => {
     const connection = new Promise<void>((resolve) => {
       resolveConnection = resolve
     })
-    // Test seam: isolate call's connection and request phases from socket handshaking.
-    // Both phases live on the transport the client delegates call() to.
+    // Isolate connection/request phases from handshaking on call’s delegated transport.
     const internals = client as unknown as {
       transport: {
         connectionWaiters: { wait: (timeoutMs?: number) => Promise<void> }

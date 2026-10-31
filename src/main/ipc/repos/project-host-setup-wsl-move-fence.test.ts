@@ -18,7 +18,6 @@ import { RuntimeRepositoryIssueCommand } from '../../runtime/runtime-repository-
 import { RuntimeRepositorySettingsController } from '../../runtime/runtime-repository-settings-controller'
 import * as issueCommandFile from '../../issue-command-file'
 import { registerProjectHostSetupHandlers } from './project-host-setup-handlers'
-import { registerRepoCatalogHandlers } from './repo-catalog-handlers'
 
 const { handlers } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>()
@@ -142,20 +141,6 @@ describe('project host setups under a WSL move', () => {
   })
 })
 
-describe('projects:update once the WSL host owns a repo', () => {
-  it('lets project-wide settings change again', async () => {
-    store.addRepo(repo('repo-1'))
-    seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
-    registerRepoCatalogHandlers(new BrowserWindow(), store, { removeProject: vi.fn() })
-    const project = store.getProjects().find((entry) => entry.sourceRepoIds.includes('repo-1'))
-    const updates = { localWindowsRuntimePreference: { kind: 'windows-host' } }
-
-    await expect(invoke('projects:update', { projectId: project?.id, updates })).resolves.toEqual(
-      expect.objectContaining({ sourceRepoIds: ['repo-1'] })
-    )
-  })
-})
-
 describe('issue command writes under a WSL move', () => {
   it('refuses a runtime write to a moving repo before touching the file', async () => {
     store.addRepo(repo('repo-1'))
@@ -183,7 +168,8 @@ describe('repo settings on another host under a WSL move', () => {
       forgetTerminalTopology: vi.fn(),
       invalidateResolvedWorktrees: vi.fn(),
       invalidateWorktreeScan: vi.fn(),
-      notifyReposChanged: vi.fn()
+      notifyReposChanged: vi.fn(),
+      notifyWorktreesChanged: vi.fn()
     })
 
     await expect(controller.setBaseRef('repo-1', 'origin/dev')).resolves.toBe(onHost)

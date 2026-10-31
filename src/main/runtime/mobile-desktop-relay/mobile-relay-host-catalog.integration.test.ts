@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
 import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
@@ -70,7 +70,6 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
     return offer.pairingUrl
   }
 
-  /** The desktop's status snapshot for a server: what its status owner last heard. */
   function snapshot(
     environmentId: string,
     contact: Contact,
@@ -180,7 +179,7 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
       ]
     })
 
-    // The update-needed server still answers the desktop, so its rows are live.
+    // Update-needed servers can still answer catalog reads.
     await expect(
       phoneCall('mobileRelay.hosts.worktrees', { hostId: 'runtime:old' })
     ).resolves.toMatchObject({
@@ -192,7 +191,6 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
     await expect(phoneCall('mobileRelay.hosts.list')).resolves.toMatchObject({
       hosts: [{ hostId: 'runtime:box', relay: 'unavailable' }, { hostId: 'runtime:old' }]
     })
-    // The last rows exactly as fetched, provenance kept.
     await expect(
       phoneCall('mobileRelay.hosts.worktrees', { hostId: 'runtime:box' })
     ).resolves.toEqual(warm)

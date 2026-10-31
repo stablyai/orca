@@ -44,8 +44,7 @@ describe('provider-independent stored records', () => {
     }
   )
 
-  // Whether this build can drive the chain's transport is decided when its agent would start
-  // (structured-agent-session-drivability.test.ts), so a definition change never hides a chat.
+  // Check transport drivability at start (structured-agent-session-drivability.test.ts), so definition changes never hide stored chats.
   it("reads a record whose handles are in a transport other than the agent's current one", () => {
     expect(isPersistedAgentSessionRecord(encodeAgentSessionRecord(grokRecord('other')))).toBe(true)
   })

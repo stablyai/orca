@@ -24,14 +24,12 @@ import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-per
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
 import { rehomeLocalOnlyWorktreeMetadata } from '../loading-store/local-only-worktree-meta-rehoming'
 
-// Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
-// GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
+// Reclaim externally deleted local checkouts after idle grace; local stat cannot judge remote/WSL paths.
 export const WORKTREE_META_GC_GRACE_MS = 30 * 24 * 60 * 60 * 1000
 export const STALE_DURABLE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 export function gcStaleWorktreeMeta(state: PersistedState): number {
-  // Why: a hand-corrupted "worktreeMeta": null overrides the defaults merge; normalize here instead of throwing.
-  // Companion lineage maps get the same guard because the deletes below index them directly.
+  // Corrupt null maps override merged defaults and would throw during companion deletion.
   state.worktreeMeta ??= {}
   state.worktreeLineageById ??= {}
   state.workspaceLineageByChildKey ??= {}
@@ -40,7 +38,7 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
   const now = Date.now()
   let removed = 0
   for (const key of Object.keys(state.worktreeMeta)) {
-    // Why: folder-project workspace instances (keyed repoId::path::workspace:<uuid>) ARE the workspace record, not a checkout row; skip them.
+    // Folder-workspace instance keys are workspace records, not checkout metadata.
     if (key.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)) {
       continue
     }
@@ -57,22 +55,19 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
         continue
       }
     } else if (projectIds.has(ownerId)) {
-      // Project-owned metas keep their own project/host lifecycle; leave them alone.
       continue
     }
-    // Unowned entries (repo removed before metas were pruned) fall through to the same missing-path + idle-grace gate.
     if (meta?.hostId && meta.hostId !== LOCAL_EXECUTION_HOST_ID) {
       continue
     }
     if (!isAbsolute(worktreePath) || isWslUncPath(worktreePath)) {
       continue
     }
-    // Why: WSL worktrees on Windows carry Linux-style paths that Windows existsSync can't probe and would falsely condemn.
+    // Windows cannot probe Linux-spelled WSL paths with existsSync.
     if (process.platform === 'win32' && !isWindowsAbsolutePathLike(worktreePath)) {
       continue
     }
-    // Why keep timestamp-less entries: without timestamps we can't prove the 30-day grace elapsed (measured dead entries all had them).
-    // Grace is checked before existsSync so active entries skip the stat fan-out (and its slow-NFS tail).
+    // Missing timestamps cannot prove grace elapsed; check age before expensive/NFS stats.
     const newestTouch = Math.max(meta?.lastActivityAt ?? 0, meta?.createdAt ?? 0)
     if (newestTouch === 0 || now - newestTouch < WORKTREE_META_GC_GRACE_MS) {
       continue
@@ -83,8 +78,7 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     delete state.worktreeMeta[key]
     delete state.worktreeLineageById[key]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(key)]
-    // Identity rows are companions too: a surviving alias would re-attach this dead metadata to a
-    // worktree later created at the same repoId::path, and nothing else ever reclaims them.
+    // Remove identity aliases too or future worktrees at the same path could inherit dead metadata.
     removeWorktreeMetadataForHost(state, key, LOCAL_EXECUTION_HOST_ID)
     removed++
   }
@@ -121,8 +115,7 @@ function normalizeLinkedMetadata(meta: WorktreeMeta): boolean {
 }
 
 export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): boolean {
-  // Why: a hand-corrupted null lineage map would throw on the companion deletes below. The repair
-  // itself is dirty state — without it the map stays null on disk and is repaired again every load.
+  // Mark null-map repairs dirty or they recur on every load.
   let changed =
     (state.worktreeLineageById as unknown) === null ||
     (state.workspaceLineageByChildKey as unknown) === null
@@ -144,8 +137,7 @@ export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): bool
     changed ||= rawWorktreeMeta !== undefined || hadLineage
   }
   for (const [key, meta] of Object.entries(state.worktreeMeta)) {
-    // Why: hand-corrupted non-object entries are a real input class; drop them here because gcStaleWorktreeMeta
-    // keeps timestamp-less keys forever and every downstream consumer trusts the Record<string, WorktreeMeta> type.
+    // Drop corrupt rows; GC retains timestamp-less entries and typed consumers assume metadata objects.
     if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) {
       delete state.worktreeMeta[key]
       // Legacy lineage belongs to this corrupt locator row; canonical host state is independent.
@@ -154,8 +146,7 @@ export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): bool
       changed = true
       continue
     }
-    // Not `changed`: the serializer omits these slots deliberately, so re-filling them is how the
-    // on-disk shape is already canonical -- flagging it would force a full rewrite on every launch.
+    // Restoring serializer-omitted defaults is canonical, so it must not trigger a full rewrite.
     fillDefaultWorktreeMetaFields(meta)
     changed = normalizeLinkedMetadata(meta) || changed
   }
@@ -194,8 +185,7 @@ export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): bool
       changed = true
       continue
     }
-    // Drop keys with no backing row: a dangling key is what turns the next write into an
-    // ambiguous alias, and nothing downstream can resolve it anyway.
+    // Dangling aliases cannot resolve and would make the next write ambiguous.
     const identityKeys = [
       ...new Set(
         rawIdentityKeys.filter(

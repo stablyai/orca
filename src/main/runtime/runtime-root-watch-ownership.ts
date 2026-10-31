@@ -28,8 +28,7 @@ export function createRuntimeRootOwnershipReleaser<T extends RuntimeRootOwnershi
       return
     }
     root.terminalReleaseError = error
-    // Why: an unkillable child can still own the native root after logical
-    // teardown; reserve the exact root until that child's physical exit.
+    // Keep exact roots reserved until physical child exit; logical teardown cannot free an unkillable native watcher.
     void error.physicalExit.then(() => {
       if (root.terminalReleaseError === error) {
         root.terminalReleaseError = null

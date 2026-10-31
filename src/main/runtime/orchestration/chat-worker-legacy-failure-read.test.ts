@@ -18,7 +18,10 @@ import {
   words,
   batch
 } from './chat-worker-request-failure-rig.test-fixture'
-import { countLegacyFailureDisplay } from './chat-worker-legacy-operation-counts.test-support'
+import {
+  countLegacyFailureDisplay,
+  emptyLegacyCounts
+} from './chat-worker-legacy-operation-counts.test-support'
 
 it.each([100, 1000])(
   'bounds the added failure display with %i readable legacy cards',
@@ -91,6 +94,31 @@ it.each([100, 1000])(
       db.prepare('SELECT message_id FROM queued_messages WHERE session_id = ?').all(SESSION)
     ).toHaveLength(n)
     expect(journal.queuedMessages.list()).toHaveLength(n)
+    const cold = structuredClone(ops.counts)
+    // Three decoded populations: restore, cached source and failed import. The import builds
+    // N queue rows on an isolated draft before its DELETE fails; none of that work is free.
+    expect(cold).toEqual({
+      upstream: {
+        ...emptyLegacyCounts(),
+        decodedRows: 3 * n,
+        restoredRows: n,
+        ownerClassifications: 2 * n,
+        cardConstructions: 5 * n,
+        handoffVisits: n,
+        identityEntries: n,
+        sourceIdEntries: n,
+        overlayEntries: 2 * n,
+        overlayVisits: 2 * n,
+        priorOverlayVisits: n,
+        indexUpdates: 4 * n,
+        overlayIndexUpdates: 2 * n,
+        pointIndexUpdates: 2 * n,
+        indexRebuilds: 1
+      },
+      publication: emptyLegacyCounts(),
+      failure: emptyLegacyCounts()
+    })
+    ops.reset()
     const projection = new StructuredAgentSessionJournalProjections()
     r.deliver.mockImplementation(() => ops.publication(() => projection.read(journal, null)))
     r.sessions.set(SESSION, { ...r.session, journal })
@@ -109,7 +137,24 @@ it.each([100, 1000])(
       })
     ])
     await tick()
+    const changed = structuredClone(ops.counts)
+    // First successful native introduction charges N point updates, without reclassification.
+    expect(changed).toEqual({
+      upstream: { ...emptyLegacyCounts(), indexUpdates: n, pointIndexUpdates: n },
+      publication: {
+        ...emptyLegacyCounts(),
+        displays: 2,
+        handoffApplications: 2 * n,
+        itemCopies: 2,
+        itemEntries: 2 * n + 3,
+        submissionCopies: 2,
+        submissionEntries: 2 * (n + 1)
+      },
+      failure: emptyLegacyCounts()
+    })
+    expect(r.deliver).toHaveBeenCalledTimes(2)
     ops.reset()
+    r.deliver.mockClear()
     await batch(journal, 'ordinary-output', [
       mutation(
         'ordinary-output',
@@ -124,25 +169,22 @@ it.each([100, 1000])(
     await tick()
     const ordinary = structuredClone(ops.counts)
     expect(ordinary).toEqual({
+      upstream: emptyLegacyCounts(),
       publication: {
+        ...emptyLegacyCounts(),
         displays: 1,
-        cardVisits: n,
+        handoffApplications: n,
         itemCopies: 1,
         itemEntries: n + 3,
         submissionCopies: 1,
         submissionEntries: n + 1
       },
-      failure: {
-        displays: 0,
-        cardVisits: 0,
-        itemCopies: 0,
-        itemEntries: 0,
-        submissionCopies: 0,
-        submissionEntries: 0
-      }
+      failure: emptyLegacyCounts()
     })
+    expect(r.deliver).toHaveBeenCalledTimes(1)
     expect(r.mail()).toHaveLength(0)
     ops.reset()
+    r.deliver.mockClear()
     await batch(journal, 'eligible-failure', [
       mutation('eligible-turn', {
         kind: 'turn',
@@ -156,24 +198,27 @@ it.each([100, 1000])(
     await tick()
     const failure = structuredClone(ops.counts)
     const oneDisplay = {
+      ...emptyLegacyCounts(),
       displays: 1,
-      cardVisits: n,
+      handoffApplications: n,
       itemCopies: 1,
       itemEntries: n + 4,
       submissionCopies: 1,
       submissionEntries: n + 1
     }
     expect(failure).toEqual({
+      upstream: emptyLegacyCounts(),
       publication: oneDisplay,
       failure: {
+        ...emptyLegacyCounts(),
         displays: 1,
-        cardVisits: 0,
         itemCopies: 0,
         itemEntries: 0,
         submissionCopies: 0,
         submissionEntries: 0
       }
     })
+    expect(r.deliver).toHaveBeenCalledTimes(1)
     expect(r.mail()).toHaveLength(1)
     expect(r.mail()[0]?.body).toBe(
       [
@@ -185,6 +230,8 @@ it.each([100, 1000])(
     expect(r.db.getDispatchContextById(r.dispatch().id)?.status).toBe('dispatched')
     expect(r.db.getTask(r.dispatch().task_id)?.status).toBe('dispatched')
     expect(journal.submission('legacy:0')?.dispatchState).toBe('rejected')
-    process.stdout.write(`LEGACY_FAILURE_OPERATIONS ${JSON.stringify({ n, ordinary, failure })}\n`)
+    process.stdout.write(
+      `LEGACY_FAILURE_OPERATIONS ${JSON.stringify({ n, cold, changed, ordinary, failure })}\n`
+    )
   }
 )

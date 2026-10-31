@@ -13,7 +13,7 @@ import type {
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { backgroundTaskFallbackText } from '../../../shared/native-chat-background-task-row'
+import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/native-chat-background-task-row'
 import {
   isBackgroundTaskBlock,
   type NativeChatBackgroundTaskBlock
@@ -232,7 +232,7 @@ export async function openProviderTimelineRig(
     stateDirectory: root,
     now: () => 1_000
   }
-  const journal = await journals.open(journalOptions)
+  let journal = await journals.open(journalOptions)
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   deferred.bind({ journal, fence: 1, publish: () => {} })
   cleanups.push(async () => {
@@ -283,8 +283,10 @@ export async function openProviderTimelineRig(
     reopenJournal: async () => {
       await rows()
       await journal.close()
-      closeTestJournalHostDatabase(root)
-      return journals.open(journalOptions)
+      await closeTestJournalHostDatabase(root)
+      journal = await journals.open(journalOptions)
+      rig.journal = journal
+      return journal
     },
     restart: async (more = {}) => {
       generations += 1

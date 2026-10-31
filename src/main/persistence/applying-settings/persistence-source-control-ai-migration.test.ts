@@ -107,6 +107,61 @@ describe('Store', () => {
     expect(store.getRepos()).toHaveLength(1)
   })
 
+  it('keeps saved action choices and sparse repo args through old-profile migration and re-read', async () => {
+    const recipe = {
+      agentId: 'codex',
+      commandInputTemplate: '{basePrompt}',
+      agentArgs: '',
+      launchPreferences: {
+        agentId: 'codex',
+        model: 'gpt-6-sol',
+        permissionMode: 'ask',
+        options: { thinkingEffort: 'high' }
+      }
+    }
+    const canonicalRecipe = {
+      ...recipe,
+      launchPreferences: {
+        agentId: 'codex',
+        modelSelection: {
+          base: 'default',
+          model: { agentId: 'codex', value: 'gpt-6-sol' },
+          options: { thinkingEffort: { agentId: 'codex', value: 'high' } }
+        },
+        permissionMode: 'ask'
+      }
+    }
+    const sparse = { agentArgs: '--model gpt-6-sol' }
+    const repo = makeRepo()
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [{ ...repo, sourceControlAi: { actionOverrides: { resolveConflicts: sparse } } }],
+      worktreeMeta: {},
+      settings: {
+        defaultTuiAgent: 'claude',
+        sourceControlAi: { actions: { fixCommitFailure: recipe } }
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().sourceControlAi?.actions?.fixCommitFailure).toEqual(canonicalRecipe)
+    expect(store.getRepos()[0]?.sourceControlAi?.actionOverrides?.resolveConflicts).toEqual(sparse)
+    store.updateSettings({ theme: 'light' })
+    store.flush()
+    await closeTestStores()
+
+    const reopened = await createStore()
+    expect(reopened.getSettings().sourceControlAi?.actions?.fixCommitFailure).toEqual(
+      canonicalRecipe
+    )
+    expect(reopened.getRepos()[0]?.sourceControlAi?.actionOverrides?.resolveConflicts).toEqual(
+      sparse
+    )
+  })
+
   it('migrates legacy commit-message AI settings to source-control AI on load', async () => {
     writeDataFile({
       schemaVersion: 1,

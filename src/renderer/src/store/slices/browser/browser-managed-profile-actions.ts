@@ -11,8 +11,7 @@ import {
 import { withoutKey } from '../../../../../shared/workspace-layout/stored-record-fields'
 import type { AppState } from '../../types'
 
-// Why a partition main never admits: a placeholder that outlives this run (quit, or a failed
-// creation) must load nowhere rather than fall back to the shared Default jar.
+// Use an inadmissible placeholder partition: failed/quit creations must never fall back to shared Default jar.
 const placeholderProfile = (
   sessionProfileId: string
 ): { sessionProfileId: string; sessionPartition: string } => ({

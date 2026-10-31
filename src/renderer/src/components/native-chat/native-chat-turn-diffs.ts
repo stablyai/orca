@@ -50,7 +50,6 @@ export function nativeChatTurnDiffEditFile(
   return normalizedToolEditFiles(edit.call, edit.result)?.[edit.fileIndex]
 }
 
-/** Recorded edit totals, grouped by the transcript's already-resolved turn boundaries. */
 export function nativeChatTurnDiffs(
   messages: readonly NativeChatMessage[],
   turnKeys: readonly (string | undefined)[],

@@ -43,6 +43,8 @@ vi.mock(
 vi.mock('./BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('./bottom-drawer-modal-host', () => ({ BottomDrawerModalHost: 'BottomDrawerModalHost' }))
 vi.mock('./PickerListDrawer', () => ({ PickerListDrawer: 'PickerListDrawer' }))
+vi.mock('./AutoHeight', () => ({ AutoHeight: 'AutoHeight' }))
+vi.mock('./MobileSwitch', () => ({ MobileSwitch: 'MobileSwitch' }))
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
 vi.mock('./TaskProviderLogo', () => ({ TaskProviderLogo: 'TaskProviderLogo' }))
 
@@ -634,9 +636,7 @@ describe('NewWorktreeModal project targets', () => {
     expect(pickerItems(renderer, 'Project')).toEqual([expect.objectContaining({ label: 'fresh' })])
   })
 
-  // react-native-screens freezes a blurred screen by suspending its subtree
-  // (react-freeze), so React runs this component and then throws that render away.
-  // Anything the render mutated in place outlives the work React discarded.
+  // Blurred react-native-screens freezes by suspending/react-freeze; discarded render mutations otherwise outlive React’s work.
   function suspendableTree(frozen: () => boolean, child: ReactElement) {
     const never = new Promise<void>(() => {})
     const Freezer = () => {

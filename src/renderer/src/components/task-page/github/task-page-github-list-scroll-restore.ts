@@ -20,12 +20,7 @@ export type GitHubListScrollRestoreOptions = {
   onScrollTopApplied: (scrollTop: number) => void
 }
 
-/**
- * Drives the reopened GitHub task list back to its remembered offset, retrying until the
- * list is tall enough to reach it. Why no deadline: rows can paint arbitrarily late on a
- * slow host, and abandoning the restore used to also rewrite the remembered offset with
- * the committed 0 — turning a late paint into permanent loss (STA-5949).
- */
+/** Retry until late-painted rows can reach the remembered target or the user takes over; a deadline would permanently save a clamped offset. */
 export function startGitHubListScrollRestore({
   target,
   scrollElementRef,
@@ -60,23 +55,20 @@ export function startGitHubListScrollRestore({
     element.scrollTop = target
     const committed = element.scrollTop
     restoreWriteRef.current = { target, committed }
-    // Re-assert the target, not the clamped position: a half-painted list must not
-    // downgrade what gets remembered on unmount.
+    // Remember the target rather than the clamped position so partial paint cannot lose the offset on unmount.
     onScrollTopApplied(target)
     if (Math.abs(committed - target) < SCROLL_MATCH_EPSILON_PX) {
       pendingRestoreRef.current = null
       stop()
     }
   }
-  // The container is observed alongside its rows: a pagination bar appearing or a window
-  // resize changes only the container, and that alone can make the target reachable.
+  // Observe the container too: pager/window resizes can make the target reachable without changing rows.
   observer = new ResizeObserver(restore)
   observer.observe(scrollElement)
   for (const child of scrollElement.children) {
     observer.observe(child)
   }
-  // Rows can mount after this layout effect (for example when a cached page settles),
-  // so observe child-list changes to cover elements that were not present initially.
+  // Observe child additions because rows can mount after this layout effect.
   mutationObserver = new MutationObserver(restore)
   mutationObserver.observe(scrollElement, { childList: true, subtree: true })
   restore()
@@ -86,14 +78,7 @@ export function startGitHubListScrollRestore({
   return stop
 }
 
-/**
- * Classifies a scroll on the GitHub list. A scroll carrying exactly what the pending
- * restore last wrote is its own echo and must change nothing; anything else is the user
- * taking over and supersedes the restore — otherwise a target the list can never reach
- * would suppress position saving forever (STA-5949).
- *
- * @returns whether the offset is the user's and should become the remembered position.
- */
+/** Ignore pending restore echoes; other scrolls supersede restoration and become the remembered position. */
 export function supersedeGitHubListScrollRestore({
   scrollTop,
   pendingRestoreRef,
@@ -104,8 +89,7 @@ export function supersedeGitHubListScrollRestore({
   restoreWriteRef: RefObject<GitHubListRestoreWrite | null>
 }): boolean {
   const write = restoreWriteRef.current
-  // Matching targets is what keeps a write left over from an earlier restore — pending is
-  // re-armed from passive effects, after this restore's layout effect — out of the echo.
+  // Match targets because passive re-arming can leave the preceding restore’s write visible to this layout effect.
   if (
     write !== null &&
     write.target === pendingRestoreRef.current &&

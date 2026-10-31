@@ -6,7 +6,7 @@ import {
 import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
 import { allowPageUnload } from './browser-guest-unload-policy'
 import { installDocPreviewGuestPolicy } from './doc-preview-guest-policy'
-import { installGuestDevToolsWindowBehavior } from './browser-guest-devtools-window'
+import { installGuestDevToolsCloseShortcut } from './browser-guest-devtools-close-shortcut'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
   attachGuestPolicies(
@@ -27,8 +27,6 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
     const disposeDetachTracking = this.trackDebuggerDetachForCdpOverrides(guest)
-    // Keep background compositor frames available for screenshots.
-    guest.setBackgroundThrottling(false)
     const disposePopupPolicy = this.installGuestPopupPolicy(guest)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
     const forwardAudioState = (
@@ -40,23 +38,22 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       }
     }
     guest.on('audio-state-changed', forwardAudioState)
-    const disposeDevToolsWindow = installGuestDevToolsWindowBehavior({
+    const disposeDevToolsCloseShortcut = installGuestDevToolsCloseShortcut({
       guest,
       getKeybindings: () => this.settingsResolver?.().keybindings,
-      isViewportEmulated: () => {
-        const tabId = this.tabIdByWebContentsId.get(guest.id)
-        return tabId !== undefined && this.isViewportPresetActive(tabId, guest.id)
-      }
+      closeDevTools: () => this.closeGuestDevTools(guest)
     })
 
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeDetachTracking()
       disposePopupPolicy()
       disposeNavigationPolicy()
-      disposeDevToolsWindow()
+      disposeDevToolsCloseShortcut()
       if (!guest.isDestroyed()) {
         guest.off('audio-state-changed', forwardAudioState)
       }
+      // A docked host outliving its guest would stay painted over the pane.
+      void this.devToolsDock.close(guest.id)
     })
   }
 
@@ -65,6 +62,15 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       browserPageId,
       audible
     })
+  }
+
+  /** Closes the page's DevTools wherever they are: docked in the pane or in their own window. */
+  protected closeGuestDevTools(guest: Electron.WebContents): void {
+    const docked = this.devToolsDock.isDocked(guest.id)
+    void this.devToolsDock.close(guest.id)
+    if (!docked && !guest.isDestroyed()) {
+      guest.closeDevTools()
+    }
   }
 
   /** Document guests share teardown without installing browsing navigation or popup policies. */

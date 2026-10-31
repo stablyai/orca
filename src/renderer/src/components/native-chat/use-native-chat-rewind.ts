@@ -88,7 +88,6 @@ function isRewindTarget(input: RewindInput, itemId: string): boolean {
   )
 }
 
-/** Each turn record's opening message, by the record's item id. */
 function turnOpeners(items: StructuredAgentSessionState['items']): Map<string, string> {
   const openers = new Map<string, string>()
   for (const item of items) {
@@ -141,10 +140,9 @@ export function useNativeChatRewind(input: RewindInput) {
       active.current = false
     }
   }, [input])
-  // Single-flight from the click on; only `sending` (after Confirm) blocks anything else.
+  // Reserve single-flight at the first click; only confirmed sending blocks other actions.
   const inFlight = useRef(false)
   const [sending, setSending] = useState(false)
-  // A confirmed rewind whose new conversation has not arrived yet.
   const [awaiting, setAwaiting] = useState<{
     sessionId: string
     epoch: string
@@ -155,7 +153,7 @@ export function useNativeChatRewind(input: RewindInput) {
     awaiting?.sessionId === input.sessionId &&
     awaiting.epoch === input.state.epoch &&
     (awaiting.sequence === undefined || (input.state.cursor?.sequence ?? 0) < awaiting.sequence)
-  // A hidden pane stops reading, so its new conversation cannot arrive; that is no failure to report.
+  // Hidden panes stop reading; missing reset evidence while hidden is not a failure.
   const hiddenWhileAwaiting = useRef(false)
   const visible = input.isVisible !== false
   useLayoutEffect(() => {
@@ -280,7 +278,7 @@ export function useNativeChatRewind(input: RewindInput) {
       setSending(false)
     }
   }, [])
-  /** Whether a send may go now; one refused during a confirmed rewind says why. */
+  /** Refuse sends during confirmed rewind and explain why. */
   const admitsSend = useCallback((): boolean => {
     if (blockedRef.current) {
       toast.message(nativeChatRewindPendingCopy())
@@ -313,7 +311,7 @@ export function useNativeChatRewind(input: RewindInput) {
         .map((item) => item.itemId)
     )
   }, [floor, input.state.items, input.state.submissions])
-  // Rows re-render only when this changes; none get the action where the provider can never rewind.
+  // Memoize row actions and omit them entirely for providers without rewind.
   const surface = useMemo<NativeChatRewindSurface | undefined>(
     () => (offered ? { disabledReason, request, eligibleItemIds } : undefined),
     [offered, disabledReason, request, eligibleItemIds]

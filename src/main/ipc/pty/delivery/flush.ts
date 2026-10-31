@@ -177,7 +177,8 @@ export function flushPendingData(session: PtyIpcSession): void {
           pending.startSeq,
           pending.containsBackgroundOutput,
           pending.rawLength,
-          pending.transformed
+          pending.transformed,
+          pending.gapEscapeState
         )
       )
       if (!sent) {

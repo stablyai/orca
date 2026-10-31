@@ -13,7 +13,8 @@ import { assertHostFoundingNotCancelled } from '../../agent-launch/host-founding
 
 import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session-definitive-refusal'
 
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import {
   refuse,
   type AgentSessionAttachResult,
@@ -26,7 +27,7 @@ import type { StructuredAgentSessionAttachContext } from './structured-agent-ses
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { openStructuredAgentSessionConversationJournal } from './structured-agent-session-conversation-open'
 import {
-  prepareAdoptedTranscript,
+  prepareCreateTranscript,
   importAdoptedTranscript
 } from './structured-agent-session-adopted-import'
 
@@ -133,7 +134,7 @@ async function foundConversation(
   }
   const prepared = replayed
     ? { ok: true as const, items: null }
-    : await prepareAdoptedTranscript(params)
+    : await prepareCreateTranscript(context, params)
   if (!prepared.ok) {
     const { refusal } = prepared
     return {
@@ -153,16 +154,17 @@ async function foundConversation(
   }
   const opened = existing
     ? { session: existing }
-    : await openStructuredAgentSessionConversationJournal(deps, candidate.record).catch(
-        (error: unknown) => {
-          deps.logger.warn('opening the journal of a new chat failed', {
-            scope: 'create-journal-open',
-            sessionId,
-            error
-          })
-          throw journalOpenRefusalError(error)
-        }
-      )
+    : await openStructuredAgentSessionConversationJournal(
+        deps,
+        agentSessionConversationView(candidate.record)
+      ).catch((error: unknown) => {
+        deps.logger.warn('opening the journal of a new chat failed', {
+          scope: 'create-journal-open',
+          sessionId,
+          error
+        })
+        throw journalOpenRefusalError(error)
+      })
   const { session } = opened
   const fence = candidate.record.lease.runtimeFence
   let keepHandle = replayed
@@ -228,11 +230,7 @@ async function foundConversation(
       const record = store.getRecord(sessionId)
       const expectedFingerprint =
         options.firstMessage &&
-        computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.send',
-          sessionId,
-          fields: { body: options.firstMessage.body }
-        })
+        agentSessionSendBodyFingerprint(sessionId, options.firstMessage.body)
       if (options.firstMessage && firstMessage?.payloadFingerprint !== expectedFingerprint) {
         return {
           ok: false,

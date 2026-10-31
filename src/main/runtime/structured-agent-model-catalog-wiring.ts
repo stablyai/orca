@@ -1,5 +1,10 @@
+import type { AgentModelCatalogRunningAccountDeps } from '../native-chat/agent-model-catalog/agent-model-catalog-running-account'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { agentSessionPinnedLaunchDirectory } from './agent-session-record-launch-directory'
-import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import {
+  agentModelCatalogStore,
+  type AgentModelCatalogProbe
+} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogFilePersistence } from '../native-chat/agent-model-catalog/agent-model-catalog-persistence'
 import {
   createAgentModelCatalogService,
@@ -10,7 +15,6 @@ import {
   agentReadsProjectModelConfig,
   workspaceMayOverrideDefaultModel
 } from '../native-chat/agent-model-catalog/agent-project-model-override'
-import type { AgentModelCatalogProbe } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import type {
   StructuredAgentModelCatalogContext,
@@ -62,16 +66,12 @@ export function registeredModelCatalogDiscovery(
   return { probes, listingNamesConfiguredModel, listsInChatFolder }
 }
 
-/**
- * The host-deps slice for the catalog surface: hydrates the store from disk
- * once, then builds the service — or nothing, when the runtime cannot name
- * the currently selected account, in which case every catalog read answers
- * `unknown` rather than guessing a key.
- */
+/** Hydrate once and build catalog service only with a known selected account; otherwise answer unknown rather than guess its key. */
 export async function modelCatalogHostDeps(input: {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'listRecords'>
+  store: Pick<AgentSessionRecordStore, 'getRecord' | 'getConversation' | 'listConversations'>
   agents: Pick<StructuredAgentRegistry, 'definition'>
   registrations: readonly CatalogRegistration[]
+  host: () => StructuredAgentSessionHost | null
   deps: StructuredAgentModelCatalogContext['deps']
   environment: StructuredAgentModelCatalogContext['environment']
 }): Promise<{ modelCatalog?: AgentModelCatalogService }> {
@@ -82,16 +82,18 @@ export async function modelCatalogHostDeps(input: {
   }
   const modelCatalog = createAgentModelCatalogService({
     store: agentModelCatalogStore,
+    getConversation: (id) => input.store.getConversation(id) ?? undefined,
     getRecord: (sessionId) => input.store.getRecord(sessionId) ?? undefined,
     drivesRecord: (record) => agentDrivesSession(input.agents, record),
     resolveAccountHome: deps.resolveAgentAccountHome,
+    ...structuredAgentModelCatalogAccountReads(input.host),
     recordWorkspacePath: async (record) =>
       agentSessionPinnedLaunchDirectory(record) ??
       (await deps.resolveWorkspacePath(record.location.workspaceId).catch(() => null)),
     agentReadsProjectModelConfig,
     workspaceMayOverrideDefaultModel,
     hasChatRecords: (agent) =>
-      input.store.listRecords().some((record) => record.provider === agent),
+      input.store.listConversations().some((record) => record.provider === agent),
     ...registeredModelCatalogDiscovery(input.registrations, {
       deps,
       environment: input.environment
@@ -100,10 +102,20 @@ export async function modelCatalogHostDeps(input: {
   return { modelCatalog }
 }
 
+/** Capture the constructing runtime's host lazily; global installation is a separate lifetime. */
+export function structuredAgentModelCatalogAccountReads(
+  readHost: () => Pick<StructuredAgentSessionHost, 'childAccountHome'> | null
+): Pick<AgentModelCatalogRunningAccountDeps, 'liveAccountHome'> {
+  return {
+    liveAccountHome: (id) => readHost()?.childAccountHome(id)
+  }
+}
+
 /** The installed host lists what a changed account or agent setting made cold; with no host yet,
  *  its install lists everything anyway. */
 export function prewarmStructuredAgentModelCatalogs(): void {
-  void getStructuredAgentSessionHost()?.deps.modelCatalog?.prewarm()
+  const catalog = getStructuredAgentSessionHost()?.deps.modelCatalog
+  void catalog?.prewarm()
 }
 
 // Re-exported so the runtime deps type can reference the resolver shape without

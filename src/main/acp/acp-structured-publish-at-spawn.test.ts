@@ -1,3 +1,4 @@
+import { acpLaunchSpecFor } from './acp-launch-specs'
 import { z } from 'zod'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -16,6 +17,51 @@ afterEach(closeProviderTimelineRigs)
 const configParams = z.object({ configId: z.string(), value: z.string() })
 
 describe('ACP child published before its handshake', () => {
+  it('publishes mapped initial/config permission without selecting it, and generic unknown for legacy modes', async () => {
+    const mode = {
+      id: 'mode',
+      name: 'Mode',
+      category: 'mode',
+      type: 'select',
+      currentValue: 'default',
+      options: [
+        { value: 'default', name: 'Default' },
+        { value: 'yolo', name: 'Yolo' }
+      ]
+    }
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('antigravity')!,
+      script: (agent) =>
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, {
+            sessionId: PROVIDER_SESSION,
+            configOptions: [...GROK_CONFIG_OPTIONS, mode]
+          })
+        )
+    })
+    await rig.acquire({ permissionMode: 'own' })
+    expect(rig.started().reportedOptions).toMatchObject({ reportedPermissionMode: 'ask' })
+    for (const [currentValue, expected] of [
+      ['yolo', 'full-access'],
+      ['unknown', null]
+    ] as const) {
+      rig.child().agent.notify('session/update', {
+        sessionId: PROVIDER_SESSION,
+        update: {
+          sessionUpdate: 'config_option_update',
+          configOptions: [...GROK_CONFIG_OPTIONS, { ...mode, currentValue }]
+        }
+      })
+      await waitFor(() =>
+        expect(rig.lifecycle.at(-1)).toMatchObject({
+          type: 'options-reported',
+          reportedOptions: { reportedPermissionMode: expected }
+        })
+      )
+    }
+    expect(rig.sent('session/set_config_option')).toHaveLength(0)
+  })
+
   it('opens without writing saved message choices to the provider', async () => {
     let answer: (() => void) | undefined
     const writes: string[] = []

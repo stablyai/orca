@@ -81,8 +81,7 @@ describe('parseRelayEndpointIncumbentProbe', () => {
     }
   })
 
-  // A relay on node A of a round-robin alias sharing an NFS home: node B's kernel refuses the
-  // socket and B's lsof sees no holder, though A's relay still runs its terminals.
+  // Shared-home sockets may be held on another kernel; local refusal/no-holder evidence cannot prove exit.
   it('reports unverifiable for a refused socket that another machine may hold', () => {
     for (const fsType of [
       'linux 6969 ef53', // nfs

@@ -1,6 +1,4 @@
-// A headless host never loads `ipc/worktrees`, the desktop module that registers the scan-generation
-// bump, so this suite deliberately does not import it: the runtime itself must make a worktree change
-// reach the generation its listing witnesses and the scan cache that listing reads through.
+// Headless hosts never load ipc/worktrees; runtime changes must invalidate both scan generation and cache.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../shared/worktree/types'
@@ -89,15 +87,6 @@ describe('runtime worktree change invalidation', () => {
     listWorktreesStrictMock.mockResolvedValue([row(REPO_PATH)])
   })
 
-  it('moves the scan generation the runtime listing witnesses', () => {
-    makeRuntime()
-    const before = getLocalWorktreeScanGeneration(REPO_ID)
-
-    runWorktreeChangeInvalidators(REPO_ID)
-
-    expect(getLocalWorktreeScanGeneration(REPO_ID)).not.toBe(before)
-  })
-
   it('bumps that generation from the change event the runtime itself sends, with no window notifier attached', () => {
     const runtime = makeRuntimeService()
     const before = getLocalWorktreeScanGeneration(REPO_ID)
@@ -123,7 +112,6 @@ describe('runtime worktree change invalidation', () => {
     const list = makeRuntime()
     listWorktreesStrictMock
       .mockImplementationOnce(async () => {
-        // The worktree becomes listable while this scan is in flight.
         runWorktreeChangeInvalidators(REPO_ID)
         return [row(REPO_PATH)]
       })

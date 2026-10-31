@@ -14,8 +14,7 @@ const VITEST_DEFAULT_INCLUDE = '**/*.{test,spec}.?(c|m)[jt]s?(x)'
 
 const TEST_FILE_NAME = /\.(?:test|spec|e2e|bench)\.[cm]?[jt]sx?$/
 
-// `mirrors` are literals the runner's own `sources` must contain; editing one of them fails the check.
-// `manual` rows have a runner but no CI job; they are listed on every run so they stay visible.
+// Mirror literals must appear in runner sources; list manual rows each run so their lack of CI remains visible.
 const NON_UNIT_TEST_RUNNERS = [
   {
     name: 'Playwright e2e',
@@ -59,7 +58,7 @@ const NON_UNIT_TEST_RUNNERS = [
       "'src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts'"
     ]
   },
-  ...['push', 'relay'].map((app) => ({
+  ...['connector', 'push', 'relay'].map((app) => ({
     name: `cloud ${app}`,
     include: [`cloud/apps/${app}/src/**/*.test.ts`],
     sources: [`cloud/apps/${app}/vitest.config.ts`],
@@ -67,6 +66,8 @@ const NON_UNIT_TEST_RUNNERS = [
   })),
   ...[
     'cloud/apps/relay-fence-broker',
+    'cloud/packages/cloud-database',
+    'cloud/packages/connector-contract',
     'cloud/packages/postgres-schema',
     'cloud/packages/push-contract',
     'cloud/packages/relay-contract'
@@ -197,8 +198,7 @@ function importsOf(file, source, files) {
     .filter((resolved) => resolved !== null)
 }
 
-// Why transpile: it erases what Vitest's transform erases (type-only, unused, `typeof import()`).
-// That holds while no tsconfig sets verbatimModuleSyntax; enabling it only adds spurious failures.
+// Transpile to match Vitest erasure of type-only/unused/typeof-import edges; verbatimModuleSyntax would add conservative false failures.
 function runtimeImportsOf(file, source, files) {
   if (!TYPESCRIPT_FILE.test(file)) {
     return importsOf(file, source, files)
@@ -220,8 +220,7 @@ export function findUncollectedTestFiles(sources, runners) {
   const candidates = [...files].filter(
     (file) => !selected.has(file) && isTestLike(file, sources.get(file))
   )
-  // Source imports are a superset of runtime ones, so only files that reach a candidate through
-  // them need the slower transpile; every other edge can never collect a candidate.
+  // Only source edges reaching candidate tests need slower transpilation; other edges cannot collect them.
   const importers = new Map()
   for (const file of files) {
     for (const imported of importsOf(file, sources.get(file), files)) {

@@ -75,8 +75,7 @@ export class TerminalRunFactsRegister {
     }
   }
 
-  /** Once per process: a re-registration of the same incarnation keeps its facts, and so does a
-   *  reattach or adoption of the running process unless its incarnation shows another process. */
+  /** Preserve facts on same-incarnation registration/reattach/adoption; only a different process resets them. */
   recordSpawnCommit(commit: TerminalSpawnCommit, expectedSourceBinding?: unknown): void {
     const incarnationId = commit.incarnationId ?? null
     const previous = this.runsByPtyId.get(commit.id)
@@ -108,9 +107,7 @@ export class TerminalRunFactsRegister {
     })
   }
 
-  /** The one record point both write funnels call just before the provider write, because input
-   *  such as `exit` can end the process before the write returns. The payload check backs up a
-   *  writer that labels a reply or focus report as driving. */
+  /** Record before provider write because exit input can end the process before return; filter replies even if mislabeled driving. */
   recordInput(ptyId: string, inputKind: TerminalInputKind, data: string, now = Date.now()): void {
     if (inputKind === 'query-reply' || isUntypedTerminalInput(data)) {
       return

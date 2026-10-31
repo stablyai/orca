@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import { structuredLaunchesHoldingIdentity } from './agent-session/launch/structured-agent-session-launch-holders'
 import {
   subscribeStructuredAgentLaunchStatus,
   getStructuredAgentSessionLaunchFailure,
@@ -8,9 +10,7 @@ import {
   structuredLaunchStates,
   type StructuredAgentLaunchStatus,
   type StructuredAgentSessionLaunchLifecycle
-} from './structured-agent-session-launch-registry'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { structuredLaunchesHoldingIdentity } from './structured-agent-session-launch-holders'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 
 /** Whether a chat for this pair is being created here: its own first create, or an adoption. */
 export function getStructuredAgentLaunchStatus(

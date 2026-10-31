@@ -73,7 +73,6 @@ describe('resolveLaunchedSelection', () => {
       selection: { kind: 'terminal', handle: 'term_9', tabId: `${PANE.tabId}::${PANE.leafId}` },
       landedTabId: `${PANE.tabId}::${PANE.leafId}`
     })
-    // Listed before its handle is issued: landed by tab id alone.
     expect(resolveLaunchedSelection(selection, [reservedTerminalTab(null)]).selection).toEqual({
       kind: 'tab',
       tabId: `${PANE.tabId}::${PANE.leafId}`

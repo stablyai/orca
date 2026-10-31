@@ -1,51 +1,45 @@
 import type {
+  BridgeColorScheme,
   BridgeGrants,
   BridgeHostMessage,
   BridgeInitHost,
-  BridgeInitRoute
+  BridgeInitRoute,
+  BridgeUiLocale
 } from './bridge-envelope'
 import { ZERO_SAFE_AREA_INSETS, type BridgeSafeAreaInsets } from './bridge-safe-area-insets'
+import { EMPTY_PAGE_GEOMETRY, type BridgePageGeometry } from './bridge-page-geometry'
+import type { BridgeFoldDivision } from './bridge-fold-division'
+import type { BridgeTerminalKeyRail } from './bridge-terminal-key'
 
-/** What `init` said this page is attached to. `grants` is what a call site checks before it posts. */
 export type BridgeShellSession = {
   sessionId: string
   buildId: string
   grants: BridgeGrants
-  /** Null for a shell too old to name one. The page has no other way to know which screen to open. */
   route: BridgeInitRoute | null
-  /** The route patterns this page may keep for itself. Empty for a shell that names none, which
-   *  hands every navigation back and is what a shell with no `navigate` grant can honour. */
   pageRoutes: readonly string[]
-  /**
-   * What each of those patterns declared, when the shell said.
-   *
-   * `null` for a shell that sent none, which is the only thing that separates "this route needs
-   * nothing" from "nobody told me". The handoff keeps its older rule on `null` and cannot invent a
-   * coverage verdict out of an absent field.
-   */
+  // Null means an older shell supplied no grant pairs; distinguish that from a target needing no grants and retain the older handoff rule.
   pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[] | null
-  /** How much of the WebView sits under a system bar. Zeros for a shell that reserves the bars
-   *  outside the view, which is every shell before the field. */
   safeAreaInsets: BridgeSafeAreaInsets
-  /** The keyboard height native screens read on the shell's OS; 0 while it is closed. */
   keyboardInset: number
+  // Older shells omit this and paint dark native chrome, so absent means dark.
+  colorScheme: BridgeColorScheme
+  /** The fold splitting the page on a partially folded device; null when none does, which is
+   *  every device that does not fold and every shell before the field. */
+  pageGeometry: BridgePageGeometry
+  foldDivision: BridgeFoldDivision | null
+  /** The keys the shell's rail shows beside this page; empty for every shell before the field. */
+  terminalKeyRail: BridgeTerminalKeyRail
+  // Null means an older shell sent no language; the page then follows the WebView's languages.
+  uiLocale: BridgeUiLocale | null
   /** Null for a shell too old to name it; the page's own `loadHosts()` then answers with nothing. */
   host: BridgeInitHost | null
-  /** The allowlisted keys as the app held them when this page opened. */
   storage: Readonly<Record<string, string>>
-  /** The allowlisted keys `storage` could not carry because the app's value is over the page's cap
-   *  (ruling 33.6). Empty for a shell too old to name them, which is what it was before. */
+  // Oversize keys are withheld from storage and reject writes locally; older shells omit this additive field (ruling 33.6).
   storageOversize: readonly string[]
-  /** Whether the shell gave this page the whole host area; false for every shell before it. */
   ownsHostArea: boolean
 }
 
-/**
- * The session an `init` describes.
- *
- * `route` is absent on the wire rather than null, because a field written as `undefined` and a
- * field nobody sent are the same frame; the page reads one shape from here and never both.
- */
+// Normalize the wire’s absent route to one client-side shape; undefined and missing serialize identically.
 export function readShellSession(
   message: Extract<BridgeHostMessage, { type: 'init' }>
 ): BridgeShellSession {
@@ -58,6 +52,11 @@ export function readShellSession(
     pageRouteGrants: message.pageRouteGrants ?? null,
     safeAreaInsets: message.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS,
     keyboardInset: message.keyboardInset ?? 0,
+    pageGeometry: message.pageGeometry ?? EMPTY_PAGE_GEOMETRY,
+    foldDivision: message.foldDivision ?? null,
+    terminalKeyRail: message.terminalKeyRail ?? [],
+    colorScheme: message.colorScheme ?? 'dark',
+    uiLocale: message.uiLocale ?? null,
     host: message.host ?? null,
     storage: message.storage ?? {},
     storageOversize: message.storageOversize ?? [],

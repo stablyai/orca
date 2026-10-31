@@ -13,9 +13,7 @@ export function resolvePaneAgentSessionId(
   state: PaneAgentSessionIdState,
   paneKey: string
 ): string | null {
-  // OSC 133;D proves the pane is back at the shell. The durable record outlives that exit on
-  // purpose (cold restore resumes from it), so gate it here too — otherwise the gate would only
-  // hold for panes whose agent has no resumable record.
+  // Gate durable resume records on shell return too; they intentionally outlive the agent for cold restore.
   if (state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground === true) {
     return null
   }

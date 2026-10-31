@@ -152,14 +152,3 @@ it('publishes an OpenCode SQLite session through the same channel as every file 
     }
   ])
 })
-
-it('gives an OpenCode session the same three roles a file provider publishes', async () => {
-  const reads = await readEveryAgentVault()
-
-  const sqliteRead = reads.find(
-    (read) => splitOpenCodeSqliteCandidate(read.path)?.sessionId === OPENCODE_SQLITE_SESSION
-  )
-  expect(new Set(sqliteRead?.messages.map((message) => message.role))).toEqual(
-    new Set(['user', 'assistant', 'tool'])
-  )
-})

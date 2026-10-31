@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Installs the Orca dev client, rebuilding only when the Expo fingerprint of its native inputs
-// changed. Builds are cached per fingerprint in the user cache dir, so every worktree reuses them.
+// Reuse dev-client builds across worktrees by Expo native fingerprint.
 //
 //   node scripts/native-client.mjs ensure <ios|android> [--device <name|udid|serial>] [--rebuild]
 //   node scripts/native-client.mjs fingerprint [--project <dir>] [--out <file>]
@@ -77,8 +76,6 @@ function readStamp(nativeDir) {
   }
 }
 
-// --- iOS Simulator ---------------------------------------------------------------------------
-
 export function pickIosSimulator(devicesJson, requested) {
   const simulators = Object.entries(devicesJson.devices ?? {}).flatMap(([runtime, list]) =>
     runtime.includes('iOS') ? list.filter((device) => device.isAvailable !== false) : []
@@ -121,8 +118,6 @@ async function installOnIosSimulator(appPath, requested) {
   await execFileAsync('xcrun', ['simctl', 'install', simulator.udid, appPath])
   return `${simulator.name} (${simulator.udid})`
 }
-
-// --- Android ---------------------------------------------------------------------------------
 
 function adbPath() {
   const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT
@@ -185,8 +180,6 @@ async function installOnAndroid(apkPath, requested) {
   await execFileAsync(adb, ['-s', serial, 'install', '-r', '-d', apkPath], { encoding: 'utf8' })
   return serial
 }
-
-// --- Commands --------------------------------------------------------------------------------
 
 async function ensure(mobileRoot, platform, flags) {
   if (!PLATFORMS.includes(platform)) {

@@ -774,6 +774,14 @@ describe('publication', () => {
   })
 
   it('an idle Stop that takes no effect pauses nothing', async () => {
+    const capabilities = host.deps.agents.capabilities('codex')
+    if (!capabilities) {
+      throw new Error('expected the queued test provider')
+    }
+    vi.spyOn(host.deps.agents, 'capabilities').mockReturnValue({
+      ...capabilities,
+      threadGoal: false
+    })
     const working = await workingSend()
     const first = await send('to be refused', 'queue-if-active').result
     const second = await send('waits behind the card', 'queue-if-active').result

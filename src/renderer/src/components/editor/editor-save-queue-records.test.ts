@@ -29,7 +29,6 @@ function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {
   }
 }
 
-/** Holds the next disk write until the returned release runs. */
 function holdNextWrite(disk: FakeEditorDisk): () => void {
   let release = (): void => {}
   const gate = new Promise<void>((resolve) => {
@@ -45,13 +44,12 @@ function holdNextWrite(disk: FakeEditorDisk): () => void {
   return release
 }
 
-// Views of one record in two workspaces, through the real record middleware and identity index.
 describe('editor save queue: one autosave timer per record across its views', () => {
   let disk: FakeEditorDisk
   let store: ReturnType<typeof createEditorStore>
   let queue: EditorSaveQueue
 
-  // The record middleware puts views of one file on one record by their identity.
+  // Use the real middleware to join same-file views by identity.
   const share = (views: OpenFile[]): void => {
     store.setState({ openFiles: views })
     const recordIds = new Set(views.map((open) => store.getState().editorBufferIdOf[open.id]))

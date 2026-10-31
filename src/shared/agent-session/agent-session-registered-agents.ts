@@ -1,12 +1,4 @@
-/**
- * `agentSession.agents`: the structured agents a host registered, each with the capability record
- * its definition declares, so a client can show what an agent supports before any session of it
- * exists. Published only by hosts advertising the registered-agents capability.
- *
- * A host is newer than some of its clients, so the reply is read row by row: a row this build
- * cannot read is dropped and the rest are kept, and an arm this build does not know degrades to the
- * one that claims the least.
- */
+/** Advertised agentSession.agents lists registered agents/capabilities before sessions exist. Drop unreadable rows individually; unknown capability arms degrade to the least authority. */
 
 import { z } from 'zod'
 import type { AgentSessionCapabilities } from '../agent-session-capabilities'
@@ -18,8 +10,7 @@ export const AGENT_SESSION_AGENTS_METHOD = 'agentSession.agents'
 export type AgentSessionRegisteredAgent = {
   agent: string
   capabilities: AgentSessionCapabilities
-  /** Orca provides this chat's program on this host, so it needs no installed CLI. Absent from
-   *  older hosts, whose chats are offered only where the agent's CLI was detected. */
+  /** Host-provided program needs no installed CLI; older hosts omit this and require CLI detection. */
   managedRuntime?: true
 }
 

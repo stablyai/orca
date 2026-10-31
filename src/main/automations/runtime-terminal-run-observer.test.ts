@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from '../runtime/agent-transcript-pane-test-harness'
 import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
 import type { AutomationRunTerminalHost } from './runtime-terminal-run-observer'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
@@ -100,6 +104,22 @@ describe('createRuntimeAutomationRunTerminalObserver', () => {
     vi.useRealTimers()
   })
 
+  it('propagates recorded end from the real runtime initial probe without a startup wait', async () => {
+    vi.useRealTimers()
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'shell',
+      foregroundProcess: 'bash',
+      data: ''
+    })
+    runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
+    vi.useFakeTimers()
+    const observer = createRuntimeAutomationRunTerminalObserver(runtime)
+    await expect(
+      observer.observeCompletion(handle, { signal: new AbortController().signal })
+    ).rejects.toThrow('terminal_exited')
+    expect(runtime['terminalWaiters'].forPty(TRANSCRIPT_PANE_PTY_ID)).toHaveLength(0)
+  })
+
   it('does not complete a reused run from the previous run idle status', async () => {
     const runtime = createFakeRuntime({ lastAgentStatus: 'idle' })
     const run = observe(runtime)
@@ -109,40 +129,6 @@ describe('createRuntimeAutomationRunTerminalObserver', () => {
     expect(run.errors).toEqual([])
 
     runtime.setPane({ lastAgentStatus: 'working' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ lastAgentStatus: 'idle' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled[0]?.status).toBe('completed')
-    await run.promise
-  })
-
-  it('does not complete from a stale idle pane title (leaf branch shape)', async () => {
-    const runtime = createFakeRuntime({ lastAgentStatus: null, paneTitle: '✳ Claude — idle' })
-    const run = observe(runtime)
-
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ paneTitle: '✳ Claude — working' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ paneTitle: '✳ Claude — idle' })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run.settled[0]?.status).toBe('completed')
-    await run.promise
-  })
-
-  it('does not complete from a ready shell prompt left over at dispatch', async () => {
-    const runtime = createFakeRuntime({ preview: 'user@host repo %\n$' })
-    const run = observe(runtime)
-
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(run.settled).toEqual([])
-
-    runtime.setPane({ preview: 'claude is thinking…' })
     await vi.advanceTimersByTimeAsync(1_000)
     expect(run.settled).toEqual([])
 

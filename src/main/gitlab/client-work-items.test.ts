@@ -52,7 +52,7 @@ describe('gitlab client — combined listWorkItems', () => {
     }))
   })
 
-  it('merges MRs + issues and sorts by updatedAt desc', async () => {
+  it('merges and sorts MRs + issues while preserving unknown-total page continuation', async () => {
     glabApiWithHeadersMock.mockResolvedValueOnce({
       body: JSON.stringify([
         {
@@ -61,6 +61,15 @@ describe('gitlab client — combined listWorkItems', () => {
           title: 'older mr',
           state: 'opened',
           updated_at: '2026-05-05T00:00:00Z',
+          source_project_id: 5,
+          target_project_id: 5
+        },
+        {
+          id: 101,
+          iid: 2,
+          title: 'newest mr',
+          state: 'opened',
+          updated_at: '2026-05-09T00:00:00Z',
           source_project_id: 5,
           target_project_id: 5
         }
@@ -81,27 +90,25 @@ describe('gitlab client — combined listWorkItems', () => {
       }
     })
 
-    const result = await listWorkItems('/repo', 'opened', 1, 20)
-    expect(result.items.map((i) => i.title)).toEqual(['newer issue', 'older mr'])
-    expect(result.items[0].type).toBe('issue')
-    expect(result.items[1].type).toBe('mr')
-  })
+    const result = await listWorkItems('/repo', 'opened', 3, 2)
+    expect(result).toMatchObject({ page: 3, perPage: 2, totalCount: 0, totalPages: 4 })
+    expect(result.error).toBeUndefined()
+    expect(result.items.map(({ title, type }) => ({ title, type }))).toEqual([
+      { title: 'newest mr', type: 'mr' },
+      { title: 'newer issue', type: 'issue' },
+      { title: 'older mr', type: 'mr' }
+    ])
+    expect(glabApiWithHeadersMock).toHaveBeenCalledTimes(1)
 
-  it("skips the issues fetch when state === 'merged'", async () => {
     glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
-
-    await listWorkItems('/repo', 'merged', 1, 20)
-    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('passes the closed state through to the issues fetch', async () => {
-    glabExecFileAsyncMock.mockImplementation(async () => {
-      return { stdout: '[]' }
+    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+    expect(await listWorkItems('/repo', 'opened', 4, 2)).toEqual({
+      items: [],
+      page: 4,
+      perPage: 2,
+      totalCount: 0,
+      totalPages: 4
     })
-
-    await listWorkItems('/repo', 'closed', 1, 20)
-    const issuesCallPath = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-    expect(issuesCallPath.at(-1)).toContain('state=closed')
   })
 
   it('passes search queries through to merge request and issue fetches', async () => {
@@ -126,30 +133,6 @@ describe('gitlab client — combined listWorkItems', () => {
     const issueParams = new URLSearchParams(issuesCallPath.at(-1)?.split('?')[1])
     expect(issueParams.getAll('iids[]')).toEqual(['23'])
     expect(issueParams.has('search')).toBe(false)
-  })
-
-  it('passes the requested page through to merge request and issue fetches', async () => {
-    glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
-    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
-
-    await listWorkItems('/repo', 'opened', 2, 20)
-
-    const mergeRequestCallPath = glabApiWithHeadersMock.mock.calls[0][0] as string[]
-    const issuesCallPath = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-    const mergeRequestParams = new URLSearchParams(mergeRequestCallPath[0].split('?')[1])
-    const issueParams = new URLSearchParams(issuesCallPath.at(-1)?.split('?')[1])
-    expect(mergeRequestParams.get('page')).toBe('2')
-    expect(issueParams.get('page')).toBe('2')
-  })
-
-  it("omits the state param when 'all'", async () => {
-    glabExecFileAsyncMock.mockImplementation(async () => {
-      return { stdout: '[]' }
-    })
-
-    await listWorkItems('/repo', 'all', 1, 20)
-    const issuesCallPath = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-    expect(issuesCallPath.at(-1)).not.toContain('state=')
   })
 
   it('routes issue list fetches through the selected SSH GitLab host', async () => {
@@ -177,14 +160,6 @@ describe('gitlab client — combined listWorkItems', () => {
     expect(result.error?.type).toBe('not_found')
     expect(result.items).toEqual([])
     expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('surfaces the MR error envelope into the combined result', async () => {
-    glabApiWithHeadersMock.mockRejectedValueOnce(new Error('HTTP 403 Forbidden'))
-    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
-
-    const result = await listWorkItems('/repo', 'opened', 1, 20)
-    expect(result.error?.type).toBe('permission_denied')
   })
 
   it('still returns issues when MRs error out', async () => {

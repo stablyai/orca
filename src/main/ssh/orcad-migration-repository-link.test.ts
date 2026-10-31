@@ -80,14 +80,12 @@ function repo(id: string, path: string, connectionId: string | null = TARGET.id)
 }
 
 let userDataPath: string
-// This desktop's profile, which still holds the host's relay-era projects.
 let store: Store
-// The host's managed server, which another desktop on the same login already uses.
 let server: Store
 let targetStore: SshConnectionStore
 let destination: OrcadMigrationDestinationCatalog & { stage: ReturnType<typeof vi.fn> }
 
-/** The real server-side import behind the T6-9 calls, as orcad runs it. */
+/** Use the real server import behind migration calls. */
 function serverDestination(): typeof destination {
   return {
     readState: async (manifest: OrcadMigrationManifest) =>
@@ -211,7 +209,7 @@ describe('moving onto a server another desktop already added the same project to
     expect(journal?.manifest.payload.repositories.map((entry) => entry.id)).toEqual([
       'desktop-only'
     ])
-    // Both rows stay for a downgraded build; this build shows the server's projects instead.
+    // Retain desktop rows for downgraded builds while managed clients show server rows.
     expect(
       store
         .getRepos()
@@ -257,7 +255,6 @@ describe('moving onto a server another desktop already added the same project to
     await expect(convert()).resolves.toMatchObject({ outcome: 'converted' })
     expect(server.getWorktreeMeta('desktop-only::/root/tool')?.comment).toBe('moves')
     expect(server.getWorktreeMeta('desktop-repo::/root/migrepo')).toBeUndefined()
-    // Kept in this desktop's retained rows for a downgraded build.
     expect(store.getWorktreeMeta('desktop-repo::/root/migrepo')?.comment).toBe('from this desktop')
   })
 
@@ -375,7 +372,6 @@ describe('moving the host again after its server was stopped', () => {
       comment: 'before the first move'
     })
     await expect(convert()).resolves.toMatchObject({ outcome: 'converted' })
-    // Used on the server while it was managed.
     server.setWorktreeMeta(onServer('desktop-repo::/root/migrepo'), {
       comment: 'edited on the server'
     })
@@ -432,7 +428,7 @@ describe('moving the host again after its server was stopped', () => {
     })
   }
 
-  // Review repro: the linked project's retained group was imported over the server's renamed one.
+  // Retained groups must not overwrite server-side renames on relink.
   it('keeps the server’s project group when it changed while managed', async () => {
     const groupId = groupDesktopRepo()
     await expect(convert()).resolves.toMatchObject({ outcome: 'converted' })
@@ -442,7 +438,6 @@ describe('moving the host again after its server was stopped', () => {
     await expect(convert()).resolves.toMatchObject({ outcome: 'converted' })
     expect(groupName(server, groupId)).toBe('Renamed on the server')
     expect(server.getRepo('desktop-repo')?.projectGroupId).toBe(groupId)
-    // This desktop's retained copy stays as it was, for a downgraded build.
     expect(groupName(store, groupId)).toBe('Before')
   })
 
@@ -472,7 +467,7 @@ describe('moving the host again after its server was stopped', () => {
     expect(plan.added.map((row) => row.id)).toEqual(['added-later'])
   })
 
-  // Codex repro: a nested group's moved parent was re-exported in a later delta.
+  // Delta exports must not resend a moved parent group through a new nested row.
   it('keeps the server’s nested groups out of the relink and later deltas', async () => {
     const parent = store.createProjectGroup({
       name: 'Parent',
@@ -500,7 +495,7 @@ describe('moving the host again after its server was stopped', () => {
     expect(groupName(server, parent.id)).toBe('Parent renamed on the server')
   })
 
-  // Codex repro: hiding the group from the source also hid the host a folder takes from it.
+  // Hiding server-owned groups must preserve inherited host ownership for later folders.
   it('still moves a later folder workspace that takes its host from the server’s group', async () => {
     const groupId = groupDesktopRepo()
     await convert()
@@ -514,7 +509,7 @@ describe('moving the host again after its server was stopped', () => {
     expect(server.getFolderWorkspace(folder.id)?.projectGroupId).toBe(groupId)
   })
 
-  // Codex repro: a group only a linked project used never reached the server, so it still moves.
+  // Groups absent from the server still move, even when only a linked project used them.
   it('moves a linked project’s group the server does not hold, so later rows can use it', async () => {
     otherDesktopAddsSameCheckout()
     const groupId = groupDesktopRepo()
@@ -526,7 +521,7 @@ describe('moving the host again after its server was stopped', () => {
     expect(server.getRepo('added-later')?.projectGroupId).toBe(groupId)
   })
 
-  // Review repro: a folder the server edited while managed must link on reconnect.
+  // Relink folders edited on the server while managed.
   it('links a folder workspace the server edited while managed', async () => {
     const group = targetGroup('Notes')
     const folder = store.createFolderWorkspace({
@@ -541,7 +536,7 @@ describe('moving the host again after its server was stopped', () => {
     expect(server.getFolderWorkspace(folder.id)?.comment).toBe('edited on the server')
   })
 
-  // Review repro: an empty group no server row sits in was re-imported over the server's.
+  // Retained empty groups must not overwrite server-side renames.
   it('keeps the server’s empty project group when it was renamed while managed', async () => {
     const group = targetGroup('Empty')
     await expect(convert()).resolves.toMatchObject({ outcome: 'converted' })
@@ -592,7 +587,7 @@ describe('moving the host again after its server was stopped', () => {
     ).rejects.toThrow(`orcad_migration_project_group_id_conflict:${group.id}`)
   })
 
-  // Review repro: a later folder in the relinked group re-exported this desktop's old group.
+  // New folders reference server-owned groups without re-exporting stale copies.
   it('moves a later folder into the server’s renamed group without re-exporting it', async () => {
     const groupId = groupDesktopRepo()
     await convert()
@@ -608,7 +603,7 @@ describe('moving the host again after its server was stopped', () => {
     expect(groupName(server, groupId)).toBe('Renamed on the server')
   })
 
-  // Opus repro: a group the first move imported, changed on the server, was re-exported too.
+  // Groups imported by the first move become server-owned too.
   it('moves a later row into a group the first move imported and the server changed', async () => {
     const groupId = groupDesktopRepo()
     await convert()
@@ -682,7 +677,6 @@ describe('moving the host again after its SSH target was deleted and re-created'
     })
     const recreated = recreateTarget()
     expect(store.getRepo('desktop-repo')?.connectionId).toBe(recreated)
-    // Used on this desktop under the new target before it was moved again.
     store.setWorktreeMeta(onSsh('desktop-repo::/root/migrepo', recreated), {
       comment: 'edited after re-creating'
     })
@@ -731,11 +725,10 @@ describe('moving the host again after its SSH target was deleted and re-created'
     )
     expect(journal?.linkedFolderWorkspaceIds).toEqual([folderId])
     expect(journal?.manifest.payload.folderWorkspaces).toEqual([])
-    // This desktop's copy stays in its retained rows for a downgraded build.
     expect(store.getFolderWorkspace(folderId)?.comment).toBe('edited after re-creating')
   })
 
-  // Codex repro: a folder lease key is `folder:<id>`, not a worktree id.
+  // Folder relay leases use folder:<id> keys, not worktree ids.
   describe('with relay terminals the bridge still serves', () => {
     const lease = (targetId: string, folderId: string) => ({
       targetId,
@@ -897,7 +890,7 @@ describe('which folder workspaces the server already holds', () => {
     expect(held({}, [], { connectionId: 'nested-target' })).toEqual([])
   })
 
-  // Codex repro: a bare row its group's nested SSH project places on another host.
+  // Group-inherited host ownership must distinguish otherwise bare rows.
   it('keeps a bare row apart when its group puts it on another host', () => {
     const nested = { id: 'r', path: '/srv/app', projectGroupId: 'group', connectionId: 'nested' }
     expect(held({}, [nested])).toEqual([])

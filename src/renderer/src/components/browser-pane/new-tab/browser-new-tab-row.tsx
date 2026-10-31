@@ -1,6 +1,5 @@
 import { ArrowUpRight } from 'lucide-react'
 
-/** One row of the workspace card: an icon, a title over a detail line, and optional trailing state. */
 export function BrowserNewTabRow({
   icon,
   title,

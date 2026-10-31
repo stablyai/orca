@@ -4,9 +4,7 @@ import {
   type NativeChatEditLine
 } from './native-chat-edit-model'
 
-/** Line diff between two contents, interleaved with context. Numbers are
- *  positions within the given contents, so they locate rows in the file only
- *  when the caller passed whole files. */
+/** Line numbers locate the supplied contents; they are file positions only when callers pass whole files. */
 export function editLinesFromContents(
   originalContent: string,
   modifiedContent: string

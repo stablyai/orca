@@ -32,8 +32,7 @@ export type RuntimeLocalBaseRefRefresh = {
   finish: () => Promise<void>
 }
 
-// Why: the deferred refresh can change neither the base nor the name, so start it before naming
-// and await it before the add, as the desktop create does; naming's PR lookup overlaps it.
+// Refresh cannot change base/name; overlap it with naming's PR lookup, then await before add as desktop does.
 export function startRuntimeLocalBaseRefRefresh(args: {
   repoPath: string
   base: RuntimeLocalWorktreeCreateBase
@@ -53,7 +52,7 @@ export function startRuntimeLocalBaseRefRefresh(args: {
       remoteTrackingBase,
       args.localWorktreeGitOptions
     )
-    // Why: naming can throw before finish() awaits the refresh.
+    // Handle refresh rejection even if naming throws before finish awaits it.
     void refresh.catch(() => undefined)
     return {
       finish: async () => {
@@ -110,10 +109,7 @@ export async function createRuntimeLocalGitWorktree(args: {
   if (args.request.sparseCheckout && sparseDirectories.length === 0) {
     throw new Error('Sparse checkout requires at least one repo-relative directory.')
   }
-  // Why: defer the remote add + fetch (fork case) or the redundant re-fetch
-  // (same-repo case, already fetched while resolving the PR start point) to
-  // first use -- push/pull/fetch/fast-forward materialize it on demand
-  // (#17828). Metadata is persisted untouched; only the git mutation defers.
+  // Defer fork remote add/fetch and redundant same-repo fetch until push/pull/fetch/fast-forward; persist metadata unchanged (#17828).
   const preparedPushTarget = args.request.pushTarget
   const suggestLocalBaseRefUpdate =
     !args.settings.refreshLocalBaseRefOnWorktreeCreate &&
@@ -133,7 +129,10 @@ export async function createRuntimeLocalGitWorktree(args: {
             args.request.onProgress?.({ phase: 'creating', checkout })
         }
       : {}),
-    ...(args.checkoutExistingBranch ? { checkoutExistingBranch: true } : {})
+    ...(args.checkoutExistingBranch ? { checkoutExistingBranch: true } : {}),
+    ...(args.request.branchIntent === 'open-existing-v2' && !args.checkoutExistingBranch
+      ? { trackRemoteBranch: true }
+      : {})
   }
   const shouldRetireGeneratedName =
     args.request.nameWasGenerated === true &&
@@ -142,7 +141,11 @@ export async function createRuntimeLocalGitWorktree(args: {
   let addResult: AddWorktreeResult
   try {
     addResult = await args.timing.time('git_worktree_add', async () => {
-      if (sparseDirectories.length > 0 || args.checkoutExistingBranch) {
+      if (
+        sparseDirectories.length > 0 ||
+        args.checkoutExistingBranch ||
+        args.request.branchIntent === 'open-existing-v2'
+      ) {
         args.timing.recordPreparedCheckout({
           status: 'miss',
           reason: sparseDirectories.length > 0 ? 'sparse_checkout' : 'checkout_existing_branch'
@@ -159,8 +162,7 @@ export async function createRuntimeLocalGitWorktree(args: {
           timing: args.timing
         })
         if (preparedAttempt.status === 'hit') {
-          // Deferred, not fired: re-arming is a full `reset --hard`, and the caller still has
-          // materialization probes and terminals ahead of it.
+          // Return rearm unstarted: reset --hard must wait until materialization and terminal startup finish.
           args.rearm.fire = preparedAttempt.rearm
           return preparedAttempt.result
         }
@@ -204,7 +206,7 @@ export async function createRuntimeLocalGitWorktree(args: {
     }
     throw error
   }
-  // Why: the worktree is listable from here on; scans that began before it appeared are stale.
+  // New worktree is now listable; invalidate scans started before it appeared.
   runWorktreeChangeInvalidators(args.repo.id)
   if (shouldRetireGeneratedName) {
     await retireGeneratedWorktreeName(
@@ -214,9 +216,7 @@ export async function createRuntimeLocalGitWorktree(args: {
       args.effectiveSanitizedName!
     )
   }
-  // Why: `--set-upstream-to` requires the remote to already exist -- safe for a
-  // same-repo target (its remote, e.g. `origin`, always exists) but not for a
-  // deferred fork remote, which is materialized lazily at first push/pull/fetch.
+  // Set upstream only for existing same-repo remotes; deferred fork remotes materialize at first push/pull/fetch.
   const configuredPushTarget =
     preparedPushTarget && !preparedPushTarget.remoteUrl
       ? await configureCreatedWorktreePushTarget(

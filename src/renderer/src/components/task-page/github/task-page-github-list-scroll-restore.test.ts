@@ -144,8 +144,7 @@ describe('GitHub task list scroll restore', () => {
 
     vi.advanceTimersByTime(30_000)
 
-    // The remembered offset must survive an arbitrarily slow paint instead of being
-    // overwritten with the committed 0 — that is what lost the position for good.
+    // Slow paint must not overwrite the remembered target with a clamped zero.
     expect(applied).not.toContain(0)
     expect(pendingRestoreRef.current).toBe(360)
 
@@ -169,8 +168,7 @@ describe('GitHub task list scroll restore', () => {
       onScrollTopApplied: () => {}
     })
 
-    // A pagination bar appearing or the window resizing shrinks only the container,
-    // which alone can make the remembered offset reachable.
+    // Container-only resize can make the target reachable without changing row height.
     list.setMaxScrollTop(900)
     resize(list.element)
 
@@ -217,8 +215,7 @@ describe('GitHub task list scroll restore', () => {
 
   describe('user takeover', () => {
     it('ignores the scroll event the restore itself produced', () => {
-      // Half-painted: the restore commits 200 of the 360 it wants, and that clamped
-      // write is what the browser echoes back as a scroll event.
+      // A half-painted list clamps 360 to 200 and echoes that committed position as a scroll event.
       const list = createScrollList(200)
       const pendingRestoreRef = ref<number | null>(360)
       const restoreWriteRef = ref<GitHubListRestoreWrite | null>(null)

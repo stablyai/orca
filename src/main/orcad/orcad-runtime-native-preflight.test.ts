@@ -89,7 +89,6 @@ describe('bundled native readiness', () => {
     )
   })
 
-  // A loaded Windows runner timed the whole-table snapshot out, and startup failed readiness.
   it('identifies itself by one PID when the process-table snapshot times out', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     fixture.rows.mockRejectedValue(

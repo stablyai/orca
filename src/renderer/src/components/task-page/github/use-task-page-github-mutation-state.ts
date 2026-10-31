@@ -12,7 +12,7 @@ import { useAppStore } from '@/store/index'
 import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
 import { rebuildSoftHiddenKeysFromPendingAndSticky } from '@/components/task-page/github/task-page-github-work-item-mutation-composition'
 import { buildGitHubRepoUrl } from '../../../../../shared/github/links'
-import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 export function useTaskPageGitHubMutationState(model: TaskPageLinearCreationStateModel) {
   const {
     selectedRepos,

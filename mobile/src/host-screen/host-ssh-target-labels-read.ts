@@ -16,7 +16,6 @@ export async function settledMetadataReply(
   }
 }
 
-/** An accepted metadata payload, or null for a refusal or a send that never landed. */
 export function acceptedMetadata<Value>(
   reply: RpcResponse | null,
   interpret: (reply: RpcResponse) => RpcAcceptedResult<Value>
@@ -33,7 +32,6 @@ function readHostSettingOverrides(result: unknown): unknown {
   return (result as { hostSettingOverrides?: unknown } | null)?.hostSettingOverrides
 }
 
-/** The desktop's SSH targets and the names its hosts show under: SSH labels, then display overrides. */
 export async function readHostSshTargetLabels(client: RpcClient) {
   const [sshTargets, hostSettings] = await Promise.all([
     settledMetadataReply(() => hostSshTargetSummariesRead.request(client)),

@@ -1,45 +1,11 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, typography, radii } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const styles = StyleSheet.create({
+export const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  titleWrap: {
-    flex: 1
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  subheading: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    marginTop: 1
   },
   scroll: {
     paddingHorizontal: spacing.lg,
@@ -63,7 +29,7 @@ export const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   row: {
@@ -79,10 +45,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     gap: 4
   },
-  // Why: fixed-width trailing slot so the usage bars in `rowMain` keep the
-  // same width whether or not the row is currently selected (otherwise the
-  // checkmark on the active account squeezes the bars narrower than the
-  // inactive rows above/below it).
+  // Reserve trailing width so selected checkmark cannot squeeze active usage bars relative to other rows.
   rowTrailing: {
     width: 24,
     alignItems: 'flex-end',
@@ -134,4 +97,4 @@ export const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 18
   }
-})
+}))

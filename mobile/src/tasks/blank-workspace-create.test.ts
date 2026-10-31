@@ -18,8 +18,7 @@ function fakeClient(script: (method: string, call: number) => unknown, calls: Ca
         return {
           id: '1',
           ok: false,
-          // `name` stands in for the wire error code, which is what tells a refused method apart
-          // from a refused create.
+          // name carries the wire error code distinguishing refused methods from refused creates.
           error: { code: result.name === 'Error' ? 'x' : result.name, message: result.message },
           _meta: { runtimeId: 'r' }
         }
@@ -51,7 +50,6 @@ describe('createBlankWorkspace', () => {
       setupDecision: 'inherit',
       nameWasGenerated: false,
       worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
-      // Default the existing cases to an old host so they keep pinning the legacy create.
       agentLaunchSupported: false
     })
 
@@ -65,8 +63,7 @@ describe('createBlankWorkspace', () => {
         name: 'octopus',
         displayName: 'octopus',
         displayNameKind: 'user',
-        // Idempotency key so a create interrupted by a connection migration can be
-        // safely retried without the host spawning a duplicate worktree.
+        // Reuse the idempotency key across connection migration so retries cannot duplicate the worktree.
         clientMutationId: expect.any(String)
       }
     })
@@ -77,7 +74,7 @@ describe('createBlankWorkspace', () => {
   })
 
   it('marks the name as generated only when the user typed nothing', async () => {
-    // Why: the host retires generated names permanently; a name the user chose must stay reusable.
+    // Generated names retire permanently; user-chosen names must remain reusable.
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: { id: 'wt-3' } }), calls)
 
@@ -90,7 +87,6 @@ describe('createBlankWorkspace', () => {
       setupDecision: 'inherit',
       nameWasGenerated: true,
       worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
-      // Default the existing cases to an old host so they keep pinning the legacy create.
       agentLaunchSupported: false
     })
 
@@ -98,8 +94,7 @@ describe('createBlankWorkspace', () => {
   })
 
   it('sends startupAgent (not a pre-built command) so the host resolves launch args', async () => {
-    // Why: regression — the modal used to send a bare startupCommand ('claude')
-    // that skipped the host's default `--dangerously-skip-permissions`.
+    // Let the host resolve launch args; bare commands would omit configured permission flags.
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: { id: 'wt-2' } }), calls)
 
@@ -112,7 +107,6 @@ describe('createBlankWorkspace', () => {
       setupDecision: 'run',
       nameWasGenerated: false,
       worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
-      // Default the existing cases to an old host so they keep pinning the legacy create.
       agentLaunchSupported: false
     })
 
@@ -129,8 +123,7 @@ describe('createBlankWorkspace', () => {
   })
 
   it('routes a picked agent through agent.launch on a host that advertises it', async () => {
-    // The bug: `worktree.create` + `startupAgent` creates the worktree agent-first, so its startup
-    // terminal IS the agent and the user's structured-chat default can never apply.
+    // startupAgent forces a PTY and bypasses the user’s structured-chat default.
     const calls: Call[] = []
     const client = fakeClient(
       () => ({
@@ -155,7 +148,6 @@ describe('createBlankWorkspace', () => {
     expect(result).toEqual({ worktreeId: 'wt-9', name: 'manatee' })
     expect(calls).toHaveLength(1)
     expect(calls[0]?.method).toBe('agent.launch')
-    // Everything the create needs survives the move; only the agent fields the launch owns go.
     expect(calls[0]?.params).toMatchObject({
       agent: 'claude',
       target: {
@@ -242,8 +234,7 @@ describe('createBlankWorkspace', () => {
   })
 
   it('downgrades to worktree.create when the host refuses the method itself', async () => {
-    // The status.get probe can win the race against this client's own capability advertisement;
-    // a refused method must not fail the create outright.
+    // A stale capability advertisement can refuse the method; legacy fallback must still create.
     const calls: Call[] = []
     const client = fakeClient((method) => {
       if (method === 'agent.launch') {
@@ -289,7 +280,6 @@ describe('createBlankWorkspace', () => {
       setupDecision: 'inherit',
       nameWasGenerated: false,
       worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
-      // Default the existing cases to an old host so they keep pinning the legacy create.
       agentLaunchSupported: false
     })
 
@@ -317,7 +307,6 @@ describe('createBlankWorkspace', () => {
       setupDecision: 'inherit',
       nameWasGenerated: false,
       worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
-      // Default the existing cases to an old host so they keep pinning the legacy create.
       agentLaunchSupported: false
     })
 
@@ -338,7 +327,6 @@ describe('createBlankWorkspace', () => {
       setupDecision: 'skip',
       nameWasGenerated: false,
       worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
-      // Default the existing cases to an old host so they keep pinning the legacy create.
       agentLaunchSupported: false
     })
 
@@ -346,13 +334,7 @@ describe('createBlankWorkspace', () => {
     expect(calls).toHaveLength(1)
   })
 
-  // The break branch, and the two routes now answer it differently.
-  //
-  // `agent.launch` still reports it as a message: its reader guards `worktreeId` itself and answers
-  // null, which the retry loop turns into "Failed to create workspace". `worktree.create` does not:
-  // the create screen reads `result.worktree.id` unguarded into the session route, so the checked
-  // reader requires it and a reply without one is named as unreadable rather than reported as a
-  // create that failed. Both surface at the same catch; only the sentence changes.
+  // Missing launch receipts become failed-create copy; malformed worktree.create replies fail the checked reader before routing.
   it('names an accepted worktree.create reply that carries no workspace id', async () => {
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: {} }), calls)

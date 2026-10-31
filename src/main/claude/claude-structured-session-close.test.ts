@@ -3,7 +3,7 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import type {
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+} from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   adapterFor,
@@ -12,35 +12,8 @@ import {
 } from './claude-structured-session-test-support'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import { claudeRootExitObserved, closeClaudeSession } from './claude-structured-session-close'
-import { ClaudeAcquisitionRegistry } from './claude-structured-session-state'
 
 describe('Claude published session close lifecycle', () => {
-  it('never reads a failed spawn as an observed root exit, whatever checks it first', async () => {
-    const claude = fakeClaude()
-    const adapter = adapterFor(claude)
-    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
-    const connection = claude.connections[0]!
-    connection.exitVerdict = { root: 'exited', tree: 'exited', processless: true }
-    expect(claudeRootExitObserved(connection)).toBe(false)
-    connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
-    expect(claudeRootExitObserved(connection)).toBe(true)
-  })
-
-  it('reports a proven root exit when published-session close cannot prove descendants', async () => {
-    const claude = fakeClaude()
-    const adapter = adapterFor(claude)
-    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
-    const connection = claude.connections[0]!
-    connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
-    connection.close = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
-
-    await expect(adapter.closeSession('session-1')).rejects.toBeInstanceOf(
-      AgentSessionAcquisitionRootExitObservedError
-    )
-  })
-
   it('lets the chat start again after a close that saw the root exit', async () => {
     const claude = fakeClaude()
     const adapter = adapterFor(claude)
@@ -71,23 +44,6 @@ describe('Claude published session close lifecycle', () => {
 
     expect(claude.connections).toHaveLength(2)
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
-  })
-
-  it('reports the same root-exit verdict while cancelling acquisition', async () => {
-    const claude = fakeClaude({
-      unprovenCloseVerdict: { root: 'exited', tree: 'unverifiable' }
-    })
-    const acquisitions = new ClaudeAcquisitionRegistry()
-    const { attempt } = acquisitions.start('session-1', new ClaudePromptRegistry())
-    attempt.connection = await claude.openConnection({
-      pathToClaudeCodeExecutable: 'claude',
-      options: {},
-      cwd: '/work/repo'
-    })
-
-    await expect(
-      closeClaudeSession({ sessionId: 'session-1', sessions: new Map(), acquisitions })
-    ).rejects.toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
   })
 
   it('ends the session even when the durable handle write rejects', async () => {

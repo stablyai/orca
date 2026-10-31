@@ -95,9 +95,7 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(connect).toHaveBeenCalledWith({ targetId: 'ssh-target-1' })
   })
 
-  // The canned "Connect again to continue" sentence is the same for a timeout and for a refused
-  // host key. Only the detail says which, and for a host key it carries the only remedy the user
-  // will see anywhere in the terminal.
+  // Failure details carry the host-key remedy missing from the generic status sentence.
   it('shows the failure detail beneath the status sentence', () => {
     installSshConnect(vi.fn())
 
@@ -110,7 +108,6 @@ describe('TerminalSshReconnectOverlay', () => {
       />
     )
 
-    // Both, not either: the sentence says what to do, the detail says what happened.
     expect(screen.getByText(/The SSH connection to devbox failed/)).toBeInTheDocument()
     expect(screen.getByText(/ssh-keygen -R devbox/)).toBeInTheDocument()
   })
@@ -126,8 +123,7 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(screen.queryByText(/ssh-keygen/)).not.toBeInTheDocument()
   })
 
-  // A removed target already explains itself and can never reconnect; a stale connection error
-  // underneath would contradict that.
+  // Removed targets cannot reconnect; stale connection errors would contradict the removal notice.
   it('suppresses the detail for a removed target', () => {
     installSshConnect(vi.fn())
 
@@ -197,8 +193,7 @@ describe('TerminalSshReconnectOverlay', () => {
 
     await user.click(screen.getByRole('button', { name: 'Connect' }))
 
-    // Why: the metadata refresh is what flips TerminalPane's targetRemoved
-    // derivation, replacing the failing Connect loop with the ghost-host UI.
+    // Refresh metadata so the pane replaces a failing Connect loop with removed-host recovery.
     await waitFor(() => {
       expect(useAppStore.getState().sshTargetLabels.get('ssh-live')).toBe('devbox')
       expect(useAppStore.getState().removedSshTargetLabels.get('ssh-dead')).toBe('devbox (removed)')
@@ -222,8 +217,7 @@ describe('TerminalSshReconnectOverlay', () => {
 
     await user.click(screen.getByRole('button', { name: 'Connect' }))
 
-    // Why: a removed-labels failure must not discard the refreshed target
-    // list — it alone is enough evidence for targetRemoved to converge.
+    // Keep the refreshed target list even if removed-label metadata fails.
     await waitFor(() => {
       expect(useAppStore.getState().sshTargetLabels.get('ssh-live')).toBe('devbox')
       expect(useAppStore.getState().sshTargetsHydrated).toBe(true)
@@ -246,7 +240,6 @@ describe('TerminalSshReconnectOverlay', () => {
     )
 
     expect(screen.getByText('SSH host removed')).toBeInTheDocument()
-    // No Connect button — reconnect is impossible for a removed target.
     expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Remove workspace' }))
@@ -279,7 +272,6 @@ describe('TerminalSshReconnectOverlay', () => {
         'ssh-remote-1'
       )
     )
-    // The local ssh API must never see a remote host's target.
     expect(connect).not.toHaveBeenCalled()
   })
 
@@ -310,7 +302,6 @@ describe('TerminalSshReconnectOverlay', () => {
     await waitFor(() =>
       expect(environmentSshMocks.resyncRuntimeEnvironmentSshTargets).toHaveBeenCalledWith('env-1')
     )
-    // The failed-connect resync must not rewrite local target metadata.
     expect(listTargets).not.toHaveBeenCalled()
     expect(useAppStore.getState().sshTargetsHydrated).toBe(false)
   })
@@ -378,7 +369,6 @@ describe('TerminalSshReconnectOverlay', () => {
     )
   })
 
-  // A move refused only by saved state has a way out; the pane must offer it, not just Retry.
   it('offers Move anyway beside Retry for a local move refused only by saved state', async () => {
     const allowMoveLeavingBehind = vi.fn().mockResolvedValue(undefined)
     const connect = vi.fn().mockResolvedValue(null)

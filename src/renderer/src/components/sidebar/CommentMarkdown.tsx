@@ -3,9 +3,15 @@ import {
   CommentMarkdownMermaidContext,
   CommentMarkdownMermaidSourceContext
 } from './comment-markdown-mermaid-policy'
-import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
+import {
+  defaultUrlTransform,
+  type Components,
+  type Options as MarkdownOptions
+} from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
+import { remarkChatMath } from './chat-markdown-math'
+import { copyChatMathSelection } from './chat-markdown-math-selection'
 import remarkCjkFriendly from 'remark-cjk-friendly/parseOnly'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
@@ -22,14 +28,13 @@ import {
   type FileLinkExists
 } from './comment-markdown-native-chat-file-links'
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
-import { rehypeWordFade } from './comment-markdown-word-fade'
 import { remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
 import {
-  splitMarkdownTopLevelBlocks,
-  type MarkdownBlock,
-  type MarkdownBlockSplit
-} from './markdown-top-level-blocks'
+  MemoizedMarkdown,
+  useMarkdownBlocks,
+  markdownBlockContent
+} from './comment-markdown-block-pipeline'
 import {
   GITHUB_CALLOUT_SANITIZE_ATTRIBUTE,
   remarkGitHubCallouts
@@ -38,9 +43,9 @@ import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-litera
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
-type MarkdownPlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
-type RemarkPlugins = NonNullable<React.ComponentProps<typeof Markdown>['remarkPlugins']>
-type UrlTransform = NonNullable<React.ComponentProps<typeof Markdown>['urlTransform']>
+type MarkdownPlugins = NonNullable<MarkdownOptions['rehypePlugins']>
+type RemarkPlugins = NonNullable<MarkdownOptions['remarkPlugins']>
+type UrlTransform = NonNullable<MarkdownOptions['urlTransform']>
 
 type GitHubRepoReference = {
   owner: string
@@ -79,10 +84,7 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
   return commentMarkdownUrlTransform(value, key, node)
 }
 
-// Why: standard CommonMark collapses single newlines into spaces. The old
-// plain-text renderer used whitespace-pre-wrap which preserved them. Adding
-// remark-breaks converts single newlines to <br>, keeping backward compat
-// with existing plain-text comments that rely on newline formatting.
+// remark-breaks preserves newlines expected by existing plain-text comments; CommonMark otherwise collapses them.
 const remarkPlugins = [
   remarkGfm,
   remarkCjkFriendly,
@@ -163,8 +165,7 @@ function transformGitHubReferenceChildren(
   const nextChildren: MarkdownNode[] = []
   for (const child of node.children) {
     if (child.type === 'text' && child.value !== undefined) {
-      // Why: generated agent comments can contain thousands of issue refs;
-      // appending iteratively avoids V8's argument-list limit.
+      // Agent replies can contain thousands of issue refs; append iteratively to avoid V8’s argument limit.
       for (const part of splitGitHubReferenceText(child.value, defaultRepo)) {
         nextChildren.push(part)
       }
@@ -183,7 +184,7 @@ export function remarkGitHubReferences(
   return () => (tree) => transformGitHubReferenceChildren(tree, defaultRepo)
 }
 
-const commentMarkdownSanitizeSchema = {
+const commentMarkdownSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'sub', 'sup', 'ins', 'kbd'],
   attributes: {
@@ -196,19 +197,30 @@ const commentMarkdownSanitizeSchema = {
     details: [...(defaultSchema.attributes?.details ?? []), 'open'],
     img: [...(defaultSchema.attributes?.img ?? []), 'src', 'alt', 'title', 'width', 'height'],
     input: [...(defaultSchema.attributes?.input ?? []), 'type', 'checked', 'disabled'],
+    code: [
+      ...(defaultSchema.attributes?.code ?? []),
+      ['className', 'language-math', 'math-inline', 'math-display']
+    ],
+    span: [
+      ...(defaultSchema.attributes?.span ?? []),
+      ['className', 'language-math', 'math-inline', 'math-display', 'whitespace-pre-wrap']
+    ],
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      ['className', 'language-math', 'math-inline', 'math-display', 'whitespace-pre-wrap']
+    ],
     td: [...(defaultSchema.attributes?.td ?? []), 'align'],
     th: [...(defaultSchema.attributes?.th ?? []), 'align']
   },
   protocols: {
     ...defaultSchema.protocols,
-    // Why: native chat opts into file URI links after sanitize; the URL
-    // transform below still strips them for all other markdown surfaces.
+    // Allow file links through sanitize for native chat; other surfaces still strip them in URL transformation.
     href: [...(defaultSchema.protocols?.href ?? []), 'file'],
     src: [...(defaultSchema.protocols?.src ?? []), 'data', 'blob', 'orca-jira-image']
   }
 }
 
-// Why: runs before remark-breaks so newlines inside the escaped HTML still break.
+// Escape HTML before remark-breaks so newlines inside it still break.
 const unknownHtmlAsTextRemarkPlugins = [
   remarkUnknownHtmlAsText(
     new Set((commentMarkdownSanitizeSchema.tagNames ?? []).map((name) => name.toLowerCase()))
@@ -216,17 +228,14 @@ const unknownHtmlAsTextRemarkPlugins = [
   ...remarkPlugins
 ]
 
-// Why: GitHub comments often include safe raw HTML (`<sub>`, `<details>`,
-// `<br />`). Parse it, then sanitize immediately before React renders it.
+// GitHub comments use raw HTML; parse it then sanitize before rendering.
 const rehypePlugins: MarkdownPlugins = [rehypeRaw, [rehypeSanitize, commentMarkdownSanitizeSchema]]
 
-/**
- * A surface-specific markdown addition: its own remark plugins, the element attributes those
- * plugins need to survive sanitize, and the components that render them. Keep the object stable
- * per surface; a new one rebuilds the components and remounts what they rendered.
- */
+/** Keep extensions stable per surface; new objects rebuild components and remount their contents. */
 export type CommentMarkdownExtension = {
   remarkPlugins: RemarkPlugins
+  /** Extra flow syntax requires one of these markers; omitted means unknown grammar. */
+  extraFlowSyntaxMarkers?: readonly string[]
   sanitizeAttributes: Record<string, readonly string[]>
   components: Components
 }
@@ -243,6 +252,7 @@ function extensionRehypePlugins(extension: CommentMarkdownExtension): MarkdownPl
 
 type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   content: string
+  math?: boolean
   variant?: 'compact' | 'document'
   githubRepo?: GitHubRepoReference | null
   onLinkClick?: CommentMarkdownLinkClickHandler
@@ -264,24 +274,6 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   unknownHtmlAsText?: boolean
 }
 
-/** One render of the pipeline; memoized so an unchanged block is not parsed again. */
-const MemoizedMarkdown = React.memo(Markdown)
-
-/** The content as the blocks to render. Cut into blocks from the first time it is growing, and
- *  from then on, so the stream ending does not redraw what is already there. */
-function useMarkdownBlocks(content: string, growing: boolean): readonly MarkdownBlock[] {
-  const [previous, setPrevious] = React.useState<MarkdownBlockSplit | null>(null)
-  if (!growing && previous === null) {
-    return [{ start: 0, line: 1, text: content }]
-  }
-  if (previous?.source === content) {
-    return previous.blocks
-  }
-  const next = splitMarkdownTopLevelBlocks(content, previous)
-  setPrevious(next)
-  return next.blocks
-}
-
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
 // and event handlers (onPointerEnter, onPointerLeave, data-state, etc.) onto
 // the child. Without forwarding both, the hover card cannot open or position.
@@ -289,6 +281,7 @@ const CommentMarkdown = React.memo(
   React.forwardRef<HTMLDivElement, CommentMarkdownProps>(function CommentMarkdown(
     {
       content,
+      math = false,
       className,
       variant = 'compact',
       githubRepo,
@@ -302,6 +295,7 @@ const CommentMarkdown = React.memo(
       growing = false,
       fadeWords = false,
       extension,
+      onCopy,
       unknownHtmlAsText = false,
       ...rest
     },
@@ -325,7 +319,7 @@ const CommentMarkdown = React.memo(
       () => ({ ...components, span: CommentMarkdownWords }),
       [components]
     )
-    const activeRehypePlugins = React.useMemo(
+    const activeRehypePlugins = React.useMemo<MarkdownPlugins>(
       () => (extension ? extensionRehypePlugins(extension) : rehypePlugins),
       [extension]
     )
@@ -334,19 +328,16 @@ const CommentMarkdown = React.memo(
       const plugins = fileLinkExists
         ? [...basePlugins, remarkNativeChatFileLinks(fileLinkExists)]
         : basePlugins
-      const withExtension = extension ? [...plugins, ...extension.remarkPlugins] : plugins
+      const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
+      const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo, unknownHtmlAsText])
-    const blocks = useMarkdownBlocks(content, growing)
+    }, [extension, fileLinkExists, githubRepo, math, unknownHtmlAsText])
+    const blocks = useMarkdownBlocks(content, growing, math, activeRemarkPlugins, extension)
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {
       setHadWordFade(true)
     }
     const wrapsWords = fadeWords || hadWordFade
-    const fadingRehypePlugins = React.useMemo(
-      () => [...activeRehypePlugins, rehypeWordFade],
-      [activeRehypePlugins]
-    )
 
     return (
       <CommentMarkdownMermaidContext.Provider value={renderMermaid}>
@@ -354,20 +345,27 @@ const CommentMarkdown = React.memo(
           <div
             ref={ref}
             className={cn(
-              // Reset inline-code pill styles when <code> is inside a <pre> block.
-              // The descendant selector (pre code) has higher specificity than the
-              // direct utility classes on <code>, so these overrides win reliably.
+              // Descendant pre/code selectors outrank inline-code pill utilities to reset block-code styling.
               '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none',
               'min-w-0 max-w-full [overflow-wrap:anywhere]',
               className
             )}
+            onCopy={(event) => {
+              onCopy?.(event)
+              if (math && !event.defaultPrevented) {
+                copyChatMathSelection(event)
+              }
+            }}
             {...rest}
           >
             {blocks.map((block, index) => (
               <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
                 <MemoizedMarkdown
+                  block={block.tree ? block : undefined}
                   remarkPlugins={activeRemarkPlugins}
-                  rehypePlugins={wrapsWords ? fadingRehypePlugins : activeRehypePlugins}
+                  rehypePlugins={activeRehypePlugins}
+                  math={math}
+                  fadeWords={wrapsWords}
                   components={wrapsWords ? fadingComponents : components}
                   urlTransform={
                     allowFileUriLinks
@@ -375,9 +373,12 @@ const CommentMarkdown = React.memo(
                       : commentMarkdownUrlTransform
                   }
                 >
-                  {growing && index === blocks.length - 1
-                    ? remend(block.text, { linkMode: 'text-only' })
-                    : block.text}
+                  {growing && index === blocks.length - 1 && !block.literalMath
+                    ? remend(markdownBlockContent(block), {
+                        linkMode: 'text-only',
+                        ...(math ? { katex: false, inlineKatex: false } : {})
+                      })
+                    : markdownBlockContent(block)}
                 </MemoizedMarkdown>
               </CommentMarkdownBlockLineContext.Provider>
             ))}

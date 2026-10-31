@@ -1,3 +1,4 @@
+import { callerRendersLaunchedChat } from './agent-launch-caller-selection'
 import {
   assertHostFoundingNotCancelled,
   type HostFoundingAttempt
@@ -8,13 +9,12 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { canonicalWorktreeIdentity } from '../../../../shared/worktree/identity'
 import { worktreeCreateRepoSelector } from './worktree-create-args'
 
-import type { AgentLaunchIntent, AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import { agentSessionOperationKey } from '../../../../shared/agent-session-operation-ledger'
 import { WorktreeCreateCollisionError } from '../../../../shared/new-workspace/worktree-create-collision'
 
 import { trackTerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 
-import type { RpcContext } from '../core'
 import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
 import {
   AgentLaunchExecutionError,
@@ -33,11 +33,11 @@ import {
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
 import { publishEarlyTab, type AgentLaunchView } from './agent-launch-tab-publication'
 
-import type { ActiveAgentLaunch } from './agent-launch'
+import type { ActiveAgentLaunch, HostLaunchContext } from './agent-launch'
 import { runAgentLaunch } from './agent-launch-run'
 async function reserveAgentLaunchWorkspaceIdentity(
   params: AgentLaunchParams & { operationId: string },
-  context: RpcContext,
+  context: HostLaunchContext,
   active: Map<string, ActiveAgentLaunch>
 ): Promise<void> {
   if (!params.createIdentity || params.target.kind !== 'create-worktree') {
@@ -74,7 +74,7 @@ async function reserveAgentLaunchWorkspaceIdentity(
 
 export async function executeReplaySafeAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
-  context: RpcContext,
+  context: HostLaunchContext,
   fingerprint: string,
   hostFoundingAttempt: HostFoundingAttempt,
   active: Map<string, ActiveAgentLaunch>
@@ -121,7 +121,7 @@ export async function executeReplaySafeAgentLaunch(
 
 async function executeAdmittedAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
-  context: RpcContext,
+  context: HostLaunchContext,
   admission: Extract<
     Awaited<ReturnType<typeof admitAgentLaunchOperation>>,
     { decision: 'execute' }
@@ -130,14 +130,16 @@ async function executeAdmittedAgentLaunch(
   hostFoundingAttempt: HostFoundingAttempt,
   active: Map<string, ActiveAgentLaunch>
 ): Promise<AgentLaunchResult> {
-  let intent: AgentLaunchIntent
+  let resolved: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>
   try {
-    intent = await resolveUnlaunchedIntent(params, context.runtime, view.early)
+    resolved = await resolveUnlaunchedIntent(params, context.runtime, view.early, {
+      callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
+    })
   } catch (error) {
     if (hostFoundingAttempt.cancellation?.requested) {
       throw new AgentLaunchCancelledError()
     }
-    await settleQuietly(admission.fail(agentLaunchFailureCode(error)))
+    await settleQuietly(admission.fail(agentLaunchFailureCode(error), error))
     throw error
   }
   const terminalSpawn = trackTerminalSpawnDispatch()
@@ -145,7 +147,7 @@ async function executeAdmittedAgentLaunch(
   try {
     await reserveAgentLaunchWorkspaceIdentity(params, context, active)
     result = await runAgentLaunch(
-      intent,
+      resolved,
       context,
       view,
       {
@@ -169,7 +171,7 @@ async function executeAdmittedAgentLaunch(
     }
     const failedWithoutEffects = hostFoundingAttempt.disposition
       ? null
-      : launchFailureWithoutEffectsCode(error, intent.target.kind, terminalSpawn)
+      : launchFailureWithoutEffectsCode(error, resolved.intent.target.kind, terminalSpawn)
     if (failedWithoutEffects) {
       await settleQuietly(admission.fail(failedWithoutEffects, error))
     }

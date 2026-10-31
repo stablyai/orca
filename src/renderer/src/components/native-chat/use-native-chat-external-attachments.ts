@@ -1,3 +1,4 @@
+import { captureNativeChatEditDraftDestination } from './native-chat-composer-draft-store'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
@@ -35,11 +36,11 @@ import type { CapturedNativeChatDrop } from './native-chat-pane-file-drop'
 
 export type UseNativeChatExternalAttachmentsArgs = {
   terminalTabId: string
+  draftScopeKey?: string
   structuredWorktreeId?: string
   /** The structured chat behind this composer; decides where its uploads are stored. */
   structuredSession?: NativeChatStructuredAttachmentSession
-  /** Live composer-disabled state; read at await-resume via a ref so a flip
-   *  mid-upload doesn't attach into a guarded composer. */
+  /** Recheck disabled state after awaits so late uploads cannot attach to a guarded composer. */
   disabled: boolean
   attachResolvedPaths: (
     paths: string[],
@@ -51,13 +52,10 @@ export type UseNativeChatExternalAttachmentsArgs = {
   setNotice: (notice: string | null) => void
 }
 
-/**
- * Attach paths that arrived client-local (composer drop / file picker). SSH
- * worktrees upload into the worktree's `.orca/drops` first so the remote agent
- * can actually read what gets referenced (STA-1465).
- */
+/** Upload client-local files to the owning agent’s store or SSH .orca/drops before referencing them. */
 export function useNativeChatExternalAttachments({
   terminalTabId,
+  draftScopeKey,
   structuredWorktreeId,
   structuredSession,
   disabled,
@@ -82,9 +80,7 @@ export function useNativeChatExternalAttachments({
     disabledRef.current = disabled
   }, [disabled])
 
-  // The post-await gate asks which workspace this composer serves now, so it
-  // reads the pane through a ref. Resolving through the render closure would
-  // re-ask the workspace the upload started in — a comparison with itself.
+  // Read the current pane through a ref after awaits; closure-based lookup would compare the original workspace to itself.
   const workspaceRef = useRef<ComposerWorkspace>({
     structuredWorktreeId,
     terminalTabId,
@@ -124,6 +120,10 @@ export function useNativeChatExternalAttachments({
   // Captures one intake's owner, destination and chips; its checks and work run against them later.
   const captureIntake = useCallback(
     (destinationIsCurrent: () => boolean, options?: NativeChatAttachmentFocusOptions) => {
+      const destination = draftScopeKey
+        ? captureNativeChatEditDraftDestination(draftScopeKey)
+        : undefined
+      const abandoned = (): boolean => (destination ? !destination.active : disabledRef.current)
       const owner = resolveAttachmentOwner()
       const chips = pendingChipsRef.current
       const capturedWorkspace = workspaceRef.current
@@ -135,12 +135,12 @@ export function useNativeChatExternalAttachments({
         )
       const capturedWorktreeId = currentWorktreeId()
       const ownerStillCurrent = (): boolean =>
-        destinationIsCurrent() &&
+        (destination ? destination.active : destinationIsCurrent()) &&
         isSameComposerWorkspace(capturedWorkspace, workspaceRef.current) &&
         capturedWorktreeId === currentWorktreeId() &&
         nativeChatAttachmentOwnerUnchanged(owner, resolveAttachmentOwner())
       const refusal = (count: number): string | null => {
-        if (!destinationIsCurrent()) {
+        if (destination ? !destination.active : !destinationIsCurrent()) {
           return nativeChatAttachmentOwnerChangedNotice()
         }
         if (owner.kind === 'not-ready') {
@@ -162,7 +162,7 @@ export function useNativeChatExternalAttachments({
             owner,
             chips,
             options,
-            isAbandoned: () => disabledRef.current,
+            isAbandoned: abandoned,
             ownerStillCurrent,
             setNotice
           })
@@ -175,7 +175,7 @@ export function useNativeChatExternalAttachments({
           }
           const readable: typeof pending = []
           for (const entry of pending) {
-            if (disabledRef.current) {
+            if (abandoned()) {
               return
             }
             if (!ownerStillCurrent()) {
@@ -190,7 +190,7 @@ export function useNativeChatExternalAttachments({
               chips.drop(entry.chipId)
             }
           }
-          if (disabledRef.current) {
+          if (abandoned()) {
             return
           }
           if (!ownerStillCurrent()) {
@@ -234,6 +234,8 @@ export function useNativeChatExternalAttachments({
       }
       return {
         chips,
+        abandoned,
+        admitted: destination !== undefined,
         refusal,
         run,
         preparationConsumer:
@@ -242,7 +244,7 @@ export function useNativeChatExternalAttachments({
             : ('agent' as const)
       }
     },
-    [attachResolvedPaths, resolveAttachmentOwner, setNotice]
+    [attachResolvedPaths, draftScopeKey, resolveAttachmentOwner, setNotice]
   )
 
   const captureExternalDrop = useCallback(
@@ -252,7 +254,7 @@ export function useNativeChatExternalAttachments({
     ) => {
       const intake = captureIntake(destinationIsCurrent, options)
       const attach = async (paths: string[]): Promise<void> => {
-        if (paths.length === 0 || disabledRef.current || !mountedRef.current) {
+        if (paths.length === 0 || intake.abandoned() || (!intake.admitted && !mountedRef.current)) {
           return
         }
         const notice = intake.refusal(paths.length)
@@ -271,8 +273,7 @@ export function useNativeChatExternalAttachments({
     [captureIntake, mountedRef, setNotice]
   )
 
-  // Chips a paste reserved before its clipboard said they are files: admitted work, so it may
-  // finish after an unmount; a refusal releases them.
+  // Paste-reserved chips are admitted work and may finish after unmount; refusals must release them.
   const captureReservedAttachments = useCallback(
     (
       destinationIsCurrent: () => boolean = () => true,
@@ -283,7 +284,7 @@ export function useNativeChatExternalAttachments({
         if (reserved.length === 0) {
           return
         }
-        const notice = disabledRef.current ? '' : intake.refusal(reserved.length)
+        const notice = intake.abandoned() ? '' : intake.refusal(reserved.length)
         if (notice === null) {
           await intake.run(reserved)
           return

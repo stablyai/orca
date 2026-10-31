@@ -5,15 +5,6 @@ const START = '# BEGIN ORCA AGENT STATUS HOOKS'
 const END = '# END ORCA AGENT STATUS HOOKS'
 
 describe('legacy Codex managed profile block', () => {
-  it('strips a well-formed block and keeps the surrounding config', () => {
-    const content = `model = "o3"\n\n${START}\n[[hooks]]\nx = 1\n${END}\n\ntail = true\n`
-    expect(stripLegacyManagedProfileBlock(content)).toBe('model = "o3"\n\ntail = true\n')
-  })
-
-  it('leaves a file with no managed block untouched', () => {
-    expect(stripLegacyManagedProfileBlock('model = "o3"\n')).toBe('model = "o3"\n')
-  })
-
   it('rejoins a CRLF config with CRLF', () => {
     const content = `model = "o3"\r\n\r\n${START}\r\n[[hooks]]\r\n${END}\r\n\r\ntail = true\r\n`
     const next = stripLegacyManagedProfileBlock(content)

@@ -21,7 +21,6 @@ import {
   REMOTE_RUNTIME_INPUT_RESEND_BACKOFF_MS
 } from './remote-runtime-input-journal'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')

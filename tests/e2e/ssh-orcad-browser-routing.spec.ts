@@ -118,8 +118,7 @@ test('retained and new browser tabs keep SSH routing and login cookies after man
     const cookieMarker = `cookie:${SSH_REMOTE_ONLY_COOKIE_NAME}=${SSH_REMOTE_ONLY_COOKIE_VALUE}`
     // The login cookie a relay-era session left in that host's browser storage.
     const partitionBefore = relayEraPartition(remote.targetId)
-    // A relay-era build bound the partition before any page stored a cookie in it; unbound
-    // partition data is refused as browser_route_partition_binding_store_invalid.
+    // Bind legacy storage before seeding cookies; unbound data is refused as browser_route_partition_binding_store_invalid.
     const bound = await page.evaluate(
       (targetId) =>
         window.api.browser.prepareSshWorkspacePartition({

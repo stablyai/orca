@@ -326,7 +326,8 @@ it('keeps each request’s own saved error when another start fails before the d
   )
   await recordStructuredAgentSessionStartFailure(
     { journal: r.journal, fence: 0 },
-    { startKey: 'B-start', ...refused }
+    { startKey: 'B-start', ...refused },
+    'B'
   )
   await tick()
   expect(r.mail().map((message) => JSON.parse(message.payload ?? '{}'))).toMatchObject([
@@ -369,7 +370,7 @@ it.each(['history', 'close', 'replacement', 'epoch'] as const)(
   }
 )
 
-it('consumes disabled/unassigned failures and baselines adoption, epoch replacement and changed assignments', async () => {
+it('consumes unassigned failures and baselines adoption, epoch replacement and changed assignments', async () => {
   const r = await rig()
   r.sessions.delete(SESSION)
   await batch(r.journal, 'saved-history', [
@@ -381,10 +382,8 @@ it('consumes disabled/unassigned failures and baselines adoption, epoch replacem
   ])
   r.sessions.set(SESSION, r.session)
   const deltaQuery = vi.spyOn(r.journal, 'readSince')
-  r.enabled(false)
   await batch(r.journal, 'old', [turn('old', 'failure'), words('old', 'old error')])
   r.unassign()
-  r.enabled(true)
   await batch(r.journal, 'unassigned', [
     turn('unassigned', 'failure'),
     words('unassigned', 'no assignment')
@@ -479,13 +478,6 @@ it('normalizes linked refused starts, reads explicitly scoped late words past a 
     ),
     recovered: true
   })
-  await tick()
-  expect(r.mail()).toHaveLength(2)
-  await batch(r.journal, 'off-at-read', [
-    turn('off-at-read', 'failure'),
-    words('off-at-read', 'muted before read')
-  ])
-  r.enabled(false)
   await tick()
   expect(r.mail()).toHaveLength(2)
 })

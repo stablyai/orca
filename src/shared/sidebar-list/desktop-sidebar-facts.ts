@@ -1,9 +1,6 @@
 import { z } from 'zod'
 
-/**
- * The sidebar inputs this host keeps in its own store and metadata, besides rows and activity.
- * Host ids use the ExecutionHostId spelling; workspace ids are the rows' own ids.
- */
+/** Host-owned sidebar facts use ExecutionHostId spellings and each row’s own workspace ID. */
 export const DesktopSidebarFactsSchema = z.object({
   /** What the desktop window last saved as open; both null when nothing is. */
   desktopActive: z.object({

@@ -306,9 +306,7 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
               transcriptPath: transcript
             },
             launchConfig: {
-              // Why not bare 'codex': resume prefers the captured command over
-              // agentCmdOverrides, so a bare name would resolve the machine's real
-              // Codex off PATH and unpin the adoption leg this spec exercises.
+              // Resume prefers the captured command over overrides; pin its path so bare codex cannot launch the user’s installation.
               agentCommand,
               agentArgs: '--dangerously-bypass-approvals-and-sandbox',
               agentEnv: {}

@@ -22,9 +22,7 @@ export function getTaskPageGitHubWorkItemStateLabel(item: GitHubWorkItemStatusIt
     : translate('auto.components.TaskPage.606a85c774', 'Open')
 }
 
-// Why: use the same muted pill tones as merge/check badges — light washes with
-// readable foreground text in both themes. Draft stays neutral gray because
-// it's a non-actionable meta state.
+// Match merge/check pill tones across themes; draft remains neutral because it is not actionable.
 export function getTaskPageGitHubWorkItemStateTone(item: GitHubWorkItemStatusItem): string {
   if (item.type === 'pr') {
     if (item.state === 'merged') {

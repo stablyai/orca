@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -74,7 +75,6 @@ function reserveRequest(location: AgentSessionExecutionLocation): AgentSessionRe
   }
 }
 
-/** A session reserved at `location`, pinned to `launchDirectory` when one is given. */
 async function reserve(location: AgentSessionExecutionLocation, launchDirectory?: string) {
   const { record } = await store.reserveOwner({
     ...reserveRequest(location),
@@ -97,6 +97,7 @@ beforeEach(async () => {
 afterEach(async () => {
   statFault.error = null
   vi.restoreAllMocks()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

@@ -1,6 +1,4 @@
-// This machine's chat listing in a layout-owner build: main places and removes a listed chat's tab
-// in its own layout, and its frames draw it, so the listing changes no tab-bar structure of a
-// workspace frames draw. It still updates what a drawn chat tab shows (its label from the host).
+// Main places/removes listed chats and frames draw their tabs; listing changes only labels in framed workspaces.
 
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'

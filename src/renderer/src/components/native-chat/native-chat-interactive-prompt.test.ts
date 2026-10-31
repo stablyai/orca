@@ -4,12 +4,12 @@ import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
   formatAskAnswer,
-  hasAskAnswer,
-  parseApprovalFromStatus,
-  parseAskFromStatus,
-  parseInteractivePrompt,
-  type AskPrompt
-} from './native-chat-interactive-prompt'
+  hasAskAnswer
+} from '../../../../shared/native-chat-ask-answer'
+import { parseAskFromStatus } from '../../../../shared/native-chat/input/native-chat-ask'
+import { sayNativeChatApprovalTranslated } from './native-chat-interactive-prompt'
+import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
+import { parseApprovalFromStatus } from '../../../../shared/native-chat-interactive-prompt'
 
 const ESC = String.fromCharCode(27)
 
@@ -81,88 +81,27 @@ describe('parseAskFromStatus', () => {
   })
 })
 
-describe('parseApprovalFromStatus', () => {
-  it('returns null for non-approval envelopes', () => {
-    expect(parseApprovalFromStatus(null)).toBeNull()
-    expect(parseApprovalFromStatus('not json')).toBeNull()
-    expect(parseApprovalFromStatus('{}')).toBeNull()
-    expect(parseApprovalFromStatus(JSON.stringify({ approval: {} }))).toBeNull()
-    expect(parseApprovalFromStatus(JSON.stringify({ approval: { tool: '' } }))).toBeNull()
+describe('parseApprovalFromStatus translated labels', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
   })
 
-  it('builds an Allow/Deny card from { approval: { tool, summary } }', () => {
-    const approval = parseApprovalFromStatus(
-      JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } })
-    )
-    expect(approval).toEqual({
-      title: 'Allow Bash?',
+  it('translates the title and buttons but keeps the tool, summary and keys', async () => {
+    await i18n.changeLanguage('ko')
+    expect(
+      parseApprovalFromStatus(
+        JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } }),
+        'opencode',
+        sayNativeChatApprovalTranslated
+      )
+    ).toEqual({
+      title: 'Bash을(를) 허용하시겠습니까?',
       detail: 'rm -rf build',
       options: [
-        { label: 'Allow', send: '1' },
-        { label: 'Deny', send: ESC }
+        { label: '허용', send: '\r' },
+        { label: '거부', send: ESC }
       ]
     })
-  })
-
-  it('omits detail when summary is missing', () => {
-    const approval = parseApprovalFromStatus(JSON.stringify({ approval: { tool: 'Edit' } }))
-    expect(approval?.title).toBe('Allow Edit?')
-    expect(approval?.detail).toBeUndefined()
-  })
-
-  it('omits detail for an empty or non-string summary', () => {
-    for (const summary of ['', 42, null]) {
-      const approval = parseApprovalFromStatus(
-        JSON.stringify({ approval: { tool: 'Edit', summary } })
-      )
-      expect(approval?.title).toBe('Allow Edit?')
-      expect(approval?.detail).toBeUndefined()
-    }
-  })
-
-  describe('translated labels', () => {
-    afterEach(async () => {
-      await i18n.changeLanguage('en')
-    })
-
-    it('translates the title and buttons but keeps the tool, summary and keys', async () => {
-      await i18n.changeLanguage('ko')
-      expect(
-        parseApprovalFromStatus(
-          JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } }),
-          'opencode'
-        )
-      ).toEqual({
-        title: 'Bash을(를) 허용하시겠습니까?',
-        detail: 'rm -rf build',
-        options: [
-          { label: '허용', send: '\r' },
-          { label: '거부', send: ESC }
-        ]
-      })
-    })
-  })
-})
-
-describe('parseInteractivePrompt', () => {
-  it('returns a question card, with question taking precedence', () => {
-    const card = parseInteractivePrompt(
-      JSON.stringify({
-        questions: [{ question: 'q', options: ['A'] }],
-        approval: { tool: 'Bash', summary: 's' }
-      })
-    )
-    expect(card?.kind).toBe('question')
-  })
-
-  it('returns an approval card when no question is present', () => {
-    const card = parseInteractivePrompt(JSON.stringify({ approval: { tool: 'Bash' } }))
-    expect(card?.kind).toBe('approval')
-  })
-
-  it('returns null when neither parses', () => {
-    expect(parseInteractivePrompt(null)).toBeNull()
-    expect(parseInteractivePrompt('{}')).toBeNull()
   })
 })
 
@@ -215,9 +154,7 @@ const single = (options: string[], multiSelect = false): AskPrompt => ({
 
 describe('buildAskAnswerKeys', () => {
   it('single-select: sends the picked option NUMBER (not the label), no trailing Enter', () => {
-    // STA-1860 regression: picking the 2nd option must deliver the 2nd option.
-    // '2' is the selector marker Claude commits on; a label + Enter committed the
-    // highlighted default (option 1) instead.
+    // Claude commits numbered selector markers; label-plus-Enter would choose the highlighted default instead.
     expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [1] }])).toEqual([
       { raw: '2' }
     ])
@@ -375,10 +312,3 @@ describe('hasAskAnswer', () => {
     expect(hasAskAnswer(single(['A', 'B']), [])).toBe(false)
   })
 })
-
-for (const agent of ['opencode', 'opencode2']) {
-  it(`${agent} approves the captured default selector with Enter`, () => {
-    const card = parseApprovalFromStatus(JSON.stringify({ approval: { tool: 'shell' } }), agent)
-    expect(card?.options[0].send).toBe('\r')
-  })
-}

@@ -25,29 +25,22 @@ const OPENCODE_BILLING_STATUS_URL = `${OPENCODE_BASE_URL}/console/api/billing/st
 const API_TIMEOUT_MS = 15_000
 const OPTIONAL_BILLING_TIMEOUT_MS = 5_000
 
-// Server-function hash for the workspaces endpoint — stable identifier used by
-// the opencode.ai SST/TanStack router server-fn protocol.
+// SST/TanStack workspaces server-function routing id.
 const WORKSPACES_SERVER_ID = 'def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f'
 
-// Closed allowlist: only known opencode.ai auth cookies. Console Go usage is
-// authed by __Host-console_session; /_server workspace discovery still uses auth.
+// Send only known auth cookies: console usage needs __Host-console_session; workspace discovery uses auth.
 const AUTH_COOKIE_NAMES = new Set(['auth', '__Host-auth', '__Host-console_session'])
 
-// Why: users may paste just the token value (e.g. "Fe26.2**...") instead of
-// the full cookie header ("auth=Fe26.2**..."). Auto-wrapping avoids a confusing
-// silent failure where the cookie looks non-empty but contains no auth name.
+// Accept pasted token values without requiring the auth= header syntax.
 export function normalizeCookieInput(raw: string): string {
   const trimmed = raw.trim()
   if (!trimmed) {
     return trimmed
   }
-  // Already a valid cookie header: has multiple pairs or starts with known name.
   if (trimmed.includes(';') || /^(?:auth|__Host-auth|__Host-console_session)=/i.test(trimmed)) {
     return trimmed
   }
-  // Only wrap if it looks like an Iron Session seal (starts with Fe26.2**)
-  // or a reasonably structured bare token (alphanumeric with dots/dashes).
-  // Otherwise, leave it alone to fail predictably instead of sending malformed auth.
+  // Wrap only seal/structured token shapes; malformed values must fail predictably.
   if (trimmed.startsWith('Fe26.2**') || /^[a-zA-Z0-9.\-_]+$/.test(trimmed)) {
     return `auth=${trimmed}`
   }
@@ -88,7 +81,6 @@ export async function fetchOpenCodeGoRateLimits(
   workspaceIdOverride?: string,
   networkProxySettings?: NetworkProxySettings
 ): Promise<ProviderRateLimits> {
-  // Normalize before any guard — bare tokens become auth=<token>.
   const normalizedCookie = normalizeCookieInput(cookie)
 
   if (!normalizedCookie) {
@@ -103,7 +95,7 @@ export async function fetchOpenCodeGoRateLimits(
     }
   }
 
-  // Filter to only auth cookies — avoids sending unrelated session data.
+  // Exclude unrelated session data from requests.
   const authCookies = parseAuthCookies(normalizedCookie)
   if (authCookies.length === 0) {
     return {
@@ -117,8 +109,7 @@ export async function fetchOpenCodeGoRateLimits(
     }
   }
 
-  // Why: Chromium can reject a manually supplied Cookie header on Windows.
-  // An isolated session jar lets its network stack attach auth normally.
+  // Chromium may reject manual Cookie headers on Windows; use an isolated jar for normal auth attachment.
   let openCodeSession: Session
   try {
     openCodeSession = await createOpenCodeRequestSession(authCookies, networkProxySettings)
@@ -185,7 +176,6 @@ async function fetchOpenCodeGoRateLimitsWithSession(
   openCodeSession: Session,
   workspaceIdOverride?: string
 ): Promise<ProviderRateLimits> {
-  // Step 1: resolve workspace IDs to try.
   let ids: string[] = []
   const override = workspaceIdOverride?.trim()
 
@@ -198,8 +188,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
     ids = [override]
   } else {
     try {
-      // The /_server endpoint uses SST server-function protocol: GET with ?id=<hash>
-      // and X-Server-Id / X-Server-Instance headers for routing.
+      // SST server functions route by query hash plus X-Server-Id/X-Server-Instance.
       const instanceId = `server-fn:${randomUUID()}`
       const workspacesUrl = `${OPENCODE_SERVER_URL}?id=${WORKSPACES_SERVER_ID}`
       const workspacesRes = await openCodeSession.fetch(workspacesUrl, {
@@ -232,8 +221,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
     )
   }
 
-  // Why: /workspace/<id>/go now 302s to console login. Usage is JSON at
-  // /console/api/go/status, scoped by x-org-id and authed by the console session.
+  // Legacy workspace Go pages redirect to login; JSON usage uses console session auth and x-org-id.
   let lastFailure: ProviderRateLimits | null = null
   let balanceOnlyResult: ProviderRateLimits | null = null
   for (const candidateId of ids) {

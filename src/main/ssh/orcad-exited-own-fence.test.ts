@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import { unusedOrcadHostTransport } from './unused-host-transport.test-fixture'
 
-// Every remote command runs in a real local shell, so the host-side checks are the real ones.
+// Run generated host-side checks in a real local shell.
 const shell = vi.hoisted((): { env: NodeJS.ProcessEnv | undefined } => ({ env: undefined }))
 vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => {
   const { runProcess } = await import('@orca/process-host')
@@ -74,7 +74,7 @@ function hostWithFence(owner: string, held: ReturnType<typeof entry>[]) {
   return { home, fence, store, options }
 }
 
-// BUG-23: a quit mid-update left this desktop's own fence, and the next launch waited 20 minutes.
+// BUG-23: a quit mid-update previously left relaunch waiting 20 minutes on its own fence.
 describe.skipIf(process.platform === 'win32')('a fence this desktop’s exited process left', () => {
   it('is cleared at once when quiet and no state mutation is live', async () => {
     const { fence, store, options } = hostWithFence('t-exited', [entry('t-exited', EXITED_PID)])
@@ -137,7 +137,7 @@ describe.skipIf(process.platform === 'win32')('a fence this desktop’s exited p
     expect(existsSync(fence)).toBe(true)
   })
 
-  // Astra 26087: a live successor that replaces the fence after the proof is never aged or taken.
+  // A successor replacing the proven-exited fence must never be aged or stolen.
   it('leaves a successor that replaced the fence after the proof alone', async () => {
     const { home, fence, store, options } = hostWithFence('t-exited', [
       entry('t-exited', EXITED_PID)

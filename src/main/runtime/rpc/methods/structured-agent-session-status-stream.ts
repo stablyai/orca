@@ -8,7 +8,7 @@ import {
   getStructuredAgentSessionHost,
   onStructuredAgentSessionsHeldChanged
 } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { defineStreamingMethod, type RpcContext } from '../core'
 import { requireStructuredAgentAudience } from './structured-agent-session-gate'
 import { structuredAgentSessionStatusSubscriptionId } from './structured-agent-session-subscription-id'
@@ -75,7 +75,7 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
           type: 'snapshot',
           sessions: [],
           namingActiveSessionIds: naming.filter((sessionId) => {
-            const record = host?.deps.store.getRecord(sessionId)
+            const record = host?.deps.store.getConversation(sessionId)
             return record && clientReadsStructuredSessionAgent(ctx, record.provider)
           }),
           setupHeldWorkspaceIds: holds.currentWorkspaceIds()
@@ -102,13 +102,21 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
             if (event.type === 'snapshot') {
               emit({
                 ...event,
+                ...(event.conversationNames
+                  ? {
+                      conversationNames: event.conversationNames.filter((note) => {
+                        const record = host.deps.store.getConversation(note.sessionId)
+                        return record && clientReadsStructuredSessionAgent(ctx, record.provider)
+                      })
+                    }
+                  : {}),
                 ...(event.namingActiveSessionIds !== undefined
                   ? { setupHeldWorkspaceIds: holds.currentWorkspaceIds() }
                   : {}),
                 ...(event.namingActiveSessionIds
                   ? {
                       namingActiveSessionIds: event.namingActiveSessionIds.filter((sessionId) => {
-                        const record = host.deps.store.getRecord(sessionId)
+                        const record = host.deps.store.getConversation(sessionId)
                         return record && clientReadsStructuredSessionAgent(ctx, record.provider)
                       })
                     }
@@ -139,7 +147,7 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
         })
         metadata()
         await ensureStructuredAgentSessionHostUnlessRefused(async () => {
-          await restoreStructuredTabsIfSupported(ctx)
+          await prepareStructuredTabsIfSupported(ctx)
         })
         if (stream.isClosed()) {
           return

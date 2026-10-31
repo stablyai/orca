@@ -13,7 +13,7 @@ import {
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
 
 import { assertAgentPromptRequestActive } from '../runtime/orca-runtime-core'
-import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
+import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
 import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
 import { combineLaunchWarnings } from './agent-launch-warnings'
 import {
@@ -23,11 +23,8 @@ import {
   settledAtCreation,
   settleLaunchPromptDisposal
 } from './agent-launch-prompt-delivery'
-import { workspaceKindForLaunchTarget } from '../../shared/workspace-launch-kind'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session-definitive-refusal'
 import {
-  decideAgentLaunchMode,
-  readAgentLaunchModeSettings,
   resolveAgentLaunchModeOnHost,
   type AgentLaunchModeSettlement,
   DEFAULT_LAUNCH_VOCABULARY,
@@ -37,6 +34,7 @@ import {
 import { assertLegacyHostTarget, legacyHostCreateResult } from './agent-launch-legacy-host'
 import {
   AgentLaunchStructuredSessionRefusedError,
+  assertTerminalLaunchAdmissible,
   type AgentLaunchInitialSurfaceStage
 } from './agent-launch-surface-factories'
 import type { AgentLaunchExecution, AgentLaunchPublishedSurface } from './agent-launch-execution'
@@ -53,31 +51,10 @@ export async function executeAgentLaunch(
   const { intent, runtime } = execution
   const attempt = execution.hostFoundingAttempt ?? {}
   execution = { ...execution, hostFoundingAttempt: attempt }
-  if (intent.reuseTerminal || intent.target.kind === 'create-worktree') {
-    assertOpenCodeModelLaunchPreferencesAbsent(intent.agent, intent.sessionOptions)
-  }
   const vocabulary = execution.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  const preflight =
-    execution.decidedMode ??
-    decideAgentLaunchMode({
-      placement: {
-        agent: intent.agent,
-        workspaceKind: workspaceKindForLaunchTarget(intent.target),
-        ...(intent.reuseTerminal ? { terminal: intent.reuseTerminal.handle } : {}),
-        ...(intent.cwd ? { cwd: intent.cwd } : {}),
-        ...(intent.target.kind === 'existing' && intent.target.workspacePath
-          ? { workspacePath: intent.target.workspacePath }
-          : {}),
-        ...(execution.callerRendersStructured === false ? { callerRendersStructured: false } : {})
-      },
-      settings: execution.terminalOnly
-        ? undefined
-        : readAgentLaunchModeSettings(runtime, intent.nativeChatDefault),
-      ...(execution.terminalOnly ? { terminalOnly: true } : {}),
-      ...(intent.surface ? { surface: intent.surface } : {}),
-      vocabulary
-    })
-  // Intent preparation may have outlived the request.
+  const preflight = execution.decidedMode ?? decideAgentLaunchIntentMode(execution)
+  assertTerminalLaunchAdmissible(intent, preflight.mode)
+  // A caller's own preparation (intent resolution) may have outlived its request.
   assertAgentPromptRequestActive(execution.signal)
   if (execution.promptPolicy === 'legacy-host') {
     assertLegacyHostTarget(execution)
@@ -153,7 +130,8 @@ export async function executeAgentLaunch(
               placed.promptRodeLaunchCommand
                 ? HANDED_TO_TERMINAL
                 : await deliverTerminalLaunchPrompt(execution, startupHandle, {
-                    freshLaunch: true
+                    freshLaunch: true,
+                    terminalCreation: placed.startupTerminalCreation
                   })
             )
           }))()

@@ -1,4 +1,4 @@
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 import type {
   PtyDeliveryWriteOff,
   PtyRendererDeliveryHealthReply,

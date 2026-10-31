@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { shouldClearNativeChatWorkingSuppression } from './native-chat-working-suppression'
+import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/native-chat/native-chat-working-suppression'
 
 export function useNativeChatWorkingSuppressionReset(
   liveWorking: boolean,

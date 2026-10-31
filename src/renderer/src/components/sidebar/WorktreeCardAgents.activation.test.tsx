@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type * as ActivateTabAndFocusPaneModule from '@/lib/activate-tab-and-focus-pane'
+import type { Tab } from '../../../../shared/tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
@@ -51,6 +53,9 @@ function mockAgent({
 let mockAgents: DashboardAgentRowData[] = []
 let mockAgentActivityDisplayMode: 'compact' | 'full' | undefined
 let mockTabsByWorktree: Record<string, { id: string }[]> = {}
+let mockUnifiedTabs: Tab[] = []
+let mockLayouts: Record<string, TerminalLayoutSnapshot> = {}
+let mockPtyIds: Record<string, string[]> = {}
 let mockStructuredTabIds = new Set<string>()
 let mockAgentStatusByPaneKey: Record<string, { worktreeId?: string }> = {}
 let mockActiveTabId: string | null = null
@@ -83,8 +88,9 @@ function buildMockStoreState(): Record<string, unknown> {
     setActiveTab: mockSetActiveTab,
     setActiveTabType: mockSetActiveTabType,
     tabsByWorktree: mockTabsByWorktree,
-    terminalLayoutsByTabId: {},
-    ptyIdsByTabId: {},
+    unifiedTabsByWorktree: { 'wt-1': mockUnifiedTabs },
+    terminalLayoutsByTabId: mockLayouts,
+    ptyIdsByTabId: mockPtyIds,
     runtimePaneTitlesByTabId: {},
     sendPromptToSidebarAgentTarget: vi.fn(),
     settings: {
@@ -96,6 +102,7 @@ function buildMockStoreState(): Record<string, unknown> {
 
 const activationMocks = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn(),
+  activateAndRevealWorkspace: vi.fn(),
   activateTabAndFocusPane: vi.fn()
 }))
 
@@ -121,7 +128,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: activationMocks.activateAndRevealWorktree
+  activateAndRevealWorktree: activationMocks.activateAndRevealWorktree,
+  activateAndRevealWorkspace: activationMocks.activateAndRevealWorkspace
 }))
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
@@ -171,6 +179,10 @@ describe('WorktreeCardAgents activation', () => {
     activationMocks.activateAndRevealWorktree.mockImplementation(() => undefined)
     activationMocks.activateTabAndFocusPane.mockImplementation(() => undefined)
     mockAgents = []
+    mockUnifiedTabs = []
+    mockLayouts = {}
+    mockPtyIds = {}
+    activationMocks.activateAndRevealWorkspace.mockReturnValue(true)
     mockAgentActivityDisplayMode = undefined
     mockTabsByWorktree = {}
     mockStructuredTabIds = new Set()
@@ -181,6 +193,179 @@ describe('WorktreeCardAgents activation', () => {
     structuredActivationMocks.activateStructuredAgentSessionTab.mockImplementation(
       ({ tabId }: { tabId: string }) => mockStructuredTabIds.has(tabId)
     )
+  })
+
+  async function clickRetained(mode: 'compact' | 'full', workspaceId = 'wt-1'): Promise<void> {
+    mockAgentActivityDisplayMode = mode
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+    if (mode === 'full') {
+      renderToStaticMarkup(<WorktreeCardAgents worktreeId={workspaceId} />)
+      capturedRowActivations[0].onActivate('retained-tab', makePaneKey('retained-tab', LEAF_A))
+      return
+    }
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () =>
+        root.render(
+          <TooltipProvider>
+            <WorktreeCardAgents worktreeId={workspaceId} />
+          </TooltipProvider>
+        )
+      )
+      const row = host.querySelector('.compact-agent-row')
+      expect(row).toBeInstanceOf(HTMLElement)
+      await act(async () => {
+        row?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+    } finally {
+      act(() => root.unmount())
+      host.remove()
+    }
+  }
+
+  function retainedRow(): void {
+    mockAgents = [
+      {
+        ...mockAgent({
+          paneKey: makePaneKey('retained-tab', LEAF_A),
+          tabId: 'retained-tab',
+          agentType: 'codex',
+          prompt: 'Retained',
+          worktreeId: 'wt-1'
+        }),
+        rowSource: 'retained',
+        state: 'done'
+      }
+    ]
+    mockTabsByWorktree = { 'wt-1': [{ id: 'retained-tab' }] }
+    mockLayouts = {
+      'retained-tab': {
+        root: { type: 'leaf', leafId: LEAF_A },
+        activeLeafId: LEAF_A,
+        expandedLeafId: null
+      }
+    }
+  }
+
+  it.each([
+    ['compact', false],
+    ['compact', true],
+    ['full', false],
+    ['full', true]
+  ] as const)(
+    'opens a retained remote pane without status in %s mode (split=%s)',
+    async (mode, split) => {
+      retainedRow()
+      mockPtyIds = { 'retained-tab': ['remote:host-B@@pty-1'] }
+      if (split) {
+        mockLayouts['retained-tab'].root = {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: LEAF_A },
+          second: { type: 'leaf', leafId: LEAF_B }
+        }
+        mockLayouts['retained-tab'].activeLeafId = LEAF_B
+        mockLayouts['retained-tab'].ptyIdsByLeafId = {
+          [LEAF_A]: 'remote:host-B@@pty-1',
+          [LEAF_B]: 'remote:host-B@@pty-2'
+        }
+        mockPtyIds['retained-tab'].push('remote:host-B@@pty-2')
+      }
+      await clickRetained(mode)
+      expect(activationMocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
+        executionHostId: 'runtime:host-B'
+      })
+      expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+      expect(activationMocks.activateTabAndFocusPane).toHaveBeenCalledWith(
+        'retained-tab',
+        LEAF_A,
+        expect.objectContaining({ ackPaneKeyOnSuccess: makePaneKey('retained-tab', LEAF_A) })
+      )
+      expect(ownerActivationMocks.activateTerminalTabOnOwner).toHaveBeenCalledWith(
+        'wt-1',
+        'retained-tab',
+        LEAF_A
+      )
+    }
+  )
+
+  it.each([
+    'missing',
+    'sleeping',
+    'stale',
+    'other-split',
+    'foreign-owner',
+    'reveal-failed'
+  ] as const)('keeps a retained %s destination inert', async (shape) => {
+    retainedRow()
+    mockPtyIds = { 'retained-tab': ['live-pty'] }
+    if (shape === 'missing') {
+      mockTabsByWorktree = {}
+    }
+    if (shape === 'sleeping') {
+      mockPtyIds = {}
+      mockLayouts['retained-tab'].ptyIdsByLeafId = { [LEAF_A]: 'persisted-pty' }
+    }
+    if (shape === 'stale') {
+      mockLayouts['retained-tab'].ptyIdsByLeafId = { [LEAF_A]: 'exited-pty' }
+    }
+    if (shape === 'other-split') {
+      mockLayouts['retained-tab'] = {
+        root: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: LEAF_A },
+          second: { type: 'leaf', leafId: LEAF_B }
+        },
+        activeLeafId: LEAF_B,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_A]: 'exited-pty', [LEAF_B]: 'live-pty' }
+      }
+    }
+    if (shape === 'foreign-owner') {
+      mockPtyIds = { 'retained-tab': ['remote:unscoped-handle'] }
+    }
+    if (shape === 'reveal-failed') {
+      activationMocks.activateAndRevealWorkspace.mockReturnValue(false)
+    }
+    await clickRetained('full')
+    if (shape !== 'reveal-failed') {
+      expect(activationMocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
+    }
+    expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+    expect(ownerActivationMocks.activateTerminalTabOnOwner).not.toHaveBeenCalled()
+    expect(staleAgentRowMocks.dismissStaleAgentRowByKey).not.toHaveBeenCalled()
+  })
+
+  it('opens a retained native tab without a PTY using its explicit owner', async () => {
+    retainedRow()
+    mockTabsByWorktree = {}
+    mockUnifiedTabs = [
+      {
+        id: 'retained-tab',
+        entityId: 'session-1',
+        contentType: 'agent-session',
+        worktreeId: 'wt-1',
+        executionHostId: 'runtime:host-B',
+        groupId: 'g1',
+        label: 'Codex',
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 0
+      }
+    ]
+    mockStructuredTabIds.add('retained-tab')
+    await clickRetained('full')
+    expect(structuredActivationMocks.activateStructuredAgentSessionTab).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'retained-tab',
+      target: { kind: 'environment', environmentId: 'host-B' }
+    })
+    expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+    expect(ownerActivationMocks.activateTerminalTabOnOwner).not.toHaveBeenCalled()
   })
 
   it('activates a projected structured session row through the unified tab path', async () => {
@@ -274,8 +459,7 @@ describe('WorktreeCardAgents activation', () => {
       })
     ]
     mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
-    // Why: activation must use the post-reveal store snapshot, matching tab
-    // hydration that arrives while a background worker is being opened.
+    // Model tab hydration during reveal; activation must read the post-reveal store.
     activationMocks.activateAndRevealWorktree.mockImplementation(() => {
       mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
     })
@@ -312,9 +496,7 @@ describe('WorktreeCardAgents activation', () => {
     const actualActivation = await vi.importActual<typeof ActivateTabAndFocusPaneModule>(
       '@/lib/activate-tab-and-focus-pane'
     )
-    // Why: keep the component import mocked for call assertions, but delegate
-    // this repro to the real helper so it fails if the terminal-surface fix
-    // regresses.
+    // Delegate to the real activation helper while retaining the mock’s call assertions.
     activationMocks.activateTabAndFocusPane.mockImplementation(
       actualActivation.activateTabAndFocusPane
     )
@@ -374,8 +556,7 @@ describe('WorktreeCardAgents activation', () => {
       })
     ]
     mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
-    // Why: activation may create/select a different terminal before the
-    // automation worker hydrates; the row must only pane-focus its exact tab.
+    // Reveal may activate a fallback before worker hydration; focus only the worker’s exact tab.
     activationMocks.activateAndRevealWorktree.mockImplementation(() => {
       mockTabsByWorktree = { 'wt-1': [{ id: fallbackTabId }] }
       mockSetActiveTab(fallbackTabId)
@@ -484,8 +665,7 @@ describe('WorktreeCardAgents activation', () => {
       })
     ]
     mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
-    // Why: compact rows share the same activation contract as full rows, so
-    // this keeps the test pinned to reveal-time tab hydration.
+    // Compact rows must also use tabs hydrated during reveal.
     activationMocks.activateAndRevealWorktree.mockImplementation(() => {
       mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
     })

@@ -7,7 +7,7 @@ import { flushPendingEditorBuffer } from './editor-pending-flush'
 
 export type ShareableFileContentType = ArtifactWriteRequest['contentType']
 
-/** The host the tab opened its file through; tabs opened before routes were recorded keep their environment. */
+/** Use captured file ownership; legacy tabs without routes retain their recorded runtime environment. */
 function editorArtifactOwner(file: OpenFile): FileArtifactOwner {
   const route = file.operationProvenance?.generation.route
   return {
@@ -21,7 +21,6 @@ export function editorArtifactSourceKey(file: OpenFile): string {
   return fileArtifactSourceKey(editorArtifactOwner(file), file.filePath)
 }
 
-/** What an editor file shares as, or null when it isn't a shareable document. */
 export function editorArtifactContentType(
   filePath: string,
   isMarkdown: boolean

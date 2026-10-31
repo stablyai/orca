@@ -129,8 +129,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     expect(onStatus.mock.calls).toContainEqual(['connecting', undefined])
     expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://relay.example.test')
 
-    // Why: the pool publishes offline while it still holds the assignment it is
-    // about to rotate; forwarding that cell leaves the UI naming a dead one.
+    // The pool still holds the rotating assignment while publishing offline; do not expose its dead cell.
     fakes.controls[0]!.options.onClose(1006)
     expect(onStatus.mock.calls).toContainEqual(['offline', undefined])
     expect(onStatus.mock.calls).toContainEqual(['draining', 'https://relay.example.test'])
@@ -187,9 +186,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
   })
 
   it('fails connect when the control closes before origin activation', async () => {
-    // Why: a socket can deliver hello-ack and close in the same ws parser turn;
-    // onClose then fires before the connect promise settles, so nothing may
-    // publish this control as active.
+    // hello-ack and close can share a parser turn; never publish already-closed control.
     fakes.controlConnect.mockImplementationOnce(async () => {
       fakes.controls[0]!.options.onClose(1006)
       return {
@@ -246,8 +243,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       expect.objectContaining({
         preferredRegion: 'asia-east2',
         reconnect: true,
-        // Why: the rate-gate wait relies on this fencing to abort superseded
-        // callers; dropping the wiring must fail here, not only in the field.
+        // Rate-gate waits depend on superseded-caller fencing.
         isCurrent: expect.any(Function)
       })
     )
@@ -359,8 +355,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     fakes.controlConnect.mockResolvedValueOnce(ack).mockResolvedValueOnce({
       ...ack,
       leaseExpiresAt: 2_000_000,
-      // The cell restates the connection it already announced once; without the
-      // replay the phone waits out its 10s attach deadline and is closed 4404.
+      // Drain must replay once-announced connections or their phones hit the 10s attach deadline (4404).
       pendingConns: [{ connId: 'straddling-basis', connTicket: 'T'.repeat(43) }]
     })
     fakes.assign.mockResolvedValue(relayAssignment('https://relay.example.test', 1))
@@ -372,7 +367,6 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       relayDeviceId: 'device-1',
       attachDeadlineMs: 10_000
     })
-    // The blip that costs the control also kills the in-flight data socket.
     fakes.transports[0]!.openConnection.mockClear()
 
     fakes.controls[0]!.options.onDrain({
@@ -552,8 +546,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
   })
 })
 
-// The race the coordinator alone cannot cover: the broker's own renewal tick is
-// what first reads the lost session, so its close is the only one the cell sees.
+// Renewal can discover auth loss before the coordinator; its close must carry the reason.
 describe('RelaySessionBroker renewal close reason', () => {
   const signedInContext: RelayAuthContext = {
     identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
@@ -573,12 +566,11 @@ describe('RelaySessionBroker renewal close reason', () => {
       activeConnIds: [],
       pendingConns: []
     } satisfies RelayHostHelloAckMessage)
-    // An already-spent lease makes the renewal tick fire on the next turn.
+    // An expired lease schedules renewal on the next turn.
     fakes.exchange.mockReset().mockResolvedValue({ relayToken: 'relay-jwt', expiresAt: 0 })
     fakes.assign.mockReset().mockResolvedValue(relayAssignment('https://relay.example.test', 1))
   })
 
-  // Only the renewal's own read observes the loss; nothing reconciles the coordinator.
   async function closeReasonAfterRenewalReads(
     secondRead: RelayAuthContext | null
   ): Promise<unknown[]> {

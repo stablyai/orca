@@ -5,8 +5,7 @@ import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-crede
 
 const MAX_RESPONSE_BYTES = 16 * 1024
 
-// Carries the director's own pacing so the reconnect cooldown can honor a
-// bounded-overload 503 instead of re-dialing on the local backoff.
+// Honor bounded director Retry-After pacing instead of redialing overloaded service on local backoff.
 export class RelayDirectorHttpError extends Error {
   readonly name = 'RelayDirectorHttpError'
 

@@ -1,4 +1,3 @@
-/** The device calls themselves: the options that make a picked file one this shell owns. */
 import { describe, expect, it, vi } from 'vitest'
 
 const expo = vi.hoisted(() => ({
@@ -74,17 +73,7 @@ describe('which uris this shell owns', () => {
 
 describe('the library permission this shell does not ask for', () => {
   it('never calls requestMediaLibraryPermissionsAsync for a library pick', async () => {
-    // Ruling 6b. Verified in expo-image-picker 55.0.24: `launchImageLibraryAsync` goes straight to
-    // its contract on Android and to `launchImagePicker(.photoLibrary)` on iOS, and only the
-    // camera arm checks anything. The prompt "inside the shell" is the OS picker's own. Asking
-    // first adds a dialog the system does not need and a denial that would refuse a pick the OS
-    // would have completed — on Android below API 33 for storage permissions the picker never
-    // reads, and on iOS for a `PHPickerViewController` that opens without authorization. The
-    // shell asks on neither, which is why this needs no platform to stand on.
-    // Driven through the whole verb, not through `launchLibrary` alone: the request this ruling
-    // removed was made by `pick`, so a case that only called the picker would pass either way.
-    // One run, not one per platform: since the predicate went, nothing here reads `Platform.OS`,
-    // so a two-platform loop would have run the same code twice and said so twice.
+    // Exercise the full verb: Expo’s OS library picker needs no prior permission request on either platform, and an extra denial would reject a valid pick.
     const serve = createNativeMediaVerbServer(
       nativeMediaDeviceDeps(new MediaHandleRegistry({ now: () => 0, discard: () => {} }))
     )
@@ -106,13 +95,12 @@ describe('how the pickers are launched', () => {
         allowsMultipleSelection: false
       })
     )
-    // No selection limit on a single pick: the OS returns one asset and `0` would mean unlimited.
+    // Omit selectionLimit for single picks; zero means unlimited.
     expect(expo.launchImageLibraryAsync.mock.lastCall?.[0]).not.toHaveProperty('selectionLimit')
   })
 
   it('bounds a multi-select to the room it was given, never to unlimited', async () => {
-    // `selectionLimit: 0` is unlimited to the OS picker, which is the shape that lets a user wait
-    // through a nine-photo copy to be refused by the registry afterwards.
+    // A zero limit copies an unlimited selection before the registry can refuse it.
     for (const limit of [8, 3, 1]) {
       await deps().launchLibrary({ multiple: true, limit })
       expect(expo.launchImageLibraryAsync).toHaveBeenLastCalledWith(
@@ -122,8 +110,7 @@ describe('how the pickers are launched', () => {
   })
 
   it('asks the document picker to copy into the cache, which is what makes the uri ownable', async () => {
-    // Without this the picker hands back the provider's own uri on Android and the handle it
-    // backs can never be released.
+    // Copy Android provider URIs into owned cache files so their handles can be released.
     await deps().launchFiles({ multiple: true, limit: 8 })
     expect(expo.getDocumentAsync).toHaveBeenLastCalledWith({
       type: '*/*',
@@ -149,7 +136,7 @@ describe('copying a provider uri into the cache', () => {
   })
 
   it('deletes the file it created when the source could not be read', () => {
-    // The caller never learns this name, so an empty file left here is nobody's to sweep.
+    // Clean failed writes here because callers never learn the new file’s name.
     const before = expo.deleted.length
     expect(() => copyPickedMediaIntoCache('content://media/gone')).toThrow(/nothing readable/)
     expect(expo.deleted.length).toBe(before + 1)
