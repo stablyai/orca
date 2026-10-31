@@ -104,7 +104,7 @@ async function openCliTurn() {
   })
 }
 
-it('settles a CLI turn left open once no writer is left, admitted before the stop', async () => {
+it('settles a CLI turn left open as the switch\u2019s Stop once no writer is left, admitted before the stop', async () => {
   await openCliTurn()
   const { runtime } = setupMainOwnedWorkspace()
   const incarnationId = '11111111-1111-4111-8111-111111111111'
@@ -171,8 +171,10 @@ it('settles a CLI turn left open once no writer is left, admitted before the sto
     .snapshot()
     .items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
     .filter((turn) => turn.turnId === 'cli-turn')
-  expect(turns).toEqual([expect.objectContaining({ state: 'interrupted' })])
-  expect(turns[0]).not.toHaveProperty('outcome')
+  // The switch's proven stop ended it, though the status store no longer called it working.
+  expect(turns).toEqual([
+    expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
+  ])
 })
 
 it.each([false, true])(

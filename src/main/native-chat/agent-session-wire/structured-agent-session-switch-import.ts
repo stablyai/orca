@@ -90,12 +90,14 @@ function piHistoryCut(
 }
 
 /**
- * This capture is used only with an explicit Stop and positive exit of its exact CLI. `retained`:
- * the chat that already holds the conversation, whose own history the read starts after.
+ * This capture is used only with an explicit Stop and positive exit of its exact CLI. `working`:
+ * the status store calls its turn working, or (`'stopping'`) only the stop is known, so the
+ * transcript itself must show the turn still open. `retained`: the chat that already holds the
+ * conversation, whose own history the read starts after.
  */
 export async function captureSwitchStoppedCliTurn(
   source: SwitchTranscriptSource,
-  working: boolean,
+  working: boolean | 'stopping',
   deadline: AgentSessionSwitchDeadline,
   retained?: { journal: AgentSessionJournal; resumeCursor?: string }
 ): Promise<SwitchStoppedCliTurn | undefined> {
@@ -109,7 +111,12 @@ export async function captureSwitchStoppedCliTurn(
   }
   const prepared = await prepare(source, deadline, cut?.entry)
   const key = latestTurnUserKey(prepared, source)
-  if (!key || (prepared.latestTurn && prepared.latestTurn.state !== 'working')) {
+  const open = prepared.latestTurn?.state === 'working' && !prepared.latestTurnAmbiguous
+  if (
+    !key ||
+    (prepared.latestTurn && prepared.latestTurn.state !== 'working') ||
+    (working === 'stopping' && !open)
+  ) {
     return undefined
   }
   return {
