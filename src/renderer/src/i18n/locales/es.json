@@ -23467,5 +23467,12 @@
   "wslDistroHold": {
     "terminalStopped": "La distribución WSL {{distro}} está detenida, así que Orca no inició esta terminal. Inicia la distribución y vuelve a intentarlo.",
     "terminalUnverifiable": "Orca no pudo comprobar si la distribución WSL {{distro}} está en ejecución, así que no inició esta terminal. Inicia la distribución y vuelve a intentarlo."
+  },
+  "quickChat": {
+    "newChat": "Nuevo chat",
+    "startChatting": "Empezar a chatear",
+    "projectName": "Chats",
+    "shortcutTitle": "Nuevo chat sin proyecto",
+    "failed": "No se pudo iniciar un chat. Revisa la carpeta Chats e inténtalo de nuevo."
   }
 }

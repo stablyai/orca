@@ -24,6 +24,7 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.worktreeNavigateUp', 'Previous worktree'),
   'worktree.navigateDown': () =>
     translate('keybindings.title.worktreeNavigateDown', 'Next worktree'),
+  'chat.quickStart': () => translate('quickChat.shortcutTitle', 'New chat without a project'),
   'workspace.create': () => translate('keybindings.title.workspaceCreate', 'Create worktree'),
   'workspace.rename': () => translate('keybindings.title.workspaceRename', 'Rename worktree'),
   'workspace.delete': () => translate('keybindings.title.workspaceDelete', 'Delete Workspace'),
