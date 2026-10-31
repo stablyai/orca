@@ -62,6 +62,23 @@ export function orchestrationSenderName(
   )
 }
 
+/** The sender's agent: a chat's provider, else what its terminal runs; unknown for a federated address. */
+export function orchestrationSenderAgent(
+  party: Party,
+  sources: Pick<SenderNamingSources, 'records' | 'terminal'>
+): AgentType | null {
+  const record =
+    party.orcaSessionId && sources.records
+      ? lineageLiveSession(sources.records, party.orcaSessionId)
+      : null
+  if (record) {
+    return record.provider
+  }
+  return !party.address.startsWith('dispatch:') && party.terminalHandle
+    ? (sources.terminal(party.terminalHandle)?.agent ?? null)
+    : null
+}
+
 /** A chat's own name (the person's rename, else its saved name) and the label its tab falls back to. */
 export function structuredChatNaming(
   sessionId: string,

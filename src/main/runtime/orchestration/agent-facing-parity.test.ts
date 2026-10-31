@@ -68,7 +68,7 @@ function runtime(prompts: string[]): OrcaRuntimeService {
     'getNestedWorkerMaxDepth' | 'getTerminalOrchestrationCliCommand' | 'sendTerminalAgentPrompt'
   > & { orchestrationSenderNames: Pick<OrcaRuntimeService['orchestrationSenderNames'], 'nameOf'> } =
     {
-      orchestrationSenderNames: { nameOf: () => null },
+      orchestrationSenderNames: { snapshotOf: () => ({ name: null, agent: null }) },
       getNestedWorkerMaxDepth: () => 2,
       getTerminalOrchestrationCliCommand: () => 'orca',
       sendTerminalAgentPrompt: async (handle, text) => {
@@ -116,7 +116,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: () => ({ sessionId: CHAT_SESSION, dispatchId: null }),
     getCliCommand: localOrchestrationCliCommand,
-    senderName: () => null,
+    senderSnapshot: () => ({ name: null, agent: null }),
     host: {
       readSessionFacts: async () => ({ submissions: [] }),
       hasActionablePromptNow: () => false,

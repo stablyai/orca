@@ -110,7 +110,7 @@ function announcedName(batch: MessageRow[]): string | null {
       mailboxHandle: 'run:r',
       dispatchId: null,
       batch,
-      senderName: (party, reported) => sources.nameOf(party, reported)
+      senderSnapshot: (party, reported) => sources.snapshotOf(party, reported)
     }).senders[0]?.name ?? null
   )
 }
@@ -261,6 +261,16 @@ describe("a sender's name, from what Orca shows for it", () => {
     expect(names().nameOf(chatParty)).toBe('Claude Chat')
   })
 
+  it('snapshots the agent a sender runs, so its card keeps an icon once the agent is gone', () => {
+    expect(names().snapshotOf(chatParty).agent).toBe('claude')
+    expect(names().snapshotOf(terminalParty('term_plain')).agent).toBe('codex')
+    // The hook's current owner wins over the launch, as it does for the name.
+    hookRows = [hookRow()]
+    expect(names().snapshotOf(terminalParty('term_plain')).agent).toBe('claude')
+    const federated = { address: 'dispatch:d1', terminalHandle: null, orcaSessionId: null }
+    expect(names().snapshotOf(federated).agent).toBeNull()
+  })
+
   it("names a terminal agent as its sidebar row does: the tab's own name, else its agent", () => {
     expect(names().nameOf(terminalParty('term_plain'))).toBe('Codex')
     session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_plain', customTitle: ' Lint ' }] }
@@ -395,11 +405,12 @@ describe("a sender's name, from what Orca shows for it", () => {
     ).toBe('Login fix')
   })
 
-  it('builds the one sender a message records: its party and the name it has now', () => {
+  it('builds the one sender a message records: its party, name and agent now', () => {
     session.unifiedTabs = { [WORKTREE]: [chatTab(null, 'Fix the login flow')] }
     expect(names().sender(`orca_session_id:${CHAT}`)).toEqual({
       party: { address: `orca_session_id:${CHAT}`, terminalHandle: null, orcaSessionId: CHAT },
-      name: 'Fix the login flow'
+      name: 'Fix the login flow',
+      agent: 'claude'
     })
   })
 })

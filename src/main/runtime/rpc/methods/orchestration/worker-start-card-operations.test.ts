@@ -179,7 +179,7 @@ it.each([10, 100])(
     const activeSource = vi.spyOn(db, 'getActiveDispatchForTerminal')
     const recordedSource = vi.spyOn(db, 'getDispatchContextById')
     const sender = vi.spyOn(runtime.orchestrationSenderNames, 'sender')
-    const names = vi.spyOn(runtime.orchestrationSenderNames, 'nameOf')
+    const names = vi.spyOn(runtime.orchestrationSenderNames, 'snapshotOf')
     const dedupe = vi.spyOn(journal, 'hasRecordedItem')
     const scan = vi.spyOn(journal, 'visitItemsWithLinkage')
     const projection = StructuredAgentSessionJournalProjections.prototype

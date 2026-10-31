@@ -291,7 +291,8 @@ export async function startFederatedWorker(args: {
     recordStart({
       dispatchId: started.dispatch.id,
       workerAddress: `dispatch:${started.dispatch.id}`,
-      task: taskForRemote.spec
+      task: taskForRemote.spec,
+      agent: requestedLaunch.requested.agent
     })
   }
   return readyResult

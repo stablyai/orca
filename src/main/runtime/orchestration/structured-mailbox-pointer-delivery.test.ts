@@ -108,7 +108,10 @@ function harness(options: {
     resolveStructuredTarget: (mailboxHandle) =>
       mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
     getCliCommand: () => 'orca-dev',
-    senderName: (party) => (party.address === 'term_coord' ? 'Coordinator' : null),
+    senderSnapshot: (party) => ({
+      name: party.address === 'term_coord' ? 'Coordinator' : null,
+      agent: null
+    }),
     host: {
       readSessionFacts: async () => {
         await journalRead
@@ -598,7 +601,7 @@ describe('forgetting one settled worker', () => {
           : null
       },
       getCliCommand: () => 'orca',
-      senderName: () => null,
+      senderSnapshot: () => ({ name: null, agent: null }),
       host: {
         readSessionFacts: async () => (attached ? { submissions: [] } : null),
         hasActionablePromptNow: () => false,
@@ -698,7 +701,7 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
       getMessageWaiters: () => undefined,
       resolveStructuredTarget: () => ({ sessionId: target, dispatchId: 'd1' }),
       getCliCommand: () => 'orca-dev',
-      senderName: () => null,
+      senderSnapshot: () => ({ name: null, agent: null }),
       host: {
         readSessionFacts: async () => ({ submissions: [] }),
         hasActionablePromptNow: () => false,
