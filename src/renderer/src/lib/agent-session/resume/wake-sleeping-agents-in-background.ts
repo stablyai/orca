@@ -4,7 +4,10 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/ba
 import { useAppStore } from '@/store/index'
 import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
-import { getSleepingRecordTabId } from './sleeping-agent-wake-requests'
+import {
+  getSleepingRecordTabId,
+  requestSleepingAgentWakeOnMount
+} from './sleeping-agent-wake-requests'
 import { resolveActivationPtyListScope } from '../../workspace/activation/worktree-activation-pty-inventory'
 import { gateWorktreeAgentActivation } from '../../workspace/activation/worktree-agent-activation-gate'
 import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
@@ -183,6 +186,11 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
     }
   }
   if (targetTabIds.size > 0 || hasUntargetablePassiveRecord) {
+    // A whole-worktree mount sends no tab IDs, so its dispatch marks no wake requests; mark the
+    // targeted records here or the sweep below forks duplicates for them.
+    if (hasUntargetablePassiveRecord && targetTabIds.size > 0) {
+      requestSleepingAgentWakeOnMount(worktreeId, [...targetTabIds])
+    }
     // If tab identity is unresolved, mount the whole workspace rather than strand recovery.
     dispatchBackgroundMount(
       worktreeId,
