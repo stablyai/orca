@@ -1,4 +1,5 @@
 import type { ILink } from '@xterm/xterm'
+import type { TerminalLinkActionRequest } from './terminal-link-action-request'
 import { describe, expect, it, vi } from 'vitest'
 import { openDetectedFilePath, openFilePathLinkAtBufferPosition } from './terminal-link-handlers'
 import { getConnectionId } from '@/lib/connection-context'
@@ -135,6 +136,62 @@ describe('handleOscLink', () => {
 })
 
 describe('createFilePathLinkProvider range bounds', () => {
+  it('carries the resolved preview target into the plain-click action request', async () => {
+    const request = vi.fn<(request: TerminalLinkActionRequest) => void>()
+    const claimPtyMouse = vi.fn(() => true)
+    const { provider } = createProviderSetup(
+      [makeBufferLine('/repo/src/main.ts:12:4')],
+      makeExistsCache([['active\0/repo/src/main.ts', true]]),
+      {
+        getLinkActionContext: () => ({
+          paneId: 1,
+          pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+          claimPtyMouse,
+          request,
+          focusTerminal: vi.fn()
+        })
+      }
+    )
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+    // SAFETY: activation uses only these pointer fields; this provider test has no DOM.
+    const event = {
+      button: 0,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      clientX: 40,
+      clientY: 60,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent
+
+    expect(links).toHaveLength(1)
+    links[0]!.activate(event, links[0]!.text)
+
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paneId: 1,
+        anchorX: 40,
+        anchorY: 60,
+        destination: '/repo/src/main.ts',
+        filePreviewTarget: expect.objectContaining({
+          absolutePath: '/repo/src/main.ts',
+          line: 12,
+          column: 4,
+          fileContext: expect.objectContaining({
+            worktreeId: 'wt-1',
+            worktreePath: '/repo',
+            target: { kind: 'local' }
+          })
+        })
+      })
+    )
+    expect(claimPtyMouse).toHaveBeenCalledOnce()
+    expect(openFileMock).not.toHaveBeenCalled()
+  })
+
   it('shows a known worktree root link even when the exists cache says missing', async () => {
     setPlatform('Macintosh')
     storeState.worktreesByRepo = {

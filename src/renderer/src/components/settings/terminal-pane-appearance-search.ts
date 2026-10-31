@@ -91,5 +91,18 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
       ...translateSearchKeyword('auto.components.settings.terminal.search.f036794286', 'active')
     ]
   },
+  {
+    title: translate('settings.terminal.linkMenuFilePreview.label', 'Preview files in link menu'),
+    description: translate(
+      'settings.terminal.linkMenuFilePreview.description',
+      'Show a preview of the file when you click a file path in the terminal.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.terminal.linkMenuFilePreview.keywordPreview', 'preview'),
+      ...translateSearchKeyword('settings.terminal.linkMenuFilePreview.keywordFile', 'file'),
+      ...translateSearchKeyword('settings.terminal.linkMenuFilePreview.keywordLink', 'link'),
+      ...translateSearchKeyword('settings.terminal.linkMenuFilePreview.keywordMenu', 'menu')
+    ]
+  },
   ...getTerminalClipboardSearchEntries()
 ])

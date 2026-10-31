@@ -11,6 +11,7 @@ import type { PluginSystemSettings } from './plugins/plugin-system-settings'
 import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
 import type { TerminalColorOverrideGlobalSettings } from './terminal-color-overrides'
+import type { TerminalLinkMenuFilePreviewSettings } from './terminal-link-menu-file-preview-settings'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ClaudeAgentViewSettings &
@@ -25,4 +26,5 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   PluginFileTypeSuggestionSettings &
   PluginUpdatePolicySettings &
   PluginSystemSettings &
-  TerminalColorOverrideGlobalSettings
+  TerminalColorOverrideGlobalSettings &
+  TerminalLinkMenuFilePreviewSettings

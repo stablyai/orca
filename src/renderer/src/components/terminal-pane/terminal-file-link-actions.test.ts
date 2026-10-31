@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
+import type { FileLinkTarget } from './terminal-file-link-target'
 
 const mocks = vi.hoisted(() => {
   const settings: { activeRuntimeEnvironmentId: string | null; openLinksInApp?: boolean } = {
@@ -103,6 +104,42 @@ describe('terminal file link actions', () => {
       ...deps,
       openWithSystemDefault: true
     })
+  })
+
+  it('carries a preview target only when its owner can address the file', () => {
+    const previewTarget = (absolutePath: string, environment: boolean): FileLinkTarget => ({
+      absolutePath,
+      line: null,
+      column: null,
+      isRemoteRuntimePath: environment,
+      cacheKey: absolutePath,
+      isKnownWorktreeRoot: false,
+      fileContext: {
+        target: environment ? { kind: 'environment', environmentId: 'env-1' } : { kind: 'local' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        sourceHostResolved: true
+      }
+    })
+    const request = vi.fn()
+    for (const target of [
+      previewTarget('/repo/src/main.ts', true),
+      previewTarget('/elsewhere/main.ts', true)
+    ]) {
+      handleTerminalFileLink(
+        target.absolutePath,
+        null,
+        null,
+        plainEvent(),
+        deps,
+        context(request),
+        undefined,
+        target
+      )
+    }
+
+    expect(request.mock.calls[0][0].filePreviewTarget?.absolutePath).toBe('/repo/src/main.ts')
+    expect(request.mock.calls[1][0]).not.toHaveProperty('filePreviewTarget')
   })
 
   it('offers a local HTML file the link-routing browsers, primary first', () => {

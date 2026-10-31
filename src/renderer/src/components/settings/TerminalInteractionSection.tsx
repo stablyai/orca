@@ -238,6 +238,35 @@ export function TerminalInteractionSection({
         </SearchableSetting>
 
         <SearchableSetting
+          title={translate(
+            'settings.terminal.linkMenuFilePreview.label',
+            'Preview files in link menu'
+          )}
+          description={translate(
+            'settings.terminal.linkMenuFilePreview.description',
+            'Show a preview of the file when you click a file path in the terminal.'
+          )}
+          keywords={['preview', 'file', 'link', 'menu']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'settings.terminal.linkMenuFilePreview.label',
+              'Preview files in link menu'
+            )}
+            description={translate(
+              'settings.terminal.linkMenuFilePreview.description',
+              'Show a preview of the file when you click a file path in the terminal.'
+            )}
+            checked={settings.terminalLinkMenuFilePreview}
+            onChange={() =>
+              updateSettings({
+                terminalLinkMenuFilePreview: !settings.terminalLinkMenuFilePreview
+              })
+            }
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
           description={translate(
             'components.settings.TerminalInteraction.copyOnSelectDescription',

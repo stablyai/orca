@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, type ReactNode } from 'react'
 import { Check, Copy, ExternalLink, Globe, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
@@ -9,6 +9,7 @@ import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-fe
 import { translate } from '@/i18n/i18n'
 import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { useAppStore } from '@/store'
+import { cn } from '@/lib/utils'
 import type { LinkAction, LinkActionRequest } from './link-action-request'
 
 type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {
@@ -16,6 +17,7 @@ type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {
   onClose: (dismissed?: TRequest) => void
   onPointerDownOutside?: (event: Event) => void
   onOpenSettings?: () => void
+  preview?: ReactNode
 }
 
 function ActionRow({
@@ -57,7 +59,8 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
   request,
   onClose,
   onPointerDownOutside,
-  onOpenSettings
+  onOpenSettings,
+  preview
 }: LinkActionPopoverProps<TRequest>): React.JSX.Element {
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
@@ -170,7 +173,11 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
           side="top"
           sideOffset={6}
           collisionPadding={8}
-          className="w-max min-w-52 max-w-[min(21rem,calc(100vw-1rem))] p-1"
+          className={cn(
+            'w-max min-w-52 max-w-[min(21rem,calc(100vw-1rem))] p-1',
+            preview &&
+              'has-[>[data-slot=link-action-preview]:not(:empty)]:w-[min(32rem,calc(100vw-1rem))] has-[>[data-slot=link-action-preview]:not(:empty)]:max-w-none'
+          )}
           data-link-action-popover
           data-terminal-link-action-popover
           onOpenAutoFocus={(event) => event.preventDefault()}
@@ -220,6 +227,11 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
               </TooltipContent>
             </Tooltip>
           </div>
+          {preview ? (
+            <div data-slot="link-action-preview" className="contents">
+              {preview}
+            </div>
+          ) : null}
           <ActionRow
             action={request.primary}
             shortcut="primary"
