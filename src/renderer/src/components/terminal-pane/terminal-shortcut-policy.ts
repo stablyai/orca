@@ -236,11 +236,13 @@ export function resolveTerminalShortcutAction(
       return { type: 'sendInput', data: '\x0b' }
     }
     // Why: xterm.js has no Cmd+Arrow mapping; translate Cmd+←/→ to readline Ctrl+A/Ctrl+E for line start/end (iTerm2/Ghostty).
-    if (event.key === 'ArrowLeft') {
-      return { type: 'sendInput', data: '\x01' }
-    }
-    if (event.key === 'ArrowRight') {
-      return { type: 'sendInput', data: '\x05' }
+    // A kitty-protocol TUI may bind Ctrl+A/E to app actions (DSH-TUI's dashboard), so it gets Home/End instead.
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      const isLeft = event.key === 'ArrowLeft'
+      if ((getKittyKeyboardFlagsActivePane?.() ?? 0) > 0) {
+        return { type: 'sendInput', data: isLeft ? '\x1b[H' : '\x1b[F' }
+      }
+      return { type: 'sendInput', data: isLeft ? '\x01' : '\x05' }
     }
     // Why: macOS users expect Cmd+↑/↓ to scroll scrollback, not write escape bytes to the shell.
     if (event.key === 'ArrowUp') {
