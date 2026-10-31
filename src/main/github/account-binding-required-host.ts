@@ -3,7 +3,7 @@ import {
   foldComparableGitHubHost
 } from '../../shared/git-remote-host-alias'
 import { githubHostFromIdentityKey } from '../../shared/github/repository-identity-key'
-import { rawSshTransportHost, remoteUrlUsesSshTransport } from './github-remote-identity-parsing'
+import { gitHubSshConfigHostAlias } from './github-remote-identity-parsing'
 import {
   resolveSshConfigHostname,
   type SshConfigResolutionContext
@@ -25,22 +25,24 @@ export async function resolveGhAccountRequiredHost(
   resolveAlias: SshAliasHostnameResolver = resolveSshConfigHostname
 ): Promise<string | undefined> {
   const host = githubHostFromIdentityKey(repo.gitRemoteIdentity?.canonicalKey)
-  // Why: only SSH transport reads ~/.ssh/config; a dotless HTTPS host is literal.
-  const remoteUrl = repo.gitRemoteIdentity?.remoteUrl ?? ''
-  if (!host || !isUnresolvedSshHostAlias(host) || !remoteUrlUsesSshTransport(remoteUrl)) {
+  // Why: only SSH transport reads ~/.ssh/config; an HTTPS host is literal.
+  const alias = host ? gitHubSshConfigHostAlias(repo.gitRemoteIdentity?.remoteUrl ?? '') : null
+  if (!host || !alias) {
     return host
   }
-  // Expand SSH aliases in the runtime that runs gh; aliases themselves are not gh login hosts.
+  // Expand SSH aliases (dotted too) in the runtime that runs gh; aliases are not gh login hosts.
   const context: SshConfigResolutionContext = {
     repoPath: repo.path,
     connectionId: repo.connectionId ?? null,
     ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
   }
-  // Why raw: the canonical key is lowercased, but OpenSSH matches Host patterns case-sensitively.
-  const alias = rawSshTransportHost(remoteUrl) ?? host
   const resolved = await resolveAlias(alias, context).catch(() => null)
   const hostname = resolved?.hostname?.trim().toLowerCase()
-  if (!hostname || isUnresolvedSshHostAlias(hostname)) {
+  if (!hostname) {
+    // Why: a dotted host that ssh -G cannot expand is most likely a real Enterprise host.
+    return isUnresolvedSshHostAlias(host) ? undefined : host
+  }
+  if (isUnresolvedSshHostAlias(hostname)) {
     return undefined
   }
   // Why: only github.com's SSH/www aliases fold; gh keys an Enterprise login by its exact host.
