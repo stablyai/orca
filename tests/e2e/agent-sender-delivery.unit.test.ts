@@ -22,15 +22,22 @@ import {
   selectAgentSenderAssociation
 } from '@/runtime/agent-sender-associations'
 import { agentSenderAliasWorkForTest } from '@/runtime/agent-sender-alias-projection'
-import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
+import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
+import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
+import { handleGlobalSessionEvent } from '@/runtime/web-session-tabs-sync/global-session-events'
+import { VisibilityResumeCoordinator } from '@/runtime/web-session-tabs-sync/visibility-resume-coordinator'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { useAgentMessageSenderView } from '@/components/native-chat/native-chat-agent-message-sender-view'
 import {
   initialStore,
   resetSenderStore
 } from '@/components/native-chat/native-chat-agent-sender.test-fixture'
 
-beforeEach(() => resetSenderStore())
+beforeEach(() => {
+  resetSenderStore()
+  resetWebSessionTabsSnapshotFreshnessForTests()
+  resetLocalStructuredSessionVersionForTests()
+})
 afterEach(() => {
   cleanup()
   useAppStore.setState(initialStore, true)
@@ -98,13 +105,14 @@ function host(n: number) {
   }
   let stream = createSessionTabsStreamDelta(undefined)
   let version = 0
-  /** One session-tab stream frame for a worktree, through that stream's encoder and the wire. */
-  const frame = (worktree: string) =>
+  /** One session-tab stream frame for a worktree, through that stream's encoder and the wire;
+   *  a host re-emit repeats the tab version the window already has. */
+  const frame = (worktree: string, snapshotVersion = ++version) =>
     wire<RuntimeMobileSessionTabsResult>(
       stream({
         worktree,
         publicationEpoch: 'host',
-        snapshotVersion: ++version,
+        snapshotVersion,
         activeGroupId: null,
         activeTabId: null,
         activeTabType: null,
@@ -112,11 +120,10 @@ function host(n: number) {
         agentSenderAssociations: senders.buildForFrame(worktree)
       })
     )
-  const applyFrame = (snapshot: RuntimeMobileSessionTabsResult) => {
+  /** The window's local receipt path, with its version, placeholder and frames-draw checks. */
+  const applyFrame = (snapshot: RuntimeMobileSessionTabsResult, framesDraw = false) => {
     count(snapshot.agentSenderAssociations)
-    useAppStore.setState(
-      applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, LOCAL_STRUCTURED_SESSION_OWNER)
-    )
+    applyStructuredSessionTabSnapshots([snapshot], undefined, { framesDraw: () => framesDraw })
   }
   const deliverAll = () =>
     act(() => {
@@ -136,6 +143,7 @@ function host(n: number) {
     frame,
     applyFrame,
     deliverAll,
+    version: () => version,
     reconnect: () => {
       stream = createSessionTabsStreamDelta(undefined)
     },
@@ -155,7 +163,8 @@ it.each([100, 1000])(
     useAppStore.getState().setAgentSenderPublication('runtime:other', {
       associations: [{ identity: 'term_far', paneKey: 'far:pane', worktreeId: 'far' }],
       principals: [],
-      attachments: []
+      attachments: [],
+      revision: { epoch: 'far', revision: 1 }
     })
     let renders = 0
     let otherRenders = 0
@@ -259,4 +268,100 @@ it('sends complete sender data to a reconnected stream, a second window and a re
     h.senders.publisher.epoch
   )
   expect(located(3)).toBe(`tab3:${leafOf(3)}`)
+})
+
+it('applies a sender scope whose local frame the tab checks drop, and keeps it when later frames omit it', () => {
+  const h = host(2)
+  h.deliverAll()
+  // A host re-emit at the tab version the window already applied carries the new terminal.
+  h.open(2, 'w1')
+  act(() => h.applyFrame(h.frame('w1', h.version())))
+  expect(located(2)).toBe(`tab2:${leafOf(2)}`)
+  expect(h.frame('w1').agentSenderAssociations).toBeUndefined()
+  // A workspace main's frames draw drops the tab patch; the sender scope still applies.
+  h.open(4, 'w1')
+  act(() => h.applyFrame(h.frame('w1'), true))
+  expect(located(4)).toBe(`tab4:${leafOf(4)}`)
+})
+
+const PAIRED = 'paired'
+const pairedLocated = (i: number) =>
+  selectAgentSenderAssociation(useAppStore.getState(), `runtime:${PAIRED}`, sender(i))?.paneKey
+
+/** A paired host's frames through the window's real stream handler: runtime fence, receipt
+ *  order, the retired-lineage and resume-census checks, then the tab version gate. */
+function pairedWindow() {
+  const coordinator = new VisibilityResumeCoordinator({
+    environments: [],
+    environmentIdBySubscriptionSpec: [],
+    omissions: new Map(),
+    activeRuntimeWorktreeKey: () => null
+  })
+  const receive = (event: unknown, runtimeId = 'rt-1', resume = false) =>
+    act(() =>
+      handleGlobalSessionEvent({
+        environmentId: PAIRED,
+        expectedEnvironmentConnectionGeneration: 0,
+        expectedTrackingGeneration: 0,
+        visibilityGeneration: resume ? 1 : 0,
+        isCurrent: () => true,
+        event,
+        response: { id: 'stream', ok: true, result: event, _meta: { runtimeId } },
+        awaitingVisibilityResumeInventory: { value: resume },
+        coordinator
+      })
+    )
+  return {
+    frame: (snapshot: RuntimeMobileSessionTabsResult, runtimeId?: string) =>
+      receive({ ...snapshot, type: 'updated' }, runtimeId),
+    census: (snapshots: RuntimeMobileSessionTabsResult[]) =>
+      receive({ type: 'snapshots', snapshots }, 'rt-1', true)
+  }
+}
+
+it('applies a paired host scope its tab gates drop: same-version re-emit, then later frames that omit it', () => {
+  const h = host(2)
+  const w = pairedWindow()
+  w.frame(h.frame('w1'))
+  expect(pairedLocated(0)).toBe(`tab0:${leafOf(0)}`)
+  h.open(2, 'w1')
+  const reemit = h.frame('w1', h.version())
+  expect(reemit.agentSenderAssociations?.associations).toHaveLength(2)
+  w.frame(reemit)
+  const later = h.frame('w1')
+  expect(later.agentSenderAssociations).toBeUndefined()
+  w.frame(later)
+  expect(pairedLocated(2)).toBe(`tab2:${leafOf(2)}`)
+  // A resume census at unchanged versions skips its tab work, not its sender scopes.
+  h.reconnect()
+  h.open(4, 'w1')
+  w.census([h.frame('w1', h.version()), h.frame('w2', h.version())])
+  expect(pairedLocated(4)).toBe(`tab4:${leafOf(4)}`)
+  expect(pairedLocated(1)).toBe(`tab1:${leafOf(1)}`)
+})
+
+it('never lets an older paired scope or a superseded runtime replace a newer one', () => {
+  const h = host(2)
+  const w = pairedWindow()
+  w.frame(h.frame('w1'))
+  // A one-shot list cut before the change arrives after the stream delivered it.
+  h.reconnect()
+  const delayed = h.frame('w1')
+  h.open(2, 'w1')
+  w.frame(h.frame('w1'))
+  const applied = useAppStore.getState().agentSenderPublicationsByHost
+  w.frame(delayed)
+  expect(useAppStore.getState().agentSenderPublicationsByHost).toBe(applied)
+  expect(pairedLocated(2)).toBe(`tab2:${leafOf(2)}`)
+  // The host restarts: the new runtime's scope replaces the old epoch, and the old runtime's
+  // straggler changes nothing.
+  const straggler = h.frame('w1')
+  h.replaceRuntime()
+  h.reconnect()
+  h.leaves.splice(2, 1)
+  w.frame(h.frame('w1'), 'rt-2')
+  expect(pairedLocated(2)).toBeUndefined()
+  const restarted = useAppStore.getState().agentSenderPublicationsByHost
+  w.frame({ ...straggler, agentSenderAssociations: delayed.agentSenderAssociations }, 'rt-1')
+  expect(useAppStore.getState().agentSenderPublicationsByHost).toBe(restarted)
 })

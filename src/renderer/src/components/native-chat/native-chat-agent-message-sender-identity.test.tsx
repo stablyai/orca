@@ -251,7 +251,8 @@ it('uses the same published /clear successor for the live sender label', () => {
       }
     ],
     principals: [],
-    attachments: []
+    attachments: [],
+    revision: { epoch: 'host', revision: 1 }
   })
   render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)
   expect(screen.getByText('Continued sender')).toBeInTheDocument()

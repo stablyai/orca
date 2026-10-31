@@ -16,6 +16,6 @@ export type AgentSenderPublication = {
   /** This host's principal as each paired execution peer authenticates it; one per peer. */
   principals: readonly { peerFingerprint: string; homePeerFingerprint: string }[]
   attachments: readonly (AgentSenderAssociation & { homePeerFingerprint: string })[]
-  /** Absent from hosts that predate revisions; such a delivery is always complete. */
-  revision?: AgentSenderRevision
+  /** Every publishing host stamps one; hosts that predate publications send no field at all. */
+  revision: AgentSenderRevision
 }

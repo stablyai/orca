@@ -57,9 +57,16 @@ import type {
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 
 const LOCAL = { kind: 'local' } as const
+let revision = 0
+/** Each delivery is the host's next revision, as a publishing host stamps it. */
 const publication = (
   associations: AgentSenderPublication['associations'] = []
-): AgentSenderPublication => ({ associations, principals: [], attachments: [] })
+): AgentSenderPublication => ({
+  associations,
+  principals: [],
+  attachments: [],
+  revision: { epoch: 'host', revision: ++revision }
+})
 const terminal = (handle = 'term_0', agent: AgentMessageSender['agent'] = 'claude') => ({
   party: { address: handle, terminalHandle: handle, orcaSessionId: null },
   name: 'Worker',

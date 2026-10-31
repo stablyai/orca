@@ -7,6 +7,7 @@ import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner
 import { getExecutionHostIdForWorktree } from '../../lib/worktree-runtime-owner'
 import { applyWebSessionTabsSnapshot } from '../web-session-tabs-sync/snapshot-api'
 import { applyWebSessionTabsStorePatch } from '../web-session-tabs-sync/store-patch'
+import { receivedAgentSenderPublications } from '../web-session-tabs-sync/received-agent-sender-publications'
 import type { WebSessionTabsSyncState } from '../web-session-tabs-sync/state'
 import {
   admitRetiredValueUnderAuthority,
@@ -129,6 +130,12 @@ export function applyLocalStructuredSessionTabSnapshots<
   changedAgentPaneKeys?: Set<string>
 ): State {
   let next = state
+  // Received sender scopes apply before any tab check below can drop their frame.
+  const received = next.agentSenderPublicationsByHost ?? {}
+  const publications = receivedAgentSenderPublications(received, 'local', snapshots)
+  if (publications !== received) {
+    next = { ...next, agentSenderPublicationsByHost: publications }
+  }
   for (const snapshot of snapshots) {
     // Local inventory must not rewrite paired/SSH panes; execution hosts own their tabs.
     if (getExecutionHostIdForWorktree(next, snapshot.worktree) !== 'local') {

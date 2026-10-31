@@ -26,10 +26,18 @@ import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-
 import type { Tab } from '../../../../shared/tab-types'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
+import { applyReceivedAgentSenderPublications } from '@/runtime/web-session-tabs-sync/received-agent-sender-publications'
 
+let revision = 0
+/** Each delivery is the host's next revision, as a publishing host stamps it. */
 const publication = (
   associations: AgentSenderPublication['associations'] = []
-): AgentSenderPublication => ({ associations, principals: [], attachments: [] })
+): AgentSenderPublication => ({
+  associations,
+  principals: [],
+  attachments: [],
+  revision: { epoch: 'host', revision: ++revision }
+})
 const association = (i: number) => ({
   identity: `term_${i}`,
   paneKey: status(i).paneKey,
@@ -175,8 +183,11 @@ it('a worktree removal frame drops only its own scope and keeps the host authori
     tabs: [],
     ...(agentSenderAssociations ? { agentSenderAssociations } : {})
   })
-  const apply = (snapshot: Parameters<typeof applyWebSessionTabsSnapshot>[1]) =>
+  // The receipt applies sender scopes; the accepted tab frame applies a worktree's removal.
+  const apply = (snapshot: Parameters<typeof applyWebSessionTabsSnapshot>[1]) => {
+    applyReceivedAgentSenderPublications('remote', [snapshot], undefined)
     useAppStore.setState(applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, 'remote'))
+  }
   const worker = { ...association(0), identity: 'term_worker', worktreeId: 'w3' }
   apply(frame('w2', publication()))
   apply(frame('w3', publication([worker])))
@@ -254,7 +265,7 @@ it('receives an authoritative remote publication on the same snapshot path as re
     tabs: [],
     agentSenderAssociations: publication([{ ...association(0), identity: 'term_same' }])
   }
-  useAppStore.setState(applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, 'remote'))
+  applyReceivedAgentSenderPublications('remote', [snapshot], undefined)
   expect(
     selectAgentSenderAssociation(useAppStore.getState(), 'runtime:remote', sender('term_same'))
       ?.host
@@ -276,12 +287,8 @@ it.each([100, 1000])(
         )
       }
     })
-    useAppStore
-      .getState()
-      .setAgentSenderPublication(
-        'local',
-        publication(Array.from({ length: n }, (_, i) => association(i)))
-      )
+    const whole = publication(Array.from({ length: n }, (_, i) => association(i)))
+    useAppStore.getState().setAgentSenderPublication('local', whole)
     const before = agentSenderIndexWorkForTest()
     let renders = 0
     const hook = renderHook(() => {
@@ -310,12 +317,8 @@ it.each([100, 1000])(
     const published = useAppStore.getState().agentSenderPublicationsByHost
     act(() =>
       useAppStore.setState(
-        agentSenderPublicationPatch(
-          useAppStore.getState(),
-          'local',
-          'workspace',
-          publication(Array.from({ length: n }, (_, i) => association(i)))
-        )
+        // The same revision again, as that worktree's scope from a frame.
+        agentSenderPublicationPatch(useAppStore.getState(), 'local', 'workspace', whole)
       )
     )
     expect(useAppStore.getState().agentSenderPublicationsByHost).toBe(published)

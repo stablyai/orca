@@ -8,14 +8,11 @@ export type AgentSenderPublications = Record<string, Record<string, AgentSenderP
 type State = Partial<Pick<AppState, 'agentSenderPublicationsByHost'>>
 const EMPTY: AgentSenderPublications = Object.freeze({})
 
-const sameRevision = (a?: AgentSenderRevision, b?: AgentSenderRevision) =>
-  Boolean(a && b && a.epoch === b.epoch && a.revision === b.revision)
-
 /** A host publishes once any frame carries the field; a frame without it changes only its own
  *  scope when it removes that worktree, so capability never follows which scopes have rows.
- *  Revisioned deliveries are applied by revision alone: the whole-host publication is the
- *  baseline, a scope newer than it overrides that worktree, and nothing older or equal changes
- *  anything, whichever transport or key order delivered it. */
+ *  Deliveries are applied by revision alone: the whole-host publication is the baseline, a scope
+ *  newer than both it and that scope's own last delivery overrides that worktree, and nothing
+ *  older or equal changes anything, whichever transport, frame or key order delivered it. */
 export function agentSenderPublicationPatch(
   state: State,
   host: string,
@@ -43,54 +40,22 @@ export function agentSenderPublicationPatch(
     delete next[scope]
     return set(next)
   }
-  const revision = publication.revision
-  const whole = scopes?.['*']
-  if (revision) {
-    const baseline = whole?.revision?.epoch === revision.epoch ? whole.revision.revision : -1
-    if (scope === '*') {
-      if (baseline >= revision.revision) {
-        return {}
-      }
-      const newer = Object.entries(scopes ?? {}).filter(
-        ([id, value]) =>
-          id !== '*' &&
-          value.revision?.epoch === revision.epoch &&
-          value.revision.revision > revision.revision
-      )
-      return set({ ...Object.fromEntries(newer), '*': publication })
-    }
-    if (baseline >= revision.revision || sameRevision(scopes?.[scope]?.revision, revision)) {
-      return {}
-    }
-    return set({ ...scopes, [scope]: publication })
-  }
-  // A host before revisions sends complete publications, compared by content.
-  if (scope !== '*' && whole) {
-    const current = {
-      ...whole,
-      associations: whole.associations.filter((row) => row.worktreeId === scope),
-      attachments: whole.attachments.filter((row) => row.worktreeId === scope)
-    }
-    if (JSON.stringify(current) === JSON.stringify(publication)) {
-      return {}
-    }
-    publication = {
-      ...publication,
-      associations: [
-        ...whole.associations.filter((row) => row.worktreeId !== scope),
-        ...publication.associations
-      ],
-      attachments: [
-        ...whole.attachments.filter((row) => row.worktreeId !== scope),
-        ...publication.attachments
-      ]
-    }
-    scope = '*'
-  }
-  if (JSON.stringify(scopes?.[scope]) === JSON.stringify(publication)) {
+  const { revision } = publication
+  const newerOrEqual = (stored: AgentSenderRevision | undefined) =>
+    stored?.epoch === revision.epoch && stored.revision >= revision.revision
+  if (newerOrEqual(scopes?.['*']?.revision)) {
     return {}
   }
-  return set({ ...scopes, [scope]: publication })
+  if (scope === '*') {
+    const newer = Object.entries(scopes ?? {}).filter(
+      ([id, value]) =>
+        id !== '*' &&
+        value.revision.epoch === revision.epoch &&
+        value.revision.revision > revision.revision
+    )
+    return set({ ...Object.fromEntries(newer), '*': publication })
+  }
+  return newerOrEqual(scopes?.[scope]?.revision) ? {} : set({ ...scopes, [scope]: publication })
 }
 
 /** What a host publishes now: its whole-host baseline, with each newer scope in its worktree. */

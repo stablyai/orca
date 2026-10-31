@@ -40,13 +40,17 @@ export function applyWebSessionTabsSnapshotWithContext(
   ) {
     return state
   }
-  const identityPatch = agentSenderPublicationPatch(
-    { agentSenderPublicationsByHost: state.agentSenderPublicationsByHost ?? {} },
-    environmentId === LOCAL_STRUCTURED_SESSION_OWNER ? 'local' : `runtime:${environmentId}`,
-    rawSnapshot.worktree,
-    rawSnapshot.agentSenderAssociations,
-    isWebSessionTabsWorktreeRemovalFrame(rawSnapshot)
-  )
+  // Received sender scopes were applied at receipt; a removal is no sender revision, so it drops
+  // that worktree's scope only once the tab gates accept the frame that says so.
+  const identityPatch = isWebSessionTabsWorktreeRemovalFrame(rawSnapshot)
+    ? agentSenderPublicationPatch(
+        { agentSenderPublicationsByHost: state.agentSenderPublicationsByHost ?? {} },
+        environmentId === LOCAL_STRUCTURED_SESSION_OWNER ? 'local' : `runtime:${environmentId}`,
+        rawSnapshot.worktree,
+        undefined,
+        true
+      )
+    : {}
   const worktreeId = rawSnapshot.worktree
   // Switch point: ORCA_LAYOUT_OWNER_IS_MAIN && — every mirror write (single, batch, operations) passes here.
   const previousSnapshotTabIds =
