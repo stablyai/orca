@@ -44,6 +44,28 @@ describe('deferHiddenAgentResume', () => {
     expect(deferHiddenAgentResume(session, startup)).toBe(true)
   })
 
+  it('consumes a pending wake mark when a visible or disposed pane bypasses the hidden deferral', () => {
+    wakeRequests.take.mockClear()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deferHiddenAgentResume reads only these session members.
+    const visible = {
+      ...hiddenPaneSession(),
+      deps: { isVisibleRef: { current: true } }
+    } as unknown as ConnectPanePtySession
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deferHiddenAgentResume reads only these session members.
+    const disposed = {
+      ...hiddenPaneSession(),
+      disposed: true
+    } as unknown as ConnectPanePtySession
+
+    expect(deferHiddenAgentResume(visible, startup)).toBe(false)
+    expect(deferHiddenAgentResume(disposed, startup)).toBe(false)
+    // A pane that never takes the deferral path must not leave its mark behind as stale ownership.
+    expect(wakeRequests.take).toHaveBeenCalledWith(startup.sleepingRecordEntry.record)
+    expect(wakeRequests.take).toHaveBeenCalledTimes(2)
+    expect(deferHiddenAgentResume(visible, null)).toBe(false)
+    expect(wakeRequests.take).toHaveBeenCalledTimes(2)
+  })
+
   it('releases the hold under a record key the pane no longer holds', async () => {
     const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
     const session = hiddenPaneSession()
