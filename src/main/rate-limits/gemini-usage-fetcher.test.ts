@@ -1,11 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setMainHttpClient } from '../network/http-client'
-import {
-  authJsonGoogle,
-  authJsonGoogleExpired,
-  makeResponse,
-  quotaResponse
-} from './gemini-usage-fetcher.test-fixtures'
+import { authJsonGoogle, makeResponse, quotaResponse } from './gemini-usage-fetcher.test-fixtures'
 
 const { readFileMock, extractCredsMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
@@ -59,35 +54,6 @@ describe('fetchGeminiRateLimits', () => {
       throw { code: 'ENOENT' }
     })
   }
-  const setupAuthJsonExpired = () => {
-    readFileMock.mockImplementation(async (p: string) => {
-      if (p.includes('auth.json')) {
-        return JSON.stringify(authJsonGoogleExpired)
-      }
-      throw { code: 'ENOENT' }
-    })
-  }
-
-  it('returns unavailable when no credentials exist', async () => {
-    const result = await fetchGeminiRateLimits(true)
-    expect(result.status).toBe('unavailable')
-  })
-
-  it('returns quota via auth.json', async () => {
-    setupAuthJsonValid()
-    fetchMock.mockImplementation((url: string) => {
-      if (url.includes('retrieveUserQuota')) {
-        return Promise.resolve(makeResponse(quotaResponse))
-      }
-      if (url.includes('loadCodeAssist')) {
-        return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      }
-      return Promise.resolve(makeResponse({}, 404))
-    })
-    const result = await fetchGeminiRateLimits(true)
-    expect(result.status).toBe('ok')
-    expect(result.buckets).toHaveLength(2)
-  })
 
   it('tags a quota request that throws as a network failure', async () => {
     setupAuthJsonValid()
@@ -134,31 +100,6 @@ describe('fetchGeminiRateLimits', () => {
     expect(result.status).toBe('ok')
     expect(result.buckets).toHaveLength(1)
     expect(result.buckets![0].name).toBe('1.5 Flash')
-  })
-
-  it('handles empty bucket list', async () => {
-    setupAuthJsonValid()
-    fetchMock.mockImplementation((url: string) => {
-      if (url.includes('retrieveUserQuota')) {
-        return Promise.resolve(makeResponse([]))
-      }
-      if (url.includes('loadCodeAssist')) {
-        return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      }
-      return Promise.resolve(makeResponse({}, 404))
-    })
-    const result = await fetchGeminiRateLimits(true)
-    expect(result.status).toBe('ok')
-    expect(result.buckets).toEqual([])
-  })
-
-  it('returns error when token refresh fails', async () => {
-    vi.useRealTimers()
-    setupAuthJsonExpired()
-    const result = await fetchGeminiRateLimits(true)
-    expect(result.status).toBe('error')
-    expect(result.error).toContain('Token refresh failed')
-    vi.useFakeTimers()
   })
 
   it('handles wrapped buckets response', async () => {

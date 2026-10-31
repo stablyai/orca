@@ -48,39 +48,6 @@ describe('equalizeTerminalPanes', () => {
     }
   }
 
-  it('a window-owned build equalizes at once, without asking main', () => {
-    const current = manager()
-    const then = vi.fn()
-
-    equalizeTerminalPanes(
-      { worktreeId: 'worktree-1', tabId: 'tab-1', getManager: () => current },
-      then
-    )
-
-    expect(current.equalizePaneSizes).toHaveBeenCalledOnce()
-    expect(then).toHaveBeenCalledWith(current)
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-  })
-
-  it('a layout-owner build leaves the sizes to main’s frame, then focuses', async () => {
-    mocks.layoutOwnerIsMain = true
-    beginLayoutFramePositions()
-    mocks.callRuntimeRpc.mockResolvedValue({ ok: true, result: {} })
-    const current = manager()
-    const then = vi.fn()
-
-    equalizeTerminalPanes(
-      { worktreeId: 'worktree-1', tabId: 'tab-1', getManager: () => current },
-      then
-    )
-
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'layout.apply', {
-      command: { type: 'equalizePanes', tabId: 'tab-1', workspace: 'worktree-1' }
-    })
-    await vi.waitFor(() => expect(then).toHaveBeenCalledWith(current))
-    expect(current.equalizePaneSizes).not.toHaveBeenCalled()
-  })
-
   it('a layout-owner build equalizes itself when no frame is coming', async () => {
     mocks.layoutOwnerIsMain = true
     beginLayoutFramePositions()

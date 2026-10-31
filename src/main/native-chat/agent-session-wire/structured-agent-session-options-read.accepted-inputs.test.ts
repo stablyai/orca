@@ -21,6 +21,7 @@ import {
 
 import { expect, it, vi } from 'vitest'
 import {
+  hostTestCatalogReadOperation,
   hostTestRestingOptionsRecord as restingRecord,
   HOST_TEST_RESTING_OPTIONS_CREATED_LINKS as created,
   hostTestRestingOptionsJournal as restingJournal,
@@ -193,7 +194,10 @@ it.each([false, true])(
             current: { model: 'opus[1m]', effort: 'high', confirmed: ['model', 'effort'] }
           })
         },
-        modelCatalog: { read: async () => ({ origin: 'probe', fetchedAt: 1, models }) },
+        modelCatalog: {
+          captureRead: hostTestCatalogReadOperation,
+          read: async () => ({ origin: 'probe', fetchedAt: 1, models })
+        },
         agents: NO_STRUCTURED_AGENTS,
         store: hostTestOptionsReadStore(() => record)
       },
