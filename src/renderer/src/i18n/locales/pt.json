@@ -13934,7 +13934,6 @@
           "rowActions": "Ações da automação",
           "tableLastRun": "Última execução",
           "ownerChanged": "Esta automação mudou de host. Atualize e tente novamente.",
-          "runError": "Erro:",
           "deleteAutomationDescription": "Excluir <name/> e seu histórico de execuções. Os espaços de trabalho criados por execuções anteriores não serão excluídos.",
           "deleteExternalAutomationDescription": "Excluir <name/> de <provider/> em <host/>.",
           "runUsageSummaryTokens_one": "{{cost}} (est.) · {{tokens}} token",
@@ -14397,7 +14396,8 @@
           "runStatusSkippedMissed": "Ignorada",
           "runStatusSkippedUnavailable": "Indisponível",
           "runStatusSkippedNeedsInteractiveAuth": "Requer credenciais",
-          "runStatusDispatchFailed": "Falhou"
+          "runStatusDispatchFailed": "Falhou",
+          "runStatusCompletedWithWarnings": "Concluído com avisos"
         },
         "runContent": {
           "noOutput": "Nenhum conteúdo de saída disponível."
@@ -14440,6 +14440,22 @@
           "partialFailureOfHosts_one": "Falha ao carregar {{failed}} de {{count}} host",
           "partialFailureOfHosts_other": "Falha ao carregar {{failed}} de {{count}} hosts",
           "partialFailureOfHosts_many": "Falha ao carregar {{failed}} de {{count}} hosts"
+        },
+        "automationRunOutputActions": {
+          "saveFailed": "Não foi possível salvar '{{title}}'."
+        },
+        "AutomationRunResults": {
+          "download": "Baixar",
+          "evidence": "Detalhes",
+          "noWarningsReported": "Nenhum aviso relatado.",
+          "saveAndOpen": "Salvar e abrir",
+          "attachments": "Anexos",
+          "resolved": "Resolvido",
+          "resolvedWith": "Resolvido: {{resolution}}",
+          "warnings": "Avisos"
+        },
+        "AutomationRunDetailsPage": {
+          "summary": "Resumo"
         }
       },
       "TaskPage": {

@@ -41,6 +41,7 @@ export function useAutomationsPageRefresh({
     automationHostTargetKey,
     setRelativeNow,
     runHistoryReloadToken,
+    setRunHistoryReloadToken,
     workspaceNameCacheRef
   } = local
   const { scopedExternal, selectedRow } = list
@@ -151,12 +152,16 @@ export function useAutomationsPageRefresh({
     onSettled: local.setSelectedAutomationRuns
   })
   useEffect(() => {
-    const onAutomationsChanged = (): void => {
+    const onAutomationsChanged = (event: Event): void => {
       void refresh()
+      // Run progress (including agent warnings) also changes the open run history and run page.
+      if (event instanceof CustomEvent && event.detail?.reason === 'run') {
+        setRunHistoryReloadToken((token) => token + 1)
+      }
     }
     window.addEventListener(AUTOMATIONS_CHANGED_EVENT, onAutomationsChanged)
     return () => window.removeEventListener(AUTOMATIONS_CHANGED_EVENT, onAutomationsChanged)
-  }, [refresh])
+  }, [refresh, setRunHistoryReloadToken])
   useEffect(() => {
     const onVisibilityOrFocus = (): void => {
       if (document.visibilityState === 'visible') {

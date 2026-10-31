@@ -17141,7 +17141,6 @@
           "rowActions": "自動化操作",
           "tableLastRun": "最後一次執行",
           "ownerChanged": "此自動化已切換主機。請重新整理後再試。",
-          "runError": "錯誤：",
           "deleteAutomationDescription": "刪除 <name/> 及其執行歷程。不會刪除先前執行所建立的工作區。",
           "deleteExternalAutomationDescription": "從 <host/> 上的 <provider/> 中刪除 <name/>。",
           "runUsageSummaryTokens_other": "預估 {{cost}} · {{tokens}} token"
@@ -17442,7 +17441,8 @@
           "runStatusSkippedMissed": "已略過",
           "runStatusSkippedUnavailable": "無法使用",
           "runStatusSkippedNeedsInteractiveAuth": "需要憑證",
-          "runStatusDispatchFailed": "失敗"
+          "runStatusDispatchFailed": "失敗",
+          "runStatusCompletedWithWarnings": "已完成（有警告）"
         },
         "runContent": {
           "noOutput": "沒有可用的輸出內容。"
@@ -17481,6 +17481,22 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "{{count}} 台主機中有 {{failed}} 台無法載入"
+        },
+        "automationRunOutputActions": {
+          "saveFailed": "無法儲存「{{title}}」。"
+        },
+        "AutomationRunResults": {
+          "download": "下載",
+          "evidence": "詳細資料",
+          "noWarningsReported": "未回報警告。",
+          "saveAndOpen": "儲存並開啟",
+          "attachments": "附件",
+          "resolved": "已解決",
+          "resolvedWith": "已解決：{{resolution}}",
+          "warnings": "警告"
+        },
+        "AutomationRunDetailsPage": {
+          "summary": "摘要"
         }
       },
       "agent": {

@@ -6,6 +6,11 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { AutomationRunPageFrame } from './AutomationRunPageFrame'
+import {
+  AutomationRunResults,
+  AutomationRunSectionLabel,
+  type AutomationRunOutputActions
+} from './AutomationRunResults'
 import { getAutomationRunContent } from './automation-run-content'
 import { automationRunErrorText } from './automation-run-error-copy'
 import type { AutomationRunViewState } from './automation-run-view-state'
@@ -13,8 +18,7 @@ import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-d
 import {
   AutomationRunErrorNotice,
   formatAutomationDateTimeWithRelative,
-  getAutomationRunStatusLabel,
-  getAutomationRunStatusVariant
+  AutomationRunStatusBadge
 } from './automation-page-parts'
 
 export function AutomationRunDetailsPage({
@@ -27,7 +31,8 @@ export function AutomationRunDetailsPage({
   isRerunPending,
   onRerun,
   onOpenWorkspace,
-  onBack
+  onBack,
+  outputActions
 }: {
   automation: Automation | null
   run: AutomationRun
@@ -39,11 +44,12 @@ export function AutomationRunDetailsPage({
   onRerun: () => void
   onOpenWorkspace: () => void
   onBack: () => void
+  outputActions: AutomationRunOutputActions
 }): React.JSX.Element {
   const content = getAutomationRunContent(run)
-  const errorText = automationRunErrorText(run)
+  const errorText = run.reportedFailure?.message ?? automationRunErrorText(run)
   return (
-    <section className="flex min-h-0 flex-1 p-5">
+    <section className="flex min-h-0 flex-1">
       <AutomationRunPageFrame
         title={automation?.name ?? run.title}
         breadcrumbs={[
@@ -60,8 +66,7 @@ export function AutomationRunDetailsPage({
               )
             : null
         }
-        statusLabel={getAutomationRunStatusLabel(run.status)}
-        statusVariant={getAutomationRunStatusVariant(run.status)}
+        status={<AutomationRunStatusBadge run={run} />}
         actions={
           <>
             {canRerun && automation ? (
@@ -88,18 +93,23 @@ export function AutomationRunDetailsPage({
         onBack={onBack}
       >
         {/* Why: saved terminal output otherwise hides why the run failed. */}
-        {run.status === 'dispatch_failed' && errorText && content !== errorText ? (
-          <AutomationRunErrorNotice
-            className="mb-4"
-            label={translate('auto.components.automations.AutomationsPage.runError', 'Error:')}
-            error={errorText}
-          />
+        {errorText && (run.reportedFailure || content !== errorText) ? (
+          <AutomationRunErrorNotice error={errorText} />
         ) : null}
-        <CommentMarkdown
-          variant="document"
-          content={content}
-          className="text-sm leading-relaxed text-foreground"
-        />
+        {/* The agent's answer leads; warnings and attachments qualify it. */}
+        <section>
+          {run.outputSnapshot ? (
+            <AutomationRunSectionLabel>
+              {translate('auto.components.automations.AutomationRunDetailsPage.summary', 'Summary')}
+            </AutomationRunSectionLabel>
+          ) : null}
+          <CommentMarkdown
+            variant="document"
+            content={content}
+            className="max-w-[68ch] text-sm leading-relaxed text-foreground"
+          />
+        </section>
+        <AutomationRunResults run={run} actions={outputActions} />
       </AutomationRunPageFrame>
     </section>
   )

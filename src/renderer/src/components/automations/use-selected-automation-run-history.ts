@@ -49,11 +49,26 @@ export type SelectedAutomationRunHistoryInput = {
   onSettled: (outcome: SelectedAutomationRunHistoryOutcome) => void
 }
 
-function navigationHostId(
-  navigation: SelectedAutomationRunNavigation,
-  automationId: string
-): string | null {
-  return navigation?.automationId === automationId ? (navigation.hostId ?? null) : null
+export function selectedAutomationRunHistoryTarget(
+  input: Pick<
+    SelectedAutomationRunHistoryInput,
+    'selected' | 'context' | 'navigation' | 'legacyTarget'
+  >
+): AutomationHostTarget | null {
+  const selected = input.selected
+  const captured = capturedAutomationOwner(
+    input.context.capturedOwners,
+    selected?.key ?? null
+  ).owner
+  const navigationHost =
+    input.navigation?.automationId === selected?.automation.id ? input.navigation?.hostId : null
+  return captured
+    ? getAutomationAuthorityTarget(captured.authority)
+    : navigationHost
+      ? getAutomationTargetFromHostId(navigationHost)
+      : selected
+        ? input.legacyTarget(selected)
+        : null
 }
 
 export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHistoryInput): void {
@@ -78,14 +93,7 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
     () => (authority?.kind === 'runtime' ? authority : { kind: 'desktop' }),
     [authority]
   )
-  const navigationHost = automationId ? navigationHostId(input.navigation, automationId) : null
-  const target = captured
-    ? getAutomationAuthorityTarget(captured.authority)
-    : navigationHost
-      ? getAutomationTargetFromHostId(navigationHost)
-      : input.selected
-        ? (input.legacyTarget(input.selected) ?? { kind: 'local' as const })
-        : { kind: 'local' as const }
+  const target = selectedAutomationRunHistoryTarget(input) ?? { kind: 'local' as const }
   const fetchKey =
     automationId && rowKey
       ? [

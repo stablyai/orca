@@ -40,11 +40,11 @@ const run: AutomationRun = {
   createdAt: 1
 }
 
-function renderPage(viewState: AutomationRunViewState): void {
+function renderPage(viewState: AutomationRunViewState | null, current: AutomationRun = run): void {
   render(
     <AutomationRunDetailsPage
       automation={null}
-      run={run}
+      run={current}
       relativeNow={1}
       workspaceDisplay={null}
       viewState={viewState}
@@ -53,6 +53,7 @@ function renderPage(viewState: AutomationRunViewState): void {
       onRerun={() => {}}
       onOpenWorkspace={() => {}}
       onBack={() => {}}
+      outputActions={{ load: async () => '', open: async () => {}, download: async () => {} }}
     />
   )
 }
@@ -108,6 +109,7 @@ describe('AutomationRunDetailsPage', () => {
           onRerun={() => {}}
           onOpenWorkspace={open}
           onBack={() => {}}
+          outputActions={{ load: async () => '', open: async () => {}, download: async () => {} }}
         />
       )
       fireEvent.click(screen.getByRole('button', { name: 'Ver ejecución' }))
@@ -120,6 +122,27 @@ describe('AutomationRunDetailsPage', () => {
       }
     }
   })
+
+  it.each(['dispatched', 'dispatch_failed', 'completed'] as const)(
+    'shows the reported failure immediately while %s',
+    (status) => {
+      renderPage(null, {
+        ...run,
+        status,
+        error: 'Older error',
+        reportedFailure: { message: 'Linear access was denied.', reportedAt: 2 },
+        outputSnapshot: {
+          format: 'plain_text',
+          content: 'Partial answer',
+          capturedAt: 2,
+          truncated: false
+        }
+      })
+      expect(screen.getByText('Linear access was denied.')).toBeInTheDocument()
+      expect(screen.getByText('Partial answer')).toBeInTheDocument()
+      expect(screen.queryByText('Older error')).not.toBeInTheDocument()
+    }
+  )
 
   it('hides the open action when the supplied view state disallows it', () => {
     renderPage({

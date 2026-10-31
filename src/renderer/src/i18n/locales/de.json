@@ -17372,7 +17372,6 @@
           "rowActions": "Automatisierungsaktionen",
           "tableLastRun": "Letzte Ausführung",
           "ownerChanged": "Der Host dieser Automatisierung hat sich geändert. Aktualisieren und erneut versuchen.",
-          "runError": "Fehler:",
           "deleteAutomationDescription": "<name/> und den Ausführungsverlauf löschen. Arbeitsbereiche aus früheren Ausführungen werden nicht gelöscht.",
           "deleteExternalAutomationDescription": "<name/> aus <provider/> auf <host/> löschen.",
           "runUsageSummaryTokens_one": "ca. {{cost}} · {{tokens}} Token",
@@ -17680,7 +17679,8 @@
           "runStatusSkippedMissed": "Übersprungen",
           "runStatusSkippedUnavailable": "Nicht verfügbar",
           "runStatusSkippedNeedsInteractiveAuth": "Zugangsdaten erforderlich",
-          "runStatusDispatchFailed": "Fehlgeschlagen"
+          "runStatusDispatchFailed": "Fehlgeschlagen",
+          "runStatusCompletedWithWarnings": "Fertig mit Warnungen"
         },
         "runContent": {
           "noOutput": "Keine Ausgabe verfügbar."
@@ -17721,6 +17721,22 @@
         "hostSummary": {
           "partialFailureOfHosts_one": "Laden fehlgeschlagen: {{failed}} von {{count}} Host",
           "partialFailureOfHosts_other": "Laden fehlgeschlagen: {{failed}} von {{count}} Hosts"
+        },
+        "automationRunOutputActions": {
+          "saveFailed": "'{{title}}' konnte nicht gespeichert werden."
+        },
+        "AutomationRunResults": {
+          "download": "Herunterladen",
+          "evidence": "Details",
+          "noWarningsReported": "Keine Warnungen gemeldet.",
+          "saveAndOpen": "Speichern und öffnen",
+          "attachments": "Anhänge",
+          "resolved": "Behoben",
+          "resolvedWith": "Behoben: {{resolution}}",
+          "warnings": "Warnungen"
+        },
+        "AutomationRunDetailsPage": {
+          "summary": "Zusammenfassung"
         }
       },
       "agent": {

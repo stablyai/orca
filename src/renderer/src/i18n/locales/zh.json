@@ -16871,7 +16871,6 @@
           "rowActions": "自动化操作",
           "tableLastRun": "最后一次运行",
           "ownerChanged": "这种自动化改变了主机。刷新并重试。",
-          "runError": "错误：",
           "deleteAutomationDescription": "删除 <name/> 及其运行历史。不会删除之前运行创建的工作区。",
           "deleteExternalAutomationDescription": "从 <host/> 上的 <provider/> 中删除 <name/>。",
           "runUsageSummaryTokens_other": "预估 {{cost}} · {{tokens}} token"
@@ -17147,7 +17146,8 @@
           "runStatusSkippedMissed": "已跳过",
           "runStatusSkippedUnavailable": "不可用",
           "runStatusSkippedNeedsInteractiveAuth": "需要凭据",
-          "runStatusDispatchFailed": "失败"
+          "runStatusDispatchFailed": "失败",
+          "runStatusCompletedWithWarnings": "已完成（有警告）"
         },
         "runContent": {
           "noOutput": "没有可用的输出内容。"
@@ -17186,6 +17186,22 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "{{count}} 个主机中有 {{failed}} 个无法加载"
+        },
+        "automationRunOutputActions": {
+          "saveFailed": "无法保存“{{title}}”。"
+        },
+        "AutomationRunResults": {
+          "download": "下载",
+          "evidence": "详情",
+          "noWarningsReported": "未报告警告。",
+          "saveAndOpen": "保存并打开",
+          "attachments": "附件",
+          "resolved": "已解决",
+          "resolvedWith": "已解决：{{resolution}}",
+          "warnings": "警告"
+        },
+        "AutomationRunDetailsPage": {
+          "summary": "摘要"
         }
       },
       "agent": {
