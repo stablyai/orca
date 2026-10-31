@@ -3,6 +3,7 @@ import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { z } from 'zod'
+import { accountRelayFetch } from '../../network/env-proxy-transport'
 import { hardenExistingSecureFile, writeSecureJsonFile } from '../../../shared/secure-file'
 import { fetchRelayRegionCatalog, relayDirectorHost } from './relay-region-catalog-fetch'
 import type { RelayRegionDecision, RelayRegionWindow } from './relay-region-correction-protocol'
@@ -81,7 +82,7 @@ export class RelayRegionPreferenceResolver {
     return measureRelayRegionDecision(window, {
       diagnosticOverride: Boolean(this.overrideRegion()),
       now: this.options.now ?? Date.now,
-      measure: () => this.probeCatalog(this.options.fetch ?? globalThis.fetch)
+      measure: () => this.probeCatalog(this.options.fetch ?? accountRelayFetch())
     })
   }
 
@@ -140,7 +141,7 @@ export class RelayRegionPreferenceResolver {
       reason: 'catalog-unavailable'
     }
     try {
-      const fetch = this.options.fetch ?? globalThis.fetch
+      const fetch = this.options.fetch ?? accountRelayFetch()
       const probe = this.createProbe(fetch)
       const reports = await this.probeCatalog(fetch, () => this.logSelfHeal(outcome))
       const best = bestMeasurement(measuredRegions(reports))
@@ -172,7 +173,7 @@ export class RelayRegionPreferenceResolver {
     previous: RelayRegionCache | null,
     now: number
   ): Promise<RelayRegion | undefined> {
-    const fetch = this.options.fetch ?? globalThis.fetch
+    const fetch = this.options.fetch ?? accountRelayFetch()
     // Refresh reports catalog failure as no hint; self-heal reports its separate outcome.
     const reports = await this.probeCatalog(fetch, () =>
       this.log(relayRegionCatalogFailureEvent(this.options.directorUrl))

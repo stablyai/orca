@@ -1,4 +1,5 @@
 import WebSocket, { type RawData } from 'ws'
+import { envProxyWsOptions } from '../../network/env-proxy-transport'
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { RpcTransport } from './transport'
 import type { MobileSocketTransport, MobileSocketTransportMetadata } from './mobile-socket-wiring'
@@ -64,7 +65,11 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.createSocket =
       options.createSocket ??
       ((url) =>
-        new WebSocket(url, { perMessageDeflate: false, maxPayload: MAX_RELAY_MESSAGE_BYTES }))
+        new WebSocket(url, {
+          perMessageDeflate: false,
+          maxPayload: MAX_RELAY_MESSAGE_BYTES,
+          ...envProxyWsOptions(url)
+        }))
   }
 
   onMessage(handler: Parameters<MobileSocketTransport['onMessage']>[0]): void {

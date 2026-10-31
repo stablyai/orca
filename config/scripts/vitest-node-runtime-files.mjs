@@ -25,6 +25,10 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/session-scanner-scope-walk.test.ts',
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
+  // undici dispatchers and SOCKS tunnels back the Orca account/relay calls in Electron main; Bun's fetch ignores them.
+  'src/main/network/env-proxy-transport.test.ts',
+  // Mocks the `ws` package, which Bun replaces with its built-in WebSocket.
+  'src/main/runtime/mobile-cloud-relay/relay-proxy-agent.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
