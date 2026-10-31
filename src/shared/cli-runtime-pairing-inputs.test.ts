@@ -10,6 +10,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, open: vi.fn(actual.open) }
 })
 
+const actual = await vi.importActual<typeof fs>('node:fs/promises')
+
 let root: string
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-cli-runtime-close-'))
@@ -33,7 +35,6 @@ describe('installed CLI advisory cleanup', () => {
             ? '#!/usr/bin/env node\n'
             : 'unknown'
       )
-      const actual = await vi.importActual<typeof fs>('node:fs/promises')
       const file = await actual.open(command, 'r')
       vi.mocked(fs.open).mockResolvedValueOnce(file)
       if (kind === 'read failure') {
