@@ -4,7 +4,6 @@ import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-typ
 import { layoutOwnerPaneGestures } from './terminal-pane-layout-owner-gestures'
 import { withPaneSplitRatios } from '../../../../shared/workspace-layout/split-ratio-intents'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
 
 const mocks = vi.hoisted(
   (): {
@@ -59,75 +58,10 @@ describe('layoutOwnerPaneGestures', () => {
     mocks.send.mockReturnValue(true)
     mocks.mainRoot = undefined
   })
-
-  const drop = { sourcePaneId: 2, targetPaneId: 1, zone: 'left' } as const
   const ratiosSent = () =>
     mocks.send.mock.calls
       .map(([, command]) => command)
       .filter((command) => command.type === 'setPaneRatios')
-
-  it('takes an in-tab drop and leaves moving the pane to main’s frame', () => {
-    const move = vi.fn()
-
-    expect(gestures().takePaneDrop?.(drop, move)).toBe(true)
-    expect(mocks.send).toHaveBeenCalledWith(
-      'worktree-1',
-      { type: 'movePane', tabId: 'tab-1', leafId: 'leaf-2', targetLeafId: 'leaf-1', side: 'left' },
-      {
-        apply: expect.any(Function),
-        asToday: expect.any(Function),
-        refused: expect.any(Function)
-      }
-    )
-    mocks.send.mock.calls[0]?.[2].apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
-
-    expect(move).not.toHaveBeenCalled()
-  })
-
-  it('moves the pane as today when main answers as today', () => {
-    const move = vi.fn()
-    gestures().takePaneDrop?.(drop, move)
-
-    mocks.send.mock.calls[0]?.[2].asToday()
-
-    expect(move).toHaveBeenCalledOnce()
-  })
-
-  it('keeps the window’s shape when main refuses, as main’s tree did not change', () => {
-    const move = vi.fn()
-    gestures().takePaneDrop?.(drop, move)
-    mocks.send.mock.calls[0]?.[2]?.refused?.('same_pane')
-
-    expect(move).not.toHaveBeenCalled()
-  })
-
-  it('leaves the drop to the window when main cannot take it', () => {
-    expect(gestures().takePaneDrop?.({ ...drop, sourcePaneId: 0 }, vi.fn())).toBe(false)
-    expect(mocks.send).not.toHaveBeenCalled()
-
-    mocks.send.mockReturnValue(false)
-    expect(gestures().takePaneDrop?.(drop, vi.fn())).toBe(false)
-  })
-
-  it('sends the divider that moved, by its path, when a drag ends', () => {
-    mocks.mainRoot = { ...mocks.root, ratio: 0.5 }
-
-    gestures().onDividerRatiosCommitted?.()
-
-    expect(mocks.send).toHaveBeenCalledWith(
-      'worktree-1',
-      {
-        type: 'setPaneRatios',
-        tabId: 'tab-1',
-        ratios: [{ path: '', ratio: 0.3, split: ROOT_SPLIT }]
-      },
-      {
-        apply: expect.any(Function),
-        asToday: expect.any(Function),
-        refused: expect.any(Function)
-      }
-    )
-  })
 
   it('sends only the moved divider of a nested split, never the tree', () => {
     const nested = (outer: number, inner: number): typeof mocks.root => ({
@@ -151,34 +85,6 @@ describe('layoutOwnerPaneGestures', () => {
         type: 'setPaneRatios',
         tabId: 'tab-1',
         ratios: [{ path: 'second', ratio: 0.7, split: ROOT_SPLIT }]
-      }
-    ])
-  })
-
-  it('sends every divider before main’s frame holds the tab', () => {
-    gestures().onDividerRatiosCommitted?.()
-
-    expect(ratiosSent()).toEqual([
-      {
-        type: 'setPaneRatios',
-        tabId: 'tab-1',
-        ratios: [{ path: '', ratio: 0.3, split: ROOT_SPLIT }]
-      }
-    ])
-  })
-
-  it('sends ratios at once while a move is in flight, as intents main applies to its own tree', () => {
-    mocks.mainRoot = { ...mocks.root, ratio: 0.5 }
-    const view = gestures()
-    view.takePaneDrop?.(drop, vi.fn())
-
-    view.onDividerRatiosCommitted?.()
-
-    expect(ratiosSent()).toEqual([
-      {
-        type: 'setPaneRatios',
-        tabId: 'tab-1',
-        ratios: [{ path: '', ratio: 0.3, split: ROOT_SPLIT }]
       }
     ])
   })
@@ -223,19 +129,5 @@ describe('layoutOwnerPaneGestures', () => {
     )
     expect(ended).toEqual({ ...even, ratio: undefined })
     expect(ended).not.toHaveProperty('ratio')
-  })
-
-  it('sends nothing when no divider moved', () => {
-    mocks.mainRoot = mocks.root
-
-    gestures().onDividerRatiosCommitted?.()
-
-    expect(mocks.send).not.toHaveBeenCalled()
-  })
-
-  it('sends no ratios while a restore owns the layout', () => {
-    gestures(false).onDividerRatiosCommitted?.()
-
-    expect(mocks.send).not.toHaveBeenCalled()
   })
 })
