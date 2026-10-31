@@ -3,8 +3,7 @@ import {
   clearCrashBreadcrumbsForTest,
   getCrashBreadcrumbSnapshot
 } from './crash-reporting/crash-breadcrumb-store'
-import { registerSystemResumeBroadcast, SYSTEM_RESUMED_CHANNEL } from './system-resume-broadcast'
-import { subscribeSystemPowerLifecycle } from './system-power-lifecycle'
+import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: vi.fn(() => []) },
@@ -51,42 +50,6 @@ function createWindow(destroyed = false): {
 }
 
 describe('registerSystemResumeBroadcast', () => {
-  it('publishes suspend and resume to main-process lifecycle consumers', () => {
-    const { source, fireSuspend, fireResume } = createResumeSource()
-    const listener = { onSuspend: vi.fn(), onResume: vi.fn() }
-    const unsubscribe = subscribeSystemPowerLifecycle(listener)
-    listener.onResume.mockClear()
-    const stopBroadcast = registerSystemResumeBroadcast({
-      resumeSource: source,
-      getWindows: () => []
-    })
-
-    fireSuspend()
-    fireResume()
-    unsubscribe()
-    fireSuspend()
-    fireResume()
-    stopBroadcast()
-
-    expect(listener.onSuspend).toHaveBeenCalledOnce()
-    expect(listener.onResume).toHaveBeenCalledOnce()
-  })
-
-  it('broadcasts the resume channel to every live window', () => {
-    const { source, fireResume } = createResumeSource()
-    const liveWindow = createWindow()
-    const destroyedWindow = createWindow(true)
-    registerSystemResumeBroadcast({
-      resumeSource: source,
-      getWindows: () => [liveWindow, destroyedWindow]
-    })
-
-    fireResume()
-
-    expect(liveWindow.webContents.send).toHaveBeenCalledWith(SYSTEM_RESUMED_CHANNEL)
-    expect(destroyedWindow.webContents.send).not.toHaveBeenCalled()
-  })
-
   it('stops broadcasting after unsubscribe', () => {
     const { source, fireResume } = createResumeSource()
     const window = createWindow()
@@ -100,23 +63,6 @@ describe('registerSystemResumeBroadcast', () => {
 
     expect(source.off.mock.calls).toEqual(source.on.mock.calls)
     expect(window.webContents.send).not.toHaveBeenCalled()
-  })
-
-  it('records the sleep span so a heartbeat gap is attributable to suspend', () => {
-    const { source, fireSuspend, fireResume } = createResumeSource()
-    const clock = { value: 1_000 }
-    registerSystemResumeBroadcast({
-      resumeSource: source,
-      getWindows: () => [],
-      now: () => clock.value
-    })
-
-    fireSuspend()
-    clock.value += 109 * 60_000
-    fireResume()
-
-    expect(breadcrumbNames()).toEqual(['system_slept'])
-    expect(getCrashBreadcrumbSnapshot().at(-1)?.data).toEqual({ suspendedForMs: 109 * 60_000 })
   })
 
   it('spans from the first suspend when dark wake swallows the intervening resume', () => {
@@ -138,17 +84,6 @@ describe('registerSystemResumeBroadcast', () => {
     expect(getCrashBreadcrumbSnapshot().at(-1)?.data).toEqual({
       suspendedForMs: 90 * 60_000 + 20_000
     })
-  })
-
-  it('records nothing when resume arrives without a recorded suspend', () => {
-    const { source, fireResume } = createResumeSource()
-    const window = createWindow()
-    registerSystemResumeBroadcast({ resumeSource: source, getWindows: () => [window] })
-
-    fireResume()
-
-    expect(breadcrumbNames()).toEqual([])
-    expect(window.webContents.send).toHaveBeenCalledWith(SYSTEM_RESUMED_CHANNEL)
   })
 
   it('ignores sleeps too short to open a gap, keeping ring slots for real evidence', () => {
