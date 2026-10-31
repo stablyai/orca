@@ -150,7 +150,10 @@ describe('AgentTerminalDialog', () => {
       />
     )
 
-    expect(screen.getByText(/Claude · Done/)).toBeInTheDocument()
+    expect(screen.getByText(/Claude · Turn ended/)).toHaveAttribute(
+      'title',
+      'An agent turn ended. Task acceptance has not been verified.'
+    )
   })
 
   it('preserves the execution host when revealing a colliding worktree ID', () => {

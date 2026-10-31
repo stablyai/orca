@@ -20554,7 +20554,8 @@
       "working": "En activité",
       "idle": "Inactif",
       "empty": "Aucun",
-      "done": "Terminé"
+      "doneDescription": "Un tour de l’agent est terminé. L’acceptation de la tâche n’a pas été vérifiée.",
+      "done": "Tour terminé"
     },
     "title": "Agents",
     "total": "{{count}} au total",

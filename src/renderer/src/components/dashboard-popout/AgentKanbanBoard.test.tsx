@@ -112,8 +112,17 @@ describe('AgentKanbanBoard', () => {
 
   it('renders the three default columns in order', () => {
     renderBoard([])
-    const headers = screen.getAllByText(/Needs You|Working|Done/)
-    expect(headers.map((h) => h.textContent)).toEqual(['Needs You', 'Working', 'Done'])
+    const headers = screen.getAllByText(/Needs You|Working|Turn ended/)
+    expect(headers.map((h) => h.textContent)).toEqual(['Needs You', 'Working', 'Turn ended'])
+  })
+
+  it('describes the ended-turn column without claiming task acceptance', () => {
+    renderBoard([card({ bucket: 'done' })])
+
+    expect(screen.getByRole('region', { name: 'Turn ended' })).toHaveAccessibleDescription(
+      'An agent turn ended. Task acceptance has not been verified.'
+    )
+    expect(screen.queryByRole('region', { name: 'Done' })).not.toBeInTheDocument()
   })
 
   it('hides the agent map from dashboard chrome', () => {
@@ -130,7 +139,7 @@ describe('AgentKanbanBoard', () => {
 
     expect(
       screen.getAllByRole('region').map((region) => region.getAttribute('aria-label'))
-    ).toEqual(['Needs You', 'Working', 'Done'])
+    ).toEqual(['Needs You', 'Working', 'Turn ended'])
     expect(
       within(screen.getByRole('region', { name: 'Needs You' })).getByText('needs-review')
     ).toBeInTheDocument()
@@ -142,10 +151,13 @@ describe('AgentKanbanBoard', () => {
     renderBoard([], { showIdle: true })
 
     expect(screen.getAllByRole('region')).toHaveLength(4)
-    for (const name of ['需要你', '工作中', '已完成', '空闲']) {
+    for (const name of ['需要你', '工作中', '本轮结束', '空闲']) {
       const region = screen.getByRole('region', { name })
       expect(within(region).getByText(name)).toBeInTheDocument()
     }
+    expect(screen.getByRole('region', { name: '本轮结束' })).toHaveAccessibleDescription(
+      '仅表示智能体本轮已结束，不代表任务已通过验收。'
+    )
   })
 
   it('offers project filters without agent-state map filters', async () => {
@@ -237,7 +249,7 @@ describe('AgentKanbanBoard', () => {
     await i18n.changeLanguage('ja')
     renderBoard([card({ bucket: 'done' })])
 
-    expect(screen.getByText('完了')).toBeInTheDocument()
+    expect(screen.getByText('ターン終了')).toBeInTheDocument()
     expect(screen.getByLabelText('Agent を検索')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^フィルター/ })).toBeInTheDocument()
   })

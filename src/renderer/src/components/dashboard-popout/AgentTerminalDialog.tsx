@@ -14,6 +14,10 @@ import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import {
+  dashboardBucketLabel,
+  dashboardTurnEndedDescription
+} from '@/components/dashboard/dashboard-bucket-labels'
 
 /** Routing payload for focusing an agent's pane in the main window. */
 export type AgentRevealArgs = DashboardRevealAgentArgs
@@ -39,6 +43,8 @@ function AgentTerminalFrame({
   onOpenChange,
   onReveal
 }: AgentTerminalFrameProps): React.JSX.Element {
+  const displayState = dashboardCardDisplayState(card)
+  const turnEnded = displayState === 'done'
   const reveal = (): void => {
     onReveal({
       repoId: card.repoId,
@@ -57,9 +63,12 @@ function AgentTerminalFrame({
           <AgentTypeIcon agentType={card.agentType} size={13} />
         </span>
         {title}
-        <span className="text-[11px] text-muted-foreground">
+        <span
+          className="text-[11px] text-muted-foreground"
+          title={turnEnded ? dashboardTurnEndedDescription() : undefined}
+        >
           {formatAgentTypeLabel(card.agentType)} ·{' '}
-          {agentStateLabel(dashboardCardDisplayState(card))}
+          {turnEnded ? dashboardBucketLabel('done') : agentStateLabel(displayState)}
         </span>
         <Button
           type="button"

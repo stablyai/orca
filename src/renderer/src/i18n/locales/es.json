@@ -20334,7 +20334,8 @@
       "working": "Working",
       "idle": "Idle",
       "empty": "None",
-      "done": "Finalizado"
+      "doneDescription": "Ha terminado un turno del agente. No se ha verificado la aceptación de la tarea.",
+      "done": "Turno finalizado"
     },
     "title": "Agents",
     "total": "{{count}} total",

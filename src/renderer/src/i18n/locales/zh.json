@@ -19749,7 +19749,8 @@
       "working": "工作中",
       "idle": "空闲",
       "empty": "无",
-      "done": "已完成"
+      "doneDescription": "仅表示智能体本轮已结束，不代表任务已通过验收。",
+      "done": "本轮结束"
     },
     "title": "智能体",
     "total": "共 {{count}} 个",

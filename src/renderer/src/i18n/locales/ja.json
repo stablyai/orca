@@ -19748,7 +19748,8 @@
       "working": "作業中",
       "idle": "アイドル",
       "empty": "なし",
-      "done": "完了"
+      "doneDescription": "Agent のターンが終了しました。タスクの受け入れは検証されていません。",
+      "done": "ターン終了"
     },
     "title": "Agent",
     "total": "合計 {{count}} 件",
