@@ -10,7 +10,7 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
-import { parseArgs, validateCommandAndFlags } from '../args'
+import { normalizeCommandPositionals, parseArgs, validateCommandAndFlags } from '../args'
 import { formatCommandHelp } from '../help'
 import { okFixture } from '../test-fixtures'
 import { RuntimeClient } from '../runtime-client'
@@ -736,10 +736,8 @@ describe('orchestration worker-start CLI contract', () => {
   })
 
   it('keeps cleanup and retention TTL controls off the public CLI surface', async () => {
-    const retained = parseArgs(['orchestration', 'worker-retain', '--dispatch', 'ctx_1'])
-    expect(() =>
-      validateCommandAndFlags(ORCHESTRATION_WORKER_COMMAND_SPECS, retained)
-    ).not.toThrow()
+    const kept = parseArgs(['orchestration', 'worker-keep-open', '--dispatch', 'ctx_1'])
+    expect(() => validateCommandAndFlags(ORCHESTRATION_WORKER_COMMAND_SPECS, kept)).not.toThrow()
     expect(() =>
       validateCommandAndFlags(
         ORCHESTRATION_WORKER_COMMAND_SPECS,
@@ -749,26 +747,47 @@ describe('orchestration worker-start CLI contract', () => {
     expect(() =>
       validateCommandAndFlags(
         ORCHESTRATION_WORKER_COMMAND_SPECS,
-        parseArgs(['orchestration', 'worker-retain', '--until', '2099-01-01T00:00:00Z'])
+        parseArgs(['orchestration', 'worker-keep-open', '--until', '2099-01-01T00:00:00Z'])
       )
-    ).toThrow('Unknown flag --until for command: orchestration worker-retain')
-    expect(() =>
-      validateCommandAndFlags(
-        ORCHESTRATION_WORKER_COMMAND_SPECS,
-        parseArgs(['orchestration', 'worker-retain', '--policy', 'forever'])
-      )
-    ).toThrow('Unknown flag --policy for command: orchestration worker-retain')
+    ).toThrow('Unknown flag --until for command: orchestration worker-keep-open')
 
     callMock.mockResolvedValue({
       result: { dispatchId: 'ctx_1', state: 'retained', processAction: 'none' }
     })
-    await ORCHESTRATION_HANDLERS['orchestration worker-retain']({
-      flags: retained.flags,
+    await ORCHESTRATION_HANDLERS['orchestration worker-keep-open']({
+      flags: kept.flags,
       client,
       cwd: '/tmp/repo',
       json: true
     })
     expect(callMock).toHaveBeenCalledWith('orchestration.workerRetain', { dispatch: 'ctx_1' })
+  })
+
+  it('still runs worker-retain as the keep-open command', () => {
+    const parsed = normalizeCommandPositionals(
+      ORCHESTRATION_WORKER_COMMAND_SPECS,
+      parseArgs(['orchestration', 'worker-retain', '--dispatch', 'ctx_1'])
+    )
+    expect(parsed.commandPath).toEqual(['orchestration', 'worker-keep-open'])
+    expect(parsed.flags.get('dispatch')).toBe('ctx_1')
+  })
+
+  it('keeps a worker started with --keep-open open after it finishes', async () => {
+    callMock.mockImplementation(async (method: string) =>
+      method === 'orchestration.workerStart'
+        ? { result: { taskId: 'task_1', dispatchId: 'ctx_1', state: 'ready', effects: [] } }
+        : { result: { dispatchId: 'ctx_1', state: 'retained', processAction: 'none' } }
+    )
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'codex'],
+        ['keep-open', true]
+      ]),
+      false
+    )
+    expect(callMock).toHaveBeenLastCalledWith('orchestration.workerRetain', { dispatch: 'ctx_1' })
+    expect(printedText()).toContain('Kept open after it finishes')
   })
 
   it('does not tell a coordinator that chat workers skip automatic release', () => {

@@ -1,16 +1,21 @@
 import type { CommandHandler } from '../../dispatch'
 import { getOptionalStringFlag, getPresentStringFlag } from '../../flags'
-import { RuntimeClientError } from '../../runtime-client'
+import { RuntimeClientError, type RuntimeClient } from '../../runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { isDevCliInvocation } from './runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
-import { WORKER_START_VIEW, type WorkerStartAgentReceipt } from './worker-start-agent-view'
+import {
+  isUnobservedTurnStart,
+  WORKER_START_VIEW,
+  type WorkerStartAgentReceipt
+} from './worker-start-agent-view'
 import { printOrchestrationResult } from './agent-view'
 import { explainOlderRuntimeRunRequired } from './older-runtime-run-binding'
 import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
+import { readTextOrFileFlag } from '../../command-body-input'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
@@ -31,7 +36,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       }
     }
     const task = getOptionalStringFlag(flags, 'task')
-    const spec = getOptionalStringFlag(flags, 'spec')
+    const spec = await readTextOrFileFlag(flags, cwd, 'spec', false)
     const taskTitle = getOptionalStringFlag(flags, 'task-title')
     const deps = getOptionalStringFlag(flags, 'deps')
     const parent = getOptionalStringFlag(flags, 'parent')
@@ -66,17 +71,43 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     ).catch(async (error: unknown) => {
       throw await explainOlderRuntimeRunRequired(client, error)
     })
-    const renderedResult = result.result.nextCommands
-      ? {
-          ...result,
-          result: {
-            ...result.result,
-            nextCommands: result.result.nextCommands.map((command) =>
-              renderResolvedOrchestrationCommand(command)
-            )
-          }
-        }
-      : result
+    const keptOpen = flags.has('keep-open') && (await keepStartedWorkerOpen(client, result.result))
+    const renderedResult = {
+      ...result,
+      result: {
+        ...result.result,
+        ...(keptOpen ? { keptOpen } : {}),
+        ...(result.result.nextCommands
+          ? {
+              nextCommands: result.result.nextCommands.map((command) =>
+                renderResolvedOrchestrationCommand(command)
+              )
+            }
+          : {})
+      }
+    }
     printOrchestrationResult(renderedResult, { flags, json }, WORKER_START_VIEW)
+  }
+}
+
+// Every host version serves workerRetain, so older servers keep the worker open too.
+async function keepStartedWorkerOpen(
+  client: RuntimeClient,
+  receipt: WorkerStartAgentReceipt
+): Promise<boolean> {
+  if (receipt.state !== 'ready' && !isUnobservedTurnStart(receipt)) {
+    return false
+  }
+  try {
+    await client.call('orchestration.workerRetain', { dispatch: receipt.dispatchId })
+    return true
+  } catch (error) {
+    const code = error instanceof RuntimeClientError ? error.code : 'keep_open_failed'
+    const message = error instanceof Error ? error.message : String(error)
+    // The worker is running, so recovery is the keep-open call, never a second start.
+    throw new RuntimeClientError(
+      code,
+      `Started ${receipt.dispatchId} but could not keep it open: ${message} Run orca orchestration worker-keep-open --dispatch ${receipt.dispatchId}.`
+    )
   }
 }

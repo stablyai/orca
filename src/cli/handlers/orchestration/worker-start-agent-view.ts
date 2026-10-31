@@ -20,10 +20,11 @@ export type WorkerStartAgentReceipt = WorkerStartReceipt & {
   stage?: string
   turnStart?: string
   next?: string
+  keptOpen?: true
 }
 
 // A hook-capable agent that has not shown its turn yet is usually slow, not dead; a resend duplicates the task.
-function isUnobservedTurnStart(value: WorkerStartAgentReceipt): boolean {
+export function isUnobservedTurnStart(value: WorkerStartAgentReceipt): boolean {
   return (
     value.state === 'outcome_unknown' &&
     (value.turnStart === 'unobserved' || value.stage === 'turn_start_unobserved')
@@ -49,6 +50,7 @@ type WorkerStartFields = {
   warning?: string
   residualResources?: string[]
   nextCommands?: string[]
+  keptOpen?: true
   next?: string
 }
 
@@ -83,6 +85,7 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         residualResources:
           value.state !== 'ready' && !unobserved && residual.length ? residual : undefined,
         nextCommands: value.state === 'ready' || unobserved ? undefined : value.nextCommands,
+        keptOpen: value.keptOpen,
         next: unobserved
           ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
           : value.recovery
@@ -110,6 +113,9 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         lines.push(
           `Terminal ${fields.terminal ?? 'none'} in workspace ${fields.workspace ?? 'unknown'}`
         )
+      }
+      if (fields.keptOpen) {
+        lines.push('Kept open after it finishes')
       }
       if (fields.modeDetail) {
         lines.push(fields.modeDetail)

@@ -4,6 +4,7 @@ import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { abbreviateOrchestrationTasks } from '../../../shared/orchestration-task-summary'
 import { callOrchestrationMutation } from './mutation-request'
+import { readTextOrFileFlag } from '../../command-body-input'
 import { resolveCoordinatorTerminalHandle, runScopedSessionCaller } from './terminal-identity'
 
 const TASK_STATUS_VALUES = [
@@ -23,7 +24,7 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
       flags,
       'orchestration.taskCreate',
       {
-        spec: getRequiredStringFlag(flags, 'spec'),
+        spec: await readTextOrFileFlag(flags, cwd, 'spec', true),
         taskTitle: getOptionalStringFlag(flags, 'task-title'),
         displayName: getOptionalStringFlag(flags, 'display-name'),
         deps: getOptionalStringFlag(flags, 'deps'),

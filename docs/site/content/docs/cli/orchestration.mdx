@@ -80,8 +80,8 @@ orca orchestration worker-stop --dispatch <dispatchId>
 # After an accepted worker_done: reuse the same terminal for a follow-up Dispatch, or release it
 # (archives inspectable output, then closes only that coordinator-owned agent terminal):
 orca orchestration worker-release --dispatch <dispatchId>
-# Keep a settled worker live for debugging when the user asked to retain it:
-orca orchestration worker-retain --dispatch <dispatchId>
+# Keep a worker open after it finishes (or start it with worker-start --keep-open):
+orca orchestration worker-keep-open --dispatch <dispatchId>
 # retry placement is explicit — --retry-of does not inherit --on/worktree:
 orca orchestration worker-start --task <taskId> --retry-of <dispatchId> --worktree current --agent codex
 ```

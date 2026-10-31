@@ -70,7 +70,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     printOrchestrationResult(result, { flags, json }, WORKER_RELEASE_VIEW)
   },
 
-  'orchestration worker-retain': async ({ flags, client, json }) => {
+  'orchestration worker-keep-open': async ({ flags, client, json }) => {
     const result = await callOrchestrationMutation<WorkerReleaseReceipt>(
       client,
       flags,
