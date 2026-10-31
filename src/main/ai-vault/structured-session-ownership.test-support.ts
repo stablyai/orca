@@ -1,3 +1,4 @@
+import { vi } from 'vitest'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import {
@@ -123,18 +124,17 @@ export function codexChatHolding(sessionId: string, threadIds: string[]): AgentS
   }
 }
 
-export function installChats(records: AgentSessionRecord[]): void {
+/** Returns the fake store's spies so a projection can be held to an operation count. */
+export function installChats(records: AgentSessionRecord[]) {
+  const byId = new Map(records.map((record) => [record.sessionId, record]))
+  const store = {
+    hostId: 'local',
+    getRecord: vi.fn((sessionId: string) => byId.get(sessionId) ?? null),
+    listConversations: vi.fn(() => records.map(agentSessionConversationView))
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `getRecord` and `hostId`; the rest of the host is never reached.
-  setStructuredAgentSessionHost({
-    deps: {
-      store: {
-        hostId: 'local',
-        getRecord: (sessionId: string) =>
-          records.find((record) => record.sessionId === sessionId) ?? null,
-        listConversations: () => records.map(agentSessionConversationView)
-      }
-    }
-  } as never)
+  setStructuredAgentSessionHost({ deps: { store } } as never)
+  return store
 }
 
 export function listResult(): AiVaultListResult {

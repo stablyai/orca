@@ -152,6 +152,37 @@ describe('structured AI Vault ownership', () => {
     expect(shown()).toEqual(founding)
   })
 
+  it.each([10, 100])(
+    'projects %i owned History rows with one roster read and one record lookup per owned row',
+    (n) => {
+      const records = Array.from({ length: n }, (_, index) =>
+        codexChatHolding(`session-${index}`, [`thread-${index}`])
+      )
+      const store = installChats(records)
+      const base = listResult().sessions[0]!
+      const rows = records.map((record, index) => ({
+        ...base,
+        id: `local:codex:thread-${index}`,
+        sessionId: `thread-${index}`,
+        title: `Row ${index}`
+      }))
+      const unowned = { ...base, id: 'local:codex:unowned', sessionId: 'thread-unowned' }
+      const result = { ...listResult(), sessions: [...rows, unowned] }
+      const projected = projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT)
+      expect(projected.sessions.map((session) => session.structuredSession?.sessionId)).toEqual([
+        ...records.map((record) => record.sessionId),
+        undefined
+      ])
+      expect(projected.sessions.slice(0, n).map((session) => session.accountHome)).toEqual(
+        records.map((record) => record.accountHome)
+      )
+      // One roster read per projection; one record lookup per owned row, none for unowned rows.
+      expect(store.listConversations).toHaveBeenCalledTimes(1)
+      expect(store.getRecord).toHaveBeenCalledTimes(n)
+      expect(new Set(store.getRecord.mock.calls.map(([sessionId]) => sessionId)).size).toBe(n)
+    }
+  )
+
   it('keeps the legacy shared Codex home unknown and redacts account homes over relay search', () => {
     installOwnership({
       accountHome: { variable: 'CODEX_HOME', path: resolveOrcaManagedCodexHomePath() }
