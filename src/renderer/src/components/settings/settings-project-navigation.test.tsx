@@ -314,42 +314,39 @@ it('measures qualified preparation and actual view forwarding with independent c
       projectHostSetups: projection.setups,
       settings: { projectGroupingMode: experiment.mode }
     }
-    const observed = plain.map(
-      (repo) =>
-        new Proxy(repo, {
-          get(target, key, receiver) {
-            if (phase === 'nav' && key === 'badgeColor') {
-              counters.sectionProjections++
-            }
-            return Reflect.get(target, key, receiver)
-          }
-        })
-    )
+    const observed = plain.map((repo) => ({
+      ...repo,
+      get badgeColor() {
+        if (phase === 'nav') {
+          counters.sectionProjections++
+        }
+        return repo.badgeColor
+      }
+    }))
     function observe(rows: Repo[]): Repo[] {
-      return new Proxy(rows, {
-        get(target, key, receiver) {
-          if (key === Symbol.iterator) {
-            return function* () {
-              for (const row of target) {
-                if (phase === 'lookup') {
-                  counters.catalogVisits++
-                }
-                yield row
+      const counted = [...rows]
+      Object.defineProperties(counted, {
+        [Symbol.iterator]: {
+          value: function* () {
+            for (const row of rows) {
+              if (phase === 'lookup') {
+                counters.catalogVisits++
               }
+              yield row
             }
           }
-          if (key === 'find') {
-            return (predicate: (row: Repo) => boolean) =>
-              target.find((row) => {
-                if (phase === 'builder') {
-                  counters.builderRawComparisons++
-                }
-                return predicate(row)
-              })
-          }
-          return Reflect.get(target, key, receiver)
+        },
+        find: {
+          value: (predicate: (row: Repo) => boolean) =>
+            rows.find((row) => {
+              if (phase === 'builder') {
+                counters.builderRawComparisons++
+              }
+              return predicate(row)
+            })
         }
       })
+      return counted
     }
     const repos = observe(observed)
     const actualLookup = repoLookups.buildProjectSetupRepoLookup
@@ -404,17 +401,15 @@ it('measures qualified preparation and actual view forwarding with independent c
         }
         const visible = sections
           .filter((row) => !query || row.title === query)
-          .map(
-            (row) =>
-              new Proxy(row, {
-                get(target, key, receiver) {
-                  if (phase === 'builder' && key === 'id') {
-                    counters.builderIdReads++
-                  }
-                  return Reflect.get(target, key, receiver)
-                }
-              })
-          )
+          .map((row) => ({
+            ...row,
+            get id() {
+              if (phase === 'builder') {
+                counters.builderIdReads++
+              }
+              return row.id
+            }
+          }))
         const partialModel: Partial<SettingsStoreModel> = {
           repos: catalog,
           settingsSearchQuery: query,
@@ -490,17 +485,15 @@ it('measures qualified preparation and actual view forwarding with independent c
         observe(
           observed.map((repo, i) =>
             i === 0
-              ? new Proxy(
-                  { ...repo, badgeColor: 'replacement-color' },
-                  {
-                    get(target, key, receiver) {
-                      if (phase === 'nav' && key === 'badgeColor') {
-                        counters.sectionProjections++
-                      }
-                      return Reflect.get(target, key, receiver)
+              ? {
+                  ...repo,
+                  get badgeColor() {
+                    if (phase === 'nav') {
+                      counters.sectionProjections++
                     }
+                    return 'replacement-color'
                   }
-                )
+                }
               : repo
           )
         ),

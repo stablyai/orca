@@ -332,17 +332,13 @@ it.each([100, 1000])(
     let reads = 0
     const model = {
       ...base,
-      repositories: base.repositories.map(
-        (option) =>
-          new Proxy(option, {
-            get(target, key, receiver) {
-              if (key === 'searchText') {
-                reads++
-              }
-              return Reflect.get(target, key, receiver)
-            }
-          })
-      )
+      repositories: base.repositories.map((option) => ({
+        ...option,
+        get searchText() {
+          reads++
+          return option.searchText
+        }
+      }))
     }
     const actualRank = optionRanker.rankPaletteFilterOptions
     const passes: number[] = []

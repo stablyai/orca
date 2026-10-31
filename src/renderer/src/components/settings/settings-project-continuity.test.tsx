@@ -73,7 +73,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   const projection = projectHostSetupProjectionFromRepos(repos)
   const projectId = projection.projects[0].id
   let saved = getDefaultSettings('/tmp')
-  const persist = vi.fn(async (patch: object) => {
+  const persist = vi.fn(async (patch: Parameters<typeof window.api.settings.set>[0]) => {
     saved = { ...saved, ...patch }
     return saved
   })

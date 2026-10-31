@@ -716,17 +716,17 @@ it.each([
   const original = dedupeRows.dedupeReadySetupRows
   vi.spyOn(dedupeRows, 'dedupeReadySetupRows').mockImplementation((options, hosts) => {
     dedupeInput = options.length
-    const counted = options.map(
-      (option) =>
-        new Proxy(option, {
-          get(target, key, receiver) {
-            if (key === 'hostId' || key === 'path') {
-              reads++
-            }
-            return Reflect.get(target, key, receiver)
-          }
-        })
-    )
+    const counted = options.map((option) => ({
+      ...option,
+      get hostId() {
+        reads++
+        return option.hostId
+      },
+      get path() {
+        reads++
+        return option.path
+      }
+    }))
     const rows = original(counted, hosts)
     dedupeReads = reads
     return rows

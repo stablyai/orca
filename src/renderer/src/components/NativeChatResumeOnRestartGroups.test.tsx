@@ -472,13 +472,16 @@ it.each([
     vi.spyOn(workspaceLookups, 'useRepoIdByWorkspace').mockImplementation((workspaces) => {
       let counted = observed.get(workspaces)
       if (!counted) {
-        counted = new Proxy(workspaces, {
-          get(target, key, receiver) {
-            if (typeof key === 'string' && /^\d+$/.test(key)) {
+        counted = [...workspaces]
+        workspaces.forEach((group, index) => {
+          Object.defineProperty(counted, index, {
+            configurable: true,
+            enumerable: true,
+            get() {
               offerReads++
+              return group
             }
-            return Reflect.get(target, key, receiver)
-          }
+          })
         })
         observed.set(workspaces, counted)
       }

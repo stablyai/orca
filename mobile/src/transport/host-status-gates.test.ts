@@ -5,7 +5,7 @@ import type { RpcClient } from './rpc-client'
 import { FakeSession } from './mobile-endpoint-supervisor-test-fakes'
 
 vi.mock('react-native', () => ({ AppState: { addEventListener: () => ({ remove: () => {} }) } }))
-function withLifecycle(overrides: object): FakeSession {
+function withLifecycle(overrides: Pick<RpcClient, 'sendRequest'>): FakeSession {
   return Object.assign(new FakeSession('connected'), overrides)
 }
 import { useHostStatusGates, type HostStatusGates } from './host-status-gates'

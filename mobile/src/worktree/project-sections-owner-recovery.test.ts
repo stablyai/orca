@@ -166,7 +166,8 @@ it.each([false, true])(
                 delayReady &&
                 result !== null &&
                 typeof result === 'object' &&
-                Reflect.get(result, 'type') === 'ready'
+                'type' in result &&
+                result.type === 'ready'
               ) {
                 held.push(reply)
               } else {
