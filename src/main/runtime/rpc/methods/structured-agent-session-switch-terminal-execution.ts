@@ -37,10 +37,10 @@ export async function executeStructuredSessionTerminalSwitch(
     nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved'
       ? await prepareSwitchCliTranscript(ctx.runtime, sessionId, record.location.workspaceId, true)
       : undefined
-  // Admission before the chat stops, as in the other direction: a live agent the status store
-  // shows holding this conversation (a CLI resumed by hand) refuses. The terminal this
-  // conversation's claim owns is the one the create below adopts (an earlier attempt's), not
-  // another writer.
+  // Admission before the chat stops, as in the other direction: the create's ownership decision
+  // refuses now where it would refuse after the stop, and a live agent the status store shows
+  // holding this conversation (a CLI resumed by hand) refuses. The one terminal that decision
+  // would adopt (an earlier attempt's) is not another writer.
   const adoption = providerSessionId
     ? await ctx.runtime.switchTerminalAdoption(record.location.workspaceId, {
         agent,

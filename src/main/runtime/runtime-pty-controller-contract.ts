@@ -158,8 +158,11 @@ export type RuntimePtyController = {
   /** Attach existing local daemon output without creating, resizing or focusing; refuse uncertain, SSH-scoped or non-daemon sessions. */
   attach?(ptyId: string): Promise<boolean>
   killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
-  /** The live owner a claimed create would adopt: same claim, same worktree scope. */
-  findAgentSessionOwner?: (claim: AgentSessionExecutionClaim) => AgentSessionOwnerBinding | null
+  /** What a claimed create would adopt or join, decided as the create decides, changing nothing;
+   *  null for a fresh create. Refuses (rejects) where the create would. */
+  prepareAgentSessionOwner?: (
+    claim: AgentSessionExecutionClaim
+  ) => Promise<AgentSessionOwnerBinding | null>
   kill(ptyId: string): boolean
   /** `incarnationId` is the rejected spawn's; a same-id respawn since then is left alone. */
   retireRejectedPty?(ptyId: string, stopConfirmed: boolean, incarnationId: string | undefined): void

@@ -9,7 +9,7 @@ import {
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
-import { agentSessionOwners } from '../pane/agent-session-owners'
+import { prepareAgentSessionOwner } from '../pane/agent-session-owner-preparation'
 import { spawnPtyFromRuntimeController } from './spawn'
 import {
   killPtyFromRuntimeController,
@@ -75,7 +75,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     killFenced: (request) =>
       getProviderForPty(request.id).killFenced?.(request) ??
       Promise.resolve({ outcome: 'refused', reason: 'unsupported' }),
-    findAgentSessionOwner: (claim) => agentSessionOwners.find(claim),
+    prepareAgentSessionOwner,
     kill: (ptyId) => killPtyFromRuntimeController(deps, ptyId),
     retireRejectedPty: (ptyId, stopConfirmed, incarnationId) =>
       retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed, incarnationId),

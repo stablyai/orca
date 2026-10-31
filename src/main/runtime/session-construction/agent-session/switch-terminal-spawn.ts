@@ -11,6 +11,7 @@ import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { MobileTerminalCommand } from '../../terminal/launch/mobile-terminal-startup'
 import { canonicalizeAgentSessionIdentity } from '../../agent-session/ownership/agent-session-claim-identity'
+import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './get-agent-session-execution-namespace'
 
 export type SwitchTerminalSpawn = {
@@ -79,10 +80,11 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
   }
 
   /**
-   * What a re-issued switch's create would adopt, asked of the registry that create adopts from:
-   * the live owner of this conversation's claim in this worktree's scope, only when the create will
-   * carry the claim. A first attempt whose answer was lost leaves that terminal for this retry.
-   * `resumeSupported` is the execution owner's one answer, which the spawn then reuses.
+   * The switch's create decided before the chat stops, by the create's own ownership preparation:
+   * a refusal it would give after the stop rejects now, and the owner it would adopt or join (a
+   * first attempt's terminal whose answer was lost) is returned, only when the create will carry
+   * the claim. `resumeSupported` is the execution owner's one answer, which the spawn then reuses;
+   * the spawn still decides again, so nothing here outlives the stop.
    */
   async switchTerminalAdoption(
     workspaceId: string,
@@ -102,7 +104,16 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
     const claim = resumeSupported
       ? this.switchTerminalClaim(workspace, args.agent, providerSession)
       : undefined
-    const owner = claim ? this.ptyController?.findAgentSessionOwner?.(claim) : null
+    const owner = claim
+      ? await this.ptyController?.prepareAgentSessionOwner?.(claim).catch((error: unknown) => {
+          // Another worktree's terminal, or several, own this conversation's claim.
+          throw error instanceof Error && error.message === 'agent_session_conflict'
+            ? agentSessionRefusalError('agent_session_conflict', {
+                reason: 'conversationHeldElsewhere'
+              })
+            : error
+        })
+      : null
     return {
       resumeSupported,
       ...(owner ? { ownerPaneKey: `${owner.surface.tabId}:${owner.surface.leafId}` } : {})
