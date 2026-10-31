@@ -23,6 +23,7 @@ import {
   panView,
   zoomViewAt
 } from './pan-zoom-view'
+import { listenForViewerZoomRequests } from './viewer-zoom-request'
 
 type PanZoomImageDialogProps = Omit<
   React.ComponentProps<typeof DialogContent>,
@@ -40,6 +41,23 @@ type PanZoomImageDialogProps = Omit<
   /** Shown instead of the image while it has no source or after it fails to load. */
   fallback?: React.ReactNode
   toolbarActions?: React.ReactNode
+}
+
+type PanZoomGeometry = { content: PanZoomSize; viewport: PanZoomSize; fitScale: number }
+
+/** One zoom step about the canvas center, from the fitted view until the user moves it. */
+function zoomFromCenter(
+  geometry: PanZoomGeometry,
+  current: PanZoomView | null,
+  factor: number
+): PanZoomView {
+  const view = current ?? getFittedPanZoomView(geometry.content)
+  return zoomViewAt({
+    ...geometry,
+    view,
+    nextZoom: view.zoom * factor,
+    anchor: { x: geometry.viewport.width / 2, y: geometry.viewport.height / 2 }
+  })
 }
 
 function ToolbarButton({
@@ -111,6 +129,7 @@ export function PanZoomImageDialog({
         <DialogTitle className="sr-only">{title}</DialogTitle>
         {/* Mount with dialog content so each opening starts fitted. */}
         <PanZoomImageCanvas
+          open={open}
           src={src}
           size={size}
           title={title}
@@ -126,6 +145,7 @@ export function PanZoomImageDialog({
 }
 
 function PanZoomImageCanvas({
+  open,
   src,
   size,
   title,
@@ -136,7 +156,7 @@ function PanZoomImageCanvas({
   onClose
 }: Pick<
   PanZoomImageDialogProps,
-  'src' | 'size' | 'title' | 'showTitle' | 'background' | 'fallback' | 'toolbarActions'
+  'open' | 'src' | 'size' | 'title' | 'showTitle' | 'background' | 'fallback' | 'toolbarActions'
 > & { onClose: () => void }): React.JSX.Element {
   // Use state: the portal canvas mounts after this component’s first effects.
   const [canvas, setCanvas] = useState<HTMLDivElement | null>(null)
@@ -220,21 +240,30 @@ function PanZoomImageCanvas({
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [canvas, geometry])
 
-  const stepZoom = (factor: number): void => {
-    if (!geometry || !view) {
+  useEffect(() => {
+    // Why: `open`, not the mount — a closing dialog stays mounted while it fades out.
+    if (!canvas || !open) {
       return
     }
-    setManualView(
-      zoomViewAt({
-        ...geometry,
-        view,
-        nextZoom: view.zoom * factor,
-        anchor: {
-          x: geometry.viewport.width / 2,
-          y: geometry.viewport.height / 2
+    // Why: popup priority, so Cmd/Ctrl +/- zooms this image instead of the editor image it covers.
+    return listenForViewerZoomRequests(
+      (direction) => {
+        if (direction === 'reset') {
+          setManualView(null)
+        } else if (geometry) {
+          const factor = direction === 'in' ? IMAGE_VIEWER_ZOOM_STEP : 1 / IMAGE_VIEWER_ZOOM_STEP
+          setManualView((current) => zoomFromCenter(geometry, current, factor))
         }
-      })
+      },
+      { current: canvas },
+      'popup'
     )
+  }, [canvas, geometry, open])
+
+  const stepZoom = (factor: number): void => {
+    if (geometry) {
+      setManualView((current) => zoomFromCenter(geometry, current, factor))
+    }
   }
 
   const endDrag = (): void => {

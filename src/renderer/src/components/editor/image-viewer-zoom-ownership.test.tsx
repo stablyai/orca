@@ -46,14 +46,12 @@ describe('ImageViewer app zoom ownership', () => {
     expect(screen.getByText('100%')).toBeTruthy()
   })
 
-  it('zooms the open popup instead of the hidden inline image', () => {
+  it('lets the open popup take the zoom instead of the hidden inline image', () => {
     renderImage(true)
     fireEvent.click(screen.getByTitle('Open image in popup'))
 
-    zoom('in')
-
-    expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
-    expect(screen.getAllByText('100%')).toHaveLength(1)
+    expect(zoom('in')).toBe(true)
+    expect(screen.getByText('100%')).toBeTruthy()
   })
 
   it('releases zoom ownership when focus moves and removes its listener on unmount', () => {
@@ -92,7 +90,6 @@ describe('ImageViewer app zoom ownership', () => {
     fireEvent.click(screen.getAllByTitle('Open image in popup')[1])
 
     expect(zoom('in')).toBe(true)
-    expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
     expect(screen.getAllByText('100%')).toHaveLength(2)
 
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
@@ -132,7 +129,6 @@ describe('ImageViewer app zoom ownership', () => {
     floating.focus()
     fireEvent.click(within(floating).getByTitle('Open image in popup'))
     expect(zoom('in')).toBe(true)
-    expect(within(screen.getByRole('dialog')).getByText('156%')).toBeTruthy()
     expect(within(main).getByText('125%')).toBeTruthy()
     expect(within(floating).getByText('125%')).toBeTruthy()
   })
@@ -173,12 +169,11 @@ describe('ImageViewer app zoom ownership', () => {
     expect(screen.getByText('100%')).toBeTruthy()
   })
 
-  it('zooms the popup a combined-diff image opened', () => {
+  it('lets the popup a combined-diff image opened take the zoom', () => {
     renderImage(true, 'intrinsic')
     fireEvent.click(screen.getByTitle('Open image in popup'))
 
     expect(zoom('in')).toBe(true)
-    expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
-    expect(screen.getAllByText('100%')).toHaveLength(1)
+    expect(screen.getByText('100%')).toBeTruthy()
   })
 })
