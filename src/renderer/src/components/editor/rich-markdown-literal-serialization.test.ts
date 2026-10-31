@@ -26,6 +26,43 @@ function expectReopens(editor: Editor) {
 }
 
 describe('literal Markdown serialization', () => {
+  it.each(['a < b && c and "quotes".', 'Finance > Invoices; F&B', 'R&D credits'])(
+    'keeps newly typed prose characters in %j',
+    (text) => {
+      const editor = createEditor({ type: 'doc', content: [paragraph(text)] })
+      try {
+        expect(editor.getMarkdown()).toBe(text)
+        expectReopens(editor)
+      } finally {
+        editor.destroy()
+      }
+    }
+  )
+
+  it.each(['<script>alert(1)</script>', '> quoted text', '&amp; and &#60; must remain literal'])(
+    'keeps necessary encoding in literal prose %j',
+    (text) => {
+      const editor = createEditor({ type: 'doc', content: [paragraph(text)] })
+      try {
+        expectReopens(editor)
+      } finally {
+        editor.destroy()
+      }
+    }
+  )
+
+  it.each(['person@example.com', 'https://example.com'])(
+    'retains angle-bracket encoding around an autolink-shaped literal %j',
+    (text) => {
+      const editor = createEditor({ type: 'doc', content: [paragraph(`<${text}>`)] })
+      try {
+        expect(editor.getMarkdown()).toBe(`&lt;${text}&gt;`)
+      } finally {
+        editor.destroy()
+      }
+    }
+  )
+
   it.each(['[ref]: ./target.md', '[ref]: <./target.md> "Title"'])(
     'preserves literal references across blocks with definition %j',
     (definition) => {
