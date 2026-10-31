@@ -1,7 +1,6 @@
-import type { SendRequestOptions } from './rpc-client'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { connect } from './rpc-client'
+import { connect, type RpcClient, type SendRequestOptions } from './rpc-client'
 
 vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
@@ -175,7 +174,6 @@ import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import { withGitHubTargetOperation } from '../tasks/github-work-item-operation'
 import { githubIssueUpdate } from '../tasks/mobile-task-item-state-operations'
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as exactCapability } from '../../../src/shared/source-control-runtime-capabilities'
-import type { RpcClient } from './rpc-client'
 
 const exactRepo = { owner: 'fork', repo: 'widgets', host: 'github.corp' }
 function boundUpdate(client: RpcClient) {
