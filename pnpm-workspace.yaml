@@ -118,6 +118,7 @@ overrides:
   katex@>=0.11.0 <0.18.2: 0.18.10
 
 patchedDependencies:
+  prosemirror-view@1.42.3: config/patches/prosemirror-view@1.42.3.patch
   '@xterm/addon-image@0.10.0-beta.301': config/patches/@xterm__addon-image@0.10.0-beta.301.patch
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.301': config/patches/@xterm__addon-ligatures@0.11.0-beta.301.patch

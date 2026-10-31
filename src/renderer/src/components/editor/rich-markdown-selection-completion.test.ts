@@ -3,7 +3,7 @@ import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { TableKit } from '@tiptap/extension-table'
 import { TextSelection, Plugin } from '@tiptap/pm/state'
-import { CellSelection } from '@tiptap/pm/tables'
+import { CellSelection, tableEditingKey } from '@tiptap/pm/tables'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { fireEvent } from '@testing-library/react'
 import { DragSelectionGuard, richMarkdownSelectionCompletionEvents } from './drag-selection-guard'
@@ -23,16 +23,16 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-function surface() {
+function surface(integrated = true) {
   const host = document.createElement('div')
   document.body.append(host)
   const editor = new Editor({
     element: host,
-    extensions: [StarterKit, TableKit, DragSelectionGuard],
+    extensions: [StarterKit, TableKit, ...(integrated ? [DragSelectionGuard] : [])],
     content:
       '<h1>Heading stays</h1><p>lower target</p>' +
       '<table><tr><td>alpha</td><td>beta</td></tr><tr><td>gamma</td><td>delta</td></tr></table>',
-    editorProps: { handleDOMEvents: richMarkdownSelectionCompletionEvents }
+    editorProps: { handleDOMEvents: integrated ? richMarkdownSelectionCompletionEvents : {} }
   })
   editors.push(editor)
   editor.view.focus()
@@ -85,7 +85,9 @@ it.each([
       throw new Error('Expected table cells')
     }
     editor.view.dispatch(
-      editor.state.tr.setSelection(CellSelection.create(editor.state.doc, first, last))
+      editor.state.tr
+        .setSelection(CellSelection.create(editor.state.doc, first, last))
+        .setMeta(tableEditingKey, first)
     )
   } else {
     const text = textNode(editor, 'p')
@@ -193,6 +195,242 @@ it('keeps navigation by a new focus owner during pending DOM publication', () =>
   selectNative(text, 4, 10)
   expect(copy(editor)).toBe('Heading')
   expect(document.activeElement).toBe(input)
+  vi.runAllTimers()
+  expect(editor.state.selection.from).toBe(1)
+  expect(editor.state.selection.to).toBe(8)
+})
+
+function heldRange(editor: Editor, text: Node) {
+  vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({
+    pos: editor.view.posAtDOM(text, 0),
+    inside: -1
+  })
+  fireEvent.mouseDown(text.parentElement ?? editor.view.dom, {
+    button: 0,
+    buttons: 1,
+    shiftKey: true
+  })
+  // SAFETY: Read the pinned engine's real tracker; never replace its lifetime or delayed writer.
+  // oxlint-disable-next-line typescript/consistent-type-assertions
+  const engine = editor.view as Editor['view'] & {
+    input: {
+      mouseDown: { allowDefault: boolean; delayedSelectionSync: boolean; done(): void } | null
+    }
+  }
+  const tracker = engine.input.mouseDown
+  if (!tracker) {
+    throw new Error('Expected real held gesture')
+  }
+  expect(tracker.allowDefault).toBe(true)
+  selectNative(text, 12, 6)
+  document.dispatchEvent(new Event('selectionchange'))
+  expect(editor.state.selection.empty).toBe(true)
+  // Preserve the engine's real recent-click exclusion; this is not a widened classifier window.
+  vi.advanceTimersByTime(400)
+  return { engine, tracker }
+}
+
+it.each(['notification', 'copy', 'beforeinput', 'no-buttons'] as const)(
+  'classifies held bare-return presentation before %s and all late writers',
+  (boundary) => {
+    const editor = surface()
+    const text = textNode(editor, 'p')
+    const { engine, tracker } = heldRange(editor, text)
+    const publications = vi.fn()
+    editor.on('selectionUpdate', publications)
+    const input = document.createElement('input')
+    document.body.append(input)
+    input.focus()
+    const accepted = editor.state.selection
+    expect(accepted.anchor).toBe(editor.view.posAtDOM(text, 12))
+    expect(accepted.head).toBe(editor.view.posAtDOM(text, 6))
+    expect(engine.input.mouseDown).toBe(tracker)
+    expect(tracker.delayedSelectionSync).toBe(true)
+    expect(publications).toHaveBeenCalledOnce()
+    editor.view.dom.focus()
+    // Declared synthetic Chromium reset after real core focus; not a physical-native reproduction.
+    selectNative(textNode(editor, 'h1'), 0, 0)
+    if (boundary === 'notification' || boundary === 'no-buttons') {
+      document.dispatchEvent(new Event('selectionchange'))
+    } else if (boundary === 'copy') {
+      expect(copy(editor)).toBe('target')
+    } else {
+      fireEvent(
+        editor.view.dom,
+        new InputEvent('beforeinput', { bubbles: true, inputType: 'insertText', data: 'x' })
+      )
+    }
+    expect(editor.state.selection.eq(accepted)).toBe(true)
+    expect(document.getSelection()?.anchorNode).toBe(text)
+    expect(document.getSelection()?.anchorOffset).toBe(12)
+    expect(document.getSelection()?.focusOffset).toBe(6)
+    vi.advanceTimersByTime(845)
+    expect(copy(editor)).toBe('target')
+    fireEvent(
+      document,
+      new MouseEvent(boundary === 'no-buttons' ? 'mousemove' : 'mouseup', {
+        bubbles: true,
+        button: 0,
+        buttons: 0
+      })
+    )
+    expect(engine.input.mouseDown).toBeNull()
+    vi.runAllTimers()
+    expect(publications).toHaveBeenCalledOnce()
+    expect(editor.state.selection.eq(accepted)).toBe(true)
+    editor.commands.insertContent('x')
+    expect(editor.view.dom.querySelector('p')?.textContent).toBe('lower x')
+    expect(editor.view.dom.querySelector('h1')?.textContent).toBe('Heading stays')
+  }
+)
+
+it('observes incoming focus before synchronous custom redirect and preserves newer navigation', () => {
+  const editor = surface()
+  const text = textNode(editor, 'p')
+  heldRange(editor, text)
+  const input = document.createElement('input')
+  document.body.append(input)
+  input.focus()
+  const accepted = editor.state.selection
+  const observations: number[] = []
+  editor.view.setProps({
+    handleDOMEvents: {
+      ...richMarkdownSelectionCompletionEvents,
+      focus: (view) => {
+        observations.push(document.getSelection()?.focusOffset ?? -1)
+        expect(view.state.selection.eq(accepted)).toBe(true)
+        input.focus()
+        editor.commands.setTextSelection({ from: 1, to: 8 })
+        return false
+      }
+    }
+  })
+  // A reset already present at core focus must be classified before the custom callback reads it.
+  selectNative(textNode(editor, 'h1'), 0, 0)
+  editor.view.dom.focus()
+  expect(observations).toEqual([6])
+  expect(document.activeElement).toBe(input)
+  expect(editor.view.dom.classList.contains('ProseMirror-focused')).toBe(false)
+  expect(editor.state.selection.from).toBe(1)
+  expect(editor.state.selection.to).toBe(8)
+  vi.runAllTimers()
+  expect(editor.state.selection.from).toBe(1)
+  expect(editor.state.selection.to).toBe(8)
+})
+
+it('preserves the core and table owners when held input resumes after a focus roundtrip', () => {
+  const editor = surface()
+  const paragraphs = editor.view.dom.querySelectorAll('td p')
+  const first = paragraphs[0]?.firstChild
+  const second = paragraphs[1]?.firstChild
+  if (!first || !second) {
+    throw new Error('Expected table text')
+  }
+  editor.commands.setTextSelection(editor.view.posAtDOM(first, 1))
+  vi.spyOn(editor.view, 'posAtCoords').mockImplementation((coords) => ({
+    pos: editor.view.posAtDOM(coords.left === 10 ? second : first, 1),
+    inside: -1
+  }))
+  fireEvent.mouseDown(first.parentElement ?? editor.view.dom, {
+    button: 0,
+    buttons: 1,
+    shiftKey: true
+  })
+  selectNative(first, 1, 4)
+  document.dispatchEvent(new Event('selectionchange'))
+  vi.advanceTimersByTime(400)
+  const input = document.createElement('input')
+  document.body.append(input)
+  input.focus()
+  const accepted = editor.state.selection
+  editor.view.dom.focus()
+  selectNative(textNode(editor, 'h1'), 0, 0)
+  document.dispatchEvent(new Event('selectionchange'))
+  const updates = vi.fn()
+  editor.on('selectionUpdate', updates)
+  // Deliver a real table move into another cell while the original core tracker is still held.
+  const dispatch = vi.spyOn(editor.view, 'dispatch')
+  fireEvent.mouseMove(second.parentElement ?? editor.view.dom, { buttons: 1, clientX: 10 })
+  expect(dispatch.mock.calls.some(([tr]) => tr.selection instanceof CellSelection)).toBe(true)
+  expect(editor.state.selection).not.toBeInstanceOf(CellSelection)
+  expect(editor.state.selection.eq(accepted)).toBe(true)
+  selectNative(first, 2, 5)
+  document.dispatchEvent(new Event('selectionchange'))
+  expect(updates).not.toHaveBeenCalled()
+  fireEvent.mouseUp(document, { button: 0 })
+  expect(editor.state.selection.from).toBe(editor.view.posAtDOM(first, 2))
+  expect(editor.state.selection.to).toBe(editor.view.posAtDOM(first, 5))
+  vi.runAllTimers()
+  expect(updates).toHaveBeenCalledOnce()
+})
+
+it('retains unopted engine custom-focus order and ordinary native acceptance', () => {
+  const editor = surface(false)
+  const coreFocus = vi.fn()
+  editor.view.setProps({
+    handleDOMEvents: {
+      focus: (view) => {
+        coreFocus(view.dom.classList.contains('ProseMirror-focused'))
+        return false
+      }
+    }
+  })
+  const input = document.createElement('input')
+  document.body.append(input)
+  input.focus()
+  editor.view.dom.focus()
+  expect(coreFocus).toHaveBeenCalledWith(false)
+  vi.advanceTimersByTime(400)
+  const text = textNode(editor, 'p')
+  selectNative(text, 6, 12)
+  document.dispatchEvent(new Event('selectionchange'))
+  expect(editor.state.selection.from).toBe(editor.view.posAtDOM(text, 6))
+  expect(editor.state.selection.to).toBe(editor.view.posAtDOM(text, 12))
+})
+
+it('projects current navigation when a real NodeView changes the accepted model during recovery', () => {
+  const editor = surface()
+  let navigate = false
+  const projections = vi.fn()
+  editor.view.setProps({
+    nodeViews: {
+      paragraph: () => {
+        const dom = document.createElement('p')
+        return {
+          dom,
+          contentDOM: dom,
+          setSelection: (anchor, head) => {
+            projections()
+            if (navigate) {
+              navigate = false
+              editor.commands.setTextSelection({ from: 1, to: 8 })
+              return
+            }
+            const text = dom.firstChild
+            if (!text) {
+              throw new Error('Expected NodeView text')
+            }
+            selectNative(text, anchor, head)
+          }
+        }
+      }
+    }
+  })
+  const text = textNode(editor, 'p')
+  heldRange(editor, text)
+  const input = document.createElement('input')
+  document.body.append(input)
+  input.focus()
+  editor.view.dom.focus()
+  selectNative(textNode(editor, 'h1'), 0, 0)
+  navigate = true
+  projections.mockClear()
+  document.dispatchEvent(new Event('selectionchange'))
+  expect(projections).toHaveBeenCalledOnce()
+  expect(copy(editor)).toBe('Heading')
+  expect(editor.state.selection.from).toBe(1)
+  expect(editor.state.selection.to).toBe(8)
+  fireEvent.mouseUp(document, { button: 0 })
   vi.runAllTimers()
   expect(editor.state.selection.from).toBe(1)
   expect(editor.state.selection.to).toBe(8)

@@ -2,7 +2,7 @@
 import { Editor, Node, type AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { TableKit } from '@tiptap/extension-table'
-import { Plugin } from '@tiptap/pm/state'
+import { Plugin, TextSelection } from '@tiptap/pm/state'
 import {
   DragSelectionGuard,
   completeRichMarkdownSelection,
@@ -123,6 +123,13 @@ describe('Find focus with editor-owned selection', () => {
           flushSoon: () => view.domObserver.flushSoon()
         }
       })
+      const filters = surfaces.map(({ editor }) => {
+        const filter = vi.fn(() => true)
+        editor.registerPlugin(new Plugin({ filterTransaction: filter }))
+        return filter
+      })
+      const dispatches = surfaces.map(({ editor }) => vi.spyOn(editor.view, 'dispatch'))
+      const constructors = vi.spyOn(TextSelection, 'between')
       const mappings = surfaces.map(({ editor }) => vi.spyOn(editor.view, 'posAtDOM'))
       const native = document.getSelection()
       if (!native) {
@@ -207,6 +214,75 @@ describe('Find focus with editor-owned selection', () => {
           }
           expect(settledReads).toBeLessThanOrEqual(30 * paragraphs)
         }
+
+        // Observation is a separate phase: genuine held motion maps/publishes/writes nothing.
+        fireEvent.mouseDown(text.parentElement ?? active.view.dom, {
+          button: 0,
+          buttons: 1,
+          shiftKey: true
+        })
+        native.setBaseAndExtent(text, 7, text, 2)
+        restorations.mockClear()
+        nativeWrites.forEach((write) => write.mockClear())
+        publications.mockClear()
+        reads.fill(0)
+        constructors.mockClear()
+        filters.forEach((filter) => filter.mockClear())
+        dispatches.forEach((dispatch) => dispatch.mockClear())
+        document.dispatchEvent(new Event('selectionchange'))
+        expect(publications).not.toHaveBeenCalled()
+        expect(restorations).not.toHaveBeenCalled()
+        expect(nativeWrites.map((write) => write.mock.calls.length)).toEqual([0, 0, 0, 0])
+        expect(reads).toEqual(Array(surfaces.length).fill(0))
+        expect(constructors).not.toHaveBeenCalled()
+        expect(filters.map((filter) => filter.mock.calls.length)).toEqual(
+          Array(surfaces.length).fill(0)
+        )
+        expect(dispatches.map((dispatch) => dispatch.mock.calls.length)).toEqual(
+          Array(surfaces.length).fill(0)
+        )
+        vi.advanceTimersByTime(400)
+        activeSurface.input.focus()
+        const accepted = active.state.selection
+        active.view.dom.focus()
+        const start = active.view.dom.querySelector('p')?.firstChild
+        if (!start) {
+          throw new Error('Expected focus reset text')
+        }
+        native.setBaseAndExtent(start, 0, start, 0)
+        restorations.mockClear()
+        nativeWrites.forEach((write) => write.mockClear())
+        publications.mockClear()
+        reads.fill(0)
+        constructors.mockClear()
+        filters.forEach((filter) => filter.mockClear())
+        dispatches.forEach((dispatch) => dispatch.mockClear())
+        document.dispatchEvent(new Event('selectionchange'))
+        // Recovery has its own declared bound: exactly one model projection, zero publications.
+        expect(restorations).toHaveBeenCalledOnce()
+        expect(constructors).toHaveBeenCalledOnce()
+        expect(publications).not.toHaveBeenCalled()
+        expect(filters.map((filter) => filter.mock.calls.length)).toEqual(
+          Array(surfaces.length).fill(0)
+        )
+        expect(dispatches.map((dispatch) => dispatch.mock.calls.length)).toEqual(
+          Array(surfaces.length).fill(0)
+        )
+        expect(active.state.selection.eq(accepted)).toBe(true)
+        vi.advanceTimersByTime(845)
+        fireEvent.mouseUp(document, { button: 0 })
+        vi.runAllTimers()
+        expect(restorations).toHaveBeenCalledOnce()
+        expect(publications).not.toHaveBeenCalled()
+        expect(nativeWrites.map((write) => write.mock.calls.length)).toEqual([0, 0, 0, 0])
+        expect(reads.slice(0, -1)).toEqual(Array(surfaces.length - 1).fill(0))
+        expect(reads.at(-1)).toBeLessThanOrEqual(40 * paragraphs)
+        expect(filters.map((filter) => filter.mock.calls.length)).toEqual(
+          Array(surfaces.length).fill(0)
+        )
+        expect(dispatches.map((dispatch) => dispatch.mock.calls.length)).toEqual(
+          Array(surfaces.length).fill(0)
+        )
       } finally {
         document.removeEventListener('selectionchange', notifications)
         measuredViews.forEach(({ restore }) => restore())
