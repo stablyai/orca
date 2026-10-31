@@ -135,8 +135,11 @@ describe('public assignment overload', () => {
     expect(refused.status).toBe(413)
     expect(await refused.json()).toEqual({ error: 'request_too_large' })
     expect(resolve).not.toHaveBeenCalled()
-    // Reserve bodies may reach 16 KiB, so the 4 KiB app limit must not answer for them.
-    expect((await app.request('/internal/reserve', chunked(6 * 1024))).status).not.toBe(413)
+    // Reserve bodies may reach 16 KiB, so the 4 KiB app limit must not answer for them: this one
+    // reaches the route itself, which a director answers as unavailable.
+    const reserve = await app.request('/internal/reserve', chunked(6 * 1024))
+    expect(reserve.status).toBe(404)
+    expect(await reserve.json()).toEqual({ error: 'reserve_unavailable' })
     expect((await app.request('/internal/reserve', chunked(20 * 1024))).status).toBe(413)
   })
 
