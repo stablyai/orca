@@ -1003,6 +1003,11 @@
       "title": "出了点问题",
       "tryAgain": "重试",
       "home": "首页"
+    },
+    "native-chat": {
+      "userMessage": {
+        "automationInstructions": "自动化指令"
+      }
     }
   },
   "connection": {

@@ -1,4 +1,7 @@
-import { Goal } from 'lucide-react'
+import { ChevronRight, Goal } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { splitAutomationRunMessage } from '../../../../shared/automation-run-preamble'
+import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -86,15 +89,34 @@ export function NativeChatUserMessageRow({
 }): React.JSX.Element {
   // Agent-authored input belongs to the turn but uses a left-aligned sender row instead of the person’s bubble.
   const from = message.from
+  const automation = !from ? splitAutomationRunMessage(markdown) : null
+  const task = automation?.task ?? markdown
+  const disclosure = useNativeChatDisclosure(`automation-instructions:${message.id}`, false)
   const sending = deliveryNotice?.sending === true
   return (
-    <div
+    <Collapsible
+      open={disclosure.open}
+      onOpenChange={disclosure.setOpen}
       ref={rowRef}
       // Read by the context menu: only rows showing the hover copy or rewind offer them there.
       data-native-chat-message-id={markdown ? message.id : undefined}
       data-native-chat-rewind-item={rewind && !sending ? message.id : undefined}
       className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
     >
+      {automation ? (
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-chat-foreground-faint hover:bg-accent/20 hover:text-chat-foreground-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronRight className={cn('size-3', disclosure.open && 'rotate-90')} aria-hidden />
+            {translate(
+              'components.native-chat.userMessage.automationInstructions',
+              'Automation instructions'
+            )}
+          </button>
+        </CollapsibleTrigger>
+      ) : null}
       {from ? (
         <NativeChatAgentMessageCard
           message={message}
@@ -106,7 +128,23 @@ export function NativeChatUserMessageRow({
         />
       ) : (
         <div className="max-w-[80%] rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-sm text-chat-foreground-strong">
-          {markdown ? (
+          {automation ? (
+            <CollapsibleContent>
+              <div className="text-chat-foreground-faint">
+                <NativeChatMarkdown
+                  rowKey={`${message.id}:automation`}
+                  content={automation.instructions}
+                  variant="document"
+                  className="text-sm"
+                  renderCodeBlock={NativeChatCodeBlock}
+                  onLinkClick={onLinkClick}
+                  allowFileUriLinks={allowFileUriLinks}
+                />
+              </div>
+              <div className="my-3 border-t border-chat-user-border" />
+            </CollapsibleContent>
+          ) : null}
+          {task ? (
             <>
               <NativeChatImageAttachments
                 blocks={prose}
@@ -115,12 +153,12 @@ export function NativeChatUserMessageRow({
               />
               <NativeChatUserMessageFold
                 messageId={message.id}
-                markdown={markdown}
+                markdown={task}
                 onRefolded={onRefolded}
               >
                 <NativeChatMarkdown
                   rowKey={message.id}
-                  content={markdown}
+                  content={task}
                   variant="document"
                   className="text-sm"
                   renderCodeBlock={NativeChatCodeBlock}
@@ -146,7 +184,7 @@ export function NativeChatUserMessageRow({
       ) : null}
       {!from ? (
         <UserMessageMeta
-          markdown={markdown}
+          markdown={task}
           timestamp={message.timestamp}
           sending={sending}
           {...(rewind ? { rewind: { itemId: message.id, surface: rewind } } : {})}
@@ -171,6 +209,6 @@ export function NativeChatUserMessageRow({
           </NativeChatDetailsDisclosure>
         </div>
       ) : null}
-    </div>
+    </Collapsible>
   )
 }

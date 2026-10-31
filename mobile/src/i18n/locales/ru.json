@@ -1093,6 +1093,11 @@
       "title": "Что-то пошло не так",
       "tryAgain": "Повторить",
       "home": "Главная"
+    },
+    "native-chat": {
+      "userMessage": {
+        "automationInstructions": "Инструкции автоматизации"
+      }
     }
   },
   "connection": {

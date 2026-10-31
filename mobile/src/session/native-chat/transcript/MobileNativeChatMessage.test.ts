@@ -1,3 +1,4 @@
+import { buildAutomationRunPreamble } from '../../../../../src/shared/automation-run-preamble'
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,6 +7,7 @@ import type { NativeChatMessage } from '../../../../../src/shared/native-chat-ty
 import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../../../src/shared/agent-session-host-status-rows'
 import { structuredQuestionTranscript } from '../../../../../src/shared/structured-agent-question-projection'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
+import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
 import { colors, typography } from '../../../theme/mobile-theme'
 import { ANSWERED_PROMPT_ITEMS } from '../input/mobile-native-chat-answered-prompts.test-fixture'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
@@ -132,6 +134,23 @@ describe('MobileNativeChatMessage', () => {
       .map((markdown) => markdown.props.content)
   const textIn = (node: ReactTestInstance): string[] =>
     findAllByHostType(node, 'Text').map((text) => String(text.children.join('')))
+
+  it('hides automation instructions until expanded and copies only the task', () => {
+    const preamble = buildAutomationRunPreamble('orca-ide')
+    const tree = render(userMessage([{ type: 'text', text: `${preamble}Write the brief` }]))
+    expect(markdownIn(tree.root)).toEqual(['Write the brief'])
+    const toggle = findAllByHostType(tree.root, 'Pressable').find(
+      (node) => node.props.accessibilityState?.expanded === false
+    )
+    expect(toggle).toBeDefined()
+    act(() => toggle!.props.onPress())
+    expect(markdownIn(tree.root)).toEqual([
+      preamble.slice(0, -'=== TASK ===\n'.length).trimEnd(),
+      'Write the brief'
+    ])
+    const copy = tree.root.findByType(MobileSourceCopyButton)
+    expect(copy.props.text).toBe('Write the brief')
+  })
 
   it('renders the shared clear boundary as one muted divider with prior history retained', () => {
     const message = projectStructuredItemToNativeChat({
