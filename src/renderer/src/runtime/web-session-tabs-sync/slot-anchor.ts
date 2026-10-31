@@ -17,6 +17,26 @@ export function slotAnchorOf(row: RuntimeMobileSessionTabsResult['tabs'][number]
       : undefined
 }
 
+type LocalTabIndex = { byId: Map<string, Tab>; chatByEntity: Map<string, Tab> }
+const localTabIndexes = new WeakMap<readonly Tab[], LocalTabIndex>()
+
+/** This client's tabs by id and its chats by session, built once per tab list (O(tabs)) and
+ *  shared by every anchored row an apply resolves; nothing builds it without an anchor. */
+export function localTabIndex(unifiedTabs: readonly Tab[]): LocalTabIndex {
+  let index = localTabIndexes.get(unifiedTabs)
+  if (!index) {
+    index = { byId: new Map(), chatByEntity: new Map() }
+    for (const tab of unifiedTabs) {
+      index.byId.set(tab.id, tab)
+      if (tab.contentType === 'agent-session' && !index.chatByEntity.has(tab.entityId)) {
+        index.chatByEntity.set(tab.entityId, tab)
+      }
+    }
+    localTabIndexes.set(unifiedTabs, index)
+  }
+  return index
+}
+
 /** This client's ids for a tab the host names; a replaced chat has left the snapshot, so it is
  *  found by its session. */
 export function slotAnchorLocalTabIds(
@@ -25,11 +45,7 @@ export function slotAnchorLocalTabIds(
   hostToLocalTabId?: ReadonlyMap<string, string>
 ): string[] {
   const chat = isStructuredAgentSessionHostTabId(hostTabId)
-    ? unifiedTabs.find(
-        (tab) =>
-          tab.contentType === 'agent-session' &&
-          tab.entityId === hostTabId.slice('agent-session:'.length)
-      )
+    ? localTabIndex(unifiedTabs).chatByEntity.get(hostTabId.slice('agent-session:'.length))
     : undefined
   return [
     ...(chat ? [chat.id] : []),
@@ -48,6 +64,7 @@ export function replacedTabPinned(
 ): boolean | undefined {
   const anchor = slotAnchorOf(row)
   const ids = anchor && !anchor.after ? slotAnchorLocalTabIds(unifiedTabs, anchor.hostTabId) : []
-  const replaced = unifiedTabs.find((tab) => ids.includes(tab.id))
+  const byId = ids.length > 0 ? localTabIndex(unifiedTabs).byId : undefined
+  const replaced = ids.map((id) => byId?.get(id)).find((tab) => tab !== undefined)
   return replaced ? replaced.isPinned === true : undefined
 }

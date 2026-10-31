@@ -64,31 +64,51 @@ it.each([50, 500])(
   }
 )
 
-it('reads this client’s tabs a linear number of times per frame as the workspace grows', () => {
-  const reads = (n: number): number => {
-    const rows = Array.from({ length: n }, (_, index) => terminal(`host-${index}`))
-    const shown = {
-      ...makeState(),
-      ...applyWebSessionTabsSnapshot(makeState(), frame(rows, 1), ENV, NOW)
+it.each([0, 10])(
+  'reads this client’s tabs a linear number of times per frame as the workspace grows, with %i in 100 chats switched',
+  (switchedPer100) => {
+    const reads = (n: number): number => {
+      // K = n / 10 chats beside the terminals; each was switched to a terminal in its slot.
+      const switched = Math.floor((n * switchedPer100) / 100)
+      const chats = Array.from({ length: switched }, (_, index): Row => ({
+        type: 'agent-session',
+        id: `agent-session:chat-${index}`,
+        title: 'Codex',
+        sessionId: `chat-${index}`,
+        agent: 'codex',
+        isActive: false
+      }))
+      const rows = Array.from({ length: n - switched }, (_, index) => terminal(`host-${index}`))
+      const shown = {
+        ...makeState(),
+        ...applyWebSessionTabsSnapshot(makeState(), frame([...chats, ...rows], 1), ENV, NOW)
+      }
+      const next = [
+        ...chats.map((chat, index): Row => ({
+          ...terminal(`switched-${index}`),
+          replaces: { tabId: chat.id }
+        })),
+        ...rows
+      ]
+      let count = 0
+      // Every tab read goes through its index's getter.
+      const tabs = [...shown.unifiedTabsByWorktree[WT]!]
+      tabs.forEach((tab, index) =>
+        Object.defineProperty(tabs, index, {
+          get: () => {
+            count += 1
+            return tab
+          }
+        })
+      )
+      applyWebSessionTabsSnapshot(
+        { ...shown, unifiedTabsByWorktree: { [WT]: tabs } },
+        frame(next, 2),
+        ENV,
+        NOW
+      )
+      return count
     }
-    let count = 0
-    // Every tab read goes through its index's getter.
-    const tabs = [...shown.unifiedTabsByWorktree[WT]!]
-    tabs.forEach((tab, index) =>
-      Object.defineProperty(tabs, index, {
-        get: () => {
-          count += 1
-          return tab
-        }
-      })
-    )
-    applyWebSessionTabsSnapshot(
-      { ...shown, unifiedTabsByWorktree: { [WT]: tabs } },
-      frame(rows, 2),
-      ENV,
-      NOW
-    )
-    return count
+    expect(reads(500)).toBeLessThanOrEqual(15 * reads(50))
   }
-  expect(reads(500)).toBeLessThanOrEqual(15 * reads(50))
-})
+)

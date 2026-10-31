@@ -34,7 +34,7 @@ import {
   isTerminalRowRetiredByHost
 } from './host-retired-terminal-rows'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
-import { slotAnchorLocalTabIds, slotAnchorOf } from './slot-anchor'
+import { localTabIndex, slotAnchorLocalTabIds, slotAnchorOf } from './slot-anchor'
 
 export function prepareWebSessionTabsSnapshotBase(
   state: WebSessionTabsSyncState,
@@ -70,11 +70,9 @@ export function prepareWebSessionTabsSnapshotBase(
     : rawSnapshot
   const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const shownHere = (tab: RuntimeMobileSessionTabsResult['tabs'][number]): boolean =>
-    unifiedTabs.some((local) =>
-      tab.type === 'terminal'
-        ? local.id === toWebTerminalSurfaceTabId(tab.parentTabId)
-        : tab.type === 'agent-session' && local.entityId === tab.sessionId
-    )
+    tab.type === 'terminal'
+      ? localTabIndex(unifiedTabs).byId.has(toWebTerminalSurfaceTabId(tab.parentTabId))
+      : tab.type === 'agent-session' && localTabIndex(unifiedTabs).chatByEntity.has(tab.sessionId)
   // Why: only a caller-recorded create intent may focus its arriving tab; unsolicited server-active must not steal focus (#5435).
   const focusIntent = peekWebSessionFocusIntent({ environmentId }, worktreeId)
   const focusIntentHostTabId = focusIntent?.hostTabId ?? null
