@@ -1,3 +1,4 @@
+import { activeThreadSelection, clearThreadSelection } from '@/components/threads/thread-navigation'
 import type { KeybindingContext } from '../../../shared/keybindings'
 import { toVisibleTabType, type Tab } from '../../../shared/tab-types'
 import { useAppStore } from '@/store'
@@ -106,6 +107,26 @@ function resolveCloseTarget(
 /** Input adapters describe intent; targeting and tab operations live here. */
 export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boolean {
   const state = useAppStore.getState()
+  const thread = activeThreadSelection(state)
+  if (
+    thread &&
+    !(command.type === 'close' && command.target) &&
+    !isFloatingWorkspacePanelFocused() &&
+    !selectEmptyFloatingWorkspacePanelVisible(state)
+  ) {
+    if (command.type !== 'close') {
+      return false
+    }
+    if (thread.kind === 'new') {
+      clearThreadSelection()
+      return true
+    }
+    const tab = state.getTab(thread.tabId)
+    if (!tab) {
+      return false
+    }
+    command = { ...command, target: { kind: 'tab', tabId: tab.id, worktreeId: tab.worktreeId } }
+  }
   if (command.type === 'close') {
     if (!command.target) {
       if (selectEmptyFloatingWorkspacePanelVisible(state)) {
