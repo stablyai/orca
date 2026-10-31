@@ -1,11 +1,25 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
+  CustomSttEndpointTestOutcome,
   SpeechErrorEvent,
   SpeechLifecycleEvent,
   SpeechModelManifest,
   SpeechModelState,
   SpeechTranscriptEvent
 } from '../../shared/speech-types'
+
+export type CustomSttEndpointStatus = {
+  baseUrl: string
+  model: string
+  language: string
+  apiKeyConfigured: boolean
+}
+
+export type CustomSttEndpointTestResult = {
+  ok: boolean
+  outcome: CustomSttEndpointTestOutcome
+  detail: string
+}
 
 export type SpeechApi = {
   getCatalog: () => Promise<SpeechModelManifest[]>
@@ -16,6 +30,27 @@ export type SpeechApi = {
   }>
   saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
   clearOpenAiApiKey: () => Promise<{ configured: boolean }>
+  getCustomEndpointStatus: () => Promise<CustomSttEndpointStatus>
+  saveCustomEndpoint: (input: {
+    baseUrl: string
+    model: string
+    language?: string
+    apiKey?: string
+  }) => Promise<CustomSttEndpointStatus>
+  clearCustomEndpoint: () => Promise<CustomSttEndpointStatus>
+  testCustomEndpoint: (probe?: {
+    baseUrl: string
+    model: string
+    language: string
+    apiKey?: string
+  }) => Promise<CustomSttEndpointTestResult>
+  discoverCustomEndpointModels: (input: { baseUrl: string; apiKey?: string }) => Promise<{
+    ok: boolean
+    models: string[]
+    reachability: 'reachable' | 'unreachable' | 'unknown'
+    source?: 'openai-models' | 'health' | 'models'
+    detail?: string
+  }>
   downloadModel: (modelId: string) => Promise<void>
   cancelDownload: (modelId: string) => Promise<void>
   deleteModel: (modelId: string) => Promise<void>

@@ -46,10 +46,11 @@ describe('OpenAiTranscriptionSession', () => {
       uploads.push(Buffer.from(await file.arrayBuffer()))
       return new Response(JSON.stringify({ text: ' complete dictation ' }))
     })
-    const session = new OpenAiTranscriptionSession(
-      'openai-gpt-4o-mini-transcribe',
-      () => 'test-key'
-    )
+    const session = new OpenAiTranscriptionSession({
+      url: 'https://api.openai.com/v1/audio/transcriptions',
+      apiModel: 'gpt-4o-mini-transcribe',
+      readApiKey: () => 'test-key'
+    })
     const input = new Float32Array([
       -2,
       -1,

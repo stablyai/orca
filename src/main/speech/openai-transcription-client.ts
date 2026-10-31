@@ -5,9 +5,26 @@ export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
   'openai-gpt-4o-transcribe': 'gpt-4o-transcribe'
 }
 
-const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
+export const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
 const CLOUD_TRANSCRIPTION_SAMPLE_RATE = 16000
 const MAX_CLOUD_AUDIO_SECONDS = 10 * 60
+const TRANSCRIPTION_TIMEOUT_MS = 120_000
+
+/**
+ * Resolved POST target for an OpenAI-shaped transcription request.
+ *
+ * `readApiKey` is a getter, not a value, so the secret is read only when a request
+ * is actually made (an empty dictation never touches the keychain). The URL/model/
+ * language are snapshotted when the session starts, so a settings change mid-dictation
+ * cannot re-route the buffered audio.
+ */
+export type OpenAiTranscriptionTarget = {
+  url: string
+  apiModel: string
+  readApiKey: () => string | null
+  /** ISO-639 language hint for the multipart `language` field; undefined = auto-detect. */
+  language?: string
+}
 
 type OpenAiTranscriptionResponse = {
   text?: unknown
@@ -80,10 +97,12 @@ export class OpenAiTranscriptionSession {
   private audioSeconds = 0
   private readonly abortController = new AbortController()
 
-  constructor(
-    private readonly modelId: string,
-    private readonly readApiKey: () => string
-  ) {}
+  /**
+   * The destination is fixed for the whole recording. Why: resolving it lazily at
+   * finish would let a settings change mid-dictation re-route the buffered audio to
+   * a different server (or none, if the endpoint was disconnected), losing the clip.
+   */
+  constructor(private readonly target: OpenAiTranscriptionTarget) {}
 
   cancel(): void {
     this.chunks = []
@@ -108,28 +127,40 @@ export class OpenAiTranscriptionSession {
       return ''
     }
 
-    const apiModel = OPENAI_TRANSCRIPTION_MODEL_BY_ID[this.modelId]
-    if (!apiModel) {
-      throw new Error(`Unknown OpenAI transcription model: ${this.modelId}`)
-    }
+    const target = this.target
 
     const chunks = this.chunks
     this.chunks = []
     const wav = encodePcm16Wav(chunks, CLOUD_TRANSCRIPTION_SAMPLE_RATE)
     const form = new FormData()
-    form.append('model', apiModel)
+    form.append('model', target.apiModel)
     form.append('response_format', 'json')
+    if (target.language) {
+      form.append('language', target.language)
+    }
     // A named WAV blob satisfies multipart uploads without temporary files.
     form.append('file', new Blob([wav], { type: 'audio/wav' }), 'dictation.wav')
 
-    const response = await fetch(OPENAI_TRANSCRIPTION_URL, {
-      method: 'POST',
-      signal: this.abortController.signal,
-      headers: {
-        Authorization: `Bearer ${this.readApiKey()}`
-      },
-      body: form
-    })
+    // Why: a user-selected LAN/remote server can leave the request open; without a
+    // deadline the cloud stop path would wait forever instead of releasing the
+    // session and reporting a failure. `cancel()` aborts through the session
+    // controller, so combine both signals.
+    const timeoutSignal = AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS)
+    const signal = AbortSignal.any([this.abortController.signal, timeoutSignal])
+    const apiKey = target.readApiKey()
+    let response: Response
+    try {
+      response = await fetch(target.url, {
+        method: 'POST',
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        body: form,
+        signal
+      })
+    } catch (error) {
+      throw timeoutSignal.aborted && !this.abortController.signal.aborted
+        ? new Error(`Transcription timed out after ${TRANSCRIPTION_TIMEOUT_MS / 1000}s`)
+        : error
+    }
 
     const data = (await response.json().catch(() => ({}))) as OpenAiTranscriptionResponse
     if (!response.ok) {
@@ -137,7 +168,7 @@ export class OpenAiTranscriptionSession {
         typeof data.error?.message === 'string'
           ? sanitizeOpenAiTranscriptionErrorMessage(data.error.message)
           : response.statusText
-      throw new Error(`OpenAI transcription failed: ${message}`)
+      throw new Error(`Transcription failed: ${message}`)
     }
 
     return parseOpenAiTranscriptionResponse(data)
