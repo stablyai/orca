@@ -83,6 +83,35 @@ function switchParams(sessionId: string, source?: SwitchSource) {
   }
 }
 
+function worktreeTarget() {
+  return {
+    worktree: {
+      id: WORKTREE_ID,
+      repoId: 'repo-1',
+      path: rig.root,
+      head: 'head',
+      branch: 'main',
+      isBare: false,
+      isMainWorktree: true,
+      displayName: 'repo',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null,
+      git: { path: rig.root, head: 'head', branch: 'main', isBare: false, isMainWorktree: true }
+    },
+    executionHostId: 'local'
+  }
+}
+
 it('keeps a proven stop when the rollout moved during the stop, so a retry reads Interrupted', async () => {
   const codexHome = join(rig.root, 'codex-account')
   const transcriptPath = join(codexHome, 'sessions', '2026', '10', '31', `rollout-${THREAD}.jsonl`)
@@ -133,32 +162,7 @@ it('keeps a proven stop when the rollout moved during the stop, so a retry reads
   vi.spyOn(runtime.agentTransitions, 'latestRow').mockReturnValue(row)
   vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({ supported: true })
   vi.spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited').mockResolvedValue()
-  vi.spyOn(runtime, 'resolveRuntimeFileTarget').mockResolvedValue({
-    worktree: {
-      id: WORKTREE_ID,
-      repoId: 'repo-1',
-      path: rig.root,
-      head: 'head',
-      branch: 'main',
-      isBare: false,
-      isMainWorktree: true,
-      displayName: 'repo',
-      comment: '',
-      linkedIssue: null,
-      linkedPR: null,
-      linkedLinearIssue: null,
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null,
-      git: { path: rig.root, head: 'head', branch: 'main', isBare: false, isMainWorktree: true }
-    },
-    executionHostId: 'local'
-  })
+  vi.spyOn(runtime, 'resolveRuntimeFileTarget').mockResolvedValue(worktreeTarget())
   const moved = `${transcriptPath}.moved`
   runtime.setPtyController({
     write: () => true,
@@ -201,4 +205,58 @@ it('keeps a proven stop when the rollout moved during the stop, so a retry reads
   expect(turns).toEqual([
     expect.objectContaining({ turnId: 'cli-turn', state: 'interrupted', outcome: 'cancellation' })
   ])
+})
+
+it('refuses a WSL pane before anything is stopped, so a paused agent there survives', async () => {
+  const codexHome = join(rig.root, 'codex-account')
+  await mkdir(codexHome, { recursive: true })
+  const { runtime } = setupMainOwnedWorkspace({
+    runtimeDeps: {
+      prepareCodexStructuredLaunch: () => codexHome,
+      resolveCodexStructuredLaunchHome: () => codexHome
+    }
+  })
+  const incarnationId = '11111111-1111-4111-8111-111111111111'
+  runtime.registerPty(
+    PTY_A,
+    WORKTREE_ID,
+    null,
+    { tabId: TAB_ID, leafId: LEAF_A, incarnationId },
+    true
+  )
+  const pane = runtime.resolveTerminalPane(PANE, WORKTREE_ID)
+  if (!pane.presentation) {
+    throw new Error('missing captured source')
+  }
+  vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue([])
+  vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({ supported: true })
+  vi.spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited').mockResolvedValue()
+  vi.spyOn(runtime, 'resolveRuntimeFileTarget').mockResolvedValue(worktreeTarget())
+  const paused = vi.spyOn(runtime, 'terminalAgentPaused')
+  const stopped = vi.fn(async () => true)
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => false,
+    stopAndWait: stopped,
+    getForegroundProcess: async () => 'codex'
+  })
+
+  const answer = await executeStructuredSessionSwitch(
+    switchParams(SESSION, {
+      terminal: pane.handle,
+      expectedIncarnationId: incarnationId,
+      originalPresentation: pane.presentation
+    }),
+    { runtime },
+    'chat'
+  )
+  expect(answer).toMatchObject({
+    status: 'refused',
+    refusal: {
+      code: 'structured_agent_session_unsupported',
+      details: { reason: 'hostUnsupported' }
+    }
+  })
+  expect(stopped).not.toHaveBeenCalled()
+  expect(paused).not.toHaveBeenCalled()
 })
