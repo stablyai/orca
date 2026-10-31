@@ -8,6 +8,28 @@ import { agentSessionRecordFixture } from '../../../native-chat/agent-session-re
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 
+function agedWriterClock(previousMaximum: number | undefined, ...timestamps: string[]) {
+  expect(timestamps.length).toBeGreaterThan(0)
+  const times = timestamps.map((value) => {
+    expect(value).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/)
+    const at = Date.parse(value)
+    expect(Number.isFinite(at)).toBe(true)
+    return at
+  })
+  const maximum = Math.max(previousMaximum ?? -Infinity, ...times)
+  const cutoff = maximum + 1
+  const now = cutoff + AGENT_STATUS_STALE_AFTER_MS
+  expect(Number.isFinite(new Date(now).getTime())).toBe(true)
+  expect(new Date(cutoff).getTime()).toBe(cutoff)
+  expect(now - AGENT_STATUS_STALE_AFTER_MS).toBe(cutoff)
+  expect(cutoff - maximum).toBe(1)
+  expect(cutoff).toBeGreaterThan(maximum)
+  process.stdout.write(
+    `C2 captured writer clock ${JSON.stringify({ timestamps, times, previousMaximum, maximum, now, cutoff })}\n`
+  )
+  return { maximum, now, cutoff }
+}
+
 it('decorates handed-back peer questions after row creation without flattening direct children', () => {
   const { db, deps, run, assign } = fixture()
   const parent = assign('term_worker')
@@ -58,25 +80,33 @@ it('keeps aged read handbacks independently pending through answer, close, audie
     direct.message.created_at
   ].map((value) => Date.parse(value))
   expect(lifecycleTimes.every(Number.isFinite)).toBe(true)
-  const now = Math.max(...lifecycleTimes) + AGENT_STATUS_STALE_AFTER_MS + 1
+  let aged = agedWriterClock(
+    undefined,
+    completedAt,
+    first.message.created_at,
+    newest.message.created_at,
+    direct.message.created_at
+  )
+  const now = aged.now
   process.stdout.write(
     `C2 aged handback clock ${JSON.stringify({ completedAt, messageTimes: [first.message.created_at, newest.message.created_at, direct.message.created_at], lifecycleTimes, now, cutoff: now - AGENT_STATUS_STALE_AFTER_MS })}\n`
   )
   const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
-  const frames: OrchestrationCrewFrame[] = []
-  const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
-  let current = model.read('term_coord')
-  let stop = subscribeCrew(
-    () => {
-      current = model.read('term_coord')
-      return current
-    },
-    model.subscribe,
-    (frame) => frames.push(frame)
-  )
-  const helperRow = () =>
-    current.sections.talkingWith.find((row) => row.partyKey.endsWith('term_helper"]'))
+  let stop: (() => void) | undefined
   try {
+    const frames: OrchestrationCrewFrame[] = []
+    const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
+    let current = model.read('term_coord')
+    stop = subscribeCrew(
+      () => {
+        current = model.read('term_coord')
+        return current
+      },
+      model.subscribe,
+      (frame) => frames.push(frame)
+    )
+    const helperRow = () =>
+      current.sections.talkingWith.find((row) => row.partyKey.endsWith('term_helper"]'))
     expect(f.db.getMessageById(newest.message.id)).toMatchObject({
       to_handle: `run:${f.run.id}`,
       read: 1
@@ -101,12 +131,37 @@ it('keeps aged read handbacks independently pending through answer, close, audie
     f.db.markAsReadAndDelivered([newest.message.id])
     await Promise.resolve()
     expect(count()).toBe(unchanged)
-    f.db.answerQuestion({
+    const answer = f.db.answerQuestion({
       messageId: newest.message.id,
       runId: f.run.id,
       consumerGeneration: f.run.consumer_generation,
       body: 'answer latest'
     })
+    expect(answer).toMatchObject({
+      duplicate: false,
+      question: {
+        message_id: newest.message.id,
+        dispatch_id: helper.id,
+        status: 'answered',
+        answer_message_id: answer.message.id,
+        answer_body: 'answer latest'
+      },
+      message: {
+        run_id: f.run.id,
+        thread_id: newest.message.id,
+        from_handle: `run:${f.run.id}`,
+        to_handle: `dispatch:${helper.id}`,
+        body: 'answer latest'
+      }
+    })
+    expect([first.message.id, newest.message.id, direct.message.id]).not.toContain(
+      answer.message.id
+    )
+    expect(answer.message.sequence).toBeGreaterThan(direct.message.sequence)
+    expect(f.db.getMessageById(answer.message.id)).toEqual(answer.message)
+    process.stdout.write(`C2 lifecycle answer ${JSON.stringify(answer)}\n`)
+    aged = agedWriterClock(aged.maximum, answer.message.created_at)
+    clock.mockReturnValue(aged.now)
     await Promise.resolve()
     expect(helperRow()?.pendingQuestion?.preview).toBe('oldest handback')
     expect(helperRow()).not.toHaveProperty('latest')
@@ -143,8 +198,11 @@ it('keeps aged read handbacks independently pending through answer, close, audie
     await Promise.resolve()
     expect(count()).toBe(released)
   } finally {
-    stop()
-    clock.mockRestore()
+    try {
+      stop?.()
+    } finally {
+      clock.mockRestore()
+    }
   }
 })
 
@@ -218,7 +276,8 @@ it('folds pending representatives across committed clear aliases without fabrica
       question: `pending ${id}`
     })
   })
-  const now = Date.parse(questions[1].message.created_at) + AGENT_STATUS_STALE_AFTER_MS + 1
+  let aged = agedWriterClock(undefined, ...questions.map(({ message }) => message.created_at))
+  let now = aged.now
   const snapshot = () => buildCrewSnapshot('term_coord', { ...f.deps, now })
   let peers = snapshot().sections.talkingWith
   expect(peers).toHaveLength(1)
@@ -228,12 +287,35 @@ it('folds pending representatives across committed clear aliases without fabrica
     openTarget: { kind: 'chat', sessionId: next }
   })
   expect(peers[0]).not.toHaveProperty('latest')
-  f.db.answerQuestion({
+  const answer = f.db.answerQuestion({
     messageId: questions[1].message.id,
     runId: f.run.id,
     consumerGeneration: f.run.consumer_generation,
     body: 'answered representative'
   })
+  expect(answer).toMatchObject({
+    duplicate: false,
+    question: {
+      message_id: questions[1].message.id,
+      dispatch_id: questions[1].question.dispatch_id,
+      status: 'answered',
+      answer_message_id: answer.message.id,
+      answer_body: 'answered representative'
+    },
+    message: {
+      run_id: f.run.id,
+      thread_id: questions[1].message.id,
+      from_handle: `run:${f.run.id}`,
+      to_handle: `dispatch:${questions[1].question.dispatch_id}`,
+      body: 'answered representative'
+    }
+  })
+  expect(questions.map(({ message }) => message.id)).not.toContain(answer.message.id)
+  expect(answer.message.sequence).toBeGreaterThan(questions[1].message.sequence)
+  expect(f.db.getMessageById(answer.message.id)).toEqual(answer.message)
+  process.stdout.write(`C2 alias answer ${JSON.stringify(answer)}\n`)
+  aged = agedWriterClock(aged.maximum, answer.message.created_at)
+  now = aged.now
   peers = snapshot().sections.talkingWith
   expect(peers).toHaveLength(1)
   expect(peers[0].pendingQuestion?.preview).toBe(`pending ${root}`)
