@@ -520,7 +520,8 @@ it.each([
       identities: vi.mocked(notifyWorktreeHeadIdentitiesChanged).mock.calls.length
     })
     const blocked = Promise.withResolvers<void>()
-    const reachedRead = vi.fn()
+    const baselineRead = Promise.withResolvers<void>()
+    const reachedRead = vi.fn(baselineRead.resolve)
     native.mockRejectedValueOnce(
       new WatcherProcessFailure('test fuse', 'supervisor', 'supervisor_crash_fuse')
     )
@@ -556,7 +557,9 @@ it.each([
     const before = counts()
     const upgrading = fsControl.upgrade()
     try {
-      await vi.waitFor(() => expect(reachedRead).toHaveBeenCalledOnce())
+      // Await real I/O without starting fallback ticks on the fake clock.
+      await Promise.race([baselineRead.promise, upgrading])
+      expect(reachedRead).toHaveBeenCalledOnce()
       expect(events.slice(before.batches)).toEqual([[{ type: 'delete', path: fsControl.root }]])
       expect(subscriptions[0].unsubscribe).toHaveBeenCalledOnce()
       // Keep the real baseline blocked, but allow the real head reader its own listing.
@@ -650,10 +653,14 @@ it.each([
     } finally {
       fsControl.read = null
       blocked.resolve()
-      await upgrading
-      consumer.disposed = true
-      clearTimeout(consumer.notifyTimer ?? undefined)
-      reader.mockRestore()
+      baselineRead.resolve()
+      try {
+        await upgrading
+      } finally {
+        consumer.disposed = true
+        clearTimeout(consumer.notifyTimer ?? undefined)
+        reader.mockRestore()
+      }
     }
   }
 )
