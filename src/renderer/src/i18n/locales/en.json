@@ -19622,7 +19622,8 @@
         "runBrowser_one": "Used the browser {{count}} time",
         "runPlan_one": "Updated the plan {{count}} time",
         "runLiveBrowser_one": "Using the browser {{count}} time",
-        "runLivePlan_one": "Updating the plan {{count}} time"
+        "runLivePlan_one": "Updating the plan {{count}} time",
+        "activity": "Activity"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",

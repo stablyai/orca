@@ -215,9 +215,11 @@ export function ToolRun({
   const { live, latestCallLabel, iconName: headerIcon } = header
   const sentence = nativeChatToolRunSentence(header.work, { live }, nativeChatToolRunWords(t))
   const fallbackLabel =
-    header.fallbackLabel === 'result'
-      ? nativeChatToolActivityCopy(t).result
-      : nativeChatToolCallCount(t, header.callCount)
+    header.callCount === 0 && asideCount > 0
+      ? t('chat.tool.activity', 'Activity')
+      : header.fallbackLabel === 'result'
+        ? nativeChatToolActivityCopy(t).result
+        : nativeChatToolCallCount(t, header.callCount)
   const marks = [
     header.failedCallCount > 0
       ? nativeChatToolActivityCopy(t, { value0: header.failedCallCount }).failedCount

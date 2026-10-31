@@ -65,6 +65,10 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
 import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
+import {
+  APPROVED_REVIEW,
+  approvalReviewMessage
+} from '../../../../../src/shared/native-chat-activity.test-fixture'
 
 const thought: NativeChatMessage = {
   id: 'r1',
@@ -252,3 +256,31 @@ it('loads a shortened grouped thought from its own source between two tool rows'
   expect(textIn(tree.root)).not.toContain('Show full message')
   expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Read', 'a.ts', 'pnpm test']))
 })
+
+it.each(['review-first', 'tool-first'])(
+  'retains successful review details within one collapsed mobile group: %s',
+  (order) => {
+    const review = approvalReviewMessage('review')
+    const members = order === 'review-first' ? [review, read, command] : [read, review, command]
+    act(() => {
+      renderer = create(
+        createElement(MobileNativeChatMessage, {
+          message: members[0]!,
+          workRun: members,
+          structuredActivityUi: true,
+          activeTurnIsWorking: false
+        })
+      )
+    })
+    const tree = renderer!
+    const trigger = tree.root.find(
+      (node) => String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion
+    )
+    expect(trigger.props.accessibilityState.expanded).toBe(false)
+    expect(textIn(tree.root)).not.toContain(APPROVED_REVIEW)
+    act(() => trigger.props.onPress())
+    expect(textIn(tree.root).join(' ')).toContain(APPROVED_REVIEW)
+    expect(textIn(tree.root).join(' ')).toContain(JSON.stringify({ message: APPROVED_REVIEW }))
+    expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Read', 'a.ts', 'pnpm test']))
+  }
+)

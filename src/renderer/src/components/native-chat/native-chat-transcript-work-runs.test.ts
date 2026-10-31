@@ -279,11 +279,11 @@ describe('work run height', () => {
 describe('work run entries', () => {
   it('places each thought before the call after it, and keeps trailing ones last', () => {
     const members = [thought('r1'), call('a'), thought('r2'), call('b'), thought('r3')]
-    const { blocks, thoughtsBefore, thoughtsAfter } = nativeChatWorkRunEntries(members)
+    const { blocks, asidesBefore, asidesAfter } = nativeChatWorkRunEntries(members)
     expect(blocks).toEqual([...members[1]!.blocks, ...members[3]!.blocks])
-    expect(thoughtsBefore.get(blocks[0]!)?.map((m) => m.id)).toEqual(['r1'])
-    expect(thoughtsBefore.get(blocks[1]!)?.map((m) => m.id)).toEqual(['r2'])
-    expect(thoughtsAfter.map((m) => m.id)).toEqual(['r3'])
+    expect(asidesBefore.get(blocks[0]!)?.map((m) => m.id)).toEqual(['r1'])
+    expect(asidesBefore.get(blocks[1]!)?.map((m) => m.id)).toEqual(['r2'])
+    expect(asidesAfter.map((m) => m.id)).toEqual(['r3'])
   })
 
   // The turn's diff rollup numbers an edit within its own message; the run counts across all.

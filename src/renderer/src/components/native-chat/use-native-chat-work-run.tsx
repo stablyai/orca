@@ -7,6 +7,8 @@ import {
   nativeChatWorkRunEntries
 } from '../../../../shared/native-chat/native-chat-work-run'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
+import { ProviderFrameRow } from './NativeChatTranscriptChrome'
+import { translate } from '@/i18n/i18n'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 
@@ -37,25 +39,51 @@ export function useNativeChatWorkRun(
     if (!members) {
       return undefined
     }
-    const { blocks, thoughtsBefore, thoughtsAfter } = nativeChatWorkRunEntries(members)
-    const thought = (message: NativeChatMessage): React.JSX.Element => (
-      // Keyed by the thought, so it stays mounted as calls arrive after it.
-      <NativeChatReasoningRow
-        key={`thought:${message.id}`}
-        message={message}
-        markdown={deriveNativeChatRowContent(message.blocks).markdown}
-        turnIsWorking={activeTurnIsWorking}
-        onLinkClick={onLinkClick}
-        allowFileUriLinks={allowFileUriLinks}
-      />
-    )
+    const { blocks, asidesBefore, asidesAfter } = nativeChatWorkRunEntries(members)
+    const aside = (message: NativeChatMessage): React.JSX.Element => {
+      const occurrences = new Map<string, number>()
+      return message.role === 'system' ? (
+        <div key={`notice:${message.id}`} data-native-chat-activity-message-id={message.id}>
+          {message.blocks.map((block) => {
+            if (block.type !== 'text') {
+              return null
+            }
+            const identity = JSON.stringify(block)
+            const occurrence = (occurrences.get(identity) ?? 0) + 1
+            occurrences.set(identity, occurrence)
+            return (
+              <div
+                key={`${identity}:${occurrence}`}
+                className="space-y-1 py-1 text-sm text-chat-foreground-faint"
+              >
+                <p className="whitespace-pre-wrap break-words">{block.text}</p>
+                <ProviderFrameRow
+                  block={block}
+                  summary={translate('components.native-chat.notices.details', 'Details')}
+                />
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        // Keyed by the thought, so it stays mounted as calls arrive after it.
+        <NativeChatReasoningRow
+          key={`thought:${message.id}`}
+          message={message}
+          markdown={deriveNativeChatRowContent(message.blocks).markdown}
+          turnIsWorking={activeTurnIsWorking}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+        />
+      )
+    }
     const before = new Map<NativeChatBlock, React.JSX.Element[]>()
-    for (const [block, thoughts] of thoughtsBefore) {
-      before.set(block, thoughts.map(thought))
+    for (const [block, asides] of asidesBefore) {
+      before.set(block, asides.map(aside))
     }
     return {
       blocks,
-      asides: { before, after: thoughtsAfter.map(thought) }
+      asides: { before, after: asidesAfter.map(aside) }
     }
   }, [members, activeTurnIsWorking, onLinkClick, allowFileUriLinks])
   const runReveal = useMemo(() => {

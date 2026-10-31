@@ -20136,7 +20136,8 @@
         "runLiveTool_one": "Использует {{count}} инструмент",
         "runLiveTool_few": "Использует {{count}} инструмента",
         "runLiveTool_many": "Использует {{count}} инструментов",
-        "runLiveTool_other": "Использует {{count}} инструмента"
+        "runLiveTool_other": "Использует {{count}} инструмента",
+        "activity": "Активность"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} байт",

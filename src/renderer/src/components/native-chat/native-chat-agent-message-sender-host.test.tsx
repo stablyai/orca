@@ -164,6 +164,9 @@ async function mount(): Promise<ReturnType<typeof render>> {
       </TooltipProvider>
     )
   })
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Orchestration mail' }))
+  })
   return view!
 }
 function publish(host: string, sessionId: string = ROOT): void {

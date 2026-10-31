@@ -49,7 +49,7 @@ export function NativeChatAssistantMessageRow({
   const toolRun = toolRunProps(props, content, run)
   const isSystem = message.role === 'system'
   // A thought heading a run reads inside it, so the row has no words of its own.
-  const words = message.role === 'reasoning' ? '' : markdown
+  const words = message.role === 'reasoning' || (isSystem && run) ? '' : markdown
   // Hide controls on system asides and the still-working frontier, where more content may arrive.
   const showControls =
     !isSystem && words.length > 0 && !continuesTurn && activeTurnIsWorking !== true
