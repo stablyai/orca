@@ -22,6 +22,11 @@ import type {
   MirroredAgentTab
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
+import {
+  adoptInheritedChatPin,
+  inheritedChatPinHolds,
+  pruneInheritedChatPins
+} from './inherited-chat-pins'
 import { replacedTabPinned } from './slot-anchor'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
@@ -115,8 +120,14 @@ export function buildMirroredAgentTabs(
       replacementIds.add(existing.id)
     }
   }
+  const pinScope = `${executionHostId}\0${snapshot.worktree}`
+  pruneInheritedChatPins(pinScope, new Set(agentTabs.map((tab) => tab.sessionId)))
   return agentTabs.map((tab, index) => {
     const existing = replacementTabs.get(tab.sessionId) ?? firstUnreplaced(tab.sessionId)
+    const inheritedPin = existing ? undefined : replacedTabPinned(currentUnifiedTabs, tab)
+    if (inheritedPin !== undefined) {
+      adoptInheritedChatPin(pinScope, tab.sessionId, tab.isPinned === true)
+    }
     const launch = readStructuredAgentLaunchRecord(tab.sessionId)
     const address =
       executionHostId === 'local' &&
@@ -156,13 +167,14 @@ export function buildMirroredAgentTabs(
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,
-        // A chat in a replaced tab's slot keeps the pin it took from that tab here for its life,
-        // as a terminal does; the host's flag on later frames never flips it.
+        // A chat in a replaced tab's slot keeps the pin it took from that tab here until the
+        // host's own flag on it changes (inherited-chat-pins.ts).
         isPinned: existing
-          ? tab.isPinned !== undefined && !tab.replaces
+          ? tab.isPinned !== undefined &&
+            !inheritedChatPinHolds(pinScope, tab.sessionId, tab.isPinned)
             ? tab.isPinned
             : existing.isPinned === true
-          : (replacedTabPinned(currentUnifiedTabs, tab) ?? tab.isPinned === true)
+          : (inheritedPin ?? tab.isPinned === true)
       }
     }
   })

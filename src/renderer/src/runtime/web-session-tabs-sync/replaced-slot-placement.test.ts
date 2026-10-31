@@ -212,24 +212,32 @@ it.each([
   }
 )
 
-it('keeps the pin a chat took from the terminal it replaced on every later frame', () => {
+it('keeps the pin a chat took from the terminal it replaced, until the host’s own pin changes', () => {
   const { state } = shownThree('host-a')
   // The host pinned its terminal; this client never did.
-  const replacing = { ...chat, replaces: { tabId: 'host-a' }, isPinned: true }
-  const frame = (snapshotVersion: number) =>
-    makeSnapshot([replacing, terminal('host-b'), terminal('host-c')], {
-      snapshotVersion,
-      tabGroups: [
-        { id: 'host-group-1', activeTabId: null, tabOrder: [chat.id, 'host-b', 'host-c'] }
-      ]
-    })
-  const first = apply(state, frame(2))
-  const second = apply(first, frame(3))
-  for (const next of [first, second]) {
-    expect(
-      next.unifiedTabsByWorktree[WT]!.find((tab) => tab.entityId === 'session-1')?.isPinned
-    ).toBe(false)
-  }
+  const frame = (snapshotVersion: number, hostPinned: boolean) =>
+    makeSnapshot(
+      [
+        { ...chat, replaces: { tabId: 'host-a' }, isPinned: hostPinned },
+        terminal('host-b'),
+        terminal('host-c')
+      ],
+      {
+        snapshotVersion,
+        tabGroups: [
+          { id: 'host-group-1', activeTabId: null, tabOrder: [chat.id, 'host-b', 'host-c'] }
+        ]
+      }
+    )
+  const pinned = (next: WebSessionTabsSyncState) =>
+    next.unifiedTabsByWorktree[WT]!.find((tab) => tab.entityId === 'session-1')?.isPinned
+  const first = apply(state, frame(2, true))
+  const second = apply(first, frame(3, true))
+  expect([pinned(first), pinned(second)]).toEqual([false, false])
+  // The desktop user unpins it, then pins it again: from the first change, the host decides.
+  const unpinned = apply(second, frame(4, false))
+  const repinned = apply(unpinned, frame(5, true))
+  expect([pinned(unpinned), pinned(repinned)]).toEqual([false, true])
 })
 
 it('places a destination in a split group this client is not looking at, without moving focus', () => {
