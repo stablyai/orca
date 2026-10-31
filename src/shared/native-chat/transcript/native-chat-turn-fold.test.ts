@@ -1,5 +1,7 @@
+import type { NativeChatMessage } from '../../native-chat-types'
 import { describe, expect, it } from 'vitest'
 import {
+  nativeChatHistoryTurnFold,
   nativeChatTurnAnswerRows,
   nativeChatTurnFold,
   type NativeChatTurnFoldRow
@@ -217,4 +219,34 @@ describe('nativeChatTurnFold', () => {
     expect([...foldedRows]).toEqual([1])
     expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(3)
   })
+})
+
+it('retains only prepended history disclosures until an explicit collapse, while ordinary completion still folds', () => {
+  const messages: NativeChatMessage[] = Array.from({ length: 3 }, (_, i) => ({
+    id: `m${i}`,
+    role: i === 0 ? 'user' : 'assistant',
+    timestamp: null,
+    source: 'transcript',
+    blocks: [{ type: 'text', text: `m${i}` }]
+  }))
+  const rows = messages.map((message) => row({ role: message.role }))
+  const initial = nativeChatHistoryTurnFold(null, {
+    scope: 'a',
+    messages: messages.slice(1),
+    rows: rows.slice(1).map((r) => ({ ...r, turnKey: undefined })),
+    expandedTurnKeys: NONE,
+    settledTurnKeys: SETTLED
+  })
+  const input = { scope: 'a', messages, rows, expandedTurnKeys: NONE, settledTurnKeys: SETTLED }
+  const retained = nativeChatHistoryTurnFold(initial, input)
+  expect(retained.fold.foldedRows.size).toBe(0)
+  expect(retained.expandedTurnKeys.has('turn-1')).toBe(true)
+  expect(nativeChatHistoryTurnFold(retained, input).fold.foldedRows.size).toBe(0)
+  const collapsed = nativeChatHistoryTurnFold(retained, { ...input, expandedTurnKeys: new Set() })
+  expect([...collapsed.fold.foldedRows]).toEqual([1])
+  expect([
+    ...nativeChatHistoryTurnFold(retained, { ...input, scope: 'b' }).fold.foldedRows
+  ]).toEqual([1])
+  const running = nativeChatHistoryTurnFold(null, { ...input, settledTurnKeys: NONE })
+  expect([...nativeChatHistoryTurnFold(running, input).fold.foldedRows]).toEqual([1])
 })

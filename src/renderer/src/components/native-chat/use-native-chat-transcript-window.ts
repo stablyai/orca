@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elementScroll, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import {
   NATIVE_CHAT_ROW_GAP_PX,
@@ -9,7 +10,8 @@ import {
   DEFAULT_ROW_TYPOGRAPHY
 } from './native-chat-row-height-estimate'
 import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-chat-pinned-rows'
-import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import { useNativeChatTranscriptRowKeys } from './use-native-chat-transcript-row-keys'
 import {
   nativeChatScrollOffsetWithin,
   useNativeChatViewportAlign
@@ -49,6 +51,7 @@ export type NativeChatTranscriptWindow = {
 export function useNativeChatTranscriptWindow({
   scrollRef,
   slots,
+  messages,
   isVisible,
   revealIndex,
   newRowsMarkerIndex,
@@ -56,6 +59,7 @@ export function useNativeChatTranscriptWindow({
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   slots: readonly NativeChatTranscriptSlot[]
+  messages?: readonly NativeChatMessage[]
   isVisible: boolean
   /** Slot the transcript was asked to reveal, or -1. */
   revealIndex: number
@@ -74,9 +78,7 @@ export function useNativeChatTranscriptWindow({
     () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex, newRowsMarkerIndex }),
     [slots.length, revealIndex, newRowsMarkerIndex]
   )
-  // Keep measured offsets through content-only growth to preserve the end anchor; rebuild only on structural changes.
-  const encodedItemKeys = JSON.stringify(slots.map(nativeChatSlotKey))
-  const itemKeys = useMemo(() => JSON.parse(encodedItemKeys) as string[], [encodedItemKeys])
+  const { itemKeys, prepending } = useNativeChatTranscriptRowKeys(slots, messages)
   const estimateSize = useCallback(
     (index: number) => slots[index]?.estimatedHeight ?? FALLBACK_ROW_PX,
     [slots]
@@ -213,7 +215,7 @@ export function useNativeChatTranscriptWindow({
     const offset = instance.scrollOffset ?? 0
     const written = scrollRef.current?.scrollTop ?? offset
     return (
-      Math.abs(written - offset) <= UNSEEN_SCROLL_PX &&
+      (prepending || Math.abs(written - offset) <= UNSEEN_SCROLL_PX) &&
       !(item.index === revealIndex && !instance.itemSizeCache.has(item.key)) &&
       item.end <= offset &&
       (instance.scrollDirection !== 'backward' ||

@@ -1,11 +1,12 @@
-import { useMemo } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
 import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat-row-content'
 import {
   NATIVE_CHAT_EMPTY_TURN_FOLD,
-  nativeChatTurnFold,
+  nativeChatHistoryTurnFold,
   nativeChatTurnFoldRow,
-  type NativeChatTurnFold
+  type NativeChatTurnFold,
+  type NativeChatTurnFoldHistory
 } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-fold'
 import {
   nativeChatRowRendersProse,
@@ -27,25 +28,6 @@ type TranscriptRows = {
 export type MobileNativeChatWorkRuns = {
   heads: ReadonlyMap<number, readonly NativeChatMessage[]>
   joined: ReadonlySet<number>
-}
-
-function mobileNativeChatTurnFold({
-  rows,
-  turnKeys,
-  receipts,
-  settledTurnKeys,
-  expandedTurnKeys
-}: TranscriptRows & {
-  settledTurnKeys: ReadonlySet<string>
-  expandedTurnKeys: ReadonlySet<string>
-}): NativeChatTurnFold {
-  return nativeChatTurnFold({
-    rows: rows.map((message, index) =>
-      nativeChatTurnFoldRow(message, turnKeys[index], receipts?.has(message.id) === true)
-    ),
-    settledTurnKeys,
-    expandedTurnKeys
-  })
 }
 
 // Invisible thoughts neither join nor split work runs; visible thoughts stay inside the run.
@@ -89,6 +71,8 @@ const NO_WORK_RUNS: MobileNativeChatWorkRuns = { heads: new Map(), joined: new S
 // Fold/frontier/work-run projection applies only to structured turn rows.
 export function useMobileNativeChatTranscriptRows({
   enabled,
+  scopeKey,
+  historyHead,
   rows,
   turnKeys,
   receipts,
@@ -97,27 +81,42 @@ export function useMobileNativeChatTranscriptRows({
   liveReasoningId
 }: TranscriptRows & {
   enabled: boolean
+  scopeKey: string
+  historyHead?: string
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   expandedTurnKeys: ReadonlySet<string>
   liveReasoningId: string | undefined
-}): { fold: NativeChatTurnFold; trailingRunIndex: number; workRuns: MobileNativeChatWorkRuns } {
-  const fold = useMemo(
+}): {
+  fold: NativeChatTurnFold
+  expandedTurnKeys: ReadonlySet<string>
+  trailingRunIndex: number
+  workRuns: MobileNativeChatWorkRuns
+} {
+  const committedFold = useRef<NativeChatTurnFoldHistory | null>(null)
+  const historyFold = useMemo(
     () =>
       enabled
-        ? mobileNativeChatTurnFold({
-            rows,
-            turnKeys,
-            receipts,
+        ? nativeChatHistoryTurnFold(committedFold.current, {
+            scope: scopeKey,
+            historyHead,
+            messages: rows,
+            rows: rows.map((message, index) =>
+              nativeChatTurnFoldRow(message, turnKeys[index], receipts?.has(message.id) === true)
+            ),
             settledTurnKeys: new Set(
-              Object.entries(completedByTurn).flatMap(([turnKey, status]) =>
-                status.workedSeconds != null ? [turnKey] : []
+              Object.entries(completedByTurn).flatMap(([key, status]) =>
+                status.workedSeconds != null ? [key] : []
               )
             ),
             expandedTurnKeys
           })
-        : NATIVE_CHAT_EMPTY_TURN_FOLD,
-    [completedByTurn, enabled, expandedTurnKeys, receipts, rows, turnKeys]
+        : null,
+    [enabled, scopeKey, historyHead, rows, turnKeys, receipts, completedByTurn, expandedTurnKeys]
   )
+  useLayoutEffect(() => {
+    committedFold.current = historyFold
+  }, [historyFold])
+  const fold = historyFold?.fold ?? NATIVE_CHAT_EMPTY_TURN_FOLD
   // The turn owns liveness: its frontier stays live between calls, while earlier runs are settled.
   const trailingRunIndex = useMemo(
     () =>
@@ -135,5 +134,10 @@ export function useMobileNativeChatTranscriptRows({
         : NO_WORK_RUNS,
     [enabled, liveReasoningId, receipts, rows, turnKeys]
   )
-  return { fold, trailingRunIndex, workRuns }
+  return {
+    fold,
+    expandedTurnKeys: historyFold?.expandedTurnKeys ?? expandedTurnKeys,
+    trailingRunIndex,
+    workRuns
+  }
 }

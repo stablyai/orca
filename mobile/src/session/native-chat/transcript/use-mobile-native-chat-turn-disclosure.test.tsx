@@ -31,6 +31,36 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     renderer = null
   })
 
+  it('lets the reader explicitly collapse a turn retained when older history supplies its opener', () => {
+    const messages: NativeChatMessage[] = [
+      userMessage('opener'),
+      { ...userMessage('reading'), role: 'assistant' },
+      { ...userMessage('answer'), role: 'assistant' }
+    ]
+    const settledTurns = new Map([['opener', { startedAt: 1, workedSeconds: 10 }]])
+    const draw = (rows: NativeChatMessage[]) =>
+      createElement(Harness, { messages: rows, enabled: true, isWorking: false, settledTurns })
+    act(() => {
+      renderer = create(draw(messages.slice(1)))
+    })
+    act(() => {
+      renderer!.update(draw(messages))
+    })
+    const retained = renderer!.root.findByType(Result).props.disclosure
+    expect(retained.resolveRow(1, messages[1]!).foldedAway).toBeUndefined()
+    expect(retained.resolveRow(1, messages[1]!).turnExpanded).toBe(true)
+    act(() => retained.onToggleTurn('opener'))
+    const collapsed = renderer!.root.findByType(Result).props.disclosure
+    expect(collapsed.resolveRow(1, messages[1]!).foldedAway).toBe(true)
+    expect(collapsed.resolveRow(1, messages[1]!).turnExpanded).toBe(false)
+    act(() => {
+      renderer!.update(draw([...messages]))
+    })
+    expect(
+      renderer!.root.findByType(Result).props.disclosure.resolveRow(1, messages[1]!).foldedAway
+    ).toBe(true)
+  })
+
   it('shows unresolved history without an independent bar or unanchored live work', () => {
     const messages = [userMessage('follow-up')]
     const items: AgentJournalRenderItem[] = [

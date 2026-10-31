@@ -134,3 +134,71 @@ export function nativeChatTurnFold({
   }
   return { foldedRows, foldableTurnKeys }
 }
+
+export type NativeChatTurnFoldHistory = {
+  scope: string
+  historyHead?: string
+  messages: readonly NativeChatMessage[]
+  rows: readonly NativeChatTurnFoldRow[]
+  requestedExpandedTurnKeys: ReadonlySet<string>
+  expandedTurnKeys: ReadonlySet<string>
+  fold: NativeChatTurnFold
+}
+
+// Paging must not silently fold prose already on screen when its previously unloaded turn arrives.
+export function nativeChatHistoryTurnFold(
+  previous: NativeChatTurnFoldHistory | null,
+  input: {
+    scope: string
+    historyHead?: string
+    messages: readonly NativeChatMessage[]
+    rows: readonly NativeChatTurnFoldRow[]
+    settledTurnKeys: ReadonlySet<string>
+    expandedTurnKeys: ReadonlySet<string>
+  }
+): NativeChatTurnFoldHistory {
+  const before = previous?.scope === input.scope ? previous : null
+  let expandedTurnKeys =
+    before?.requestedExpandedTurnKeys === input.expandedTurnKeys
+      ? before.expandedTurnKeys
+      : input.expandedTurnKeys
+  let fold = nativeChatTurnFold({ ...input, expandedTurnKeys })
+  const historyHead = input.historyHead ?? input.messages[0]?.id
+  if (before && before.historyHead !== historyHead) {
+    const indexes = new Map(input.messages.map((message, index) => [message.id, index]))
+    const prepended =
+      before.messages[0]?.id === input.messages[0]?.id ||
+      before.messages.some((message, index) => {
+        const at = indexes.get(message.id)
+        return at !== undefined && at > index
+      })
+    if (prepended) {
+      const retained = new Set(expandedTurnKeys)
+      before.messages.forEach((message, index) => {
+        const at = indexes.get(message.id)
+        const turnKey = at === undefined ? undefined : input.rows[at]?.turnKey
+        if (
+          at !== undefined &&
+          turnKey !== undefined &&
+          !before.fold.foldedRows.has(index) &&
+          fold.foldedRows.has(at)
+        ) {
+          retained.add(turnKey)
+        }
+      })
+      if (retained.size !== expandedTurnKeys.size) {
+        expandedTurnKeys = retained
+        fold = nativeChatTurnFold({ ...input, expandedTurnKeys })
+      }
+    }
+  }
+  return {
+    scope: input.scope,
+    historyHead,
+    messages: input.messages,
+    rows: input.rows,
+    requestedExpandedTurnKeys: input.expandedTurnKeys,
+    expandedTurnKeys,
+    fold
+  }
+}

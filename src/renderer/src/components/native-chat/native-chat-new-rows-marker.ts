@@ -143,7 +143,9 @@ export function useNativeChatNewRowsMarker(
   /** Rows held behind the running turn: seen and missed like any other, drawn outside `slots`. */
   waitingSlots: readonly NativeChatTranscriptSlot[],
   /** The pane is the one showing, and shows what the host holds now. */
-  isShowingLatest: boolean
+  isShowingLatest: boolean,
+  /** Reader input during foreground catch-up supersedes the automatic return jump. */
+  navigationSequence?: React.RefObject<number>
 ): {
   marker: NativeChatNewRowsMarkerState | undefined
   /** The reader answered the conversation, so nothing in it is news to them. */
@@ -157,16 +159,37 @@ export function useNativeChatNewRowsMarker(
     /** Stands until the reader answers. */
     missed: NativeChatMissedRows | null
     arriving: boolean
-  }>({ watching, left: null, missed: null, arriving: false })
+    navigationSequence: number
+  }>({
+    watching,
+    left: null,
+    missed: null,
+    arriving: false,
+    navigationSequence: navigationSequence?.current ?? 0
+  })
   if (seen.watching !== watching) {
     const all = [...slots, ...waitingSlots]
     if (watching) {
       const missed = seen.left ? nativeChatMissedRows(all, seen.left) : seen.missed
-      setSeen({ watching, left: null, missed, arriving: seen.left !== null && missed !== null })
+      setSeen({
+        ...seen,
+        watching,
+        left: null,
+        missed,
+        arriving:
+          seen.left !== null &&
+          missed !== null &&
+          seen.navigationSequence === (navigationSequence?.current ?? 0)
+      })
     } else {
       // An unanswered marker whose row still stands is kept: the reader may be midway through it.
       const marked = nativeChatNewRowsMarkerPlacement(all, seen.missed) !== undefined
-      setSeen({ ...seen, watching, left: marked ? null : nativeChatLeftAt(slots, waitingSlots) })
+      setSeen({
+        ...seen,
+        watching,
+        left: marked ? null : nativeChatLeftAt(slots, waitingSlots),
+        navigationSequence: navigationSequence?.current ?? 0
+      })
     }
   }
   const { missed } = seen

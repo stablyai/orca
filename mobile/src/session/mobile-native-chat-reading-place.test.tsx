@@ -18,6 +18,7 @@ import {
   mobileNativeChatRowId
 } from './mobile-native-chat-reading-place'
 import { MobileNativeChatPageList } from './MobileNativeChatPageList'
+import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { ToolRun } from './native-chat/transcript/MobileNativeChatToolRun'
 import { useMobileNativeChatTurnDisclosure } from './native-chat/transcript/use-mobile-native-chat-turn-disclosure'
 
@@ -134,9 +135,17 @@ const chat = [say('u0', 'user', 'first'), say('x0', 'assistant', 'answer'), say(
   })
   .concat(run(1).slice(1), ...Array.from({ length: 39 }, (_, i) => run(i + 2)))
 
-type Box = { id: string; top: number; bottom: number; end: number; parent: number; rows: boolean }
+type Box = {
+  id: string
+  pageKey?: string
+  top: number
+  bottom: number
+  end: number
+  parent: number
+  rows: boolean
+}
 type Element = {
-  getAttribute: () => string
+  getAttribute: (name?: string) => string | null
   getBoundingClientRect: () => { top: number; bottom: number }
   querySelectorAll: (selector: string) => Element[]
   children: Element[]
@@ -158,7 +167,11 @@ function page(tree: () => Node | Node[] | null) {
       }
       const id = String(node.props.testID ?? '')
       const rows = node.props['data-chat-rows'] !== undefined
-      const at = out.push({ id, top: y, bottom: y, end: 0, parent, rows }) - 1
+      const pageKey = node.props['data-native-chat-page-row']
+      const at = out.push({ id, pageKey, top: y, bottom: y, end: 0, parent, rows }) - 1
+      if (node.type === 'div' && typeof node.props.style?.height === 'number') {
+        y += node.props.style.height
+      }
       node.children?.forEach((child) => walk(child, at))
       out[at] = { ...out[at]!, bottom: y, end: out.length }
     }
@@ -170,7 +183,8 @@ function page(tree: () => Node | Node[] | null) {
     const siblings = (parent: number): Element[] =>
       all.flatMap((other, i) => (other.parent === parent ? [element(all, i)] : []))
     return {
-      getAttribute: () => box.id,
+      getAttribute: (name) =>
+        name === 'data-native-chat-page-row' ? (box.pageKey ?? null) : box.id,
       getBoundingClientRect: () => ({
         top: box.top - node.viewTop(),
         bottom: box.bottom - node.viewTop()
@@ -188,7 +202,13 @@ function page(tree: () => Node | Node[] | null) {
   const select = (all: Box[], from: number, to: number, selector: string): Element[] => {
     const prefix = /\^="([^"]+)"/.exec(selector)?.[1] ?? '?'
     return all.flatMap((box, at) =>
-      at >= from && at < to && box.id.startsWith(prefix) ? [element(all, at)] : []
+      at >= from &&
+      at < to &&
+      (selector === '[data-native-chat-page-row]'
+        ? box.pageKey !== undefined
+        : box.id.startsWith(prefix))
+        ? [element(all, at)]
+        : []
     )
   }
   let scrollTop = 0
@@ -236,15 +256,17 @@ function Row({
   rowKey,
   joined = 0,
   workRun,
-  joinsWorkRun
+  joinsWorkRun,
+  foldedAway
 }: {
   message: NativeChatMessage
   rowKey: string
   joined?: number
   workRun?: readonly NativeChatMessage[]
   joinsWorkRun?: boolean
+  foldedAway?: boolean
 }): ReactElement | null {
-  if (joinsWorkRun) {
+  if (joinsWorkRun || foldedAway) {
     return null
   }
   const { prose, tools } = splitNativeChatBlocks((workRun ?? [message]).flatMap((m) => m.blocks))
@@ -259,11 +281,12 @@ let shownKeys!: MobileNativeChatRowKeys
 
 function Chat(props: {
   messages: NativeChatMessage[]
-  following: boolean
+  following?: boolean
   live: boolean
   joined?: number
   runs?: boolean
   status?: boolean
+  settledTurns?: import('../../../src/shared/native-chat-turn-status').NativeChatSettledTurns
 }): ReactElement {
   const folded = useMemo(
     () => foldMobileNativeChatMessages(props.messages, 'claude'),
@@ -273,25 +296,30 @@ function Chat(props: {
     messages: folded,
     enabled: props.runs === true,
     isWorking: false,
-    scopeKey: 'chat'
+    scopeKey: 'chat',
+    settledTurns: props.settledTurns
   })
   const keys = useMobileNativeChatRowKeys(folded, props.messages, 'chat', turns.presentation)
+  const tail = useMobileNativeChatTailFollow({ hasItems: folded.length > 0, scopeKey: 'chat' })
   shownKeys = keys
   return h(MobileNativeChatPageList, {
-    ref: null,
+    ref: tail.pageListProps.ref,
     rows: turns.listMessages,
     rowKeys: keys,
-    runs: turns.presentation.workRuns.heads,
-    isFollowing: () => props.following,
-    onEndDistance: () => {},
+    isFollowing:
+      props.following === undefined
+        ? tail.pageListProps.isFollowing
+        : () => props.following === true,
+    onEndDistance: props.following === undefined ? tail.pageListProps.onEndDistance : () => {},
     renderItem: ({ item, index }) => {
-      const { workRun, joinsWorkRun } = turns.resolveRow(index, item)
+      const { workRun, joinsWorkRun, foldedAway } = turns.resolveRow(index, item)
       const row = h(Row, {
         message: item,
         rowKey: keys.keyOf(item),
         joined: item === folded.at(-1) ? props.joined : 0,
         workRun,
-        joinsWorkRun
+        joinsWorkRun,
+        foldedAway
       })
       // Turn status draws beside its row, untagged.
       return props.status
@@ -305,7 +333,12 @@ function Chat(props: {
     },
     layoutKey: 'layout',
     contentContainerStyle: null,
-    header: h('div', { testID: 'header' }, h('span', null, 'Loading')),
+    header: h(
+      'div',
+      { testID: 'header' },
+      h('span', null, 'Loading'),
+      h('button', { onPress: tail.jumpToTail }, 'Jump to latest')
+    ),
     footer: props.live ? h('span', null, 'Working') : null,
     emptyStateView: null,
     onScroll: () => {}
@@ -314,7 +347,13 @@ function Chat(props: {
 
 function mount(
   messages: NativeChatMessage[],
-  options: { following: boolean; live: boolean; runs?: boolean; status?: boolean } = {
+  options: {
+    following?: boolean
+    live: boolean
+    runs?: boolean
+    status?: boolean
+    settledTurns?: import('../../../src/shared/native-chat-turn-status').NativeChatSettledTurns
+  } = {
     following: false,
     live: false
   }
@@ -418,6 +457,121 @@ it('holds back a change below a scrolling reader until they rest, then keeps the
   expect(chat0.scroller.top(mobileNativeChatRowId('m4'))).toBe(line)
 })
 
+it('keeps the initial tall-row window anchored after a reader parks and background history appends', () => {
+  const rows = Array.from({ length: 230 }, (_, i) => ({
+    ...say(`m${i}`, 'assistant', ''),
+    blocks: Array.from({ length: 5 }, () => ({ type: 'text' as const, text: `Message ${i}` }))
+  }))
+  const chat0 = mount(rows.slice(0, 200), { live: false })
+  chat0.scroller.touch('touchstart')
+  chat0.scroller.scrollTop = -150
+  chat0.scrolled()
+  chat0.scroller.touch('touchend')
+  chat0.rest()
+  const anchor = mobileNativeChatRowId('m196')
+  const top = chat0.scroller.top(anchor)
+  expect(Number.isFinite(top)).toBe(true)
+  chat0.show(rows)
+
+  expect(chat0.drawn(anchor)).toBe(1)
+  expect(chat0.scroller.top(anchor)).toBe(top)
+  chat0.scroller.touch('touchstart')
+  chat0.scroller.scrollTop -= 100
+  chat0.scrolled()
+  chat0.scroller.touch('touchend')
+  chat0.rest()
+  expect(chat0.scroller.top(anchor)).toBe(top + 100)
+})
+
+it.each([
+  ['scroll', 'opening'],
+  ['jump', 'opening'],
+  ['scroll', 'partial'],
+  ['jump', 'partial'],
+  ['scroll', 'automatic'],
+  ['jump', 'automatic'],
+  ['scroll', 'automatic-start'],
+  ['jump', 'automatic-start']
+] as const)(
+  'slides the %s-resumed tail after a detached reader used the %s window',
+  (resume, window) => {
+    const rows = Array.from({ length: 500 }, (_, i) => ({
+      ...say(`m${i}`, 'assistant', ''),
+      blocks: Array.from(
+        {
+          length:
+            (window === 'automatic' && i >= 176 && i < 200) ||
+            (window === 'automatic-start' && i < 40)
+              ? 1
+              : 5
+        },
+        () => ({
+          type: 'text' as const,
+          text: `Message ${i}`
+        })
+      )
+    }))
+    const initial = window === 'automatic-start' ? 40 : 200
+    const chat0 = mount(rows.slice(0, initial), { live: false })
+    if (window === 'automatic' || window === 'automatic-start') {
+      // The tall offscreen expansion trims at the draw-ahead line while still following.
+      expect(chat0.rows()[0]).toBe(mobileNativeChatRowId(window === 'automatic' ? 'm171' : 'm0'))
+    }
+    chat0.read(() => (chat0.scroller.scrollTop = -150))
+    chat0.show(rows.slice(0, initial + 30))
+    expect(chat0.drawn(mobileNativeChatRowId(`m${initial - 4}`))).toBe(1)
+    if (window === 'partial') {
+      chat0.read(() => chat0.scroller.showFrom(200))
+      expect(chat0.rows()[0]).toBe(mobileNativeChatRowId('m164'))
+    }
+
+    if (resume === 'jump') {
+      chat0.press('header')
+    } else {
+      chat0.read(() => (chat0.scroller.scrollTop = 0))
+    }
+    for (const count of [initial + 50, 350, 500]) {
+      chat0.show(rows.slice(0, count))
+      expect(chat0.rows()).toEqual(
+        rows.slice(count - 24, count).map((row) => mobileNativeChatRowId(row.id))
+      )
+      expect(chat0.scroller.scrollTop).toBe(0)
+    }
+  }
+)
+
+it.each([40, 200])('bounds an automatically expanded %i-row chat while following', (initial) => {
+  const rows = Array.from({ length: 1000 }, (_, i) => say(`m${i}`, 'assistant', 'line'))
+  const chat0 = mount(rows.slice(0, initial), { live: false })
+  const drawn = chat0.rows().length
+  expect(drawn).toBeGreaterThan(24)
+  for (const count of [initial + 100, 500, 1000]) {
+    chat0.show(rows.slice(0, count))
+    expect(chat0.rows()).toHaveLength(drawn)
+    expect(chat0.drawn(mobileNativeChatRowId(`m${count - 1}`))).toBe(1)
+    expect(chat0.drawn(mobileNativeChatRowId(`m${initial - 1}`))).toBe(0)
+    expect(chat0.scroller.scrollTop).toBe(0)
+  }
+})
+
+it('keeps an explicitly opened from-start window until the reader jumps back to the tail', () => {
+  const rows = Array.from({ length: 100 }, (_, i) => ({
+    ...say(`m${i}`, 'assistant', ''),
+    blocks: Array.from({ length: 5 }, () => ({ type: 'text' as const, text: `Message ${i}` }))
+  }))
+  const chat0 = mount(rows.slice(0, 40), { live: false })
+  chat0.read(() => chat0.scroller.showFrom(0))
+  chat0.read(() => chat0.scroller.showFrom(0))
+  expect(chat0.rows()[0]).toBe(mobileNativeChatRowId('m0'))
+  chat0.show(rows.slice(0, 60))
+  expect(chat0.rows()[0]).toBe(mobileNativeChatRowId('m0'))
+  chat0.press('header')
+  chat0.show(rows)
+
+  expect(chat0.rows()).toEqual(rows.slice(-24).map((row) => mobileNativeChatRowId(row.id)))
+  expect(chat0.scroller.scrollTop).toBe(0)
+})
+
 it('keeps a parked reader on their line when the list viewport changes height, as when the composer grows', () => {
   const rows = Array.from({ length: 12 }, (_, i) => say(`m${i}`, i % 2 ? 'assistant' : 'user', 'x'))
   const chat0 = mount(rows)
@@ -444,7 +598,7 @@ it("holds a row's look with its messages: what the chat's state adds lands once 
   expect(chat0.scroller.top(mobileNativeChatRowId('m4'))).toBe(line)
 })
 
-it('draws a run once when an older page brings in its start while the reader moves', () => {
+it('defers an older run head until rest, then draws its members once', () => {
   const call = (id: string): NativeChatMessage => ({
     ...say(id, 'assistant', ''),
     blocks: [{ type: 'tool-call', name: 'Bash', callId: id, input: { command: id } }]
@@ -456,9 +610,10 @@ it('draws a run once when an older page brings in its start while the reader mov
   const chat0 = mount([thought, call('b'), ...later], { following: false, live: false, runs: true })
   chat0.scroller.showFrom(40)
   chat0.scrolled()
+  const before = chat0.rows()
   chat0.show([say('u', 'user', 'go'), call('a'), thought, call('b'), ...later])
   const once = ['u', 'a', 'm0'].map(mobileNativeChatRowId)
-  expect(chat0.rows().slice(0, 3)).toEqual(once)
+  expect(chat0.rows()).toEqual(before)
   expect(chat0.drawn('chat-member:run')).toBe(1)
   chat0.rest()
   expect(chat0.rows().slice(0, 3)).toEqual(once)
@@ -492,12 +647,14 @@ it('draws a bounded tail again once a reader who scrolled back through history r
     chat0.read(() => chat0.scroller.showFrom(0))
   }
   expect(chat0.rows().length).toBeGreaterThan(tail * 2)
+  const extent = chat0.scroller.scrollHeight
 
   options.following = true
   chat0.show(messages)
   chat0.read(() => (chat0.scroller.scrollTop = 0))
   expect(chat0.rows().length).toBeLessThanOrEqual(tail)
   expect(chat0.rows().at(-1)).toBe(mobileNativeChatRowId('m199'))
+  expect(chat0.scroller.scrollHeight).toBe(extent)
 })
 
 it('holds a row the reader taps open in place, and a reply below waits out a flick', () => {
@@ -628,7 +785,7 @@ it('keeps the nearest rows off screen as stand-ins when turn-status lines sit be
     { testID: mobileNativeChatRowId('below'), top: 300, bottom: 500 }
   ]
   const children = lines.map((line) => ({
-    getAttribute: () => line.testID || null,
+    getAttribute: (name: string) => (name === 'data-testid' ? line.testID || null : null),
     getBoundingClientRect: () => line,
     querySelectorAll: () => [],
     nextElementSibling: null
@@ -650,4 +807,29 @@ it('keeps the nearest rows off screen as stand-ins when turn-status lines sit be
   })
 
   expect(place.map((unit) => unit.key)).toEqual(['shown', 'below', 'above'])
+})
+
+it('retains already-displayed prose when an async older page supplies its settled turn opener', async () => {
+  const rows = Array.from({ length: 60 }, (_, i) => ({
+    ...say(`m${i}`, i % 30 === 0 ? 'user' : 'assistant', `Message ${i}`),
+    blocks: Array.from({ length: 5 }, () => ({ type: 'text' as const, text: `Message ${i}` }))
+  }))
+  const settledTurns = new Map([['m30', { startedAt: 1, workedSeconds: 10 }]])
+  const chat0 = mount(rows.slice(41), { following: false, live: false, runs: true, settledTurns })
+  chat0.read(() => chat0.scroller.showFrom(400))
+  const anchor = mobileNativeChatRowId('m45')
+  const top = chat0.scroller.top(anchor)
+  const before = chat0.scroller.scrollHeight
+  await act(async () => {
+    await Promise.resolve()
+  })
+  chat0.show(rows)
+  chat0.rest()
+  expect(chat0.drawn(anchor)).toBe(1)
+  expect(chat0.scroller.top(anchor)).toBe(top)
+  const extent = chat0.scroller.scrollHeight
+  expect(extent).toBeGreaterThan(before)
+  chat0.read(() => (chat0.scroller.scrollTop += 100))
+  expect(chat0.scroller.top(anchor)).toBe(top - 100)
+  expect(chat0.scroller.scrollHeight).toBe(extent)
 })
