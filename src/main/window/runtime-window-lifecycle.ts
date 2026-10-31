@@ -9,6 +9,7 @@ import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identi
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { requestAgentLaunchTabPublishFromRenderer } from './agent-launch-tab-publish-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { TerminalNotPlacedError } from '../runtime/session-tabs/terminal-not-placed-error'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
@@ -81,7 +82,7 @@ export function registerRuntimeWindowLifecycle(
             : null
           : undefined
         if (expectedIdentity === null) {
-          reject(new Error('terminal_reveal_identity_required'))
+          reject(new TerminalNotPlacedError('terminal_reveal_identity_required'))
           return
         }
         const timer = setTimeout(() => {
@@ -96,7 +97,7 @@ export function registerRuntimeWindowLifecycle(
           clearTimeout(timer)
           ipcMain.removeListener('terminal:tabCreateReply', handler)
           if (reply.error) {
-            reject(new Error(reply.error))
+            reject(new TerminalNotPlacedError(reply.error))
             return
           }
           if (

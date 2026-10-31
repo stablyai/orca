@@ -6,6 +6,7 @@ import {
   type TerminalSurfaceCloseCapture
 } from '../../../shared/terminal-tab-close'
 import { OrcaRuntimeWithExplicitTerminalTabClose } from './explicit-terminal-tab-close'
+import type { AiVaultAgent } from '../../../shared/ai-vault-types'
 export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRuntimeWithExplicitTerminalTabClose {
   captureTerminalSwitchClose(
     handle: string,
@@ -112,7 +113,7 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
        * once, only after proof of the stop; a replace's chat names itself, so the window settles
        * only once that chat is there and its replace has had its pass.
        */
-      settleStoppedSource: (replacedBySessionId?: string) => {
+      settleStoppedSource: (replacedBySessionId?: string, agent?: AiVaultAgent) => {
         if (!keptStopped || stoppedSourceSettled) {
           return
         }
@@ -123,7 +124,8 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
           leafId: source.leafId,
           ptyId: addressedPty,
           incarnationId: incarnation,
-          ...(replacedBySessionId ? { replacedBySessionId } : {})
+          ...(replacedBySessionId ? { replacedBySessionId } : {}),
+          ...(agent ? { agent } : {})
         })
       },
       /** Retires the pane's bookkeeping; its presentation too, unless a replace or its exit already did. */

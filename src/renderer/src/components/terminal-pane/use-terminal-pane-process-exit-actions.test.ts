@@ -95,6 +95,27 @@ describe('useTerminalPaneProcessExitActions', () => {
     expect(mocks.buildPaneAccountRestartStartup).not.toHaveBeenCalled()
   })
 
+  it('restarts a pane a switch stopped as a fresh shell that replaces the stopped process', () => {
+    const { result } = renderHook(() => useTerminalPaneProcessExitActions(createController()))
+
+    act(() =>
+      result.current.handleRestartExitedPane({
+        paneId: PANE.id,
+        exitCode: 0,
+        reason: 'switch-stopped',
+        startup: null,
+        replacesPtyId: 'pty-stopped',
+        agent: 'codex'
+      })
+    )
+
+    expect(mocks.connectPanePty).toHaveBeenCalledWith(
+      PANE,
+      expect.anything(),
+      expect.objectContaining({ startup: null, replacesPtyId: 'pty-stopped' })
+    )
+  })
+
   it('still resumes Codex when an account switch restarts the pane', () => {
     mocks.readyRestartPtyIds = ['pty-1']
     mocks.pendingAgent = 'codex'

@@ -33,6 +33,7 @@ import { mainAgentState } from '../../../../shared/main-agent-status'
 import { captureSwitchStoppedCliTurn } from '../../../native-chat/agent-session-wire/structured-agent-session-switch-import'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { isAiVaultAgent } from '../../../../shared/ai-vault-types'
 
 type Prepared = Awaited<ReturnType<typeof prepareStructuredSessionSwitch>>
 
@@ -187,7 +188,8 @@ async function switchToChat(
         create?.worktree.replace(/^id:/, ''),
       boundary: before && stopped ? { source: before, stopped } : undefined,
       keepSource: (settle) => keepSource(() => settle(replacedBy)),
-      consented: execution.consented
+      consented: execution.consented,
+      agent: [create?.agent, host.deps.store.getRecord(sessionId)?.provider].find(isAiVaultAgent)
     })
   }
   deadline.check()

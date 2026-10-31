@@ -15,7 +15,7 @@ type Entry = {
   leafId: string
   stopped?: StoppedPane
   notice?: StoppedSwitchSource
-  watcher?: () => void
+  watcher?: (notice: StoppedSwitchSource) => void
 }
 
 const entries = new Map<string, Entry>()
@@ -78,10 +78,10 @@ function reconcile(): void {
     }
     if (!entry.stopped && !entry.notice) {
       entries.delete(key)
-    } else if (entry.watcher && settles(state, entry)) {
+    } else if (entry.watcher && entry.notice && settles(state, entry)) {
       const settle = entry.watcher
       entries.delete(key)
-      settle()
+      settle(entry.notice)
     }
   }
   if (entries.size === 0) {
@@ -138,11 +138,11 @@ export function noteStoppedSwitchSource(notice: StoppedSwitchSource): void {
  */
 export function watchStoppedSwitchSource(
   pane: { tabId: string; leafId: string } & StoppedPane,
-  settle: () => void
+  settle: (notice: StoppedSwitchSource) => void
 ): () => void {
   const entry = entryFor(pane.tabId, pane.leafId)
   entry.stopped = { ptyId: pane.ptyId, incarnationId: pane.incarnationId, exitCode: pane.exitCode }
-  const watcher = (): void => settle()
+  const watcher = (notice: StoppedSwitchSource): void => settle(notice)
   entry.watcher = watcher
   track()
   return () => {

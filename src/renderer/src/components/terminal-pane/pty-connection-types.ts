@@ -20,6 +20,7 @@ import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/termin
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
 
 export type PtyPaneStartup = {
   command: string
@@ -53,8 +54,11 @@ export type PtyPaneStartup = {
 export type PaneProcessExit = {
   paneId: number
   exitCode: number
-  reason: 'git-bash-console-capacity' | 'process-failed'
+  reason: 'git-bash-console-capacity' | 'process-failed' | 'switch-stopped'
   startup: PtyPaneStartup
+  /** A switch stopped this process: Restart replaces it with a fresh shell session in this pane. */
+  replacesPtyId?: string
+  agent?: AiVaultAgent
 }
 
 export type PtyConnectionDeps = {

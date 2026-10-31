@@ -4,6 +4,7 @@ import type { RuntimeTerminalCreate } from '../../../shared/runtime-terminal-cre
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../runtime-layout-apply'
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
+import { TerminalNotPlacedError } from './terminal-not-placed-error'
 
 export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
   abstract applyLayoutCommand(
@@ -35,7 +36,7 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
         ? terminal.paneKey.slice(tabId.length + 1)
         : undefined
     if (!pty || !tabId || !leafId) {
-      throw new Error('terminal_handle_stale')
+      throw new TerminalNotPlacedError('terminal_handle_stale')
     }
     const layoutTabId = chatTabId(args.chatSessionId)
     const snapshotTabId = `agent-session:${args.chatSessionId}`
@@ -80,7 +81,7 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
         replaces: { tabId: layoutTabId }
       })
       if (!reply.ok) {
-        throw new Error(reply.code)
+        throw new TerminalNotPlacedError(reply.code)
       }
       replaced = reply.result.closed?.includes(layoutTabId) === true
     }

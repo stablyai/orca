@@ -10,6 +10,7 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { interruptWorkingAgent } from '../../terminal-agent-interrupt'
 import { mainAgentState } from '../../../../shared/main-agent-status'
+import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
 import type { captureStructuredSwitchTerminalSource } from './structured-agent-session-switch-source'
 
 /**
@@ -29,6 +30,8 @@ export async function stopStructuredSwitchTerminalSource(input: {
   keepSource: (settle: (replacedBy: string | undefined) => void) => void
   /** False: the client left consent to this host, so a replying agent is refused, not stopped. */
   consented?: boolean
+  /** The stopped agent, named by the pane the window keeps on screen. */
+  agent?: AiVaultAgent
 }): Promise<void> {
   const { ctx, host, sessionId, close, deadline } = input
   // Checked where the stop is admitted (before the Escape, at its write, and before the exit), so
@@ -76,7 +79,7 @@ export async function stopStructuredSwitchTerminalSource(input: {
     await host.trackSwitchPhysical(sessionId, close.stop(replacing))
     // The window decides whether the stopped pane is still there; a chat that replaced it is
     // named so the window waits for that replace's own pass.
-    input.keepSource((replacedBy) => close.settleStoppedSource(replacedBy))
+    input.keepSource((replacedBy) => close.settleStoppedSource(replacedBy, input.agent))
   } catch {
     host.deps.logger.warn('switch source exit was not confirmed', {
       scope: 'session-switch',

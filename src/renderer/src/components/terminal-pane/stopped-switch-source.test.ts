@@ -160,13 +160,17 @@ it('shows the kept pane exited at its own code once main settles it, with no clo
     kept.stoppedForReplace()
     await flushAsyncTicks(5)
     expect(kept.died).not.toHaveBeenCalled()
-    kept.modules.sources.noteStoppedSwitchSource(kept.source)
+    kept.modules.sources.noteStoppedSwitchSource({ ...kept.source, agent: 'codex' })
     await flushAsyncTicks(5)
+    // It names the agent the switch stopped, and its Restart replaces that process with a fresh
+    // shell session: main kept the stopped process's binding, whose session is killed.
     expect(kept.died).toHaveBeenCalledExactlyOnceWith({
       paneId: kept.pane.id,
       exitCode: 0,
       startup: null,
-      reason: 'process-failed'
+      reason: 'switch-stopped',
+      replacesPtyId: kept.source.ptyId,
+      agent: 'codex'
     })
     expect(kept.automaticClose).not.toHaveBeenCalled()
     expect(kept.transport.sendInput('must not run\r', 'driving')).toBe(false)

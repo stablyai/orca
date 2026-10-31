@@ -12,6 +12,7 @@ import type {
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { nativeConversationContent } from '../../../ai-vault/structured-chat-cli-fork'
 import { prepareSwitchCliTranscript } from './structured-agent-session-switch-transcript'
+import { TerminalNotPlacedError } from '../../session-tabs/terminal-not-placed-error'
 
 /** Stop the chat with proof, spawn the terminal parked, then one layout replace into the chat's slot. */
 export async function executeStructuredSessionTerminalSwitch(
@@ -69,8 +70,10 @@ export async function executeStructuredSessionTerminalSwitch(
     })
   )
   let placed: Awaited<ReturnType<typeof ctx.runtime.placeSwitchTerminal>>
+  let dispatched = false
   try {
     check()
+    dispatched = true
     placed = await ctx.runtime.placeSwitchTerminal(record.location.workspaceId, {
       terminal,
       chatSessionId: sessionId,
@@ -79,9 +82,10 @@ export async function executeStructuredSessionTerminalSwitch(
       focusWindow: agentLaunchMovesHostWindow(ctx)
     })
   } catch (error) {
-    // A connected client hears this failure and keeps its chat, so nothing will show this
-    // terminal; after a lost connection the client's retry adopts it instead.
-    if (!ctx.signal?.aborted) {
+    // Ended only when nothing will show it: a connected client hears this failure and keeps its
+    // chat, and the layout owner never got or refused the placement. A timed-out reveal may have
+    // placed it, and after a lost connection the client's retry adopts it.
+    if (!ctx.signal?.aborted && (!dispatched || error instanceof TerminalNotPlacedError)) {
       await ctx.runtime.discardSwitchTerminal(terminal)
     }
     throw error

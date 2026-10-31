@@ -24,6 +24,7 @@ import {
   LEAF_B
 } from '../../main-owned-workspace-runtime-fixture'
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
+import { TerminalNotPlacedError } from '../../session-tabs/terminal-not-placed-error'
 import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
 import { refusedMobileSessionTabClose } from '../../mobile-session-tab-close-outcome'
 import { AGENT_SESSION_SWITCH_HOST_MS } from '../../../../shared/agent-session-switch-execution'
@@ -464,6 +465,8 @@ it('puts the switched terminal in the chat tab’s slot and closes the chat tab,
 
 it.each([
   ['connected', 1],
+  // The window may have placed it before the answer was lost: kept for the retry to adopt.
+  ['timed-out', 0],
   ['viewed', 0],
   ['adopted', 0],
   ['disconnected', 0]
@@ -494,7 +497,11 @@ it.each([
       ...(shape === 'adopted' ? { agentSessionDisposition: 'adopted' as const } : {})
     }))
     vi.spyOn(runtime, 'hasTerminalViewer').mockReturnValue(shape === 'viewed')
-    vi.spyOn(runtime, 'placeSwitchTerminal').mockRejectedValue(new Error('terminal_handle_stale'))
+    vi.spyOn(runtime, 'placeSwitchTerminal').mockRejectedValue(
+      shape === 'timed-out'
+        ? new Error('Terminal reveal timed out')
+        : new TerminalNotPlacedError('terminal_handle_stale')
+    )
     const result = await executeStructuredSessionSwitch(
       { sessionId: id, execution: { invocationId: `to-terminal-${shape}` } },
       { runtime, ...(shape === 'disconnected' ? { signal: AbortSignal.abort() } : {}) },
@@ -625,7 +632,9 @@ function keptSourceTerminal(options: KeptTerminalSwitchOptions = {}) {
     tabId: TAB_ID,
     leafId: LEAF_A,
     ptyId: PTY_A,
-    incarnationId
+    incarnationId,
+    // The stopped pane names it.
+    agent: 'codex' as const
   }
   return {
     runtime,
@@ -758,5 +767,6 @@ it('settles a kept source once when an addressed close stops it but cannot retir
   await expect(
     runtime.closeTerminal(source.handle, incarnationId, source.presentation)
   ).rejects.toThrow('terminal_pane_close_failed')
-  expect(settled).toHaveBeenCalledExactlyOnceWith(stoppedSource)
+  // An ordinary close, not a switch: no agent to name.
+  expect(settled).toHaveBeenCalledExactlyOnceWith({ ...stoppedSource, agent: undefined })
 })
