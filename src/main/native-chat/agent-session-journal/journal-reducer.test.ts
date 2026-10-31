@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import {
@@ -48,6 +49,23 @@ function fold(rows: JournalRow[]): JournalReducerState {
   const state = createJournalReducerState('session-1', EPOCH)
   for (const row of rows) {
     applyJournalRow(state, row)
+    expect(
+      journalInputOrder(state)
+        .unsettledSubmissions()
+        .map((entry) => entry.clientMessageId)
+        .sort()
+    ).toEqual(
+      [...state.submissions.values()]
+        .filter((entry) => entry.dispatchState === 'pending' || entry.dispatchState === 'unknown')
+        .map((entry) => entry.clientMessageId)
+        .sort()
+    )
+    for (const entry of state.submissions.values()) {
+      if (entry.dispatchState !== 'pending') {
+        expect(journalInputOrder(state).forced(entry.clientMessageId)).toBe(false)
+        expect(journalInputOrder(state).place(entry.clientMessageId)).toBeUndefined()
+      }
+    }
   }
   return state
 }
@@ -734,4 +752,35 @@ describe('re-adding a tombstoned row', () => {
     applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 4, fence: 1, ts: 1_004 }))
     expect(renderJournalState(state).items).toEqual([])
   })
+})
+
+it('retires unknown execution debt with the submission tombstone', () => {
+  const state = fold([
+    {
+      kind: 'submission',
+      clientMessageId: 'retired',
+      providerHandle: { kind: 'codex', threadId: 'thread-1' },
+      payloadFingerprint: 'retired',
+      body: userText('retired'),
+      handoverRecorded: true,
+      ...base(1)
+    },
+    {
+      kind: 'dispatch',
+      clientMessageId: 'retired',
+      state: 'unknown',
+      providerItemId: null,
+      reason: null,
+      ...base(2)
+    },
+    {
+      kind: 'tombstone',
+      itemId: agentJournalSubmissionKey('retired'),
+      revision: 1,
+      retireSubmission: true,
+      ...base(3)
+    }
+  ])
+  expect(state.submissions.has('retired')).toBe(false)
+  expect(journalInputOrder(state).unsettledSubmissions()).toEqual([])
 })

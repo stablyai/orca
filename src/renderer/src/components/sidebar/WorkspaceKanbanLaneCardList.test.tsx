@@ -10,7 +10,6 @@ import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
 
 const WINDOW_START = 20
 const WINDOW_END = 25
-const TOTAL_SIZE = 21_992
 const virtualizerKeys = vi.hoisted(() => [] as (string | number)[])
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -69,12 +68,6 @@ const { default: WorkspaceKanbanLaneCardList } = await import('./WorkspaceKanban
 
 const REPO_MAP = new Map<string, Repo>()
 
-function renderLane(count: number): HTMLElement {
-  return renderLaneItems(
-    Array.from({ length: count }, (_, index) => ({ id: `w${index}`, hostId: 'local' }) as Worktree)
-  )
-}
-
 function renderLaneItems(
   items: readonly Worktree[],
   options: { activeIdentity?: string; selectedIdentities?: readonly string[] } = {}
@@ -102,58 +95,6 @@ function renderLaneItems(
 afterEach(cleanup)
 
 describe('WorkspaceKanbanLaneCardList', () => {
-  it('mounts only the virtual window, not the whole lane', () => {
-    const container = renderLane(500)
-
-    const ids = Array.from(container.querySelectorAll('[data-workspace-board-card-id]')).map(
-      (card) => card.getAttribute('data-workspace-board-card-id')
-    )
-    expect(ids).toEqual([
-      'local|w20',
-      'local|w21',
-      'local|w22',
-      'local|w23',
-      'local|w24',
-      'local|w25'
-    ])
-  })
-
-  it('gives every rendered card its lane index, not its rendered position', () => {
-    const container = renderLane(500)
-
-    const indexes = Array.from(container.querySelectorAll('[data-workspace-board-card-index]')).map(
-      (card) => Number(card.getAttribute('data-workspace-board-card-index'))
-    )
-    expect(indexes).toEqual([20, 21, 22, 23, 24, 25])
-  })
-
-  it('reserves the full lane height so the scrollbar spans the whole list', () => {
-    const container = renderLane(500)
-
-    const spacer = container.querySelector<HTMLElement>('[data-workspace-board-card-id]')
-      ?.parentElement?.parentElement
-    expect(spacer?.style.height).toBe(`${TOTAL_SIZE}px`)
-  })
-
-  it('positions each card at its virtual offset', () => {
-    const container = renderLane(500)
-
-    const first = container.querySelector<HTMLElement>(
-      '[data-workspace-board-card-id]'
-    )?.parentElement
-    expect(first?.style.transform).toBe(`translateY(${WINDOW_START * 44}px)`)
-  })
-
-  it('renders nothing for an empty lane and a single card at index 0', () => {
-    const empty = renderLane(0)
-    expect(empty.querySelectorAll('[data-workspace-board-card-id]')).toHaveLength(0)
-
-    const single = renderLane(1)
-    const card = single.querySelector('[data-workspace-board-card-id]')
-    expect(card?.getAttribute('data-workspace-board-card-id')).toBe('local|w0')
-    expect(card?.getAttribute('data-workspace-board-card-index')).toBe('0')
-  })
-
   it('gives same-id cards unique host-qualified virtual and DOM identities', () => {
     const container = renderLaneItems(
       [

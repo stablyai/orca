@@ -11,11 +11,12 @@ export async function runCoalescedProbe<T>(
   probes: CoalescedProbes<T>,
   key: string,
   createProbe: (ownsKey: () => boolean) => Promise<T>,
-  staleAfterMs: number = PROBE_COALESCE_STALE_MS
+  staleAfterMs: number = PROBE_COALESCE_STALE_MS,
+  options: { userRefresh?: boolean } = {}
 ): Promise<T> {
   const now = Date.now()
   const existing = probes.get(key)
-  if (existing && now - existing.startedAt < staleAfterMs) {
+  if (!options.userRefresh && existing && now - existing.startedAt < staleAfterMs) {
     return existing.promise
   }
   if (existing) {

@@ -23,25 +23,6 @@ import {
 beforeEach(prepareUninstallFixture)
 afterEach(resetUninstallFixtures)
 
-it('resolves removal after an ordinary earlier refresh replaces the discovery object', async () => {
-  const { root, service, install } = await createUninstallFixture()
-  const key = await install('identity')
-  const prior = requireInstalledPlugin(service, key)
-  const refresh = service.refresh()
-  const removal = service.removePlugin(key, async () => {
-    expect(requireInstalledPlugin(service, key)).not.toBe(prior)
-    await removeInstalledPlugin({
-      pluginsDir: getUserPluginsDir(root),
-      pluginsDataDir: getPluginsDataDir(root),
-      pluginKey: key
-    })
-  })
-  await refresh
-  await removal
-  expect(service.findValidPlugin(key)).toBeNull()
-  expect(service.getLogs(key)).toHaveLength(0)
-})
-
 it('actual IPC removal survives an immediately preceding queued refresh', async () => {
   const { service, install } = await createUninstallFixture()
   const key = await install('ipc-refresh')

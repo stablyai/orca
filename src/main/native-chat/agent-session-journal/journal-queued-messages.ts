@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
 import {
   journalAttachmentClaimReceipt,
@@ -20,7 +21,6 @@ import type { JournalQueuedMessagesDeps, JournalSubmissionConsume } from './jour
 import {
   deriveQueuePauses,
   journalUserStopInForce,
-  nextSendableQueuedCard,
   type DerivedQueuePause,
   type JournalQueuePauseMarks
 } from './queued-message-pause'
@@ -46,7 +46,11 @@ export type JournalQueueRestatement = {
 }
 
 export class JournalQueuedMessages {
-  readonly editLeases = new QueuedMessageEditLeases(() => this.list())
+  readonly editLeases = new QueuedMessageEditLeases(
+    () => this.list(),
+    undefined,
+    (id) => this.get(id)
+  )
   private readonly legacy: LegacyQueuedCards
   private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
 
@@ -58,7 +62,13 @@ export class JournalQueuedMessages {
     return this.deps.sessionId
   }
 
+  inputState(): JournalReducerState {
+    const state = this.deps.state()
+    journalInputOrder(state).overlay(state, this.legacy.cards())
+    return state
+  }
   displayState(): JournalReducerState {
+    this.inputState()
     return this.legacy.displayState()
   }
 
@@ -77,11 +87,20 @@ export class JournalQueuedMessages {
   }
 
   get(messageId: string): QueuedMessageRow | null {
-    return (
-      this.deps.state().queue.cards.get(messageId) ??
-      this.legacy.cards().find((card) => card.messageId === messageId) ??
-      null
-    )
+    return this.deps.state().queue.cards.get(messageId) ?? this.legacy.get(messageId) ?? null
+  }
+
+  /** Selection reads identity summaries; current values are resolved after edits. */
+  nextInputCard(automatic = true): QueuedMessageRow | null {
+    const state = this.inputState()
+    const identity = journalInputOrder(state).head(state, this.deps.reopenFloor())
+    const card = identity ? this.get(identity.messageId) : null
+    return !card ||
+      card.state === 'returned' ||
+      journalInputOrder(state).paused(state, card, this.deps.reopenFloor()) ||
+      (automatic && this.editLeases.isHeld(card.messageId))
+      ? null
+      : card
   }
 
   // Card insertion, attachment claims and send receipt must commit together.
@@ -210,9 +229,7 @@ export class JournalQueuedMessages {
       card.fingerprint === input.fingerprint &&
       input.consumedAs !== input.messageId
     if (consumable && input.yieldsToPause) {
-      const cards = this.list()
-      const held = this.editLeases.heldIds(cards)
-      const next = nextSendableQueuedCard(this.derivePauses(cards), cards, held)
+      const next = this.nextInputCard()
       if (next?.messageId === input.messageId) {
         return
       }

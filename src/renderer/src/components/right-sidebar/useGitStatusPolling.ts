@@ -6,6 +6,7 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
 import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import { useRefreshOnHostContact } from './use-refresh-on-host-contact'
 import {
   hasInteractiveActiveGitStatusConsumer,
   shouldPollActiveGitStatus
@@ -248,6 +249,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [activeStatusPollScope, canFetchActiveWorktreeGitStatus])
+
+  useRefreshOnHostContact(activeExecutionHostId, statusSchedulerRef, canApplyScheduledStatusRef)
 
   const previousConsumerVisibilityRef = useRef({
     worktreeId: activeWorktreeId,

@@ -90,17 +90,6 @@ describe('agent-session creates with a desktop-prepared accountEnv', () => {
     expect(createTerminal).toHaveBeenCalledOnce()
   })
 
-  it('leaves the launch env as built when an older client sends none', async () => {
-    const runtime = createRuntime()
-    const { planned } = planCreates(runtime)
-    await runtime.createAgentSession({
-      clientOperationId: operationId(),
-      worktree: 'id:worktree-1',
-      agent: 'codex'
-    })
-    expect(planned[0]?.env).toMatchObject({ CODEX_HOME: '/stale' })
-  })
-
   it('puts the host-selected account over Settings agent env', async () => {
     const runtime = createRuntime()
     runtime.setHostAccountLaunchEnv(

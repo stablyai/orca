@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
+import { nativeChatQueueFollowUps } from '../../../shared/native-chat-follow-up-behavior'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../shared/onboarding-defaults'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -136,6 +137,32 @@ describe('Store', () => {
     expect(readDataFile()).not.toHaveProperty('settings.orchestrationHeartbeatsEnabled')
     expect(readDataFile()).not.toHaveProperty('settings.orchestrationHeartbeatIntervalMinutes')
   })
+
+  it.each([true, false, undefined])(
+    'preserves the queue preference %s through load, update, save and reload',
+    async (saved) => {
+      const persisted = getDefaultPersistedState(testState.dir)
+      const { nativeChatQueueFollowUps: _absent, ...settings } = persisted.settings
+      void _absent
+      writeDataFile({
+        ...persisted,
+        settings: {
+          ...settings,
+          ...(saved === undefined ? {} : { nativeChatQueueFollowUps: saved })
+        }
+      })
+      const store = await createStore()
+      expect(nativeChatQueueFollowUps(store.getSettings())).toBe(saved !== false)
+      store.updateSettings({ nativeChatQueueFollowUps: false })
+      store.flush()
+      expect(readDataFile()).toHaveProperty('settings.nativeChatQueueFollowUps', false)
+      const reloaded = await createStore()
+      expect(nativeChatQueueFollowUps(reloaded.getSettings())).toBe(false)
+      reloaded.updateSettings({ nativeChatQueueFollowUps: true })
+      reloaded.flush()
+      expect(readDataFile()).toHaveProperty('settings.nativeChatQueueFollowUps', true)
+    }
+  )
 
   it('returns default UI state when no data file exists', async () => {
     const store = await createStore()

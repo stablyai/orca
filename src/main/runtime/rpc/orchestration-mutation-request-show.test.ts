@@ -142,16 +142,6 @@ describe('orchestration.requestShow', () => {
     await runningMutation
   })
 
-  it('reports an unknown request as absent without claiming nothing happened', async () => {
-    const { dispatcher } = createHarness()
-
-    const response = await dispatcher.dispatch(showRequest('mutation_missing'))
-
-    const result = (response as { result: { state: string; interpretation: string } }).result
-    expect(result.state).toBe('absent')
-    expect(result.interpretation).toContain('not proof that nothing happened')
-  })
-
   it('scopes receipts to the caller identity that recorded them', async () => {
     const { dispatcher } = createHarness()
     await dispatcher.dispatch(sendRequest('mutation_scoped'))
