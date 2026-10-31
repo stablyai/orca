@@ -9,6 +9,8 @@ import {
 
 /** The NSIS uninstaller's flag (config/nsis/orca-installer-hooks.nsh); keep the two in sync. */
 export const WSL_HOLDER_UNINSTALL_FLAG = '--orca-uninstall-release-wsl-holders'
+/** Added only by the last install for this user: its HKCU/HKLM twin shares these hosts' servers. */
+export const WSL_SERVER_UNINSTALL_FLAG = '--orca-uninstall-stop-wsl-servers'
 
 // Uninstall must finish even if the process table or a distro never answers.
 const UNINSTALL_RELEASE_TIMEOUT_MS = 45_000
@@ -49,13 +51,15 @@ export function runWslHolderUninstallPreflight(argv: readonly string[] = process
   // Armed first: nothing below may leave the uninstaller waiting on an error box.
   const timeout = setTimeout(() => app.exit(1), UNINSTALL_RELEASE_TIMEOUT_MS)
   let holder: WslDistroHolder
-  let servers: WslHostUninstallStopDependencies
+  let servers: WslHostUninstallStopDependencies | undefined
   try {
     process.env.ORCA_BACKGROUND_LAUNCH = '1'
     // The same userData the app records holders under; before any other preflight step.
     ensureWindowsAppDataPath(app)
     holder = createWslDistroHolder({ userDataPath: app.getPath('userData') })
-    servers = wslHostUninstallStopDependencies(app.getPath('userData'))
+    servers = argv.includes(WSL_SERVER_UNINSTALL_FLAG)
+      ? wslHostUninstallStopDependencies(app.getPath('userData'))
+      : undefined
   } catch (error) {
     console.warn('[wsl] uninstall could not start releasing WSL distro holders:', error)
     clearTimeout(timeout)
