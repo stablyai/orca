@@ -5994,7 +5994,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts",
         // The hardening round: the third url door, the group projection, and both directions of the focus handoff.
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/preload/doc-preview-link-interception.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/window/main-window-webview-security.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/ipc/browser.test.ts",
@@ -6049,7 +6049,6 @@
         "src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts",
         "src/renderer/src/components/editor/EditorPanelShell.header.test.tsx",
         "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
-        "src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx",
         "src/shared/doc-preview-scheme.test.ts",
         "src/renderer/src/lib/doc-preview-grants.test.ts",
         "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
@@ -6293,13 +6292,6 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx",
-          "assertions": [
-            "the pane offers its guest focus when the reader is in this very preview",
-            "it refuses while the reader is in a terminal in front of it, in a different browser tab, or while its own page is not the active one"
-          ]
-        },
-        {
           "file": "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "assertions": [
             "a preview that is the reader's surface hands its guest focus, and one that is not leaves focus alone",
@@ -6329,6 +6321,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "failed",
           "durationSeconds": 7,
           "summary": "The adversarial pass answered the request for its own group-projection probe after this round landed, and it had measured a third observable this test was missing: the held-back group also has to leave the published layout tree, or the phone renders a split whose second pane can never hold anything. Adopted as a fourth assertion and re-run against the same sole delta, which now fails on the dangling-reference check and, with that check blinded, on the layout alone — group-left and group-right against the group-right the clean tree publishes. The two probes agreed on everything else, including that the tab list is unchanged under this mutant, which is why an assertion reading only the tab list cannot reach the site at all."
@@ -6338,6 +6331,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "passed",
           "durationSeconds": 3,
           "summary": "The adversarial pass's four coverage findings, landed and pinned: 58/58. The third url door now keeps a document page blank and names it by its document, the group projection holds a document back from published groups as well as from the tab list, the pane's focus handoff is pinned in the widening direction as well as the narrowing one, and the handoff is re-offered when the window takes focus back."
@@ -6347,6 +6341,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "failed",
           "durationSeconds": 3,
           "summary": "Three sole-delta mutants on the third url door, each failing only the new store test: committing the reported url onto a document page, dropping the document from the title normalizer there (which renames the tab New Tab, since a blank url is what that fallback reads), and marking a blank document page loading. The ordinary-page half of the same test passes under all three, so the door is pinned as a document-only refusal rather than as a door that writes nothing."
@@ -6356,6 +6351,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "failed",
           "durationSeconds": 3,
           "summary": "Two sole-delta mutants on the mobile publish boundary. Dropping the document from the group projection's browser ids fails only the new grouped test — the tab list stays correct because the per-tab guard still refuses the tab, and what breaks is a published group whose order and active tab name a tab the phone is never sent. This is the survivor the adversarial pass reported: it survives the whole suite without this test, because no other test in it has tab groups. Dropping the per-tab guard instead fails only the ungrouped test, so the two halves of the boundary are pinned separately."
@@ -6365,6 +6361,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "failed",
           "durationSeconds": 3,
           "summary": "Three sole-delta mutants widening the focus handoff, the direction the adversarial pass found uncovered: dropping the page-activity half, dropping the active-tab-type half, and dropping the active-browser-tab half each fail exactly one of the pane's refusals — the inactive page, the terminal in front, and the other browser tab respectively. The presence half of that test passes under all three, so a pane that had stopped offering focus at all would still fail rather than pass the refusals vacuously."
@@ -6374,6 +6371,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "failed",
           "durationSeconds": 3,
           "summary": "One sole-delta mutant dropping the window-focus re-offer: the guest is focused once at mount and never again after the window comes back, which is the desktop gap behind it — another app taking the front leaves the preview's only route out shut until the pane remounts. It fails only the new re-offer test, and the refusing-preview case beside it stays green, so the re-offer is pinned as gated rather than unconditional."
