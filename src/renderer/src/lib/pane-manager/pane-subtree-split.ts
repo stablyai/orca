@@ -34,6 +34,7 @@ type SplitPaneAroundLeafIdsArgs = {
   ) => void
   getDragCallbacks: () => DragReorderCallbacks
   setActivePaneId: (paneId: number | null) => void
+  getActivePaneId: () => number | null
   isDestroyed: () => boolean
 }
 
@@ -62,6 +63,7 @@ export function splitPaneAroundMountedSubtree(
     publishPaneCreated: args.publishPaneCreated,
     getDragCallbacks: args.getDragCallbacks,
     setActivePaneId: args.setActivePaneId,
+    getActivePaneId: args.getActivePaneId,
     isDestroyed: args.isDestroyed
   })
 }

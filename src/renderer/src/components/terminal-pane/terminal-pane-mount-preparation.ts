@@ -24,7 +24,7 @@ import type { TerminalHttpLinkActionDestinations } from './terminal-url-link-hit
 import type { PtyConnectionDeps } from './pty-connection-types'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
-import { fitAndFocusPanes, fitPanes } from './pane-helpers'
+import { createQueuedPaneResize, fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { normalizeTerminalLayoutSnapshot } from './layout-serialization'
 import { applyTerminalAppearance } from './terminal-appearance'
@@ -179,30 +179,19 @@ export function prepareTerminalPaneMount(
     getLinkActionContext,
     sourceTabId: deps.tabId
   }
-  let resizeRaf: number | null = null
-  const queueResizeAll = (focusActive: boolean): void => {
-    if (resizeRaf !== null) {
-      cancelAnimationFrame(resizeRaf)
+  const queuedResize = createQueuedPaneResize((focusActive) => {
+    const manager = deps.managerRef.current
+    if (!manager) {
+      return
     }
-    resizeRaf = requestAnimationFrame(() => {
-      resizeRaf = null
-      const manager = deps.managerRef.current
-      if (!manager) {
-        return
-      }
-      if (focusActive) {
-        fitAndFocusPanes(manager)
-      } else {
-        fitPanes(manager)
-      }
-    })
-  }
-  const cancelResizeAll = (): void => {
-    if (resizeRaf !== null) {
-      cancelAnimationFrame(resizeRaf)
-      resizeRaf = null
+    if (focusActive) {
+      fitAndFocusPanes(manager)
+    } else {
+      fitPanes(manager)
     }
-  }
+  })
+  const queueResizeAll = queuedResize.queue
+  const cancelResizeAll = queuedResize.cancel
   const syncCanExpandState = (): void => {
     deps.setTabCanExpandPane(deps.tabId, (deps.managerRef.current?.getPanes().length ?? 1) > 1)
   }

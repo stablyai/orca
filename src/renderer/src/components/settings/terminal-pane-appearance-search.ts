@@ -91,5 +91,22 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
       ...translateSearchKeyword('auto.components.settings.terminal.search.f036794286', 'active')
     ]
   },
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.focusNewSplitPane.title',
+      'Focus New Split Pane'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.focusNewSplitPane.description',
+      'A new split pane takes keyboard focus as soon as it opens. Turn off to keep typing in the pane you split from.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f5d1e3d472', 'focus'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.de7bc1d5f5', 'split'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.846a7a1204', 'pane'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.fd6c24313d', 'new'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f036794286', 'active')
+    ]
+  },
   ...getTerminalClipboardSearchEntries()
 ])

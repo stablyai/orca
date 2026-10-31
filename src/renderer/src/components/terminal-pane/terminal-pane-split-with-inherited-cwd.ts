@@ -1,6 +1,7 @@
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-terminal-actions'
+import { useAppStore } from '@/store'
 import {
   isHostTabPane,
   notifyHostTabSplitRefused,
@@ -89,7 +90,9 @@ function splitLocally(args: SplitArgs, cwd: () => SplitCwd): void {
   if (!manager) {
     return
   }
-  const createdPane = manager.splitPane(args.pane.id, args.direction, cwd())
+  const focusNewPane = useAppStore.getState().settings?.terminalFocusNewSplitPane !== false
+  const focusOption = focusNewPane ? {} : { focusNewPane: false }
+  const createdPane = manager.splitPane(args.pane.id, args.direction, { ...cwd(), ...focusOption })
   recordCreatedTerminalPaneSplit(createdPane, {
     source: args.source,
     direction: args.direction

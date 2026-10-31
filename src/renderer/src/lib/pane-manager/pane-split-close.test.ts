@@ -150,6 +150,7 @@ describe('splitManagedPane', () => {
       publishPaneCreated,
       getDragCallbacks: () => ({}) as never,
       setActivePaneId,
+      getActivePaneId: () => newPane.id,
       isDestroyed: () => false
     })
 
@@ -199,6 +200,7 @@ describe('splitManagedPane', () => {
       publishPaneCreated: vi.fn(),
       getDragCallbacks: () => ({}) as never,
       setActivePaneId: vi.fn(),
+      getActivePaneId: () => newPane.id,
       isDestroyed: () => false
     })
 

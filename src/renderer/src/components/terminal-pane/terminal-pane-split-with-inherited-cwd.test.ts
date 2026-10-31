@@ -7,6 +7,7 @@ import { createDeferred } from './pty-connection-test-async'
 import type { splitPaneInMain, splitServerPane } from './terminal-pane-split-in-main'
 
 const mocks = vi.hoisted(() => {
+  const settings: { terminalFocusNewSplitPane?: boolean } | null = {}
   return {
     layoutOwnerIsMain: false,
     recordCreatedTerminalPaneSplit: vi.fn(),
@@ -16,7 +17,8 @@ const mocks = vi.hoisted(() => {
     splitWebRuntimeTerminal: vi.fn(),
     readHostPublishedSplitSourcePtyId: vi.fn<() => string | null>(),
     isHostTabPane: vi.fn<() => boolean>(),
-    notifyHostTabSplitRefused: vi.fn()
+    notifyHostTabSplitRefused: vi.fn(),
+    settings
   }
 })
 
@@ -50,6 +52,10 @@ vi.mock('./terminal-pane-split-completion', () => ({
   recordCreatedTerminalPaneSplit: mocks.recordCreatedTerminalPaneSplit
 }))
 
+vi.mock('@/store', () => ({
+  useAppStore: { getState: () => ({ settings: mocks.settings }) }
+}))
+
 function makeManager(splitPane: ReturnType<typeof vi.fn>): PaneManager {
   // A pane counts as mounted once a split that placed it returned a pane.
   const getNumericIdForLeaf = (leafId: string): number | null =>
@@ -78,6 +84,7 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     mocks.resolveSplitCwd.mockReset()
     mocks.splitWebRuntimeTerminal.mockReset()
     mocks.splitWebRuntimeTerminal.mockReturnValue(false)
+    mocks.settings = {}
     mocks.readHostPublishedSplitSourcePtyId.mockReset().mockReturnValue(null)
     mocks.isHostTabPane.mockReset().mockReturnValue(false)
     mocks.notifyHostTabSplitRefused.mockReset()
@@ -311,6 +318,38 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     expect(staleSplitPane).not.toHaveBeenCalled()
     expect(mocks.resolveSplitCwd).not.toHaveBeenCalled()
     expect(mocks.recordCreatedTerminalPaneSplit).not.toHaveBeenCalled()
+  })
+
+  it('asks the pane manager not to focus the new pane when Focus New Split Pane is off', () => {
+    mocks.settings = { terminalFocusNewSplitPane: false }
+    const cwd = createDeferred<string>()
+    mocks.resolveSplitCwd.mockReturnValue(cwd.promise)
+    const splitPane = vi.fn()
+    const base = {
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      manager: makeManager(splitPane),
+      paneTransports: new Map<number, PtyTransport>(),
+      fallbackCwd: '/fallback',
+      pane: { id: 1, leafId: 'leaf-1' } as ManagedPane,
+      direction: 'vertical',
+      source: 'keyboard'
+    } as const
+
+    splitTerminalPaneWithInheritedCwd({
+      ...base,
+      paneCwdMap: new Map([[1, { cwd: '/cached', confirmed: true }]])
+    })
+    splitTerminalPaneWithInheritedCwd({ ...base, paneCwdMap: new Map() })
+
+    expect(splitPane).toHaveBeenNthCalledWith(1, 1, 'vertical', {
+      cwd: '/cached',
+      focusNewPane: false
+    })
+    expect(splitPane).toHaveBeenNthCalledWith(2, 1, 'vertical', {
+      cwdPromise: cwd.promise,
+      focusNewPane: false
+    })
   })
 
   it('never asks main in a window-owned build', () => {

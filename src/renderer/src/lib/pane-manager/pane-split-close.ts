@@ -49,6 +49,7 @@ type SplitManagedPaneArgs = {
   ) => void
   getDragCallbacks: () => DragReorderCallbacks
   setActivePaneId: (paneId: number | null) => void
+  getActivePaneId: () => number | null
   isDestroyed: () => boolean
 }
 
@@ -66,14 +67,25 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
   const isVertical = args.direction === 'vertical'
   const divider = args.createDivider(isVertical)
 
+  const activateNewPane = args.opts?.focusNewPane !== false
+  const retainedActivePaneId = activateNewPane ? newPane.id : existing.id
+
   const movedPaneStates = prepareMovedPanesForSplit(existingContainer, existing, args.panes)
 
   wrapInSplit(existingContainer, newPane.container, isVertical, divider, {
     ratio: args.opts?.ratio,
     newPaneFirst: args.newPaneFirst
   })
-  args.setActivePaneId(newPane.id)
-  openSplitPane(args, newPane, existing.leafId, args.opts?.cwd)
+  if (activateNewPane) {
+    args.setActivePaneId(newPane.id)
+  } else if (args.getActivePaneId() !== existing.id) {
+    args.setActivePaneId(existing.id)
+  }
+  openSplitPane(args, newPane, existing.leafId, {
+    cwd: args.opts?.cwd,
+    opacityActivePaneId: retainedActivePaneId,
+    focusNewPane: activateNewPane
+  })
 
   for (const movedPaneState of movedPaneStates) {
     scheduleSplitScrollRestore(
@@ -140,19 +152,28 @@ function findManagedPanesInContainer(
   return movedPanes
 }
 
+type OpenSplitPaneOptions = {
+  cwd?: string
+  opacityActivePaneId: number
+  focusNewPane: boolean
+}
+
 function openSplitPane(
   args: SplitManagedPaneArgs,
   newPane: ManagedPaneInternal,
   parentLeafId: string,
-  cwd?: string
+  opts: OpenSplitPaneOptions
 ): void {
+  const { cwd } = opts
   openTerminal(newPane, {
     ligatures: args.managerOptions.terminalLigaturesEnabled?.(),
     inlineImages: args.managerOptions.terminalInlineImagesEnabled?.()
   })
-  applyPaneOpacity(args.panes.values(), newPane.id, args.styleOptions)
+  applyPaneOpacity(args.panes.values(), opts.opacityActivePaneId, args.styleOptions)
   applyDividerStyles(args.root, args.styleOptions)
-  newPane.terminal.focus()
+  if (opts.focusNewPane) {
+    newPane.terminal.focus()
+  }
   updateMultiPaneState(args.getDragCallbacks())
   // Forward creation hints to inherit local cwd or adopt the runtime-spawned PTY in web splits.
   args.publishPaneCreated(newPane, {
