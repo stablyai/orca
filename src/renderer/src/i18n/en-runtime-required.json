@@ -1257,6 +1257,9 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} unseen failed runs",
+    "unseenFailures_one": "{{count}} unseen failed runs",
+    "unseenFailures_other": "{{count}} unseen failed runs",
     "extraAgentArgs": {
       "errors": {
         "controlCharacters": "Extra arguments cannot contain control characters or line breaks.",

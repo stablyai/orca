@@ -71,6 +71,7 @@ export function startAutomationOutcomeNotifications(
         if (!stopped) {
           return presentAppNotificationResult(result, settings)
         }
+        return undefined
       })
       .catch((error) => console.warn('[automations] Could not present outcome:', error))
   }

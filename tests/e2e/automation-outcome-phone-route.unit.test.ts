@@ -1,67 +1,67 @@
-import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
+import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
-import { fixture } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
-import { stubRuntime } from '../runtime/rpc/terminal-multiplex-test-harness'
-import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
-import { publishAutomationOutcome } from './automation-outcome-notification'
-import type { RpcClient } from '../../../mobile/src/transport/rpc-client'
-import { subscribeToDesktopNotifications } from '../../../mobile/src/notifications/mobile-notifications'
-import { pushNotificationRouteData } from '../../../mobile/src/notifications/push-receive'
-import { getNotificationNavigationTarget } from '../../../mobile/src/notifications/notification-routing'
+import { fixture } from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
+import { stubRuntime } from '../../src/main/runtime/rpc/terminal-multiplex-test-harness'
+import { RuntimeMobileNotificationController } from '../../src/main/runtime/runtime-mobile-notification-controller'
+import { publishAutomationOutcome } from '../../src/main/automations/automation-outcome-notification'
+import type { RpcClient } from '../../mobile/src/transport/rpc-client'
+import { subscribeToDesktopNotifications } from '../../mobile/src/notifications/mobile-notifications'
+import { pushNotificationRouteData } from '../../mobile/src/notifications/push-receive'
+import { getNotificationNavigationTarget } from '../../mobile/src/notifications/notification-routing'
 
 const phone = vi.hoisted(() => ({
   present: vi.fn(),
   support: { completed: Promise.resolve(false), signal: new AbortController().signal },
   hosts: [{ id: 'phone-host', publicKeyB64: 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=' }]
 }))
-vi.mock('../../../mobile/src/notifications/push-token', () => ({
+vi.mock('../../mobile/src/notifications/push-token', () => ({
   getDevicePushToken: async () => null
 }))
-vi.mock('../../../mobile/src/notifications/push-registration', () => ({
+vi.mock('../../mobile/src/notifications/push-registration', () => ({
   getHostPushSupported: () => false,
   getHostPushSupportCompletion: () => phone.support
 }))
-vi.mock('../../../mobile/src/notifications/notification-delivery-preferences', () => ({
+vi.mock('../../mobile/src/notifications/notification-delivery-preferences', () => ({
   loadNotificationDeliveryPreferences: async () => ({
     onlyWhenDesktopAway: false,
     sound: false,
     suppressWhileViewing: false
   })
 }))
-vi.mock('../../../mobile/src/transport/host-store', () => ({
+vi.mock('../../mobile/src/transport/host-store', () => ({
   loadHostCatalog: async () => phone.hosts
 }))
-vi.mock('../../../mobile/src/notifications/desktop-notification-channel', () => ({
+vi.mock('../../mobile/src/notifications/desktop-notification-channel', () => ({
   ensureDesktopNotificationChannel: async () => {},
   DESKTOP_NOTIFICATION_CHANNEL_ID: 'fixture'
 }))
-vi.mock('../../../mobile/src/notifications/android-foreground-push', () => ({
+vi.mock('../../mobile/src/notifications/android-foreground-push', () => ({
   presentForegroundPush: phone.present
 }))
-vi.mock('../../../mobile/src/notifications/push-socket-dismissal', () => ({
+vi.mock('../../mobile/src/notifications/push-socket-dismissal', () => ({
   dismissHostPushNotification: async () => {}
 }))
-vi.mock('../../../mobile/src/notifications/push-dismissal-reconciliation', () => ({
+vi.mock('../../mobile/src/notifications/push-dismissal-reconciliation', () => ({
   requestNotificationCatchup: async () => {}
 }))
-vi.mock('../../../mobile/src/notifications/notification-permissions', () => ({}))
-vi.mock('../../../mobile/src/notifications/push-dismissal-watermarks', () => ({
+vi.mock('../../mobile/src/notifications/notification-permissions', () => ({}))
+vi.mock('../../mobile/src/notifications/push-dismissal-watermarks', () => ({
   wasPushDismissed: () => false
 }))
-vi.mock('../../../mobile/src/notifications/push-tray-dismissal', () => ({
+vi.mock('../../mobile/src/notifications/push-tray-dismissal', () => ({
   dismissPresentedPushNotification: async () => {}
 }))
-vi.mock('../../../mobile/src/notifications/notification-viewing-policy', () => ({
+vi.mock('../../mobile/src/notifications/notification-viewing-policy', () => ({
   shouldSuppressNotificationWhileViewing: () => false
 }))
-vi.mock('../../../mobile/src/storage/preferences', () => ({
+vi.mock('../../mobile/src/storage/preferences', () => ({
   loadPushNotificationsEnabled: async () => true
 }))
-vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../telemetry/cohort-classifier', () => ({
+vi.mock('../../src/main/telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../src/main/telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../ssh/config/ssh-config-parser', () => ({
+vi.mock('../../src/main/ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))

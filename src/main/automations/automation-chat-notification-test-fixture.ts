@@ -85,6 +85,10 @@ export async function complete(rig: QueuedMessageTestRig, message: string, turnI
   await rig.settleAccepted(message, turnId)
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const accepted = journal.submission(message)!
+  const userItemId = accepted.providerItemId
+  if (!userItemId) {
+    throw new Error('Expected canonical provider item after accepted submission')
+  }
   const sink = rig.providerEvents()
   const identity = { provider: 'codex' as const, threadId: THREAD, turnId, ordinal: 1 }
   sink.appendItem(
@@ -92,7 +96,7 @@ export async function complete(rig: QueuedMessageTestRig, message: string, turnI
     {
       kind: 'turn',
       turnId,
-      userItemId: accepted.providerItemId,
+      userItemId,
       state: 'completed',
       outcome: 'success'
     },

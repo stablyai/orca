@@ -22947,6 +22947,10 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} exécutions échouées non consultées",
+    "unseenFailures_one": "{{count}} exécution échouée non consultée",
+    "unseenFailures_many": "{{count}} exécutions échouées non consultées",
+    "unseenFailures_other": "{{count}} exécutions échouées non consultées",
     "runFailures": {
       "noDispatchHost": "Aucune fenêtre Orca n’était disponible pour lancer l’automatisation.",
       "unevaluableSchedule": "Orca n’a pas pu évaluer cette automatisation et a ignoré cette occurrence.",

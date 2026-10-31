@@ -22073,6 +22073,8 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} 次未查看的失敗執行",
+    "unseenFailures_other": "{{count}} 次未查看的失敗執行",
     "runFailures": {
       "noDispatchHost": "沒有可用來啟動自動化的 Orca 視窗。",
       "unevaluableSchedule": "Orca 無法評估此自動化，已略過此次執行。",

@@ -22831,6 +22831,9 @@
     "legacyModelCount": "{{total}} models"
   },
   "automations": {
+    "unseenFailures": "{{count}} unseen failed runs",
+    "unseenFailures_one": "{{count}} unseen failed runs",
+    "unseenFailures_other": "{{count}} unseen failed runs",
     "runFailures": {
       "noDispatchHost": "No Orca window was available to launch the automation.",
       "unevaluableSchedule": "Orca could not evaluate this automation and skipped the occurrence.",

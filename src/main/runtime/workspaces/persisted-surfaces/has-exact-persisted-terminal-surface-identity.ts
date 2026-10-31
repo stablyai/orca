@@ -1,3 +1,4 @@
+import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
@@ -43,6 +44,8 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
   protected abstract getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId
   protected abstract getTerminalTopologyRevision(worktreeId: string): number
   protected abstract getPtyDisplayRecord(pty: RuntimePtyWorktreeRecord): RuntimePtyWorktreeRecord
+
+  abstract openedAgentSessionRecordStore(): AgentSessionRecordStore | null
 
   abstract notifyMobileSessionTabsChanged(worktreeId?: string): void
 

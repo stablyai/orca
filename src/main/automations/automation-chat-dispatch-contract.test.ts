@@ -1,3 +1,4 @@
+import type { AutomationRun } from '../../shared/automations-types'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as PrecheckRunner from './precheck-runner'
 import { setup, listen, complete } from './automation-chat-notification-test-fixture'
@@ -66,7 +67,7 @@ it('delivers B while real scheduled A parks, closes/reconnects, then settles A e
     timezone: 'UTC',
     rrule: 'FREQ=DAILY',
     dtstart: 1_800_000_000_000,
-    surface: 'chat',
+    launchSetupPatch: { surface: 'chat' },
     precheck: { command: 'external-fixture-check', timeoutSeconds: 600 }
   })
   const run = store.createAutomationRun(automation, 1_800_000_000_000, 'scheduled')
@@ -241,7 +242,7 @@ it('restores retained final and nonfinal receipts before adoption, then retires 
   held.host = rig.host
   const { store } = await fixture()
   const automation = store.listAutomations()[0]
-  const retained = []
+  const retained: AutomationRun[] = []
   for (const status of ['completed', 'dispatched'] as const) {
     const run = store.createAutomationRun(automation, 1_800_000_000_000 + retained.length, 'manual')
     const id = automationRunOperationId(run, 'reuse-send')

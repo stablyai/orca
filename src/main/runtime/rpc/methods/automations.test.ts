@@ -202,10 +202,13 @@ it('runs runSeen through the actual owner fence and primary save before replying
   const changed = vi.fn()
   const runtime = stubRuntime({
     getRuntimeId: () => 'seen-contract',
-    notifyAutomationsChanged: changed,
+    notifyAutomationsChanged: changed
+  })
+  Object.assign(runtime, {
+    store,
+    automation: controller,
     automationChangeSelector: store.automationChangeSelector.bind(store)
   })
-  Object.assign(runtime, { store, automation: controller })
   runtime.markAutomationRunSeen =
     OrcaRuntimeWithAutomationOperations.prototype.markAutomationRunSeen.bind(runtime)
   const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })

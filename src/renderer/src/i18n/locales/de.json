@@ -22405,6 +22405,9 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} ungesehene fehlgeschlagene Läufe",
+    "unseenFailures_one": "{{count}} ungesehener fehlgeschlagener Lauf",
+    "unseenFailures_other": "{{count}} ungesehene fehlgeschlagene Läufe",
     "runFailures": {
       "noDispatchHost": "Zum Starten der Automatisierung war kein Orca-Fenster verfügbar.",
       "unevaluableSchedule": "Orca konnte diese Automatisierung nicht auswerten und hat diese Ausführung übersprungen.",

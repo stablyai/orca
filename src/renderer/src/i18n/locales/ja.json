@@ -22259,6 +22259,8 @@
     }
   },
   "automations": {
+    "unseenFailures": "未確認の失敗した実行 {{count}} 件",
+    "unseenFailures_other": "未確認の失敗した実行 {{count}} 件",
     "runFailures": {
       "noDispatchHost": "オートメーションを起動できる Orca ウィンドウがありませんでした。",
       "unevaluableSchedule": "Orca はこのオートメーションを評価できず、今回の実行をスキップしました。",

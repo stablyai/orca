@@ -52,9 +52,9 @@ const settledRun: AutomationRunOutcome = {
   }
 }
 let local: (event: RuntimeClientEvent) => void
-let stopped: ReturnType<typeof vi.fn>
+let stopped = vi.fn<() => void>()
 async function start() {
-  stopped = vi.fn()
+  stopped = vi.fn<() => void>()
   const runtime = stubRuntime({
     onClientEvent: vi.fn((listener) => {
       local = listener

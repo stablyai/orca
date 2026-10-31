@@ -22388,6 +22388,9 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} görülmemiş başarısız çalıştırma",
+    "unseenFailures_one": "{{count}} görülmemiş başarısız çalıştırma",
+    "unseenFailures_other": "{{count}} görülmemiş başarısız çalıştırma",
     "runFailures": {
       "noDispatchHost": "Otomasyonu başlatmak için kullanılabilir bir Orca penceresi yoktu.",
       "unevaluableSchedule": "Orca bu otomasyonu değerlendiremedi ve bu çalıştırmayı atladı.",

@@ -22259,6 +22259,8 @@
     }
   },
   "automations": {
+    "unseenFailures": "확인하지 않은 실패한 실행 {{count}}개",
+    "unseenFailures_other": "확인하지 않은 실패한 실행 {{count}}개",
     "runFailures": {
       "noDispatchHost": "자동화를 시작할 수 있는 Orca 창이 없었습니다.",
       "unevaluableSchedule": "Orca가 이 자동화를 평가할 수 없어 이번 실행을 건너뛰었습니다.",
