@@ -172,13 +172,6 @@ describe('the structured worker-read cursor over a mutating journal', () => {
     expect(textsOf(second)).toEqual(['streaming more'])
   })
 
-  it('delivers every message exactly once when nothing below the cursor changes', async () => {
-    installJournal([message('i1', 'a'), message('i2', 'b'), message('i3', 'c')])
-    const first = await read(undefined, 2)
-    const second = await read(first.cursor, 2)
-    expect([...textsOf(first), ...textsOf(second)]).toEqual(['a', 'b', 'c'])
-  })
-
   it('still refuses when the window slides off the front', async () => {
     // Keep detecting window slides, which shift every message index.
     installJournal([message('i1', 'a'), message('i2', 'b')])

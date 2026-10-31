@@ -18,7 +18,7 @@ import {
   isStructuredAgentSessionToolAction,
   structuredAgentSessionToolCallBlock,
   type StructuredAgentSessionToolAction
-} from './structured-agent-session-tool-call-block'
+} from './agent-session/structured-agent-session-tool-call-block'
 
 /** Host current-work scope excludes turns from ended generations. */
 export function activeStructuredAgentSessionTurnId(

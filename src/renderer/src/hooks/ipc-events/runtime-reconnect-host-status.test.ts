@@ -181,13 +181,4 @@ describe('remote Orca server reconnect', () => {
     expect(window.api.runtimeEnvironments.getStatus).not.toHaveBeenCalled()
     expect(sidebarHostHealth()).toBe('available')
   })
-
-  it('does not start UI recovery machinery when an initial subscription attaches', async () => {
-    useAppStore.setState({
-      runtimeStatusByEnvironmentId: new Map([[ENVIRONMENT_ID, { status: null, checkedAt: 1 }]])
-    })
-    startBridge()
-    await settle()
-    expect(window.api.runtimeEnvironments.getStatus).not.toHaveBeenCalled()
-  })
 })

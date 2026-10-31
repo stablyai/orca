@@ -3,9 +3,9 @@
 
 import type {
   SubmissionRejectionFact,
-  AgentSessionArgumentProblem,
   ProviderDiagnostic
 } from '../../../shared/agent-session-failure'
+import type { AgentSessionArgumentProblem } from '../../../shared/agent-session/agent-session-argument-problem'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import {
   agentSessionRefusalFromReference,

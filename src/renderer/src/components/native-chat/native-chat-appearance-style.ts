@@ -46,6 +46,7 @@ export function selectNativeChatAppearanceSettings(
     terminalUseSeparateLightTheme: settings?.terminalUseSeparateLightTheme,
     terminalCustomThemes: settings?.terminalCustomThemes,
     terminalColorOverrides: settings?.terminalColorOverrides,
+    terminalColorOverridesLight: settings?.terminalColorOverridesLight,
     terminalFontFamily: settings?.terminalFontFamily,
     terminalFontSize: settings?.nativeChatAppearance?.matchTerminalInterface
       ? settings.terminalFontSize
@@ -107,7 +108,8 @@ export function nativeChatAppearanceStyle(
         terminalThemeLight: settings?.terminalThemeLight ?? '',
         terminalUseSeparateLightTheme: settings?.terminalUseSeparateLightTheme ?? false,
         terminalCustomThemes: settings?.terminalCustomThemes,
-        terminalColorOverrides: settings?.terminalColorOverrides
+        terminalColorOverrides: settings?.terminalColorOverrides,
+        terminalColorOverridesLight: settings?.terminalColorOverridesLight
       },
       systemPrefersDark
     )

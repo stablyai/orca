@@ -2,11 +2,11 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   providerDiagnosticOf,
-  type AgentSessionArgumentProblem,
   type SubmissionRejectionFact,
   type AgentSessionFailureKind,
   type ProviderDiagnostic
 } from '../../../shared/agent-session-failure'
+import type { AgentSessionArgumentProblem } from '../../../shared/agent-session/agent-session-argument-problem'
 import type { AgentSessionRefusalReason } from '../../../shared/agent-session-refusal-details'
 import {
   agentSessionFailureWords,

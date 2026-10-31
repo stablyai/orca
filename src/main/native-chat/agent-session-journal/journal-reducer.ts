@@ -1,4 +1,10 @@
 import { journalItemDeclaresEcho } from './journal-item-echo'
+import {
+  journalInputOrder,
+  initializeJournalInputOrder,
+  type JournalInputOrder
+} from './journal-input-order'
+import type { JournalInputEntry, JournalInputCard } from './journal-input-lineage'
 // Live append and replay share this fold. Revisions change content, preserving creation position
 // and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
 
@@ -79,11 +85,17 @@ export type JournalReducerState = {
   normalizedHandOffs: Set<string>
   /** The queued messages, folded from their own rows and their hand-offs (`journal-queue-fold.ts`). */
   queue: JournalQueueState
+  inputEntries: Map<string, JournalInputEntry>
+  inputCards: Map<string, JournalInputCard>
   historyOrigin: JournalHistoryOrigin | null
 }
 
-export function createJournalReducerState(sessionId: string, epoch: string): JournalReducerState {
-  return {
+export function createJournalReducerState(
+  sessionId: string,
+  epoch: string,
+  originalAcceptance?: ConstructorParameters<typeof JournalInputOrder>[1]
+): JournalReducerState {
+  const state: JournalReducerState = {
     sessionId,
     epoch,
     lastSequence: 0,
@@ -108,8 +120,12 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     queuedHandOffPlaces: new Map(),
     normalizedHandOffs: new Set(),
     queue: createJournalQueueState(),
+    inputEntries: new Map(),
+    inputCards: new Map(),
     historyOrigin: null
   }
+  initializeJournalInputOrder(state, originalAcceptance)
+  return state
 }
 
 export function applyJournalRow(
@@ -117,8 +133,10 @@ export function applyJournalRow(
   row: JournalRow,
   savedAt = row.ts
 ): void {
+  journalInputOrder(state).beforeRow(state, row)
   applyJournalRowFacts(state, row, savedAt)
   foldJournalQueueRow(state, row)
+  journalInputOrder(state).afterRow(state, row)
 }
 
 function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, savedAt: number): void {

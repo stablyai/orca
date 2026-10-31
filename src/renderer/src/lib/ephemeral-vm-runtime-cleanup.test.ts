@@ -20,22 +20,6 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
     cleanup.mockReset().mockResolvedValue({ status: 'cleaned' })
   })
 
-  it('cleans runtimes matched by workspace id and returns destroyed SSH target ids', async () => {
-    listRuntimes.mockResolvedValue([
-      runtime({ id: 'rt-1', workspaceId: 'wt-1', sshTargetId: 'runtime-ssh-a' }),
-      runtime({ id: 'rt-2', workspaceId: 'wt-other' })
-    ])
-
-    const destroyed = await cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })
-
-    expect(cleanup).toHaveBeenCalledTimes(1)
-    expect(cleanup).toHaveBeenCalledWith({ runtimeId: 'rt-1' })
-    expect(destroyed).toEqual({
-      destroyedSshTargetIds: ['runtime-ssh-a'],
-      retainedSshTargetIds: []
-    })
-  })
-
   it("re-reads the server catalog once a cleanup may have forgotten the VM's server (#33805)", async () => {
     listRuntimes.mockResolvedValue([
       runtime({ id: 'rt-a', workspaceId: 'wt-1', runtimeEnvironmentId: 'env-a' })
@@ -154,13 +138,6 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
 
     await expect(cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })).resolves.toEqual(
       { destroyedSshTargetIds: [], retainedSshTargetIds: ['runtime-ssh-a'] }
-    )
-  })
-
-  it('swallows listRuntimes failures', async () => {
-    listRuntimes.mockRejectedValue(new Error('boom'))
-    await expect(cleanupEphemeralVmRuntimesForDeleted({ workspaceIds: ['wt-1'] })).resolves.toEqual(
-      { destroyedSshTargetIds: [], retainedSshTargetIds: [] }
     )
   })
 

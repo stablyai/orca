@@ -115,3 +115,65 @@ it.each(['accepted', 'pending', 'oldest'] as const)(
     }
   }
 )
+
+it('a pending-result reader gets the original direct receipt behind a waiting command before W ends', async () => {
+  const rig = await createQueuedMessageTestRig()
+  setStructuredAgentSessionHost(rig.host)
+  try {
+    const working = await rig.workingSend()
+    const commandId = hostTestOperationId()
+    const fields = { command: 'compact' as const, delivery: 'queue-if-active' as const }
+    expect(
+      await rig.host.conversationCommand(QUEUED_RIG_CALLER, {
+        ...fields,
+        envelope: rig.envelope(fields, 'agentSession.conversationCommand', commandId),
+        userSend: true
+      })
+    ).toMatchObject({ ok: true, value: { queued: { messageId: commandId } } })
+    const body = hostTestMessage('M behind waiting compact')
+    const messageId = hostTestOperationId()
+    const params = {
+      body,
+      envelope: rig.envelope(
+        { body: agentSessionMessagePayload(body) },
+        'agentSession.send',
+        messageId
+      )
+    }
+    const result = await sendStructuredAgentSessionForClient(params, {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installed-host registry path never reads runtime methods.
+      runtime: {} as RpcContext['runtime'],
+      clientId: QUEUED_RIG_CALLER.callerKey,
+      clientKind: 'runtime',
+      clientCapabilities: [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
+      ]
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      value: { clientMessageId: messageId, submission: { dispatchState: 'pending' } }
+    })
+    expect(await rig.submission(messageId)).not.toHaveProperty('handedOverAt')
+    const replay = await rig.host.send(QUEUED_RIG_CALLER, { ...params, userSend: true })
+    expect(replay).toMatchObject({
+      ok: true,
+      replayed: true,
+      value: { submission: { clientMessageId: messageId } }
+    })
+    expect(rig.compact).not.toHaveBeenCalled()
+    await rig.settleAccepted(working, 'W')
+    await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+    rig.finishCompact()
+    await eventually(async () =>
+      expect((await rig.submission(messageId))?.handedOverAt).toBeDefined()
+    )
+    await rig.settleAccepted(messageId, 'M')
+    expect(await rig.submission(messageId)).toMatchObject({ dispatchState: 'accepted' })
+    expect(
+      rig.dispatch.mock.calls.filter(([input]) => input.clientMessageId === messageId)
+    ).toHaveLength(1)
+  } finally {
+    await rig.dispose()
+  }
+})
