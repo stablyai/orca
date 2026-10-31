@@ -227,16 +227,30 @@ export function setAside(
 }
 
 // Copies under the old names come from older builds, and any copy that ever had a name could
-// have written the progress marker beside it. Importing a marked copy could bring back prompts
-// the user deleted and retiring it could lose prompts never imported, so it is kept aside
-// unimported. An unmarked copy is claimed and merged like a new one.
+// have written the progress marker beside it. A marked copy whose every line is already shared
+// (an older build's drained leftover) is retired, which loses and brings back nothing; its marker
+// goes with the next setup. Otherwise importing it could bring back prompts the user deleted and
+// retiring it could lose prompts never imported, so it is kept aside unimported. An unmarked copy
+// is claimed and merged like a new one.
 export function legacyPending(
   parent: HistoryDirectory,
   name: string,
-  marked: boolean
+  marked: boolean,
+  shared: Set<string>
 ): Claim | { keptAt: string } | undefined {
   if (!marked) {
     return claim(parent, name)
+  }
+  const merged = (directory: HistoryDirectory, entry: string): boolean =>
+    absentAs(() => directory.read(entry).toString('utf8'), '')
+      .split('\n')
+      .every((line) => line === '' || shared.has(line))
+  // Proved again through the claim, since the name may hold a newer copy by then.
+  if (
+    merged(parent, name) &&
+    retireProved(parent, name, (claimed) => merged(claimed, HISTORY)) !== 'restored'
+  ) {
+    return undefined
   }
   const keptAt = setAside(parent, name, CONFLICT)
   return keptAt ? { keptAt } : undefined
@@ -302,7 +316,7 @@ export function drainPending(
 ): void {
   for (const { name, marked } of legacy) {
     try {
-      const adopted = legacyPending(parent, name, marked)
+      const adopted = legacyPending(parent, name, marked, shared)
       if (adopted && 'keptAt' in adopted) {
         const detail = `Prompt history with an unknown merge position is kept at ${join(profile, adopted.keptAt)}`
         warnClaudeProfile(

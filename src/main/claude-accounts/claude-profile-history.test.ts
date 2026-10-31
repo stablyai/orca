@@ -223,7 +223,7 @@ describe('Claude profile history sharing', () => {
     expect(f.history()).toBe('g0\ng1\ng2\ng10\ng11\n')
   })
   itLinks(
-    "merges an older build's unmarked copy and keeps a marked one aside unimported",
+    "merges an older build's unmarked copy, retires a merged marked one and keeps the rest aside unimported",
     async () => {
       const f = fixture()
       fs.writeFileSync(join(f.defaultHome, 'history.jsonl'), 'd1\nd2\n')
@@ -233,6 +233,10 @@ describe('Claude profile history sharing', () => {
       const marked = join(f.profileHome, 'history.jsonl.orca-profile-merge-1')
       fs.writeFileSync(marked, 'd1\ndeleted\n')
       fs.writeFileSync(`${marked}.offset`, '11\n')
+      // What an older build leaves after every staging setup: drained, every line shared.
+      const leftover = join(f.profileHome, 'history.jsonl.orca-profile-merge-2')
+      fs.writeFileSync(leftover, 'd1\nd2\n')
+      fs.writeFileSync(`${leftover}.offset`, '6\n')
       const report = await f.share()
       expect(f.history()).toBe('d1\nd2\nnew\n')
       expect(report.warnings).toEqual([
@@ -240,9 +244,12 @@ describe('Claude profile history sharing', () => {
       ])
       const kept = join(f.profileHome, 'history.jsonl.orca-profile-conflict')
       expect(fs.readFileSync(kept, 'utf8')).toBe('d1\ndeleted\n')
+      expect(fs.existsSync(leftover)).toBe(false)
+      expect(fs.existsSync(`${kept}-1`)).toBe(false)
       await f.share()
       expect(f.history()).toBe('d1\nd2\nnew\n')
       expect(fs.existsSync(`${marked}.offset`)).toBe(false)
+      expect(fs.existsSync(`${leftover}.offset`)).toBe(false)
     }
   )
   itLinks('still links a session tree when its old leftover cannot be read', async () => {
