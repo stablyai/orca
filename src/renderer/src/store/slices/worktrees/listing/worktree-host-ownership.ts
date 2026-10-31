@@ -1,3 +1,4 @@
+import { worktreeIdentityKey } from '../../../../../../shared/worktree/id'
 import type { AppState } from '../../../types'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
@@ -285,8 +286,12 @@ export function getRemovedWorktreeIdsAfterAuthoritativeScan(
   if (!detected.authoritative) {
     return []
   }
-  const detectedIds = new Set(detected.worktrees.map((worktree) => worktree.id))
-  return getKnownWorktreeIdsForPurge(state, repoId, hostId).filter((id) => !detectedIds.has(id))
+  const detectedIds = new Set(
+    detected.worktrees.map((worktree) => worktreeIdentityKey(worktree.id))
+  )
+  return getKnownWorktreeIdsForPurge(state, repoId, hostId).filter(
+    (id) => !detectedIds.has(worktreeIdentityKey(id))
+  )
 }
 
 export function toLegacyDetectedWorktreeResult(

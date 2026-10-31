@@ -30,6 +30,21 @@ const localRepo: Repo = {
 }
 
 describe('stopMissingWorktreeTerminals', () => {
+  it('does not stop terminals when only the listed folder spelling changed', async () => {
+    const runtime = createRuntime()
+    const provider = createProvider([])
+    expect(
+      await stopMissingWorktreeTerminals(
+        localRepo,
+        ['repo-1::C:\\work\\repo'],
+        ['repo-1::C:/work/repo'],
+        { runtime, getLocalProvider: () => provider }
+      )
+    ).toEqual({ stoppedWorktreeIds: [] })
+    expect(provider.listProcesses).not.toHaveBeenCalled()
+    expect(runtime.stopTerminalsForWorktree).not.toHaveBeenCalled()
+  })
+
   it('stops only locally owned worktrees absent from the authoritative scan', async () => {
     const deletedId = 'repo-1::/workspace/deleted'
     const survivingId = 'repo-1::/workspace/surviving'

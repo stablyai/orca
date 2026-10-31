@@ -78,6 +78,25 @@ afterEach(() => {
 })
 
 describe('remote worktree event lineage refresh', () => {
+  it('does not purge a spelling-only before/after listing change', async () => {
+    const old = makeWorktree({ id: 'repo1::C:\\work\\repo', repoId: 'repo1' })
+    const listed = makeWorktree({ ...old, id: 'repo1::C:/work/repo' })
+    store.setState({
+      worktreesByRepo: { repo1: [old] },
+      fetchWorktrees: vi.fn(async () => {
+        store.setState({
+          detectedWorktreesByRepo: { repo1: makeDetectedResult('repo1', [listed]) }
+        })
+        return true
+      })
+    })
+    const { worktreeChangeRefreshQueue: queue } = createWorktreeEventRuntime(unsubs, () => false)
+    queue.enqueue({ repoId: 'repo1', executionHostId: 'local' })
+    await flushPromises()
+    expect(store.getState().purgeWorktreeTerminalState).not.toHaveBeenCalled()
+    expect(store.getState().removeWorkspaceSpaceWorktrees).not.toHaveBeenCalled()
+  })
+
   it('downloads zero lineage copies for a 25-repository order save, then refreshes structural changes', async () => {
     const { worktreeChangeRefreshQueue: queue } = createWorktreeEventRuntime(unsubs, () => false)
     for (let index = 0; index < 25; index += 1) {

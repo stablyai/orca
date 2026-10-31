@@ -1,3 +1,5 @@
+import { preserveConcurrentManualOrder } from './worktree-listing-manual-order'
+import { mergeListedWorktreeSpellings } from '../session/worktree-spelling-merge'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'
@@ -36,32 +38,6 @@ import {
   rememberAuthoritativelyRemovedWorktrees
 } from './authoritative-worktree-removal-memory'
 import type { FencedWorktreeMergeArgs } from './worktree-slice-types'
-
-export function preserveConcurrentManualOrder<T extends Worktree>(
-  incoming: readonly T[],
-  requestStarted: readonly Worktree[] | undefined,
-  current: readonly Worktree[] | undefined,
-  matchesRefreshHost: (worktree: Worktree) => boolean
-): T[] {
-  if (!requestStarted || !current) {
-    return [...incoming]
-  }
-  const startedById = new Map(
-    requestStarted.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
-  const currentById = new Map(
-    current.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
-  return incoming.map((worktree) => {
-    const started = startedById.get(worktree.id)
-    const latest = currentById.get(worktree.id)
-    if (!started || !latest || started.manualOrder === latest.manualOrder) {
-      return worktree
-    }
-    // Why: a refresh response may predate a completed drag; the renderer's optimistic rank is newer.
-    return { ...worktree, manualOrder: latest.manualOrder }
-  })
-}
 
 export function preserveConcurrentDisplayName<T extends Worktree>(
   incoming: readonly T[],
@@ -173,6 +149,16 @@ export function mergeFetchedWorktrees(
       return s
     }
     decision.outcome = 'applied'
+    const spellingPatch = mergeListedWorktreeSpellings(
+      s,
+      args.repoId,
+      args.hostId,
+      args.refresh.result
+    )
+    const spellingChanged = Object.keys(spellingPatch).length > 0
+    if (spellingChanged) {
+      s = { ...s, ...spellingPatch }
+    }
     const matchOptions = worktreeHostMatchOptions(s, args.repoId, args.hostId)
     const currentWorktrees = s.worktreesByRepo[args.repoId]
     const refreshResult = {
@@ -255,6 +241,7 @@ export function mergeFetchedWorktrees(
       args.refresh.result.catalogVersion
     )
     if (
+      !spellingChanged &&
       !worktreesChanged &&
       !detectedChanged &&
       removedIds.length === 0 &&
@@ -263,6 +250,7 @@ export function mergeFetchedWorktrees(
       return s
     }
     return {
+      ...spellingPatch,
       ...versionPatch,
       ...(worktreesChanged
         ? {
