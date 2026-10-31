@@ -40,11 +40,10 @@ export const BRIDGE_EXTERNAL_LINK_SCHEMES: readonly string[] = ['https:', 'http:
 
 export const BRIDGE_MAX_EXTERNAL_LINK_CHARS = BRIDGE_MAX_ROUTE_HREF_CHARS
 
-// Parse absolute URLs without a base; relative targets belong to navigate. Forward the normalized href so device handling sees the same URL that passed the scheme check.
-// Normalize rather than rejecting changed spellings: bare origins gain a slash, while WHATWG strips controls/space before interpreting schemes.
-export function readBridgeExternalLinkUrl(url: string): string | null {
-  // Bound before parsing, then bound normalized output too because percent-encoding can expand it.
-  if (url.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS) {
+// Complete readers preserve the original scheme-validated string; legacy readers retain their normalized2048 contract.
+export function readBridgeExternalLinkUrl(url: string, complete = false): string | null {
+  // Legacy normalization can expand beyond the old reader’s domain.
+  if (!complete && url.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS) {
     return null
   }
   let parsed: URL
@@ -56,7 +55,7 @@ export function readBridgeExternalLinkUrl(url: string): string | null {
   if (!BRIDGE_EXTERNAL_LINK_SCHEMES.includes(parsed.protocol)) {
     return null
   }
-  return parsed.href.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS ? null : parsed.href
+  return complete ? url : parsed.href.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS ? null : parsed.href
 }
 
 export function isBridgeExternalLinkUrl(url: string): boolean {

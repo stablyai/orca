@@ -49,100 +49,139 @@ const approval: NativeChatResolvedPrompt = {
 }
 
 describe('resolution receipts', () => {
-  it('automatically displays the complete selected saved body without updating an unrelated receipt', async () => {
-    const exact: NativeChatResolvedPrompt = {
-      ...approval,
-      title: 'Exact saved form',
-      detail: null,
-      form: {
-        fields: [
-          { name: 'answer', required: true, schema: { type: 'string' } },
-          {
-            name: 'color',
-            required: true,
-            schema: {
-              type: 'string',
-              enum: ['a'.repeat(4000) + 'r'.repeat(4000), 'a'.repeat(4000) + 'b'.repeat(4000)],
-              enumNames: ['Red label', 'Blue label']
+  it.each([2, 20])(
+    'shares exact bodies at N/10N across %s host owners without unrelated consumer commits',
+    async (count) => {
+      const exact: NativeChatResolvedPrompt = {
+        ...approval,
+        title: 'Exact saved form',
+        detail: null,
+        form: {
+          fields: [
+            { name: 'answer', required: true, schema: { type: 'string' } },
+            {
+              name: 'color',
+              required: true,
+              schema: {
+                type: 'string',
+                enum: ['a'.repeat(4000) + 'r'.repeat(4000), 'a'.repeat(4000) + 'b'.repeat(4000)],
+                enumNames: ['Red label', 'Blue label']
+              }
             }
+          ]
+        },
+        resolution: {
+          ...approval.resolution,
+          selectedOptionId: null,
+          formContent: {
+            answer: `  first\n${'x'.repeat(60000)}\nlast  `,
+            color: 'a'.repeat(4000) + 'b'.repeat(4000)
           }
-        ]
-      },
-      resolution: {
-        ...approval.resolution,
-        selectedOptionId: null,
-        formContent: {
-          answer: `  first\n${'x'.repeat(60000)}\nlast  `,
-          color: 'a'.repeat(4000) + 'b'.repeat(4000)
         }
       }
-    }
-    const descriptor = {
-      contract: AGENT_SESSION_SETTLED_BODY_CAPABILITY,
-      version: 'approval-json.v1' as const,
-      state: 'resolved' as const
-    }
-    const source = {
-      ...descriptor,
-      sessionId: 'session-alpha',
-      epoch: 'epoch-1',
-      itemId: 'item-1',
-      revision: 2
-    }
-    let allowRead!: () => void
-    const gate = new Promise<void>((resolve) => {
-      allowRead = resolve
-    })
-    const read = vi.fn(async (request: AgentSessionSettledBodyRead) => {
-      await gate
-      return { source, ...agentSessionJsonPiece(JSON.stringify(exact), request.cursor) }
-    })
-    const reader = createAgentSessionSettledBodyReader(read)
-    const selectedCommits = vi.fn(),
-      unrelatedCommits = vi.fn()
-    const owner = Object.freeze({ reader, sessionId: source.sessionId, epoch: source.epoch })
-    const view = render(
-      <NativeChatSettledBodyContext.Provider value={owner}>
-        <Profiler id="selected" onRender={selectedCommits}>
-          <NativeChatResolutionReceipt
-            body={{
-              ...approval,
-              title: 'Saved form',
-              options: [],
-              resolution: { ...approval.resolution, selectedOptionId: null },
-              deferredBody: { itemId: source.itemId, revision: source.revision, descriptor }
-            }}
-          />
-        </Profiler>
-        <Profiler id="unrelated" onRender={unrelatedCommits}>
-          <NativeChatResolutionReceipt body={approval} />
-        </Profiler>
-      </NativeChatSettledBodyContext.Provider>
-    )
-    try {
-      await act(async () => {
-        await Promise.resolve()
+      const descriptor = {
+        contract: AGENT_SESSION_SETTLED_BODY_CAPABILITY,
+        version: 'approval-json.v1' as const,
+        state: 'resolved' as const
+      }
+      const hosts = Array.from({ length: count }, (_, index) => {
+        const source = {
+          ...descriptor,
+          sessionId: `host-${index}`,
+          epoch: `epoch-${index}`,
+          itemId: 'item-1',
+          revision: 2
+        }
+        let finish!: () => void
+        const gate = new Promise<void>((resolve) => {
+          finish = resolve
+        })
+        const read = vi.fn(async (request: AgentSessionSettledBodyRead) => {
+          await gate
+          return { source, ...agentSessionJsonPiece(JSON.stringify(exact), request.cursor) }
+        })
+        const reader = createAgentSessionSettledBodyReader(read)
+        return {
+          source,
+          reader,
+          read,
+          finish,
+          commits: vi.fn(),
+          owner: Object.freeze({ reader, sessionId: source.sessionId, epoch: source.epoch })
+        }
       })
-      const unrelatedBefore = unrelatedCommits.mock.calls.length
-      await act(async () => {
-        allowRead()
-        await vi.waitFor(() => expect(screen.getByText('Exact saved form')).toBeInTheDocument())
-      })
-      expect(screen.getByText('Blue label')).toBeInTheDocument()
-      expect(screen.queryByText('Red label')).toBeNull()
-      const answer = view.container.querySelector(
-        '[data-native-chat-receipt="approval"] p.whitespace-pre-wrap'
+      const view = render(
+        <>
+          {hosts.map((host, index) => (
+            <NativeChatSettledBodyContext.Provider key={index} value={host.owner}>
+              <Profiler id={`host-${index}`} onRender={host.commits}>
+                {[0, 1].map((duplicate) => (
+                  <NativeChatResolutionReceipt
+                    key={duplicate}
+                    body={{
+                      ...approval,
+                      title: 'Saved form',
+                      options: [],
+                      resolution: { ...approval.resolution, selectedOptionId: null },
+                      deferredBody: {
+                        itemId: host.source.itemId,
+                        revision: host.source.revision,
+                        descriptor
+                      }
+                    }}
+                  />
+                ))}
+              </Profiler>
+            </NativeChatSettledBodyContext.Provider>
+          ))}
+        </>
       )
-      expect(answer?.textContent).toBe(exact.resolution.formContent!.answer)
-      expect(answer).not.toHaveClass('line-clamp-3')
-      expect(read).toHaveBeenCalledTimes(Math.ceil(JSON.stringify(exact).length / 24576))
-      expect(selectedCommits.mock.calls.length).toBeGreaterThan(1)
-      expect(unrelatedCommits).toHaveBeenCalledTimes(unrelatedBefore)
-    } finally {
-      view.unmount()
-      reader.dispose()
+      try {
+        await act(async () => {
+          await Promise.resolve()
+        })
+        for (const [index, host] of hosts.entries()) {
+          const before = hosts.map((held) => held.commits.mock.calls.length)
+          // One actual addressed completion per act; no batching hides fan-out.
+          await act(async () => {
+            host.finish()
+            await vi.waitFor(() =>
+              expect(host.reader.getSnapshot(host.source).status).toBe('ready')
+            )
+          })
+          expect(host.read).toHaveBeenCalledTimes(Math.ceil(JSON.stringify(exact).length / 24576))
+          expect(host.commits.mock.calls.length).toBeGreaterThan(before[index])
+          hosts.forEach((other, otherIndex) => {
+            if (other !== host) {
+              expect(other.commits).toHaveBeenCalledTimes(before[otherIndex])
+            }
+          })
+          await act(async () => {
+            hosts.forEach((held) => held.reader.retry())
+            await Promise.resolve()
+          })
+          hosts.forEach((other, otherIndex) => {
+            if (other !== host) {
+              expect(other.commits).toHaveBeenCalledTimes(before[otherIndex])
+            }
+          })
+        }
+        expect(screen.getAllByText('Blue label')).toHaveLength(count * 2)
+        expect(screen.queryByText('Red label')).toBeNull()
+        const answers = view.container.querySelectorAll(
+          '[data-native-chat-receipt="approval"] p.whitespace-pre-wrap'
+        )
+        const fullAnswers = Array.from(answers).filter(
+          (answer) => answer.textContent === exact.resolution.formContent!.answer
+        )
+        expect(fullAnswers).toHaveLength(count * 2)
+        fullAnswers.forEach((answer) => expect(answer).not.toHaveClass('line-clamp-3'))
+      } finally {
+        view.unmount()
+        hosts.forEach((host) => host.reader.dispose())
+      }
     }
-  })
+  )
 
   it('projects saved whole-form values into the existing receipt without filling omitted fields', () => {
     const body: NativeChatResolvedPrompt = {

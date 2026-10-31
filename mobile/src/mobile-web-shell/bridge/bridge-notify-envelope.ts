@@ -12,13 +12,12 @@ import {
   PAGE_STORAGE_MAX_VALUE_CHARS
 } from '../page-storage-keys'
 import {
-  BRIDGE_MAX_EXTERNAL_LINK_CHARS,
   BRIDGE_MAX_ROUTE_HREF_CHARS,
   BRIDGE_MAX_ROUTE_PARAM_CHARS,
   BRIDGE_MAX_VIEWPORT_COLS,
   BRIDGE_MAX_VIEWPORT_ROWS,
   BRIDGE_ROUTE_HREF_PATTERN,
-  isBridgeExternalLinkUrl
+  readBridgeExternalLinkUrl
 } from './bridge-caps'
 import {
   BRIDGE_EXTERNAL_LINK_GRANT,
@@ -55,7 +54,10 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal(BRIDGE_EXTERNAL_LINK_GRANT),
-    url: z.string().min(1).max(BRIDGE_MAX_EXTERNAL_LINK_CHARS).refine(isBridgeExternalLinkUrl)
+    url: z
+      .string()
+      .min(1)
+      .refine((url) => readBridgeExternalLinkUrl(url, true) !== null)
   }),
   z.object({
     v: versionSchema,

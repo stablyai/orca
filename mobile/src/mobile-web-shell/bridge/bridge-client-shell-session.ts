@@ -1,4 +1,10 @@
 import { readShellSession, type BridgeShellSession } from './bridge-client-session'
+import { BRIDGE_EXTERNAL_LINK_FULL_URL, BRIDGE_EXTERNAL_LINK_GRANT } from './bridge-frame-fields'
+import {
+  readBridgeExternalLinkSupport,
+  sameBridgeExternalLinkSupport,
+  type BridgeExternalLinkSupport
+} from './bridge-external-link-support'
 import { bridgeRouteMoved } from './bridge-route-update'
 import {
   sameSafeAreaInsets,
@@ -18,6 +24,8 @@ type InitMessage = Extract<BridgeHostMessage, { type: 'init' }>
 // Same-session init preserves exchanges; replacement drops prior work before publishing the new session to listeners.
 export type BridgeClientShellSession = {
   current: () => BridgeShellSession | null
+  externalLinkSupport: () => BridgeExternalLinkSupport
+  onExternalLinkSupport: (listener: () => void) => () => void
   accept: (message: InitMessage) => void
   onReady: (listener: () => void) => () => void
   onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
@@ -33,6 +41,18 @@ export function createBridgeClientShellSession(args: {
   prime: (connection: BridgeConnectionSnapshot) => void
 }): BridgeClientShellSession {
   let session: BridgeShellSession | null = null
+  let externalSupport = readBridgeExternalLinkSupport(null)
+  const externalListeners = new Set<() => void>()
+  function publishExternalSupport(): void {
+    const next = readBridgeExternalLinkSupport(session)
+    if (sameBridgeExternalLinkSupport(externalSupport, next)) {
+      return
+    }
+    externalSupport = next
+    for (const listener of externalListeners) {
+      listener()
+    }
+  }
   const readyListeners = new Set<() => void>()
   const routeUpdateListeners = new Set<(route: BridgeInitRoute | null) => void>()
   const insetsListeners = new Set<(insets: BridgeSafeAreaInsets) => void>()
@@ -42,6 +62,13 @@ export function createBridgeClientShellSession(args: {
 
   return {
     current: () => session,
+    externalLinkSupport: () => externalSupport,
+    onExternalLinkSupport: (listener) => {
+      externalListeners.add(listener)
+      return () => {
+        externalListeners.delete(listener)
+      }
+    },
     accept: (message) => {
       const held = session
       const update = held !== null && held.sessionId === message.sessionId ? held : null
@@ -64,6 +91,21 @@ export function createBridgeClientShellSession(args: {
           ? { ...readShellSession(message), safeAreaInsets }
           : {
               ...update,
+              grants: {
+                ...update.grants,
+                native: [
+                  ...update.grants.native.filter(
+                    (grant) =>
+                      grant !== BRIDGE_EXTERNAL_LINK_GRANT &&
+                      grant !== BRIDGE_EXTERNAL_LINK_FULL_URL
+                  ),
+                  ...message.grants.native.filter(
+                    (grant) =>
+                      grant === BRIDGE_EXTERNAL_LINK_GRANT ||
+                      grant === BRIDGE_EXTERNAL_LINK_FULL_URL
+                  )
+                ]
+              },
               inboundMessageBytes: message.inboundMessageBytes,
               route: message.route ?? null,
               safeAreaInsets,
@@ -72,6 +114,7 @@ export function createBridgeClientShellSession(args: {
               uiLocale
             }
       // Reprime on every init to repair refused stale generations after client rebuild; identical pane-update snapshots emit no transition.
+      publishExternalSupport()
       args.prime(message.connection)
       for (const listener of readyListeners) {
         listener()
@@ -148,6 +191,8 @@ export function createBridgeClientShellSession(args: {
     },
     close: () => {
       session = null
+      publishExternalSupport()
+      externalListeners.clear()
       readyListeners.clear()
     }
   }

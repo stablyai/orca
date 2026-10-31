@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 import { nativeChatAskDismissKey } from '../../../../../src/shared/native-chat-ask-dismiss-key'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
-import { openExternalLink } from '../../../platform/external-link'
+import { openExternalLink, useExternalLinkAvailable } from '../../../platform/external-link'
 import { useMobileStructuredPromptResponses } from '../../use-mobile-structured-prompt-responses'
 import { MobileNativeChatResolutionReceipt } from '../../MobileNativeChatResolutionReceipt'
 import {
@@ -21,7 +21,10 @@ import {
 } from '../../mobile-structured-agent-prompts'
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../../src/shared/structured-agent-session-reducer'
 import type { StructuredAgentSessionMutate } from '../../mobile-structured-agent-session-rpc'
-vi.mock('../../../platform/external-link', () => ({ openExternalLink: vi.fn() }))
+vi.mock('../../../platform/external-link', () => ({
+  openExternalLink: vi.fn(),
+  useExternalLinkAvailable: vi.fn(() => true)
+}))
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -439,4 +442,52 @@ describe('MobileNativeChatPromptCard collapse', () => {
     expect(tree!.root.findAllByType(TextInput)).toHaveLength(0)
     act(() => tree!.unmount())
   })
+})
+
+it('keeps the known Open control present disabled without support while decisions and the complete address remain available', async () => {
+  vi.mocked(useExternalLinkAvailable).mockReturnValue(false)
+  const url = 'https://example.com/' + 'x'.repeat(8192 - 20)
+  const answer = vi.fn(async () => true)
+  let tree: ReactTestRenderer | undefined
+  try {
+    await act(async () => {
+      tree = create(
+        createElement(MobileNativeChatPromptCard, {
+          permission: {
+            title: 'Connect',
+            url,
+            detail: url,
+            options: [
+              { label: 'Continue', send: 'accept' },
+              { label: 'Decline', send: 'decline' }
+            ]
+          },
+          onRespondPermission: answer
+        })
+      )
+    })
+    const opener = tree!.root
+      .findAllByType(Pressable)
+      .find(
+        (node) =>
+          node.props.accessibilityRole === 'button' &&
+          node.findAll((text) => text.children.includes('Open link')).length > 0
+      )!
+    expect(opener.props.disabled).toBe(true)
+    expect(opener.props.accessibilityState).toEqual({ disabled: true })
+    expect(
+      tree!.root.findAll((node) => node.type === 'Text' && node.children.includes(url)).length
+    ).toBeGreaterThan(0)
+    const decision = tree!.root
+      .findAllByType(Pressable)
+      .find((node) => node.findAll((text) => text.children.includes('Continue')).length > 0)!
+    expect(decision.props.disabled).toBe(false)
+    await act(async () => {
+      await decision.props.onPress()
+    })
+    expect(answer).toHaveBeenCalledWith('accept')
+  } finally {
+    await act(async () => tree?.unmount())
+    vi.mocked(useExternalLinkAvailable).mockReturnValue(true)
+  }
 })

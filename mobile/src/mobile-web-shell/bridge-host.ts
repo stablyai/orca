@@ -5,6 +5,7 @@ import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { createBridgeHostStreamFrames } from './bridge-host-stream-frames'
 import {
+  BRIDGE_EXTERNAL_LINK_FULL_URL,
   BRIDGE_FAULT_GRANT,
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
@@ -46,6 +47,7 @@ export type BridgeHost = {
 export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { client, buildId, sessionId, pageRoutes, host } = options
   const granted: readonly string[] = [
+    BRIDGE_EXTERNAL_LINK_FULL_URL,
     BRIDGE_FAULT_GRANT,
     BRIDGE_RPC_ENVELOPE_GRANT,
     ...options.routeGrants

@@ -71,6 +71,8 @@ export type BridgeRpcClient = RpcClient & {
   onColorSchemeUpdate: (listener: (scheme: BridgeShellSession['colorScheme']) => void) => () => void
   onUiLocaleUpdate: (listener: (locale: BridgeShellSession['uiLocale']) => void) => () => void
   getShellSession: () => BridgeShellSession | null
+  getExternalLinkSupport: ReturnType<typeof createBridgeClientShellSession>['externalLinkSupport']
+  onExternalLinkSupport: (listener: () => void) => () => void
   // False without navigate lets tap handlers fall back safely instead of throwing into uncaught UI callbacks.
   notifyNavigate: (href: string, replace?: boolean) => boolean
   // The page owns no native history; ask the shell to pop. Missing grant returns false; older shells may also drop the new notify, so callers retain their router fallback.
@@ -339,6 +341,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     onColorSchemeUpdate: shellSession.onColorSchemeUpdate,
     onUiLocaleUpdate: shellSession.onUiLocaleUpdate,
     getShellSession: shellSession.current,
+    getExternalLinkSupport: shellSession.externalLinkSupport,
+    onExternalLinkSupport: shellSession.onExternalLinkSupport,
     clearRouteParam: (param, value) =>
       posted({
         v: BRIDGE_PROTOCOL_VERSION,

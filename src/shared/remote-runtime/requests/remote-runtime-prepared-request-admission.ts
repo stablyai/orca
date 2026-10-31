@@ -38,10 +38,18 @@ export function subscribeRemoteRuntimeAdmissionRelease(listener: () => void): ()
     releaseListeners.delete(listener)
   }
 }
+let releaseQueued = false
 function admissionReleased(): void {
-  for (const listener of releaseListeners) {
-    queueMicrotask(listener)
+  if (releaseQueued) {
+    return
   }
+  releaseQueued = true
+  queueMicrotask(() => {
+    releaseQueued = false
+    for (const listener of releaseListeners) {
+      listener()
+    }
+  })
 }
 
 export function prepareRemoteRuntimeRequest(

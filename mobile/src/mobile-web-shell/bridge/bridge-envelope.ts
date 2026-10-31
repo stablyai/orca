@@ -15,6 +15,7 @@ import { BRIDGE_BACK_FRAME } from './bridge-page-back'
 import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
 
 export {
+  BRIDGE_EXTERNAL_LINK_FULL_URL,
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_FOREGROUND_NUDGE_REASONS,

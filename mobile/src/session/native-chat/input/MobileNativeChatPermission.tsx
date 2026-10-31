@@ -15,7 +15,7 @@ import {
   isPlanApprovalSubject
 } from '../../../../../src/shared/agent-session-approval-subject'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
-import { openExternalLink } from '../../../platform/external-link'
+import { openExternalLink, useExternalLinkAvailable } from '../../../platform/external-link'
 
 function MobileNativeChatPermissionImpl({
   permission,
@@ -33,6 +33,7 @@ function MobileNativeChatPermissionImpl({
   const t = useMobileTranslation()
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
+  const linkAvailable = useExternalLinkAvailable(permission.url)
   // Unknown newer-host subjects allow only cancellation; preserve their detail for the reader.
   const newerSubject = isNewerApprovalSubject(permission.subject)
   const respond = async (...args: Parameters<MobilePermissionResponse>): Promise<boolean> => {
@@ -80,8 +81,13 @@ function MobileNativeChatPermissionImpl({
         {permission.url ? (
           <Pressable
             accessibilityRole="button"
-            disabled={submitting}
-            style={[styles.option, styles.optionSecondary]}
+            disabled={submitting || !linkAvailable}
+            accessibilityState={{ disabled: submitting || !linkAvailable }}
+            style={[
+              styles.option,
+              styles.optionSecondary,
+              (submitting || !linkAvailable) && styles.disabled
+            ]}
             onPress={() => permission.url && openExternalLink(permission.url)}
           >
             <Text style={styles.optionText}>{t('chat.permission.openLink', 'Open link')}</Text>

@@ -1,4 +1,3 @@
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
 import { createAgentSessionJsonAssembly } from './agent-session-json-pieces'
 import {
   AgentSessionSettledBodyPieceSchema,
@@ -29,91 +28,150 @@ type Entry = {
   listeners: Set<() => void>
   running: boolean
   retired: boolean
+  eligible: boolean
+  transient: boolean
+  metadataBytes: number
   lease?: Lease
-  start: () => void
-  stopRetry: () => void
+  start: () => 'started' | 'occupied' | 'pressure'
+  stop: () => void
+  retry: () => void
 }
 const entries = new Set<Entry>()
+// Eligibility derives from live selection; no serialized queue/overflow descriptor is retained.
+const pending = new Set<Entry>()
 let active = 0
+let draining = false
 function drain(): void {
-  for (const entry of entries) {
-    if (!entry.retired && !entry.running && entry.state.status === 'loading') {
-      entry.start()
-    }
+  if (draining) {
+    return
   }
+  draining = true
+  queueMicrotask(() => {
+    draining = false
+    for (const entry of pending) {
+      if (active >= 8) {
+        break
+      }
+      const result = entry.start()
+      if (result === 'pressure') {
+        break
+      }
+      if (result === 'started') {
+        pending.delete(entry)
+      }
+    }
+  })
 }
-
 subscribeRemoteRuntimeAdmissionRelease(drain)
 
-/** One session/connection namespace; completed values are shared references, never session-state copies. */
+export function getAgentSessionSettledBodyDemandEvidence() {
+  let selected = 0,
+    listeners = 0,
+    metadataBytes = 0
+  for (const entry of entries) {
+    if (!entry.retired) {
+      selected++
+      listeners += entry.listeners.size
+      metadataBytes += entry.metadataBytes + entry.listeners.size * 64
+    }
+  }
+  return { selected, listeners, metadataBytes, queuedDescriptors: 0, pending: pending.size, active }
+}
+
+/** One session/connection namespace; completed values are shared references. */
 export function createAgentSessionSettledBodyReader(
   read: (request: AgentSessionSettledBodyRead) => Promise<unknown>
 ) {
-  const owned = new Map<string, Entry>()
+  const owned = new Set<Entry>()
   let disposed = false
   let ownerRunning = false
-  const key = (source: AgentSessionSettledBodySource) => JSON.stringify(source)
+  function find(source: AgentSessionSettledBodySource): Entry | undefined {
+    for (const entry of owned) {
+      if (sameAgentSessionSettledSource(entry.source, source)) {
+        return entry
+      }
+    }
+    return undefined
+  }
   function remove(entry: Entry): void {
+    entries.delete(entry)
+    pending.delete(entry)
+    owned.delete(entry)
+    entry.stop()
     entry.lease?.release()
     entry.lease = undefined
-    entries.delete(entry)
-    if (owned.get(key(entry.source)) === entry) {
-      owned.delete(key(entry.source))
-    }
-    entry.stopRetry()
   }
   function publish(entry: Entry, state: SettledBodyReadState): void {
+    if (entry.state === state) {
+      return
+    }
     entry.state = state
     for (const listener of entry.listeners) {
       listener()
     }
   }
-  function acquire(source: AgentSessionSettledBodySource): Entry | undefined {
-    const id = key(source)
-    const held = owned.get(id)
-    if (held && !held.retired) {
+  function acquire(source: AgentSessionSettledBodySource): Entry {
+    const held = find(source)
+    if (held) {
       return held
     }
-    if (disposed || entries.size >= 64) {
-      return undefined
-    }
-    const metadataBytes = id.length * 3 + 256
-    const metadata = reserveRemoteRuntimeRetainedBytes(metadataBytes)
-    if (!metadata) {
-      return undefined
-    }
+    const metadataBytes = JSON.stringify(source).length * 3 + 256
     const entry: Entry = {
       source,
-      lease: metadata,
+      metadataBytes,
       state: LOADING,
       running: false,
       retired: false,
+      eligible: true,
+      transient: false,
       listeners: new Set(),
-      start: () => {},
-      stopRetry: () => {}
+      start: () => 'occupied',
+      stop: () => {},
+      retry: () => {}
+    }
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    function endDeadline(): void {
+      clearTimeout(deadline)
+      deadline = undefined
+    }
+    function beginDeadline(): void {
+      endDeadline()
+      deadline = setTimeout(() => {
+        deadline = undefined
+        if (!entry.retired) {
+          publish(entry, ERROR)
+        }
+      }, 30_000)
     }
     const retry = createReconnectScheduler({
       shouldStop: () => entry.retired || disposed,
-      reconnect: () => {
-        publish(entry, LOADING)
-        drain()
-      }
+      reconnect: () => entry.retry()
     })
-    entry.stopRetry = () => retry.dispose()
-    entry.start = () => {
-      if (entry.running || entry.retired || ownerRunning || active >= 8) {
+    entry.stop = () => {
+      endDeadline()
+      retry.dispose()
+    }
+    entry.retry = () => {
+      if (entry.running || entry.retired || !entry.transient) {
         return
       }
-      // Chunks, joined JSON, parsed scalar strings and the current ordinary piece overlap.
-      const lease = entry.lease
-      if (
-        !lease ||
-        !lease.resize(metadataBytes + 6 * AGENT_SESSION_SETTLED_BODY_MAX_UNITS + 256 * 1024)
-      ) {
-        return
+      entry.eligible = true
+      pending.add(entry)
+      drain()
+    }
+    entry.start = () => {
+      if (entry.running || entry.retired || ownerRunning || !entry.eligible) {
+        return 'occupied'
+      }
+      const lease = reserveRemoteRuntimeRetainedBytes(
+        metadataBytes + 6 * AGENT_SESSION_SETTLED_BODY_MAX_UNITS + 256 * 1024
+      )
+      if (!lease) {
+        return 'pressure'
       }
       entry.lease = lease
       entry.running = true
+      entry.eligible = false
       ownerRunning = true
       active++
       void (async () => {
@@ -121,24 +179,17 @@ export function createAgentSessionSettledBodyReader(
         let reading = false
         try {
           while (!entry.retired && !disposed) {
+            publish(entry, LOADING)
+            beginDeadline()
             reading = true
-            const timeout = setTimeout(() => {
-              if (!entry.retired && !disposed) {
-                publish(entry, ERROR)
-              }
-            }, 30_000)
-            let response: unknown
-            try {
-              response = await read({ ...entry.source, cursor: assembly.cursor })
-            } finally {
-              clearTimeout(timeout)
-            }
+            const response = await read({ ...source, cursor: assembly.cursor })
             reading = false
-            const piece = AgentSessionSettledBodyPieceSchema.parse(response)
+            endDeadline()
             if (entry.retired || disposed) {
               return
             }
-            if (!sameAgentSessionSettledSource(entry.source, piece.source)) {
+            const piece = AgentSessionSettledBodyPieceSchema.parse(response)
+            if (!sameAgentSessionSettledSource(source, piece.source)) {
               throw new Error('Saved answer source changed')
             }
             const complete = assembly.accept(piece)
@@ -151,88 +202,88 @@ export function createAgentSessionSettledBodyReader(
             if (!lease.resize(metadataBytes + assembly.cursor * 2 + 64 * 1024)) {
               throw new Error('Saved answer read busy')
             }
+            entry.transient = false
             retry.reset()
             publish(entry, { status: 'ready', body: complete.value })
             return
           }
         } catch (error) {
           if (!entry.retired && !disposed) {
+            entry.transient = reading && readAgentSessionErrorRefusal(error) === undefined
             publish(entry, ERROR)
-            if (reading && readAgentSessionErrorRefusal(error) === undefined) {
+            if (entry.transient) {
               retry.schedule()
             }
           }
         } finally {
+          endDeadline()
           active--
           entry.running = false
           ownerRunning = false
           if (entry.retired || disposed) {
             remove(entry)
           } else if (entry.state.status !== 'ready') {
-            lease.resize(metadataBytes)
+            entry.lease = undefined
+            lease.release()
           }
           drain()
         }
       })()
+      return 'started'
     }
     entries.add(entry)
-    owned.set(id, entry)
+    owned.add(entry)
+    pending.add(entry)
+    beginDeadline()
     return entry
+  }
+  function retire(entry: Entry): void {
+    entry.retired = true
+    entry.listeners.clear()
+    entry.stop()
+    owned.delete(entry)
+    pending.delete(entry)
+    if (!entry.running) {
+      remove(entry)
+    }
   }
   return {
     getSnapshot(source: AgentSessionSettledBodySource): SettledBodyReadState {
-      return owned.get(key(source))?.state ?? ERROR
+      return find(source)?.state ?? ERROR
     },
     subscribe(source: AgentSessionSettledBodySource, listener: () => void): () => void {
-      const entry = acquire(source)
-      if (!entry) {
-        queueMicrotask(listener)
+      if (disposed) {
         return () => {}
       }
-      entry.listeners.add(listener)
+      const entry = acquire(source)
+      // Each subscription owns its membership even when callbacks happen to be equal.
+      const notify = () => listener()
+      entry.listeners.add(notify)
       drain()
       return () => {
-        entry.listeners.delete(listener)
+        entry.listeners.delete(notify)
         if (entry.listeners.size === 0) {
-          entry.retired = true
-          entry.stopRetry()
-          if (owned.get(key(entry.source)) === entry) {
-            owned.delete(key(entry.source))
-          }
-          if (!entry.running) {
-            remove(entry)
-            drain()
-          }
+          retire(entry)
+          drain()
         }
       }
     },
     clear(): void {
-      for (const entry of owned.values()) {
-        entry.retired = true
-        entry.stopRetry()
-        if (!entry.running) {
-          remove(entry)
-        }
+      for (const entry of owned) {
+        retire(entry)
       }
-      owned.clear()
       drain()
     },
     retry(): void {
-      for (const entry of owned.values()) {
-        if (entry.state.status === 'error' && !entry.retired) {
-          publish(entry, LOADING)
-        }
+      for (const entry of owned) {
+        entry.retry()
       }
       drain()
     },
     dispose(): void {
       disposed = true
-      for (const entry of owned.values()) {
-        entry.retired = true
-        entry.stopRetry()
-        if (!entry.running) {
-          remove(entry)
-        }
+      for (const entry of owned) {
+        retire(entry)
       }
       drain()
     }
@@ -241,22 +292,7 @@ export function createAgentSessionSettledBodyReader(
 
 export type AgentSessionSettledBodyReader = ReturnType<typeof createAgentSessionSettledBodyReader>
 
-export type AgentSessionSettledBodyOwner = {
-  reader: AgentSessionSettledBodyReader
-  sessionId: string
-  epoch: string | null
-}
-export function receiptSettledBodySource(
-  owner: AgentSessionSettledBodyOwner | null,
-  body: NativeChatResolvedPrompt
-): AgentSessionSettledBodySource | null {
-  return owner?.epoch && body.deferredBody
-    ? {
-        ...body.deferredBody.descriptor,
-        sessionId: owner.sessionId,
-        epoch: owner.epoch,
-        itemId: body.deferredBody.itemId,
-        revision: body.deferredBody.revision
-      }
-    : null
-}
+export {
+  receiptSettledBodySource,
+  type AgentSessionSettledBodyOwner
+} from './agent-session-settled-body-source'

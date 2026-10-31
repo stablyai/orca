@@ -1,3 +1,9 @@
+// @vitest-environment happy-dom
+import { certifyBody } from './codex-settled-body-contract-fixture'
+import { createElement } from 'react'
+import { act, cleanup, render } from '@testing-library/react'
+import { NativeChatResolutionReceipt } from '../../renderer/src/components/native-chat/NativeChatResolutionReceipt'
+import { NativeChatSettledBodyContext } from '../../renderer/src/components/native-chat/native-chat-settled-body'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { replaceHostTestState } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
@@ -43,13 +49,8 @@ import {
 import { encrypt, decrypt } from '../../shared/e2ee-crypto'
 import { sealMobileE2EEV2Frame, openMobileE2EEV2Frame } from '../../shared/mobile-e2ee-v2-framing'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
-import {
-  readSettledBodyPiece,
-  settledBodyPresentation
-} from '../native-chat/agent-session-wire/agent-session-settled-body'
-import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
+import { settledBodyPresentation } from '../native-chat/agent-session-wire/agent-session-settled-body'
 import { createAgentSessionSettledBodyReader } from '../../shared/agent-session-settled-body-reader'
-import { nativeChatReceiptAnswers } from '../../shared/native-chat-resolution-receipt'
 import {
   AgentSessionSettledBodyPieceSchema,
   AGENT_SESSION_SETTLED_BODY_CAPABILITY
@@ -57,7 +58,6 @@ import {
 import { readCodexMcpElicitation } from './codex-mcp-elicitation'
 import { codexPromptIdentity } from './codex-structured-prompt-items'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import {
   call,
   STRUCTURED_MOBILE_CLIENT
@@ -72,6 +72,7 @@ import { rewriteRelayedPhoneRequest } from '../runtime/mobile-desktop-relay/rela
 
 let adapter: ReturnType<typeof adapterFor> | undefined
 afterEach(async () => {
+  cleanup()
   await closeSharedControlTestServers()
   setStructuredAgentSessionHost(null)
   await adapter?.closeAll()
@@ -558,139 +559,6 @@ it.each(['WF1', 'WF2', 'literal', 'enum', 63, 64] as const)(
   }
 )
 
-async function certifyBody(
-  item: AgentJournalRenderItem,
-  journal: AgentSessionJournal,
-  R: number,
-  C: number
-) {
-  if (item.body.kind !== 'approval' || !item.body.form) {
-    throw new Error('Expected form')
-  }
-  const json = JSON.stringify(item.body)
-  const E = Buffer.byteLength(
-    JSON.stringify({ kind: 'form', message: item.body.title, fields: item.body.form.fields })
-  )
-  const X = Buffer.byteLength(json)
-  expect(X).toBeLessThanOrEqual(M + 65536)
-  const descriptor = settledBodyPresentation(item, true).settledBody!
-  const source = {
-    ...descriptor,
-    sessionId: SESSION,
-    epoch: journal.cursor().epoch,
-    itemId: item.itemId,
-    revision: item.revision
-  }
-  const chunks: string[] = []
-  let cursor = 0,
-    count = 0,
-    maxJ = 0,
-    maxFrame = 0,
-    maxLegacy = 0,
-    maxV2 = 0
-  const key = new Uint8Array(32).fill(1)
-  for (;;) {
-    const piece = readSettledBodyPiece(journal, { ...source, cursor })
-    expect(piece.json.length).toBeLessThanOrEqual(24576)
-    const next = cursor + piece.json.length
-    expect(piece.nextCursor).toBe(next === json.length ? null : next)
-    const reply = {
-      id: 'rpc-9007199254740991-1793399999999',
-      ok: true as const,
-      result: piece,
-      _meta: { runtimeId: '00000000-0000-0000-0000-000000000000' }
-    }
-    const raw = JSON.stringify(reply)
-    maxJ = Math.max(maxJ, Buffer.byteLength(raw))
-    maxLegacy = Math.max(maxLegacy, encrypt(raw, key).length)
-    const v2 = sealMobileE2EEV2Frame({
-      key,
-      sessionId: new Uint8Array(32).fill(2),
-      direction: 'desktop-to-mobile',
-      payloadKind: 'text',
-      payload: Buffer.from(raw),
-      counter: BigInt(count)
-    })
-    maxV2 = Math.max(maxV2, Buffer.from(v2).toString('base64').length)
-    const split = splitBridgeReply('0'.repeat(22), reply)
-    if (!split.ok) {
-      throw new Error(split.refusal)
-    }
-    const assembler = new BridgeReplyAssembler()
-    let result
-    for (const frame of split.frames) {
-      maxFrame = Math.max(maxFrame, Buffer.byteLength(JSON.stringify(frame)))
-      result = assembler.accept(frame)
-    }
-    expect(result).toEqual({ status: 'complete', payload: reply })
-    chunks.push(piece.json)
-    count++
-    cursor = next
-    if (piece.nextCursor === null) {
-      break
-    }
-  }
-  expect(chunks.join('')).toBe(json)
-  expect(JSON.parse(chunks.join(''))).toEqual(item.body)
-  const reader = createAgentSessionSettledBodyReader(async (request) => {
-    const { sessionId, itemId, ...bodySource } = request
-    const reply = await call(
-      'agentSession.item',
-      { sessionId, itemId, bodySource },
-      {
-        ...STRUCTURED_MOBILE_CLIENT,
-        clientCapabilities: [
-          ...STRUCTURED_MOBILE_CLIENT.clientCapabilities,
-          AGENT_SESSION_SETTLED_BODY_CAPABILITY
-        ]
-      },
-      {},
-      STRUCTURED_AGENT_SESSION_ITEM_METHODS
-    )
-    if (!reply.ok) {
-      throw new Error(JSON.stringify(reply.error))
-    }
-    return AgentSessionSettledBodyPieceSchema.parse(reply.result)
-  })
-  const stop = reader.subscribe(source, () => {})
-  try {
-    await vi.waitFor(() => expect(reader.getSnapshot(source).status).toBe('ready'))
-    const recovered = reader.getSnapshot(source)
-    if (recovered.status !== 'ready') {
-      throw new Error('Missing saved body')
-    }
-    expect(recovered.body).toEqual(item.body)
-    expect(nativeChatReceiptAnswers(recovered.body)).toEqual(nativeChatReceiptAnswers(item.body))
-    if (item.body.form.fields[0]?.schema.enum) {
-      expect(nativeChatReceiptAnswers(recovered.body)[0]?.answer).toBe('Blue label')
-    }
-  } finally {
-    stop()
-    reader.dispose()
-  }
-
-  const descriptorBytes = Buffer.byteLength(JSON.stringify(settledBodyPresentation(item, true)))
-  expect(descriptorBytes).toBeLessThanOrEqual(2048)
-  process.stdout.write(
-    `${JSON.stringify({
-      bodyCertificate: true,
-      E,
-      R,
-      C,
-      F: Buffer.byteLength(JSON.stringify(item)),
-      X,
-      K: X - E - C,
-      descriptorBytes,
-      units: json.length,
-      count,
-      maxJ,
-      maxLegacy,
-      maxV2,
-      maxFrame
-    })}\n`
-  )
-}
-
 it('certifies twenty actual large-description form cancellations in their composed settlement group', async () => {
   const state = hostTestState()
   await attach()
@@ -708,7 +576,7 @@ it('certifies twenty actual large-description form cancellations in their compos
       threadId: THREAD,
       turnId: 'turn-1',
       mode: 'form',
-      message: 'Enter values',
+      message: `Enter values ${id} ${' title'.repeat(20)}`,
       requestedSchema: {
         type: 'object',
         properties: { value: { type: 'string', description: 'd'.repeat(30000) } },
@@ -727,6 +595,15 @@ it('certifies twenty actual large-description form cancellations in their compos
   expect(journal.snapshot().items.filter((item) => item.body.kind === 'approval')).toHaveLength(20)
   const pending = journal.snapshot().items.filter((item) => item.body.kind === 'approval')
   const beforeGroup = journal.cursor()
+  const live: AgentSessionSubscribeEvent[] = []
+  const stopLive = await state.host.subscribe({
+    id: 'composed-live',
+    sessionId: SESSION,
+    boundedFrames: true,
+    readsCurrentRequests: true,
+    readsSettledBodies: true,
+    emit: (event) => live.push(event)
+  })
   codex.connections[0].handlers.onNotification?.('turn/completed', {
     threadId: THREAD,
     turn: { id: 'turn-1', status: 'completed' }
@@ -740,6 +617,34 @@ it('certifies twenty actual large-description form cancellations in their compos
     )
   ).toBe(true)
   const descriptors = items.map((item) => settledBodyPresentation(item, true))
+  const published = live
+    .flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
+    .filter((item) => item.settledBody)
+  expect(published.map((item) => item.itemId).sort()).toEqual(
+    items.map((item) => item.itemId).sort()
+  )
+  for (const [direction, sequence] of [
+    ['tail', 0],
+    ['before', grouped.sequence + 1],
+    ['after', beforeGroup.sequence]
+  ] as const) {
+    const history = await state.host.history(
+      {
+        sessionId: SESSION,
+        direction,
+        ...(direction === 'tail' ? {} : { cursor: { epoch: grouped.epoch, sequence } })
+      },
+      undefined,
+      true,
+      true
+    )
+    expect(
+      history.page.items
+        .filter((item) => item.settledBody)
+        .map((item) => item.itemId)
+        .sort()
+    ).toEqual(items.map((item) => item.itemId).sort())
+  }
   const events: AgentSessionSubscribeEvent[] = []
   const dispose = await hostTestState().host.subscribe({
     id: 'composed-certificate',
@@ -755,8 +660,94 @@ it('certifies twenty actual large-description form cancellations in their compos
   }
   const compact = snapshot
   expect(snapshot.page.items.filter((item) => item.settledBody)).toHaveLength(20)
-  for (const item of items) {
-    await certifyBody(item, journal, 0, 0)
+  await certifyBody(items[0]!, journal, 0, 0)
+  const client = {
+    ...STRUCTURED_MOBILE_CLIENT,
+    clientCapabilities: [
+      ...STRUCTURED_MOBILE_CLIENT.clientCapabilities,
+      AGENT_SESSION_SETTLED_BODY_CAPABILITY
+    ]
+  }
+  const reader = createAgentSessionSettledBodyReader(async (request) => {
+    const { sessionId, itemId, ...bodySource } = request
+    const response = await call(
+      'agentSession.item',
+      { sessionId, itemId, bodySource },
+      client,
+      {},
+      STRUCTURED_AGENT_SESSION_ITEM_METHODS
+    )
+    if (!response.ok) {
+      throw new Error(JSON.stringify(response.error))
+    }
+    return AgentSessionSettledBodyPieceSchema.parse(response.result)
+  })
+  const owner = Object.freeze({ reader, sessionId: SESSION, epoch: grouped.epoch })
+  const view = render(
+    createElement(
+      NativeChatSettledBodyContext.Provider,
+      { value: owner },
+      descriptors.map((item) => {
+        if (item.body.kind !== 'approval' || !item.settledBody) {
+          throw new Error('Missing descriptor')
+        }
+        return createElement(NativeChatResolutionReceipt, {
+          key: item.itemId,
+          body: {
+            ...item.body,
+            deferredBody: {
+              itemId: item.itemId,
+              revision: item.revision,
+              descriptor: item.settledBody
+            }
+          }
+        })
+      })
+    )
+  )
+  try {
+    await act(async () => {
+      await vi.waitFor(() =>
+        expect(
+          items.every(
+            (item) =>
+              reader.getSnapshot({
+                ...settledBodyPresentation(item, true).settledBody!,
+                sessionId: SESSION,
+                epoch: grouped.epoch,
+                itemId: item.itemId,
+                revision: item.revision
+              }).status === 'ready'
+          )
+        ).toBe(true)
+      )
+    })
+    for (const item of items) {
+      if (item.body.kind !== 'approval') {
+        throw new Error('Missing form')
+      }
+      const title = item.body.title
+      expect(
+        Array.from(view.container.querySelectorAll('.font-medium')).some(
+          (node) => node.textContent === title
+        )
+      ).toBe(true)
+      const recovered = reader.getSnapshot({
+        ...settledBodyPresentation(item, true).settledBody!,
+        sessionId: SESSION,
+        epoch: grouped.epoch,
+        itemId: item.itemId,
+        revision: item.revision
+      })
+      expect(recovered).toEqual({ status: 'ready', body: item.body })
+    }
+    expect(view.container.querySelectorAll('[data-native-chat-receipt="approval"]')).toHaveLength(
+      20
+    )
+  } finally {
+    view.unmount()
+    reader.dispose()
+    stopLive()
   }
   expect(Buffer.byteLength(JSON.stringify(compact))).toBeLessThan(640 * 1024)
   expect(grouped.sequence).toBe(beforeGroup.sequence + 1)
