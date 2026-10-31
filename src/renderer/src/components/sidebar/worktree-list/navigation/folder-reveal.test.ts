@@ -8,7 +8,11 @@ import {
   getKnownSidebarWorktreeById,
   sidebarWorkspaceStillExists
 } from './folder-reveal'
-import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
+import {
+  getProjectGroupHeaderKey,
+  PINNED_GROUP_KEY
+} from '../../../../../../shared/sidebar-list/group-keys'
+import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/host-section-collapse'
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
   return {
@@ -208,5 +212,18 @@ describe('reveal keys under non-repo grouping', () => {
     })
     expect(keys).toContain(getProjectGroupHeaderKey(group.id))
     expect(keys.some((key) => key.startsWith('workspace-status:'))).toBe(false)
+  })
+
+  it('returns the Pinned keys instead of the lane for a pinned folder workspace', () => {
+    const keys = getFolderWorkspaceRevealGroupKeys(
+      workspaceKey,
+      [{ ...folderWorkspace, isPinned: true }],
+      [group],
+      { groupBy: 'repo', workspaceStatuses: [], defaultHostId: 'local', hostScopedGroups: true }
+    )
+    expect(keys).toEqual([
+      getHostSectionCollapseKey(PINNED_GROUP_KEY, 'ssh:target-1'),
+      'host:ssh:target-1'
+    ])
   })
 })

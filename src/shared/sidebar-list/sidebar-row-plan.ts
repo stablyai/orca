@@ -111,6 +111,15 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Resolve folder membership before groupBy; every mode renders the same set (#15362).
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
+  // Pinned folder workspaces leave their lane like pinned worktrees do.
+  const pinnedFolderWorkspaces = renderableFolderWorkspaces
+    .filter((pair) => pair.folderWorkspace.isPinned)
+    .sort((left, right) =>
+      compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
+    )
+  const laneFolderWorkspaces = renderableFolderWorkspaces.filter(
+    (pair) => !pair.folderWorkspace.isPinned
+  )
   const pendingByRepo = new Map<string, PendingCreationRef[]>()
   for (const creation of pendingCreations) {
     const list = pendingByRepo.get(creation.repoId) ?? []
@@ -148,7 +157,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               pendingByRepo,
               repoOrder,
               projectOrderBy,
-              folderWorkspaces: renderableFolderWorkspaces
+              folderWorkspaces: laneFolderWorkspaces
             })
       if (pinned.length > 0) {
         groups.unshift([PINNED_GROUP_KEY, { label: '', items: pinned, repoIds: new Set() }])
@@ -210,6 +219,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     })
     emitPinnedGroup(
       pinnedSectionWorktrees,
+      pinnedFolderWorkspaces,
       repoOf,
       defaultHostId,
       collapsedGroups,
@@ -223,21 +233,21 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     )
     if (groupBy === 'none') {
       // Folder-only accounts must still render flat rows (#15362).
-      if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {
+      if (naturalWorktrees.length > 0 || laneFolderWorkspaces.length > 0) {
         result.push({
           type: 'header',
           key: ALL_GROUP_KEY,
-          count: naturalWorktrees.length + renderableFolderWorkspaces.length,
+          count: naturalWorktrees.length + laneFolderWorkspaces.length,
           icon: { kind: 'all' },
           hostWorktreeCounts: getLaneHostWorktreeCounts(
             naturalWorktrees,
-            renderableFolderWorkspaces,
+            laneFolderWorkspaces,
             repoOf,
             defaultHostId
           ),
           hostWorktreeIds: getLaneHostWorktreeIds(
             naturalWorktrees,
-            renderableFolderWorkspaces,
+            laneFolderWorkspaces,
             repoOf,
             defaultHostId
           ),
@@ -250,7 +260,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
             sectionKey: ALL_GROUP_KEY,
             hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
           })
-          for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
+          for (const pair of [...laneFolderWorkspaces].sort((left, right) =>
             compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
           )) {
             result.push(buildFolderWorkspaceRow(pair, 0))
@@ -289,7 +299,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     appendProjectGroupSections(sectionContext, {
       orderedGroups,
       projectGroups,
-      folderWorkspaces: renderableFolderWorkspaces,
+      folderWorkspaces: laneFolderWorkspaces,
       projectOrderBy,
       repoOrder
     })

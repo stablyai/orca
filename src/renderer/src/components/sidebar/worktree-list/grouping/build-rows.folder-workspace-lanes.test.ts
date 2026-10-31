@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './build-rows.test-fixture'
 import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list/folder-workspace-lanes'
-import { getPRLaneKey } from '../../../../../../shared/sidebar-list/group-keys'
+import { getPRLaneKey, PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { getPRGroupKey } from './pr-group-key'
 import { getRenderRowKey } from '../listing/render-row'
 import type { Row, WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
@@ -128,6 +128,63 @@ describe('a folder workspace can be the only member of a lane', () => {
   it('renders in flat mode with no worktrees present', () => {
     const rows = buildSidebarRows({ groupBy: 'none', worktrees: [] })
     expect(folderRows(rows)).toHaveLength(1)
+  })
+})
+
+describe('pinned folder workspaces', () => {
+  const pinned = makeFolderWorkspace({ id: 'fw-pinned', name: 'Pinned folder', isPinned: true })
+  const unpinned = makeFolderWorkspace({ id: 'fw-loose', name: 'Loose folder' })
+
+  for (const groupBy of ALL_GROUP_BY) {
+    it(`moves the folder row into Pinned when groupBy is ${groupBy}`, () => {
+      const rows = buildSidebarRows({ groupBy, folderWorkspaces: [pinned, unpinned] })
+      const pinnedHeaderIndex = rows.findIndex(
+        (row) => row.type === 'header' && row.key === PINNED_GROUP_KEY
+      )
+      const nextHeaderIndex = rows.findIndex(
+        (row, index) => index > pinnedHeaderIndex && row.type === 'header'
+      )
+      const pinnedSection = rows.slice(pinnedHeaderIndex + 1, nextHeaderIndex)
+
+      expect(pinnedHeaderIndex).toBe(0)
+      expect(rows[0]).toMatchObject({ count: 1 })
+      expect(folderRows(pinnedSection).map((row) => row.folderWorkspace.id)).toEqual([pinned.id])
+      expect(folderRows(rows).map((row) => row.folderWorkspace.id)).toEqual([
+        pinned.id,
+        unpinned.id
+      ])
+    })
+  }
+
+  it('renders Pinned when a folder workspace is the only pinned row', () => {
+    const rows = buildSidebarRows({ groupBy: 'repo', worktrees: [], folderWorkspaces: [pinned] })
+    expect(rows[0]).toMatchObject({ type: 'header', key: PINNED_GROUP_KEY, count: 1 })
+    expect(rows[1]).toMatchObject({ type: 'folder-workspace', folderWorkspace: pinned })
+  })
+
+  it('hides the folder row when Pinned is collapsed', () => {
+    const rows = buildSidebarRows({
+      groupBy: 'repo',
+      folderWorkspaces: [pinned],
+      collapsedGroups: new Set([PINNED_GROUP_KEY])
+    })
+    expect(rows[0]).toMatchObject({ type: 'header', key: PINNED_GROUP_KEY })
+    expect(folderRows(rows)).toEqual([])
+  })
+
+  it('counts a pinned folder workspace under its own host', () => {
+    const sshGroup: ProjectGroup = { ...GROUP, connectionId: 'target-1' }
+    const rows = buildSidebarRows({
+      groupBy: 'repo',
+      worktrees: [],
+      projectGroups: [sshGroup],
+      folderWorkspaces: [pinned]
+    })
+    expect(rows[0]).toMatchObject({
+      key: PINNED_GROUP_KEY,
+      hostWorktreeCounts: new Map([['ssh:target-1', 1]]),
+      hostWorktreeIds: new Map([['ssh:target-1', []]])
+    })
   })
 })
 

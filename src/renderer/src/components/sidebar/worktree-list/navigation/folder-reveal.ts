@@ -13,7 +13,10 @@ import {
   composeWorktreeHostIdentity,
   getExecutionHostIdFromWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
-import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
+import {
+  getProjectGroupHeaderKey,
+  PINNED_GROUP_KEY
+} from '../../../../../../shared/sidebar-list/group-keys'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
@@ -111,6 +114,19 @@ export function getFolderWorkspaceRevealGroupKeys(
       )
       .map((group) => [group.id, group])
   )
+  const owningGroup = groupsById.get(folderWorkspace.projectGroupId)
+  if (folderWorkspace.isPinned && owningGroup) {
+    if (!options?.defaultHostId) {
+      return [PINNED_GROUP_KEY]
+    }
+    const hostId = getFolderWorkspaceHostId(folderWorkspace, owningGroup, options.defaultHostId)
+    return [
+      options.hostScopedGroups
+        ? getHostSectionCollapseKey(PINNED_GROUP_KEY, hostId)
+        : PINNED_GROUP_KEY,
+      `host:${hostId}`
+    ]
+  }
   // Resolve parents from the unfiltered last same-ID group copy, matching the hostless headers the sidebar renders.
   const renderedGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
   const keys: string[] = []
@@ -129,7 +145,6 @@ export function getFolderWorkspaceRevealGroupKeys(
   }
 
   // Non-repo modes hide folders behind lane/host headers; derive their reveal keys from the grouping function.
-  const owningGroup = groupsById.get(folderWorkspace.projectGroupId)
   if (options?.groupBy && options.groupBy !== 'repo' && owningGroup) {
     const laneKey = getFolderWorkspaceLaneKey(
       { folderWorkspace, projectGroup: owningGroup },
