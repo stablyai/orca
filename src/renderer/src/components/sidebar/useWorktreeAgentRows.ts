@@ -1,5 +1,6 @@
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
@@ -31,6 +32,14 @@ import {
   createWorktreeAgentFreshnessSelector,
   EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
 } from './worktree-agent-freshness-selector'
+import {
+  getLivePaneCwdMap,
+  getLivePaneCwdVersion,
+  subscribeLivePaneCwd
+} from './live-pane-cwd-registry'
+import { applyLiveWorktreeMismatchLabels } from './worktree-agent-live-worktree-mismatch'
+import { getWorktreeMapFromState } from '@/store/selectors'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 // Why frozen: shared by every inactive card, and callers only read these rows.
 const EMPTY_AGENT_ROWS = Object.freeze([]) as unknown as DashboardAgentRow[]
@@ -98,6 +107,28 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     getInputs,
     getInputs
   )
+  // Why: OSC 7 live cwd is outside the zustand store; version bumps only when a
+  // confirmed pane cwd changes so cards do not re-render on ordinary title pings.
+  const livePaneCwdVersion = useSyncExternalStore(
+    subscribeLivePaneCwd,
+    getLivePaneCwdVersion,
+    getLivePaneCwdVersion
+  )
+  const siblingWorktrees = useAppStore(
+    useShallow((s) => {
+      if (!active || !s.worktreesByRepo) {
+        return []
+      }
+      const repoId = getRepoIdFromWorktreeId(worktreeId)
+      const attributed = getWorktreeMapFromState(s).get(worktreeId)
+      return (s.worktreesByRepo[repoId] ?? []).filter(
+        (worktree) =>
+          worktree.hostId === undefined ||
+          attributed?.hostId === undefined ||
+          worktree.hostId === attributed.hostId
+      )
+    })
+  )
 
   return useMemo<DashboardAgentRow[]>(() => {
     if (!active) {
@@ -116,20 +147,26 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
           ]
         : liveEntries
     return applyAgentRowLineage(
-      buildWorktreeAgentRows({
-        tabs: tabs ?? EMPTY_TABS,
-        representedTabs: getStructuredAgentSessionTabsByPaneKey(
-          useAppStore.getState().unifiedTabsByWorktree
-        ),
-        entries,
-        retained,
-        runtimePaneTitlesByTabId,
-        ptyIdsByTabId,
-        terminalLayoutsByTabId,
-        runtimeAgentOrchestrationByPaneKey,
-        paneForegroundAgentByPaneKey,
-        now
-      })
+      applyLiveWorktreeMismatchLabels(
+        buildWorktreeAgentRows({
+          tabs: tabs ?? EMPTY_TABS,
+          representedTabs: getStructuredAgentSessionTabsByPaneKey(
+            useAppStore.getState().unifiedTabsByWorktree
+          ),
+          entries,
+          retained,
+          runtimePaneTitlesByTabId,
+          ptyIdsByTabId,
+          terminalLayoutsByTabId,
+          runtimeAgentOrchestrationByPaneKey,
+          paneForegroundAgentByPaneKey,
+          now
+        }),
+        {
+          liveCwdByPaneKey: getLivePaneCwdMap(),
+          worktrees: siblingWorktrees
+        }
+      )
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -143,6 +180,8 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     terminalLayoutsByTabId,
     runtimeAgentOrchestrationByPaneKey,
     paneForegroundAgentByPaneKey,
-    agentFreshnessSignature
+    agentFreshnessSignature,
+    livePaneCwdVersion,
+    siblingWorktrees
   ])
 }
