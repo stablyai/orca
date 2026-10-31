@@ -107,7 +107,8 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     } else {
       printOrchestrationResult(renderedResult, json, WORKER_START_VIEW)
     }
-    if (keepOpenState && keepOpenState !== 'retained') {
+    // Only an explicit --keep-open fails the start; a new workspace's default is best effort.
+    if (flags.has('keep-open') && keepOpenState && keepOpenState !== 'retained') {
       const dispatchId = result.result.dispatchId
       // The worker runs either way, so the next step never starts it again.
       const verb =
