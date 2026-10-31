@@ -192,21 +192,19 @@ export class DirectRpcClient implements RpcClient {
     }
     const dialing = this.socketSession
     const dialAgeMs = Date.now() - this.socketFactory.getDialStartedAt()
-    let abandoned = false
     if (dialing && isStaleForegroundDial(this.getState(), dialAgeMs)) {
       console.log('[net] foreground — abandoning stale dial', {
         state: this.getState(),
         dialAgeMs
       })
       this.socketClose.forceClose(dialing)
-      abandoned = true
     }
     if (this.getState() === 'reconnecting') {
-      console.log('[net] foreground — restarting reconnect loop', {
+      console.log('[net] foreground — nudging reconnect loop', {
         attempt: this.getReconnectAttempt(),
         hadTimer: this.reconnect.hasTimer()
       })
-      this.reconnect.redialNow(!abandoned)
+      this.reconnect.redialOnNudge()
     }
   }
 

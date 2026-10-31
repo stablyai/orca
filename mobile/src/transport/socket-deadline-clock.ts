@@ -26,6 +26,10 @@ export function recordSocketDeadlineAppState(state: string | null | undefined): 
   }
 }
 
+export function isAppOutsideForeground(): boolean {
+  return outsideForegroundSince !== null
+}
+
 export function startSocketDeadlineClock(): () => number {
   const armed = readSocketDeadlineClock()
   const armedSleepGapMs = totalSleepGapMs(armed)
