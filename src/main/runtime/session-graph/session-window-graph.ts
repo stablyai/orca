@@ -81,6 +81,19 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     ) {
       throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
     }
+    // Why: reload marks the graph reloading before the next renderer publishes,
+    // so a different generation is valid only in that window. Once the new
+    // renderer is ready, a delayed graph from the previous one must not replace
+    // the snapshot or release a pending rename. A null stored generation stays
+    // open so headless promotion can still publish.
+    if (
+      typeof rendererGeneration === 'string' &&
+      typeof this.rendererGeneration === 'string' &&
+      rendererGeneration !== this.rendererGeneration &&
+      this.graphStatus === 'ready'
+    ) {
+      throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
+    }
     if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
       this.headlessGraphFallbackAvailable = true
       this.servesHeadlessGraph = true
