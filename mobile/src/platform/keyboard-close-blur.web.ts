@@ -6,12 +6,13 @@ import { subscribeSoftKeyboard } from './keyboard-occlusion.web'
 const FIELD_TOUCH_HIDE_WINDOW_MS = 1000
 const KEYBOARD_REOPEN_DELAY_MS = 50
 
+function isTextField(target: EventTarget | null): target is HTMLInputElement | HTMLTextAreaElement {
+  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+}
+
 // Android keeps the IME closed for a field that stays focused; blur then focus starts a new focus session, as for the terminal input.
 function reopenKeyboard(field: Element | null): void {
-  if (
-    document.activeElement === field &&
-    (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)
-  ) {
+  if (document.activeElement === field && isTextField(field)) {
     const { selectionStart, selectionEnd } = field
     field.blur()
     field.focus()
@@ -28,10 +29,7 @@ export function startBlurringOnKeyboardClose(): void {
     document.addEventListener(
       'pointerdown',
       (event) => {
-        const field = document.activeElement
-        const onField =
-          field !== null && event.target instanceof Node && field.contains(event.target)
-        fieldTouchedAt = onField ? Date.now() : -Infinity
+        fieldTouchedAt = isTextField(event.target) ? Date.now() : -Infinity
       },
       { capture: true }
     )

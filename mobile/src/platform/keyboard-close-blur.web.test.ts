@@ -72,6 +72,7 @@ describe('a keyboard the phone closes', () => {
     const field = focusedField('Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36')
     field.value = 'reader here'
     field.setSelectionRange(3, 3)
+    const setSelectionRange = vi.spyOn(field, 'setSelectionRange')
     let focusSessions = 0
     field.addEventListener('focus', () => focusSessions++)
     startBlurringOnKeyboardClose()
@@ -83,6 +84,7 @@ describe('a keyboard the phone closes', () => {
 
     expect(document.activeElement).toBe(field)
     expect(focusSessions).toBe(1)
+    expect(setSelectionRange).toHaveBeenLastCalledWith(3, 3)
     expect([field.selectionStart, field.selectionEnd]).toEqual([3, 3])
   })
 
@@ -111,6 +113,45 @@ describe('a keyboard the phone closes', () => {
     shellReports(0)
 
     expect(document.activeElement).not.toBe(field)
+  })
+
+  it('refocuses a field the touch itself focused, as when an autocorrected word is tapped after Back', () => {
+    vi.useFakeTimers()
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36'
+    })
+    const field = document.createElement('textarea')
+    document.body.append(field)
+    startBlurringOnKeyboardClose()
+
+    touch(field)
+    TextInputState.focusTextInput(field)
+    shellReports(300)
+    shellReports(0)
+    vi.advanceTimersByTime(50)
+
+    expect(document.activeElement).toBe(field)
+  })
+
+  it('still ends focus on a quick Back after a touch that landed on no field while nothing was focused', () => {
+    vi.useFakeTimers()
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36'
+    })
+    const terminal = document.createElement('div')
+    const terminalInput = document.createElement('textarea')
+    document.body.append(terminal, terminalInput)
+    startBlurringOnKeyboardClose()
+
+    touch(terminal)
+    TextInputState.focusTextInput(terminalInput)
+    shellReports(300)
+    shellReports(0)
+    vi.advanceTimersByTime(50)
+
+    expect(document.activeElement).not.toBe(terminalInput)
   })
 
   it('leaves focus alone on iOS, where only a blur closes the keyboard', () => {
