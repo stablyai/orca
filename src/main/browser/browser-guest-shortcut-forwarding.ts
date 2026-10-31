@@ -26,6 +26,7 @@ export function setupGuestShortcutForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
+  isLocalRenderer?: (renderer: Electron.WebContents) => boolean
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
   isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
@@ -36,6 +37,7 @@ export function setupGuestShortcutForwarding(args: {
     browserTabId,
     guest,
     resolveRenderer,
+    isLocalRenderer,
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
@@ -58,6 +60,7 @@ export function setupGuestShortcutForwarding(args: {
   const forwardContext: GuestShortcutForwardContext = {
     browserTabId,
     resolveRenderer,
+    isLocalRenderer,
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
@@ -91,7 +94,9 @@ export function setupGuestShortcutForwarding(args: {
       return
     }
 
-    if (input.type === 'keyDown' || input.type === 'keyUp') {
+    if (input.isComposing || input.key === 'Dead' || input.key === 'Process') {
+      doubleTapDetector.reset()
+    } else if (input.type === 'keyDown' || input.type === 'keyUp') {
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: input.type,
@@ -106,7 +111,10 @@ export function setupGuestShortcutForwarding(args: {
         Date.now()
       )
       if (detected) {
-        const doubleTapInput: GuestShortcutInput = { doubleTapModifier: detected.modifier }
+        const doubleTapInput: GuestShortcutInput = {
+          doubleTapModifier: detected.modifier,
+          isComposing: input.isComposing
+        }
         forwardGuestShortcutInput(
           forwardContext,
           event,

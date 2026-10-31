@@ -9,6 +9,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
+import { getEffectiveKeybindingsForAction, parseKeybinding } from '../../shared/keybindings'
 import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
 import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
 
@@ -162,21 +163,75 @@ describe('setupGuestShortcutForwarding', () => {
   })
 
   it.each([undefined, { 'view.plugins': ['Mod+Shift+X'] }])(
-    'leaves the Plugins shortcut and repeats to the guest with keybindings %j',
+    'forwards the configured Plugins shortcut once with keybindings %j',
     (keybindings) => {
       setupGuestShortcutForwarding({
         browserTabId,
         guest: makeGuest(),
         resolveRenderer: () => makeRenderer(),
+        isLocalRenderer: () => true,
         getKeybindings: () => keybindings
       })
-
-      const input = { key: 'X', code: 'KeyX', shift: true }
-      expect(triggerBeforeInput(input)).not.toHaveBeenCalled()
-      expect(triggerBeforeInput({ ...input, isAutoRepeat: true })).not.toHaveBeenCalled()
-      expect(rendererSendMock).not.toHaveBeenCalled()
+      const binding = getEffectiveKeybindingsForAction(
+        'view.plugins',
+        process.platform,
+        keybindings
+      )[0]
+      const parsed = parseKeybinding(binding)
+      if (!parsed || !/^[A-Z]$/.test(parsed.key)) {
+        throw new Error(`Unexpected binding: ${binding}`)
+      }
+      const input = {
+        key: parsed.key,
+        code: `Key${parsed.key}`,
+        alt: parsed.alt,
+        shift: parsed.shift
+      }
+      expect(triggerBeforeInput(input)).toHaveBeenCalledOnce()
+      expect(triggerBeforeInput({ ...input, isAutoRepeat: true })).toHaveBeenCalledOnce()
+      expect(rendererSendMock).toHaveBeenCalledOnce()
+      expect(rendererSendMock).toHaveBeenCalledWith(
+        'ui:browserPageTabShortcut',
+        expect.objectContaining(input)
+      )
     }
   )
+
+  it('honors remapped and disabled Plugins bindings', () => {
+    let keybindings = { 'view.plugins': ['Mod+Shift+Y'] }
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      isLocalRenderer: () => true,
+      getKeybindings: () => keybindings
+    })
+    expect(triggerBeforeInput({ key: 'X', code: 'KeyX', shift: true })).not.toHaveBeenCalled()
+    expect(triggerBeforeInput({ key: 'Y', code: 'KeyY', shift: true })).toHaveBeenCalledOnce()
+    keybindings = { 'view.plugins': [] }
+    expect(triggerBeforeInput({ key: 'Y', code: 'KeyY', shift: true })).not.toHaveBeenCalled()
+  })
+
+  it('leaves composing input and paired renderer shortcuts to the guest', () => {
+    let local = true
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      isLocalRenderer: () => local,
+      getKeybindings: () => ({ 'view.plugins': ['Mod+Shift+X'] })
+    })
+    for (const input of [
+      { key: 'X', code: 'KeyX', shift: true, isComposing: true },
+      { key: 'Dead', code: 'KeyX', shift: true },
+      { key: 'Process', code: 'KeyX', shift: true }
+    ]) {
+      expect(triggerBeforeInput(input)).not.toHaveBeenCalled()
+    }
+    local = false
+    expect(triggerBeforeInput({ key: 'X', code: 'KeyX', shift: true })).not.toHaveBeenCalled()
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
 
   it('commits Ctrl+Tab switching from focused guest pages on generic release events', () => {
     setupGuestShortcutForwarding({
@@ -395,6 +450,55 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).toHaveBeenCalledWith('ui:browserPageTabShortcut', {
       doubleTapModifier: 'Shift'
     })
+  })
+
+  it('replays a double-tap Plugins binding', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      isLocalRenderer: () => true,
+      getKeybindings: () => ({ 'view.plugins': ['DoubleTap+Shift'] })
+    })
+    const input = {
+      code: 'ShiftLeft',
+      key: 'Shift',
+      shift: true,
+      meta: false,
+      control: false,
+      alt: false
+    }
+    triggerBeforeInput(input)
+    triggerBeforeInput({ ...input, type: 'keyUp' })
+    expect(triggerBeforeInput(input)).toHaveBeenCalledOnce()
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:browserPageTabShortcut', {
+      doubleTapModifier: 'Shift'
+    })
+  })
+
+  it('does not arm a Plugins double tap during composition', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      isLocalRenderer: () => true,
+      getKeybindings: () => ({ 'view.plugins': ['DoubleTap+Shift'] })
+    })
+    const input = {
+      key: 'Shift',
+      code: 'ShiftLeft',
+      shift: true,
+      meta: false,
+      control: false,
+      alt: false
+    }
+    triggerBeforeInput({ ...input, isComposing: true })
+    triggerBeforeInput({ ...input, type: 'keyUp', isComposing: true })
+    expect(triggerBeforeInput(input)).not.toHaveBeenCalled()
+    expect(rendererSendMock).not.toHaveBeenCalled()
+    triggerBeforeInput({ ...input, type: 'keyUp' })
+    expect(triggerBeforeInput(input)).toHaveBeenCalledOnce()
+    expect(rendererSendMock).toHaveBeenCalledOnce()
   })
 
   it('resets guest double-tap detection on blur', () => {
