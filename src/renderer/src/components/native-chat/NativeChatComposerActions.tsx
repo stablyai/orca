@@ -14,13 +14,15 @@ import { NativeChatComposerPermissionPicker } from './NativeChatPermissionModePi
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
-import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import type {
+  NativeChatComposerSendIntent,
+  NativeChatOptionPickerRequest
+} from './native-chat-composer-types'
 import type {
   NativeChatFollowUpBehavior,
   NativeChatSendFollowUp
 } from '../../../../shared/native-chat-follow-up-behavior'
 import { isMacPlatform } from './native-chat-shortcut'
-import type { NativeChatComposerSendIntent } from './native-chat-composer-types'
 import { usePlatformModifierHeld } from './use-platform-modifier-held'
 
 /** `held`: the idle Send would be disabled here, so this control is too, with the same reason. */
@@ -130,8 +132,8 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
       onMouseDown={(event) => event.preventDefault()}
       onClick={handleCriticalAction}
       variant={stops ? 'secondary' : 'default'}
-      size="icon"
-      className="size-8 rounded-full pointer-coarse:size-10"
+      size="icon-round"
+      className="pointer-coarse:size-10"
     >
       {stops ? <Square className="size-3.5 fill-current" /> : <ArrowUp className="size-4" />}
     </Button>
@@ -283,8 +285,8 @@ function NativeChatFollowUpSendButton({
           onSend()
         }
       }}
-      size="icon"
-      className="size-8 rounded-full pointer-coarse:size-10"
+      size="icon-round"
+      className="pointer-coarse:size-10"
     >
       <Icon className="size-4" />
     </Button>
