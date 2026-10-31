@@ -6,7 +6,9 @@ import { useAppStore } from '@/store'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
 import { _clearHostedReviewRequestGenerationsForTest } from '@/store/slices/hosted-review-request-state'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
 import type { HostedReviewInfo } from '../../../../../shared/hosted-review'
+import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import { isGitLabChecksPanelReview } from './gitlab-review-client'
 import { useChecksPanelEntryRefreshAndTitleActions } from './use-checks-panel-entry-refresh-and-title-actions'
 
@@ -138,4 +140,41 @@ describe('refreshHostedReviewAfterMutation', () => {
       expect(forBranch).toHaveBeenCalledTimes(3)
     }
   )
+})
+
+it('GitHub post-write refresh cannot reuse a pre-write PR read', async () => {
+  const pr = (state: PRInfo['state'], headSha: string): PRInfo => ({
+    number: 12,
+    title: 'PR',
+    state,
+    url: 'https://github.com/acme/widgets/pull/12',
+    checksStatus: 'success',
+    updatedAt: '2026-10-30T00:00:00Z',
+    mergeable: 'UNKNOWN',
+    headSha
+  })
+  const old = Promise.withResolvers<{ kind: 'found'; pr: PRInfo; fetchedAt: number }>()
+  const afterWrite = pr('merged', 'head-b')
+  const refreshPRNow = vi
+    .fn()
+    .mockReturnValueOnce(old.promise)
+    .mockResolvedValueOnce({ kind: 'found', pr: afterWrite, fetchedAt: 2 })
+  vi.stubGlobal('api', { gh: { refreshPRNow } })
+  useAppStore.setState({ repos: [repo], prCache: {}, hostedReviewCache: {}, prRefreshStates: {} })
+  const input = makeInput({ ...bitbucketReview, provider: 'github', state: 'merged' })
+  input.fetchHostedReviewForBranch = vi.fn(async () => null)
+  input.fetchPRForBranch = useAppStore.getState().fetchPRForBranch
+  const before = input.fetchPRForBranch(repo.path, 'main', {
+    force: true,
+    repoId: repo.id,
+    reason: 'visible'
+  })
+  const { result } = renderHook(() => useChecksPanelEntryRefreshAndTitleActions(input))
+  await act(async () => result.current.refreshHostedReviewAfterMutation())
+  old.resolve({ kind: 'found', pr: pr('open', 'head-a'), fetchedAt: 1 })
+  await before
+  const key = getGitHubPRCacheKey(repo.path, repo.id, 'main')
+  expect(refreshPRNow).toHaveBeenCalledTimes(2)
+  expect(refreshPRNow).toHaveBeenLastCalledWith(expect.objectContaining({ userRefresh: true }))
+  expect(useAppStore.getState().prCache[key]?.data).toEqual(afterWrite)
 })

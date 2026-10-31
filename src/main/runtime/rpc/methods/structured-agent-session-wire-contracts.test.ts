@@ -33,7 +33,8 @@ import {
 } from './structured-agent-session-rpc.test-fixture'
 import {
   createQueuedMessageTestRig,
-  eventually
+  eventually,
+  QUEUED_RIG_CALLER
 } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
 import {
   HOST_TEST_SESSION as HOST_SESSION,
@@ -492,6 +493,15 @@ describe('agentSession.send reply timing', () => {
     let release = () => {}
     try {
       const working = await rig.workingSend()
+      const compactId = hostTestOperationId()
+      const compactFields = { command: 'compact' as const, delivery: 'queue-if-active' as const }
+      expect(
+        await rig.host.conversationCommand(QUEUED_RIG_CALLER, {
+          ...compactFields,
+          envelope: rig.envelope(compactFields, 'agentSession.conversationCommand', compactId),
+          userSend: true
+        })
+      ).toMatchObject({ ok: true, value: { queued: { messageId: compactId } } })
       const image = imageSend()
       expect(
         await call('agentSession.send', image.request, STRUCTURED_MOBILE_CLIENT)
@@ -499,8 +509,12 @@ describe('agentSession.send reply timing', () => {
         ok: true,
         result: { value: { submission: { clientMessageId: image.id } } }
       })
-      expect(await rig.drafts()).toEqual([])
+      expect((await rig.drafts()).map((card) => card.messageId)).toEqual([compactId])
+      expect((await rig.submission(image.id))?.handedOverAt).toBeUndefined()
       await rig.settleAccepted(working, 'working')
+      await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+      expect((await rig.submission(image.id))?.handedOverAt).toBeUndefined()
+      rig.finishCompact()
       await eventually(async () => {
         expect((await rig.submission(image.id))?.handedOverAt).toBeDefined()
         expect(
