@@ -7229,6 +7229,11 @@
           "noWsl2Title": "No WSL 2 distros found",
           "noWsl2Install": "Install one from a Windows terminal with {{command}}, then choose Refresh."
         },
+        "WorkspaceDeleteConfirmNotice": {
+          "press": "Press",
+          "again": "again to delete",
+          "againFolder": "again to remove from Orca"
+        },
         "wslHostRowStatus": {
           "connecting": "Starting",
           "reconnecting": "Reconnecting",
