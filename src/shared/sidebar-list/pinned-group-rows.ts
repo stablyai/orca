@@ -1,14 +1,23 @@
 import type { WorktreeOccurrencePlan } from '../worktree-occurrence-plan'
 import type { Worktree } from '../worktree/types'
-import { getWorktreeExecutionHostId } from '../execution-host'
 import type { ExecutionHostId } from '../execution-host'
 import { PINNED_GROUP_KEY } from './group-keys'
-import { appendWorktreeRows, buildImportedWorktreesCardRow } from './row-builders'
+import {
+  appendWorktreeRows,
+  buildFolderWorkspaceRow,
+  buildImportedWorktreesCardRow
+} from './row-builders'
+import { getLaneHostWorktreeCounts, getLaneHostWorktreeIds } from './host-labels'
+import {
+  compareFolderWorkspacesForDisplay,
+  type RenderableFolderWorkspace
+} from './folder-workspace-lanes'
 import type { NoticeHostContext } from './host-labels'
 import type { ImportedWorktreesCardCandidate, RepoOfWorktree, Row } from './row-types'
 
 export function emitPinnedGroup(
   pinnedSectionWorktrees: Worktree[],
+  pinnedFolderWorkspaces: readonly RenderableFolderWorkspace[],
   repoOf: RepoOfWorktree,
   defaultHostId: ExecutionHostId,
   collapsedGroups: Set<string>,
@@ -20,19 +29,26 @@ export function emitPinnedGroup(
   noticeHostContextLabelByRepoId?: ReadonlyMap<string, NoticeHostContext>,
   hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
 ): void {
-  if (pinnedSectionWorktrees.length === 0) {
+  if (pinnedSectionWorktrees.length === 0 && pinnedFolderWorkspaces.length === 0) {
     return
   }
-  const hostWorktreeCounts = new Map<ExecutionHostId, number>()
-  const hostWorktreeIds = new Map<ExecutionHostId, string[]>()
+  // Why lane helpers: folder-only pins still need per-host header stats (#34006), and folders
+  // contribute counts but no worktree ids.
+  const hostWorktreeCounts = getLaneHostWorktreeCounts(
+    pinnedSectionWorktrees,
+    pinnedFolderWorkspaces,
+    repoOf,
+    defaultHostId
+  )
+  const hostWorktreeIds = getLaneHostWorktreeIds(
+    pinnedSectionWorktrees,
+    pinnedFolderWorkspaces,
+    repoOf,
+    defaultHostId
+  )
   const pinnedRepoOrder: string[] = []
   const seenPinnedRepoIds = new Set<string>()
   for (const worktree of pinnedSectionWorktrees) {
-    const hostId = getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId)
-    hostWorktreeCounts.set(hostId, (hostWorktreeCounts.get(hostId) ?? 0) + 1)
-    const hostIds = hostWorktreeIds.get(hostId) ?? []
-    hostIds.push(worktree.id)
-    hostWorktreeIds.set(hostId, hostIds)
     if (!seenPinnedRepoIds.has(worktree.repoId)) {
       pinnedRepoOrder.push(worktree.repoId)
       seenPinnedRepoIds.add(worktree.repoId)
@@ -42,7 +58,7 @@ export function emitPinnedGroup(
   result.push({
     type: 'header',
     key: PINNED_GROUP_KEY,
-    count: pinnedSectionWorktrees.length,
+    count: pinnedSectionWorktrees.length + pinnedFolderWorkspaces.length,
     icon: { kind: 'pinned' },
     hostWorktreeCounts,
     hostWorktreeIds,
@@ -71,6 +87,12 @@ export function emitPinnedGroup(
     sectionKey: PINNED_GROUP_KEY,
     hostContextLabelByWorktreeIdentity
   })
+  // Folder pins ride the Pinned section after worktree rows; same display order as lanes.
+  for (const pair of [...pinnedFolderWorkspaces].sort((left, right) =>
+    compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
+  )) {
+    result.push(buildFolderWorkspaceRow(pair, 0, PINNED_GROUP_KEY))
+  }
   if (!allowImportedFallback) {
     return
   }

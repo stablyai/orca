@@ -111,11 +111,17 @@ export function appendWorktreeRows(
 /** One host-keyed folder row constructor for all emitters; IDs can collide across hosts. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
-  groupDepth: number
+  groupDepth: number,
+  /** Qualifies rows that can appear twice (Pinned under duplicate-in-groups) so the
+   * virtualizer never sees one key at two positions; lane rows keep the canonical key. */
+  keyQualifier?: string
 ): FolderWorkspaceRow {
+  const hostIdentity = getFolderWorkspaceHostIdentity(pair.folderWorkspace)
   return {
     type: 'folder-workspace',
-    key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
+    key: keyQualifier
+      ? `folder-workspace:${keyQualifier}:${hostIdentity}`
+      : `folder-workspace:${hostIdentity}`,
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: 0,
