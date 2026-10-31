@@ -220,14 +220,7 @@ export class JournalInputOrder {
   }
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
-    if (
-      journalInputOrderChanged(
-        state,
-        row,
-        () => this.receiptCount,
-        () => this.queueRevision
-      )
-    ) {
+    if (journalInputOrderChanged(state, row, (key) => this[key])) {
       this.revision++
     }
     if (row.kind === 'submission' || row.kind === 'dispatch') {

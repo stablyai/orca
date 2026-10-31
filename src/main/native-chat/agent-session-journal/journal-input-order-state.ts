@@ -65,15 +65,14 @@ export function restoreJournalInputPlaces(state: JournalReducerState): number {
 export function journalInputOrderChanged(
   state: JournalReducerState,
   row: JournalRow,
-  receiptCount: () => number,
-  queueRevision: () => number
+  readCount: (key: 'receiptCount' | 'queueRevision') => number
 ): boolean {
   return (
     row.kind === 'submission' ||
     row.kind === 'dispatch' ||
     row.kind === 'tombstone' ||
-    receiptCount() !== state.receipts.size ||
-    queueRevision() !== state.queue.revision
+    readCount('receiptCount') !== state.receipts.size ||
+    readCount('queueRevision') !== state.queue.revision
   )
 }
 
