@@ -2121,7 +2121,11 @@
       "discard": "放棄",
       "dismissKeyboard": "收起鍵盤",
       "dismissKeyboardHint": "隱藏螢幕鍵盤，並保持 Markdown 編輯器開啟。",
-      "readOnly": "唯讀"
+      "readOnly": "唯讀",
+      "editLabel": "編輯 Markdown",
+      "previewLabel": "預覽 Markdown",
+      "preview": "預覽",
+      "fileUnavailable": "此檔案位於目前工作區之外或無法使用。"
     },
     "nativeChatAttachActions": {
       "availableSkills": "{{count}} 項可用",

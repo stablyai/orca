@@ -63,6 +63,11 @@ export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
   markdownButtonDisabled: {
     opacity: 0.45
   },
+  markdownReaderFooter: {
+    padding: spacing.md,
+    alignItems: 'flex-end',
+    gap: spacing.xs
+  },
   markdownFloatingBar: {
     position: 'absolute',
     left: spacing.md,

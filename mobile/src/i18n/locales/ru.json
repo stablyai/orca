@@ -2271,7 +2271,11 @@
       "discard": "Отменить изменения",
       "dismissKeyboard": "Скрыть клавиатуру",
       "dismissKeyboardHint": "Скрывает экранную клавиатуру и оставляет редактор Markdown открытым.",
-      "readOnly": "Только чтение"
+      "readOnly": "Только чтение",
+      "editLabel": "Редактировать Markdown",
+      "previewLabel": "Предпросмотр Markdown",
+      "preview": "Предпросмотр",
+      "fileUnavailable": "Этот файл находится вне текущего рабочего пространства или недоступен."
     },
     "nativeChatAttachActions": {
       "availableSkills": "Доступно: {{count}}",

@@ -44,6 +44,34 @@ describe('Markdown preview images', () => {
     expect(client.sendRequest).not.toHaveBeenCalled()
   })
 
+  it('previews file URLs inside the known remote workspace without reading phone files', async () => {
+    const client = host()
+    await expect(
+      loadMarkdownPreviewImage(
+        client,
+        'folder-workspace',
+        'docs/readme.md',
+        'file:///remote/project/assets/a%20b.png',
+        '/remote/project/docs/readme.md'
+      )
+    ).resolves.toBe('data:image/png;base64,cG5n')
+    expect(client.sendRequest).toHaveBeenCalledWith('files.readPreview', {
+      worktree: 'id:folder-workspace',
+      relativePath: 'assets/a b.png'
+    })
+    client.sendRequest.mockClear()
+    await expect(
+      loadMarkdownPreviewImage(
+        client,
+        'folder-workspace',
+        'docs/readme.md',
+        'file:///remote/other/photo.png',
+        '/remote/project/docs/readme.md'
+      )
+    ).rejects.toThrow()
+    expect(client.sendRequest).not.toHaveBeenCalled()
+  })
+
   it('lets native Image load public URLs without sending them to the workspace host', async () => {
     const client = host()
     await expect(

@@ -2125,7 +2125,11 @@
       "discard": "Verwerfen",
       "dismissKeyboard": "Tastatur ausblenden",
       "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt den Markdown-Editor geöffnet.",
-      "readOnly": "Schreibgeschützt"
+      "readOnly": "Schreibgeschützt",
+      "editLabel": "Markdown bearbeiten",
+      "previewLabel": "Markdown-Vorschau anzeigen",
+      "preview": "Vorschau",
+      "fileUnavailable": "Diese Datei liegt außerhalb des aktuellen Arbeitsbereichs oder ist nicht verfügbar."
     },
     "nativeChatAttachActions": {
       "availableSkills": "{{count}} verfügbar",

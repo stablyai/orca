@@ -1,4 +1,8 @@
 import { useState } from 'react'
+import { MobileSessionMarkdownPreview } from './MobileSessionMarkdownPreview'
+import type { MobileFilePreviewRpcSender } from '../files/mobile-file-preview-operations'
+import { mobileMarkdownFileLink } from '../files/mobile-markdown-file-link'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { RefreshCw } from 'lucide-react-native'
 import { MobileRichMarkdownEditor } from '../components/MobileRichMarkdownEditor'
@@ -13,6 +17,12 @@ import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 
 export function MarkdownReader({
   documentId,
+  hostId,
+  worktreeId,
+  relativePath,
+  filePath,
+  client,
+  onLinkError,
   doc,
   onRefresh,
   onChange,
@@ -23,6 +33,12 @@ export function MarkdownReader({
   keyboardLift
 }: {
   documentId: string
+  hostId?: string
+  worktreeId?: string
+  relativePath?: string
+  filePath?: string
+  client?: MobileFilePreviewRpcSender | null
+  onLinkError?: (message: string) => void
   doc: MarkdownDocState | undefined
   onRefresh: () => void
   onChange: (content: string) => void
@@ -34,6 +50,25 @@ export function MarkdownReader({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const router = useWorkspaceRouteHandoff()
+  const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null)
+  const editing = editingDocumentId === documentId
+  const openFile = (pathText: string) => {
+    const href =
+      hostId && worktreeId && relativePath
+        ? mobileMarkdownFileLink({ hostId, worktreeId, relativePath }, pathText, filePath)
+        : null
+    if (href) {
+      router.push(href)
+    } else {
+      onLinkError?.(
+        t(
+          'session.markdownReader.fileUnavailable',
+          'This file is outside the current workspace or is unavailable.'
+        )
+      )
+    }
+  }
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
   const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
@@ -51,22 +86,39 @@ export function MarkdownReader({
   const statusText = markdownReaderStatusText(doc)
   const showRefresh = (doc.stale && !doc.isDirty) || !doc.editable
   const showSave = doc.isDirty || doc.saving
+  // Leaving the editor stays possible even when the document turns read-only mid-edit.
+  const editToggleDisabled = !editing && (!doc.editable || doc.saving)
 
   return (
     <View style={styles.markdownEditor}>
-      <MobileRichMarkdownEditor
-        key={documentId}
-        content={doc.localContent}
-        editable={doc.editable && !doc.saving}
-        onChange={onChange}
-        onKeyboardInsetChange={setWebviewKeyboardInset}
-      />
+      {editing ? (
+        <MobileRichMarkdownEditor
+          key={documentId}
+          content={doc.localContent}
+          editable={doc.editable && !doc.saving}
+          onChange={onChange}
+          onOpenWorkspaceFile={openFile}
+          onKeyboardInsetChange={setWebviewKeyboardInset}
+        />
+      ) : (
+        <MobileSessionMarkdownPreview
+          key={documentId}
+          relativePath={relativePath ?? documentId}
+          documentAbsolutePath={filePath}
+          content={doc.localContent}
+          truncated={doc.truncated ?? false}
+          byteLength={doc.byteLength ?? 0}
+          client={client}
+          worktreeId={worktreeId}
+          onOpenFile={openFile}
+        />
+      )}
       <View
         pointerEvents="box-none"
         style={[
-          styles.markdownFloatingBar,
+          editing ? styles.markdownFloatingBar : styles.markdownReaderFooter,
           // Why: editor focus lives in a WebView, so lift native Save/Discard controls instead of resizing it.
-          {
+          editing && {
             bottom: resolveMarkdownFloatingActionsBottom({
               keyboardLift: effectiveKeyboardLift,
               restingBottom: spacing.lg,
@@ -84,6 +136,25 @@ export function MarkdownReader({
           </Text>
         ) : null}
         <View style={styles.markdownFloatingActions}>
+          <Pressable
+            style={[
+              styles.markdownFloatingButton,
+              styles.markdownCopyButton,
+              editToggleDisabled && styles.markdownButtonDisabled
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={
+              editing
+                ? t('session.markdownReader.previewLabel', 'Preview Markdown')
+                : t('session.markdownReader.editLabel', 'Edit Markdown')
+            }
+            disabled={editToggleDisabled}
+            onPress={() => setEditingDocumentId(editing ? null : documentId)}
+          >
+            <Text style={styles.markdownFloatingButtonText}>
+              {editing ? t('session.markdownReader.preview', 'Preview') : t('common.edit', 'Edit')}
+            </Text>
+          </Pressable>
           <Pressable
             style={[styles.markdownFloatingButton, styles.markdownCopyButton]}
             onPress={onCopy}

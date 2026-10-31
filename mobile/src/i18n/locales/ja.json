@@ -2121,7 +2121,11 @@
       "discard": "破棄",
       "dismissKeyboard": "キーボードを閉じる",
       "dismissKeyboardHint": "Markdown エディターを開いたまま、ソフトウェアキーボードを非表示にします。",
-      "readOnly": "読み取り専用"
+      "readOnly": "読み取り専用",
+      "editLabel": "Markdown を編集",
+      "previewLabel": "Markdown をプレビュー",
+      "preview": "プレビュー",
+      "fileUnavailable": "このファイルは現在のワークスペースの外にあるか、利用できません。"
     },
     "nativeChatAttachActions": {
       "availableSkills": "{{count}} 件が利用可能",

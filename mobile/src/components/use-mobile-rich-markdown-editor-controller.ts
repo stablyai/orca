@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { routeMarkdownHref } from './markdown-href-routing'
 import { normalizeMobileRichMarkdownKeyboardInset } from './mobile-rich-markdown-editor-keyboard-inset'
 import type {
   MobileRichMarkdownCommand,
@@ -32,12 +33,32 @@ export function normalizeExternalEditorUrl(value: string): string | null {
   }
 }
 
+export function openEditorLink(
+  value: string,
+  onOpenLink: (url: string) => void,
+  onOpenWorkspaceFile?: (pathText: string) => void
+): void {
+  const url = normalizeExternalEditorUrl(value)
+  if (url) {
+    onOpenLink(url)
+    return
+  }
+  if (!onOpenWorkspaceFile) {
+    return
+  }
+  const route = routeMarkdownHref(value.trim())
+  if (route.kind === 'file') {
+    onOpenWorkspaceFile(route.pathText)
+  }
+}
+
 export function useMobileRichMarkdownEditorController({
   content,
   editable,
   onChange,
   onKeyboardInsetChange,
   onOpenLink,
+  onOpenWorkspaceFile,
   transport
 }: MobileRichMarkdownEditorProps & { transport: MobileRichMarkdownEditorTransport }) {
   const readyRef = useRef(false)
@@ -88,10 +109,7 @@ export function useMobileRichMarkdownEditorController({
         return
       }
       if (message.type === 'openLink' && typeof message.url === 'string') {
-        const url = normalizeExternalEditorUrl(message.url)
-        if (url) {
-          onOpenLink(url)
-        }
+        openEditorLink(message.url, onOpenLink, onOpenWorkspaceFile)
         return
       }
       if (message.type === 'keyboardInset' && typeof message.bottom === 'number') {
@@ -101,7 +119,16 @@ export function useMobileRichMarkdownEditorController({
         }
       }
     },
-    [applyContent, content, editable, onChange, onKeyboardInsetChange, onOpenLink, transport]
+    [
+      applyContent,
+      content,
+      editable,
+      onChange,
+      onKeyboardInsetChange,
+      onOpenLink,
+      onOpenWorkspaceFile,
+      transport
+    ]
   )
 
   const runCommand = useCallback(

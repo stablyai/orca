@@ -27,6 +27,7 @@ export type MobileRichMarkdownEditorProps = {
   onChange: (content: string) => void
   onKeyboardInsetChange?: (bottom: number) => void
   onOpenLink: (url: string) => void
+  onOpenWorkspaceFile?: (pathText: string) => void
 }
 
 /** How a host delivers a command into whatever surface renders the editor document. */
