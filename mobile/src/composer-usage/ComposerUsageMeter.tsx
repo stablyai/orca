@@ -9,7 +9,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useAccountsSnapshot } from './accounts-snapshot-store'
 import {
   formatUsageWindowLength,
-  pickComposerUsageWindow,
+  resolveComposerUsageTarget,
   selectAgentUsage,
   usageProviderForAgent,
   USAGE_PROVIDER_NAMES
@@ -45,21 +45,30 @@ export function ComposerUsageMeter({
   const choice = useComposerUsageWindow()
   const [open, setOpen] = useState(false)
   const usage = selectAgentUsage(snapshot, agent)
-  const entry = usage ? pickComposerUsageWindow(usage.windows, choice) : null
-  if (!usage || !entry) {
+  const target = usage ? resolveComposerUsageTarget(usage, choice) : null
+  if (!usage || !target) {
     return null
   }
-  const used = Math.round(Math.max(0, Math.min(100, entry.window.usedPercent)))
-  const length = formatUsageWindowLength(entry.window.windowMinutes)
+  const idle = target.kind === 'no-session'
+  const used = idle ? 0 : Math.round(Math.max(0, Math.min(100, target.entry.window.usedPercent)))
+  const length = idle ? '5h' : formatUsageWindowLength(target.entry.window.windowMinutes)
   return (
     <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={t(
-          'composerUsage.meter.label',
-          '{{provider}} {{window}} usage: {{percent}}% used. Show details',
-          { provider: USAGE_PROVIDER_NAMES[usage.provider], window: length, percent: used }
-        )}
+        accessibilityLabel={
+          idle
+            ? t(
+                'composerUsage.meter.labelIdle',
+                '{{provider}} {{window}} usage: no active window. Show details',
+                { provider: USAGE_PROVIDER_NAMES[usage.provider], window: length }
+              )
+            : t(
+                'composerUsage.meter.label',
+                '{{provider}} {{window}} usage: {{percent}}% used. Show details',
+                { provider: USAGE_PROVIDER_NAMES[usage.provider], window: length, percent: used }
+              )
+        }
         hitSlop={6}
         onPress={() => setOpen(true)}
         style={({ pressed }) => [styles.meter, pressed && composerInputStyles.pressed]}
@@ -74,7 +83,7 @@ export function ComposerUsageMeter({
           />
         </View>
         <Text style={styles.text} numberOfLines={1}>
-          {`${used}%`}
+          {idle ? '—' : `${used}%`}
         </Text>
       </Pressable>
       <ComposerUsageSheet

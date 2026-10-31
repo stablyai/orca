@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { decodeAccountsSnapshot } from '../components/accounts-snapshot'
-import { pickComposerUsageWindow, selectAgentUsage } from './agent-usage-provider'
+import {
+  pickComposerUsageWindow,
+  resolveComposerUsageTarget,
+  selectAgentUsage
+} from './agent-usage-provider'
 
 const window = (usedPercent: number, windowMinutes: number) => ({
   usedPercent,
@@ -44,5 +48,32 @@ describe('selectAgentUsage', () => {
     expect(pickComposerUsageWindow(claude, 'weekly')?.window.usedPercent).toBe(55)
     const opencode = selectAgentUsage(snapshot, 'opencode')?.windows ?? []
     expect(pickComposerUsageWindow(opencode, 'session')?.kind).toBe('monthly')
+  })
+})
+
+describe('resolveComposerUsageTarget', () => {
+  const weeklyOnly = decodeAccountsSnapshot({
+    claude: { accounts: [], activeAccountId: null },
+    codex: { accounts: [], activeAccountId: null },
+    rateLimits: {
+      claude: limits('claude', { weekly: window(70, 10080) }),
+      codex: null,
+      gemini: null,
+      grok: limits('grok', { weekly: window(22, 10080) }),
+      inactiveClaudeAccounts: [],
+      inactiveCodexAccounts: []
+    }
+  })
+
+  it('shows an idle 5h meter instead of weekly for session providers without a session window', () => {
+    const claude = selectAgentUsage(weeklyOnly, 'claude')!
+    expect(resolveComposerUsageTarget(claude, 'session')).toEqual({ kind: 'no-session' })
+    expect(resolveComposerUsageTarget(claude, 'weekly')?.kind).toBe('window')
+  })
+
+  it('keeps the fallback for providers that never have a session window', () => {
+    const grok = selectAgentUsage(weeklyOnly, 'grok')!
+    const target = resolveComposerUsageTarget(grok, 'session')
+    expect(target?.kind === 'window' && target.entry.kind).toBe('weekly')
   })
 })
