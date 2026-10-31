@@ -1,5 +1,6 @@
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
+import { JournalWriteProjection } from './journal-write-projection'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import { createJournalPublicReader } from './journal-public-read'
@@ -22,7 +23,7 @@ import {
   newestStructuredAgentSessionTurnBySequence,
   runningStructuredAgentSessionTurnItemBySequence
 } from '../../../shared/structured-agent-session-live-turn'
-import { readJournalSince } from './journal-cursor'
+import { journalWroteBeforeOpen, readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader } from './journal-open'
 import {
@@ -31,7 +32,6 @@ import {
   rejectJournalQueuedSubmissions
 } from './journal-pending-submission-recovery'
 import {
-  applyJournalRow,
   createJournalReducerState,
   resolveJournalItemId,
   type JournalReducerState
@@ -65,8 +65,6 @@ export class AgentSessionJournal {
   private readonly goalAttachments: JournalCollaborators['goalAttachments']
   private readonly identity: AgentSessionJournalIdentity
   private readonly database: JournalHostDatabase
-  private readonly now: () => number
-  private readonly mintEpoch: () => string
 
   private state: JournalReducerState
   private readonly readPublic = createJournalPublicReader()
@@ -81,6 +79,7 @@ export class AgentSessionJournal {
   private readonly submissionWriter: JournalCollaborators['submissionWriter']
   private readonly stepWriter: JournalCollaborators['stepWriter']
   private readonly restore: () => Promise<void>
+  private readonly projection: JournalWriteProjection
   /** Queued cards never count as owed work. */
   readonly queuedMessages: JournalCollaborators['queuedMessages']
   readonly stopMarks: JournalCollaborators['stopMarks']
@@ -90,14 +89,19 @@ export class AgentSessionJournal {
   constructor(options: AgentSessionJournalOptions) {
     this.identity = options.identity
     this.database = options.database
-    this.now = options.now ?? (() => Date.now())
-    this.mintEpoch = options.mintEpoch ?? randomUUID
     this.state = createJournalReducerState(options.identity.sessionId, '')
     this.queue = new JournalWriteQueue(options.identity.sessionId)
+    this.projection = new JournalWriteProjection({
+      database: this.database,
+      state: () => this.state,
+      adopt: (state) => {
+        this.state = state
+      }
+    })
     const collaborators = createJournalStoreCollaborators({
       identity: this.identity,
-      now: this.now,
-      mintEpoch: this.mintEpoch,
+      now: options.now ?? (() => Date.now()),
+      mintEpoch: options.mintEpoch ?? randomUUID,
       serialize: (run) => this.queue.serialize(run),
       database: () => this.database,
       state: () => this.state,
@@ -107,11 +111,10 @@ export class AgentSessionJournal {
         this.state = loaded.state
         this.onCommitted?.()
       },
-      commit: (rows, savedAt) => {
-        for (const row of rows) {
-          applyJournalRow(this.state, row, savedAt)
-        }
+      prepare: (db, rows, savedAt) => this.projection.prepare(db, rows, savedAt),
+      commit: (rows) => {
         this.onCommitted?.(rows)
+        this.projection.verify()
       },
       notifyCommitted: () => this.onCommitted?.([]),
       journal: () => this,
@@ -141,11 +144,7 @@ export class AgentSessionJournal {
 
   /** Only rows from this handle's opening epoch can predate the open. */
   wroteBeforeOpen(sequence: number | undefined): boolean {
-    return (
-      sequence !== undefined &&
-      this.state.epoch === this.openedThrough.epoch &&
-      sequence <= this.openedThrough.sequence
-    )
+    return journalWroteBeforeOpen(this.state, this.openedThrough, sequence)
   }
 
   /** Fallback reopen boundary until its mark is written; each new handle marks again. */
