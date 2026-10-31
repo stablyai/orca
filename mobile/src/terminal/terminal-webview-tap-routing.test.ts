@@ -102,13 +102,14 @@ function boot(
   }
 }
 
-function fireTouch(type: string, touches: Array<{ x: number; y: number }>): void {
+function fireTouch(type: string, touches: Array<{ x: number; y: number }>): Event {
   const surface = document.getElementById('terminal-surface') as HTMLElement
   const ev = new Event(type, { bubbles: true, cancelable: true })
   Object.defineProperty(ev, 'touches', {
     value: touches.map((p, i) => ({ identifier: i, clientX: p.x, clientY: p.y, target: surface }))
   })
   surface.dispatchEvent(ev)
+  return ev
 }
 
 const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 50))
@@ -450,5 +451,20 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchend', [])
 
     expect(posted.slice(beforeStoppingTouch).find((m) => m.type === 'terminal-tap')).toBeUndefined()
+  })
+
+  it('calls preventDefault on a terminal-surface touchstart', async () => {
+    // Why: Chromium turns an uncancelled touchstart into a focus change that hides the keyboard.
+    boot('plain prompt')
+    await settle()
+
+    const start = fireTouch('touchstart', [{ x: 20, y: tapY }])
+    const pinch = fireTouch('touchstart', [
+      { x: 20, y: tapY },
+      { x: 80, y: tapY }
+    ])
+
+    expect(start.defaultPrevented).toBe(true)
+    expect(pinch.defaultPrevented).toBe(true)
   })
 })

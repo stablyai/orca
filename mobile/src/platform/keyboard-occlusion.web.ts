@@ -37,6 +37,14 @@ export function subscribeSoftKeyboard(
       onShow(height, 0)
     } else if (open) {
       open = false
+      if (
+        typeof document !== 'undefined' &&
+        document.activeElement instanceof HTMLElement &&
+        (document.activeElement.tagName === 'INPUT' ||
+          document.activeElement.tagName === 'TEXTAREA')
+      ) {
+        document.activeElement.blur()
+      }
       onHide(0)
     }
   }

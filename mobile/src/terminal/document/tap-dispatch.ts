@@ -112,6 +112,7 @@ function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {
   scope.tapCandidate = null
 
   if (touches.length === 2) {
+    e.preventDefault()
     if (scope.selMode === 'select') {
       notify(scope, { type: 'mobile-clip-cancel-by-pinch' })
       cancelSelect(scope)
@@ -134,6 +135,10 @@ function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {
   if (inOverlay) {
     return
   }
+
+  // Why: prevent Chromium from synthesizing a default focus/mousedown change that blurs the
+  // active command input (collapsing the open soft keyboard) when touching or scrolling the TUI.
+  e.preventDefault()
 
   if (inSurface && scope.selMode === 'select') {
     // Dismiss selection immediately but let the same gesture scroll/pan without requiring another touch.
