@@ -1324,7 +1324,7 @@
       },
       "userAgent": {
         "title": "Identidade do navegador",
-        "description": "Escolha o user agent para cada perfil e página do navegador. O modo nativo desativa o login do Google. As alterações têm efeito após reiniciar.",
+        "description": "Escolha o user agent para cada perfil e página do navegador. As alterações têm efeito após reiniciar.",
         "remoteUnsupported": "Gerencie a identidade do navegador no host remoto com a CLI do Orca.",
         "loading": "Carregando…",
         "resetRequired": "Os dados de identidade precisam ser redefinidos explicitamente antes de poderem ser alterados.",
@@ -1332,7 +1332,7 @@
         "optionClean": "Limpo",
         "optionCleanTooltip": "Remove os tokens do Orca e do Electron para corresponder às sessões importadas do Chrome.",
         "optionNative": "Nativo",
-        "optionNativeTooltip": "Mantém a identidade nativa do Electron para sites que rejeitam a identidade limpa. O login do Google não está disponível no modo Nativo.",
+        "optionNativeTooltip": "Mantém a identidade nativa do Electron para sites que rejeitam a identidade limpa.",
         "restartRequired": "Reinicialização necessária",
         "unavailable": "A identidade do navegador não está disponível."
       },
@@ -7181,8 +7181,7 @@
         "PluginInstallDialog": {
           "localRequired": "Digite o caminho da pasta do plugin.",
           "gitUrlRequired": "Digite uma URL de repositório.",
-          "gitUrlInvalid": "Use uma URL Git HTTPS ou SSH.",
-          "gitRefRequired": "Adicione um #tag ou #commit, como #v0.1.0.",
+          "gitUrlInvalid": "Use um link de repositório como https://github.com/owner/repo, owner/repo ou uma URL SSH.",
           "title": "Instalar plugin",
           "description": "Nada é executado até você ativar.",
           "source": "Origem da instalação",
@@ -7192,12 +7191,23 @@
           "localPlaceholder": "Caminho para uma pasta de plugin",
           "localHelp": "A pasta com orca-plugin.json",
           "gitLabel": "URL do repositório",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "Termine com #tag ou #commit para fixar uma versão",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "Cole um link de repositório, release ou tag. Sem #tag ou #commit, o Orca usa a tag de versão mais recente.",
           "cancel": "Cancelar",
           "installing": "Instalando…",
           "install": "Instalar",
-          "installFailed": "Falha na instalação do plugin. Verifique a origem e tente novamente."
+          "installFailed": "Falha na instalação do plugin. Verifique a origem e tente novamente.",
+          "checking": "Verificando…",
+          "continue": "Continuar",
+          "gitUrlCredentials": "Remova o nome de usuário ou o token da URL. O Orca usa seu login do Git.",
+          "gitRefInvalid": "A versão após # não é um nome válido de tag, branch ou commit.",
+          "gitRefNotFound": "Este repositório não tem nenhuma tag ou branch chamada {{value0}}.",
+          "gitUnreachable": "Não foi possível ler este repositório. Verifique a URL e se sua conta do Git tem acesso.",
+          "resolvedLatestTag": "Instala {{value0}}, a versão mais recente, no commit {{value1}}.",
+          "resolvedTag": "Instala {{value0}} no commit {{value1}}.",
+          "resolvedBranch": "Instala a branch {{value0}} como está agora, no commit {{value1}}.",
+          "resolvedCommit": "Instala o commit {{value0}}.",
+          "resolvedDefaultBranch": "Nenhuma tag de versão encontrada, então será instalado o commit mais recente, {{value0}}."
         },
         "PluginMarketplaceBrowser": {
           "loadFailed": "Não foi possível carregar os plugins do catálogo.",
@@ -8062,7 +8072,8 @@
           "invalidManifest": "orca-plugin.json é inválido. Corrija-o e depois atualize os plugins.",
           "installedManifestUnloadable": "Esta versão não pode ser carregada neste Orca. Atualize-a ou reinstale-a.",
           "invalidArtifact": "Um arquivo de worker ou painel declarado está ausente ou é inseguro. Corrija os arquivos do plugin e depois atualize.",
-          "consentChanged": "O plugin mudou enquanto você o revisava. Feche esta caixa de diálogo e revise as permissões atualizadas."
+          "consentChanged": "O plugin mudou enquanto você o revisava. Feche esta caixa de diálogo e revise as permissões atualizadas.",
+          "installGitMoved": "O repositório mudou depois que o Orca o verificou. Tente novamente."
         },
         "TaskSourceProviderCard": {
           "statusChecking": "Verificando…",
@@ -9408,7 +9419,8 @@
           "previous": "Anterior",
           "updated": "Atualizado",
           "license": "Licença",
-          "whatsNew": "Novidades"
+          "whatsNew": "Novidades",
+          "installs": "Instalações"
         },
         "PluginFilterPopover": {
           "kind": "Categoria",
@@ -14368,7 +14380,8 @@
         },
         "capturedOwner": {
           "orphan": "Esta automação não tem host para ser executada. Exclua-a, ou adicione novamente o host ao qual ela pertence.",
-          "unfenced": "O Orca neste host precisa de uma atualização antes que você possa ver o histórico de execução ou gerenciar esta automação. As execuções programadas podem continuar no host."
+          "unfenced": "O Orca neste host precisa de uma atualização antes que você possa ver o histórico de execução ou gerenciar esta automação. As execuções programadas podem continuar no host.",
+          "hostReselection": "Edite a automação e selecione novamente o host antes de executá-la."
         },
         "AutomationsPageBreadcrumb": {
           "ariaLabel": "Trilha de navegação de automações",
@@ -14488,6 +14501,9 @@
           "partialFailureOfHosts_one": "Falha ao carregar {{failed}} de {{count}} host",
           "partialFailureOfHosts_other": "Falha ao carregar {{failed}} de {{count}} hosts",
           "partialFailureOfHosts_many": "Falha ao carregar {{failed}} de {{count}} hosts"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "O host de execução salvo não corresponde mais a esta configuração do projeto."
         }
       },
       "TaskPage": {
@@ -16408,27 +16424,10 @@
       "mobile": {
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7d",
-            "a3d5476811": "5h",
-            "8a350a4784": "Uso da conta",
-            "e27fdaee51": "Novo Espaço de Trabalho",
-            "4405f3c440": "Parear Desktop",
-            "0b00c98506": "Ações Rápidas",
-            "0bad5b07c8": "GitHub e Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Tarefas",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "Retomar",
             "cf3f98fa3f": "Desconectado",
-            "091355da3d": "M1 Mini · casa",
-            "0bc1881bc4": "Conectado · 40 worktrees · 5 ativas",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Desktops",
-            "156db8a68a": "PRs criados",
-            "4a40af029b": "Tempo de agente",
-            "00a6903322": "Agentes iniciados",
-            "c0e2e9dcd9": "Bem-vindo de volta",
             "af761a0c0d": "Configurações",
             "5d94e8ddcc": "Orca"
           },
@@ -19735,6 +19734,9 @@
           "PluginsSectionDescription": {
             "openWith": "Abrir com (quando o foco não estiver em um campo editável)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} instalações"
         }
       }
     },

@@ -1,6 +1,6 @@
 import { createElement, useRef, useState, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import type { SessionTitleCard } from './use-session-title-card'
@@ -10,9 +10,21 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
+  Modal: 'Modal',
   ActivityIndicator: 'ActivityIndicator',
   Platform: { OS: 'web' },
-  StyleSheet: { create: <T,>(v: T) => v, hairlineWidth: 1 }
+  StyleSheet: { create: <T,>(v: T) => v, hairlineWidth: 1, absoluteFill: {} },
+  useWindowDimensions: () => ({ width: 382, height: 800 }),
+  Animated: {
+    View: 'AnimatedView',
+    Value: class {
+      setValue() {}
+      interpolate() {
+        return this
+      }
+    },
+    timing: () => ({ start: () => {} })
+  }
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
 vi.mock('lucide-react-native', () => ({
@@ -65,9 +77,16 @@ import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionTerminalLayoutSheet } from './MobileSessionTerminalLayoutSheet'
 
 let tree: ReactTestRenderer | undefined
+let frames: FrameRequestCallback[] = []
+beforeEach(() => {
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback))
+  vi.stubGlobal('cancelAnimationFrame', () => {})
+})
 afterEach(() => {
   act(() => tree?.unmount())
   tree = undefined
+  frames = []
+  vi.unstubAllGlobals()
 })
 
 function mountHeader(overrides: Partial<MobileSessionController> = {}) {
@@ -148,7 +167,12 @@ function mountHeader(overrides: Partial<MobileSessionController> = {}) {
     )
   }
   act(() => {
-    tree = create(createElement(Screen))
+    tree = create(createElement(Screen), {
+      createNodeMock: () => ({
+        measureInWindow: (done: (x: number, y: number, w: number, h: number) => void) =>
+          done(330, 8, 36, 36)
+      })
+    })
   })
   return callbacks
 }
@@ -169,10 +193,10 @@ function openMore() {
   )
 }
 function finishMenuClose() {
-  act(() => native('Drawer')[0].props.onAfterClose())
+  act(() => frames.splice(0).forEach((frame) => frame(0)))
 }
 
-it('keeps tabs usable through narrow/wide changes and opens collapsed actions after dismissing the menu', () => {
+it('keeps tabs usable through narrow/wide changes and opens collapsed actions after the pull-down closes', () => {
   const callbacks = mountHeader()
   const originalTabs = native('Pressable').filter((node) => node.props.accessibilityRole === 'tab')
   expect(
@@ -198,10 +222,16 @@ it('keeps tabs usable through narrow/wide changes and opens collapsed actions af
   openMore()
   expect(native('Text').map((node) => node.props.children)).toContain('Agent History')
   expect(native('Text').map((node) => node.props.children)).toContain('Checks')
+  expect(
+    native('Pressable').filter((node) => node.props.accessibilityRole === 'menuitem')
+  ).not.toEqual([])
   pressAction('Terminal layout')
-  expect(native('Drawer').map((node) => node.props.visible)).toEqual([false, false])
+  expect(native('Pressable').filter((node) => node.props.accessibilityRole === 'menuitem')).toEqual(
+    []
+  )
+  expect(native('Drawer').map((node) => node.props.visible)).toEqual([false])
   finishMenuClose()
-  expect(native('Drawer').map((node) => node.props.visible)).toEqual([false, true])
+  expect(native('Drawer').map((node) => node.props.visible)).toEqual([true])
   pressAction('Side by side')
   expect(callbacks.setTerminalSplitLayout).toHaveBeenCalledWith('side-by-side')
   expect(callbacks.toggleTerminalSplit).toHaveBeenCalledOnce()

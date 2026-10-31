@@ -618,7 +618,7 @@
       },
       "userAgent": {
         "title": "瀏覽器識別設定",
-        "description": "為所有瀏覽器設定檔與頁面選擇使用者代理程式。原生模式會停用 Google 登入。重新啟動後才會生效。",
+        "description": "為所有瀏覽器設定檔與頁面選擇使用者代理程式。重新啟動後才會生效。",
         "remoteUnsupported": "使用 Orca CLI 管理遠端主機上的瀏覽器識別設定。",
         "loading": "載入中…",
         "resetRequired": "變更瀏覽器識別設定前，必須先手動重設識別資料。",
@@ -626,7 +626,7 @@
         "optionClean": "精簡",
         "optionCleanTooltip": "移除 Orca 與 Electron 標記，以符合匯入的 Chrome 工作階段。",
         "optionNative": "原生",
-        "optionNativeTooltip": "針對拒絕精簡識別設定的網站，保留 Electron 內建的識別設定。原生模式無法使用 Google 登入。",
+        "optionNativeTooltip": "針對拒絕精簡識別設定的網站，保留 Electron 內建的識別設定。",
         "restartRequired": "需要重新啟動",
         "unavailable": "無法使用瀏覽器識別設定。"
       },
@@ -11719,8 +11719,7 @@
         "PluginInstallDialog": {
           "localRequired": "請輸入外掛資料夾路徑。",
           "gitUrlRequired": "請輸入存放庫 URL。",
-          "gitUrlInvalid": "請使用 HTTPS 或 SSH Git URL。不允許使用可執行的 Git 輔助通訊協定。",
-          "gitRefRequired": "請新增明確的 #ref（標籤或提交）以固定安裝版本，例如 #v0.1.0。",
+          "gitUrlInvalid": "請使用存放庫連結，例如 https://github.com/owner/repo、owner/repo 或 SSH URL。",
           "title": "安裝外掛",
           "description": "安裝會將外掛複製到 Orca，並顯示其權限供您審查。啟用外掛之前，不會執行任何外掛程式碼。",
           "source": "安裝來源",
@@ -11730,12 +11729,23 @@
           "localPlaceholder": "/Users/you/plugins/my-plugin 或 C:\\Users\\you\\plugins\\my-plugin",
           "localHelp": "此電腦上包含 orca-plugin.json 的資料夾完整路徑。系統會完全按輸入內容使用該路徑。",
           "gitLabel": "帶 #ref 的存放庫 URL",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "附加明確的 #ref（標籤或提交）以固定安裝版本。適用於 GitHub、GitLab 和任何 Git 主機。",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "貼上存放庫、發行版本或標籤連結。未指定 #tag 或 #commit 時，Orca 會使用最新的版本標籤。",
           "cancel": "取消",
           "installing": "正在安裝…",
           "install": "安裝",
-          "installFailed": "外掛安裝失敗。請檢查來源後重試。"
+          "installFailed": "外掛安裝失敗。請檢查來源後重試。",
+          "checking": "正在檢查…",
+          "continue": "繼續",
+          "gitUrlCredentials": "請從 URL 中移除使用者名稱或權杖。Orca 會使用你的 Git 登入憑證。",
+          "gitRefInvalid": "# 後面的版本不是有效的標籤、分支或提交名稱。",
+          "gitRefNotFound": "此存放庫中沒有名為 {{value0}} 的標籤或分支。",
+          "gitUnreachable": "無法讀取此存放庫。請檢查 URL，以及你的 Git 帳戶是否有存取權限。",
+          "resolvedLatestTag": "將安裝最新版本 {{value0}}（提交 {{value1}}）。",
+          "resolvedTag": "將安裝 {{value0}}（提交 {{value1}}）。",
+          "resolvedBranch": "將安裝分支 {{value0}} 的目前狀態（提交 {{value1}}）。",
+          "resolvedCommit": "將安裝提交 {{value0}}。",
+          "resolvedDefaultBranch": "找不到版本標籤，因此將安裝最新提交 {{value0}}。"
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "僅在工作區為作用中時執行。"
@@ -11839,7 +11849,8 @@
           "invalidManifest": "orca-plugin.json 無效。請修復它，然後重新整理外掛。",
           "installedManifestUnloadable": "此版本無法在這個 Orca 中載入。請更新或重新安裝。",
           "invalidArtifact": "宣告的工作行程或面板檔案缺失或不安全。請修復外掛檔案，然後重新整理。",
-          "consentChanged": "您在審查時外掛發生了變更。請關閉此對話方塊並審查更新後的權限。"
+          "consentChanged": "您在審查時外掛發生了變更。請關閉此對話方塊並審查更新後的權限。",
+          "installGitMoved": "Orca 檢查後存放庫已變更。請再試一次。"
         },
         "plugins": {
           "search": {
@@ -12832,7 +12843,8 @@
           "previous": "上一版",
           "updated": "更新時間",
           "license": "授權",
-          "whatsNew": "新功能"
+          "whatsNew": "新功能",
+          "installs": "安裝次數"
         },
         "PluginDetailPage": {
           "back": "外掛",
@@ -14870,27 +14882,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7 天",
-            "a3d5476811": "5 小時",
-            "8a350a4784": "帳戶用量",
-            "e27fdaee51": "新工作區",
-            "4405f3c440": "配對電腦",
-            "0b00c98506": "快速操作",
-            "0bad5b07c8": "GitHub 和 Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "任務",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "恢復",
             "cf3f98fa3f": "已斷開連線",
-            "091355da3d": "M1 Mini · 家",
-            "0bc1881bc4": "已連線 · 40 個工作樹 · 5 個使用中",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "電腦",
-            "156db8a68a": "已建立 PR",
-            "4a40af029b": "代理程式時間",
-            "00a6903322": "已建立的代理程式",
-            "c0e2e9dcd9": "歡迎回來",
             "af761a0c0d": "設定",
             "5d94e8ddcc": "Orca"
           },
@@ -17343,7 +17338,8 @@
         },
         "capturedOwner": {
           "orphan": "此自動化沒有可供執行的主機。刪除它，或重新新增它所屬的主機。",
-          "unfenced": "此主機上的 Orca 需要更新，然後您才能查看執行歷史記錄或管理此自動化。排程執行仍可能在主機上繼續。"
+          "unfenced": "此主機上的 Orca 需要更新，然後您才能查看執行歷史記錄或管理此自動化。排程執行仍可能在主機上繼續。",
+          "hostReselection": "請編輯此自動化，並在執行前重新選擇其主機。"
         },
         "hostStatus": {
           "authority": {
@@ -17514,6 +17510,9 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "{{count}} 台主機中有 {{failed}} 台無法載入"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "儲存的執行主機與此專案設定不再相符。"
         }
       },
       "agent": {
@@ -18399,6 +18398,9 @@
           "PluginsSectionDescription": {
             "openWith": "開啟方式（焦點不在可編輯欄位時）"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} 次安裝"
         }
       }
     },

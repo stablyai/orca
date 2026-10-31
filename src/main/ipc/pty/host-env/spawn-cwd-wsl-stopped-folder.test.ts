@@ -36,7 +36,7 @@ const FOLDER = '\\\\wsl.localhost\\Ubuntu\\home\\me\\notes'
 const WORKTREE_ID = folderWorkspaceKey('folder-1')
 const originalPlatform = process.platform
 
-function makeStore(): Store {
+function makeStore(twinOrder?: 'remote-first' | 'local-first'): Store {
   const workspace: FolderWorkspace = {
     id: 'folder-1',
     projectGroupId: 'group-1',
@@ -52,10 +52,16 @@ function makeStore(): Store {
     createdAt: 1,
     updatedAt: 1
   }
+  const remote = { ...workspace, connectionId: 'remote', folderPath: '/remote/notes' }
+  const folders = twinOrder
+    ? twinOrder === 'remote-first'
+      ? [remote, workspace]
+      : [workspace, remote]
+    : [workspace]
   const store = {
     getRepos: () => [],
     getProjectGroups: () => [],
-    getFolderWorkspaces: () => [workspace]
+    getFolderWorkspaces: () => folders
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the folder check reads only these three store methods.
   return store as unknown as Store
@@ -77,6 +83,23 @@ afterEach(() => {
 })
 
 describe('a folder workspace on a stopped WSL distro', () => {
+  it.each(['remote-first', 'local-first'] as const)(
+    'keeps the selected host through the passive WSL check (%s)',
+    async (order) => {
+      const store = makeStore(order)
+      await expect(
+        assertWorkspaceAcceptsNewPty(store, WORKTREE_ID, 'session-1', undefined, true, null)
+      ).rejects.toThrow(wslDistroHoldMessage('Ubuntu', 'stopped'))
+      expect(mocks.stat).not.toHaveBeenCalled()
+      mocks.readWslDistroRunningState.mockClear()
+      await expect(
+        assertWorkspaceAcceptsNewPty(store, WORKTREE_ID, 'session-1', undefined, true, 'remote')
+      ).rejects.toThrow('folder_workspace_path_unavailable:/remote/notes')
+      expect(mocks.stat).not.toHaveBeenCalled()
+      expect(mocks.readWslDistroRunningState).not.toHaveBeenCalled()
+    }
+  )
+
   it('reports the folder unavailable to a background status read without touching it', async () => {
     await expect(
       getFolderWorkspacePathStatus(makeStore(), {

@@ -56,6 +56,18 @@ describe('automation write invalidation', () => {
     expect(automationRowCatalogRef({ owner: null, selector: null }, DESKTOP)).toBeNull()
   })
 
+  it('invalidates the storing runtime orphan under All hosts without carrying its pairing revision into the cache key', () => {
+    const captured: AutomationCapturedOwner = {
+      owner: null,
+      authority: RUNTIME,
+      selector: { kind: 'orphan', issue: 'host-reselection-required' }
+    }
+    expect(automationRowCatalogRef(captured, DESKTOP)).toEqual({
+      authority: { kind: 'runtime', environmentId: 'env-1' },
+      selector: { kind: 'orphan' }
+    })
+  })
+
   it('widens to the whole authority rather than guessing a selector', () => {
     expect(automationWriteChangeEvent(null, RUNTIME)).toEqual({
       authority: { kind: 'runtime', environmentId: 'env-1' },

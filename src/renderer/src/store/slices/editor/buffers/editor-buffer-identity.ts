@@ -90,6 +90,16 @@ export function editorBufferIdentityOf(
   }
 }
 
+export function editorSaveResourceKey(
+  file: OpenFile,
+  state: WorktreeOperationRouteState
+): string | null {
+  const identity = editorBufferIdentityOf({ ...file, mode: 'edit' }, state)
+  return identity
+    ? JSON.stringify([file.mode, file.mirroredFromRuntimeSession === true, identity.key])
+    : null
+}
+
 /** Check one retirement event’s IDs for machine replacement; long-lived lists become stale when IDs are re-paired. */
 export function isEditorBufferIdentityRetired(
   identity: EditorBufferIdentity,

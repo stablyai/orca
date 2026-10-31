@@ -1,4 +1,7 @@
 import { structuredNativeWorkReaders } from '../structured-native-work-readers'
+import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
+import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../structured-agent-launch-support'
 import { resolveStructuredCodexAccountKind } from '../structured-agent-account-home'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -150,29 +153,31 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     sourceDefaultsSupported = true
   ): ResolvedWorktreeSnapshot {
     const visibilitySettings = this.store?.getSettings()
-    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
+    const sourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
       snapshot.worktrees,
       sourceDefaultsSupported,
       visibilitySettings
     )
     const hiddenRepos = runtimeHiddenRepos(this.store)
+    const repos = this.store?.getRepos() ?? []
+    const repoOwners = createRepoRowExecutionHostLookup(repos)
     return {
       ...snapshot,
-      worktrees: snapshot.worktrees.filter(
-        (worktree) =>
-          !hiddenRepos.hasWorktree(worktree) &&
-          this.isRuntimeWorktreeVisible(
-            worktree,
-            visibilitySourceMatchersByRepoId.get(worktree.repoId),
-            sourceDefaultsSupported,
-            visibilitySettings
-          )
-      )
+      worktrees: snapshot.worktrees.filter((worktree) => {
+        const owner = resolveWorktreeHostRouting(repos, worktree, repoOwners)
+        if (owner.kind === 'ambiguous' || hiddenRepos.hasWorktree(worktree)) {
+          return false
+        }
+        return this.isRuntimeWorktreeVisible(
+          worktree,
+          owner.kind === 'resolved'
+            ? sourceMatchersByRepoId.get(getRepoHostIdentityForParts(worktree.repoId, owner.hostId))
+            : undefined,
+          sourceDefaultsSupported,
+          visibilitySettings
+        )
+      })
     }
-  }
-
-  listRepos(): Repo[] {
-    return this.store?.getRepos() ?? []
   }
 
   /** Exclude retained migration sources from client listings. */

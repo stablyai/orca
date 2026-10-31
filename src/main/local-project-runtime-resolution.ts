@@ -5,10 +5,11 @@ import type { Repo } from '../shared/repo-types'
 import type { FolderWorkspace } from '../shared/folder-workspace-types'
 import type { ProjectGroup } from '../shared/project-group-types'
 import {
-  findFolderWorkspaceCandidateRepos,
-  resolveFolderWorkspaceHost,
-  type FolderWorkspaceHostState
+  findLocalFolderWorkspaceRuntimeRepo,
+  resolveQualifiedFolderWorkspace
 } from '../shared/folder-workspace-execution-host'
+import { parseWorkspaceKey } from '../shared/workspace-scope'
+import type { TerminalWorkspaceLaunchScope } from './runtime/runtime-legacy-worker-terminal-recovery-types'
 import {
   getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
@@ -22,12 +23,14 @@ import {
 } from './wsl'
 import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
 import { projectMatchesRepo } from '../shared/project-repo-match'
+import type { LocalWindowsTerminalRuntimeOptions } from '../shared/local-windows-terminal-runtime'
+import { resolveLocalPtyOptions, type LocalPtySettings } from './local-project-runtime-pty-options'
+export { resolveLocalPtyOptions } from './local-project-runtime-pty-options'
 import {
-  resolveLocalWindowsTerminalRuntimeOptions,
-  type LocalWindowsTerminalRuntimeOptions
-} from '../shared/local-windows-terminal-runtime'
-import { resolveManagedSshHostLoginShell } from './pty/managed-ssh-host-login-shell'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+  getConnectionExecutionHostId,
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../shared/execution-host'
 
 // Structural typing lets narrowed runtime stores use the same resolution as workspace creation.
 export type ProjectRuntimeResolutionStore = {
@@ -127,31 +130,79 @@ export function resolveLocalWorkspaceRuntime(
   )
 }
 
-/** A folder inherits a runtime only from a single repo on the local host. */
-export function findLocalFolderWorkspaceRuntimeRepo(
-  state: FolderWorkspaceHostState,
-  folderWorkspaceId: string
-): Repo | undefined {
-  const folder = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
-  if (!folder || resolveFolderWorkspaceHost(state, folder.id).kind !== 'local') {
-    return undefined
-  }
-  const group = state.projectGroups.find((entry) => entry.id === folder.projectGroupId)
-  if (
-    (folder.executionHostId ?? group?.executionHostId ?? LOCAL_EXECUTION_HOST_ID) !==
-    LOCAL_EXECUTION_HOST_ID
-  ) {
-    return undefined
-  }
-  const candidates = findFolderWorkspaceCandidateRepos(state, folder.id)
-  const repo = candidates.length === 1 ? candidates[0] : undefined
-  return repo && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID ? repo : undefined
-}
+export { findLocalFolderWorkspaceRuntimeRepo } from '../shared/folder-workspace-execution-host'
 
 export type LaunchScopeRuntimeStore = ProjectRuntimeResolutionStore & {
   getRepos?: () => Repo[]
   getFolderWorkspaces?: () => FolderWorkspace[]
   getProjectGroups?: () => ProjectGroup[]
+  getWorkspaceSession?: Store['getWorkspaceSession']
+}
+
+export function resolvePlainTerminalWorkspace(
+  store: LaunchScopeRuntimeStore | undefined,
+  worktreeId: string | undefined,
+  connectionId?: string | null,
+  acquired?: TerminalWorkspaceLaunchScope
+): TerminalWorkspaceLaunchScope | undefined {
+  if (acquired) {
+    return acquired
+  }
+  const scope = worktreeId ? parseWorkspaceKey(worktreeId) : null
+  if (!worktreeId || !store?.getFolderWorkspaces || scope?.type !== 'folder') {
+    return undefined
+  }
+  const selected = resolveQualifiedFolderWorkspace(
+    {
+      folderWorkspaces: store.getFolderWorkspaces(),
+      projectGroups: store.getProjectGroups?.() ?? [],
+      repos: store.getRepos?.() ?? []
+    },
+    scope.folderWorkspaceId,
+    getConnectionExecutionHostId(connectionId),
+    (kind) =>
+      new Error(
+        kind === 'missing'
+          ? 'folder_workspace_path_scope_not_found'
+          : 'folder_workspace_host_ambiguous'
+      )
+  )
+  return {
+    id: worktreeId,
+    path: selected.workspace.folderPath,
+    connectionId: selected.connectionId,
+    repo: null,
+    folderWorkspace: {
+      ...selected.workspace,
+      executionHostId: selected.hostId,
+      connectionId: selected.connectionId
+    }
+  }
+}
+
+export function resolvePlainTerminalProjectRuntime(
+  store: LaunchScopeRuntimeStore | undefined,
+  worktreeId: string | undefined,
+  workspace?: TerminalWorkspaceLaunchScope,
+  tabId?: string,
+  connectionId?: string | null
+): ProjectExecutionRuntimeResolution | undefined {
+  if (!store) {
+    return undefined
+  }
+  const session =
+    !(connectionId ?? workspace?.connectionId) && tabId
+      ? store.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
+      : undefined
+  if (
+    worktreeId &&
+    session?.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId && tab.forceHostRuntime)
+  ) {
+    return undefined
+  }
+  return workspace?.folderWorkspace
+    ? resolveLocalLaunchScopeRuntime(store, workspace)
+    : resolveLocalProjectRuntimeForWorktreeId(store, worktreeId)
 }
 
 /** Remote scopes resolve their runtime on their own host. */
@@ -162,7 +213,7 @@ export function resolveLocalLaunchScopeRuntime(
     path: string
     connectionId: string | null
     repo: Repo | null
-    folderWorkspace: Pick<FolderWorkspace, 'id'> | null
+    folderWorkspace: FolderWorkspace | null
   }
 ): ProjectExecutionRuntimeResolution | undefined {
   if (scope.connectionId) {
@@ -177,7 +228,8 @@ export function resolveLocalLaunchScopeRuntime(
             projectGroups: store.getProjectGroups?.() ?? [],
             repos: store.getRepos?.() ?? []
           },
-          scope.folderWorkspace.id
+          scope.folderWorkspace.id,
+          scope.folderWorkspace
         )
       : undefined)
   // A repo-less folder has no runtime: its path alone places it, and its cwd picks its shell.
@@ -231,42 +283,24 @@ export function resolveLocalProjectRuntimeForWorktreeId(
   return repo ? resolveLocalProjectRuntimeForRepo(store, repo) : undefined
 }
 
-type LocalPtySettings = Partial<
-  Pick<GlobalSettings, 'terminalWindowsShell' | 'terminalWindowsWslDistro' | 'terminalDefaultShell'>
->
-
-/** Throws for a Windows runtime that needs repair. */
-export function resolveLocalPtyOptions(
-  settings: LocalPtySettings | undefined,
-  projectRuntime: ProjectExecutionRuntimeResolution | undefined,
-  requestedShellOverride: string | undefined,
-  /** Replaces a `wsl.exe` setting on a Windows-host runtime; absent is `powershell.exe`. */
-  fallbackHostShell?: string
-): LocalWindowsTerminalRuntimeOptions {
-  return process.platform === 'win32'
-    ? resolveLocalWindowsTerminalRuntimeOptions({
-        requestedShellOverride,
-        settings,
-        projectRuntime,
-        fallbackHostShell,
-        sshLoginShell: resolveManagedSshHostLoginShell()
-      })
-    : {
-        shellOverride: requestedShellOverride ?? (settings?.terminalDefaultShell || undefined),
-        terminalWindowsWslDistro: null
-      }
-}
-
 /** Plain terminals use the project runtime and fall back to COMSPEC for the Windows host shell. */
 export function resolvePlainTerminalPtyOptions(
-  store: ProjectRuntimeResolutionStore | undefined,
+  store: LaunchScopeRuntimeStore | undefined,
   settings: LocalPtySettings | undefined,
   worktreeId: string | undefined,
-  requestedShellOverride: string | undefined
+  requestedShellOverride: string | undefined,
+  workspace?: TerminalWorkspaceLaunchScope,
+  tabId?: string
 ): LocalWindowsTerminalRuntimeOptions {
   return resolveLocalPtyOptions(
     settings,
-    resolveLocalProjectRuntimeForWorktreeId(store, worktreeId),
+    resolvePlainTerminalProjectRuntime(
+      store,
+      worktreeId,
+      workspace,
+      tabId,
+      workspace?.connectionId
+    ),
     requestedShellOverride,
     process.env.COMSPEC || 'powershell.exe'
   )
