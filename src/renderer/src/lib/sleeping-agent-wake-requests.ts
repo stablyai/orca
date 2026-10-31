@@ -1,9 +1,12 @@
 import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import { markSleepingAgentWakeRequest } from './sleeping-agent-wake-request-registry'
 
-// Why record identity: a replaced or cleared record drops its request, so a stale ask never wakes a later sleep.
-const requestedRecords = new WeakSet<SleepingAgentSessionRecord>()
+export {
+  hasSleepingAgentWakeRequest,
+  takeSleepingAgentWakeRequest
+} from './sleeping-agent-wake-request-registry'
 
 export function getSleepingRecordTabId(record: SleepingAgentSessionRecord): string | null {
   return (
@@ -21,13 +24,14 @@ export function requestSleepingAgentWakeOnMount(
 ): void {
   const wanted = new Set(tabIds)
   for (const record of Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey)) {
+    // Explicit sleep stays asleep until its own tab opens; a sibling record's targeted wake must not
+    // wake it just because the two share a tab (#11598).
+    if (record.restoreOnTabOpenOnly === true) {
+      continue
+    }
     const tabId = getSleepingRecordTabId(record)
     if (record.worktreeId === worktreeId && tabId !== null && wanted.has(tabId)) {
-      requestedRecords.add(record)
+      markSleepingAgentWakeRequest(record)
     }
   }
-}
-
-export function takeSleepingAgentWakeRequest(record: SleepingAgentSessionRecord): boolean {
-  return requestedRecords.delete(record)
 }

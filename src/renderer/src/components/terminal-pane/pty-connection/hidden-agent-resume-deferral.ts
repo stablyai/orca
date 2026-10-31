@@ -1,10 +1,18 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { useAppStore } from '@/store'
 import { takeSleepingAgentWakeRequest } from '@/lib/sleeping-agent-wake-requests'
 import { holdPaneResumeUntilShown, releasePaneResumeHold } from '@/lib/pane-spawn-deferral-registry'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
 import { pendingSpawnByPaneKey } from './pty-connect-limits'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+
+// Mirrors waitsForMainPaneStart's gate: these statuses span main's start of the pane through its
+// asynchronous attach-back, a window with no renderer connect or spawn in flight.
+const mainPaneStartInFlight = (paneKey: string): boolean => {
+  const status = useAppStore.getState().terminalPaneStartsByPaneKey[paneKey]?.status
+  return status === 'starting' || status === 'resuming' || status === 'failed'
+}
 
 /** Defer hidden restores through the hibernation wake until reveal; visible panes and explicit background wakes run immediately (#7145). */
 export function deferHiddenAgentResume(
@@ -19,6 +27,36 @@ export function deferHiddenAgentResume(
     session.deps.isVisibleRef.current ||
     session.hiddenAgentResumeReleased
   ) {
+    if (recordEntry && (session.disposed || session.deps.isVisibleRef.current)) {
+      // Why consume: a disposed or visible pane never takes the hidden-deferral path, so nothing
+      // would ever spend its wake mark — a later sweep would then read the stale mark as ownership
+      // and skip a record whose pane has no live PTY and no resume in flight.
+      if (takeSleepingAgentWakeRequest(recordEntry.record)) {
+        session.hiddenAgentResumeReleased = true
+      }
+      if (!session.disposed) {
+        // Why the hold: the visible restore runs async after this bypass, and before it binds a
+        // PTY the sweep would see no mark, no live PTY and fork a duplicate. The predicate owns
+        // exactly the attempt's in-flight window, self-releases once it reads false, and is also
+        // tracked for releaseHiddenAgentResumeHold so a disposed pane cannot pin its session graph.
+        const paneKey = recordEntry.paneKey
+        const visibleHold = (): boolean => {
+          const inFlight =
+            !session.disposed &&
+            session.transport.getPtyId() === null &&
+            (session.transportConnectInFlightSince !== null ||
+              pendingSpawnByPaneKey.has(session.pendingSpawnKey) ||
+              mainPaneStartInFlight(paneKey))
+          if (!inFlight) {
+            releasePaneResumeHold(paneKey, visibleHold)
+          }
+          return inFlight
+        }
+        session.visibleAgentResumeHold = visibleHold
+        session.visibleAgentResumeHoldPaneKey = paneKey
+        holdPaneResumeUntilShown(paneKey, visibleHold)
+      }
+    }
     return false
   }
   if (takeSleepingAgentWakeRequest(recordEntry.record)) {
@@ -75,6 +113,12 @@ export function releaseHiddenAgentResumeHold(session: ConnectPanePtySession): vo
   session.hiddenAgentResumeHeldTarget = null
   if (session.hiddenAgentResumeHold && session.hiddenAgentResumeHoldKey) {
     releasePaneResumeHold(session.hiddenAgentResumeHoldKey, session.hiddenAgentResumeHold)
+  }
+  // The visible bypass's attempt hold is anonymous to the hidden flow; drop it here too or the
+  // registry entry pins the pane's session graph until its pane key is reused.
+  if (session.visibleAgentResumeHold && session.visibleAgentResumeHoldPaneKey) {
+    releasePaneResumeHold(session.visibleAgentResumeHoldPaneKey, session.visibleAgentResumeHold)
+    session.visibleAgentResumeHold = null
   }
 }
 
