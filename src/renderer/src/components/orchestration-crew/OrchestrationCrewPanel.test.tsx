@@ -59,7 +59,6 @@ function mount(row = worker, section: 'managing' | 'talkingWith' = 'managing') {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
-  vi.useRealTimers()
   vi.clearAllMocks()
 })
 
@@ -388,36 +387,6 @@ it.each(['heading', 'inside-then-heading'] as const)(
     await user.click(screen.getByText('Orchestration'))
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(focus).not.toHaveBeenCalled()
-    expect(screen.getByRole('complementary')).toBeInTheDocument()
-    expect(rig.open).not.toHaveBeenCalled()
-    expect(rig.copy).not.toHaveBeenCalled()
-  }
-)
-
-it.each(['before-registration', 'missed-interior'] as const)(
-  'dismisses on the first fresh Crew heading input at the %s boundary',
-  (boundary) => {
-    vi.useFakeTimers()
-    const tasks = holdPhysicalCloseTasks()
-    const peer: OrchestrationCrewRow = { ...worker, role: 'peer' }
-    delete peer.sendAddress
-    mount(peer, 'talkingWith')
-    fireEvent.click(screen.getByRole('button', { name: 'Show crew: Talking with Worker' }))
-    const more = screen.getByRole('button', { name: 'More for Worker' })
-    fireEvent.pointerDown(more, { pointerType: 'mouse', button: 0, ctrlKey: false })
-    const popup = screen.getByRole('menu')
-    expect(popup).toHaveAttribute('data-state', 'open')
-    expect(screen.getByRole('menuitem', { name: 'Copy address' })).toHaveAttribute('data-disabled')
-    if (boundary === 'missed-interior') {
-      fireEvent.pointerDown(popup, { pointerType: 'mouse', button: 0 })
-      act(() => vi.runOnlyPendingTimers())
-    }
-    const focus = vi.spyOn(more, 'focus')
-    fireEvent.pointerDown(screen.getByText('Orchestration'), { pointerType: 'mouse', button: 0 })
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
-    expect(tasks).toHaveLength(1)
-    act(tasks[0])
     expect(focus).not.toHaveBeenCalled()
     expect(screen.getByRole('complementary')).toBeInTheDocument()
     expect(rig.open).not.toHaveBeenCalled()

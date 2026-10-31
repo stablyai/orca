@@ -118,8 +118,6 @@ overrides:
   katex@>=0.11.0 <0.18.2: 0.18.10
 
 patchedDependencies:
-  '@radix-ui/react-dismissable-layer@1.1.19': config/patches/@radix-ui__react-dismissable-layer@1.1.19.patch
-  '@radix-ui/react-menu@2.1.24': config/patches/@radix-ui__react-menu@2.1.24.patch
   '@xterm/addon-image@0.10.0-beta.301': config/patches/@xterm__addon-image@0.10.0-beta.301.patch
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.301': config/patches/@xterm__addon-ligatures@0.11.0-beta.301.patch
