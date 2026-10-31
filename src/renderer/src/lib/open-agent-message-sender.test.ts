@@ -49,11 +49,12 @@ vi.mock('@/store', () => ({
 }))
 
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/runtime-protocol-compat'
+import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
+import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../shared/agent-session-write-notice-copy'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
-import { openAgentMessageSender } from './open-agent-message-sender'
+import { openAgentMessageSender, openOrchestrationCrewAgent } from './open-agent-message-sender'
 
 const HOST = { kind: 'environment', environmentId: 'env-host' }
 const ROOT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
@@ -93,7 +94,24 @@ function failure(code: string): RuntimeRpcCallError {
 }
 
 function versionBlock(): Error {
-  return Object.assign(new Error('update needed'), { code: RUNTIME_COMPAT_BLOCK_CODE })
+  try {
+    assertRuntimeStatusCompatible({
+      runtimeId: 'runtime-old',
+      rendererGraphEpoch: 0,
+      graphStatus: 'ready',
+      authoritativeWindowId: null,
+      liveTabCount: 0,
+      liveLeafCount: 0,
+      runtimeProtocolVersion: 0,
+      minCompatibleRuntimeClientVersion: Number.MAX_SAFE_INTEGER
+    })
+  } catch (error) {
+    if (error instanceof Error) {
+      return error
+    }
+    throw error
+  }
+  throw new Error('Expected the production compatibility gate to block')
 }
 
 // Existing sentences, each translated whole: the cause and what to do, or which Orca to update.
@@ -108,6 +126,89 @@ beforeEach(() => {
 })
 
 describe("opening a message's sender", () => {
+  it('preserves sender remedies and the captured host/target across crew terminal and dispatch opens', async () => {
+    const host = { kind: 'environment', environmentId: 'captured-host' } as const
+    for (const kind of ['terminal', 'dispatch'] as const) {
+      for (const outcome of ['compat', 'transient', 'gone', 'older-host'] as const) {
+        if (kind === 'terminal' && outcome === 'older-host') {
+          continue
+        }
+        const party = kind === 'terminal' ? terminal : dispatch
+        const row: OrchestrationCrewRow = {
+          partyKey: 'captured-worker',
+          role: 'worker',
+          label: 'Worker',
+          agentKind: 'codex',
+          status: 'working',
+          sendAddress: 'run:mailbox-is-not-a-pane',
+          openTarget:
+            kind === 'terminal'
+              ? { kind, handle: 'term_captured' }
+              : { kind, address: party.address }
+        }
+        const prepare = () => {
+          vi.clearAllMocks()
+          mocks.callRuntimeRpc.mockReset()
+          mocks.focusRuntime.mockReset()
+          mocks.focusRenderer.mockReturnValue(false)
+          const error = outcome === 'compat' ? versionBlock() : failure('request_timeout')
+          if (kind === 'terminal') {
+            mocks.callRuntimeRpc.mockResolvedValue({
+              location: { kind: 'terminal', handle: 'term_captured' }
+            })
+            mocks.focusRuntime.mockRejectedValue(
+              outcome === 'gone' ? failure('terminal_handle_stale') : error
+            )
+          } else if (outcome === 'gone') {
+            mocks.callRuntimeRpc.mockResolvedValue({ location: null, lost: 'terminal' })
+          } else {
+            mocks.callRuntimeRpc.mockRejectedValue(
+              outcome === 'older-host' ? failure('method_not_found') : error
+            )
+          }
+        }
+        prepare()
+        const source = sourceFor(party)
+        await openAgentMessageSender(source, source.senders[0]!, 'wt-chat', host)
+        const oldMessages = mocks.toastError.mock.calls.map(([message]) => message)
+        expect(oldMessages).toEqual(
+          outcome === 'gone'
+            ? []
+            : [outcome === 'compat' ? UPDATE : outcome === 'older-host' ? OLDER_HOST : UNREACHABLE]
+        )
+        expect(mocks.paneUnavailable).toHaveBeenCalledTimes(outcome === 'gone' ? 1 : 0)
+        prepare()
+        await openOrchestrationCrewAgent(row, host)
+        expect(mocks.toastError.mock.calls.map(([message]) => message)).toEqual([
+          outcome === 'gone'
+            ? `Worker: ${kind === 'terminal' ? 'This terminal has exited.' : 'This agent is no longer available.'}`
+            : `Worker: ${oldMessages[0]}`
+        ])
+        expect(mocks.paneUnavailable).not.toHaveBeenCalled()
+        expect(mocks.activateChat).not.toHaveBeenCalled()
+        if (kind === 'terminal') {
+          expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+          expect(mocks.focusRenderer).toHaveBeenCalledExactlyOnceWith(
+            'term_captured',
+            'captured-host'
+          )
+          expect(mocks.focusRuntime).toHaveBeenCalledExactlyOnceWith(
+            'term_captured',
+            'captured-host'
+          )
+        } else {
+          expect(mocks.callRuntimeRpc).toHaveBeenCalledExactlyOnceWith(
+            host,
+            'orchestration.partyLocation',
+            { address: party.address }
+          )
+          expect(mocks.focusRenderer).not.toHaveBeenCalled()
+          expect(mocks.focusRuntime).not.toHaveBeenCalled()
+        }
+      }
+    }
+  })
+
   it("asks the chat's host where a terminal is, with the mail it sent, and focuses what it finds", async () => {
     mocks.callRuntimeRpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_now' } })
     mocks.focusRenderer.mockReturnValue(true)

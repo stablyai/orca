@@ -56,13 +56,17 @@ export const structuredSessionOpenFeedback: Pick<
 export async function activateAiVaultStructuredSession(
   session: Pick<AiVaultSession, 'structuredSession'>,
   deps?: StructuredSessionActivationDeps,
-  target?: RuntimeClientTarget
+  target?: RuntimeClientTarget,
+  feedbackOverride?: Pick<
+    StructuredSessionActivationDeps,
+    'unavailable' | 'gone' | 'hostCannotOpen'
+  >
 ): Promise<boolean> {
   const structured = session.structuredSession
   if (!structured) {
     return false
   }
-  const feedback = deps ?? structuredSessionOpenFeedback
+  const feedback = feedbackOverride ?? deps ?? structuredSessionOpenFeedback
   await openExistingStructuredSession(structured, {
     target,
     deps,

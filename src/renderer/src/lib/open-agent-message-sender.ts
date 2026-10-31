@@ -1,3 +1,4 @@
+import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
 // Open the sender through chat or terminal-handle routes; choose feedback from the answering host’s evidence, never the sender’s address shape.
 
 import { toast } from 'sonner'
@@ -122,7 +123,14 @@ async function openSender(
   await focusTerminal(location.handle, environmentId)
 }
 
-async function focusTerminal(handle: string, environmentId: string | null): Promise<void> {
+async function focusTerminal(
+  handle: string,
+  environmentId: string | null,
+  feedback = {
+    gone: showAgentPaneUnavailable,
+    lookupFailure: showLookupFailure
+  }
+): Promise<void> {
   if (focusRendererTerminalHandle(handle, environmentId)) {
     return
   }
@@ -130,9 +138,9 @@ async function focusTerminal(handle: string, environmentId: string | null): Prom
     await focusRuntimeTerminalHandle(handle, environmentId)
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && TERMINAL_GONE_CODES.has(error.code)) {
-      showAgentPaneUnavailable()
+      feedback.gone()
     } else {
-      showLookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable')
+      feedback.lookupFailure(lookupFailure(error))
     }
   }
 }
@@ -152,8 +160,12 @@ async function lookUpSender(
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       return lookUpOnOlderHost(party, host)
     }
-    return isRuntimeCompatBlockError(error) ? 'update' : 'unreachable'
+    return lookupFailure(error)
   }
+}
+
+function lookupFailure(error: unknown): LookupFailure {
+  return isRuntimeCompatBlockError(error) ? 'update' : 'unreachable'
 }
 
 /** Older hosts allow root-ID chats and terminal-handle opens; other identities require updating that host. */
@@ -187,14 +199,70 @@ function located(location: OrchestrationPartyLocation): OrchestrationPartyLocati
   return { location }
 }
 
-function showLookupFailure(failure: LookupFailure): void {
-  toast.error(
-    agentSessionWriteNoticeText(
-      failure === 'older-host'
-        ? ['unsupported']
-        : failure === 'update'
-          ? ['updateOrcaToOpenChat']
-          : ['unreachable', 'tryAgain']
-    )
+function showLookupFailure(failure: LookupFailure, label?: string): void {
+  const message = agentSessionWriteNoticeText(
+    failure === 'older-host'
+      ? ['unsupported']
+      : failure === 'update'
+        ? ['updateOrcaToOpenChat']
+        : ['unreachable', 'tryAgain']
   )
+  toast.error(label ? `${label}: ${message}` : message)
+}
+
+/** Crew opens share the sender's host-aware navigation; mailbox identity is never a terminal handle. */
+export async function openOrchestrationCrewAgent(
+  row: OrchestrationCrewRow,
+  host: RuntimeClientTarget
+): Promise<void> {
+  const unavailable = (detail: string) => toast.error(`${row.label}: ${detail}`)
+  let target = row.openTarget
+  try {
+    if (target?.kind === 'dispatch') {
+      const result = await lookUpSender(
+        { address: target.address, terminalHandle: null, orcaSessionId: null },
+        [],
+        host
+      )
+      if (typeof result === 'string') {
+        showLookupFailure(result, row.label)
+        return
+      }
+      if (!result.location) {
+        unavailable(
+          result.lost
+            ? 'This agent is no longer available.'
+            : 'This host cannot locate this agent. Try again.'
+        )
+        return
+      }
+      target = result.location
+    }
+    if (target?.kind === 'chat') {
+      await activateAiVaultStructuredSession(
+        { structuredSession: { workspaceId: target.worktreeId, sessionId: target.sessionId } },
+        undefined,
+        host,
+        {
+          unavailable: () => unavailable('This host cannot open the chat. Try again.'),
+          gone: () => unavailable('This chat is no longer on this host.'),
+          hostCannotOpen: () => unavailable('Update Orca to open this chat.')
+        }
+      )
+    } else if (target?.kind === 'terminal') {
+      const environmentId = host.kind === 'environment' ? host.environmentId : null
+      await focusTerminal(target.handle, environmentId, {
+        gone: () => unavailable('This terminal has exited.'),
+        lookupFailure: (failure) => showLookupFailure(failure, row.label)
+      })
+    } else {
+      unavailable(
+        row.hostLabel
+          ? `Open this agent on ${row.hostLabel}.`
+          : 'This host cannot locate this agent. Try again.'
+      )
+    }
+  } catch (error) {
+    showLookupFailure(lookupFailure(error), row.label)
+  }
 }
