@@ -55,25 +55,26 @@ INSERT INTO temp.agent_sender_generation SELECT 0, 0
   WHERE NOT EXISTS (SELECT 1 FROM temp.agent_sender_generation);
 CREATE TEMP TABLE IF NOT EXISTS agent_sender_dirty (
   kind TEXT NOT NULL, key TEXT NOT NULL, PRIMARY KEY (kind, key)) WITHOUT ROWID;
-${HISTORY_TRIGGERS.flatMap((trigger) =>
-  [
-    ['insert', 'AFTER INSERT', [markDirty('NEW', trigger)]],
-    ['delete', 'AFTER DELETE', [markDirty('OLD', trigger)]],
-    [
-      'update',
-      `AFTER UPDATE OF ${trigger.columns}`,
-      [markDirty('OLD', trigger), markDirty('NEW', trigger)]
-    ]
-  ].map(
-    ([
+${HISTORY_TRIGGERS.flatMap((trigger) => {
+  const events: { name: string; event: string; marks: string[] }[] = [
+    { name: 'insert', event: 'AFTER INSERT', marks: [markDirty('NEW', trigger)] },
+    { name: 'delete', event: 'AFTER DELETE', marks: [markDirty('OLD', trigger)] },
+    {
+      name: 'update',
+      event: `AFTER UPDATE OF ${trigger.columns}`,
+      marks: [markDirty('OLD', trigger), markDirty('NEW', trigger)]
+    }
+  ]
+  return events.map(
+    ({
       name,
       event,
       marks
-    ]) => `CREATE TEMP TRIGGER IF NOT EXISTS agent_sender_${trigger.table}_${name}
+    }) => `CREATE TEMP TRIGGER IF NOT EXISTS agent_sender_${trigger.table}_${name}
 ${event} ON main.${trigger.table}
-BEGIN UPDATE temp.agent_sender_generation SET history = history + 1; ${[marks].flat().join(' ')} END;`
+BEGIN UPDATE temp.agent_sender_generation SET history = history + 1; ${marks.join(' ')} END;`
   )
-).join('\n')}
+}).join('\n')}
 ${['insert', 'delete', 'update']
   .map(
     (name) => `CREATE TEMP TRIGGER IF NOT EXISTS agent_sender_federated_dispatches_${name}
