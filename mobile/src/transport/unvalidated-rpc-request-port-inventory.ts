@@ -43,7 +43,9 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
 /** Call sites awaiting migration to a typed operation. Grouped by the feature area that owns them. */
 export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcRequestPortEntry[] = [
   // Accounts recording needs useFocusEffect/ScrollView substitutes and an accounts.subscribe stream scenario.
-  { file: 'src/accounts/MobileAccountsScreen.tsx', references: 2 },
+  { file: 'src/accounts/MobileAccountsScreen.tsx', references: 3 },
+  // Antigravity saved accounts are a capability-gated list/select, separate from the accounts snapshot.
+  { file: 'src/accounts/antigravity-account-section.tsx', references: 2 },
 
   // callAgentSession accepts dynamic methods and generic results; typed operations require restructuring its callers.
   { file: 'src/session/mobile-structured-agent-session-rpc.ts', references: 1 },

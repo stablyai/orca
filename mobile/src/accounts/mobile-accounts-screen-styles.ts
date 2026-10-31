@@ -20,6 +20,10 @@ export const styles = themedStyleSheet(() => ({
     gap: spacing.md,
     marginTop: spacing.xs
   },
+  usageStack: {
+    gap: spacing.sm,
+    marginTop: 4
+  },
   errorText: {
     fontSize: typography.metaSize,
     color: colors.statusRed

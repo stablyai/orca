@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  collectProviderUsageMeters,
+  getGrokUsageWindowKey,
   getInactiveProviderUsage,
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,
+  hasRenderableGrokUsage,
+  hasRenderableProviderUsage,
   hasRenderableUsage,
+  readUsageAuthProvenance,
   type AccountsSnapshot,
   type InactiveAccountUsage,
+  type MobileUsageProviderId,
   type ProviderRateLimits
 } from './account-usage-state'
 
@@ -28,10 +34,13 @@ function makeSnapshot(
   overrides: {
     claudeLimits?: ProviderRateLimits | null
     codexLimits?: ProviderRateLimits | null
+    grokLimits?: ProviderRateLimits | null
+    grokAuthConfigured?: boolean
     claudeAccounts?: AccountsSnapshot['claude']['accounts']
     codexAccounts?: AccountsSnapshot['codex']['accounts']
     inactiveClaudeAccounts?: InactiveAccountUsage[]
     inactiveCodexAccounts?: InactiveAccountUsage[]
+    extraRateLimits?: Partial<AccountsSnapshot['rateLimits']>
   } = {}
 ): AccountsSnapshot {
   return {
@@ -48,12 +57,21 @@ function makeSnapshot(
     rateLimits: {
       claude: overrides.claudeLimits ?? null,
       codex: overrides.codexLimits ?? null,
+      ...(overrides.grokLimits !== undefined ? { grok: overrides.grokLimits } : {}),
+      ...(overrides.grokAuthConfigured !== undefined
+        ? { grokAuthConfigured: overrides.grokAuthConfigured }
+        : {}),
       claudeTarget: { runtime: 'host', wslDistro: null },
       codexTarget: { runtime: 'host', wslDistro: null },
       inactiveClaudeAccounts: overrides.inactiveClaudeAccounts ?? [],
-      inactiveCodexAccounts: overrides.inactiveCodexAccounts ?? []
+      inactiveCodexAccounts: overrides.inactiveCodexAccounts ?? [],
+      ...overrides.extraRateLimits
     }
   }
+}
+
+function limitWindow(usedPercent: number, windowMinutes: number) {
+  return { usedPercent, windowMinutes, resetsAt: null, resetDescription: null }
 }
 
 describe('hasActiveProviderUsage', () => {
@@ -206,5 +224,188 @@ describe('getUsageBarState', () => {
       unavailable: false,
       loading: true
     })
+  })
+
+  it('reads a monthly window for providers that have no session or weekly limit', () => {
+    expect(
+      getUsageBarState(
+        makeLimits({
+          provider: 'grok',
+          status: 'ok',
+          monthly: { usedPercent: 25, windowMinutes: 43200, resetsAt: null, resetDescription: null }
+        }),
+        'monthly'
+      )
+    ).toEqual({ usedPercent: 25, unavailable: false, loading: false })
+  })
+})
+
+describe('Grok usage visibility', () => {
+  it('stays hidden when the host omits Grok', () => {
+    expect(hasRenderableGrokUsage(makeSnapshot())).toBe(false)
+  })
+
+  it('stays hidden for an unavailable snapshot with no windows', () => {
+    expect(
+      hasRenderableGrokUsage(
+        makeSnapshot({
+          grokLimits: makeLimits({ provider: 'grok', status: 'unavailable' })
+        })
+      )
+    ).toBe(false)
+  })
+
+  it('shows a configured CLI session before the first usage payload arrives', () => {
+    expect(hasRenderableGrokUsage(makeSnapshot({ grokAuthConfigured: true }))).toBe(true)
+  })
+
+  it('shows weekly credits, and monthly usage only when weekly is absent', () => {
+    const weekly = makeLimits({
+      provider: 'grok',
+      status: 'ok',
+      weekly: { usedPercent: 40, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      monthly: { usedPercent: 10, windowMinutes: 43200, resetsAt: null, resetDescription: null }
+    })
+    const monthly = makeLimits({
+      provider: 'grok',
+      status: 'ok',
+      monthly: { usedPercent: 10, windowMinutes: 43200, resetsAt: null, resetDescription: null }
+    })
+
+    expect(hasRenderableGrokUsage(makeSnapshot({ grokLimits: monthly }))).toBe(true)
+    expect(getGrokUsageWindowKey(weekly)).toBe('weekly')
+    expect(getGrokUsageWindowKey(monthly)).toBe('monthly')
+    expect(getGrokUsageWindowKey(null)).toBe('weekly')
+  })
+
+  it('keeps a failed refresh visible and reads its auth provenance', () => {
+    const limits = makeLimits({
+      provider: 'grok',
+      status: 'error',
+      error: 'session expired',
+      usageMetadata: { authProvenance: 'Grok CLI session' }
+    })
+
+    expect(hasRenderableGrokUsage(makeSnapshot({ grokLimits: limits }))).toBe(true)
+    expect(readUsageAuthProvenance(limits)).toBe('Grok CLI session')
+    expect(readUsageAuthProvenance(makeLimits({ provider: 'grok' }))).toBe(null)
+  })
+})
+
+describe('desktop provider usage on mobile', () => {
+  it('shows a provider when its desktop credential flag is set and hides it when the host omits it', () => {
+    expect(hasRenderableProviderUsage(makeSnapshot(), 'gemini')).toBe(false)
+    expect(hasRenderableProviderUsage(makeSnapshot(), 'minimax')).toBe(false)
+    expect(
+      hasRenderableProviderUsage(
+        makeSnapshot({ extraRateLimits: { minimaxCookieConfigured: true } }),
+        'minimax'
+      )
+    ).toBe(true)
+    expect(
+      hasRenderableProviderUsage(
+        makeSnapshot({ extraRateLimits: { minimaxApiKeyConfigured: true } }),
+        'minimax'
+      )
+    ).toBe(true)
+    expect(
+      hasRenderableProviderUsage(
+        makeSnapshot({ extraRateLimits: { opencodeGoApiKeyConfigured: true } }),
+        'opencodeGo'
+      )
+    ).toBe(true)
+    expect(
+      hasRenderableProviderUsage(
+        makeSnapshot({ extraRateLimits: { cursorAuthConfigured: true } }),
+        'cursor'
+      )
+    ).toBe(true)
+    expect(
+      hasRenderableProviderUsage(
+        makeSnapshot({ extraRateLimits: { zcodePlanApiKeyConfigured: true } }),
+        'zcode'
+      )
+    ).toBe(true)
+  })
+
+  it('keeps Gemini and Cursor named pools and drops experimental Gemini buckets', () => {
+    const gemini = makeLimits({
+      provider: 'gemini',
+      status: 'ok',
+      buckets: [
+        { ...limitWindow(15, 10080), name: 'Flash' },
+        { ...limitWindow(90, 10080), name: 'Experimental' },
+        { ...limitWindow(40, 10080), name: '1.5 Pro' }
+      ]
+    })
+    const cursor = makeLimits({
+      provider: 'cursor',
+      status: 'ok',
+      monthly: limitWindow(55, 43200),
+      buckets: [
+        { ...limitWindow(20, 43200), name: 'Cursor Models' },
+        { ...limitWindow(5, 43200), name: 'On-demand' }
+      ]
+    })
+
+    expect(collectProviderUsageMeters('gemini', gemini).map((meter) => meter.title)).toEqual([
+      'Flash',
+      '1.5 Pro'
+    ])
+    expect(collectProviderUsageMeters('cursor', cursor).map((meter) => meter.title)).toEqual([
+      'Cursor Models',
+      'On-demand',
+      'Plan'
+    ])
+    expect(collectProviderUsageMeters('cursor', cursor).map((meter) => meter.usedPercent)).toEqual([
+      20, 5, 55
+    ])
+  })
+
+  it('shows every Zcode window together and a monthly-only OpenCode Go window', () => {
+    const zcode = makeLimits({
+      provider: 'zcode',
+      status: 'ok',
+      session: limitWindow(10, 300),
+      weekly: limitWindow(20, 10080),
+      monthly: limitWindow(30, 43200)
+    })
+    const opencodeGo = makeLimits({
+      provider: 'opencode-go',
+      status: 'ok',
+      monthly: limitWindow(33, 43200)
+    })
+
+    expect(collectProviderUsageMeters('zcode', zcode)).toEqual([
+      expect.objectContaining({ key: 'session', chip: '5h', usedPercent: 10 }),
+      expect.objectContaining({ key: 'weekly', chip: 'wk', usedPercent: 20 }),
+      expect.objectContaining({ key: 'monthly', title: 'MCP monthly', chip: '', usedPercent: 30 })
+    ])
+    expect(collectProviderUsageMeters('opencodeGo', opencodeGo)).toEqual([
+      expect.objectContaining({ key: 'monthly', chip: 'mo', title: null, usedPercent: 33 })
+    ])
+  })
+
+  it('keeps arbitrary Antigravity pools and hides a provider that only has unnamed leftover buckets', () => {
+    const antigravity = makeLimits({
+      provider: 'antigravity',
+      status: 'ok',
+      buckets: [{ ...limitWindow(12, 10080), name: 'Gemini 3 Pro' }]
+    })
+    const hidden = makeLimits({
+      provider: 'gemini',
+      status: 'ok',
+      buckets: [{ ...limitWindow(90, 10080), name: 'Experimental' }]
+    })
+
+    expect(collectProviderUsageMeters('antigravity', antigravity)).toEqual([
+      expect.objectContaining({ title: 'Gemini 3 Pro', usedPercent: 12 })
+    ])
+    expect(
+      hasRenderableProviderUsage(
+        makeSnapshot({ extraRateLimits: { gemini: hidden } }),
+        'gemini' satisfies MobileUsageProviderId
+      )
+    ).toBe(false)
   })
 })
