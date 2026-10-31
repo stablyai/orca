@@ -4,6 +4,7 @@ import { createRef } from 'react'
 import { afterEach, expect, it } from 'vitest'
 import { useCombinedDiffFocusRange } from './use-combined-diff-focus-range'
 import { createCombinedDiffOverflow } from './combined-diff-overflow'
+import { getCombinedDiffExtent } from './combined-diff-extent-dom'
 
 afterEach(() => {
   cleanup()
@@ -59,4 +60,38 @@ it('retains only the focused owner, including overflow focus, and isolates hosts
   expect(view.getByTestId('owner').textContent).toBe('0,1')
   overflow.dispose()
   expect(widgetInput.isConnected).toBe(false)
+})
+
+it('adds only the pending restored target to the bounded range without focusing it', () => {
+  const viewport = document.createElement('div')
+  Object.defineProperty(viewport, 'clientHeight', { value: 700 })
+  document.body.append(viewport)
+  const ref = createRef<HTMLDivElement>()
+  ref.current = viewport
+  const owner = getCombinedDiffExtent(viewport)
+  owner.publish(
+    Array.from({ length: 1000 }, (_, index) => ({
+      key: `file-${index}`,
+      index,
+      lane: 0,
+      start: index * 100,
+      end: index * 100 + 100,
+      size: 100,
+      settled: false
+    }))
+  )
+  owner.importView({ scrollTop: 21237, anchor: { key: 'file-950', offset: 19050 } })
+  function Probe() {
+    const extract = useCombinedDiffFocusRange(ref)
+    return (
+      <output>{extract({ startIndex: 0, endIndex: 1, count: 1000, overscan: 0 }).join(',')}</output>
+    )
+  }
+  const focus = document.activeElement
+  const view = render(<Probe />)
+  expect(view.container.textContent).toBe('0,1,950')
+  expect(document.activeElement).toBe(focus)
+  act(() => owner.input())
+  view.rerender(<Probe />)
+  expect(view.container.textContent).toBe('0,1')
 })

@@ -1,4 +1,8 @@
 import type { VirtualItem } from '@tanstack/react-virtual'
+import { getCombinedDiffImportedPoint } from './combined-diff-view-import'
+import { getCombinedDiffTopAnchor } from './combined-diff-extent-geometry'
+
+export type CombinedDiffExtentItem = VirtualItem & { settled?: boolean }
 
 export type CombinedDiffItemAnchor = {
   key: VirtualItem['key']
@@ -12,14 +16,15 @@ export type CombinedDiffViewImport = {
 }
 
 export class CombinedDiffExtent {
-  private items: readonly VirtualItem[] = []
+  private items: readonly CombinedDiffExtentItem[] = []
   private indices = new Map<VirtualItem['key'], number>()
-  private source: readonly VirtualItem[] | null = null
+  private source: readonly CombinedDiffExtentItem[] | null = null
   private sourcePrefix = 0
   private anchor: CombinedDiffItemAnchor | null = null
   private pendingImport: CombinedDiffViewImport | null = null
   private depth = 0
   private target = 0
+  private geometry: { height: number; scrollHeight: number; applied: number } | null = null
   revision = 0
   leadingSlack = 0
   trailingSlack = 0
@@ -28,6 +33,7 @@ export class CombinedDiffExtent {
     private readonly view: {
       position: () => number
       height: () => number
+      scrollHeight?: () => number
       project: (items: readonly VirtualItem[], height: number, leading: number) => void
       write: (position: number) => void
     }
@@ -50,35 +56,22 @@ export class CombinedDiffExtent {
   }
 
   private topAnchor(priority?: VirtualItem['key']): CombinedDiffItemAnchor | null {
-    const position = this.view.position() - this.leadingSlack
-    const priorityIndex = priority === undefined ? undefined : this.indices.get(priority)
-    const focused = priorityIndex === undefined ? undefined : this.items[priorityIndex]
-    let low = 0
-    let high = this.items.length
-    while (low < high) {
-      const middle = Math.floor((low + high) / 2)
-      if (this.items[middle]!.end <= position) {
-        low = middle + 1
-      } else {
-        high = middle
-      }
-    }
-    const item =
-      focused && focused.end > position && focused.start < position + this.view.height()
-        ? focused
-        : this.items[low]
-    return item
-      ? {
-          key: item.key,
-          offset: Math.max(0, position - item.start),
-          gap: Math.max(0, item.start - position)
-        }
-      : null
+    return getCombinedDiffTopAnchor(
+      this.items,
+      this.indices,
+      this.view.position() - this.leadingSlack,
+      this.view.height(),
+      priority
+    )
   }
 
-  publish(items: readonly VirtualItem[], priority?: VirtualItem['key'], prefix = 0): void {
+  publish(
+    items: readonly CombinedDiffExtentItem[],
+    priority?: VirtualItem['key'],
+    prefix = 0
+  ): void {
     if (items === this.source && prefix === this.sourcePrefix) {
-      if (this.pendingImport && this.applyImport()) {
+      if (this.pendingImport && this.applyImport(true)) {
         return
       }
       this.project(this.logicalScrollTop())
@@ -94,11 +87,12 @@ export class CombinedDiffExtent {
           !previous ||
           item.key !== previous.key ||
           item.size !== previous.size ||
+          item.settled !== previous.settled ||
           item.start + prefix !== previous.start
         )
       })
     if (!changed) {
-      if (this.pendingImport && this.applyImport()) {
+      if (this.pendingImport && this.applyImport(true)) {
         return
       }
       this.project(this.logicalScrollTop())
@@ -125,7 +119,7 @@ export class CombinedDiffExtent {
         : fallback
           ? { key: fallback.key, offset: 0, gap: anchor?.gap ?? 0 }
           : null
-    if (this.pendingImport && this.applyImport()) {
+    if (this.pendingImport && this.applyImport(true)) {
       return
     }
     if (!this.depth) {
@@ -144,7 +138,7 @@ export class CombinedDiffExtent {
   private project(target: number): void {
     const extent = this.items.at(-1)?.end ?? 0
     this.leadingSlack = Math.max(0, -target)
-    this.trailingSlack = Math.max(0, target - Math.max(0, extent - this.view.height()))
+    this.trailingSlack = Math.max(0, target + this.view.height() - extent)
     this.view.project(
       this.items,
       extent + this.leadingSlack + this.trailingSlack,
@@ -159,7 +153,12 @@ export class CombinedDiffExtent {
     if (before !== this.target) {
       this.view.write(this.target)
     }
-    return before !== this.view.position()
+    this.geometry = {
+      height: this.view.height(),
+      scrollHeight: this.view.scrollHeight?.() ?? this.target + this.view.height(),
+      applied: this.view.position()
+    }
+    return before !== this.geometry.applied
   }
 
   exportView(): CombinedDiffViewImport {
@@ -197,30 +196,33 @@ export class CombinedDiffExtent {
     this.applyImport()
   }
 
-  private applyImport(): boolean {
+  private applyImport(published = false): boolean {
     const state = this.pendingImport
     if (!state) {
       return false
     }
-    const saved = state.anchor
-    const item =
-      saved &&
-      (this.items.find((item) => item.key === saved.key) ??
-        this.items.find((item) => saved.fallbackKeys?.includes(String(item.key))))
-    if (saved && !item) {
+    const point = getCombinedDiffImportedPoint(state, this.items, this.view.height(), published)
+    if (!point) {
       return false
     }
-    if (!saved && (this.items.at(-1)?.end ?? 0) < state.scrollTop + this.view.height()) {
-      this.apply(state.scrollTop)
-      return true
-    }
-    this.pendingImport = null
-    if (item && saved) {
-      this.restore({ key: item.key, offset: item.key === saved.key ? saved.offset : 0, gap: 0 })
-    } else {
-      this.navigate(state.scrollTop)
+    this.anchor = point.anchor
+    this.apply(point.target)
+    if (point.settled && this.view.position() === this.target) {
+      this.pendingImport = null
+      this.anchor = point.anchor ?? this.topAnchor()
     }
     return true
+  }
+
+  restorationIndex(): number | undefined {
+    const state = this.pendingImport
+    if (!state) {
+      return undefined
+    }
+    if (state.anchor) {
+      return this.indices.get(state.anchor.key)
+    }
+    return this.items.find((item) => item.end > state.scrollTop)?.index ?? this.items.at(-1)?.index
   }
 
   restore(anchor: CombinedDiffItemAnchor): boolean {
@@ -243,6 +245,7 @@ export class CombinedDiffExtent {
     }
     // The native line delta is a new item offset, not a new screen gap.
     anchor.gap = 0
+    this.pendingImport = null
     this.depth += 1
     let valid: boolean
     try {
@@ -269,12 +272,34 @@ export class CombinedDiffExtent {
     this.anchor = null
   }
 
+  dispose(): void {
+    this.input()
+    this.items = []
+    this.indices.clear()
+    this.source = null
+    this.sourcePrefix = 0
+    this.geometry = null
+    this.target = 0
+    this.leadingSlack = 0
+    this.trailingSlack = 0
+    this.revision += 1
+  }
+
   scrolled(): void {
     const position = this.view.position()
-    if (position !== this.target) {
+    const height = this.view.height()
+    const scrollHeight = this.view.scrollHeight?.() ?? this.geometry?.scrollHeight ?? height
+    const previous = this.geometry
+    const changed =
+      !previous || height !== previous.height || scrollHeight !== previous.scrollHeight
+    const expected = Math.min(this.target, Math.max(0, scrollHeight - height))
+    if (!changed && position !== expected && position !== previous?.applied) {
       this.input()
     }
-    this.apply(position - this.leadingSlack)
+    if (this.pendingImport && this.applyImport()) {
+      return
+    }
+    this.apply(this.position(this.anchor) ?? position - this.leadingSlack)
   }
 
   invalidate(key: VirtualItem['key']): void {

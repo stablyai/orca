@@ -67,19 +67,11 @@ export function usePRFilesDiffViewPersistence(args: {
     }
 
     const cacheScrollPositionOnScroll = (): void => {
-      // Why: mid-restore scrollTop is a clamped intermediate, so caching it would lose the real target.
-      if (args.pendingRestoreScrollTopRef.current !== null) {
-        return
-      }
       writeCachedScrollPosition(getCombinedDiffExtent(container).exportView().scrollTop)
     }
 
     const cacheScrollPositionOnTeardown = (): void => {
-      // Why: tearing down mid-restore must persist the pending target, not the clamped intermediate.
-      writeCachedScrollPosition(
-        args.pendingRestoreScrollTopRef.current ??
-          getCombinedDiffExtent(container).exportView().scrollTop
-      )
+      writeCachedScrollPosition(getCombinedDiffExtent(container).exportView().scrollTop)
     }
 
     container.addEventListener('scroll', cacheScrollPositionOnScroll, { passive: true })

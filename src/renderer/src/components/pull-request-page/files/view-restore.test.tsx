@@ -93,3 +93,42 @@ it('restores a late PR viewport once and exports its outgoing context before det
   expect(incoming.scrollTop).toBe(2700)
   view.unmount()
 })
+
+it('exports the owner pending scalar request when a PR context detaches before it can land', () => {
+  prFilesDiffScrollTopCache.set('pending-pr', 2500)
+  const viewport = document.createElement('div')
+  Object.defineProperties(viewport, {
+    clientHeight: { value: 700 },
+    scrollHeight: { value: 700 },
+    scrollTop: { get: () => 0, set: (_value: number) => {} }
+  })
+  const owner = getCombinedDiffExtent(viewport)
+  owner.publish([{ key: 'file-a', index: 0, start: 0, end: 91, size: 91, lane: 0, settled: false }])
+  function Probe() {
+    const { beforeDetachRef, releaseViewport } = useCombinedDiffViewport()
+    const pendingRestoreScrollTopRef = useRef<number | null>(null)
+    const loadedIndicesRef = useRef(new Set<number>())
+    usePRFilesDiffViewPersistence({
+      sections: [],
+      entriesLength: 1,
+      viewStateKey: 'pending-pr',
+      entrySignature: 'one',
+      sectionHeights: {},
+      sideBySide: true,
+      fileTreeCollapsed: false,
+      activeTreeSectionKey: null,
+      loadedIndicesRef,
+      viewportNode: viewport,
+      beforeDetachRef,
+      releaseViewport,
+      pendingRestoreScrollTopRef
+    })
+    return null
+  }
+  const view = render(<Probe />)
+  expect(viewport.scrollTop).toBe(0)
+  expect(owner.exportView()).toEqual({ scrollTop: 2500 })
+  act(() => viewport.dispatchEvent(new Event('scroll')))
+  view.unmount()
+  expect(prFilesDiffScrollTopCache.get('pending-pr')).toBe(2500)
+})

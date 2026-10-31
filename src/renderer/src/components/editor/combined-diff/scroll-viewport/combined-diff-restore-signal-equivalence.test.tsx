@@ -14,7 +14,10 @@ import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor
 import type { DiffSection } from '../../diff-section-types'
 import {
   getCombinedDiffExtent,
-  publishCombinedDiffMeasurements
+  observeCombinedDiffOffset,
+  reconcileCombinedDiffViewport,
+  publishCombinedDiffMeasurements,
+  publishCombinedDiffSectionGeometry
 } from '../../combined-diff-extent-dom'
 import { useCombinedDiffExtent, useCombinedDiffViewport } from '../../use-combined-diff-extent'
 import { useCombinedDiffScrollAnchors } from './use-combined-diff-scroll-anchors'
@@ -261,6 +264,162 @@ it('imports a saved context on null-then-attached viewport and exports the outgo
   expect(incoming.scrollTop).toBe(21030)
   act(() => virtualizer.resizeItem(0, 2390))
   expect(incoming.scrollTop).toBe(21230)
+  view.unmount()
+  dispose()
+  releaseCombinedDiffView(lease)
+})
+
+it('keeps a pending T3 import across null attachment, a clamping DOM, export and reattachment', () => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  )
+  let sections = [section('clip-0'), section('clip-a'), section('clip-b')]
+  const lease = claimCombinedDiffView('pending-tab', 'worktree')
+  const scrollRef: { current: HTMLDivElement | null } = { current: null }
+  let attach = () => {}
+  let detach = () => {}
+  let height = 0
+  const virtualizer = new Virtualizer<HTMLDivElement, Element>({
+    count: 3,
+    getScrollElement: () => scrollRef.current,
+    getItemKey: (index) => sections[index]!.key,
+    estimateSize: () => 91,
+    initialRect: { width: 800, height: 0 },
+    observeElementRect: (_instance, callback) => {
+      callback({ width: 800, height })
+      return () => {}
+    },
+    observeElementOffset: observeCombinedDiffOffset,
+    scrollToFn: (_offset, _options, instance) => reconcileCombinedDiffViewport(instance),
+    onChange: (instance) => publishCombinedDiffMeasurements(instance, sections)
+  })
+  const dispose = virtualizer._didMount()
+  function Viewer() {
+    const [visible, setVisible] = useState(false)
+    const lifecycle = useCombinedDiffViewport()
+    const { setViewport } = lifecycle
+    const anchor = useRef<VirtualizedScrollAnchor>({ key: 'clip-a', offset: 19050 })
+    const offset = useRef(21237)
+    const memoryLeaseRef = useRef(lease)
+    attach = () => setVisible(true)
+    detach = () => setVisible(false)
+    const ref = useCallback(
+      (node: HTMLDivElement | null) => {
+        setViewport(node)
+        scrollRef.current = node
+        if (node) {
+          let top = 0
+          node.dataset.combinedDiffViewport = ''
+          Object.defineProperties(node, {
+            clientHeight: { get: () => height },
+            scrollHeight: {
+              get: () =>
+                Math.max(
+                  height,
+                  Number.parseFloat(
+                    node.firstElementChild
+                      ?.getAttribute('style')
+                      ?.match(/height: ([\d.]+)px/)?.[1] ?? '0'
+                  )
+                )
+            },
+            scrollTop: {
+              get: () => top,
+              set: (value: number) => {
+                top = Math.max(0, Math.min(value, node.scrollHeight - height))
+              }
+            }
+          })
+        }
+      },
+      [setViewport]
+    )
+    useCombinedDiffScrollAnchors({
+      restorationKey: 'pending-tab',
+      viewportNode: lifecycle.viewportNode,
+      beforeDetachRef: lifecycle.beforeDetachRef,
+      releaseViewport: lifecycle.releaseViewport,
+      scrollAnchorRef: anchor,
+      scrollOffsetRef: offset,
+      memoryLeaseRef,
+      virtualizer
+    })
+    useCombinedDiffExtent(lifecycle.viewportNode, virtualizer, undefined, sections)
+    virtualizer._willUpdate()
+    return visible ? (
+      <div ref={ref}>
+        <div data-combined-diff-extent="" />
+      </div>
+    ) : null
+  }
+  const view = render(<Viewer />)
+  expect(scrollRef.current).toBeNull()
+  act(() => attach())
+  const outgoing = scrollRef.current
+  if (!outgoing) {
+    throw new Error('Missing attached viewport')
+  }
+  const pending = { scrollTop: 21237, anchor: { key: 'clip-a', offset: 19050 } }
+  const owner = getCombinedDiffExtent(outgoing)
+  expect(owner.exportView()).toMatchObject(pending)
+  height = 803
+  act(() => {
+    outgoing.scrollTop = 0
+    outgoing.dispatchEvent(new Event('scroll'))
+    reconcileCombinedDiffViewport(virtualizer)
+  })
+  expect(owner.exportView()).toMatchObject(pending)
+  act(() => detach())
+  expect(readCombinedDiffViewMemory('pending-tab')?.scrollTop).toBe(21237)
+  act(() => attach())
+  const incoming = scrollRef.current
+  if (!incoming) {
+    throw new Error('Missing reattached viewport')
+  }
+  expect(incoming).not.toBe(outgoing)
+  expect(getCombinedDiffExtent(incoming).exportView()).toMatchObject(pending)
+  act(() => {
+    virtualizer.resizeItem(0, 2387)
+    virtualizer.resizeItem(1, 20067)
+    virtualizer.resizeItem(2, 19000)
+  })
+  expect(incoming.scrollTop).toBe(21437)
+  expect(getCombinedDiffExtent(incoming).exportView()).toMatchObject(pending)
+  const target = document.createElement('div')
+  target.dataset.combinedDiffSectionRow = ''
+  target.dataset.index = '1'
+  target.getBoundingClientRect = () => new DOMRect(0, 2387, 800, 20067)
+  incoming.firstElementChild?.append(target)
+  act(() => publishCombinedDiffSectionGeometry(target, sections[1]!))
+  expect(getCombinedDiffExtent(incoming).exportView()).toMatchObject({
+    scrollTop: 21437,
+    anchor: { key: 'clip-a', offset: 19050 }
+  })
+  act(() => detach())
+  sections = sections.map((section) => ({ ...section, contentGeneration: 1 }))
+  act(() => attach())
+  const next = scrollRef.current
+  if (!next) {
+    throw new Error('Missing next-generation viewport')
+  }
+  act(() => virtualizer.resizeItem(0, 3000))
+  expect(next.scrollTop).toBe(22050)
+  expect(getCombinedDiffExtent(next).exportView()).toMatchObject({
+    scrollTop: 21437,
+    anchor: { key: 'clip-a', offset: 19050 }
+  })
+  const nextTarget = target.cloneNode()
+  if (!(nextTarget instanceof HTMLDivElement)) {
+    throw new Error('Missing target row')
+  }
+  nextTarget.getBoundingClientRect = () => new DOMRect(0, 3000, 800, 20067)
+  next.firstElementChild?.append(nextTarget)
+  act(() => publishCombinedDiffSectionGeometry(nextTarget, sections[1]!))
+  expect(getCombinedDiffExtent(next).exportView().scrollTop).toBe(22050)
   view.unmount()
   dispose()
   releaseCombinedDiffView(lease)

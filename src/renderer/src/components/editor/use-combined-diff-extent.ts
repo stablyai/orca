@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
+import type { DiffSection } from './diff-section-types'
 import {
   connectCombinedDiffExtent,
   publishCombinedDiffMeasurements
@@ -9,7 +10,7 @@ export function useCombinedDiffExtent(
   viewport: HTMLDivElement | null,
   virtualizer: Virtualizer<HTMLDivElement, Element>,
   mark?: (offset: number) => void,
-  sections?: readonly { key: string }[],
+  sections?: readonly (Pick<DiffSection, 'key'> & Partial<DiffSection>)[],
   context?: string
 ): void {
   // Install before measurements can ask the virtualizer to compensate a size change.

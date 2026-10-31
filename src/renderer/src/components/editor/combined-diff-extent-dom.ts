@@ -1,7 +1,11 @@
 import { observeElementOffset, type VirtualItem, type Virtualizer } from '@tanstack/react-virtual'
 import { CombinedDiffExtent } from './combined-diff-extent'
+import type { DiffSection } from './diff-section-types'
 import { getCombinedDiffFocusOwner } from './combined-diff-overflow'
-import { COMBINED_DIFF_ROW_SELECTOR } from './combined-diff-viewport'
+import {
+  COMBINED_DIFF_ROW_SELECTOR,
+  COMBINED_DIFF_VIEWPORT_SELECTOR
+} from './combined-diff-viewport'
 
 const prefixHeight = (viewport: HTMLElement): number =>
   viewport.querySelector('[data-combined-diff-prefix]')?.getBoundingClientRect().height ?? 0
@@ -12,9 +16,13 @@ function createOwner(viewport: HTMLElement) {
   let mark: ((offset: number) => void) | undefined
   let offsetChanged: (() => void) | undefined
   let projectedLeading = 0
+  let refresh: (() => void) | undefined
+  const content = new Map<string, { section: DiffSection; row: HTMLElement; size: number }>()
+  let contentRevision = 0
   const extent = new CombinedDiffExtent({
     position: () => viewport.scrollTop,
     height: () => viewport.clientHeight,
+    scrollHeight: () => viewport.scrollHeight,
     project: (items, height, leading) => {
       const content = viewport.querySelector<HTMLElement>('[data-combined-diff-extent]')
       const prefix = prefixHeight(viewport)
@@ -39,6 +47,28 @@ function createOwner(viewport: HTMLElement) {
   })
   return {
     extent,
+    content,
+    revision: () => contentRevision,
+    publish: (section: DiffSection, row: HTMLElement, size: number) => {
+      content.set(section.key, { section, row, size })
+      contentRevision += 1
+      refresh?.()
+    },
+    retire: (row: HTMLElement) => {
+      for (const [key, geometry] of content) {
+        if (geometry.row === row) {
+          content.delete(key)
+          contentRevision += 1
+        }
+      }
+    },
+    setRefresh: (next: typeof refresh) => {
+      refresh = next
+      if (!next) {
+        content.clear()
+        contentRevision += 1
+      }
+    },
     setMark: (next: typeof mark) => {
       mark = next
     },
@@ -83,20 +113,30 @@ export function getCombinedDiffExtent(viewport: HTMLElement): CombinedDiffExtent
 const identities = new WeakMap<
   Virtualizer<HTMLDivElement, Element>,
   {
-    sections: readonly { key: string }[]
+    sections: readonly (Pick<DiffSection, 'key'> & Partial<DiffSection>)[]
     source?: readonly VirtualItem[]
+    contentRevision?: number
     logical?: readonly VirtualItem[]
   }
 >()
 
 export function publishCombinedDiffMeasurements(
   instance: Virtualizer<HTMLDivElement, Element>,
-  sections?: readonly { key: string }[]
+  sections?: readonly (Pick<DiffSection, 'key'> & Partial<DiffSection>)[]
 ): void {
   let identity = identities.get(instance)
   if (sections && identity?.sections !== sections) {
     identity = { sections }
     identities.set(instance, identity)
+    const keys = new Set(sections.map((section) => section.key))
+    const owner = instance.scrollElement && owners.get(instance.scrollElement)
+    if (owner) {
+      for (const key of owner.content.keys()) {
+        if (!keys.has(key)) {
+          owner.content.delete(key)
+        }
+      }
+    }
   }
   instance.shouldAdjustScrollPositionOnItemSizeChange = () => false
   const viewport = instance.scrollElement
@@ -108,12 +148,18 @@ export function publishCombinedDiffMeasurements(
   const prefix = prefixHeight(viewport)
   instance.getTotalSize()
   const measured = instance.measurementsCache
-  if (identity && identity.source !== measured) {
+  const owner = owners.get(viewport)
+  if (
+    identity &&
+    (identity.source !== measured || identity.contentRevision !== owner?.revision())
+  ) {
+    identity.contentRevision = owner?.revision()
     identity.source = measured
     const sections = identity.sections
     identity.logical = measured.map((item) => ({
       ...item,
-      key: sections[item.index]?.key ?? item.key
+      key: sections[item.index]?.key ?? item.key,
+      settled: isCombinedDiffSectionSettled(viewport, sections[item.index], item)
     }))
   }
   const logical = identity?.logical ?? measured
@@ -125,15 +171,13 @@ export function scrollCombinedDiffTo(viewport: HTMLElement, target: number): boo
   return getCombinedDiffExtent(viewport).navigate(target)
 }
 
-export function scrollCombinedDiffToOffset(
-  instance: Virtualizer<HTMLDivElement, Element>,
-  offset: number
+export function reconcileCombinedDiffViewport(
+  instance: Virtualizer<HTMLDivElement, Element>
 ): void {
   publishCombinedDiffMeasurements(instance)
   const viewport = instance.scrollElement
   if (viewport) {
-    const extent = getCombinedDiffExtent(viewport)
-    extent.navigate(offset + prefixHeight(viewport) + extent.leadingSlack)
+    getCombinedDiffExtent(viewport).scrolled()
   }
 }
 
@@ -158,6 +202,7 @@ export function connectCombinedDiffExtent(
 ): () => void {
   const extent = getCombinedDiffExtent(viewport)
   owners.get(viewport)?.setMark(mark)
+  owners.get(viewport)?.setRefresh(refresh)
   const overflowAnchor = viewport.style.overflowAnchor
   viewport.style.overflowAnchor = 'none'
   const input = (): void => extent.input()
@@ -178,5 +223,66 @@ export function connectCombinedDiffExtent(
     viewport.removeEventListener('scroll', scroll)
     viewport.style.overflowAnchor = overflowAnchor
     owners.get(viewport)?.setMark(undefined)
+    owners.get(viewport)?.setRefresh(undefined)
+    extent.dispose()
   }
+}
+
+export function publishCombinedDiffSectionGeometry(node: HTMLElement, section: DiffSection): void {
+  const viewport = node.closest<HTMLElement>(COMBINED_DIFF_VIEWPORT_SELECTOR)
+  const row = node.closest<HTMLElement>(COMBINED_DIFF_ROW_SELECTOR)
+  if (viewport && row) {
+    getCombinedDiffExtent(viewport)
+    owners.get(viewport)?.publish(section, row, Math.round(row.getBoundingClientRect().height))
+  }
+}
+
+export function retireCombinedDiffSectionGeometry(node: HTMLElement): void {
+  const viewport = node.closest<HTMLElement>(COMBINED_DIFF_VIEWPORT_SELECTOR)
+  const row = node.closest<HTMLElement>(COMBINED_DIFF_ROW_SELECTOR)
+  if (viewport && row) {
+    owners.get(viewport)?.retire(row)
+  }
+}
+
+function isCombinedDiffSectionSettled(
+  viewport: HTMLElement,
+  section: (Pick<DiffSection, 'key'> & Partial<DiffSection>) | undefined,
+  item: VirtualItem
+): boolean {
+  if (!section || section.loading === undefined) {
+    return true
+  }
+  const geometry = owners.get(viewport)?.content.get(section.key)
+  if (
+    geometry &&
+    geometry.size === item.size &&
+    geometry.section.contentGeneration === section.contentGeneration &&
+    geometry.section.originalContent === section.originalContent &&
+    geometry.section.modifiedContent === section.modifiedContent
+  ) {
+    return !section.loading
+  }
+  const terminal =
+    section.collapsed ||
+    (!section.loading &&
+      (section.error ||
+        section.loadOnDemand ||
+        section.largeDiffRenderLimit?.limited ||
+        section.diffResult?.kind === 'binary'))
+  const row =
+    terminal &&
+    viewport.querySelector<HTMLElement>(`${COMBINED_DIFF_ROW_SELECTOR}[data-index="${item.index}"]`)
+  if (!row || Math.round(row.getBoundingClientRect().height) !== item.size) {
+    return false
+  }
+  if (
+    section.diffResult?.kind === 'binary' &&
+    section.diffResult.isImage &&
+    !section.diffResult.tooLarge
+  ) {
+    const images = Array.from(row.querySelectorAll('img'))
+    return images.length > 0 && images.every((image) => image.complete)
+  }
+  return true
 }

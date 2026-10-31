@@ -5,7 +5,7 @@ import {
 import {
   publishCombinedDiffMeasurements,
   observeCombinedDiffOffset,
-  scrollCombinedDiffToOffset,
+  reconcileCombinedDiffViewport,
   scrollCombinedDiffToIndex
 } from '@/components/editor/combined-diff-extent-dom'
 import { useCombinedDiffFocusRange } from '@/components/editor/use-combined-diff-focus-range'
@@ -233,8 +233,7 @@ function PRFilesCombinedDiffSections({
     rangeExtractor,
     onChange: (instance) => publishCombinedDiffMeasurements(instance, sections),
     observeElementOffset: observeCombinedDiffOffset,
-    scrollToFn: (offset, options, instance) =>
-      scrollCombinedDiffToOffset(instance, offset + (options.adjustments ?? 0)),
+    scrollToFn: (_offset, _options, instance) => reconcileCombinedDiffViewport(instance),
     count: sections.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: (index) => {

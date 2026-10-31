@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
+import {
+  publishCombinedDiffSectionGeometry,
+  retireCombinedDiffSectionGeometry
+} from './combined-diff-extent-dom'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { detectLanguage } from '@/lib/language-detect'
@@ -84,6 +89,22 @@ export function DiffSectionItem({
     modelPathBase,
     collapsed: section.collapsed
   })
+
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const sectionRef = useRef(section)
+  useLayoutEffect(() => {
+    sectionRef.current = section
+  }, [section])
+  const setRoot = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (rootRef.current && rootRef.current !== node) {
+        retireCombinedDiffSectionGeometry(rootRef.current)
+      }
+      rootRef.current = node
+      setSectionRootNode(node)
+    },
+    [setSectionRootNode]
+  )
 
   const { lineStats, sectionBodyHeight, useIntrinsicImageHeight, isLargeDiffLimited } =
     useDiffSectionLayoutMetrics({
@@ -181,14 +202,17 @@ export function DiffSectionItem({
     let pendingHeightFrame: number | null = null
     const updateHeight = (): void => {
       // Zero-width side-by-side editors fall back to inline and report an incorrect taller height.
-      if (!hasLayoutBox(editor.getContainerDomNode())) {
+      if (!diffLayoutReady || !hasLayoutBox(editor.getContainerDomNode())) {
         return
       }
       const contentHeight = Math.max(
         editor.getOriginalEditor().getContentHeight(),
         modified.getContentHeight()
       )
-      publishContentHeight(contentHeight)
+      flushSync(() => publishContentHeight(contentHeight))
+      if (rootRef.current) {
+        publishCombinedDiffSectionGeometry(rootRef.current, sectionRef.current)
+      }
     }
     const requestHeightUpdate = (): void => {
       if (pendingHeightFrame !== null) {
@@ -208,9 +232,15 @@ export function DiffSectionItem({
         requestHeightUpdate()
       }
     }
-    const contentSizeSubs = [editor.getOriginalEditor(), modified].map((pane) =>
-      pane.onDidContentSizeChange(onContentSizeChange)
-    )
+    const contentSizeSubs = [editor.getOriginalEditor(), modified].flatMap((pane) => [
+      pane.onDidContentSizeChange(onContentSizeChange),
+      pane.onDidChangeModel(() => {
+        diffLayoutReady = false
+      }),
+      pane.onDidChangeModelContent(() => {
+        diffLayoutReady = false
+      })
+    ])
     const diffUpdateSub = editor.onDidUpdateDiff(markDiffLayoutReady)
     if (editor.getLineChanges() !== null) {
       markDiffLayoutReady()
@@ -291,7 +321,7 @@ export function DiffSectionItem({
   }, [index, loadSection])
 
   return (
-    <div ref={setSectionRootNode} className="border-b border-border">
+    <div ref={setRoot} className="border-b border-border">
       <DiffSectionHeader
         path={section.path}
         dirty={section.dirty}
