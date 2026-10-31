@@ -289,3 +289,75 @@ describe('a local pane’s foreground read', () => {
     ).resolves.toBe('agent')
   })
 })
+
+describe('owner-held recipient observations', () => {
+  it.each(['non-shell', 'shell'] as const)(
+    'uses fresh %s without a global census or name cache',
+    async (foregroundKind) => {
+      const inventory = vi.fn()
+      const cachedName = vi.fn(async () => 'claude')
+      const inspection = vi.fn(async () => ({
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        foregroundObservation: {
+          ptyId: 'pty-1',
+          ptyIncarnationId: 'inc-1',
+          authorityGeneration: 'owner',
+          observationEpoch: 1,
+          capturedAgeMs: 0,
+          verdict: 'observed' as const,
+          source: 'pty-master' as const,
+          foregroundKind,
+          processName: foregroundKind === 'shell' ? 'zsh' : 'unrecognized-user-wrapper'
+        }
+      }))
+      expect(
+        await readLaunchedAgentForeground(
+          {
+            supportsForegroundObservation: () => true,
+            inspectProcess: inspection,
+            getForegroundProcess: cachedName,
+            listProcesses: inventory
+          },
+          { remote: false, windows: false },
+          'pty-1',
+          'claude'
+        )
+      ).toBe(foregroundKind === 'shell' ? 'shell' : 'agent')
+      expect(inspection).toHaveBeenCalledExactlyOnceWith('pty-1', { foregroundOnly: true })
+      expect(inventory).not.toHaveBeenCalled()
+      expect(cachedName).not.toHaveBeenCalled()
+    }
+  )
+  it('keeps an unresolved owner unknown and never fills a fresh unavailable result with cached identity', async () => {
+    const cachedName = vi.fn(async () => 'claude')
+    const inventory = vi.fn()
+    expect(
+      await readLaunchedAgentForeground(
+        {
+          supportsForegroundObservation: () => true,
+          inspectProcess: async () => ({
+            foregroundProcess: 'claude',
+            hasChildProcesses: true,
+            foregroundObservation: {
+              ptyId: 'pty-1',
+              ptyIncarnationId: 'inc',
+              authorityGeneration: 'owner',
+              observationEpoch: 1,
+              capturedAgeMs: 0,
+              verdict: 'unverifiable',
+              reason: 'owner_unavailable'
+            }
+          }),
+          getForegroundProcess: cachedName,
+          listProcesses: inventory
+        },
+        { remote: false, windows: false },
+        'pty-1',
+        'claude'
+      )
+    ).toBe('unknown')
+    expect(cachedName).not.toHaveBeenCalled()
+    expect(inventory).not.toHaveBeenCalled()
+  })
+})

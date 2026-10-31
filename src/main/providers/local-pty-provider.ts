@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+import { observePtyForeground } from '../pty/pty-master-foreground-observation'
 import type * as pty from 'node-pty'
 import type {
   IPtyProvider,
@@ -63,6 +65,8 @@ export {
 } from './local-pty-termination'
 
 export class LocalPtyProvider implements IPtyProvider {
+  private readonly foregroundAuthority = randomUUID()
+  private foregroundEpoch = 0
   private opts: LocalPtyProviderOptions
 
   constructor(opts: LocalPtyProviderOptions = {}) {
@@ -142,6 +146,10 @@ export class LocalPtyProvider implements IPtyProvider {
     return hasLocalPtyChildProcesses(id)
   }
 
+  supportsForegroundObservation(_id: string): boolean {
+    return true
+  }
+
   async inspectProcess(
     id: string,
     options?: PtyProcessInspectionOptions
@@ -157,6 +165,26 @@ export class LocalPtyProvider implements IPtyProvider {
         foregroundProcess: null,
         hasChildProcesses: true,
         childProcessEvidence: 'unverifiable'
+      }
+    }
+    if (options?.foregroundOnly === true) {
+      const requestedAt = Date.now()
+      const sample = await observePtyForeground(
+        proc,
+        () => ptyProcesses.get(id) === proc && ptyIncarnations.get(id) === incarnation
+      )
+      return {
+        foregroundProcess: sample.verdict === 'observed' ? sample.processName : null,
+        hasChildProcesses: true,
+        childProcessEvidence: 'unverifiable',
+        foregroundObservation: {
+          ...sample,
+          ptyId: id,
+          ptyIncarnationId: incarnation,
+          authorityGeneration: this.foregroundAuthority,
+          observationEpoch: ++this.foregroundEpoch,
+          capturedAgeMs: Math.max(0, Date.now() - requestedAt)
+        }
       }
     }
     const foregroundProcess = await (process.platform === 'win32' && options?.steadyState !== true
@@ -202,8 +230,9 @@ export class LocalPtyProvider implements IPtyProvider {
     /* re-spawning handles local revival */
   }
 
-  listProcesses(): Promise<PtyProcessInfo[]> {
-    return listLocalPtyProcesses()
+  async listProcesses(opts?: { ptyIds?: readonly string[] }): Promise<PtyProcessInfo[]> {
+    const rows = await listLocalPtyProcesses()
+    return opts?.ptyIds ? rows.filter((row) => opts.ptyIds?.includes(row.id)) : rows
   }
 
   getDefaultShell(): Promise<string> {

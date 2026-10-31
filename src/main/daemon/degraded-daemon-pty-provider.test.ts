@@ -8,12 +8,19 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/pty-provider-contract'
-import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type {
+  PtyProcessInspection,
+  PtyProcessInspectionOptions
+} from '../providers/pty-process-inspection'
+import { readLaunchedAgentForeground } from '../runtime/launched-agent-foreground'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 
 type ProviderMock = IPtyProvider & {
   probePtyLiveness: (id: string) => Promise<boolean | null>
-  inspectProcess: (id: string) => Promise<PtyProcessInspection>
+  inspectProcess: (
+    id: string,
+    options?: PtyProcessInspectionOptions
+  ) => Promise<PtyProcessInspection>
   emitData: (id: string, data: string, sequenceChars?: number) => void
   emitReplay: (id: string, data: string) => void
   emitExit: (id: string, code: number) => void
@@ -358,6 +365,52 @@ describe('DegradedDaemonPtyProvider', () => {
       'daemon-confirmed'
     )
     await expect(provider.confirmForegroundProcess(fresh.id)).resolves.toBe('fallback-confirmed')
+  })
+
+  it('observes an established fresh PTY while an unrelated legacy daemon is unreachable', async () => {
+    const current = createDaemonAdapter('daemon')
+    const legacy = createDaemonAdapter('legacy', ['unrelated'])
+    const fallback = createProvider('fallback')
+    const observation = {
+      ptyId: 'fallback-new',
+      ptyIncarnationId: 'inc',
+      authorityGeneration: 'owner',
+      observationEpoch: 1,
+      capturedAgeMs: 0,
+      verdict: 'observed' as const,
+      source: 'pty-master' as const,
+      foregroundKind: 'non-shell' as const,
+      processName: 'claude'
+    }
+    Object.assign(fallback, { supportsForegroundObservation: () => true })
+    vi.mocked(fallback.inspectProcess).mockResolvedValue({
+      foregroundProcess: 'claude',
+      hasChildProcesses: true,
+      foregroundObservation: observation
+    })
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+    const fresh = await provider.spawn({ cols: 80, rows: 24 })
+    vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('unreachable'))
+    const controller = {
+      supportsForegroundObservation: (id: string) => provider.supportsForegroundObservation(id),
+      inspectProcess: (id: string, options?: PtyProcessInspectionOptions) =>
+        provider.inspectProcess(id, options),
+      getForegroundProcess: (id: string) => provider.getForegroundProcess(id),
+      listProcesses: (_host?: string, opts?: Parameters<IPtyProvider['listProcesses']>[0]) =>
+        provider.listProcesses(opts)
+    }
+
+    await expect(
+      readLaunchedAgentForeground(controller, { remote: false, windows: false }, fresh.id, 'claude')
+    ).resolves.toBe('agent')
+    expect(fallback.inspectProcess).toHaveBeenCalledWith(fresh.id, { foregroundOnly: true })
+    // The target read skips the unrelated census; every other scoped read keeps it.
+    await expect(
+      provider.listProcesses({ ptyIds: [fresh.id], targetOwnerOnly: true })
+    ).resolves.toMatchObject([{ id: fresh.id }])
+    expect(legacy.listProcesses).not.toHaveBeenCalled()
+    await expect(provider.listProcesses({ ptyIds: [fresh.id] })).rejects.toThrow()
+    expect(provider.supportsForegroundObservation('unrouted')).toBe(false)
   })
 
   it('routes discovered daemon sessions to the daemon and fresh PTYs to the fallback', async () => {

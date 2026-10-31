@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as PtyMasterForegroundObservation from '../pty/pty-master-foreground-observation'
 
 const { resolveForegroundMock } = vi.hoisted(() => ({ resolveForegroundMock: vi.fn() }))
 const jobMembers = vi.hoisted(() => vi.fn())
@@ -16,6 +17,12 @@ vi.mock('./agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: resolveForegroundMock,
   confirmShellForegroundProcess: confirmShellForegroundMock
 }))
+
+const observeForegroundMock = vi.hoisted(() => vi.fn())
+vi.mock('../pty/pty-master-foreground-observation', async (importOriginal) => ({
+  ...(await importOriginal<typeof PtyMasterForegroundObservation>()),
+  observePtyForeground: observeForegroundMock
+}))
 import { isRetiredPtyMaster } from '../pty/node-pty-master-fd-retirement'
 import {
   confirmLocalPtyShellForeground,
@@ -25,6 +32,8 @@ import {
 import { LocalPtyProvider } from './local-pty-provider'
 import { ptyIncarnations, ptyProcesses, ptyShellPath } from './local-pty-provider-state'
 import { inspectPtyProviderProcess } from './pty-process-inspection'
+import { readLaunchedAgentForeground } from '../runtime/launched-agent-foreground'
+import type { TerminalForegroundSample } from '../../shared/terminal-foreground-observation'
 
 // Match the recorded basename so only the retired descriptor distinguishes the pane from idle.
 const POSIX_SHELL = 'sh'
@@ -236,6 +245,47 @@ describe('inspectPtyProviderProcess child-process evidence', () => {
       childProcessEvidence: 'unverifiable'
     })
   })
+})
+
+describe('fresh foreground observation', () => {
+  it.each([
+    ['non-shell', 'claude', 'agent'],
+    ['shell', '-zsh', 'shell']
+  ] as const)(
+    'keeps a %s observation valid when the wall clock steps back during its read',
+    async (foregroundKind, processName, expected) => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(1_000)
+      registerPane('pty-clock-step', '/bin/zsh', '/bin/zsh')
+      observeForegroundMock.mockImplementationOnce(async (): Promise<TerminalForegroundSample> => {
+        vi.setSystemTime(995)
+        return { verdict: 'observed', source: 'pty-master', foregroundKind, processName }
+      })
+      const provider = new LocalPtyProvider()
+      const inspectProcess = vi.fn((id: string, options?: { foregroundOnly?: boolean }) =>
+        provider.inspectProcess(id, options)
+      )
+      try {
+        expect(
+          await readLaunchedAgentForeground(
+            {
+              supportsForegroundObservation: () => true,
+              inspectProcess,
+              getForegroundProcess: async () => null
+            },
+            { remote: false, windows: false },
+            'pty-clock-step',
+            'claude'
+          )
+        ).toBe(expected)
+        await expect(inspectProcess.mock.results[0].value).resolves.toMatchObject({
+          foregroundObservation: { verdict: 'observed', capturedAgeMs: 0 }
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
 })
 
 describeOnPosix('inspectPtyProviderProcess on a retired master', () => {

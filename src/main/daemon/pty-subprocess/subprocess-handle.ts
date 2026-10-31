@@ -4,6 +4,10 @@ import type * as pty from 'node-pty'
 import type { RecognizedAgentProcess } from '../../../shared/agent-process-recognition'
 import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo'
 import { signalPosixPtyForegroundGroup } from '../../pty/posix-pty-foreground-group'
+import {
+  observePtyForeground,
+  readPtyForegroundGroup
+} from '../../pty/pty-master-foreground-observation'
 import { readPtsName } from '../../pty/node-pty-pts-name'
 import { terminatePtyJob } from '../../windows/windows-pty-job'
 import { isValidPtySize } from '../daemon-pty-size'
@@ -145,6 +149,7 @@ export function createDaemonPtySubprocessHandle(args: {
     ...(args.startupCommandDeliveredInShellArgs
       ? { startupCommandDeliveredInShellArgs: true }
       : {}),
+    observeForeground: () => observePtyForeground(proc, () => !dead && !ioFailed && !masterRetired),
     getForegroundProcess: foreground.getForegroundProcess,
     confirmForegroundProcess: foreground.confirmForegroundProcess,
     confirmShellForeground: foreground.confirmShellForeground,
@@ -226,6 +231,7 @@ export function createDaemonPtySubprocessHandle(args: {
       // SIGWINCH belongs to the tty foreground group; destructive signals keep the root-pid target.
       if (sig === 'SIGWINCH') {
         void signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), sig, signalRootPid, {
+          readForegroundGroup: () => readPtyForegroundGroup(proc),
           ownsRoot: () => !physical.hasExited()
         })
         return

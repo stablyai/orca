@@ -163,9 +163,17 @@ export async function getForegroundProcessFromRuntimeController(ptyId: string) {
   }
 }
 
+export function supportsForegroundObservationFromRuntimeController(ptyId: string): boolean {
+  try {
+    return getProviderForPty(ptyId).supportsForegroundObservation?.(ptyId) === true
+  } catch {
+    return false
+  }
+}
+
 export async function inspectProcessFromRuntimeController(
   ptyId: string,
-  options?: { expectedIncarnationId?: string }
+  options?: { expectedIncarnationId?: string; foregroundOnly?: boolean }
 ) {
   return inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId, options)
 }

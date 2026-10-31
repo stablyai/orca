@@ -227,3 +227,46 @@ describe('process table lookup', () => {
     }
   })
 })
+
+it('shares the native master group on resize with own-TTY and lifetime protection', async () => {
+  const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+  const fallback = vi.fn()
+  try {
+    resetPosixPtyForegroundGroupOwnRowCache()
+    runProcessMock.mockResolvedValue(psResult('4242 4242 ttys002'))
+    await signalPosixPtyForegroundGroup(900, '/dev/pts/5', 'SIGWINCH', fallback, {
+      platform: 'linux',
+      currentPid: 4242,
+      readForegroundGroup: () => 931,
+      ownsRoot: () => true
+    })
+    expect(kill).toHaveBeenCalledExactlyOnceWith(-931, 'SIGWINCH')
+    expect(fallback).not.toHaveBeenCalled()
+    kill.mockClear()
+    await signalPosixPtyForegroundGroup(900, '/dev/pts/5', 'SIGWINCH', fallback, {
+      platform: 'linux',
+      currentPid: 4242,
+      readForegroundGroup: () => 931,
+      ownsRoot: () => false
+    })
+    expect(kill).not.toHaveBeenCalled()
+    await signalPosixPtyForegroundGroup(900, '/dev/ttys002', 'SIGWINCH', fallback, {
+      platform: 'linux',
+      currentPid: 4242,
+      readForegroundGroup: () => 931
+    })
+    expect(kill).not.toHaveBeenCalled()
+    expect(fallback).toHaveBeenCalledOnce()
+    resetPosixPtyForegroundGroupOwnRowCache()
+    runProcessMock.mockResolvedValue(psResult(''))
+    await signalPosixPtyForegroundGroup(900, '/dev/pts/5', 'SIGWINCH', fallback, {
+      platform: 'linux',
+      currentPid: 4242,
+      readForegroundGroup: () => 931
+    })
+    expect(kill).not.toHaveBeenCalled()
+    expect(fallback).toHaveBeenCalledTimes(2)
+  } finally {
+    kill.mockRestore()
+  }
+})

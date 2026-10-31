@@ -161,8 +161,13 @@ export type RuntimePtyController = {
   getForegroundProcess(ptyId: string): Promise<string | null>
   inspectProcess?(
     ptyId: string,
-    options?: { expectedIncarnationId?: PtyIncarnationId; scanChildProcesses?: boolean }
+    options?: {
+      expectedIncarnationId?: PtyIncarnationId
+      scanChildProcesses?: boolean
+      foregroundOnly?: boolean
+    }
   ): Promise<PtyProcessInspection>
+  supportsForegroundObservation?(ptyId: string): boolean
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
   confirmShellForeground?(ptyId: string): Promise<boolean>
   hasChildProcesses?(ptyId: string): Promise<boolean>
@@ -175,7 +180,12 @@ export type RuntimePtyController = {
   /** Omitting the host lists every registered host. */
   listProcesses?(
     hostId?: ExecutionHostId,
-    opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }
+    opts?: {
+      deadlineMs?: number
+      includeForegroundProcessEvidence?: boolean
+      ptyIds?: readonly string[]
+      targetOwnerOnly?: boolean
+    }
   ): Promise<PtyProcessInfo[]>
   listProcessesWithHostScope?(opts?: {
     deadlineMs?: number

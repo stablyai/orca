@@ -17,6 +17,7 @@ type CompletionSensitivePtyProvider = IPtyProvider & {
 
 /** scanChildProcesses requests decision-time evidence; steady polls may rely on the next tick to correct stale reads. */
 export type PtyProcessInspectionOptions = {
+  foregroundOnly?: boolean
   expectedIncarnationId?: PtyIncarnationId
   scanChildProcesses?: boolean
   /** Adoption only: ignore members outside both shell ancestry and console; close still reaches the whole job. */

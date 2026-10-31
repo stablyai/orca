@@ -2,12 +2,14 @@ import type { Session } from './session'
 import type { TakePendingOutputResult, TerminalSnapshot } from './types'
 
 export async function confirmTerminalHostForegroundProcess(
-  session: Session | undefined
+  session: Session | undefined,
+  currentSession?: () => Session | undefined
 ): Promise<string | null> {
   if (!session || !session.isAlive) {
     return null
   }
-  return session.confirmForegroundProcess()
+  const result = await session.confirmForegroundProcess()
+  return session.isAlive && (!currentSession || currentSession() === session) ? result : null
 }
 
 export async function confirmTerminalHostShellForeground(

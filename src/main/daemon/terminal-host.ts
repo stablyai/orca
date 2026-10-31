@@ -241,7 +241,9 @@ export class TerminalHost {
   }
 
   async confirmForegroundProcess(sessionId: string): Promise<string | null> {
-    return confirmTerminalHostForegroundProcess(this.sessions.get(sessionId))
+    return confirmTerminalHostForegroundProcess(this.sessions.get(sessionId), () =>
+      this.sessions.get(sessionId)
+    )
   }
 
   async confirmShellForeground(sessionId: string): Promise<boolean> {

@@ -90,3 +90,23 @@ describe('the check before each write of a launch prompt', () => {
     expect(cleared.unsubscribe).toHaveBeenCalledTimes(1)
   })
 })
+
+it('invalidates reused and pending foreground proof when the terminal session is replaced', async () => {
+  const { runtime, guard } = guardHarness(['agent', 'shell'])
+  const first = { incarnationId: 'first' }
+  const identity = vi.fn(() => first)
+  const fenced = createLaunchedAgentWriteGuard(
+    { ...runtime, launchedAgentTerminalIdentity: identity },
+    'claude'
+  )
+  await fenced.beforeWrite('pty-1')
+  first.incarnationId = 'replacement'
+  await expect(fenced.beforeWrite('pty-1')).rejects.toThrow('agent_not_in_foreground')
+  vi.mocked(runtime.readLaunchedAgentForeground).mockImplementationOnce(async () => {
+    first.incarnationId = 'third'
+    return 'agent'
+  })
+  await expect(fenced.beforeWrite('pty-1')).rejects.toThrow('request_aborted')
+  guard.dispose()
+  fenced.dispose()
+})

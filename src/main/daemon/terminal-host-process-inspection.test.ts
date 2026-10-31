@@ -1,3 +1,4 @@
+import type { TerminalForegroundSample } from '../../shared/terminal-foreground-observation'
 import './mock-descendant-sweep'
 import { describe, expect, it, vi } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -12,6 +13,7 @@ import {
   assertCliConversationWritersExited,
   type CliWriterHost
 } from '../runtime/structured-agent-cli-writers'
+import { readLaunchedAgentForeground } from '../runtime/launched-agent-foreground'
 const { fullTable, identityTable, jobMembers, consoleMembers } = vi.hoisted(() => ({
   fullTable: vi.fn(),
   identityTable: vi.fn(),
@@ -295,4 +297,107 @@ describe('TerminalHost process inspection', () => {
       await host.dispose()
     }
   })
+})
+
+describe('fresh foreground observation contract', () => {
+  it('returns no child-census proof and fences a session replaced during its read', async () => {
+    let finish!: (sample: TerminalForegroundSample) => void
+    const subprocess = createSubprocess()
+    subprocess.observeForeground = vi.fn(
+      () =>
+        new Promise<TerminalForegroundSample>((resolve) => {
+          finish = resolve
+        })
+    )
+    const host = new TerminalHost({ spawnSubprocess: () => subprocess })
+    const created = await host.createOrAttach({
+      sessionId: 'foreground-contract',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+    try {
+      const pending = host.inspectProcess('foreground-contract', {
+        foregroundOnly: true,
+        expectedIncarnationId: created.incarnationId
+      })
+      finish({
+        verdict: 'observed',
+        source: 'pty-master',
+        foregroundKind: 'non-shell',
+        processName: 'claude'
+      })
+      expect(await pending).toMatchObject({
+        foregroundProcess: 'claude',
+        hasChildProcesses: true,
+        childProcessEvidence: 'unverifiable',
+        foregroundObservation: {
+          ptyId: 'foreground-contract',
+          ptyIncarnationId: created.incarnationId,
+          verdict: 'observed'
+        }
+      })
+      const late = host.inspectProcess('foreground-contract', { foregroundOnly: true })
+      await host.kill('foreground-contract')
+      finish({
+        verdict: 'observed',
+        source: 'pty-master',
+        foregroundKind: 'non-shell',
+        processName: 'claude'
+      })
+      expect(await late).toMatchObject({
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        foregroundObservation: { verdict: 'unverifiable', reason: 'session_changed' }
+      })
+    } finally {
+      await host.dispose()
+    }
+  })
+
+  it.each([
+    ['non-shell', 'claude', 'agent'],
+    ['shell', '-zsh', 'shell']
+  ] as const)(
+    'keeps a %s observation valid when the wall clock steps back during its read',
+    async (foregroundKind, processName, expected) => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(1_000)
+      const subprocess = createSubprocess()
+      subprocess.observeForeground = vi.fn(async (): Promise<TerminalForegroundSample> => {
+        vi.setSystemTime(995)
+        return { verdict: 'observed', source: 'pty-master', foregroundKind, processName }
+      })
+      const host = new TerminalHost({ spawnSubprocess: () => subprocess })
+      try {
+        await host.createOrAttach({
+          sessionId: 'clock-step',
+          cols: 80,
+          rows: 24,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+        const inspectProcess = vi.fn((id: string, options?: { foregroundOnly?: boolean }) =>
+          host.inspectProcess(id, options)
+        )
+        expect(
+          await readLaunchedAgentForeground(
+            {
+              supportsForegroundObservation: () => true,
+              inspectProcess,
+              getForegroundProcess: async () => null
+            },
+            { remote: false, windows: false },
+            'clock-step',
+            'claude'
+          )
+        ).toBe(expected)
+        await expect(inspectProcess.mock.results[0].value).resolves.toMatchObject({
+          foregroundObservation: { verdict: 'observed', capturedAgeMs: 0 }
+        })
+      } finally {
+        await host.dispose()
+        vi.useRealTimers()
+      }
+    }
+  )
 })

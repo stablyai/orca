@@ -499,6 +499,19 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('listProcesses', () => {
+    it('target reads neither validate unrelated rows nor retire omitted active sessions', async () => {
+      const first = await adapter.spawn({ cols: 80, rows: 24 })
+      const second = await adapter.spawn({ cols: 80, rows: 24 })
+      // Full inventory must retain the exact same active-session census after a partial lookup.
+      const full = await adapter.listProcesses()
+      const selected = await adapter.listProcesses({ ptyIds: [first.id], targetOwnerOnly: true })
+      expect(selected.map((row) => row.id)).toEqual([first.id])
+      expect(adapter.hasPty(second.id)).toBe(true)
+      expect((await adapter.listProcesses()).map((row) => row.id).sort()).toEqual(
+        full.map((row) => row.id).sort()
+      )
+    })
+
     // Reconcile missed disconnect-time exits so cached hasPty results cannot block absence proofs.
     it('drops cached session ids an authoritative inventory omits', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
