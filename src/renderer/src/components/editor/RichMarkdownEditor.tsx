@@ -212,6 +212,7 @@ export default function RichMarkdownEditor({
   const { clearTransientReviewState } = review
   const setRootElement = useCallback(
     (node: HTMLDivElement | null) => {
+      bindRoot(node)
       if (node === null) {
         // Release root-owned transient resources on detach instead of waiting for passive cleanup.
         clearTransientReviewState()
@@ -219,7 +220,6 @@ export default function RichMarkdownEditor({
         cancelAutoFocusRef.current = null
         window.api.ui.setMarkdownEditorFocused(false)
       }
-      bindRoot(node)
     },
     [clearTransientReviewState, bindRoot]
   )
