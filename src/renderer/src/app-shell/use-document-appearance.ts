@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
+import { applyThemeBackground } from '../lib/theme-background'
 import { derivePluginMonacoTheme } from '../lib/plugin-monaco-theme'
 import { browserColorProbe } from '../lib/plugin-theme-tokens'
 import { usePluginMonacoThemeStore } from '../store/plugin-monaco-theme'
@@ -32,7 +33,9 @@ export function useDocumentAppearance(): void {
   usePluginAppThemeSync()
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
   usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
-  useReduceVisualEffects(useAppStore((s) => s.settings?.reduceVisualEffects))
+  const reduceEffects = useReduceVisualEffects(useAppStore((s) => s.settings?.reduceVisualEffects))
+  const terminalTranslucent = useAppStore((s) => (s.settings?.terminalBackgroundOpacity ?? 1) < 1)
+  const themeBackground = pluginTheme?.background
 
   // Why `dark` too: a system theme repaints when the OS flips, before the slot paint below.
   useEffect(() => {
@@ -64,6 +67,14 @@ export function useDocumentAppearance(): void {
       })
     }
   }, [pluginTheme, pluginThemesLoaded, theme, dark])
+
+  // Why gated: the image only shows through translucent terminals, so otherwise it would cost decode
+  // and switch terminals to transparent rendering for nothing.
+  useEffect(() => {
+    if (pluginThemesLoaded) {
+      applyThemeBackground(terminalTranslucent && !reduceEffects ? themeBackground : null)
+    }
+  }, [pluginThemesLoaded, terminalTranslucent, reduceEffects, themeBackground])
 
   useEffect(() => {
     document.documentElement.style.setProperty(

@@ -8,7 +8,7 @@ export function readPrefersReducedTransparency(): boolean {
 }
 
 /** One switch for main.css: the Reduce Visual Effects setting or the OS reduced-transparency preference. */
-export function useReduceVisualEffects(enabled: boolean | undefined): void {
+export function useReduceVisualEffects(enabled: boolean | undefined): boolean {
   const reduce = useMediaQuery(REDUCED_TRANSPARENCY_QUERY) || enabled === true
 
   useEffect(() => {
@@ -19,4 +19,5 @@ export function useReduceVisualEffects(enabled: boolean | undefined): void {
       delete root.dataset.reduceEffects
     }
   }, [reduce])
+  return reduce
 }
