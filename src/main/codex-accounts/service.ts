@@ -227,6 +227,15 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.registration.addFromHome(sourceHome, target))
   }
 
+  async importAccountFromExistingHome(
+    sourceHomePath: string,
+    target?: CodexAccountAddTarget
+  ): Promise<CodexRateLimitAccountsState> {
+    return this.serializeMutation(() =>
+      this.registration.importFromExistingHome(sourceHomePath, target)
+    )
+  }
+
   async reauthenticateAccount(
     accountId: string,
     options?: CodexAccountReauthenticateOptions

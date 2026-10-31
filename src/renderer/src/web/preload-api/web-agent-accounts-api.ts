@@ -144,6 +144,7 @@ export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
   return {
     list: async () => (await fetchAccountsSnapshot(false)).codex,
     add: rejectHostOnlySignIn,
+    importExistingHome: rejectHostOnlySignIn,
     cancelPendingLogin: () => Promise.resolve(false),
     // Host browser owns login; web has no pending URL or changes to publish.
     getPendingLoginUrl: () => Promise.resolve(null),

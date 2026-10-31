@@ -6,6 +6,11 @@ export const codexAccountsApi = {
   list: () => ipcRenderer.invoke('codexAccounts:list'),
   add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }) =>
     ipcRenderer.invoke('codexAccounts:add', args),
+  importExistingHome: (args: {
+    sourceHomePath: string
+    runtime?: 'host' | 'wsl'
+    wslDistro?: string | null
+  }) => ipcRenderer.invoke('codexAccounts:importExistingHome', args),
   cancelPendingLogin: (): Promise<boolean> =>
     ipcRenderer.invoke('codexAccounts:cancelPendingLogin'),
   getPendingLoginUrl: (): Promise<string | null> =>

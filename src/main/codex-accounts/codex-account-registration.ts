@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
@@ -13,6 +13,7 @@ import type {
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
+import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
 import type { ResolvedCodexIdentity } from './codex-account-identity'
 import type {
   CodexAccountAddTarget,
@@ -20,9 +21,15 @@ import type {
   ManagedCodexHomeLocation
 } from './codex-account-service-types'
 import type { CodexAccountSelection } from './codex-account-selection'
+import { readCodexAuthIdentity } from './codex-auth-identity'
 import type { CodexConfigMirror } from './codex-config-mirror'
 import type { CodexManagedHomeLifecycle } from './codex-managed-home-lifecycle'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
+import {
+  assertSourceHomeIsNotManagedStorage,
+  copyExistingCodexHomeIntoManaged,
+  resolveImportableCodexHomePath
+} from './import-existing-codex-home'
 import {
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget,
@@ -87,6 +94,69 @@ export class CodexAccountRegistration {
     try {
       this.prepareManagedHomeForLogin(managedHomePath, accountId)
       this.dependencies.managedHomes.importAuthFromHome(sourceHome, managedHomePath, accountId)
+      return await this.persistCapturedAccount(accountId, managedHome)
+    } catch (error) {
+      this.dependencies.managedHomes.removeUnlessUnproven(error, managedHomePath, accountId)
+      throw error
+    }
+  }
+
+  /**
+   * Import an already-authenticated external CODEX_HOME into Orca managed storage
+   * without running `codex login` again (Option B from issue #10366).
+   */
+  async importFromExistingHome(
+    sourceHomePath: string,
+    target?: CodexAccountAddTarget
+  ): Promise<CodexRateLimitAccountsState> {
+    if (target?.runtime === 'wsl') {
+      throw new Error(
+        'Importing an existing CODEX_HOME into a WSL account slot is not supported yet. Switch Account location to this device, or use Add Account for WSL.'
+      )
+    }
+
+    const resolvedSource = resolveImportableCodexHomePath(sourceHomePath)
+    assertSourceHomeIsNotManagedStorage(
+      resolvedSource,
+      this.dependencies.managedHomePaths.getRoot()
+    )
+    // Resolve identity before allocating storage so a missing email fails without an empty home.
+    const sourceIdentity = this.readExternalOAuthIdentity(resolvedSource)
+    if (!sourceIdentity?.email) {
+      throw new Error(
+        'Could not resolve an account email from the selected CODEX_HOME. Orca only imports OAuth-authenticated Codex homes (auth.json with an id_token email claim).'
+      )
+    }
+
+    const accountId = randomUUID()
+    const managedHome = await this.dependencies.managedHomes.create(accountId, target)
+    const { managedHomePath } = managedHome
+    try {
+      // When the canonical home has no config, the import copy is the config Codex will use.
+      const sourceConfig = this.readImportConfigForOAuthPolicy(resolvedSource)
+      const canonicalConfig = this.dependencies.configMirror.readForManagedHome(managedHomePath)
+      if (canonicalConfig) {
+        this.dependencies.configMirror.assertOAuthAccountAddAllowed(canonicalConfig)
+      } else {
+        this.assertImportedConfigAllowsOAuth(sourceConfig)
+      }
+      await copyExistingCodexHomeIntoManaged({
+        sourceHomePath: resolvedSource,
+        managedHomePath,
+        accountId
+      })
+      // Re-seed Orca-managed hooks after the user's config and auth are copied.
+      this.dependencies.configMirror.safeSyncIntoManagedHome(
+        managedHomePath,
+        canonicalConfig,
+        accountId
+      )
+      const identity = this.dependencies.readIdentityFromHome(managedHomePath, accountId)
+      if (!identity.email) {
+        throw new Error(
+          'Import copied auth.json, but Orca could not resolve the account email from the managed home.'
+        )
+      }
       return await this.persistCapturedAccount(accountId, managedHome)
     } catch (error) {
       this.dependencies.managedHomes.removeUnlessUnproven(error, managedHomePath, accountId)
@@ -250,6 +320,48 @@ export class CodexAccountRegistration {
     // Cache outgoing usage without delaying the already-persisted account addition.
     this.startQuotaRefresh(outgoingAccountId, targetSelection)
     return this.dependencies.selection.snapshot()
+  }
+
+  private readImportConfigForOAuthPolicy(sourceHomePath: string): string | null {
+    const configPath = join(sourceHomePath, 'config.toml')
+    if (!existsSync(configPath)) {
+      return null
+    }
+    try {
+      return readFileSync(configPath, 'utf-8')
+    } catch (error) {
+      throw new Error(`Could not read imported CODEX_HOME config: ${configPath}`, { cause: error })
+    }
+  }
+
+  private assertImportedConfigAllowsOAuth(configContents: string | null): void {
+    const modelProvider = configContents ? readCodexTopLevelModelProvider(configContents) : null
+    if (!modelProvider || modelProvider === 'openai') {
+      return
+    }
+    throw new Error(
+      `Orca cannot add a Codex OAuth account while the active Codex config pins the custom provider ${JSON.stringify(modelProvider)}. Keep using the system-default account for this provider, or remove model_provider (or set it to "openai") before adding an OAuth account. Orca left your config unchanged.`
+    )
+  }
+
+  private readExternalOAuthIdentity(sourceHomePath: string) {
+    const contents = readFileSync(join(sourceHomePath, 'auth.json'), 'utf-8')
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(contents)
+    } catch {
+      throw new Error('Codex auth.json is corrupt or not valid JSON')
+    }
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed) &&
+      typeof (parsed as { OPENAI_API_KEY?: unknown }).OPENAI_API_KEY === 'string' &&
+      (parsed as { OPENAI_API_KEY: string }).OPENAI_API_KEY.trim() !== ''
+    ) {
+      return null
+    }
+    return readCodexAuthIdentity(contents)
   }
 
   private startQuotaRefresh(

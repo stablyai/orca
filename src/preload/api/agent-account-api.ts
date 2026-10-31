@@ -13,6 +13,11 @@ export type CodexAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<CodexRateLimitAccountsState>
+  importExistingHome: (args: {
+    sourceHomePath: string
+    runtime?: 'host' | 'wsl'
+    wslDistro?: string | null
+  }) => Promise<CodexRateLimitAccountsState>
   cancelPendingLogin: () => Promise<boolean>
   getPendingLoginUrl: () => Promise<string | null>
   onPendingLoginUrlChanged: (callback: (url: string | null) => void) => () => void
