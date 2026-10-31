@@ -27,12 +27,17 @@ export function replaceSessionTabInSnapshot(
   existing: RuntimeMobileSessionTabsSnapshot | undefined,
   input: { workspaceId: string; replacedTabId: string; row: ReplacementRow; activate: boolean }
 ): RuntimeMobileSessionTabsSnapshot {
-  const { replacedTabId, activate } = input
+  const { replacedTabId } = input
   const replaced = new Set(existing ? rowsOfTab(existing, replacedTabId).map((row) => row.id) : [])
   const groups = existing?.tabGroups ?? [
     { id: getHeadlessMobileSessionGroupId(input.workspaceId), activeTabId: null, tabOrder: [] }
   ]
   const slot = groups.find((group) => group.tabOrder.includes(replacedTabId))
+  // Decided in this write: the new row takes the selection only from a tab that still holds its
+  // group's; with no slot here to read, the request's own choice stands.
+  const held = slot?.activeTabId
+  const activate =
+    input.activate && (!slot || (held != null && (held === replacedTabId || replaced.has(held))))
   // The hint names a tab this snapshot knew; a client that still shows it puts the row there.
   const row: ReplacementRow = {
     ...input.row,

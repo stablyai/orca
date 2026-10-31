@@ -1,4 +1,7 @@
-import { withSelectedChatTab } from '../agent-session/agent-session-tab-layout'
+import {
+  savedTabHoldsSelection,
+  withSelectedChatTab
+} from '../agent-session/agent-session-tab-layout'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
@@ -107,15 +110,34 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     }
     // Window creates retain the window's own placement decision.
     input.check?.()
+    // A replace takes the selection only from a tab that still holds it, decided by the layout
+    // owner as it writes: here for main's layout, else by the window applying the replace.
+    let activate = input.activate
+    const windowReplaces = Boolean(
+      input.replaces && !ORCA_LAYOUT_OWNER_IS_MAIN && this.getAvailableAuthoritativeWindow()
+    )
     if (input.check && (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow())) {
       const check = input.check
       const applied = await this.queueChatTabChanges(
-        () => [
-          {
-            worktreeId: input.workspaceId,
-            change: { open: { ...input, tabId: input.tabId ?? `agent-session:${input.sessionId}` } }
+        () => {
+          const session = this.getWorkspaceSessionForWorktree(input.workspaceId)
+          if (input.replaces && session) {
+            activate &&= savedTabHoldsSelection(
+              this.getWorkspaceSessionHostIdForWorktree(input.workspaceId),
+              session,
+              input.workspaceId,
+              input.replaces
+            )
           }
-        ],
+          return [
+            {
+              worktreeId: input.workspaceId,
+              change: {
+                open: { ...input, tabId: input.tabId ?? `agent-session:${input.sessionId}` }
+              }
+            }
+          ]
+        },
         () => {
           check()
           return true
@@ -129,7 +151,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     }
     input.check?.()
     this.projectStructuredAgentSessionTab(input)
-    if (input.activate && input.check) {
+    if (activate && input.check) {
       // The saved view selects the chat the switch put in the slot; the window draws from it.
       this.commitWindowlessChatSession(input.workspaceId, (session) =>
         withSelectedChatTab(
@@ -140,7 +162,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         )
       )
     }
-    if (input.activate && input.focusWindow !== false && input.check) {
+    if (activate && !windowReplaces && input.focusWindow !== false && input.check) {
       this.notifier?.focusEditorTab?.(
         input.tabId ?? host?.getSessionTabId(input.sessionId) ?? `agent-session:${input.sessionId}`,
         input.workspaceId

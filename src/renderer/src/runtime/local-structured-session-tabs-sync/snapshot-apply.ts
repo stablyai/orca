@@ -36,6 +36,7 @@ import { closeStructuredAgentSession } from '../structured-agent-session-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { useAppStore } from '../../store'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import { replacedTabHoldsSelection } from '@/lib/replaced-tab-selection'
 import { framesDrawWorkspace } from '../workspace-layout-frame-drawn-workspaces'
 import { drawnChatLabelChanges, type DrawnChatLabel } from './frame-drawn-chat-tabs'
 
@@ -263,6 +264,7 @@ function closeReplacedTerminalTabs(replacements: readonly ReplacedSessionTab[]):
     if (replaced.isPinned && !chat.isPinned) {
       useAppStore.getState().pinTab(chat.id, { recordInteraction: false })
     }
+    const takesSelection = replacedTabHoldsSelection(useAppStore.getState(), worktreeId, replaced)
     // Not a user close: a replace never feeds Reopen Closed Tab or drops the tab's drafts.
     closeTerminalTab(replaced.entityId, {
       reason: 'cleanup',
@@ -270,5 +272,14 @@ function closeReplacedTerminalTabs(replacements: readonly ReplacedSessionTab[]):
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
     })
+    // The chat takes the selection only from a terminal that still held it when the replace landed.
+    if (takesSelection) {
+      const store = useAppStore.getState()
+      store.activateTab(chat.id, { worktreeId })
+      if (store.activeWorktreeId === worktreeId) {
+        store.focusGroup(worktreeId, chat.groupId)
+        store.setActiveTabType('agent-session', worktreeId)
+      }
+    }
   }
 }

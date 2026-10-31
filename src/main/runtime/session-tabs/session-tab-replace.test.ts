@@ -106,4 +106,29 @@ describe('replaceSessionTabInSnapshot', () => {
     ])
     expect(gone.tabs.at(-1)).not.toHaveProperty('replaces')
   })
+
+  it.each([
+    ['still holds it', 't0::l0', true],
+    ['lost it to another tab', 'agent-session:s1', false]
+  ])('takes the selection only from a replaced tab that %s', (_name, held, takes) => {
+    const next = replaceSessionTabInSnapshot(
+      { ...snapshot, tabGroups: [{ ...snapshot.tabGroups![0]!, activeTabId: held }] },
+      {
+        workspaceId: 'ws',
+        replacedTabId: 't0',
+        row: {
+          type: 'agent-session',
+          id: 'agent-session:s2',
+          title: 'Chat 2',
+          sessionId: 's2',
+          agent: 'codex',
+          isActive: false
+        },
+        activate: true
+      }
+    )
+    expect(next.tabs.at(-1)?.isActive).toBe(takes)
+    expect(next.tabGroups?.[0]?.activeTabId).toBe(takes ? 'agent-session:s2' : held)
+    expect(next.activeTabId).toBe(takes ? 'agent-session:s2' : snapshot.activeTabId)
+  })
 })

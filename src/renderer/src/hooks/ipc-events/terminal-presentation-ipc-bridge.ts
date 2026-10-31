@@ -12,6 +12,7 @@ import { tryMakePaneKey } from './agent-status-routing'
 import { registerLaunchRecipe } from './launch-recipe-registration'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { replacedTabHoldsSelection } from '@/lib/replaced-tab-selection'
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
@@ -57,8 +58,11 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           const store = useAppStore.getState()
           // A replace opens in the replaced tab's group and takes its slot once the tab exists.
           const replaced = replaces && findUnifiedTab(worktreeId, replaces.tabId)
+          // Decided in this write: a replace takes the selection only from a tab that still holds
+          // it; otherwise the terminal fills the slot without moving the user.
+          const takesSelection = !replaced || replacedTabHoldsSelection(store, worktreeId, replaced)
           const terminalPresentation = resolveTerminalPresentation({
-            presentation,
+            presentation: takesSelection ? presentation : 'background',
             activate,
             focus
           })

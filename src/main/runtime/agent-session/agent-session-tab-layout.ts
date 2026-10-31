@@ -128,6 +128,22 @@ export function chatTabId(sessionId: string): string {
 }
 
 /** Select in the existing view without rebuilding membership from a partial runtime snapshot. */
+/** Whether a same-slot replace may take the selection from this tab in the saved view: unless
+ *  another tab of its group holds it. */
+export function savedTabHoldsSelection(
+  hostId: ExecutionHostId,
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  tabId: string
+): boolean {
+  const { loaded } = loadChatTabLayout(hostId, session, worktreeId)
+  const group = loaded.layout.workspaces[worktreeId]?.groups.find((row) =>
+    row.tabOrder.includes(tabId)
+  )
+  const active = group && loaded.desktopView.groups[worktreeId]?.[group.id]?.activeTabId
+  return active == null || active === tabId
+}
+
 export function withSelectedChatTab(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState,

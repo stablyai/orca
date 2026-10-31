@@ -28,7 +28,7 @@ import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-va
 import { refusedMobileSessionTabClose } from '../../mobile-session-tab-close-outcome'
 import { AGENT_SESSION_SWITCH_HOST_MS } from '../../../../shared/agent-session-switch-execution'
 import { DaemonRequestTimeoutError } from '../../../daemon/daemon-errors'
-import { chatTabId } from '../../agent-session/agent-session-tab-layout'
+import { chatTabId, withSelectedChatTab } from '../../agent-session/agent-session-tab-layout'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 
@@ -115,7 +115,7 @@ async function savedTranscript(sessionId = id) {
   return readable
 }
 
-it.each(['single', 'split', 'other-workspace'] as const)(
+it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
   'uses ordinary exact physical exit and source placement, retaining siblings: %s',
   async (shape) => {
     const split = shape === 'split'
@@ -149,7 +149,7 @@ it.each(['single', 'split', 'other-workspace'] as const)(
       ).toMatchObject({ ok: true })
     }
     await savedTranscript(sessionId)
-    const { runtime, session } = setupMainOwnedWorkspace({ split: shape === 'split' })
+    const { runtime, session, setSession } = setupMainOwnedWorkspace({ split: shape === 'split' })
     const incarnationId = '11111111-1111-4111-8111-111111111111'
     runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
     const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
@@ -180,6 +180,10 @@ it.each(['single', 'split', 'other-workspace'] as const)(
         tabId: 'agent-session:later-tab'
       })
     ).toMatchObject({ ok: true })
+    // The user picked another tab while the switch ran: the chat takes the slot, not the selection.
+    if (shape === 'reselected') {
+      setSession(withSelectedChatTab('local', session(), WORKTREE_ID, 'later-tab') ?? session())
+    }
     if (elsewhere) {
       await runtime.publishStructuredAgentSessionTab({
         workspaceId: destinationWorkspace,
@@ -244,7 +248,9 @@ it.each(['single', 'split', 'other-workspace'] as const)(
         ...(elsewhere ? [] : ['agent-session:later-tab'])
       ]
     )
-    expect(group?.activeTabId).toBe(savedDestination)
+    expect(group?.activeTabId).toBe(
+      shape === 'reselected' ? 'agent-session:later-tab' : savedDestination
+    )
     if (existingDestination) {
       expect(
         session().unifiedTabs?.[destinationWorkspace]?.find(
@@ -253,7 +259,9 @@ it.each(['single', 'split', 'other-workspace'] as const)(
       ).toBe(existingDestination.tabId)
     }
     const published = await runtime.listMobileSessionTabs(`id:${destinationWorkspace}`)
-    expect(published.activeTabId).toBe(destination)
+    if (shape !== 'reselected') {
+      expect(published.activeTabId).toBe(destination)
+    }
     if (!split && !elsewhere) {
       // A whole tab is replaced in the one write: its rows are gone from the published snapshot.
       expect(

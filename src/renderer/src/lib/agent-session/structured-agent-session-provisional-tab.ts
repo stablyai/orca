@@ -6,6 +6,8 @@ import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-c
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
+import { replacedTabHoldsSelection } from '@/lib/replaced-tab-selection'
+import { findUnifiedTab } from '@/lib/unified-tab-anchor-insertion'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type {
   AgentSessionLaunchPlan,
@@ -167,10 +169,15 @@ export function beginStructuredAgentSessionProvisionalLaunch(
       executionHostId: owner.executionHostId,
       target: owner.target,
       openAdmitted: (seedOptions) => {
-        // The host can answer after the user picked another tab; their newer selection wins.
+        // The host can answer after the user picked another tab; their newer selection wins, by the
+        // same rule as a same-slot replace: the tab shown at the action must still hold its group.
+        const shownAtAction = visibleAtAction ? findUnifiedTab(worktreeId, visibleAtAction) : null
         if (
           args.deferPublication &&
-          resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId) !== visibleAtAction
+          !(
+            shownAtAction &&
+            replacedTabHoldsSelection(useAppStore.getState(), worktreeId, shownAtAction)
+          )
         ) {
           focusIntent?.cancel()
           args = { ...args, activate: false }

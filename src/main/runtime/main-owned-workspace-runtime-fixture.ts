@@ -164,6 +164,7 @@ export function setupMainOwnedWorkspace(
     frames: () => frames,
     handleOf,
     ptyRecord: (ptyId: string) => internals.ptysById.get(ptyId),
-    session: () => current
+    session: () => current,
+    setSession: write
   }
 }
