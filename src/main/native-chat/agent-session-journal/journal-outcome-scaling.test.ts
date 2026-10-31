@@ -470,6 +470,64 @@ it('sweeps a retired generation one bounded page per transaction at N and 10N', 
   expectSameWork(small, measure(10 * N))
 })
 
+it('sweeps a retired generation numbered after N and 10N live chats without rescanning them per page', () => {
+  const measure = (chats: number) => {
+    const database = databaseFor(`sweep-chats-${chats}`)
+    database.transaction((db) => {
+      const generation = db.prepare(
+        'INSERT INTO journal_outcome_generations (session_id, epoch) VALUES (?, ?)'
+      )
+      const live = db.prepare('INSERT INTO journal_outcome_epochs VALUES (?, ?, ?, 1, 1, 0)')
+      for (let index = 0; index < chats; index++) {
+        const id = Number(generation.run(`chat-${index}`, epoch).lastInsertRowid)
+        live.run(`chat-${index}`, epoch, id)
+      }
+      const retired = Number(generation.run('gone', 'gone-epoch').lastInsertRowid)
+      const insert = db.prepare(`INSERT INTO journal_outcomes
+        (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
+        VALUES (?, 1, 'aliases', ?, 1, 's0000000000000001:0000000000000000', ?, 0)`)
+      for (let index = 0; index < 100; index++) {
+        insert.run(retired, JSON.stringify(`k${index}`), JSON.stringify([`k${index}`, 'v']))
+      }
+    })
+    // Each page's candidate scan walks the generations above its position in order, so the live
+    // ones it passes are those numbered above that position.
+    const positions: number[] = []
+    const prepare = database.db.prepare.bind(database.db)
+    vi.spyOn(database.db, 'prepare').mockImplementation((sql: string) => {
+      const statement = prepare(sql)
+      if (!sql.includes('LEFT JOIN journal_outcome_epochs')) {
+        return statement
+      }
+      const recorded: SqliteStatement = {
+        all: (...parameters) => {
+          positions.push(Number(parameters[0]))
+          return statement.all(...parameters)
+        },
+        get: (...parameters) => statement.get(...parameters),
+        run: (...parameters) => statement.run(...parameters),
+        iterate: (...parameters) => statement.iterate(...parameters),
+        setReadBigInts: (enabled) => statement.setReadBigInts(enabled)
+      }
+      return recorded
+    })
+    while (sweepJournalOutcomePage(database)) {
+      // One bounded page per call.
+    }
+    vi.mocked(database.db.prepare).mockRestore()
+    const passed = database.db.prepare(
+      'SELECT COUNT(*) AS n FROM journal_outcome_epochs WHERE generation > ?'
+    )
+    return positions.map((position) => Number(passed.get(position)?.n))
+  }
+  const small = measure(N)
+  const large = measure(10 * N)
+  // Four record pages and the page that drops the generation row; only a pass's first page walks
+  // the live chats, as an idle pass does.
+  expect(small).toEqual([N, 0, 0, 0, 0])
+  expect(large).toEqual([10 * N, 0, 0, 0, 0])
+})
+
 it('catches a wire client up from outcomes reading only the groups it asks for at N and 10N', async () => {
   const measure = async (size: number) => {
     const { database, rig } = outcomeChat(size, `wire-${size}`)

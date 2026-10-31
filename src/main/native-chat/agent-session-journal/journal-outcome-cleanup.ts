@@ -31,8 +31,9 @@ export function sweepJournalOutcomePage(database: JournalHostDatabase): boolean 
         db.prepare('DELETE FROM journal_outcome_generations WHERE generation = ?').run(generation)
         continue
       }
-      // One bounded data page per transaction, even with many retired generations.
-      sweepPositions.set(db, after)
+      // One bounded data page per transaction, even with many retired generations. The next page
+      // resumes at this generation, so it never rescans the live ones before it.
+      sweepPositions.set(db, generation - 1)
       return true
     }
     if (candidates.length === 32) {
