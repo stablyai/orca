@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -12,6 +13,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as FsPromises from 'node:fs/promises'
+import type * as SecureFile from '../../../shared/secure-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import { STAGED_FILE_SAVE_LIMITS } from '../../../shared/staged-file-save'
@@ -19,6 +21,17 @@ import { StagedFileSaves } from './staged-file-saves'
 
 // An append can be held open to put other ops beside it.
 const appendGate = vi.hoisted((): { hold: Promise<void> | null } => ({ hold: null }))
+const secureWrite = vi.hoisted((): { refuse: boolean } => ({ refuse: false }))
+vi.mock('../../../shared/secure-file', async (importOriginal) => {
+  const actual = await importOriginal<typeof SecureFile>()
+  return {
+    ...actual,
+    writeSecureFile: (...args: Parameters<typeof actual.writeSecureFile>) => {
+      const wrote = actual.writeSecureFile(...args)
+      return secureWrite.refuse ? false : wrote
+    }
+  }
+})
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   return {
@@ -38,6 +51,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-staged-save-'))
   staging = join(root, 'profile', 'staged-saves')
   appendGate.hold = null
+  secureWrite.refuse = false
 })
 afterEach(() => {
   vi.useRealTimers()
@@ -74,6 +88,32 @@ const userFolderTemps = () => readdirSync(root).filter((name) => name !== 'profi
 // E7: a 5 MB lockfile opened from a remote host could be edited but not saved (720 KB cap).
 describe('a staged save', () => {
   const lockfile = '"node_modules/pkg": { "version": "1.0.0" },\n'.repeat(120_000)
+
+  it('restricts the staging directory and temp file to their owner', async () => {
+    mkdirSync(ownDir(), { recursive: true, mode: 0o777 })
+    chmodSync(ownDir(), 0o777)
+    const staged = saves()
+    const { saveId } = await staged.begin('conn-1', at(join(root, 'a.txt')), 1)
+    if (process.platform === 'win32') {
+      await staged.abortConnection('conn-1')
+      return
+    }
+
+    expect(statSync(ownDir()).mode & 0o777).toBe(0o700)
+    expect(statSync(join(ownDir(), `${saveId}.tmp`)).mode & 0o777).toBe(0o600)
+    await staged.abortConnection('conn-1')
+  })
+
+  it('removes the temp when owner-only permissions cannot be kept', async () => {
+    secureWrite.refuse = true
+    const staged = saves()
+
+    await expect(staged.begin('conn-1', at(join(root, 'a.txt')), 1)).rejects.toThrow(
+      'staged_save_private_file_unavailable'
+    )
+
+    expect(temps()).toEqual([])
+  })
 
   it('round-trips a 5 MB file in place, staging only in the private folder', async () => {
     const target = join(root, 'package-lock.json')

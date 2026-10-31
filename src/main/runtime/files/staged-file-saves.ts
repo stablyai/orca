@@ -5,12 +5,14 @@
  * per host; idle saves and a closed socket's saves are dropped, and host start empties the folder.
  */
 import { randomUUID } from 'node:crypto'
-import { appendFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, chmod, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
+import { writeSecureFile } from '../../../shared/secure-file'
+import { restrictWindowsDirectory } from '../../../shared/secure-path-windows-acl'
 import { STAGED_FILE_SAVE_LIMITS } from '../../../shared/staged-file-save'
 import { writeLocalTextFileWithDiskPrecondition } from '../../ipc/filesystem/local-disk-write-precondition'
 import { inspectProcessLiveness } from '../../daemon/daemon-process-inspection'
@@ -76,8 +78,16 @@ export class StagedFileSaves {
     }
     const saveId = randomUUID()
     const tempPath = join(dir, `${saveId}.tmp`)
-    await mkdir(dir, { recursive: true })
-    await writeFile(tempPath, Buffer.alloc(0), { flag: 'wx' })
+    await mkdir(dir, { recursive: true, mode: 0o700 })
+    await chmod(dir, 0o700)
+    if (process.platform === 'win32' && !(await restrictWindowsDirectory(dir))) {
+      throw new Error('staged_save_private_directory_unavailable')
+    }
+    if (!writeSecureFile(tempPath, '')) {
+      // The file is already published when restriction fails. Nothing else tracks it.
+      await rm(tempPath, { force: true })
+      throw new Error('staged_save_private_file_unavailable')
+    }
     this.saves.set(saveId, {
       owner,
       requestedPath: target.requestedPath,
