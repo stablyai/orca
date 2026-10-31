@@ -1,5 +1,7 @@
 import type Database from '../../sqlite/sync-database'
 import type { JournalHostDatabase } from './journal-host-database'
+import { JournalOutcomeDecodeError } from './journal-outcome-codec'
+import { AgentSessionJournalError } from './journal-write-guards'
 import {
   JOURNAL_OUTCOME_FORMAT,
   journalOutcomeSource,
@@ -24,7 +26,7 @@ type Progress = {
   done?: [number, number]
 }
 
-/** Keeps first/latest values, insertion anchors and removal facts, using only record columns.
+/** Keeps first/latest values and removal facts; newest values carry their canonical order.
  * Pass coverage is disposable: a restart rescans safely, and an unchanged chat reads no records. */
 export class JournalOutcomeCompaction {
   private generation = 0
@@ -74,7 +76,20 @@ export class JournalOutcomeCompaction {
     if (this.previous.get(generation) === row.through_seq) {
       return { ...next, done: [generation, row.through_seq] }
     }
-    const source = journalOutcomeSource(db, row.session_id, row.epoch)
+    let source: JournalOutcomeSource | null
+    try {
+      source = journalOutcomeSource(db, row.session_id, row.epoch)
+    } catch (error) {
+      if (
+        error instanceof JournalOutcomeDecodeError ||
+        (error instanceof AgentSessionJournalError &&
+          (error.code === 'journal_read_only' || error.code === 'journal_row_rejected'))
+      ) {
+        // An unreadable chat must not prevent maintenance of later generations.
+        return next
+      }
+      throw error
+    }
     return {
       ...next,
       active: source && {
@@ -97,7 +112,7 @@ export class JournalOutcomeCompaction {
       return next
     }
     const rows = db
-      .prepare(`SELECT seq, field, entry_key, format, ordinal, deleted
+      .prepare(`SELECT seq, field, entry_key, format, deleted
       FROM journal_outcomes WHERE generation = ? AND (seq, field, entry_key) > (?, ?, ?)
       AND seq <= ? ORDER BY seq, field, entry_key LIMIT ${PAGE_SIZE}`)
       .all(
@@ -126,13 +141,7 @@ export class JournalOutcomeCompaction {
         return next
       }
       after = { seq: row.seq, field: row.field, key: row.entry_key }
-      const anchor = `s${String(row.seq).padStart(16, '0')}:`
-      if (
-        row.deleted !== 0 ||
-        row.field === 'tombstones' ||
-        row.field === 'removedTurnIds' ||
-        (row.field !== '$' && typeof row.ordinal === 'string' && row.ordinal.startsWith(anchor))
-      ) {
+      if (row.deleted !== 0 || row.field === 'tombstones' || row.field === 'removedTurnIds') {
         continue
       }
       const key = [active.generation, row.field, row.entry_key]

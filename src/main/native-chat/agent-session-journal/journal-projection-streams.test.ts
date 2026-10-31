@@ -81,7 +81,7 @@ it.each(['claude', 'codex'] as const)(
       providerHandle:
         agent === 'codex' ? codexProviderHandle('thread-1') : claudeProviderHandle('claude-1', null)
     }
-    const journal = await journals.open({ identity, stateDirectory: root, now: () => at })
+    let journal = await journals.open({ identity, stateDirectory: root, now: () => at })
     const expected = restoreJournal(database.db, sessionId)!.state
     let commits = 0
     let planRevisions = 0
@@ -231,6 +231,12 @@ it.each(['claude', 'codex'] as const)(
     disposals.push(() => sweeper.stop())
     await sweeper.pass()
     expect(count()).toBeLessThan(before)
+    expectProjectionMatches(database, expected)
+    const cleaned = journal.snapshot()
+    await journals.closeAll()
+    database = openTestJournalHostDatabase(root)
+    journal = await journals.open({ identity, stateDirectory: root, now: () => at })
+    expect(journal.snapshot()).toEqual(cleaned)
     expectProjectionMatches(database, expected)
     await journal.replaceEpochItems('handle_forked', 1, [
       {
