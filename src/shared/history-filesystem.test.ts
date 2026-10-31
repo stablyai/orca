@@ -34,7 +34,7 @@ function attempt(run: () => string): string {
   try {
     return run()
   } catch (error) {
-    return `throws:${(error as { code?: string }).code ?? String(error)}`
+    return `throws:${error instanceof Error && 'code' in error ? String(error.code) : String(error)}`
   }
 }
 // R3-4: the same-file postcondition is recorded before any expectation can stop the test.

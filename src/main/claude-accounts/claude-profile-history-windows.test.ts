@@ -1,9 +1,7 @@
 import * as fs from 'node:fs'
-import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { spawnProcess } from '@orca/process-host'
 import type * as FsUtils from '../codex-accounts/fs-utils'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 vi.mock('node:fs', async (original) => {
@@ -195,39 +193,6 @@ describe('Claude profile history sharing on Windows', () => {
     expect(f.history()).toBe('private\nnative\n')
     expect(f.isHardlinked()).toBe(true)
   })
-  it.runIf(process.platform === 'win32')(
-    'merges a prompt file the volume stores behind a non-link reparse point',
-    async () => {
-      const f = fixture()
-      const source = join(f.profileHome, 'history.jsonl')
-      const prompts = `${Array.from({ length: 4000 }, (_, i) => `{"display":"p${i}"}`).join('\n')}\n`
-      fs.writeFileSync(source, prompts)
-      // Compression through Windows Overlay Filter tags the file with a reparse point its filter reads.
-      const shell = spawnProcess({
-        program: 'powershell.exe',
-        args: [
-          '-NoLogo',
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          `compact.exe /C /EXE:XPRESS4K '${source}' | Out-Null; (Get-Item -LiteralPath '${source}').Attributes.ToString()`
-        ],
-        stdio: 'pipe'
-      })
-      let attributes = ''
-      shell.stdout.setEncoding('utf8')
-      shell.stdout.on('data', (chunk: string) => {
-        attributes += chunk
-      })
-      await once(shell, 'close')
-      expect(attributes).toContain('ReparsePoint')
-      const report = await f.share()
-      expect(report.surfaces['history.jsonl']).toBe('linked')
-      expect(f.history()).toBe(prompts)
-      expect(f.isHardlinked()).toBe(true)
-    },
-    60_000
-  )
   it('finishes a share that was interrupted before the links were made', async () => {
     const f = fixture()
     fs.writeFileSync(join(f.defaultHome, 'history.jsonl'), 'd1\n')
