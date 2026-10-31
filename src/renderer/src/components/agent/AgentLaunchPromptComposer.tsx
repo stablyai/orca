@@ -52,7 +52,7 @@ export function AgentLaunchPromptComposer({
   entry: AgentPickerEntry
   composerRef: Ref<NativeChatComposerHandle>
   disabled?: boolean
-  onLaunch: (prompt: string) => boolean | void
+  onLaunch: (prompt: string) => boolean | void | Promise<boolean>
 }): React.JSX.Element {
   const scopeKey = agentLaunchPromptScopeKey(entry)
   const { worktreeId } = entry
@@ -73,7 +73,8 @@ export function AgentLaunchPromptComposer({
               .map(({ name, path }) => `${name}: ${formatNativeChatFileReference(path)}`)
               .join('\n')}`
           : text
-        return onLaunch(prompt) !== false
+        const result = onLaunch(prompt)
+        return result instanceof Promise ? result : result !== false
       },
       optionsSurface: NO_OPTIONS_SURFACE,
       optionSnapshot: [],

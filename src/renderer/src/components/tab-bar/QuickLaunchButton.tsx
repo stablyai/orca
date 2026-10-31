@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
+import { agentLaunchPromptOwnership, newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { AgentSurfaceLaunchButton } from '@/components/agent/AgentSurfaceLaunchButton'
@@ -137,14 +137,13 @@ export function useTabAgentMenuLaunch({
       }
       if (result.surface.kind === 'local-chat') {
         onFocusChat?.(result.surface.tabId)
-        return true
-      }
-      if (result.surface.kind !== 'local-terminal') {
+      } else if (result.surface.kind !== 'local-terminal') {
         onFocusHostTerminal?.()
-        return true
+      } else {
+        onFocusTerminal(result.surface.tabId)
       }
-      onFocusTerminal(result.surface.tabId)
-      return true
+      // A setup submission waits for actual prompt ownership, not just surface dispatch.
+      return !draft?.prompt || agentLaunchPromptOwnership(result.promptDeliveryResult)
     },
     [
       worktreeId,

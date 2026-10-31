@@ -48,7 +48,7 @@ export function AgentLaunchSetupPanel({
   initial?: AgentPickerDraft
   disabled?: boolean
   onDraftChange?: (draft: AgentPickerDraft) => void
-  onUse: (draft: AgentPickerDraft) => boolean | void
+  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
   const footer = useRef<AgentLaunchSetupFooterHandle>(null)
   const [draft, updateDraft] = useState(() => initial ?? agentPickerDraft(entry))

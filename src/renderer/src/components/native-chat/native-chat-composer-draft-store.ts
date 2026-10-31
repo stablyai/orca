@@ -14,6 +14,10 @@ import {
 import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal'
 import {
   clearDraftMemoryForTests,
+  resolveNativeChatComposerDraftOwner,
+  releaseNativeChatComposerSubmission,
+  retireNativeChatComposerSubmissionsWhere,
+  type DraftSubmission,
   installNativeChatDraftRecord,
   type NativeChatDraftPosition,
   dirtyScopes,
@@ -85,21 +89,6 @@ export function openNativeChatEditDraft(scopeKey: string, draft: NativeChatCompo
 
 const EMPTY_DRAFT: DraftRecord = { text: '', images: [], savedAt: 0 }
 
-let resolveOwner: ((scopeKey: string) => NativeChatComposerDraftOwner | undefined) | null = null
-
-/** Names the workspace a scope's chat belongs to, so a new draft can record its owner. */
-export function setNativeChatComposerDraftOwnerResolver(
-  resolver: (scopeKey: string) => NativeChatComposerDraftOwner | undefined
-): void {
-  resolveOwner = resolver
-}
-
-export function resolveNativeChatComposerDraftOwner(
-  scopeKey: string
-): NativeChatComposerDraftOwner | undefined {
-  return resolveOwner?.(scopeKey)
-}
-
 export function subscribeToNativeChatComposerDraft(
   scopeKey: string,
   listener: () => void
@@ -128,6 +117,17 @@ export function readNativeChatComposerDraft(
   scopeKey: string
 ): NativeChatComposerDraft & Pick<StoredNativeChatComposerDraft, 'owner'> {
   return records.get(scopeKey) ?? EMPTY_DRAFT
+}
+
+export function finishNativeChatComposerSubmission(
+  scopeKey: string,
+  submission: DraftSubmission,
+  recover = false
+): void {
+  const draft = releaseNativeChatComposerSubmission(scopeKey, submission)
+  if (recover && draft) {
+    appendToNativeChatComposerDraft(scopeKey, draft, draft.owner)
+  }
 }
 
 /** Coalesce typing, persist hand-backs/clears immediately, and remove empty drafts so sent input cannot return. */
@@ -173,7 +173,7 @@ export function updateNativeChatComposerDraft(
     return
   }
   // Why stamped once: a conversation never moves to another workspace, so its owner stays true.
-  const owner = current.owner ?? change.owner ?? resolveOwner?.(scopeKey)
+  const owner = current.owner ?? change.owner ?? resolveNativeChatComposerDraftOwner(scopeKey)
   const record: DraftRecord = {
     text,
     ...(Object.keys(pastedTextFiles).length ? { pastedTextFiles } : {}),
@@ -272,6 +272,7 @@ function deleteDraftsWhere(
   matches: (scopeKey: string, draft: StoredNativeChatComposerDraft | undefined) => boolean
 ): void {
   deleteLoadingNativeChatComposerDraftsWhere(matches)
+  retireNativeChatComposerSubmissionsWhere(matches)
   for (const scopeKey of new Set([...records.keys(), ...scopeListeners.keys()])) {
     const draft = records.get(scopeKey)
     if (matches(scopeKey, draft)) {
@@ -325,12 +326,14 @@ export function clearNativeChatComposerDraftsForTests(): void {
   resetNativeChatComposerDraftPersistenceForTests()
   resetNativeChatComposerDraftLoadForTests()
   setNativeChatComposerDraftStorageForTests(null)
-  resolveOwner = null
 }
 
 export { subscribeToNativeChatComposerDraftAppend } from './native-chat-composer-draft-memory'
 
 export {
+  captureNativeChatComposerSubmission,
+  setNativeChatComposerDraftOwnerResolver,
+  resolveNativeChatComposerDraftOwner,
   captureNativeChatEditDraftDestination,
   redirectNativeChatEditDraft,
   isNativeChatEditDraft,

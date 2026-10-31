@@ -46,7 +46,7 @@ export function AgentLaunchSetupButton({
   open?: boolean
   replacedByAnotherSetup?: boolean
   onOpenChange?: (open: boolean) => void
-  onUse: (draft: AgentPickerDraft) => boolean | void
+  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
   const draftKey = JSON.stringify([entry.ownerKey, entry.agent, initial])
   const [localOpen, setOpen] = useState(false)
@@ -168,8 +168,8 @@ export function AgentLaunchSetupButton({
             disabled={disabled}
             onDraftChange={(draft) => sessionDrafts.set(draftKey, draft)}
             onUse={(draft) => {
-              const accepted = onUse(draft) !== false
-              if (accepted) {
+              const accepted = onUse(draft)
+              if (accepted !== false) {
                 changeOpen(false)
               }
               return accepted

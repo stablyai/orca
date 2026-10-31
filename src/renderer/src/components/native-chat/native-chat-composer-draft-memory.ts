@@ -1,3 +1,4 @@
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { sameNativeChatComposerDraftDocument } from './native-chat-composer-draft-comparison'
 import type { NativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
 // Memory owns drafts; storage keeps a copy shared by the API and persistence modules.
@@ -5,6 +6,7 @@ import type { NativeChatComposerDraftAddition } from './native-chat-composer-dra
 import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftImage,
+  NativeChatComposerDraftOwner,
   StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 
@@ -157,6 +159,8 @@ export function hasLocalChange(scopeKey: string): boolean {
 }
 
 export function clearDraftMemoryForTests(): void {
+  retireNativeChatComposerSubmissionsWhere(() => true)
+  resolveOwner = null
   for (const draft of records.values()) {
     retireNativeChatDraftPosition(draft)
   }
@@ -225,7 +229,32 @@ export function isNativeChatEditDraft(scopeKey: string): boolean {
 
 const LAUNCH_PROMPT_SCOPE_PREFIX = 'agent-launch:'
 
-/** The first prompt typed in an agent's launch panel, before any chat or terminal exists. */
+/** Launch input has a qualified owner before any chat or terminal exists. */
+export function nativeChatLaunchPromptDraftOwner(
+  scopeKey: string
+): NativeChatComposerDraftOwner | undefined {
+  if (!scopeKey.startsWith(LAUNCH_PROMPT_SCOPE_PREFIX)) {
+    return undefined
+  }
+  try {
+    const value: unknown = JSON.parse(scopeKey.slice(LAUNCH_PROMPT_SCOPE_PREFIX.length))
+    if (
+      Array.isArray(value) &&
+      value.length === 3 &&
+      typeof value[0] === 'string' &&
+      typeof value[1] === 'string'
+    ) {
+      const host = parseExecutionHostId(value[0])
+      if (host) {
+        return { executionHostId: host.id, workspaceId: value[1] }
+      }
+    }
+  } catch {
+    /* Malformed launch scopes have no owner. */
+  }
+  return undefined
+}
+
 export function nativeChatLaunchPromptDraftScopeKey(
   worktreeId: string,
   agent: string,
@@ -247,4 +276,65 @@ export function closeNativeChatEditDraft(scopeKey: string): void {
   ephemeralDrafts.delete(scopeKey)
   installNativeChatDraftRecord(scopeKey)
   notifyScope(scopeKey)
+}
+
+let resolveOwner: ((scopeKey: string) => NativeChatComposerDraftOwner | undefined) | null = null
+
+/** Names the workspace a scope's chat belongs to, so a new draft can record its owner. */
+export function setNativeChatComposerDraftOwnerResolver(
+  resolver: (scopeKey: string) => NativeChatComposerDraftOwner | undefined
+): void {
+  resolveOwner = resolver
+}
+
+export function resolveNativeChatComposerDraftOwner(
+  scopeKey: string
+): NativeChatComposerDraftOwner | undefined {
+  return nativeChatLaunchPromptDraftOwner(scopeKey) ?? resolveOwner?.(scopeKey)
+}
+
+export type DraftSubmission = {
+  draft: (NativeChatComposerDraft & { owner?: NativeChatComposerDraftOwner }) | undefined
+  stopObserving: () => void
+}
+const submissions = new Map<string, Set<DraftSubmission>>()
+
+/** Each send retains its own full source until a recipient owns it; removal revokes its write authority. */
+export function captureNativeChatComposerSubmission(scopeKey: string) {
+  const current: NativeChatComposerDraft & { owner?: NativeChatComposerDraftOwner } = records.get(
+    scopeKey
+  ) ?? { text: '', images: [] }
+  const submission: DraftSubmission = {
+    draft: { ...current, owner: current.owner ?? resolveNativeChatComposerDraftOwner(scopeKey) },
+    stopObserving: () => {}
+  }
+  const scoped = submissions.get(scopeKey) ?? new Set<DraftSubmission>()
+  scoped.add(submission)
+  submissions.set(scopeKey, scoped)
+  return submission
+}
+
+export function releaseNativeChatComposerSubmission(scopeKey: string, submission: DraftSubmission) {
+  const draft = submission.draft
+  submission.draft = undefined
+  submission.stopObserving()
+  submission.stopObserving = () => {}
+  const scoped = submissions.get(scopeKey)
+  scoped?.delete(submission)
+  if (scoped?.size === 0) {
+    submissions.delete(scopeKey)
+  }
+  return draft
+}
+
+export function retireNativeChatComposerSubmissionsWhere(
+  matches: (scopeKey: string, draft: StoredNativeChatComposerDraft | undefined) => boolean
+): void {
+  for (const [scopeKey, scoped] of submissions) {
+    for (const submission of scoped) {
+      if (matches(scopeKey, submission.draft ? { ...submission.draft, savedAt: 0 } : undefined)) {
+        releaseNativeChatComposerSubmission(scopeKey, submission)
+      }
+    }
+  }
 }

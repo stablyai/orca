@@ -53,11 +53,15 @@ export function captureWorkspaceChatDraftKeys(
 }
 
 /** Delete only after success, including in-flight upload chips or their later settlement can resurrect drafts. */
-export function deleteWorkspaceChatDrafts(keys: WorkspaceChatDraftKeys): void {
+export function deleteWorkspaceChatDraftOwners(keys: WorkspaceChatDraftKeys): void {
   for (const owner of keys.owners) {
     deleteNativeChatComposerDraftsOwnedBy(owner)
     dropNativeChatPendingAttachmentsOwnedBy(owner)
   }
+}
+
+export function deleteWorkspaceChatDrafts(keys: WorkspaceChatDraftKeys): void {
+  deleteWorkspaceChatDraftOwners(keys)
   for (const key of keys.conversations) {
     deleteNativeChatComposerDraft(key)
     clearNativeChatPendingAttachments(key)

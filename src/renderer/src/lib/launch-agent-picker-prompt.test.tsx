@@ -2,6 +2,7 @@
 import {
   liveStore,
   mockCreateTab,
+  mockPasteDraftWhenAgentReady,
   mockCreateSupport,
   mockCreateStructuredCodexSessionLaunchIntent,
   mockLaunchStructuredCodexSession,
@@ -302,7 +303,10 @@ it.each([true, false])(
     } else {
       expect(preparedFirstMessage).toBeUndefined()
     }
-    await result?.promptDeliveryResult
+    await expect(result?.promptDeliveryResult).resolves.toMatchObject({
+      delivered: false,
+      inComposer: true
+    })
     const returned = readNativeChatComposerDraft(
       structuredAgentSessionDraftScopeKey('codex-session-1')
     ).text
@@ -360,3 +364,161 @@ it('holds an actual clipboard-image paste until its save settles before launchin
     }
   }
 })
+
+import * as hostPreferences from '@/components/settings/use-host-agent-launch-preferences'
+import * as launchSettings from '@/components/settings/agent-launch-settings-transport'
+import * as webEnvironment from '@/runtime/web-runtime-session-environment'
+import * as worktreeHost from '@/lib/worktree-runtime-owner'
+import * as terminalCreate from '@/runtime/web-runtime-terminal-create-operation'
+import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+
+it.each([
+  { route: 'menu' as const, agent: 'claude' as const, failure: 'preferences' },
+  { route: 'search' as const, agent: 'codex' as const, failure: 'create' },
+  { route: 'search' as const, agent: 'claude' as const, failure: 'unknown' },
+  { route: 'menu' as const, agent: 'codex' as const, failure: 'paste' }
+])(
+  'recovers deferred $failure through $route $agent setup then explicitly retries once',
+  async ({ route, agent, failure }) => {
+    const selected: AgentPickerEntry = {
+      ...entry,
+      agent,
+      label: agent === 'claude' ? 'Claude' : 'Codex',
+      rows: [{ agent, kind: 'cli', executionHostId: 'runtime:paired' }]
+    }
+    const scope = agentLaunchPromptScopeKey(selected)
+    vi.spyOn(webEnvironment, 'isWebRuntimeSessionActive').mockReturnValue(true)
+    vi.spyOn(worktreeHost, 'runtimeEnvironmentIdOrLocalUnlessTwin').mockReturnValue('paired')
+    vi.spyOn(launchSettings, 'hostSupportsLaunchChoices').mockResolvedValue(true)
+    const actualLaunch = launcher.launchAgentInNewTab
+    const dispatch = vi.spyOn(launcher, 'launchAgentInNewTab').mockImplementation((args) =>
+      actualLaunch({
+        ...args,
+        ...(failure === 'paste' ? { promptDelivery: 'submit-after-ready' } : {})
+      })
+    )
+    const preferences = Promise.withResolvers<hostPreferences.AgentLaunchPreferences>()
+    vi.spyOn(hostPreferences, 'ensureAgentLaunchPreferences').mockImplementation(
+      () => preferences.promise
+    )
+    const created =
+      Promise.withResolvers<
+        Awaited<ReturnType<typeof terminalCreate.createWebRuntimeSessionTerminalResult>>
+      >()
+    const actualCreate = terminalCreate.createWebRuntimeSessionTerminalResult
+    const create = vi
+      .spyOn(terminalCreate, 'createWebRuntimeSessionTerminalResult')
+      .mockImplementation(() => created.promise)
+    const response = Promise.withResolvers<RuntimeRpcResponse<unknown>>()
+    const call = vi.fn<ReturnType<typeof webEnvironment.captureRuntimeEnvironmentCall>>(
+      () => response.promise
+    )
+    vi.spyOn(webEnvironment, 'captureRuntimeEnvironmentCall').mockReturnValue(call)
+    vi.spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapability').mockResolvedValue(true)
+    if (failure === 'create' || failure === 'unknown') {
+      create.mockImplementationOnce(actualCreate)
+    }
+    liveStore().setState({ setActiveWorktree: vi.fn() })
+    const view = render(<Menu route={route} selected={selected} />)
+    if (route === 'search') {
+      fireEvent.change(view.container.querySelector('input')!, {
+        target: { value: 'launch-model' }
+      })
+    }
+    fireEvent.click(document.querySelector(`button[aria-label="Configure ${selected.label}"]`)!)
+    changePrompt(editor(), 'review @/repo/file')
+    await act(async () => button('Launch terminal').click())
+    expect(readNativeChatComposerDraft(scope).text).toBe('')
+    view.unmount()
+    if (failure === 'preferences') {
+      await act(async () => preferences.reject(new DOMException('Pairing changed', 'AbortError')))
+      expect(create).not.toHaveBeenCalled()
+    } else {
+      await act(async () =>
+        preferences.resolve({ defaultTuiAgent: undefined, disabledTuiAgents: undefined })
+      )
+      await waitFor(() => expect(create).toHaveBeenCalledOnce())
+      if (failure === 'paste') {
+        mockPasteDraftWhenAgentReady.mockRejectedValueOnce(new Error('paste failed'))
+        await act(async () =>
+          created.resolve({ outcome: { status: 'created' }, hostTabId: 'paste-target' })
+        )
+      } else {
+        await waitFor(() => expect(call).toHaveBeenCalledOnce())
+        await act(async () => {
+          if (failure === 'unknown') {
+            response.reject(new Error('Response lost after remote applied'))
+          } else {
+            response.resolve({
+              id: 'refused',
+              ok: false,
+              error: { code: 'forbidden', message: 'Host refused before create' }
+            })
+          }
+        })
+        await waitFor(() =>
+          expect(readNativeChatComposerDraft(scope).text).toBe('review @/repo/file')
+        )
+        expect(call).toHaveBeenCalledTimes(failure === 'unknown' ? 2 : 1)
+        if (failure === 'unknown') {
+          expect(call.mock.calls[0][0]).toEqual(call.mock.calls[1][0])
+        }
+      }
+    }
+    await waitFor(() => expect(readNativeChatComposerDraft(scope).text).toBe('review @/repo/file'))
+    vi.mocked(hostPreferences.ensureAgentLaunchPreferences).mockResolvedValue({
+      defaultTuiAgent: undefined,
+      disabledTuiAgents: undefined
+    })
+    create.mockResolvedValue({ outcome: { status: 'created' }, hostTabId: 'accepted' })
+    mockPasteDraftWhenAgentReady.mockResolvedValue(true)
+    const retry = render(<Menu route={route} selected={selected} />)
+    if (route === 'search') {
+      fireEvent.change(retry.container.querySelector('input')!, {
+        target: { value: 'launch-model' }
+      })
+    }
+    fireEvent.click(document.querySelector(`button[aria-label="Configure ${selected.label}"]`)!)
+    expect(editor().textContent).toContain('review @/repo/file')
+    await act(async () => button('Launch terminal').click())
+    await expect(dispatch.mock.results.at(-1)?.value?.promptDeliveryResult).resolves.toMatchObject({
+      delivered: true
+    })
+    await waitFor(() => expect(readNativeChatComposerDraft(scope).text).toBe(''))
+    expect(create).toHaveBeenCalledTimes(failure === 'preferences' ? 1 : 2)
+  }
+)
+
+it('returns setup input when explicit chat is refused before session admission', async () => {
+  mockCreateSupport.mockResolvedValue({ supported: false, reason: 'Not available here' })
+  render(<Menu route="search" />)
+  fireEvent.change(document.querySelector('input')!, { target: { value: 'launch-model' } })
+  fireEvent.click(document.querySelector('button[aria-label="Configure Claude"]')!)
+  changePrompt(editor(), 'task before any session')
+  await act(async () => button('Launch chat').click())
+  await waitFor(() =>
+    expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(entry)).text).toBe(
+      'task before any session'
+    )
+  )
+  expect(mockLaunchStructuredCodexSession).not.toHaveBeenCalled()
+  expect(mockCreateTab).not.toHaveBeenCalled()
+})
+
+it.each(['auto-submit', 'draft'] as const)(
+  'honors local no-future %s ownership instead of treating it as a missing result',
+  async (promptDelivery) => {
+    const actual = launcher.launchAgentInNewTab
+    const dispatch = vi
+      .spyOn(launcher, 'launchAgentInNewTab')
+      .mockImplementation((args) => actual({ ...args, promptDelivery }))
+    render(<Menu route="menu" />)
+    fireEvent.click(document.querySelector('button[aria-label="Configure Claude"]')!)
+    changePrompt(editor(), 'local prompt')
+    await act(async () => button('Launch terminal').click())
+    expect(dispatch.mock.results[0].value?.promptDeliveryResult).toBeUndefined()
+    expect(mockCreateTab).toHaveBeenCalledOnce()
+    expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(entry)).text).toBe('')
+  }
+)

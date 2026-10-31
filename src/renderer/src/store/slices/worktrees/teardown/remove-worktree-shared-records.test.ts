@@ -154,3 +154,38 @@ it('dismissing one notice leaves the records a newer notice kept for the same fi
   state().releaseKeptEditorBuffers(show.mock.calls[0][2])
   expect(Object.values(state().editorBufferKept).map((entry) => entry.draft)).toEqual(['second'])
 })
+
+import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
+import { captureWorktreeStateBeforeRemoval } from './worktree-state-before-removal'
+import { tearDownRemovedWorktreeRendererState } from './removed-worktree-renderer-teardown'
+
+it('committed worktree teardown retires empty pending launch source authority without touching another owner', async () => {
+  drafts.clearNativeChatComposerDraftsForTests()
+  const key = drafts.nativeChatLaunchPromptDraftScopeKey('wt-1', 'claude')
+  const other = drafts.nativeChatLaunchPromptDraftScopeKey('wt-1', 'claude', 'ssh:other')
+  for (const scope of [key, other]) {
+    drafts.updateNativeChatComposerDraft(scope, { text: 'task' }, 'immediate')
+  }
+  const submission = drafts.captureNativeChatComposerSubmission(key)
+  drafts.updateNativeChatComposerDraft(key, { text: '' }, 'immediate')
+  const beforeRemoval = captureWorktreeStateBeforeRemoval(state(), 'wt-1', 'local')
+  useAppStore.setState({
+    shutdownWorktreeBrowsers: vi.fn(),
+    shutdownWorktreeTerminals: vi.fn(),
+    deleteManagedBrowserSessionProfile: vi.fn()
+  })
+  await tearDownRemovedWorktreeRendererState({
+    set: useAppStore.setState,
+    get: state,
+    worktreeId: 'wt-1',
+    hostId: 'local',
+    requiredExecutionHostId: 'local',
+    beforeRemoval
+  })
+  expect(submission.draft).toBeUndefined()
+  drafts.updateNativeChatComposerDraft(key, { text: 'recreated' }, 'immediate')
+  drafts.finishNativeChatComposerSubmission(key, submission, true)
+  expect(drafts.readNativeChatComposerDraft(key).text).toBe('recreated')
+  expect(drafts.readNativeChatComposerDraft(other).text).toBe('task')
+  drafts.clearNativeChatComposerDraftsForTests()
+})

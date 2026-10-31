@@ -716,3 +716,17 @@ describe('complete handback acceptance', () => {
     }
   )
 })
+
+describe('scoped asynchronous submission ownership', () => {
+  it.each([true, 'queued', false] as const)(
+    'keeps synchronous %s admission as the existing complete transfer boundary',
+    async (admission) => {
+      const { send, structuredTransport, setDraft } = harness('claude')
+      updateNativeChatComposerDraft('tab-1:pane', { text: 'task', images: [] }, 'immediate')
+      vi.mocked(structuredTransport.send).mockReturnValue(admission)
+      await send('task', [])
+      expect(setDraft).toHaveBeenCalledTimes(admission === false ? 0 : 1)
+      clearNativeChatComposerDraftsForTests()
+    }
+  )
+})

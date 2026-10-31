@@ -243,10 +243,10 @@ function TabBarCreateEntrySession({
       const accepted = onLaunchAgentOption
         ? onLaunchAgentOption(selectedOption.option)
         : onLaunchAgent?.(selectedOption.option.agent)
-      if (accepted === false) {
-        return false
+      if (accepted !== false) {
+        onDidOpenEntry?.()
       }
-      return onDidOpenEntry?.()
+      return accepted
     }
     // Route history through typed-URL navigation to preserve workspace targeting and SSH resolution.
     const classification: TabEntryActionClassification =

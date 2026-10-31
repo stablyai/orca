@@ -22,7 +22,7 @@ export function AgentLaunchSetupFooter({
   entry: AgentPickerEntry
   ref?: Ref<AgentLaunchSetupFooterHandle>
   disabled?: boolean
-  onLaunch: (surface: AgentPickerSurface, prompt?: string) => boolean | void
+  onLaunch: (surface: AgentPickerSurface, prompt?: string) => boolean | void | Promise<boolean>
 }): React.JSX.Element {
   const composer = useRef<NativeChatComposerHandle>(null)
   // Enter launches the default way; a Launch button names its own before it submits the prompt.

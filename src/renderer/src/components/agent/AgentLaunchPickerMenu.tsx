@@ -28,7 +28,7 @@ type Launch = (
   row: NewTabAgentMenuRow,
   draft?: AgentPickerDraft,
   entry?: AgentPickerEntry
-) => boolean | void
+) => boolean | void | Promise<boolean>
 
 function keepSetupFocus(event: PointerEvent<HTMLDivElement>) {
   // Radix row hover must not steal focus from the row's portaled setup or its nested controls.
@@ -153,8 +153,7 @@ function AgentPickerMenuRow({
 }) {
   const setupId = useId()
   const item = useRef<HTMLDivElement>(null)
-  const configured = useRef<AgentPickerDraft | undefined>(undefined)
-  const accepted = useRef(false)
+  const dismissing = useRef(false)
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
   return (
     <AgentLaunchSetupButton
@@ -170,10 +169,13 @@ function AgentPickerMenuRow({
         }
       }}
       onUse={(draft) => {
-        configured.current = draft
-        accepted.current = false
-        item.current?.click()
-        return accepted.current
+        const result = runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
+        if (result !== false) {
+          // The row click dismisses Radix only; the operation above owns acceptance.
+          dismissing.current = true
+          item.current?.click()
+        }
+        return result
       }}
       renderAnchor={(trigger) => (
         <DropdownMenuItem
@@ -181,8 +183,11 @@ function AgentPickerMenuRow({
           variant="launch"
           disabled={disabled || !entry.surfaces.length}
           onSelect={(event) => {
-            const draft = configured.current ?? initial
-            configured.current = undefined
+            if (dismissing.current) {
+              dismissing.current = false
+              return
+            }
+            const draft = initial
             const surface = draft?.surface ?? entry.defaultSurface
             const row = draft
               ? pickerLaunchRow(entry, surface)
@@ -191,9 +196,8 @@ function AgentPickerMenuRow({
                     ? row.kind === 'chat'
                     : row.kind === 'terminal' || row.kind === 'cli'
                 ) ?? pickerLaunchRow(entry, surface))
-            accepted.current =
-              (draft ? runLaunch(row, draft, entry) : runLaunch(row, undefined)) !== false
-            if (!accepted.current) {
+            const result = draft ? runLaunch(row, draft, entry) : runLaunch(row, undefined)
+            if (result === false) {
               event.preventDefault()
             }
           }}
