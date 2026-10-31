@@ -224,9 +224,7 @@ export const SwitchToChatParams = OptionsParams.extend({
       create: CreateIntentParams.omit({ firstMessage: true }).optional(),
       source: TerminalClose.required().optional(),
       /** With no source to stop: the tab the chat opens right after, when the client knows it. */
-      sourceTabId: Identifier('Invalid tab').optional(),
-      /** Sent only to a host advertising switch consent; false refuses a replying agent. */
-      consented: z.boolean().optional()
+      sourceTabId: Identifier('Invalid tab').optional()
     })
     .strict()
     .optional()
@@ -237,8 +235,7 @@ export const SwitchToTerminalParams = OptionsParams.extend({
       invocationId: Identifier('Invalid invocation'),
       sourceTabId: Identifier('Invalid tab').optional(),
       groupId: Identifier('Invalid group').optional(),
-      commandOverride: z.string().max(8192).optional(),
-      consented: z.boolean().optional()
+      commandOverride: z.string().max(8192).optional()
     })
     .strict()
     .optional()

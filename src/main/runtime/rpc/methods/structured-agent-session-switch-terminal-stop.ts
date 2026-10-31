@@ -9,47 +9,8 @@ import type { AgentSessionSwitchDeadline } from '../../../../shared/agent-sessio
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { interruptWorkingAgent } from '../../terminal-agent-interrupt'
-import { mainAgentState } from '../../../../shared/main-agent-status'
 import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
 import type { captureStructuredSwitchTerminalSource } from './structured-agent-session-switch-source'
-
-/** False consent: the client left it to this host, so a replying terminal agent is refused. */
-export function requireTerminalSwitchConsent(
-  row: ReturnType<RpcContext['runtime']['agentTransitions']['latestRow']>,
-  consented: boolean | undefined
-): void {
-  if (consented === false && row && mainAgentState(row) === 'working') {
-    throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'turnActive' })
-  }
-}
-
-/** A paused agent (Ctrl+Z) is the user's to resume or quit: nothing is stopped and the tab stays. */
-export async function refuseSwitchOfPausedAgent(paused: Promise<boolean>): Promise<void> {
-  if (await paused) {
-    throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'agentPaused' })
-  }
-}
-
-/**
- * The pane's one process-table read begins beside the transcript's and is awaited before the
- * stop; a consent refusal waits for it, so a paused pane (which still reads as replying, as Ctrl+Z
- * sends no Stop hook) is refused as paused, never asked whether to stop a reply.
- */
-export async function admitTerminalSwitch(
-  ctx: RpcContext,
-  ptyId: string | null | undefined,
-  row: ReturnType<RpcContext['runtime']['agentTransitions']['latestRow']>,
-  consented: boolean | undefined
-): Promise<{ paused: Promise<boolean> }> {
-  const paused = ptyId ? ctx.runtime.terminalAgentPaused(ptyId) : Promise.resolve(false)
-  try {
-    requireTerminalSwitchConsent(row, consented)
-  } catch (refusal) {
-    await refuseSwitchOfPausedAgent(paused)
-    throw refusal
-  }
-  return { paused }
-}
 
 /**
  * A terminal source's stop: Escape a replying agent, let it record its own end of that turn
@@ -66,21 +27,11 @@ export async function stopStructuredSwitchTerminalSource(input: {
   destination: string | undefined
   boundary?: { source: SwitchTranscriptSource; stopped: SwitchStoppedCliTurn }
   keepSource: (settle: (replacedBy: string | undefined) => void) => void
-  /** False: the client left consent to this host, so a replying agent is refused, not stopped. */
-  consented?: boolean
   /** The stopped agent and its conversation, named by the pane kept on screen. */
   agent?: AiVaultAgent
   providerSessionId?: string | null
 }): Promise<void> {
   const { ctx, host, sessionId, close, deadline } = input
-  // Checked where the stop is admitted (before the Escape, at its write, and before the exit), so
-  // a turn the user started while the switch prepared is never stopped without their yes.
-  const requireConsent = (): void =>
-    requireTerminalSwitchConsent(
-      input.consented === false ? ctx.runtime.agentTransitions.latestRow(input.paneKey) : null,
-      input.consented
-    )
-  requireConsent()
   const awaitBoundary = input.boundary
     ? await armSwitchTurnBoundaryWait(
         input.boundary.source,
@@ -95,10 +46,7 @@ export async function stopStructuredSwitchTerminalSource(input: {
     input.paneKey,
     {
       signal: deadline.signal,
-      beforeWrite: async () => {
-        deadline.check()
-        requireConsent()
-      }
+      beforeWrite: async () => deadline.check()
     }
   )
   if (interrupted.outcome === 'accepted') {
@@ -110,7 +58,6 @@ export async function stopStructuredSwitchTerminalSource(input: {
     input.destination !== undefined &&
     worktreeIdsEqual(close.source.worktreeId, input.destination) &&
     close.wholeTab()
-  requireConsent()
   // Shutdown already accepted must finish even when the observing request expires.
   try {
     await host.trackSwitchPhysical(sessionId, close.stop(replacing))

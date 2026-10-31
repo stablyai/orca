@@ -65,7 +65,7 @@ it.each([
     tab: { id: 'tab-1', worktreeId: 'wt-1' },
     paneKey: 'tab-1:leaf'
   })
-  expect(mocks.run).toHaveBeenCalledWith(mocks.source, expect.any(Function))
+  expect(mocks.run).toHaveBeenCalledWith(mocks.source)
   mocks.pending = true
   rerender(
     <TooltipProvider>
@@ -101,8 +101,3 @@ it('keeps an older host visible but disabled, telling the user to update it', as
   ).toBeGreaterThan(0)
   expect(mocks.run).not.toHaveBeenCalled()
 })
-
-vi.mock('@/components/confirmation-dialog-context', async (original) => ({
-  ...(await original<Record<string, unknown>>()),
-  useConfirmationDialog: () => vi.fn(async () => false)
-}))

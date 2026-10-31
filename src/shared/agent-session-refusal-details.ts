@@ -93,8 +93,6 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     /** A terminal may still be writing the chat's conversation, so its agent did not start. */
     'conversationOpenInTerminal',
     'conversationOpenElsewhere',
-    /** Job control paused the terminal's agent (Ctrl+Z); a switch leaves it to the user. */
-    'agentPaused',
     /** The agent started, then Orca could not open the chat's conversation for it. */
     'attachFailed'
   ],

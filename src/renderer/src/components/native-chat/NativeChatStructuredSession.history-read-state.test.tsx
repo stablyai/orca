@@ -315,8 +315,3 @@ it('holds the native header switch until capabilities hydrate, with no copy butt
     expect(button.hasAttribute('disabled')).toBe(false)
   }
 })
-
-vi.mock('@/components/confirmation-dialog-context', async (original) => ({
-  ...(await original<Record<string, unknown>>()),
-  useConfirmationDialog: () => vi.fn(async () => false)
-}))

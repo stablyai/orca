@@ -27,11 +27,7 @@ import {
 } from './structured-agent-session-switch-source'
 import { executeStructuredSessionTerminalSwitch } from './structured-agent-session-switch-terminal-execution'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
-import {
-  admitTerminalSwitch,
-  refuseSwitchOfPausedAgent,
-  stopStructuredSwitchTerminalSource
-} from './structured-agent-session-switch-terminal-stop'
+import { stopStructuredSwitchTerminalSource } from './structured-agent-session-switch-terminal-stop'
 import { agentSessionLeasePossiblyWriting } from '../../../../shared/agent-session-lease-adjudication'
 import { mainAgentState } from '../../../../shared/main-agent-status'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
@@ -146,8 +142,6 @@ async function switchToChat(
     : undefined
   const paneKey = close ? `${close.source.tabId}:${close.source.leafId}` : undefined
   const row = paneKey ? ctx.runtime.agentTransitions.latestRow(paneKey) : null
-  // A replying agent without consent is refused before the transcript is read; the stop re-checks.
-  const { paused } = await admitTerminalSwitch(ctx, close?.source.ptyId, row, execution.consented)
   const adopt = createIdentity?.adopt
   const retainedSource =
     !adopt && source
@@ -176,7 +170,6 @@ async function switchToChat(
     : undefined
   deadline.check()
   if (close && paneKey) {
-    await refuseSwitchOfPausedAgent(paused)
     await stopStructuredSwitchTerminalSource({
       ctx,
       host,
@@ -189,7 +182,6 @@ async function switchToChat(
         create?.worktree.replace(/^id:/, ''),
       boundary: before && stopped ? { source: before, stopped } : undefined,
       keepSource: (settle) => keepSource(() => settle(replacedBy)),
-      consented: execution.consented,
       agent: [create?.agent, host.deps.store.getRecord(sessionId)?.provider].find(isAiVaultAgent),
       providerSessionId
     })

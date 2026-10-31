@@ -57,17 +57,10 @@ export function inPlaceSwitchCapability(agent: string): string {
   return `agent-session.structured.switch.v1:${agent}`
 }
 
-/** The host decides whether a switch needs the user's yes: a client sends `consented: false` and
- *  shows its dialog only when the host refuses a replying agent. */
-export const SWITCH_CONSENT_RUNTIME_CAPABILITY = 'agent-session.structured.switch-consent.v1'
-
-export const IN_PLACE_SWITCH_RUNTIME_CAPABILITIES = [
-  ...IN_PLACE_SWITCH_AGENTS.flatMap((agent) => [
-    inPlaceSwitchCapability(agent),
-    inPlaceSwitchExecutionCapability(agent)
-  ]),
-  SWITCH_CONSENT_RUNTIME_CAPABILITY
-]
+export const IN_PLACE_SWITCH_RUNTIME_CAPABILITIES = IN_PLACE_SWITCH_AGENTS.flatMap((agent) => [
+  inPlaceSwitchCapability(agent),
+  inPlaceSwitchExecutionCapability(agent)
+])
 
 export function inPlaceSwitchExecutionCapability(agent: string): string {
   return `agent-session.structured.switch-execution.v1:${agent}`

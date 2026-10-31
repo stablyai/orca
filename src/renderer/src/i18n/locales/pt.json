@@ -20970,8 +20970,6 @@
           "allowAutoClose": "Permitir fechamento automático"
         },
         "switch": {
-          "stopAndSwitchTitle": "{{agent}} está respondendo. Interromper e alternar?",
-          "stopAndSwitch": "Interromper e alternar",
           "stopUnknown": "O Orca não pôde confirmar que {{agent}} parou. Verifique os chats e terminais abertos e tente alternar novamente.",
           "sourceStopUnknown": "O Orca não pôde confirmar que {{agent}} parou. Verifique {{agent}} no terminal original e tente alternar novamente."
         },

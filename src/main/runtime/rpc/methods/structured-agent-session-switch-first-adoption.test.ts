@@ -76,7 +76,6 @@ function switchParams(sessionId: string, source?: SwitchSource) {
     sessionId,
     execution: {
       invocationId: sessionId,
-      consented: true,
       create: { envelope, ...fields },
       ...(source ? { source } : {})
     }
@@ -210,7 +209,7 @@ it('keeps a proven stop when the rollout moved during the stop, so a retry reads
   ])
 })
 
-it('refuses a WSL pane before anything is stopped, so a paused agent there survives', async () => {
+it('refuses a WSL pane before anything is stopped', async () => {
   const codexHome = join(rig.root, 'codex-account')
   await mkdir(codexHome, { recursive: true })
   const { runtime } = setupMainOwnedWorkspace({
@@ -235,7 +234,6 @@ it('refuses a WSL pane before anything is stopped, so a paused agent there survi
   vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({ supported: true })
   vi.spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited').mockResolvedValue()
   vi.spyOn(runtime, 'resolveRuntimeFileTarget').mockResolvedValue(worktreeTarget())
-  const paused = vi.spyOn(runtime, 'terminalAgentPaused')
   const stopped = vi.fn(async () => true)
   runtime.setPtyController({
     write: () => true,
@@ -261,5 +259,4 @@ it('refuses a WSL pane before anything is stopped, so a paused agent there survi
     }
   })
   expect(stopped).not.toHaveBeenCalled()
-  expect(paused).not.toHaveBeenCalled()
 })

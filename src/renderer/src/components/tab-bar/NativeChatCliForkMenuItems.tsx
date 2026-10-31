@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   useConversationSwitchReadiness,
   runNativeChatCliSwitch
@@ -44,7 +43,7 @@ export function NativeChatCliForkMenuItems(
   )
 }
 
-/** Every supported chat switch uses the same consent and owning-host command. */
+/** Every supported chat switch uses the same owning-host command. */
 function NativeChatCliSwitchMenuItems({
   tab,
   nativeChat,
@@ -55,7 +54,6 @@ function NativeChatCliSwitchMenuItems({
     useShallow((state) => resolveNativeChatCliForkIdentity(state, { tab, nativeChat }))
   )
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
-  const confirm = useConfirmationDialog()
   const readiness = useConversationSwitchReadiness(
     chat && agent
       ? {
@@ -85,7 +83,6 @@ function NativeChatCliSwitchMenuItems({
         onResumeInNewCli={(event) => {
           event.preventDefault()
           void runNativeChatCliSwitch({
-            confirm,
             sessionId: chat.sessionId,
             workspaceId: chat.workspaceId,
             executionHostId: chat.executionHostScope,

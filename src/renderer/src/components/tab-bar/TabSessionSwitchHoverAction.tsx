@@ -1,4 +1,3 @@
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   useConversationSwitchBusy,
   useConversationSwitchReadiness,
@@ -45,7 +44,6 @@ function ChatSwitchAction({
   )
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
   const inPlace = useInPlaceSwitchCapability(chat?.executionHostScope, agent)
-  const confirm = useConfirmationDialog()
   const readiness = useConversationSwitchReadiness(
     chat && agent
       ? {
@@ -71,7 +69,6 @@ function ChatSwitchAction({
       title={readiness.explanation}
       onClick={() =>
         void runNativeChatCliSwitch({
-          confirm,
           sessionId: chat.sessionId,
           workspaceId: chat.workspaceId,
           executionHostId: chat.executionHostScope,
@@ -93,7 +90,6 @@ function TerminalSwitchAction({
 }): React.JSX.Element | null {
   const source = useAppStore(useShallow((state) => resolveCliChatResumeSource(state, { tab })))
   const inPlace = useInPlaceSwitchCapability(source?.executionHostId, source?.agent)
-  const confirm = useConfirmationDialog()
   const readiness = useConversationSwitchReadiness(
     source ? { direction: 'chat', ...source, source } : null
   )
@@ -108,7 +104,7 @@ function TerminalSwitchAction({
       size="xs"
       disabled={!readiness.ready}
       title={readiness.explanation}
-      onClick={() => void runCliChatResume(source, confirm)}
+      onClick={() => void runCliChatResume(source)}
     >
       {busy ? <Loader2 className="animate-spin" /> : <MessagesSquare />}
       {translate('components.tab.bar.switch.toNativeChat', 'Switch to Chat UI')}

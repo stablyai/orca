@@ -203,7 +203,7 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     renderItemsNow()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Chat UI' }))
     await act(async () => {})
-    expect(mocks.runCliChatResume).toHaveBeenCalledWith(source, expect.any(Function))
+    expect(mocks.runCliChatResume).toHaveBeenCalledWith(source)
     expect(mocks.listSessions).not.toHaveBeenCalled()
   })
 })
@@ -221,8 +221,3 @@ it('keeps an accepted native action visible with shared disabled spinner feedbac
   expect(item.getAttribute('data-disabled')).not.toBeNull()
   expect(item.querySelector('.animate-spin')).not.toBeNull()
 })
-
-vi.mock('@/components/confirmation-dialog-context', async (original) => ({
-  ...(await original<Record<string, unknown>>()),
-  useConfirmationDialog: () => vi.fn(async () => false)
-}))

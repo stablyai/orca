@@ -1,5 +1,4 @@
 import { collectAgentPaneConversations } from '@/lib/ai-vault-tab-title-requests'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import {
   cliConversationRowsShareAgent,
@@ -17,10 +16,7 @@ import {
 
 /** History's "Switch to CLI": in the chat tab's slot when that tab is open in this window, else a
  *  new tab. False when the row's host doesn't switch this agent in place, so the row forks. */
-export function switchAiVaultSessionToCli(
-  session: AiVaultSession,
-  confirm?: ConfirmationDialogContextValue
-): boolean {
+export function switchAiVaultSessionToCli(session: AiVaultSession): boolean {
   const chat = session.structuredSession
   if (!chat || !inPlaceSwitchSupportedNow(session.executionHostId, session.agent)) {
     return false
@@ -31,7 +27,6 @@ export function switchAiVaultSessionToCli(
       (tab) => tab.contentType === 'agent-session' && tab.entityId === chat.sessionId
     )
   void runNativeChatCliSwitch({
-    confirm,
     sessionId: chat.sessionId,
     workspaceId: chat.workspaceId,
     executionHostId: session.executionHostId,
@@ -47,8 +42,7 @@ export function switchAiVaultSessionToCli(
 export function switchAiVaultSessionToNativeChat(
   session: AiVaultSession,
   workspaceId?: string,
-  originalPaneTarget?: AiVaultOriginalPaneTarget | null,
-  confirm?: ConfirmationDialogContextValue
+  originalPaneTarget?: AiVaultOriginalPaneTarget | null
 ): boolean {
   if (!inPlaceSwitchSupportedNow(session.executionHostId, session.agent)) {
     return false
@@ -59,10 +53,10 @@ export function switchAiVaultSessionToNativeChat(
     if (!subject) {
       return false
     }
-    void runConversationSwitch({ ...subject, confirm })
+    void runConversationSwitch(subject)
     return true
   }
-  void runConversationSwitch({ direction: 'chat', ...source, source, history: session, confirm })
+  void runConversationSwitch({ direction: 'chat', ...source, source, history: session })
   return true
 }
 

@@ -2,10 +2,7 @@ import { resolveWorktreeExecutionHostPlatform } from './execution-host-facts'
 import { translate } from '@/i18n/i18n'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
-import { runningStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { useInPlaceSwitchCapability } from './in-place-switch-support'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
@@ -18,7 +15,6 @@ import type { AiVaultSession, AiVaultAgent } from '../../../shared/ai-vault-type
 import type { CliChatResumeSource } from '@/components/tab-bar/cli-chat-resume-source'
 
 export type ConversationSwitch = {
-  confirm?: ConfirmationDialogContextValue
   direction: 'chat' | 'terminal'
   executionHostId: string
   workspaceId: string
@@ -78,26 +74,6 @@ export function useConversationSwitchBusy(pending: boolean, delayMs = 200): bool
     return () => clearTimeout(timer)
   }, [pending, delayMs])
   return pending && busy
-}
-
-/** Live facts choose consent only; never open a reader to classify saved work. */
-export function conversationSwitchReplying(args: ConversationSwitch): boolean {
-  const state = useAppStore.getState()
-  if (args.source) {
-    return state.agentStatusByPaneKey[args.source.paneKey]?.state === 'working'
-  }
-  const target = structuredAgentSessionTargetForHost(args.executionHostId)
-  if (!args.sessionId || !target) {
-    return false
-  }
-  const held = findStructuredAgentSessionReadOwner(args.sessionId, target)?.getSnapshot()
-  return Boolean(
-    (held?.current &&
-      held.state.working !== false &&
-      runningStructuredAgentSessionTurnId(held.state)) ||
-    getStructuredAgentSessionStatusFeed(target).getSnapshot().get(args.sessionId)?.status ===
-      'working'
-  )
 }
 
 export function useConversationSwitchReadiness(args: ConversationSwitch | null) {

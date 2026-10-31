@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => ({
   launchAiVaultSessionInNewTab: vi.fn(),
   activateAiVaultResumeWorkspace: vi.fn(),
   switchToCli: vi.fn(async () => {}),
-  confirm: vi.fn(async () => false),
   rpc: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn()
@@ -275,11 +274,6 @@ it('refuses the stale OMP row before creating a second terminal writer', async (
   )
   expect(mocks.launchAiVaultSessionInNewTab).not.toHaveBeenCalled()
 })
-
-vi.mock('@/components/confirmation-dialog-context', async (original) => ({
-  ...(await original<Record<string, unknown>>()),
-  useConfirmationDialog: () => mocks.confirm
-}))
 
 it('intercepts an ordinary structured Resume and actual pane drop on handled refusal without terminal execution', async () => {
   mocks.getState.mockReturnValue({

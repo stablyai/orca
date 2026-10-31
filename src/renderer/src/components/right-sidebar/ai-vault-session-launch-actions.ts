@@ -1,4 +1,3 @@
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import {
   notifyAiVaultSessionPreparationFailure,
@@ -54,7 +53,6 @@ export function useAiVaultSessionLaunchActions({
   targetState: AiVaultSessionResumeTargetState
   agentCmdOverrides?: Partial<Record<AiVaultAgent, string | null>>
 }) {
-  const confirm = useConfirmationDialog()
   const [continuationRequest, setContinuationRequest] =
     useState<AgentSessionContinuationRequest | null>(null)
 
@@ -154,7 +152,7 @@ export function useAiVaultSessionLaunchActions({
   // Supported chats transfer the same conversation; other history rows keep their ordinary resume.
   const handleResumeInNewCli = useCallback(
     (session: AiVaultSession, targetWorktreeId: string): void => {
-      if (switchAiVaultSessionToCli(session, confirm)) {
+      if (switchAiVaultSessionToCli(session)) {
         return
       }
       const prepareStartup = async (worktreeId: string): Promise<AiVaultResumeStartup> => {
@@ -195,7 +193,7 @@ export function useAiVaultSessionLaunchActions({
       }
       launchInTerminal(session, targetWorktreeId, prepareStartup, describeAiVaultCliForkFailure)
     },
-    [agentCmdOverrides, launchInTerminal, confirm]
+    [agentCmdOverrides, launchInTerminal]
   )
 
   const handleResumeInNewChat = useCallback(
@@ -209,8 +207,7 @@ export function useAiVaultSessionLaunchActions({
         switchAiVaultSessionToNativeChat(
           session,
           targetWorktreeId ?? activeWorktreeId ?? activeWorktree?.id,
-          pane,
-          confirm
+          pane
         )
       ) {
         return
@@ -232,7 +229,7 @@ export function useAiVaultSessionLaunchActions({
         newAgentLaunchRequestId()
       )
     },
-    [activeWorktree?.id, activeWorktreeId, confirm]
+    [activeWorktree?.id, activeWorktreeId]
   )
 
   const handleContinueInNewSession = useCallback(

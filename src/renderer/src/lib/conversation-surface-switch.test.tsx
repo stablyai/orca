@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => {
   return {
     target: makeTarget(),
     support: vi.fn(),
-    consent: vi.fn(async () => false),
     rpc: vi.fn(),
     capture: vi.fn(),
     prepare: vi.fn(),
@@ -43,9 +42,6 @@ vi.mock('sonner', () => ({ toast: { error: mocks.error, info: mocks.info } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   supportsInPlaceSwitch: mocks.support,
   callStructuredAgentSession: mocks.call
-}))
-vi.mock('@/runtime/structured-agent-session-switch-consent', () => ({
-  supportsSwitchConsent: mocks.consent
 }))
 vi.mock('@/runtime/structured-agent-session-owner', async (original) => ({
   ...(await original<typeof SessionOwner>()),
@@ -115,7 +111,6 @@ beforeEach(() => {
   })
   mocks.reader.mockReturnValue(undefined)
   mocks.support.mockResolvedValue(true)
-  mocks.consent.mockResolvedValue(false)
   mocks.call.mockResolvedValue({ status: 'completed', sessionId: subject.sessionId })
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
@@ -212,41 +207,6 @@ it.each([false, true])(
   }
 )
 
-it.each([
-  ['confirms', true],
-  ['cancels', false]
-])(
-  'asks only when a host that decides consent refuses a replying agent, and the user %s',
-  async (_name, confirmed) => {
-    mocks.consent.mockResolvedValue(true)
-    const confirm = vi.fn(async () => confirmed)
-    mocks.call
-      .mockResolvedValueOnce({
-        status: 'refused',
-        sessionId: subject.sessionId,
-        refusal: { code: 'agent_session_operation_invalid', details: { reason: 'turnActive' } }
-      })
-      .mockResolvedValueOnce({ status: 'completed', sessionId: subject.sessionId })
-    await expect(runConversationSwitch({ ...subject, confirm })).resolves.toBe(confirmed)
-    expect(confirm).toHaveBeenCalledOnce()
-    const executions = mocks.call.mock.calls.map(([, , params]) => params.execution)
-    expect(executions[0]).toMatchObject({ consented: false })
-    if (confirmed) {
-      // A yes is a fresh switch, never a replay of the refused invocation.
-      expect(executions[1]).toMatchObject({ consented: true })
-      expect(executions[1].invocationId).not.toBe(executions[0].invocationId)
-    } else {
-      expect(mocks.call).toHaveBeenCalledOnce()
-    }
-    expect(mocks.error).not.toHaveBeenCalled()
-  }
-)
-
-it('sends no consent field to a host that does not decide consent (its strict schema)', async () => {
-  await expect(runConversationSwitch(subject)).resolves.toBe(true)
-  expect(mocks.call.mock.calls[0]![2].execution).not.toHaveProperty('consented')
-})
-
 const fromPane = {
   tabId: 'terminal',
   workspaceId: 'workspace',
@@ -256,15 +216,67 @@ const fromPane = {
   executionHostId: 'local' as const,
   ptyId: 'pty'
 }
+
+// A replying agent: a host that asked before stopping a reply refuses only when told `false`.
+async function replyingHost(
+  _target: unknown,
+  _method: string,
+  params: { sessionId: string; execution: { consented?: boolean } }
+) {
+  return params.execution.consented === false
+    ? {
+        status: 'refused',
+        sessionId: params.sessionId,
+        refusal: { code: 'agent_session_operation_invalid', details: { reason: 'turnActive' } }
+      }
+    : { status: 'completed', sessionId: params.sessionId }
+}
+
+it.each([
+  ['terminal', 'claude'],
+  ['terminal', 'codex'],
+  ['chat', 'claude'],
+  ['chat', 'codex']
+] as const)(
+  'switches a replying agent to %s without asking (%s), sending no consent',
+  async (direction, agent) => {
+    mocks.call.mockImplementation(replyingHost)
+    mocks.capture.mockResolvedValue({
+      target: { kind: 'local' },
+      handle: 'terminal-source',
+      incarnationId: 'incarnation',
+      presentation: { identity: { tabId: 'terminal' }, holders: [] }
+    })
+    const pane = { ...fromPane, agent, providerSessionId: `${agent}-session` }
+    const args =
+      direction === 'chat'
+        ? { direction, ...pane, source: pane }
+        : { ...subject, agent, sessionId: `${agent}_chat` }
+    await expect(runConversationSwitch(args)).resolves.toBe(true)
+    expect(mocks.call).toHaveBeenCalledOnce()
+    expect(mocks.call.mock.calls[0]![2].execution).not.toHaveProperty('consented')
+    expect(mocks.error).not.toHaveBeenCalled()
+  }
+)
+
+it('shows a host’s refusal of a replying agent once, without retrying', async () => {
+  mocks.call.mockResolvedValue({
+    status: 'refused',
+    sessionId: subject.sessionId,
+    refusal: { code: 'agent_session_operation_invalid', details: { reason: 'turnActive' } }
+  })
+  await expect(runConversationSwitch(subject)).resolves.toBe(false)
+  expect(mocks.call).toHaveBeenCalledOnce()
+  expect(mocks.error).toHaveBeenCalledOnce()
+})
+
 it.each([
   ['refuses', 'refused', true],
-  ['asks for consent and the user declines', 'declined', true],
   ['fails before the request is sent', 'unsent', true],
   ['loses the answer after the send', 'lost', false]
 ] as const)(
   'withdraws where a split switch would land when the host %s',
   async (_name, outcome, withdrawn) => {
-    mocks.consent.mockResolvedValue(outcome === 'declined')
     mocks.capture.mockResolvedValue({
       target: { kind: 'environment', environmentId: 'paired' },
       handle: 'terminal-source',
@@ -290,14 +302,13 @@ it.each([
           sessionId: 'chat',
           refusal: {
             code: 'agent_session_operation_invalid',
-            details: { reason: outcome === 'declined' ? 'turnActive' : 'messagesUnsettled' }
+            details: { reason: 'messagesUnsettled' }
           }
         }
       }
     )
-    const confirm = vi.fn(async () => false)
     await expect(
-      runConversationSwitch({ direction: 'chat', ...fromPane, source: fromPane, confirm })
+      runConversationSwitch({ direction: 'chat', ...fromPane, source: fromPane })
     ).resolves.toBe(false)
     expect(mocks.call).toHaveBeenCalledOnce()
     expect(mocks.abandonFocus).toHaveBeenCalledTimes(withdrawn ? 1 : 0)

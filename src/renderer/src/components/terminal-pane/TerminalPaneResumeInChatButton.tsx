@@ -1,4 +1,3 @@
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   useConversationSwitchBusy,
   useConversationSwitchReadiness,
@@ -30,7 +29,6 @@ export function TerminalPaneResumeInChatButton({
     )
   )
   const capability = useCliChatResumeCapability(worktreeId, source?.agent)
-  const confirm = useConfirmationDialog()
   const readiness = useConversationSwitchReadiness(
     source ? { direction: 'chat', ...source, source } : null
   )
@@ -79,7 +77,7 @@ export function TerminalPaneResumeInChatButton({
             onClick={(event) => {
               event.stopPropagation()
               if (source && readiness.ready) {
-                void runCliChatResume(source, confirm)
+                void runCliChatResume(source)
               }
             }}
           >

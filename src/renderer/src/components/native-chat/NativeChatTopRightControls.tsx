@@ -1,5 +1,4 @@
 import { useInPlaceSwitchCapability } from '@/lib/in-place-switch-support'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   useConversationSwitchBusy,
   useConversationSwitchReadiness,
@@ -38,7 +37,6 @@ export function NativeChatTopRightControls({
   )
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === session.agent)
   const inPlace = useInPlaceSwitchCapability(hostId, agent)
-  const confirm = useConfirmationDialog()
   const readiness = useConversationSwitchReadiness(
     worktreeId && hostId && agent
       ? {
@@ -75,7 +73,6 @@ export function NativeChatTopRightControls({
             onClick={() => {
               if (readiness.ready) {
                 void runNativeChatCliSwitch({
-                  confirm,
                   sessionId: session.sessionId,
                   workspaceId: worktreeId,
                   executionHostId: hostId,

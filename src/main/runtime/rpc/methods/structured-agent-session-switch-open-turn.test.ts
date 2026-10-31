@@ -23,7 +23,13 @@ import {
 } from '../../main-owned-workspace-runtime-fixture'
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
 import * as legacyImport from '../../../native-chat/agent-session-journal/journal-legacy-import'
+import * as cliWriters from '../../structured-agent-cli-writers'
 
+// A job the user left running beside the agent (`npm run dev &`): the shell is never alone.
+vi.mock('../../structured-agent-cli-writers', async (load) => ({
+  ...(await load<typeof cliWriters>()),
+  posixCliWriterShellAlone: vi.fn(async () => false)
+}))
 vi.mock('../../../native-chat/agent-session-journal/journal-legacy-import', async (load) => {
   const actual = await load<typeof legacyImport>()
   return { ...actual, prepareLegacyTranscriptImport: vi.fn(actual.prepareLegacyTranscriptImport) }
@@ -170,13 +176,9 @@ it('settles a CLI turn left open once no writer is left, after the census', asyn
   expect(turns[0]).not.toHaveProperty('outcome')
 })
 
-it.each([
-  [false, false],
-  [true, false],
-  [true, true]
-])(
-  'refuses a replying terminal agent without consent, stopping nothing (replying from the start=%s, paused with Ctrl+Z=%s)',
-  async (fromStart, paused) => {
+it.each([false, true])(
+  'stops a replying terminal agent and switches, without asking (replying from the start=%s)',
+  async (fromStart) => {
     await openCliTurn()
     const { runtime } = setupMainOwnedWorkspace()
     const incarnationId = '11111111-1111-4111-8111-111111111111'
@@ -185,16 +187,20 @@ it.each([
     if (!source.presentation) {
       throw new Error('missing captured source')
     }
-    const written = vi.fn(() => true)
-    const stopped = vi.fn(async () => true)
+    const stopped = vi.fn(async () => {
+      await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
+      return true
+    })
     runtime.setPtyController({
-      write: written,
+      write: () => true,
       kill: () => false,
       stopAndWait: stopped,
       getForegroundProcess: async () => 'codex'
     })
-    // Idle when the request arrives, replying by the time the stop would be admitted; or replying
-    // already, refused before the transcript is read.
+    vi.spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited').mockResolvedValue()
+    const sent = vi.spyOn(runtime, 'sendTerminal')
+    // Idle when the request arrives and replying by the time the stop is admitted, or replying
+    // already: either way the switch stops the reply.
     let replying = fromStart
     vi.spyOn(runtime.agentTransitions, 'latestRow').mockImplementation((paneKey) =>
       replying
@@ -208,8 +214,6 @@ it.each([
           }
         : null
     )
-    // A paused pane still reads as replying (Ctrl+Z sends no Stop hook): it is refused as paused.
-    vi.spyOn(runtime, 'terminalAgentPaused').mockResolvedValue(paused)
     const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
     const readable = prepare.getMockImplementation()!
     prepare.mockImplementation(async (...args) => {
@@ -220,8 +224,7 @@ it.each([
       {
         sessionId: id,
         execution: {
-          invocationId: 'consent-left-to-host',
-          consented: false,
+          invocationId: 'replying',
           source: {
             terminal: source.handle,
             expectedIncarnationId: incarnationId,
@@ -232,64 +235,76 @@ it.each([
       { runtime },
       'chat'
     )
-    expect(answer).toMatchObject({
-      status: 'refused',
-      refusal: {
-        code: 'agent_session_operation_invalid',
-        details: { reason: paused ? 'agentPaused' : 'turnActive' }
-      }
-    })
-    expect(written).not.toHaveBeenCalled()
-    expect(stopped).not.toHaveBeenCalled()
-    expect(prepare).toHaveBeenCalledTimes(fromStart ? 0 : 1)
+    expect(answer).toEqual({ status: 'completed', sessionId: id })
+    expect(sent).toHaveBeenCalledWith(
+      source.handle,
+      { text: '\x1b', enter: false },
+      expect.anything()
+    )
+    expect(stopped).toHaveBeenCalledOnce()
   }
 )
 
-it('reads the process table for a paused agent while the transcript is prepared, not after', async () => {
-  await openCliTurn()
-  const { runtime } = setupMainOwnedWorkspace()
-  const incarnationId = '11111111-1111-4111-8111-111111111111'
-  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
-  const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
-  if (!source.presentation) {
-    throw new Error('missing captured source')
-  }
-  runtime.setPtyController({
-    write: () => true,
-    kill: () => false,
-    stopAndWait: vi.fn(async () => false),
-    getForegroundProcess: async () => 'codex'
-  })
-  // The read answers only once preparation has begun: a read awaited first would never finish.
-  let answerRead: (paused: boolean) => void = () => {}
-  vi.spyOn(runtime, 'terminalAgentPaused').mockReturnValue(
-    new Promise((resolve) => {
-      answerRead = resolve
+// POSIX job control: Windows reads a pane's processes through its provider instead.
+it.skipIf(process.platform === 'win32')(
+  'closes the whole source terminal, background job included, and opens the chat',
+  async () => {
+    await openCliTurn()
+    const { runtime, session } = setupMainOwnedWorkspace()
+    const incarnationId = '11111111-1111-4111-8111-111111111111'
+    runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+    const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
+    if (!source.presentation) {
+      throw new Error('missing captured source')
+    }
+    // The terminal's stop ends its process tree, the job with the agent, as closing the tab does.
+    const stopped = vi.fn(async (_ptyId: string) => {
+      await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
+      return true
     })
-  )
-  const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
-  const readable = prepare.getMockImplementation()!
-  prepare.mockImplementation(async (...args) => {
-    answerRead(true)
-    return readable(...args)
-  })
-  const answer = await executeStructuredSessionSwitch(
-    {
-      sessionId: id,
-      execution: {
-        invocationId: 'paused-read-overlaps',
-        source: {
-          terminal: source.handle,
-          expectedIncarnationId: incarnationId,
-          originalPresentation: source.presentation
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: stopped,
+      getForegroundProcess: async () => 'codex',
+      listProcesses: async () => [
+        {
+          id: PTY_A,
+          incarnationId,
+          rootProcessId: 10,
+          cwd: rig.root,
+          title: 'codex',
+          worktreeId: WORKTREE_ID
         }
-      }
-    },
-    { runtime },
-    'chat'
-  )
-  expect(answer).toMatchObject({
-    status: 'refused',
-    refusal: { details: { reason: 'agentPaused' } }
-  })
-})
+      ]
+    })
+    // The real writer census: while the terminal runs, its job holds the conversation; the switch
+    // ends the terminal first, so nothing is left to refuse it.
+    const paneSource = { workspaceId: WORKTREE_ID, paneKey: `${TAB_ID}:${LEAF_A}` }
+    const nativeId = rig.store.getRecord(id)!.providerHandleChain.at(-1)!.handle.nativeId
+    await expect(
+      runtime.assertStructuredAdoptionTerminalWritersExited('codex', nativeId, paneSource)
+    ).rejects.toMatchObject({ refusal: { details: { reason: 'conversationHeldElsewhere' } } })
+    expect(cliWriters.posixCliWriterShellAlone).toHaveBeenCalledWith(10)
+    const answer = await executeStructuredSessionSwitch(
+      {
+        sessionId: id,
+        execution: {
+          invocationId: 'background-job',
+          source: {
+            terminal: source.handle,
+            expectedIncarnationId: incarnationId,
+            originalPresentation: source.presentation
+          }
+        }
+      },
+      { runtime },
+      'chat'
+    )
+    expect(answer).toEqual({ status: 'completed', sessionId: id })
+    expect(stopped).toHaveBeenCalledExactlyOnceWith(PTY_A, expect.anything())
+    expect(session().tabsByWorktree[WORKTREE_ID]?.some((tab) => tab.id === TAB_ID)).toBe(false)
+    expect(rig.store.getRecord(id)?.location.workspaceId).toBe(WORKTREE_ID)
+    expect(cliWriters.posixCliWriterShellAlone).toHaveBeenCalledOnce()
+  }
+)

@@ -3,7 +3,6 @@ import {
   terminalLaunchFacts,
   type TerminalLaunchResult
 } from '../../../shared/agent-session-resume'
-import { withEvidenceBudget } from '../../../shared/process-table-snapshot-reader'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/workspace-process-listing'
@@ -13,7 +12,6 @@ import { inspectPtyProviderProcess } from '../../providers/pty-process-inspectio
 import { inspectionShowsShellAlone } from '../run-terminal-shell-alone'
 import {
   assertCliConversationWritersExited,
-  posixAgentPausedBelow,
   posixCliWriterShellAlone,
   type CliWriterPane,
   type CliWriterTerminal
@@ -146,25 +144,6 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
       return
     }
     await this.assertStructuredAdoptionTerminalWritersExited(record.provider, key.id)
-  }
-
-  /** Whether job control paused an agent in this pane (Ctrl+Z); Windows terminals have no such stop. */
-  async terminalAgentPaused(ptyId: string): Promise<boolean> {
-    if (process.platform === 'win32') {
-      return false
-    }
-    // Bounded like other process evidence, so a loaded machine doesn't hold every switch for it.
-    const read = async (): Promise<boolean> => {
-      const processes = await this.ptyController?.listProcesses?.(LOCAL_EXECUTION_HOST_ID)
-      const rootPid = processes?.find((candidate) => candidate.id === ptyId)?.rootProcessId
-      return !!rootPid && (await posixAgentPausedBelow(rootPid))
-    }
-    try {
-      return await withEvidenceBudget(read())
-    } catch {
-      // An unreadable or late process table proves nothing paused; the stop's own proof still applies.
-      return false
-    }
   }
 
   async assertStructuredAdoptionTerminalWritersExited(

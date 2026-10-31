@@ -1,7 +1,4 @@
 import { adoptingAgentOnHost } from '@/components/right-sidebar/ai-vault-session-resume-in-chat-launch'
-import { translate } from '@/i18n/i18n'
-import { agentLabel } from '../../../shared/ai-vault-session-filters'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { adoptsCliConversations } from '../../../shared/structured-agent-cli-conversation-adoption'
 import { toHostSessionPaneKey } from '../../../shared/terminal-surface-id'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -17,7 +14,6 @@ import {
   callStructuredAgentSession,
   supportsInPlaceSwitch
 } from '@/runtime/structured-agent-session-client'
-import { supportsSwitchConsent } from '@/runtime/structured-agent-session-switch-consent'
 import { createStructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
 import { createBrowserUuid } from './browser-uuid'
 import { captureSourceTerminal } from '@/components/tab-bar/cli-chat-resume-terminal-capture'
@@ -44,17 +40,13 @@ import {
   keyFor,
   pendingNow,
   rederiveConversationSwitch,
-  conversationSwitchReplying,
   withConversationSwitchPlatform
 } from './conversation-switch-state'
 
 export { conversationSwitchFailureText } from './conversation-switch-feedback'
 
-export async function runCliChatResume(
-  source: CliChatResumeSource,
-  confirm?: ConfirmationDialogContextValue
-): Promise<void> {
-  await runConversationSwitch({ direction: 'chat', ...source, source, confirm })
+export async function runCliChatResume(source: CliChatResumeSource): Promise<void> {
+  await runConversationSwitch({ direction: 'chat', ...source, source })
 }
 export function runNativeChatCliSwitch(
   args: Omit<ConversationSwitch, 'direction'> & { onComplete?: () => void }
@@ -65,9 +57,9 @@ export function runNativeChatCliSwitch(
 }
 
 /**
- * Consent, one RPC, one settle. The host stops the agent, prepares the other view at rest and
- * replaces the tab in one layout write; here the source tab only shows the pending state. Every
- * exit is visible: the tab is replaced, or it stays as it was with one message.
+ * One RPC, one settle. The host stops the agent (even mid-reply, without asking), prepares the
+ * other view at rest and replaces the tab in one layout write; here the source tab only shows the
+ * pending state. Every exit is visible: the tab is replaced, or it stays as it was with one message.
  */
 export async function runConversationSwitch(args: ConversationSwitch): Promise<boolean> {
   if (pendingNow(args)) {
@@ -89,93 +81,44 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
     executionHostId: args.executionHostId
   })
   conversationSwitchChanged()
-  let consented = false
+  let attempted = false
   let sent = false
-  let disposeDeadline: (() => void) | undefined
   let request: Awaited<ReturnType<typeof switchRequest>> | undefined
+  const deadline = agentSessionSwitchDeadline(Date.now, AGENT_SESSION_SWITCH_CLIENT_MS)
   try {
-    const supported = await withinSwitchBudget(supportsInPlaceSwitch(target, args.agent, true))
+    const supported = await deadline.wait(supportsInPlaceSwitch(target, args.agent, true))
     // The chat's surfaces offer the copy where the host can't switch; a click that raced the
     // host's answer stops nothing and says so.
     if (!supported && args.direction === 'terminal') {
       feedback(conversationSwitchUnsupportedText(args.agent), 'error')
       return false
     }
-    const confirmStop = async (): Promise<boolean> =>
-      (await args.confirm?.({
-        title: translate(
-          'components.tab.bar.switch.stopAndSwitchTitle',
-          '{{agent}} is replying. Stop it and switch?',
-          { agent: agentLabel(args.agent) }
-        ),
-        confirmLabel: translate('components.tab.bar.switch.stopAndSwitch', 'Stop and switch'),
-        cancelLabel: translate('common.cancel', 'Cancel'),
-        compact: true,
-        ignoresOpeningGesture: true
-      })) === true
-    // A host that decides consent refuses a replying agent itself; this client's copy of the
-    // agent's status is never permission to stop it, nor a reason to ask.
-    const hostConsents = supported && (await withinSwitchBudget(supportsSwitchConsent(target)))
-    if (!hostConsents && conversationSwitchReplying(args) && !(await confirmStop())) {
-      return false
-    }
-    consented = true
+    attempted = true
     // An agent or host without the in-place switch keeps the earlier chat resume.
     if (!supported) {
       await runLegacyConversationSwitch(args, target)
       return false
     }
-    let consent = hostConsents ? false : undefined
-    let answer: AgentSessionSwitchResult
-    for (;;) {
-      // Time spent answering the consent dialog is not the switch's budget.
-      const deadline = agentSessionSwitchDeadline(Date.now, AGENT_SESSION_SWITCH_CLIENT_MS)
-      disposeDeadline = deadline.dispose
-      request ??= await switchRequest(args, hostId, deadline)
-      answer = await deadline.wait(
-        callStructuredAgentSession<AgentSessionSwitchResult>(
-          target,
-          args.direction === 'chat' ? 'agentSession.switchToChat' : 'agentSession.switchToTerminal',
-          {
-            sessionId: request.sessionId,
-            execution: {
-              ...request.execution,
-              ...(consent === undefined ? {} : { consented: consent })
-            }
-          },
-          {
-            signal: deadline.signal,
-            dispatchObservation: deadline.delegateSend,
-            onSent: (sentAt) => {
-              deadline.beforeSend(sentAt)
-              sent = true
-            }
+    request = await switchRequest(args, hostId, deadline)
+    // Never `consented`: a host that asked before stopping a reply refuses only on `false`.
+    const answer = await deadline.wait(
+      callStructuredAgentSession<AgentSessionSwitchResult>(
+        target,
+        args.direction === 'chat' ? 'agentSession.switchToChat' : 'agentSession.switchToTerminal',
+        { sessionId: request.sessionId, execution: request.execution },
+        {
+          signal: deadline.signal,
+          dispatchObservation: deadline.delegateSend,
+          onSent: (sentAt) => {
+            deadline.beforeSend(sentAt)
+            sent = true
           }
-        )
+        }
       )
-      deadline.dispose()
-      const needsConsent =
-        consent === false &&
-        answer.status === 'refused' &&
-        answer.refusal.details?.reason === 'turnActive'
-      if (!needsConsent) {
-        break
-      }
-      // The host stopped nothing. A yes is a new switch under its own invocation, never a replay.
-      if (!(await confirmStop())) {
-        request.abandonFocus?.()
-        return false
-      }
-      consent = true
-      sent = false
-      request = {
-        ...request,
-        execution: { ...request.execution, invocationId: createBrowserUuid() }
-      }
-    }
+    )
     if (answer.status !== 'completed') {
       if (answer.status === 'refused') {
-        request?.abandonFocus?.()
+        request.abandonFocus?.()
       }
       feedback(
         conversationSwitchFailureText(new AgentSessionRefusalError(answer.refusal), args),
@@ -200,26 +143,16 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
     )
     return false
   } finally {
-    disposeDeadline?.()
+    deadline.dispose()
     pending.delete(key)
     conversationSwitchChanged()
-    if (consented) {
+    if (attempted) {
       rederiveConversationSwitch(args)
     }
   }
 }
 
-/** The capability read before consent gets the same budget as the switch, but its own clock. */
-async function withinSwitchBudget<T>(work: Promise<T>): Promise<T> {
-  const budget = agentSessionSwitchDeadline(Date.now, AGENT_SESSION_SWITCH_CLIENT_MS)
-  try {
-    return await budget.wait(work)
-  } finally {
-    budget.dispose()
-  }
-}
-
-/** The host call's identity and execution facts, captured after consent. */
+/** The host call's identity and execution facts. */
 async function switchRequest(
   args: ConversationSwitch,
   hostId: ExecutionHostId,

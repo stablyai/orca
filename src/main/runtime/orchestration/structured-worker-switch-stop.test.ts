@@ -128,23 +128,7 @@ it.each([false, true])(
   }
 )
 
-it('refuses a replying chat, stopping nothing, when the client left consent to the host', async () => {
-  await foundRestTestChat(rig)
-  providerEvents().appendItem(
-    { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'turn', ordinal: 50 },
-    { kind: 'turn', turnId: 'turn', state: 'running' },
-    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-  )
-  await rig.host.flushStreamedEvents(id)
-  const cancel = vi.spyOn(rig.host, 'cancel')
-  await expect(rig.host.stopForSwitch(id, caller, deadline, false)).rejects.toMatchObject({
-    refusal: { details: { reason: 'turnActive' } }
-  })
-  expect(cancel).not.toHaveBeenCalled()
-  expect(rig.adapter.closeSession).not.toHaveBeenCalled()
-})
-
-it('stops a paused queue without asking, since nothing is replying', async () => {
+it('sends a paused queue the Stop that fences its sends, though nothing is replying', async () => {
   await foundRestTestChat(rig)
   const events = providerEvents()
   for (const state of ['running', 'completed'] as const) {
@@ -178,6 +162,6 @@ it('stops a paused queue without asking, since nothing is replying', async () =>
     cursor: journal.cursor(),
     value: { cancelled: true }
   })
-  await rig.host.stopForSwitch(id, caller, deadline, false)
+  await rig.host.stopForSwitch(id, caller, deadline)
   expect(cancel).toHaveBeenCalledTimes(1)
 })

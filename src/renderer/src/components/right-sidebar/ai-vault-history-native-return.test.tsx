@@ -203,8 +203,3 @@ it.each(['local', 'runtime:paired'] as const)(
     )
   }
 )
-
-vi.mock('@/components/confirmation-dialog-context', async (original) => ({
-  ...(await original<Record<string, unknown>>()),
-  useConfirmationDialog: () => vi.fn(async () => false)
-}))

@@ -1,4 +1,3 @@
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { useConversationSwitchReadiness, runCliChatResume } from '@/lib/conversation-surface-switch'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -17,7 +16,6 @@ export function CliChatResumeMenuItems({
   onComplete?: () => void
 }): React.JSX.Element | null {
   const source = useAppStore(useShallow((state) => resolveCliChatResumeSource(state, { tab })))
-  const confirm = useConfirmationDialog()
   const capability = useCliChatResumeCapability(tab.worktreeId, source?.agent)
   const readiness = useConversationSwitchReadiness(
     source ? { direction: 'chat', ...source, source } : null
@@ -38,7 +36,7 @@ export function CliChatResumeMenuItems({
         chatPending={readiness.pending}
         onResumeInNewChat={(event) => {
           event.preventDefault()
-          void runCliChatResume(source, confirm).finally(() => onComplete?.())
+          void runCliChatResume(source).finally(() => onComplete?.())
         }}
       />
     </>
