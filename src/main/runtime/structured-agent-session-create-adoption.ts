@@ -149,7 +149,10 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
     }
     const adoption = await resolveStructuredAgentSessionAdoption({
       providerSessionId: input.providerSessionId,
-      ...(source?.kind === 'absent' ? { exhaustionReason: 'transcriptUnreadable' as const } : {}),
+      // A source that proves the CLI saved this conversation never reads as "not saved yet".
+      ...(source?.kind === 'absent' || (source?.kind === 'matched' && source.conversed)
+        ? { exhaustionReason: 'transcriptUnreadable' as const }
+        : {}),
       candidateAccountHomes: admitted ? [admitted.accountHome] : candidates,
       resolveTranscript: async (args) => {
         const exact = admitted?.path

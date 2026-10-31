@@ -161,7 +161,7 @@ async function switchToChat(
           ctx.runtime,
           sessionId,
           recordWorkspace(host, sessionId),
-          false
+          nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved'
         )
       : undefined
   const before = adopt?.transcriptPath
