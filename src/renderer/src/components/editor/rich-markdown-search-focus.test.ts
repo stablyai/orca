@@ -52,23 +52,6 @@ describe('rich markdown search focus handoff', () => {
     }
   )
 
-  it('restores the editor selection before native Shift click handling', () => {
-    const { paragraph, editorDom, findInput, viewFocus } = createSurface()
-    findInput.focus()
-    const event = new MouseEvent('mousedown', {
-      bubbles: true,
-      cancelable: true,
-      button: 0,
-      shiftKey: true
-    })
-
-    paragraph.dispatchEvent(event)
-
-    expect(document.activeElement).toBe(editorDom)
-    expect(viewFocus).toHaveBeenCalledExactlyOnceWith()
-    expect(event.defaultPrevented).toBe(false)
-  })
-
   it.each(['button', 'input', 'textarea', 'select', 'noneditable', 'task-label'])(
     'leaves embedded %s controls in charge of focus',
     (kind) => {

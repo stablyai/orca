@@ -2,7 +2,7 @@
 import { Editor, Node, type AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { TableKit } from '@tiptap/extension-table'
-import { Plugin, TextSelection } from '@tiptap/pm/state'
+import { Plugin, TextSelection, Selection } from '@tiptap/pm/state'
 import {
   DragSelectionGuard,
   completeRichMarkdownSelection,
@@ -14,6 +14,8 @@ import { focusRichMarkdownEditorFromSearch } from './rich-markdown-search-focus'
 import { createElement } from 'react'
 import { fireEvent, render } from '@testing-library/react'
 import { RichMarkdownToolbar } from './RichMarkdownToolbar'
+import { createRichMarkdownExtensions } from './rich-markdown-extensions'
+import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { installHappyDomSelectionNotificationTasks } from '../../../../../config/scripts/vitest-dom-setup'
 
 function findTextPosition(editor: Editor, text: string): number {
@@ -31,12 +33,17 @@ function findTextPosition(editor: Editor, text: string): number {
   return position
 }
 
-function createSurface(content: string, extensions: AnyExtension[] = []) {
+function createSurface(content: string, extensions: AnyExtension[] = [], production = false) {
   const root = document.createElement('div')
   root.className = 'rich-markdown-editor-shell'
   document.body.append(root)
   const editor = new Editor({
-    extensions: [StarterKit, TableKit, DragSelectionGuard, ...extensions],
+    extensions: [
+      ...(production
+        ? createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() })
+        : [StarterKit, TableKit, DragSelectionGuard]),
+      ...extensions
+    ],
     content,
     editorProps: {
       handleDOMEvents: {
@@ -78,7 +85,7 @@ describe('Find focus with editor-owned selection', () => {
     for (const scale of [1, 10]) {
       const paragraphs = 20 * scale
       const surfaces = Array.from({ length: 3 * scale }, () =>
-        createSurface('<p>lower caret</p>'.repeat(paragraphs))
+        createSurface('<p>lower caret</p>'.repeat(paragraphs), [], true)
       )
       const activeSurface = surfaces.at(-1)
       if (!activeSurface) {
@@ -91,13 +98,14 @@ describe('Find focus with editor-owned selection', () => {
       }
       active.view.focus()
       active.commands.setTextSelection(active.view.posAtDOM(text, 2))
+      vi.advanceTimersByTime(400)
       const reads = surfaces.map(() => 0)
       const publications = vi.fn()
       active.on('selectionUpdate', publications)
       const measuredViews = surfaces.map(({ editor }, owner) => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Count real sibling reads on the pinned engine's root view description, without replacing its mapping logic.
         const view = editor.view as Editor['view'] & {
-          docView: { children: unknown[] }
+          docView: { children: unknown[]; posFromDOM: typeof editor.view.posAtDOM }
           domObserver: { flushSoon(): void }
         }
         const children = view.docView.children
@@ -120,16 +128,57 @@ describe('Find focus with editor-owned selection', () => {
         })
         return {
           restore: () => Object.defineProperties(children, descriptors),
-          flushSoon: () => view.domObserver.flushSoon()
+          flushSoon: () => view.domObserver.flushSoon(),
+          nativeMappings: vi.spyOn(view.docView, 'posFromDOM')
         }
       })
-      const filters = surfaces.map(({ editor }) => {
-        const filter = vi.fn(() => true)
-        editor.registerPlugin(new Plugin({ filterTransaction: filter }))
-        return filter
-      })
-      const dispatches = surfaces.map(({ editor }) => vi.spyOn(editor.view, 'dispatch'))
+      const operations = surfaces.map(({ editor }) => ({
+        filters: editor.state.plugins.flatMap((plugin) =>
+          plugin.spec.filterTransaction ? [vi.spyOn(plugin.spec, 'filterTransaction')] : []
+        ),
+        appenders: editor.state.plugins.flatMap((plugin) =>
+          plugin.spec.appendTransaction ? [vi.spyOn(plugin.spec, 'appendTransaction')] : []
+        ),
+        structured: editor.state.plugins.flatMap((plugin) =>
+          plugin.props.createSelectionBetween
+            ? [vi.spyOn(plugin.props, 'createSelectionBetween')]
+            : []
+        ),
+        dispatch: vi.spyOn(editor.view, 'dispatch'),
+        scroll: vi.spyOn(editor.view, 'scrollToSelection')
+      }))
+      // between counts parser/fallback factories; near counts the separate comparator, not all allocations.
       const constructors = vi.spyOn(TextSelection, 'between')
+      const comparators = vi.spyOn(Selection, 'near')
+      const clearWork = () => {
+        constructors.mockClear()
+        comparators.mockClear()
+        operations.forEach(({ filters, appenders, structured, dispatch, scroll }) => {
+          ;[...filters, ...appenders, ...structured, dispatch, scroll].forEach((spy) =>
+            spy.mockClear()
+          )
+        })
+        measuredViews.forEach(({ nativeMappings }) => nativeMappings.mockClear())
+      }
+      const expectWork = (
+        parses: number,
+        near: number,
+        dispatches: number,
+        scrolls: number,
+        endpoints: number
+      ) => {
+        expect(constructors).toHaveBeenCalledTimes(parses)
+        expect(comparators).toHaveBeenCalledTimes(near)
+        operations.forEach(({ filters, appenders, structured, dispatch, scroll }, index) => {
+          const owner = index === operations.length - 1
+          expect(dispatch).toHaveBeenCalledTimes(owner ? dispatches : 0)
+          expect(scroll).toHaveBeenCalledTimes(owner ? scrolls : 0)
+          filters.forEach((spy) => expect(spy).toHaveBeenCalledTimes(owner ? dispatches : 0))
+          appenders.forEach((spy) => expect(spy).toHaveBeenCalledTimes(owner ? dispatches : 0))
+          structured.forEach((spy) => expect(spy).toHaveBeenCalledTimes(owner ? parses - near : 0))
+          expect(measuredViews[index].nativeMappings).toHaveBeenCalledTimes(owner ? endpoints : 0)
+        })
+      }
       const mappings = surfaces.map(({ editor }) => vi.spyOn(editor.view, 'posAtDOM'))
       const native = document.getSelection()
       if (!native) {
@@ -145,6 +194,9 @@ describe('Find focus with editor-owned selection', () => {
       const notifications = vi.fn()
       document.addEventListener('selectionchange', notifications)
       try {
+        expect(operations.at(-1)?.appenders.length).toBeGreaterThan(0)
+        expect(operations.at(-1)?.structured.length).toBeGreaterThan(0)
+        clearWork()
         fireEvent.keyDown(active.view.dom, { key: 'Shift' })
         document.dispatchEvent(new Event('selectionchange'))
         vi.runAllTimers()
@@ -159,6 +211,7 @@ describe('Find focus with editor-owned selection', () => {
         expect(activeReads).toBeGreaterThanOrEqual(paragraphs)
         expect(activeReads).toBeLessThanOrEqual(20 * paragraphs)
         samples.push(activeReads)
+        expectWork(1, 0, 0, 0, 3)
 
         for (const [step, boundary] of ['key', 'pending-flush', 'release'].entries()) {
           if (boundary === 'release') {
@@ -178,6 +231,7 @@ describe('Find focus with editor-owned selection', () => {
           publications.mockClear()
           notifications.mockClear()
           reads.fill(0)
+          clearWork()
           if (boundary !== 'key') {
             const measuredActive = measuredViews.at(-1)
             if (!measuredActive) {
@@ -213,6 +267,14 @@ describe('Find focus with editor-owned selection', () => {
             throw new Error('Expected settled owner mapping count')
           }
           expect(settledReads).toBeLessThanOrEqual(30 * paragraphs)
+          // A pending nonheld observe parses once, then consume confirms it; release stays held until consume.
+          expectWork(
+            boundary === 'pending-flush' ? 2 : 1,
+            0,
+            1,
+            boundary === 'release' ? 0 : 1,
+            boundary === 'pending-flush' ? 8 : 4
+          )
         }
 
         // Observation is a separate phase: genuine held motion maps/publishes/writes nothing.
@@ -226,21 +288,13 @@ describe('Find focus with editor-owned selection', () => {
         nativeWrites.forEach((write) => write.mockClear())
         publications.mockClear()
         reads.fill(0)
-        constructors.mockClear()
-        filters.forEach((filter) => filter.mockClear())
-        dispatches.forEach((dispatch) => dispatch.mockClear())
+        clearWork()
         document.dispatchEvent(new Event('selectionchange'))
         expect(publications).not.toHaveBeenCalled()
         expect(restorations).not.toHaveBeenCalled()
         expect(nativeWrites.map((write) => write.mock.calls.length)).toEqual([0, 0, 0, 0])
         expect(reads).toEqual(Array(surfaces.length).fill(0))
-        expect(constructors).not.toHaveBeenCalled()
-        expect(filters.map((filter) => filter.mock.calls.length)).toEqual(
-          Array(surfaces.length).fill(0)
-        )
-        expect(dispatches.map((dispatch) => dispatch.mock.calls.length)).toEqual(
-          Array(surfaces.length).fill(0)
-        )
+        expectWork(0, 0, 0, 0, 0)
         vi.advanceTimersByTime(400)
         activeSurface.input.focus()
         const accepted = active.state.selection
@@ -254,20 +308,13 @@ describe('Find focus with editor-owned selection', () => {
         nativeWrites.forEach((write) => write.mockClear())
         publications.mockClear()
         reads.fill(0)
-        constructors.mockClear()
-        filters.forEach((filter) => filter.mockClear())
-        dispatches.forEach((dispatch) => dispatch.mockClear())
+        clearWork()
         document.dispatchEvent(new Event('selectionchange'))
-        // Recovery has its own declared bound: exactly one model projection, zero publications.
+        // Declared recovery: native-only parse1/near1/projection1/scroll1; terminal rich confirmation adds1 parse.
         expect(restorations).toHaveBeenCalledOnce()
-        expect(constructors).toHaveBeenCalledOnce()
+        expectWork(1, 1, 0, 1, 1)
         expect(publications).not.toHaveBeenCalled()
-        expect(filters.map((filter) => filter.mock.calls.length)).toEqual(
-          Array(surfaces.length).fill(0)
-        )
-        expect(dispatches.map((dispatch) => dispatch.mock.calls.length)).toEqual(
-          Array(surfaces.length).fill(0)
-        )
+
         expect(active.state.selection.eq(accepted)).toBe(true)
         vi.advanceTimersByTime(845)
         fireEvent.mouseUp(document, { button: 0 })
@@ -277,18 +324,20 @@ describe('Find focus with editor-owned selection', () => {
         expect(nativeWrites.map((write) => write.mock.calls.length)).toEqual([0, 0, 0, 0])
         expect(reads.slice(0, -1)).toEqual(Array(surfaces.length - 1).fill(0))
         expect(reads.at(-1)).toBeLessThanOrEqual(40 * paragraphs)
-        expect(filters.map((filter) => filter.mock.calls.length)).toEqual(
-          Array(surfaces.length).fill(0)
-        )
-        expect(dispatches.map((dispatch) => dispatch.mock.calls.length)).toEqual(
-          Array(surfaces.length).fill(0)
-        )
+        expectWork(2, 1, 0, 1, 5)
       } finally {
         document.removeEventListener('selectionchange', notifications)
         measuredViews.forEach(({ restore }) => restore())
         surfaces.forEach(({ editor }) => editor.destroy())
         restorations.mockRestore()
         nativeWrites.forEach((write) => write.mockRestore())
+        constructors.mockRestore()
+        comparators.mockRestore()
+        operations.forEach(({ filters, appenders, structured, dispatch, scroll }) => {
+          ;[...filters, ...appenders, ...structured, dispatch, scroll].forEach((spy) =>
+            spy.mockRestore()
+          )
+        })
       }
       await Promise.resolve()
       const counts = mappings.map((mapping) => mapping.mock.calls.length)
@@ -566,15 +615,22 @@ describe('Find focus with editor-owned selection', () => {
       const updates = vi.fn()
       editor.on('update', updates)
       try {
-        editor.commands.setTextSelection(caret)
-        ;(field === 'find' ? input : replace).focus()
-        document.getSelection()?.removeAllRanges()
         const paragraph = editor.view.dom.querySelector('p:last-child')
         const text = paragraph?.firstChild
         if (!paragraph || !text) {
           throw new Error('Expected lower paragraph text')
         }
         vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: caret, inside: -1 })
+        editor.view.focus()
+        fireEvent.mouseDown(paragraph, { button: 0, buttons: 1, shiftKey: true })
+        document.getSelection()?.setBaseAndExtent(text, 1, text, 4)
+        document.dispatchEvent(new Event('selectionchange'))
+        ;(field === 'find' ? input : replace).focus()
+        // Deliberate navigation owns M while Find still presents the older outgoing R.
+        editor.commands.setTextSelection(caret)
+        document.getSelection()?.setBaseAndExtent(text, 1, text, 4)
+        const publications = vi.fn()
+        editor.on('selectionUpdate', publications)
         const beforePointer = vi.fn(() => ({
           focused: document.activeElement === editor.view.dom,
           anchor: document.getSelection()?.anchorNode,
@@ -592,6 +648,7 @@ describe('Find focus with editor-owned selection', () => {
             }
           })
         )
+        vi.advanceTimersByTime(600)
         const originalDoc = editor.state.doc
         const selection = editor.state.selection
         const event = new MouseEvent('mousedown', {
@@ -615,6 +672,19 @@ describe('Find focus with editor-owned selection', () => {
         expect(editor.state.selection).toBe(selection)
         expect(editor.state.doc).toBe(originalDoc)
         expect(updates).not.toHaveBeenCalled()
+        expect(publications).not.toHaveBeenCalled()
+        const data = new DataTransfer()
+        fireEvent(
+          editor.view.dom,
+          new ClipboardEvent('copy', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: data
+          })
+        )
+        expect(data.getData('text/plain')).toBe('')
+        editor.commands.insertContent('x')
+        expect(editor.view.dom.querySelector('p:last-child')?.textContent).toBe('lower xcaret')
       } finally {
         editor.destroy()
       }

@@ -13,11 +13,11 @@ function selectionView(view: EditorView): SelectionView {
 }
 
 /** Publish native input before an editor action consumes it or outgoing focus discards its endpoints. */
-export function completeRichMarkdownSelection(editorView: EditorView): false {
+export function completeRichMarkdownSelection(editorView: EditorView, event?: Event): false {
   if (editorView.isDestroyed || !editorView.dom.isConnected || editorView.composing) {
     return false
   }
-  editorView.completeNativeSelection(!editorView.hasFocus())
+  editorView.completeNativeSelection(event?.type === 'blur')
   return false
 }
 

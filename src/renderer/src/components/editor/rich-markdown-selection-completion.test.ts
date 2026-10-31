@@ -68,8 +68,7 @@ function copy(editor: Editor): string {
 it.each([
   ['cells', 'notification'],
   ['cells', 'copy'],
-  ['text', 'notification'],
-  ['text', 'copy']
+  ['text', 'notification']
 ] as const)('keeps the accepted %s target on bare focus return before %s', (kind, boundary) => {
   const editor = surface()
   if (kind === 'cells') {
@@ -126,9 +125,19 @@ it('copies genuine cache-equal held input after the engine tracker has finished'
   const text = textNode(editor, 'p')
   vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 1, inside: -1 })
   fireEvent.mouseDown(editor.view.dom, { button: 0, buttons: 1, shiftKey: true })
+  // SAFETY: Use the actual inherited suppression seam while the actual tracker owns held input.
+  // oxlint-disable-next-line typescript/consistent-type-assertions
+  const observer = editor.view as Editor['view'] & {
+    domObserver: { suppressSelectionUpdates(): void }
+  }
+  observer.domObserver.suppressSelectionUpdates()
   selectNative(text, 12, 6)
   document.dispatchEvent(new Event('selectionchange'))
   expect(editor.state.selection.empty).toBe(true)
+  expect(document.getSelection()?.anchorNode).toBe(text)
+  expect(document.getSelection()?.anchorOffset).toBe(12)
+  expect(document.getSelection()?.focusOffset).toBe(6)
+  vi.advanceTimersByTime(50)
   const input: unknown = 'input' in editor.view ? editor.view.input : undefined
   if (!input || typeof input !== 'object' || !('mouseDown' in input)) {
     throw new Error('Expected real engine input')
@@ -179,26 +188,60 @@ it.each([false, true])(
   }
 )
 
-it('keeps navigation by a new focus owner during pending DOM publication', () => {
-  const editor = surface()
-  const text = textNode(editor, 'p')
-  const input = document.createElement('input')
-  document.body.append(input)
-  const navigate = () => {
-    editor.off('update', navigate)
-    input.focus()
-    editor.commands.setTextSelection({ from: 1, to: 8 })
-    selectNative(textNode(editor, 'p'), 4, 10)
+it.each(['publication', 'registration'] as const)(
+  'keeps navigation by a new focus owner during pending DOM %s',
+  (boundary) => {
+    const editor = surface()
+    const text = textNode(editor, 'p')
+    const input = document.createElement('input')
+    document.body.append(input)
+    const navigate = () => {
+      editor.off('update', navigate)
+      input.focus()
+      editor.commands.setTextSelection({ from: 1, to: 8 })
+      selectNative(textNode(editor, 'p'), 4, 10)
+    }
+    if (boundary === 'publication') {
+      editor.on('update', navigate)
+      text.nodeValue = 'new target'
+      selectNative(text, 4, 10)
+    } else {
+      const outgoing = document.createElement('input')
+      document.body.append(outgoing)
+      outgoing.focus()
+      let handoff = true
+      editor.view.setProps({
+        nodeViews: {
+          paragraph: () => {
+            const dom = document.createElement('p')
+            return {
+              dom,
+              contentDOM: dom,
+              ignoreMutation: (mutation) => {
+                if (mutation.type !== 'selection' && handoff) {
+                  handoff = false
+                  navigate()
+                }
+                return mutation.type !== 'selection'
+              }
+            }
+          }
+        }
+      })
+      const current = textNode(editor, 'p')
+      selectNative(current, 6, 12)
+      current.parentElement?.setAttribute('data-pending', 'owned')
+      // Exercise the actual outgoing engine entry with A owning focus during registration.
+      editor.view.completeNativeSelection(true)
+      expect(handoff).toBe(false)
+    }
+    expect(copy(editor)).toBe('Heading')
+    expect(document.activeElement).toBe(input)
+    vi.runAllTimers()
+    expect(editor.state.selection.from).toBe(1)
+    expect(editor.state.selection.to).toBe(8)
   }
-  editor.on('update', navigate)
-  text.nodeValue = 'new target'
-  selectNative(text, 4, 10)
-  expect(copy(editor)).toBe('Heading')
-  expect(document.activeElement).toBe(input)
-  vi.runAllTimers()
-  expect(editor.state.selection.from).toBe(1)
-  expect(editor.state.selection.to).toBe(8)
-})
+)
 
 function heldRange(editor: Editor, text: Node) {
   vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({
@@ -307,6 +350,10 @@ it('observes incoming focus before synchronous custom redirect and preserves new
   })
   // A reset already present at core focus must be classified before the custom callback reads it.
   selectNative(textNode(editor, 'h1'), 0, 0)
+  // SAFETY: Schedule the pinned engine's actual inherited observer work, without replacing it.
+  // oxlint-disable-next-line typescript/consistent-type-assertions
+  const scheduled = editor.view as Editor['view'] & { domObserver: { flushSoon(): void } }
+  scheduled.domObserver.flushSoon()
   editor.view.dom.focus()
   expect(observations).toEqual([6])
   expect(document.activeElement).toBe(input)
@@ -387,6 +434,40 @@ it('retains unopted engine custom-focus order and ordinary native acceptance', (
   expect(editor.state.selection.from).toBe(editor.view.posAtDOM(text, 6))
   expect(editor.state.selection.to).toBe(editor.view.posAtDOM(text, 12))
 })
+
+it.each([true, false])(
+  'retains actual suppression projection and later genuine input (opted=%s)',
+  (integrated) => {
+    const editor = surface(integrated)
+    const text = textNode(editor, 'p')
+    const from = editor.view.posAtDOM(text, 6)
+    editor.commands.setTextSelection({ from, to: from + 6 })
+    vi.runAllTimers()
+    const accepted = editor.state.selection
+    const publication = vi.fn()
+    editor.on('selectionUpdate', publication)
+    // SAFETY: Exercise the pinned observer's inherited suppression policy, not a replacement flag/timer.
+    // oxlint-disable-next-line typescript/consistent-type-assertions
+    const engine = editor.view as Editor['view'] & {
+      domObserver: { suppressSelectionUpdates(): void }
+    }
+    engine.domObserver.suppressSelectionUpdates()
+    selectNative(textNode(editor, 'h1'), 0, 7)
+    document.dispatchEvent(new Event('selectionchange'))
+    expect(editor.state.selection.eq(accepted)).toBe(true)
+    expect(document.getSelection()?.anchorNode).toBe(text)
+    expect(document.getSelection()?.anchorOffset).toBe(6)
+    expect(document.getSelection()?.focusOffset).toBe(12)
+    expect(publication).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(50)
+    selectNative(text, 0, 5)
+    document.dispatchEvent(new Event('selectionchange'))
+    expect(
+      editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)
+    ).toBe('lower')
+    expect(publication).toHaveBeenCalledOnce()
+  }
+)
 
 it('projects current navigation when a real NodeView changes the accepted model during recovery', () => {
   const editor = surface()

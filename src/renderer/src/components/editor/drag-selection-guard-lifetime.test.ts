@@ -85,11 +85,14 @@ describe('drag selection guard listener lifetime', () => {
     expect([...terminalListeners.values()].map((listeners) => listeners.size)).toEqual([0, 0])
     expect(view.isDestroyed).toBe(true)
     expect(view.state.doc).toBe(doc)
-    expect(selectionListeners.size).toBe(1)
+    expect(selectionListeners.size).toBe(0)
+    const dispatch = vi.spyOn(view, 'dispatch')
+    document.dispatchEvent(new Event('selectionchange'))
 
     await Promise.resolve()
 
     expect(selectionListeners.size).toBe(0)
+    expect(dispatch).not.toHaveBeenCalled()
   })
 
   it('restores selection handling synchronously when the live guard is removed', async () => {
@@ -110,6 +113,48 @@ describe('drag selection guard listener lifetime', () => {
     expect([...selectionListeners][0]).toBe(restored)
     editor.commands.insertContent(' edited')
     expect(editor.getText()).toContain(' edited')
+  })
+
+  it('parks live detached observation and accepts real pending input after reattachment', () => {
+    const editor = createEditor()
+    const view = editor.view
+    view.focus()
+    const host = view.dom.parentElement
+    const text = view.dom.querySelector('p')?.firstChild
+    const native = document.getSelection()
+    if (!host || !text || !native) {
+      throw new Error('Expected live mounted editor')
+    }
+    // SAFETY: Count the actual pinned engine mapper; do not replace the live observer.
+    // oxlint-disable-next-line typescript/consistent-type-assertions
+    const engine = view as typeof view & { docView: { posFromDOM: typeof view.posAtDOM } }
+    const mapping = vi.spyOn(engine.docView, 'posFromDOM')
+    const publication = vi.fn()
+    editor.on('selectionUpdate', publication)
+    host.remove()
+    text.nodeValue = 'Reattached selection'
+    const write = vi.spyOn(native, 'setBaseAndExtent')
+    mapping.mockClear()
+    publication.mockClear()
+    expect(() => document.dispatchEvent(new Event('selectionchange'))).not.toThrow()
+    expect(view.isDestroyed).toBe(false)
+    expect(mapping).not.toHaveBeenCalled()
+    expect(publication).not.toHaveBeenCalled()
+    expect(write).not.toHaveBeenCalled()
+    expect(editor.getText()).toBe('Ordinary text selection')
+
+    document.body.append(host)
+    view.focus()
+    const current = view.dom.querySelector('p')?.firstChild
+    if (!current) {
+      throw new Error('Expected reattached current text')
+    }
+    native.setBaseAndExtent(current, 11, current, 20)
+    document.dispatchEvent(new Event('selectionchange'))
+    expect(editor.getText()).toBe('Reattached selection')
+    expect(
+      editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)
+    ).toBe('selection')
   })
 
   it('preserves the live listener and document during search reconfiguration', async () => {
@@ -134,8 +179,7 @@ describe('drag selection guard listener lifetime', () => {
     const oldView = editor.view
     const doc = oldView.state.doc
     editor.unmount()
-    const oldListener = [...selectionListeners][0]
-    expect(oldListener).toBeDefined()
+    expect(selectionListeners.size).toBe(0)
     expect(oldView.isDestroyed).toBe(true)
 
     const host = document.createElement('div')
@@ -145,13 +189,12 @@ describe('drag selection guard listener lifetime', () => {
     const newView = editor.view
     expect(newView).not.toBe(oldView)
     expect(newView.state.doc).toBe(doc)
-    expect(selectionListeners.size).toBe(2)
+    expect(selectionListeners.size).toBe(1)
     expect([...terminalListeners.values()].map((listeners) => listeners.size)).toEqual([1, 1])
 
     await Promise.resolve()
 
     expect(selectionListeners.size).toBe(1)
-    expect([...selectionListeners][0]).not.toBe(oldListener)
     expect(newView.isDestroyed).toBe(false)
     editor.commands.insertContent(' remounted')
     expect(editor.getText()).toContain(' remounted')
