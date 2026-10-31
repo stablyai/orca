@@ -79,7 +79,7 @@ it.each([20, 200])(
       return { settings: host.controller.getAgentLaunch() }
     })
     useAppStore.setState((state) => ({
-      settings: { ...state.settings!, experimentalNativeChat: true },
+      settings: { ...state.settings!, agentDefaultSurface: 'chat' },
       runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId).set('alpha', {
         ...status(),
         status: {
@@ -222,7 +222,7 @@ it.each([20, 200])(
       return { settings: host.controller.getAgentLaunch() }
     })
     useAppStore.setState((state) => ({
-      settings: { ...state.settings!, experimentalNativeChat: true }
+      settings: { ...state.settings!, agentDefaultSurface: 'chat' }
     }))
     const menu = mount(1)
     await settle()

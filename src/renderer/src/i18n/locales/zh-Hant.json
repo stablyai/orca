@@ -775,6 +775,20 @@
       "chatRuntime": "聊天執行環境",
       "chatChoiceTitle": "以聊天或 CLI 開啟",
       "chatChoiceDescription": "選擇每個代理程式以聊天或其 CLI 開啟。",
+      "defaultSurfaceTitle": "代理程式開啟方式",
+      "defaultSurfaceDescription": "這台電腦上代理程式的預設開啟方式。",
+      "defaultSurfaceChatDescription": "豐富訊息、視覺內容和圖片。",
+      "defaultSurfaceTerminal": "終端機",
+      "defaultSurfaceTerminalDescription": "每個代理程式自己的 CLI。",
+      "defaultSurfacePerAgent": "逐一設定代理程式",
+      "defaultSurfaceNowChat": "代理程式現在會以聊天方式開啟",
+      "defaultSurfaceNowTerminal": "代理程式現在會在終端機中開啟",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} 依您的設定繼續在終端機中開啟。",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} 依您的設定繼續在終端機中開啟。",
+      "defaultSurfaceKeptChat_one": "{{agents}} 依您的設定繼續以聊天方式開啟。",
+      "defaultSurfaceKeptChat_other": "{{agents}} 依您的設定繼續以聊天方式開啟。",
+      "defaultSurfaceSetAllChat": "全部設為聊天",
+      "defaultSurfaceSetAllTerminal": "全部設為終端機",
       "sameAsChoice": "與 {{agent}} 相同 · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -7701,10 +7715,6 @@
           "dd6f0a1d45": "寵物",
           "0e89a574ae": "右下角漂浮的動畫寵物。",
           "nativeChat": {
-            "title": "聊天介面",
-            "description": "在聊天介面中開啟支援此功能的新代理程式。",
-            "copy": "支援此功能的新代理程式會在結構化聊天介面中開啟。其他代理程式會在終端機中開啟；現有聊天仍可使用。",
-            "toggleLabel": "切換聊天介面",
             "resumeTitle": "重新啟動後自動恢復處理中的聊天",
             "resumeCopy": "當 Orca 結束或安裝更新時，原本正在處理任務的聊天會在重新開啟 Orca 後自動恢復。",
             "resumeToggleLabel": "切換重新啟動後自動恢復功能",
@@ -9916,19 +9926,6 @@
             "051203d37c": "寵物",
             "6b5a56ac35": "右下角漂浮的動畫寵物。",
             "87d99e634b": "寵物",
-            "nativeChat": {
-              "title": "聊天介面",
-              "description": "新啟動的代理程式若受支援，會以聊天介面開啟。",
-              "grok": "grok",
-              "native": "原生",
-              "chat": "聊天",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "終端機",
-              "agent": "代理程式"
-            },
             "agentDashboard": {
               "title": "代理程式儀表板",
               "description": "用於監控跨工作樹的代理程式的看板，支援視窗內或彈出視窗顯示。",
@@ -20082,18 +20079,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "新功能",
-      "title": "原生聊天已升級",
-      "leaveOff": "保持關閉",
-      "enableNow": "立即啟用",
-      "enableError": "無法啟用聊天模式。",
-      "intro": "受支援代理程式的新聊天現在會在升級後的聊天檢視中開啟。要在聊天和 CLI 之間切換，請開啟右側邊欄中的 {{panel}}：",
-      "resumeInNativeChat": "{{action}} 會在原生聊天中開啟受支援的 CLI 對話。",
-      "resumeInCli": "{{action}} 會將 Claude 或 Codex 聊天複製到新的 CLI 工作階段中。原始聊天保持不變。",
-      "gotIt": "知道了",
-      "manageInSettings": "在<link>設定 → 實驗性</link>中管理聊天介面。"
-    },
     "voice": {
       "demoPrompt": "審查這份差異的邊界情況，並為發現的問題新增測試。",
       "startDictation": "開始聽寫",
@@ -20165,7 +20150,26 @@
       "title": "使用 <shortcut> 跳至工作樹",
       "description": "搜尋工作樹、切換分頁、調整設定或建立工作樹，全程不必離開鍵盤。"
     },
-    "gotIt": "知道了"
+    "gotIt": "知道了",
+    "chatUiHere": {
+      "title": "聊天介面來了",
+      "offIntro": "代理程式現在可以用聊天方式開啟，支援豐富訊息、視覺內容和圖片。",
+      "offTerminal": "比較喜歡終端機？終端機仍會獲得完整支援。在您選擇聊天之前，代理程式都會繼續在終端機中開啟。",
+      "onIntro": "聊天介面已結束實驗階段，正式成為 Orca 的一部分。您的代理程式會繼續以聊天方式開啟，支援豐富訊息、視覺內容和圖片。",
+      "onTerminal": "終端機同樣會獲得完整支援。您隨時可以把任何代理程式切換回終端機。",
+      "changeInSettings": "隨時可在<link>設定 → 代理程式</link>中變更。",
+      "stayInTerminal": "繼續使用終端機",
+      "cta": "使用聊天介面",
+      "saveFailed": "無法開啟聊天介面。請在「設定 → 代理程式」中選擇聊天。",
+      "demoTabTitle": "說明登入流程",
+      "demoPrompt": "說明登入是怎麼運作的",
+      "demoReply": "登入從 {{file}} 開始：瀏覽器送出到 /login，伺服器檢查密碼並建立工作階段，然後將您重新導向到應用程式。流程如下：",
+      "demoBrowser": "瀏覽器",
+      "demoSession": "工作階段",
+      "demoApp": "應用程式",
+      "demoPassword": "密碼",
+      "demoCookie": "Cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "可能還有更多符合項目。請縮小搜尋範圍。",

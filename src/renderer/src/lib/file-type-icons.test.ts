@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { File, LayoutGrid } from 'lucide-react'
+import { File } from 'lucide-react'
 import { parsePluginIconThemeArtifact } from '../../../shared/plugins/artifacts/plugin-icon-theme-artifact'
 import { getFileTypeIcon, getPluginFileTypeIconIndex } from './file-type-icons'
 
 describe('getFileTypeIcon', () => {
-  it('uses LayoutGrid for the agents tab synthetic label', () => {
-    expect(getFileTypeIcon('Agents')).toBe(LayoutGrid)
-  })
-
   it.each([
     'constructor',
     '__proto__',

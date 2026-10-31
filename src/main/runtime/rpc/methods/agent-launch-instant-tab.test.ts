@@ -826,7 +826,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
   })
 
   describe('the view the tab opens in', () => {
-    const TERMINAL_VIEW = { experimentalNativeChat: false }
+    const TERMINAL_VIEW = {}
 
     it('keeps a terminal launch in the same view for the shown tab and spawn', async () => {
       const runtime = hostWithWindow({ settings: TERMINAL_VIEW })
@@ -847,7 +847,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
     })
 
     it('publishes a terminal fallback in terminal view while Chat UI is on', async () => {
-      const runtime = hostWithWindow({ settings: { experimentalNativeChat: true } })
+      const runtime = hostWithWindow({ settings: STRUCTURED_PREFERENCE })
 
       await replayLaunch(runtime, { agent: 'gemini' }, CLI)
 

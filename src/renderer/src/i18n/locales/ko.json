@@ -379,6 +379,20 @@
       "chatRuntime": "채팅 런타임",
       "chatChoiceTitle": "채팅 또는 CLI로 열기",
       "chatChoiceDescription": "각 에이전트를 채팅으로 열지 CLI로 열지 선택합니다.",
+      "defaultSurfaceTitle": "에이전트 열기 방식",
+      "defaultSurfaceDescription": "이 컴퓨터에서 에이전트를 여는 기본 방식입니다.",
+      "defaultSurfaceChatDescription": "서식 있는 메시지, 시각 자료, 이미지.",
+      "defaultSurfaceTerminal": "터미널",
+      "defaultSurfaceTerminalDescription": "각 에이전트의 자체 CLI.",
+      "defaultSurfacePerAgent": "에이전트별로 선택",
+      "defaultSurfaceNowChat": "이제 에이전트가 채팅으로 열립니다",
+      "defaultSurfaceNowTerminal": "이제 에이전트가 터미널에서 열립니다",
+      "defaultSurfaceKeptTerminal_one": "{{agents}}은(는) 설정한 대로 터미널에서 열립니다.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}}은(는) 설정한 대로 터미널에서 열립니다.",
+      "defaultSurfaceKeptChat_one": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
+      "defaultSurfaceKeptChat_other": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
+      "defaultSurfaceSetAllChat": "모두 채팅으로 설정",
+      "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
       "sameAsChoice": "{{agent}}와 동일 · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -7241,8 +7255,6 @@
             "toggleLabel": "새 카드 스타일 전환"
           },
           "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Chat UI 전환",
             "shellEnvNamesLabel": "셸에서 전달할 변수",
             "shellEnvNamePlaceholder": "변수 이름",
             "shellEnvNameAdd": "추가",
@@ -7254,9 +7266,7 @@
             "shellEnvToggleLabel": "셸 환경 사용 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
-            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환",
-            "description": "Chat UI에서 지원되는 새 에이전트를 엽니다.",
-            "copy": "구조화된 채팅에서 지원되는 새 에이전트가 열립니다. 터미널에 다른 에이전트가 열립니다. 기존 채팅은 계속 사용할 수 있습니다."
+            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환"
           },
           "agentDashboard": {
             "title": "에이전트 대시보드",
@@ -9410,19 +9420,6 @@
               "title": "새 카드 스타일",
               "worktree": "워크트리",
               "worktrees": "worktrees"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "네이티브",
-              "chat": "채팅",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "터미널",
-              "agent": "에이전트",
-              "description": "Chat UI에서 지원되는 새 에이전트를 엽니다."
             },
             "agentDashboard": {
               "title": "에이전트 대시보드",
@@ -20234,18 +20231,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "새 기능",
-      "title": "기본 채팅이 업그레이드되었습니다",
-      "intro": "이제 지원되는 Agent의 새 채팅은 업그레이드된 채팅 보기에서 열립니다. 채팅과 CLI 사이를 오가려면 오른쪽 사이드바에서 {{panel}}을 여세요:",
-      "resumeInNativeChat": "{{action}}: 지원되는 CLI 대화를 기본 채팅에서 엽니다.",
-      "resumeInCli": "{{action}}: Claude 또는 Codex 채팅을 새 CLI 세션으로 복사합니다. 원래 채팅은 그대로 유지됩니다.",
-      "gotIt": "확인",
-      "leaveOff": "꺼진 상태 유지",
-      "enableNow": "지금 활성화",
-      "enableError": "채팅 모드를 활성화하지 못했습니다.",
-      "manageInSettings": "<link>설정 → 실험적</link>에서 Chat UI를 관리하세요."
-    },
     "voice": {
       "demoPrompt": "극단적인 경우에 대해 이 차이점을 검토하고 찾은 항목에 대한 테스트를 추가하세요.",
       "startDictation": "받아쓰기 시작",
@@ -20317,7 +20302,26 @@
       "title": "<shortcut> 키로 워크트리 이동",
       "description": "워크트리 검색, 탭 전환, 설정 조정, 새 워크트리 생성까지 모두 키보드만으로 하세요."
     },
-    "gotIt": "확인"
+    "gotIt": "확인",
+    "chatUiHere": {
+      "title": "채팅 UI가 나왔습니다",
+      "offIntro": "이제 에이전트를 채팅으로 열 수 있습니다. 서식 있는 메시지, 시각 자료, 이미지를 지원합니다.",
+      "offTerminal": "터미널이 더 편하신가요? 터미널은 앞으로도 완전히 지원됩니다. 채팅을 선택하기 전까지 에이전트는 계속 터미널에서 열립니다.",
+      "onIntro": "채팅 UI가 실험적 기능에서 벗어나 이제 Orca의 정식 기능이 되었습니다. 에이전트는 계속 채팅으로 열리며 서식 있는 메시지, 시각 자료, 이미지를 지원합니다.",
+      "onTerminal": "터미널도 계속 완전히 지원됩니다. 언제든지 에이전트를 다시 터미널로 바꿀 수 있습니다.",
+      "changeInSettings": "<link>설정 → 에이전트</link>에서 언제든지 변경할 수 있습니다.",
+      "stayInTerminal": "터미널 계속 사용",
+      "cta": "채팅 UI 사용",
+      "saveFailed": "채팅 UI를 켜지 못했습니다. 설정 → 에이전트에서 채팅을 선택하세요.",
+      "demoTabTitle": "로그인 설명",
+      "demoPrompt": "로그인이 어떻게 동작하는지 정리해 줘",
+      "demoReply": "로그인은 {{file}}에서 시작합니다. 브라우저가 /login으로 보내면 서버가 비밀번호를 확인하고 세션을 만든 뒤 앱으로 리디렉션합니다. 흐름은 다음과 같습니다:",
+      "demoBrowser": "브라우저",
+      "demoSession": "세션",
+      "demoApp": "앱",
+      "demoPassword": "비밀번호",
+      "demoCookie": "쿠키"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "더 많은 일치 항목을 사용할 수 있습니다. 검색 결과를 좁히려면 검색을 구체화하세요.",

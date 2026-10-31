@@ -201,7 +201,6 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'terminalLinkActionPopoverEnabled',
   'experimentalMobile',
   'experimentalPet',
-  'experimentalNativeChat',
   'experimentalBrowserExtensions',
   'experimentalActivity',
   'experimentalAgentDashboardPopout',

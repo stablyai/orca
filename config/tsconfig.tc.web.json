@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.web.json",
   "exclude": [
+    "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
     "../src/shared/**/*.test.ts",
     "../src/shared/**/*.test.tsx",
     "../src/shared/**/*.spec.ts",

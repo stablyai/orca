@@ -382,6 +382,22 @@
       "chatRuntime": "Entorno de chat",
       "chatChoiceTitle": "Abrir como chat o CLI",
       "chatChoiceDescription": "Elige si cada agente se abre como chat o en su CLI.",
+      "defaultSurfaceTitle": "Abrir agentes como",
+      "defaultSurfaceDescription": "La opción predeterminada para los agentes en este equipo.",
+      "defaultSurfaceChatDescription": "Mensajes enriquecidos, elementos visuales e imágenes.",
+      "defaultSurfaceTerminal": "Terminal",
+      "defaultSurfaceTerminalDescription": "La CLI propia de cada agente.",
+      "defaultSurfacePerAgent": "Elegir por agente",
+      "defaultSurfaceNowChat": "Los agentes ahora se abren como chats",
+      "defaultSurfaceNowTerminal": "Los agentes ahora se abren en el terminal",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} sigue en el terminal, como lo configuraste.",
+      "defaultSurfaceKeptTerminal_many": "{{agents}} siguen en el terminal, como lo configuraste.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} siguen en el terminal, como lo configuraste.",
+      "defaultSurfaceKeptChat_one": "{{agents}} sigue como chat, como lo configuraste.",
+      "defaultSurfaceKeptChat_many": "{{agents}} siguen como chats, como lo configuraste.",
+      "defaultSurfaceKeptChat_other": "{{agents}} siguen como chats, como lo configuraste.",
+      "defaultSurfaceSetAllChat": "Poner todos en Chat",
+      "defaultSurfaceSetAllTerminal": "Poner todos en Terminal",
       "sameAsChoice": "Igual que {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -7532,8 +7548,6 @@
             "toggleLabel": "Alternar nuevo estilo de tarjeta"
           },
           "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Alternar Chat UI",
             "shellEnvNamesLabel": "Variables que se pasan desde tu shell",
             "shellEnvNamePlaceholder": "Nombre de la variable",
             "shellEnvNameAdd": "Agregar",
@@ -7545,9 +7559,7 @@
             "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell",
             "resumeCopy": "Cuando Orca se cierra o instala una actualización, los chats que estaban trabajando se reanudan automáticamente al volver a abrir Orca.",
             "resumeTitle": "Reanudar los chats de trabajo automáticamente después de reiniciar",
-            "resumeToggleLabel": "Alternar reanudación automática después de un reinicio",
-            "description": "Abra nuevos agentes admitidos en la interfaz de usuario de Chat.",
-            "copy": "Los nuevos agentes admitidos se abren en un chat estructurado. Otros agentes abren en la terminal; los chats existentes permanecen disponibles."
+            "resumeToggleLabel": "Alternar reanudación automática después de un reinicio"
           },
           "agentDashboard": {
             "title": "Panel de agentes",
@@ -9703,19 +9715,6 @@
               "title": "Nuevo estilo de tarjeta",
               "worktree": "worktree",
               "worktrees": "worktrees"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "nativo",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "claudia abierta",
-              "omp": "omp",
-              "terminal": "Terminal",
-              "agent": "agente",
-              "description": "Abra nuevos agentes admitidos en la interfaz de usuario de Chat."
             },
             "agentDashboard": {
               "title": "Panel de agentes",
@@ -20679,18 +20678,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "Nuevo",
-      "title": "El chat nativo mejora",
-      "intro": "Los chats nuevos de agentes compatibles usan la vista de chat mejorada. Para alternar entre chat y CLI, abre {{panel}} (barra lateral derecha):",
-      "resumeInNativeChat": "{{action}} abre una conversación de CLI compatible en el chat nativo.",
-      "resumeInCli": "{{action}} copia un chat de Claude/Codex a una CLI nueva sin tocar el original.",
-      "gotIt": "Entendido",
-      "leaveOff": "Dejarlo desactivado",
-      "enableNow": "Activar ahora",
-      "enableError": "No se pudo activar el modo chat.",
-      "manageInSettings": "Gestiona Chat UI en <link>Ajustes → Experimental</link>."
-    },
     "sessionSearch": {
       "ageHours": "2 h",
       "ageMinutes": "12 min",
@@ -20762,7 +20749,26 @@
       "title": "Ve a un worktree con <shortcut>",
       "description": "Busca worktrees, cambia de pestaña, ajusta la configuración o crea un worktree, todo sin dejar el teclado."
     },
-    "gotIt": "Entendido"
+    "gotIt": "Entendido",
+    "chatUiHere": {
+      "title": "Llega la interfaz de chat",
+      "offIntro": "Los agentes ya pueden abrirse como un chat, con mensajes enriquecidos, elementos visuales e imágenes.",
+      "offTerminal": "¿Prefieres el terminal? Sigue teniendo soporte completo. Tus agentes seguirán abriéndose allí hasta que elijas Chat.",
+      "onIntro": "La interfaz de chat ya no es experimental y ahora forma parte de Orca. Tus agentes siguen abriéndose como chats, con mensajes enriquecidos, elementos visuales e imágenes.",
+      "onTerminal": "El terminal también sigue teniendo soporte completo. Puedes volver a cambiar cualquier agente cuando quieras.",
+      "changeInSettings": "Cámbialo cuando quieras en <link>Configuración → Agentes</link>.",
+      "stayInTerminal": "Seguir en el terminal",
+      "cta": "Usar la interfaz de chat",
+      "saveFailed": "No se pudo activar la interfaz de chat. Elige Chat en Configuración → Agentes.",
+      "demoTabTitle": "Explicar el inicio de sesión",
+      "demoPrompt": "Explica cómo funciona el inicio de sesión",
+      "demoReply": "El inicio de sesión empieza en {{file}}: el navegador envía a /login, el servidor comprueba la contraseña y crea una sesión, y luego te redirige a la app. Este es el flujo:",
+      "demoBrowser": "Navegador",
+      "demoSession": "Sesión",
+      "demoApp": "App",
+      "demoPassword": "contraseña",
+      "demoCookie": "cookie"
+    }
   },
   "fileExplorer": {
     "root": {

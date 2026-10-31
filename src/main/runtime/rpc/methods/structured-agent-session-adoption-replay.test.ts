@@ -232,12 +232,6 @@ describe('committed adopting create RPC replay', () => {
       .spyOn(runtime, 'getAgentProviderSessionRows')
       .mockImplementation(() => rows)
     const sourceRoute = vi.spyOn(runtime, 'getStructuredAgentCliSourceRoute')
-    // The structured surface is settings-gated for every caller, not just mobile; this test
-    // probes durable-identity replay, which only runs once the gate admits the call.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The RPC gate reads only this setting from the test double.
-    vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
-      experimentalNativeChat: true
-    } as ReturnType<OrcaRuntimeService['getClientSettings']>)
     vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
       supported: true
     })

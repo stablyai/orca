@@ -18,8 +18,7 @@ describe('agent cards under the local chat mirror', () => {
     store.setState({
       settings: {
         ...getDefaultSettings('/tmp'),
-        experimentalTiledAgents: true,
-        experimentalNativeChat: true
+        experimentalTiledAgents: true
       }
     })
     const ids = ['t0', 't1']
