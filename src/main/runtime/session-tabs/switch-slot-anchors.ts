@@ -36,6 +36,25 @@ export class SwitchSlotAnchors {
     return true
   }
 
+  /** Records the anchor before the write that publishes its destination; a write that fails
+   *  withdraws the anchor it added, so a later open isn't stamped into the source's slot. */
+  async recordFor<T>(
+    workspaceId: string,
+    destinationTabId: string,
+    anchor: SlotAnchor | undefined,
+    write: () => Promise<T>
+  ): Promise<T> {
+    const recorded = anchor !== undefined && this.record(workspaceId, destinationTabId, anchor)
+    try {
+      return await write()
+    } catch (error) {
+      if (recorded) {
+        this.forget(workspaceId, destinationTabId)
+      }
+      throw error
+    }
+  }
+
   /** Withdraws an anchor whose destination no frame has shown. */
   forget(workspaceId: string, destinationTabId: string): void {
     const entries = this.byWorkspace.get(workspaceId)
@@ -83,6 +102,11 @@ export class SwitchSlotAnchors {
     }
     return tabs ? { ...snapshot, tabs } : snapshot
   }
+}
+
+/** The source's slot when the destination replaces its whole tab, else the place beside it. */
+export function slotAnchor(replacedTabId: string | undefined, sourceTabId: string): SlotAnchor {
+  return replacedTabId ? { replaces: { tabId: replacedTabId } } : { after: { tabId: sourceTabId } }
 }
 
 function sameSlot(a: SlotAnchor, b: SlotAnchor): boolean {

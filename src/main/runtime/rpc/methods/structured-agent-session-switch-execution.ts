@@ -37,6 +37,7 @@ import { captureSwitchStoppedCliTurn } from '../../../native-chat/agent-session-
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isAiVaultAgent } from '../../../../shared/ai-vault-types'
+import { slotAnchor } from '../../session-tabs/switch-slot-anchors'
 
 type Prepared = Awaited<ReturnType<typeof prepareStructuredSessionSwitch>>
 
@@ -283,24 +284,23 @@ async function switchToChat(
   const sameWorkspace =
     close !== undefined && worktreeIdsEqual(close.source.worktreeId, record.location.workspaceId)
   const replaces = sameWorkspace && close.wholeTab() ? close.source.tabId : undefined
-  if (sameWorkspace) {
-    ctx.runtime.switchSlotAnchors.record(
-      record.location.workspaceId,
-      `agent-session:${sessionId}`,
-      replaces ? { replaces: { tabId: replaces } } : { after: { tabId: close.source.tabId } }
-    )
-  }
-  await ctx.runtime.publishStructuredAgentSessionTab({
-    ...revealed,
-    activate: true,
-    check,
-    focusWindow: agentLaunchMovesHostWindow(ctx),
-    ...(replaces
-      ? { replaces }
-      : sameWorkspace
-        ? { placement: close.placement(), sourceTabId: close.source.tabId }
-        : {})
-  })
+  await ctx.runtime.switchSlotAnchors.recordFor(
+    record.location.workspaceId,
+    `agent-session:${sessionId}`,
+    sameWorkspace ? slotAnchor(replaces, close.source.tabId) : undefined,
+    () =>
+      ctx.runtime.publishStructuredAgentSessionTab({
+        ...revealed,
+        activate: true,
+        check,
+        focusWindow: agentLaunchMovesHostWindow(ctx),
+        ...(replaces
+          ? { replaces }
+          : sameWorkspace
+            ? { placement: close.placement(), sourceTabId: close.source.tabId }
+            : {})
+      })
+  )
   replacedBy = replaces ? sessionId : undefined
   deadline.check()
   if (sameWorkspace) {

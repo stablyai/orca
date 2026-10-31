@@ -360,6 +360,27 @@ it('keeps the stopped source when destination publication fails before retiremen
   )
   expect(runtime.getPtyLivenessVerdict(PTY_A)).toMatchObject({ status: 'exited' })
   expect(publish).toHaveBeenCalledOnce()
+  // The slot anchor is withdrawn: a later open of the chat is not stamped into the stopped tab.
+  const later = runtime.switchSlotAnchors.stamp({
+    worktree: WORKTREE_ID,
+    publicationEpoch: 'later',
+    snapshotVersion: 1,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: [
+      {
+        type: 'agent-session',
+        id: `agent-session:${id}`,
+        title: 'Codex',
+        sessionId: id,
+        agent: 'codex',
+        isActive: false
+      }
+    ]
+  })
+  expect(later.tabs[0]).not.toHaveProperty('replaces')
+  expect(later.tabs[0]).not.toHaveProperty('after')
   expect(session().tabsByWorktree[WORKTREE_ID]).toEqual(originalSourceTabs)
   expect(session().terminalLayoutsByTabId[TAB_ID]).toEqual(originalSourceLayout)
   expect(rig.adapter.acquire).toHaveBeenCalledTimes(acquisitions)
