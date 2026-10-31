@@ -55,6 +55,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   }
   const flight = args.state.beginFlight(ptyId)
   flight.processIncarnation = expectedTarget.processIncarnation
+  flight.userInputAtStage = args.deps.readLastDrivingInputAt(ptyId)
   flight.stagedMessageIds = args.messages.map((message) => message.id)
   try {
     if (
@@ -138,6 +139,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
+          readLastDrivingInputAt: args.deps.readLastDrivingInputAt,
           writePty: args.deps.writePty,
           settle: args.settle,
           redrive: args.redrive
