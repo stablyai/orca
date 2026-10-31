@@ -406,7 +406,7 @@ describe('openMobileFileTap', () => {
     )
   })
 
-  it('does not open SSH worktree HTML paths as local browser file URLs', async () => {
+  it('opens SSH worktree HTML paths through the mobile preview route', async () => {
     const client = createClient([
       ok({
         worktree: 'wt-1',
@@ -420,19 +420,20 @@ describe('openMobileFileTap', () => {
           relativePath: 'report.html',
           absolutePath: '/home/me/repo/report.html'
         }
-      }),
-      ok({ opened: true })
+      })
     ])
     const openBrowser = vi.fn()
+    const pushPreviewRoute = vi.fn()
+    const triggerOpenFeedback = vi.fn()
 
     openMobileFileTap({
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       candidates: [{ pathText: 'report.html', line: null, column: null }],
-      pushPreviewRoute: vi.fn(),
+      pushPreviewRoute,
       openBrowser,
-      triggerOpenFeedback: vi.fn(),
+      triggerOpenFeedback,
       fetchSessionTabs: vi.fn(),
       getSessionTabs: () => [],
       getActiveSessionTabId: () => null,
@@ -443,11 +444,18 @@ describe('openMobileFileTap', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(openBrowser).not.toHaveBeenCalled()
-    expect(client.sendRequest).toHaveBeenCalledWith(
-      'files.open',
-      { worktree: 'id:wt-1', relativePath: 'report.html' },
-      { timeoutMs: 15_000 }
-    )
+    expect(pushPreviewRoute).toHaveBeenCalledWith({
+      pathname: '/h/[hostId]/files/preview/[worktreeId]',
+      params: expect.objectContaining({
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        source: 'worktree',
+        relativePath: 'report.html',
+        name: 'report.html'
+      })
+    })
+    expect(triggerOpenFeedback).toHaveBeenCalledTimes(1)
+    expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
   })
 
   it('does not navigate an absolute artifact after the user leaves the source terminal', async () => {
