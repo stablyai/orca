@@ -245,12 +245,12 @@ exec node -e "console.log('Prefix title')"
       const childHome = kind === 'absolute' ? home : relative(root, home)
       await expect(request(command, { HOME: childHome })).resolves.toMatchObject({ success: false })
       const reads = [
-        asyncFs.readdir,
-        asyncFs.stat,
-        asyncFs.access,
-        asyncFs.open,
-        asyncFs.readFile
-      ].flatMap((read) => vi.mocked(read).mock.calls.map(([path]) => String(path)))
+        ...vi.mocked(asyncFs.readdir).mock.calls.map(([path]) => String(path)),
+        ...vi.mocked(asyncFs.stat).mock.calls.map(([path]) => String(path)),
+        ...vi.mocked(asyncFs.access).mock.calls.map(([path]) => String(path)),
+        ...vi.mocked(asyncFs.open).mock.calls.map(([path]) => String(path)),
+        ...vi.mocked(asyncFs.readFile).mock.calls.map(([path]) => String(path))
+      ]
       expect(reads.some((path) => path.startsWith(mount))).toBe(false)
       expect(reads.some((path) => path.startsWith(`${root}/.nvm`))).toBe(false)
       expect(readEvents().some((event) => event.attempt?.startsWith(root))).toBe(false)
