@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -44,7 +45,7 @@ function fakes(created: { startupTerminal?: { handle: string } } = {}) {
     })),
     createTerminal: vi.fn(async () => terminalCreation),
     // Chat default on: federation still starts a terminal and never asks about a session.
-    getClientSettings: vi.fn(() => ({ experimentalNativeChat: true })),
+    getClientSettings: vi.fn(() => ({ nativeChatProviders: EVERY_AGENT_CHAT })),
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true }))
   }
   const db = {

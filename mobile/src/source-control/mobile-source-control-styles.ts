@@ -9,55 +9,9 @@ const baseStyles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  // NavBar draws the bar and its border; this fills the safe-area inset above it.
   header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700'
-  },
-  meta: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: 2
-  },
-  refreshButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.xs
-  },
-  refreshButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  refreshButtonDisabled: {
-    opacity: 0.45
+    backgroundColor: colors.bgBase
   },
   summaryCard: {
     margin: spacing.lg,

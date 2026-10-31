@@ -259,9 +259,7 @@ describe('a replay answers from the record', () => {
 
     // Changed settings must not recompute the recorded launch receipt.
     const movedSettings = runtimeStub({
-      settings: {
-        experimentalNativeChat: false
-      }
+      settings: { nativeChatProviders: { claude: false, codex: false } }
     })
     const replayed = await launch(params, movedSettings, PAIRED_CLIENT)
 

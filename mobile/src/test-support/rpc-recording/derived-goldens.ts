@@ -25,7 +25,6 @@ export type DerivedGolden = {
 const SIBLING_SCHEDULE_BASES = [
   'b3',
   'settings-new-tab-ssh',
-  'settings-home-providers-fulfilled',
   'settings-workspace-context-fulfilled',
   'settings-resume-metadata-fulfilled',
   'settings-task-hydration-fulfilled',

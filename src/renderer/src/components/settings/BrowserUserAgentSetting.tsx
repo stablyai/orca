@@ -22,7 +22,7 @@ export function BrowserUserAgentSetting({
   const title = translate('settings.browser.userAgent.title', 'Browser identity')
   const description = translate(
     'settings.browser.userAgent.description',
-    'Choose the user agent for every browser profile and page. Native mode disables Google sign-in. Changes take effect after a restart.'
+    'Choose the user agent for every browser profile and page. Changes take effect after a restart.'
   )
   const isLocal = hostId === LOCAL_EXECUTION_HOST_ID
 
@@ -128,7 +128,7 @@ export function BrowserUserAgentSetting({
               label: translate('settings.browser.userAgent.optionNative', 'Native'),
               tooltip: translate(
                 'settings.browser.userAgent.optionNativeTooltip',
-                "Keeps Electron's built-in identity for sites that reject the cleaned identity. Google sign-in is unavailable in Native mode."
+                "Keeps Electron's built-in identity for sites that reject the cleaned identity."
               )
             }
           ]}

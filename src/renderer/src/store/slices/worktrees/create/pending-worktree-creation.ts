@@ -3,17 +3,33 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import type { AppState } from '../../../types'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
 import { endWindowCreation } from '@/lib/sidebar-ended-creations'
+import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 
 export function createBeginPendingWorktreeCreation(
   set: WorktreeSliceSet,
   _get: WorktreeSliceGet
 ): WorktreeSlice['beginPendingWorktreeCreation'] {
   return (entry) => {
+    const logged = { ...entry, phaseLog: [{ phase: entry.phase, at: entry.startedAt }] }
     set((s) => ({
-      pendingWorktreeCreations: { ...s.pendingWorktreeCreations, [entry.creationId]: entry },
+      pendingWorktreeCreations: { ...s.pendingWorktreeCreations, [entry.creationId]: logged },
       activePendingCreationId: entry.creationId
     }))
   }
+}
+
+// A new startedAt is a fresh attempt (continue/retry); a phase change within one attempt is a new step.
+function nextPhaseLog(
+  entry: PendingWorktreeCreation,
+  patch: Partial<PendingWorktreeCreation>
+): PendingWorktreeCreation['phaseLog'] {
+  if (patch.startedAt !== undefined && patch.startedAt !== entry.startedAt) {
+    return [{ phase: patch.phase ?? entry.phase, at: patch.startedAt }]
+  }
+  if (patch.phase !== undefined && patch.phase !== entry.phase) {
+    return [...(entry.phaseLog ?? []), { phase: patch.phase, at: Date.now() }]
+  }
+  return entry.phaseLog
 }
 
 export function createUpdatePendingWorktreeCreation(
@@ -36,7 +52,7 @@ export function createUpdatePendingWorktreeCreation(
       return {
         pendingWorktreeCreations: {
           ...s.pendingWorktreeCreations,
-          [creationId]: { ...entry, ...patch }
+          [creationId]: { ...entry, ...patch, phaseLog: nextPhaseLog(entry, patch) }
         }
       }
     })

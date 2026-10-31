@@ -52,6 +52,10 @@ const Dispatch = z.object({
   run_id: z.string(),
   contract_version: z.number(),
   status: z.string(),
+  follow_up_of_dispatch_id: nullable,
+  next_dispatch_id: nullable,
+  creator_handle: nullable,
+  creator_pane_key: nullable,
   assignee_handle: nullable,
   assignee_pane_key: nullable,
   assignee_orca_session_id: sessionId.nullable(),
@@ -87,6 +91,10 @@ const Identity = z.object({
 export type CrewRecipientRun = z.infer<typeof Run>
 const runColumns = `r.id, r.legacy, r.home_database, r.coordinator_pane_key, r.coordinator_orca_session_id,
   r.coordinator_orca_session_id_generation, r.consumer_generation`
+
+const dispatchColumns = `d.id, d.run_id, d.contract_version, d.status, d.follow_up_of_dispatch_id,
+      (SELECT next.id FROM dispatch_contexts next WHERE next.follow_up_of_dispatch_id = d.id) AS next_dispatch_id, d.creator_handle, d.creator_pane_key, d.assignee_handle, d.assignee_pane_key,
+      d.assignee_orca_session_id, d.process_incarnation, f.protocol_version, w.state AS worker_state, s.id AS sender_run_id, s.legacy AS sender_run_legacy, ${resource('h')} AS nested_resource`
 
 /** Selected owner queries return complete source rows, never recipient decisions. */
 export function crewRecipientOwnerQueries(db: OrchestrationDb) {
@@ -143,8 +151,6 @@ export function crewRecipientOwnerQueries(db: OrchestrationDb) {
       id?: string
     }[]
   ) => {
-    const columns = `d.id, d.run_id, d.contract_version, d.status, d.assignee_handle, d.assignee_pane_key,
-      d.assignee_orca_session_id, d.process_incarnation, f.protocol_version, w.state AS worker_state, s.id AS sender_run_id, s.legacy AS sender_run_legacy, ${resource('h')} AS nested_resource`
     return Dispatch.array().parse(
       db.db
         .prepare(`WITH requested AS (
@@ -162,7 +168,7 @@ export function crewRecipientOwnerQueries(db: OrchestrationDb) {
           AND instr(d.assignee_pane_key, ':') > 1 AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL.replaceAll('assignee_pane_key', 'd.assignee_pane_key')} = requested.suffix
       UNION ALL
       SELECT requested.key, requested.caller, 'explicit', d.rowid, d.* FROM requested JOIN dispatch_contexts d ON d.id = requested.id
-    ) SELECT d.key, d.branch, ${columns} FROM candidates d
+    ) SELECT d.key, d.branch, ${dispatchColumns} FROM candidates d
       LEFT JOIN runs s ON s.id = d.run_id
       LEFT JOIN federated_dispatches f ON f.dispatch_id = d.id
       LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
@@ -186,5 +192,47 @@ export function crewRecipientOwnerQueries(db: OrchestrationDb) {
           .all(JSON.stringify(request))
       )
   }
-  return { identity, currentRuns, dispatches, history }
+  const resourceFor = (id: string) => `COALESCE(
+    (SELECT id FROM worker_terminal_resources WHERE owner_dispatch_id = ${id}),
+    (SELECT id FROM worker_terminal_resources WHERE prior_owner_dispatch_ids LIKE '%"' || ${id} || '"%' ORDER BY updated_at DESC LIMIT 1))`
+  const followUps = (ids: string[]) => {
+    return Dispatch.extend({
+      lineage_resource: nullable.transform((value) =>
+        value === null
+          ? null
+          : z
+              .object({
+                owner_dispatch_id: z.string(),
+                origin_dispatch_id: z.string()
+              })
+              .parse(JSON.parse(value))
+      ),
+      has_worker: z.number()
+    })
+      .array()
+      .parse(
+        db.db
+          .prepare(`WITH RECURSIVE crew_follow_up_seeds(id) AS (
+      SELECT value FROM json_each(?)
+    ), crew_follow_up_nodes(id) AS (
+      SELECT id FROM crew_follow_up_seeds
+      UNION SELECT d.follow_up_of_dispatch_id FROM crew_follow_up_nodes n JOIN dispatch_contexts d ON d.id = n.id WHERE d.follow_up_of_dispatch_id IS NOT NULL
+      UNION SELECT d.id FROM crew_follow_up_nodes n JOIN dispatch_contexts d ON d.follow_up_of_dispatch_id = n.id
+      UNION SELECT r.owner_dispatch_id FROM crew_follow_up_nodes n JOIN worker_terminal_resources r ON r.id = ${resourceFor('n.id')}
+      UNION SELECT r.origin_dispatch_id FROM crew_follow_up_nodes n JOIN worker_terminal_resources r ON r.id = ${resourceFor('n.id')}
+    ) SELECT d.id AS key, 'explicit' AS branch, ${dispatchColumns},
+      CASE WHEN lineage.id IS NOT NULL THEN json_object('owner_dispatch_id', lineage.owner_dispatch_id,
+        'origin_dispatch_id', lineage.origin_dispatch_id) END AS lineage_resource,
+      EXISTS(SELECT 1 FROM worker_dispatches WHERE dispatch_id = d.id) AS has_worker
+    FROM crew_follow_up_nodes n JOIN dispatch_contexts d ON d.id = n.id
+    LEFT JOIN runs s ON s.id = d.run_id
+    LEFT JOIN federated_dispatches f ON f.dispatch_id = d.id
+    LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
+    LEFT JOIN worker_terminal_resources h ON h.id = (
+      SELECT id FROM worker_terminal_resources WHERE terminal_handle = d.assignee_handle ORDER BY updated_at DESC LIMIT 1)
+    LEFT JOIN worker_terminal_resources lineage ON lineage.id = ${resourceFor('d.id')}`)
+          .all(JSON.stringify(ids))
+      )
+  }
+  return { identity, currentRuns, dispatches, history, followUps }
 }

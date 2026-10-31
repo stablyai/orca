@@ -563,3 +563,88 @@ it('keeps failed or malformed explicit acquisition unknown and retries complete 
     }
   }
 })
+
+it('keeps failed follow-up facts uncovered until a real wake retries complete values, then releases them', async () => {
+  const f = deltaFixture()
+  const started = f.db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 10,
+    taskSpec: 'follow-up fault',
+    taskRunId: f.run.id,
+    startOptions: { agent: 'codex' }
+  })
+  f.db.prepareStartingWorkerAuthority({
+    dispatchId: started.dispatch.id,
+    handle: 'term_worker',
+    paneKey: f.handles.get('term_worker')!,
+    processIncarnation: 'process:term_worker',
+    worktreeId: 'folder-worker-host',
+    effects: [],
+    setupState: 'not_applicable',
+    terminalOwnership: 'created'
+  })
+  f.db.markWorkerDispatchReady(started.dispatch.id)
+  f.db.settleWorkerReport({
+    taskId: started.task.id,
+    dispatchId: started.dispatch.id,
+    outcome: 'succeeded',
+    result: 'done'
+  })
+  const fault = new Error('follow-up SQL source failed')
+  let injected = 0
+  const meter = meterCrewSql(f.db.db)
+  meter.control.before = (sql) => {
+    if (!injected && sql.includes('crew_follow_up_seeds')) {
+      injected++
+      throw fault
+    }
+  }
+  const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
+  const frames: OrchestrationCrewFrame[] = []
+  const caught: unknown[] = []
+  const stop = subscribeCrew(
+    () => {
+      try {
+        return model.read('term_coord')
+      } catch (error) {
+        caught.push(error)
+        throw error
+      }
+    },
+    model.subscribe,
+    (frame) => frames.push(frame)
+  )
+  try {
+    expect(frames).toEqual([{ type: 'begin', status: 'unknown' }, { type: 'complete' }])
+    expect(caught).toEqual([fault])
+    expect(injected).toBe(1)
+    f.db.crewChanges.notify(new Set(['names']))
+    await Promise.resolve()
+    const output = model.read('term_coord')
+    expect(output.sections.managing[0]?.sendAddress).toBe(`dispatch:${started.dispatch.id}`)
+    expect(
+      meter.executions.filter((entry) => entry.sql.includes('crew_follow_up_seeds'))
+    ).toHaveLength(2)
+    const count = frames.length
+    f.db.crewChanges.notify(new Set(['names']))
+    await Promise.resolve()
+    expect(frames).toHaveLength(count)
+    stop()
+    const before = meter.executions.length
+    f.db.crewChanges.notify(new Set(['topology']))
+    await Promise.resolve()
+    expect(meter.executions).toHaveLength(before)
+    expect(new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe).read('term_coord')).toEqual(
+      output
+    )
+    expect(
+      meter.executions.filter((entry) => entry.sql.includes('crew_follow_up_seeds'))
+    ).toHaveLength(3)
+    process.stdout.write(
+      `Crew follow-up fault retry ${JSON.stringify({ injected, frames, sameError: caught[0] === fault, executions: meter.executions })}\n`
+    )
+  } finally {
+    stop()
+    meter.restore()
+  }
+})

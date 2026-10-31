@@ -100,13 +100,12 @@ describe('orca cli worktree awareness', () => {
           message: expect.stringMatching(/--timeout-ms.*1800000.*30 minutes/)
         }
       })
-      expect(errorSpy).not.toHaveBeenCalled()
     } else {
       expect(logSpy).not.toHaveBeenCalled()
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/--timeout-ms.*1800000.*30 minutes/)
-      )
     }
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/^error: invalid_argument: --timeout-ms.*1800000.*30 minutes/)
+    )
   })
 
   it('formats group orchestration sends in text mode', async () => {
@@ -137,7 +136,7 @@ describe('orca cli worktree awareness', () => {
       payload: undefined,
       devMode: false
     })
-    expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('recipients=2'))
   })
 
   it("refuses an agent session's caller flag naming another caller before any request", async () => {
@@ -158,7 +157,7 @@ describe('orca cli worktree awareness', () => {
     await main(['orchestration', 'reset'], '/tmp/repo')
 
     expect(errorSpy).toHaveBeenCalledExactlyOnceWith(
-      'Choose exactly one reset scope: --all, --tasks, or --messages.'
+      'error: invalid_argument: Choose exactly one reset scope: --all, --tasks, or --messages.'
     )
     expect(callMock).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)

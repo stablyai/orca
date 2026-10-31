@@ -222,7 +222,7 @@
       },
       "userAgent": {
         "title": "Identidad del navegador",
-        "description": "Elija el agente de usuario para cada perfil y página del navegador. El modo nativo deshabilita el inicio de sesión de Google. Los cambios surten efecto después de un reinicio.",
+        "description": "Elija el agente de usuario para cada perfil y página del navegador. Los cambios surten efecto después de un reinicio.",
         "remoteUnsupported": "Gestiona la identidad del navegador en el host remoto con la CLI de Orca.",
         "loading": "Cargando…",
         "resetRequired": "Los datos de identidad deben restablecerse explícitamente antes de que se puedan cambiar.",
@@ -230,7 +230,7 @@
         "optionClean": "Limpio",
         "optionCleanTooltip": "Elimina los tokens Orca y Electron para que coincidan con las sesiones de Chrome importadas.",
         "optionNative": "Nativo",
-        "optionNativeTooltip": "Mantiene la identidad incorporada de Electron para los sitios que rechazan la identidad limpiada. El inicio de sesión de Google no está disponible en modo nativo.",
+        "optionNativeTooltip": "Mantiene la identidad incorporada de Electron para los sitios que rechazan la identidad limpiada.",
         "restartRequired": "Se requiere un reinicio",
         "unavailable": "La identidad del navegador no está disponible."
       },
@@ -382,6 +382,22 @@
       "chatRuntime": "Entorno de chat",
       "chatChoiceTitle": "Abrir como chat o CLI",
       "chatChoiceDescription": "Elige si cada agente se abre como chat o en su CLI.",
+      "defaultSurfaceTitle": "Abrir agentes como",
+      "defaultSurfaceDescription": "La opción predeterminada para los agentes en este equipo.",
+      "defaultSurfaceChatDescription": "Mensajes enriquecidos, elementos visuales e imágenes.",
+      "defaultSurfaceTerminal": "Terminal",
+      "defaultSurfaceTerminalDescription": "La CLI propia de cada agente.",
+      "defaultSurfacePerAgent": "Elegir por agente",
+      "defaultSurfaceNowChat": "Los agentes ahora se abren como chats",
+      "defaultSurfaceNowTerminal": "Los agentes ahora se abren en el terminal",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} sigue en el terminal, como lo configuraste.",
+      "defaultSurfaceKeptTerminal_many": "{{agents}} siguen en el terminal, como lo configuraste.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} siguen en el terminal, como lo configuraste.",
+      "defaultSurfaceKeptChat_one": "{{agents}} sigue como chat, como lo configuraste.",
+      "defaultSurfaceKeptChat_many": "{{agents}} siguen como chats, como lo configuraste.",
+      "defaultSurfaceKeptChat_other": "{{agents}} siguen como chats, como lo configuraste.",
+      "defaultSurfaceSetAllChat": "Poner todos en Chat",
+      "defaultSurfaceSetAllTerminal": "Poner todos en Terminal",
       "sameAsChoice": "Igual que {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -7532,8 +7548,6 @@
             "toggleLabel": "Alternar nuevo estilo de tarjeta"
           },
           "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Alternar Chat UI",
             "shellEnvNamesLabel": "Variables que se pasan desde tu shell",
             "shellEnvNamePlaceholder": "Nombre de la variable",
             "shellEnvNameAdd": "Agregar",
@@ -7545,9 +7559,7 @@
             "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell",
             "resumeCopy": "Cuando Orca se cierra o instala una actualización, los chats que estaban trabajando se reanudan automáticamente al volver a abrir Orca.",
             "resumeTitle": "Reanudar los chats de trabajo automáticamente después de reiniciar",
-            "resumeToggleLabel": "Alternar reanudación automática después de un reinicio",
-            "description": "Abra nuevos agentes admitidos en la interfaz de usuario de Chat.",
-            "copy": "Los nuevos agentes admitidos se abren en un chat estructurado. Otros agentes abren en la terminal; los chats existentes permanecen disponibles."
+            "resumeToggleLabel": "Alternar reanudación automática después de un reinicio"
           },
           "agentDashboard": {
             "title": "Panel de agentes",
@@ -9704,19 +9716,6 @@
               "worktree": "worktree",
               "worktrees": "worktrees"
             },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "nativo",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "claudia abierta",
-              "omp": "omp",
-              "terminal": "Terminal",
-              "agent": "agente",
-              "description": "Abra nuevos agentes admitidos en la interfaz de usuario de Chat."
-            },
             "agentDashboard": {
               "title": "Panel de agentes",
               "description": "Tablero Kanban para monitorear agentes en diferentes worktrees, en ventana o como ventana emergente.",
@@ -11569,8 +11568,7 @@
         "PluginInstallDialog": {
           "localRequired": "Introduce la ruta de la carpeta del plugin.",
           "gitUrlRequired": "Introduce una URL de repositorio.",
-          "gitUrlInvalid": "Usa una URL Git HTTPS o SSH.",
-          "gitRefRequired": "Añade un #tag o #commit, como #v0.1.0.",
+          "gitUrlInvalid": "Usa un enlace de repositorio como https://github.com/owner/repo, owner/repo o una URL SSH.",
           "title": "Instalar plugin",
           "description": "Nada se ejecuta hasta que lo actives.",
           "source": "Origen de instalación",
@@ -11580,12 +11578,23 @@
           "localPlaceholder": "Ruta a una carpeta de plugin",
           "localHelp": "La carpeta con orca-plugin.json",
           "gitLabel": "URL del repositorio",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "Termina con #tag o #commit para fijar una versión",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "Pega un enlace de repositorio, versión o etiqueta. Sin #tag ni #commit, Orca usa la etiqueta de versión más reciente.",
           "cancel": "Cancelar",
           "installing": "Instalando…",
           "install": "Instalar",
-          "installFailed": "No se pudo instalar el plugin. Comprueba el origen e inténtalo de nuevo."
+          "installFailed": "No se pudo instalar el plugin. Comprueba el origen e inténtalo de nuevo.",
+          "checking": "Comprobando…",
+          "continue": "Continuar",
+          "gitUrlCredentials": "Quita el nombre de usuario o el token de la URL. Orca usa tu inicio de sesión de Git.",
+          "gitRefInvalid": "La versión después de # no es un nombre válido de etiqueta, rama o commit.",
+          "gitRefNotFound": "Este repositorio no tiene ninguna etiqueta ni rama llamada {{value0}}.",
+          "gitUnreachable": "No se pudo leer este repositorio. Comprueba la URL y que tu cuenta de Git tenga acceso.",
+          "resolvedLatestTag": "Instala {{value0}}, la versión más reciente, en el commit {{value1}}.",
+          "resolvedTag": "Instala {{value0}} en el commit {{value1}}.",
+          "resolvedBranch": "Instala la rama {{value0}} tal como está ahora, en el commit {{value1}}.",
+          "resolvedCommit": "Instala el commit {{value0}}.",
+          "resolvedDefaultBranch": "No se encontró ninguna etiqueta de versión, así que se instala el commit más reciente, {{value0}}."
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "Solo en un espacio de trabajo"
@@ -11755,7 +11764,8 @@
           "invalidManifest": "orca-plugin.json no es válido. Corrígelo y actualiza los plugins.",
           "installedManifestUnloadable": "Esta versión no se puede cargar en este Orca. Actualízala o reinstálala.",
           "invalidArtifact": "Falta un archivo de proceso o de panel, o no es seguro. Corrígelo y actualiza.",
-          "consentChanged": "Este plugin cambió mientras lo revisabas. Revísalo de nuevo."
+          "consentChanged": "Este plugin cambió mientras lo revisabas. Revísalo de nuevo.",
+          "installGitMoved": "El repositorio cambió después de que Orca lo comprobara. Inténtalo de nuevo."
         },
         "plugins": {
           "search": {
@@ -12828,7 +12838,9 @@
           "license": "Licencia",
           "whatsNew": "Novedades",
           "hashCopied": "Hash de contenido copiado",
-          "hashCopyFailed": "No se pudo copiar el hash."
+          "hashCopyFailed": "No se pudo copiar el hash.",
+          "readme": "Leer el README en {{value0}}",
+          "installs": "Instalaciones"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Ningún plugin coincide con estos filtros",
@@ -14940,27 +14952,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7d",
-            "a3d5476811": "5h",
-            "8a350a4784": "Uso de la cuenta",
-            "e27fdaee51": "Nuevo espacio de trabajo",
-            "4405f3c440": "Emparejar escritorio",
-            "0b00c98506": "Acciones rápidas",
-            "0bad5b07c8": "GitHub y Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Tareas",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "Reanudar",
             "cf3f98fa3f": "Desconectado",
-            "091355da3d": "M1 Mini · inicio",
-            "0bc1881bc4": "Conectado · 40 worktrees · 5 activos",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Escritorios",
-            "156db8a68a": "PRs creados",
-            "4a40af029b": "Tiempo de agentes",
-            "00a6903322": "Agentes iniciados",
-            "c0e2e9dcd9": "Bienvenido de nuevo",
             "af761a0c0d": "Ajustes",
             "5d94e8ddcc": "Orca"
           },
@@ -17550,7 +17545,8 @@
         },
         "capturedOwner": {
           "orphan": "Esta automatización no tiene host donde ejecutarse. Elimínala o vuelve a añadir el host al que pertenece.",
-          "unfenced": "Orca en este host necesita una actualización antes de que puedas ver el historial de ejecuciones o gestionar esta automatización. Las ejecuciones programadas aún pueden continuar en el host."
+          "unfenced": "Orca en este host necesita una actualización antes de que puedas ver el historial de ejecuciones o gestionar esta automatización. Las ejecuciones programadas aún pueden continuar en el host.",
+          "hostReselection": "Edita la automatización y vuelve a seleccionar su host antes de ejecutarla."
         },
         "ownerAction": {
           "failed": "Esa acción de automatización no se completó."
@@ -17648,6 +17644,9 @@
           "partialFailureOfHosts_one": "Carga fallida en {{failed}} de {{count}} host",
           "partialFailureOfHosts_other": "Carga fallida en {{failed}} de {{count}} hosts",
           "partialFailureOfHosts_many": "Carga fallida en {{failed}} de {{count}} hosts"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "El host de ejecución guardado ya no coincide con esta configuración del proyecto."
         }
       },
       "agent": {
@@ -18626,6 +18625,9 @@
           "PluginsSectionDescription": {
             "openWith": "Abrir con (cuando el foco no está en un campo editable)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} instalaciones"
         }
       }
     },
@@ -19490,7 +19492,10 @@
         "orcaStopCrash": "Orca en {{machine}} se detuvo inesperadamente mientras esta respuesta estaba en curso.",
         "orcaStopRemote": "Orca en {{machine}} se detuvo mientras esta respuesta estaba en curso.",
         "orcaStopCanContinue": "Puedes continuar en esta conversación.",
-        "orcaStopUnnamedServer": "el servidor remoto"
+        "orcaStopUnnamedServer": "el servidor remoto",
+        "permissionDenied": "{{agent}} denegó el permiso. Ver detalles.",
+        "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
+        "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes)."
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",
@@ -20679,18 +20684,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "Nuevo",
-      "title": "El chat nativo mejora",
-      "intro": "Los chats nuevos de agentes compatibles usan la vista de chat mejorada. Para alternar entre chat y CLI, abre {{panel}} (barra lateral derecha):",
-      "resumeInNativeChat": "{{action}} abre una conversación de CLI compatible en el chat nativo.",
-      "resumeInCli": "{{action}} copia un chat de Claude/Codex a una CLI nueva sin tocar el original.",
-      "gotIt": "Entendido",
-      "leaveOff": "Dejarlo desactivado",
-      "enableNow": "Activar ahora",
-      "enableError": "No se pudo activar el modo chat.",
-      "manageInSettings": "Gestiona Chat UI en <link>Ajustes → Experimental</link>."
-    },
     "sessionSearch": {
       "ageHours": "2 h",
       "ageMinutes": "12 min",
@@ -20762,7 +20755,26 @@
       "title": "Ve a un worktree con <shortcut>",
       "description": "Busca worktrees, cambia de pestaña, ajusta la configuración o crea un worktree, todo sin dejar el teclado."
     },
-    "gotIt": "Entendido"
+    "gotIt": "Entendido",
+    "chatUiHere": {
+      "title": "Llega la interfaz de chat",
+      "offIntro": "Los agentes ya pueden abrirse como un chat, con mensajes enriquecidos, elementos visuales e imágenes.",
+      "offTerminal": "¿Prefieres el terminal? Sigue teniendo soporte completo. Tus agentes seguirán abriéndose allí hasta que elijas Chat.",
+      "onIntro": "La interfaz de chat ya no es experimental y ahora forma parte de Orca. Tus agentes siguen abriéndose como chats, con mensajes enriquecidos, elementos visuales e imágenes.",
+      "onTerminal": "El terminal también sigue teniendo soporte completo. Puedes volver a cambiar cualquier agente cuando quieras.",
+      "changeInSettings": "Cámbialo cuando quieras en <link>Configuración → Agentes</link>.",
+      "stayInTerminal": "Seguir en el terminal",
+      "cta": "Usar la interfaz de chat",
+      "saveFailed": "No se pudo activar la interfaz de chat. Elige Chat en Configuración → Agentes.",
+      "demoTabTitle": "Explicar el inicio de sesión",
+      "demoPrompt": "Explica cómo funciona el inicio de sesión",
+      "demoReply": "El inicio de sesión empieza en {{file}}: el navegador envía a /login, el servidor comprueba la contraseña y crea una sesión, y luego te redirige a la app. Este es el flujo:",
+      "demoBrowser": "Navegador",
+      "demoSession": "Sesión",
+      "demoApp": "App",
+      "demoPassword": "contraseña",
+      "demoCookie": "cookie"
+    }
   },
   "fileExplorer": {
     "root": {

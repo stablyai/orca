@@ -258,3 +258,57 @@ it.each([
     expect(reloaded.get('other-host-account')).toEqual(otherBefore)
   }
 )
+
+it('notifies transient declaration changes without disk churn and restores only old facts', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'pr-36455-declarations-'))
+  onTestFinished(() => fsPromises.rm(directory, { recursive: true, force: true }))
+  let now = 1
+  const persistence = createAgentModelCatalogFilePersistence(directory)
+  const save = vi.fn(persistence.save)
+  const store = new AgentModelCatalogStore({ now: () => now++ })
+  await store.attachPersistence({ ...persistence, save })
+  const row = {
+    id: 'model',
+    label: 'Model',
+    isDefault: false,
+    defaultEffort: 'high',
+    efforts: ['low', 'high'].map((value) => ({ value, label: value }))
+  }
+  const publish = (declaredDefaultEffort: string | null) =>
+    store.recordSuccess(
+      'fp',
+      'grok',
+      { origin: 'live-session', models: [{ ...row, declaredDefaultEffort }] },
+      'live'
+    )
+  publish('low')
+  store.recordConfiguredDefault('fp', { modelId: 'model' })
+  await store.flushPersistence()
+  const saves = save.mock.calls.length
+  const release = Promise.withResolvers<void>()
+  const refresh = store.refresh('fp', 'grok', async () => {
+    await release.promise
+    return { origin: 'probe', models: [row] }
+  })
+  const waiting = store.pendingListing('fp', true)!
+  publish(null)
+  expect((await waiting)?.models[0]?.declaredDefaultEffort).toBeNull()
+  expect(save).toHaveBeenCalledTimes(saves)
+  const text = await fsPromises.readFile(join(directory, 'agent-model-catalog.json'), 'utf8')
+  expect(text).not.toContain('declaredDefaultEffort')
+  expect((await persistence.load())[0]).toMatchObject({
+    configured: { modelId: 'model' },
+    models: [{ defaultEffort: 'high' }]
+  })
+  expect((await persistence.load())[0]?.models[0]).not.toHaveProperty('declaredDefaultEffort')
+  store.recordConfiguredDefault('fp', { modelId: 'model', effort: 'low' })
+  expect(save).toHaveBeenCalledTimes(saves + 1)
+  publish(null)
+  const configuredUpdate = store.pendingListing('fp', true)!
+  store.recordConfiguredDefault('fp', { modelId: 'model', effort: 'low' })
+  expect((await configuredUpdate)?.models[0]?.declaredDefaultEffort).toBe('low')
+  expect(save).toHaveBeenCalledTimes(saves + 1)
+  await store.flushPersistence()
+  release.resolve()
+  await refresh
+})

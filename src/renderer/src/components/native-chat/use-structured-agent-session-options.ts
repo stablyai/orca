@@ -1,3 +1,4 @@
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
@@ -23,8 +24,9 @@ import {
 export type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 
 export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOptionsArgs) {
-  const { agent, fence, launch, providerVisible, sessionId, target, transportEnabled, turnId } =
-    args
+  const { agent, fence, launch, providerVisible, sessionId, transportEnabled, turnId } = args
+  const environmentId = args.target.kind === 'environment' ? args.target.environmentId : null
+  const target = useMemo(() => runtimeTargetForOwnerEnvironment(environmentId), [environmentId])
   const capturePresentation = args.capturePresentation
   const providerStarting = args.providerStarting ?? false
   const newLaunch = launch?.kind === 'new'

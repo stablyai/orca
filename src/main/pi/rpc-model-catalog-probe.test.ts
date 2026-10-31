@@ -1,3 +1,4 @@
+import { agentModelCatalogEntryWithSuccess } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { createPiModelCatalogProbe } from './rpc-model-catalog-probe'
@@ -109,6 +110,15 @@ describe('Pi model catalog', () => {
       const success = await probe({ variable: 'PI_CODING_AGENT_DIR', path: '/homes/pi-a' })
       expect(requests).toEqual(['get_state', 'get_available_models'])
       expect(success.configured).toEqual({ model: 'openai/gpt-6', effort: 'xhigh' })
+      expect(
+        agentModelCatalogEntryWithSuccess(
+          undefined,
+          { agent: 'pi', fingerprint: 'fp' },
+          success,
+          'discovery',
+          1
+        )?.models.find((row) => row.id === 'openai/gpt-6')?.declaredDefaultEffort
+      ).toBe('xhigh')
       const levels = (values: string[]) => values.map((value) => ({ value, label: value }))
       expect(success.models).toEqual([
         {

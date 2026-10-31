@@ -1,3 +1,4 @@
+import { getWorkerTerminalAutoReleaseScheduler } from '../../src/main/runtime/orchestration/worker-terminal-auto-release-scheduler'
 import { resolveOrcaSessionParty } from '../../src/main/runtime/orchestration/orchestration-party'
 import {
   meterCrewSql,
@@ -105,6 +106,7 @@ function ordinaryCrewCommandFixture(actualIdentity = false, extraPanes: [string,
     .mockImplementation(() => {})
   const notify = vi.spyOn(h.runtime, 'notifyMessageArrived')
   vi.spyOn(console, 'log').mockImplementation(() => {})
+  const receipts: { method: string; result: unknown }[] = []
   const client = new RuntimeClient('/tmp/crew-all-row-contract', 1000, null, null)
   vi.spyOn(client, 'call').mockImplementation(async (method: string, params: unknown) => {
     hostRef.current = ref.current
@@ -119,6 +121,7 @@ function ordinaryCrewCommandFixture(actualIdentity = false, extraPanes: [string,
     if (!response.ok) {
       throw new RuntimeClientError(response.error.code, response.error.message)
     }
+    receipts.push({ method, result: response.result })
     return { ...response, result: response.result, _meta: { runtimeId: h.runtime.getRuntimeId() } }
   })
   const command = async (from: string, name: string, entries: [string, string | boolean][]) => {
@@ -144,11 +147,13 @@ function ordinaryCrewCommandFixture(actualIdentity = false, extraPanes: [string,
   return {
     ...h,
     panes,
+    receipts,
     command,
     send,
     mail,
     effects,
     close: () => {
+      getWorkerTerminalAutoReleaseScheduler(h.runtime).clear()
       h.close()
       hostRef.current = null
     }
@@ -557,6 +562,156 @@ it('keeps a new ordinary terminal occupant distinct from its lost historical ses
     process.stdout.write(
       `C2 hybrid identity command ${JSON.stringify({ currentProcess, historical, snapshot, row, messages: f.mail(), refusalEffectsUnchanged: true })}\n`
     )
+  } finally {
+    f.close()
+  }
+})
+
+it('keeps the genuine settled worker Dispatch preferred and sends its published address as a same-resource follow-up', async () => {
+  const f = ordinaryCrewCommandFixture()
+  try {
+    vi.mocked(f.runtime.getOrchestrationDispatchAuthority).mockImplementation((handle) =>
+      handle === 'term_worker'
+        ? {
+            terminalHandle: handle,
+            paneKey: WORKER_PANE,
+            processIncarnation: 'process:term_worker',
+            hostScope: { kind: 'local', hostId: 'local' }
+          }
+        : null
+    )
+    vi.spyOn(f.runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(f.runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
+      id: 'folder-worker-host',
+      repoId: 'repo',
+      displayName: 'worker',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      path: '/tmp',
+      head: 'fixture',
+      branch: 'fixture',
+      isBare: false,
+      isMainWorktree: true
+    })
+    vi.spyOn(f.runtime, 'showTerminal').mockImplementation(async (handle) => ({
+      handle,
+      worktreeId: 'folder-worker-host',
+      worktreePath: '/tmp',
+      branch: 'fixture',
+      tabId: handle === 'term_worker' ? 'tab_worker' : 'tab_coord',
+      leafId:
+        handle === 'term_worker'
+          ? WORKER_PANE.split(':')[1]!
+          : f.panes.get('term_coord')!.split(':')[1]!,
+      title: 'worker',
+      connected: true,
+      writable: true,
+      lastOutputAt: null,
+      preview: '',
+      paneRuntimeId: 1,
+      ptyId: `pty_${handle}`,
+      rendererGraphEpoch: 1
+    }))
+    const create = vi.spyOn(f.runtime, 'createTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      worktreeId: 'folder-worker-host',
+      title: 'worker'
+    })
+    vi.spyOn(f.runtime, 'waitForTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running',
+      exitCode: null
+    })
+    vi.spyOn(f.runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    const prompt = vi.spyOn(f.runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+      handle: 'term_worker',
+      accepted: true,
+      bytesWritten: 1
+    })
+    vi.spyOn(f.runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+    vi.spyOn(f.runtime, 'getExactWorkerProviderSession').mockReturnValue(null)
+    await f.command('term_coord', 'run-create', [['objective', 'genuine worker follow-up']])
+    await f.command('term_coord', 'worker-start', [
+      ['spec', 'initial work'],
+      ['agent', 'codex'],
+      ['worktree', 'id:folder-worker-host']
+    ])
+    const started = z
+      .object({ dispatchId: z.string(), taskId: z.string(), state: z.literal('ready') })
+      .parse(f.receipts.findLast((entry) => entry.method === 'orchestration.workerStart')?.result)
+    const resource = f.db.getWorkerTerminalResourceByOwner(started.dispatchId)
+    expect(f.db.getWorkerDispatch(started.dispatchId)?.state).toBe('ready')
+    expect(resource).toMatchObject({
+      terminal_handle: 'term_worker',
+      process_incarnation: 'process:term_worker',
+      owner_dispatch_id: started.dispatchId
+    })
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(
+      f.db.settleWorkerReport({
+        taskId: started.taskId,
+        dispatchId: started.dispatchId,
+        outcome: 'succeeded',
+        result: 'initial work done'
+      }).action
+    ).toBe('settled')
+    const snapshot = f.runtime.getOrchestrationCrewSnapshot('term_coord')
+    const row = snapshot.sections.managing.find(
+      (item) => item.openTarget?.kind === 'terminal' && item.openTarget.handle === 'term_worker'
+    )
+    expect(row).toMatchObject({
+      role: 'worker',
+      task: { state: 'completed' },
+      openTarget: { kind: 'terminal', handle: 'term_worker' }
+    })
+    expect(JSON.parse(row!.partyKey)).toEqual([expect.any(String), 'term_worker'])
+    expect.soft(row?.sendAddress).toBe(`dispatch:${started.dispatchId}`)
+    if (!row?.sendAddress) {
+      throw new Error('genuine settled worker action missing')
+    }
+    const beforePrompts = prompt.mock.calls.length
+    await f.command('term_coord', 'send', [
+      ['to', row.sendAddress],
+      ['subject', 'same worker follow-up'],
+      ['body', 'follow-up body']
+    ])
+    const receipt = f.receipts.findLast((entry) => entry.method === 'orchestration.send')?.result
+    process.stdout.write(
+      `Crew genuine follow-up ${JSON.stringify({ started, resource, snapshot, capturedAddress: row.sendAddress, receipt, creates: create.mock.calls.length, prompts: prompt.mock.calls.slice(beforePrompts) })}\n`
+    )
+    expect
+      .soft(receipt)
+      .toMatchObject({ delivery: 'follow_up', followUpOf: started.dispatchId, state: 'ready' })
+    const linked = f.db.db
+      .prepare('SELECT * FROM dispatch_contexts WHERE follow_up_of_dispatch_id = ?')
+      .get(started.dispatchId)
+    const followUp = z
+      .object({
+        id: z.string(),
+        task_id: z.string(),
+        follow_up_of_dispatch_id: z.literal(started.dispatchId)
+      })
+      .parse(linked)
+    expect(f.db.getWorkerDispatch(followUp.id)?.state).toBe('ready')
+    expect(f.db.getTask(followUp.task_id)?.spec).toContain('follow-up body')
+    expect(f.db.getWorkerTerminalResourceByOwner(followUp.id)).toMatchObject({
+      id: resource!.id,
+      owner_dispatch_id: followUp.id,
+      terminal_handle: 'term_worker',
+      process_incarnation: 'process:term_worker'
+    })
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(prompt.mock.calls.slice(beforePrompts)).toHaveLength(1)
+    expect(prompt.mock.calls.at(-1)?.[0]).toBe('term_worker')
   } finally {
     f.close()
   }

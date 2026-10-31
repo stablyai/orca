@@ -376,6 +376,39 @@ describe('PluginManager catalog', () => {
     expect(button('Update').disabled).toBe(true)
   })
 
+  it('shows public install counts on the card and page only for community catalog plugins', async () => {
+    const getInstallCounts = vi.fn().mockResolvedValue({ [listing.pluginKey]: 1234 })
+    installApi({
+      getInstallCounts,
+      onInstallCountsChanged: vi.fn(() => () => undefined),
+      listMarketplaces: vi.fn().mockResolvedValue([
+        {
+          ...source,
+          source: { ...source.source, url: 'https://github.com/stablyai/orca-community-plugins' }
+        }
+      ])
+    })
+    await render()
+    expect(getInstallCounts).toHaveBeenCalled()
+    expect(document.querySelector('[data-plugin-install-count]')?.textContent).toContain(
+      '1.2k installs'
+    )
+    await act(async () =>
+      requestPluginPreview({ marketplaceSourceId: SOURCE_ID, pluginKey: listing.pluginKey })
+    )
+    expect(document.body.textContent).toContain('Installs1.2k')
+  })
+
+  it('hides install counts for a private catalog plugin', async () => {
+    installApi({
+      getInstallCounts: vi.fn().mockResolvedValue({ [listing.pluginKey]: 1234 }),
+      onInstallCountsChanged: vi.fn(() => () => undefined)
+    })
+    await render()
+    expect(document.querySelector('[data-plugin-install-count]')).toBeNull()
+    expect(document.body.textContent).not.toContain('installs')
+  })
+
   it('opens the plugin page for a plugin asked for from outside Settings, with no dialog', async () => {
     await render()
     await act(async () =>

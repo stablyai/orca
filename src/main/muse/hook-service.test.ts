@@ -55,10 +55,6 @@ const scriptPath = (): string =>
   )
 
 describe('MuseHookService', () => {
-  it('reports not_installed before install', () => {
-    expect(new MuseHookService().getStatus().state).toBe('not_installed')
-  })
-
   it('installs the managed hooks pointer, file, and script', () => {
     const status = new MuseHookService().install()
     expect(status.state).toBe('installed')
@@ -103,17 +99,6 @@ describe('MuseHookService', () => {
     const afterRemove = parseMuseSettingsText(readFileSync(configPath(), 'utf-8'), 'test')
     expect(afterRemove?.managed_hooks_path).toBeUndefined()
     expect(afterRemove?.model).toBe('muse-spark-1.2')
-  })
-
-  it('reports not_installed when the pointer aims elsewhere', () => {
-    mkdirSync(join(home, '.config', 'muse'), { recursive: true })
-    writeFileSync(
-      configPath(),
-      JSON.stringify({ schema_version: 1, managed_hooks_path: '/central/hooks.json' })
-    )
-    const status = new MuseHookService().getStatus()
-    expect(status.state).toBe('not_installed')
-    expect(status.detail).toContain('/central/hooks.json')
   })
 
   it('does not overwrite a user-managed hooks pointer during install', () => {

@@ -4,6 +4,4 @@
 # or match the row by id AND host (getRepoExecutionHostId).
 # Prune after a fix: pnpm check:id-only-store-write-ratchet --prune
 lookup:src/main/persistence/loading-store/terminal-binding-recovery.ts#getConnectionIdForWorktree
-lookup:src/main/persistence/scheduling-automations/automation-definition-operations.ts#createAutomation
-lookup:src/main/persistence/scheduling-automations/automation-definition-operations.ts#updateAutomation
 lookup:src/main/persistence/tracking-repos/project-host-operations.ts#getRepo
