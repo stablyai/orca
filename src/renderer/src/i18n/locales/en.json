@@ -21407,6 +21407,10 @@
       "resumed_one": "{{count}} agent session resumed.",
       "resumed_other": "{{count}} agent sessions resumed."
     },
+    "daemonStartupFallbackBanner": {
+      "body": "The terminal service did not start, so terminals run inside Orca and close when it quits or updates. Finish or save their work, then quit and reopen Orca to start the terminal service again.",
+      "title": "Terminals will close when Orca quits"
+    },
     "stalledDaemonBanner": {
       "body": "Background work on this computer is stalled. Typing and new terminals may not work. Restarting the terminal service ends its running terminals and commands.",
       "review": "Review restart options",

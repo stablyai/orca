@@ -21151,6 +21151,10 @@
     },
     "restartedInputNotSent": "终端在您输入时重新启动，部分输入可能未送达。请先查看新的 shell，再重新输入。",
     "typingBeforeStartNotSent": "终端启动期间输入的部分按键未发送。",
+    "daemonStartupFallbackBanner": {
+      "body": "终端服务未能启动，因此终端在 Orca 内运行，并会在 Orca 退出或更新时关闭。请先完成或保存其中的工作，然后退出并重新打开 Orca 以重新启动终端服务。",
+      "title": "退出 Orca 时终端将关闭"
+    },
     "stalledDaemonBanner": {
       "body": "此计算机上的后台工作已停滞。输入和新终端可能无法工作。重新启动终端服务会结束其正在运行的终端和命令。",
       "review": "查看重新启动选项",

@@ -21637,6 +21637,10 @@
       "resumed_other": "{{count}} sessões de agentes retomadas.",
       "resumed_many": "{{count}} sessões de agentes retomadas."
     },
+    "daemonStartupFallbackBanner": {
+      "body": "O serviço de terminais não foi iniciado, então os terminais são executados dentro do Orca e são fechados quando ele é encerrado ou atualizado. Conclua ou salve o trabalho deles e, em seguida, saia do Orca e abra-o novamente para iniciar o serviço de terminais outra vez.",
+      "title": "Os terminais serão fechados ao sair do Orca"
+    },
     "stalledDaemonBanner": {
       "body": "O trabalho em segundo plano neste computador está travado. A digitação e novos terminais podem não funcionar. Reiniciar o serviço de terminais encerra seus terminais e comandos em execução.",
       "review": "Revisar opções de reinicialização",

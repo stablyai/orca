@@ -21261,6 +21261,10 @@
       "resumed_one": "{{count}} ajan oturumu sürdürüldü.",
       "resumed_other": "{{count}} ajan oturumu sürdürüldü."
     },
+    "daemonStartupFallbackBanner": {
+      "body": "Terminal hizmeti başlatılamadı; bu nedenle terminaller Orca içinde çalışıyor ve Orca kapandığında veya güncellendiğinde kapanacak. İşlerini bitirin veya kaydedin, ardından terminal hizmetini yeniden başlatmak için Orca'dan çıkıp yeniden açın.",
+      "title": "Orca'dan çıkıldığında terminaller kapanacak"
+    },
     "stalledDaemonBanner": {
       "body": "Bu bilgisayarda arka plan işlemleri takıldı. Klavye girişi ve yeni terminaller çalışmayabilir. Terminal hizmetini yeniden başlatmak, çalışan terminallerini ve komutlarını sonlandırır.",
       "review": "Yeniden başlatma seçeneklerini incele",

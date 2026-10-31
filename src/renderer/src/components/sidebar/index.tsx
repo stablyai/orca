@@ -20,6 +20,7 @@ import { useWorkspaceRevealBodyRedirect } from './use-workspace-reveal-body-redi
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { DaemonStartupFallbackBanner } from './DaemonStartupFallbackBanner'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
@@ -171,6 +172,7 @@ function Sidebar({
               onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
               activityOptionsTarget={setAgentOptionsTarget}
             />
+            <DaemonStartupFallbackBanner />
             <SeveredTerminalDaemonBanner />
             <StalledTerminalDaemonBanner />
             {sidebarBody === 'agents' ? (

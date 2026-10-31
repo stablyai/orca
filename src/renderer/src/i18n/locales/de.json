@@ -21278,6 +21278,10 @@
       "resumed_one": "{{count}} Agentensitzung fortgesetzt.",
       "resumed_other": "{{count}} Agentensitzungen fortgesetzt."
     },
+    "daemonStartupFallbackBanner": {
+      "body": "Der Terminaldienst wurde nicht gestartet. Terminals laufen daher innerhalb von Orca und werden geschlossen, wenn Orca beendet oder aktualisiert wird. Schließen Sie ihre Arbeit ab oder sichern Sie sie, und beenden Sie Orca dann und öffnen Sie es erneut, um den Terminaldienst wieder zu starten.",
+      "title": "Terminals werden beim Beenden von Orca geschlossen"
+    },
     "stalledDaemonBanner": {
       "body": "Die Hintergrundarbeit auf diesem Computer hängt fest. Eingaben und neue Terminals funktionieren möglicherweise nicht. Ein Neustart des Terminaldienstes beendet dessen laufende Terminals und Befehle.",
       "review": "Neustartoptionen prüfen",

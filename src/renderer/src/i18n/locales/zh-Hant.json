@@ -20957,6 +20957,10 @@
       "resumed_one": "已恢復 {{count}} 個代理程式工作階段。",
       "resumed_other": "已恢復 {{count}} 個代理程式工作階段。"
     },
+    "daemonStartupFallbackBanner": {
+      "body": "終端機服務未能啟動，因此終端機在 Orca 內執行，並會在 Orca 結束或更新時關閉。請先完成或儲存其中的工作，然後結束並重新開啟 Orca 以重新啟動終端機服務。",
+      "title": "結束 Orca 時終端機將會關閉"
+    },
     "stalledDaemonBanner": {
       "body": "此電腦上的背景工作已停滯。輸入和新終端機可能無法正常運作。重新啟動終端機服務會結束其正在執行的終端機和命令。",
       "review": "檢視重新啟動選項",

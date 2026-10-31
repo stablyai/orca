@@ -21485,6 +21485,10 @@
     },
     "restartedInputNotSent": "El terminal se reinició mientras escribías, así que parte de la entrada puede no haberle llegado. Revisa el nuevo shell antes de volver a escribirla.",
     "typingBeforeStartNotSent": "Algunas teclas pulsadas mientras se iniciaba el terminal no se enviaron.",
+    "daemonStartupFallbackBanner": {
+      "body": "El servicio de terminal no se inició, por lo que las terminales se ejecutan dentro de Orca y se cierran cuando sale o se actualiza. Termina o guarda su trabajo y, luego, sal de Orca y vuelve a abrirlo para iniciar de nuevo el servicio de terminal.",
+      "title": "Las terminales se cerrarán al salir de Orca"
+    },
     "stalledDaemonBanner": {
       "body": "El trabajo en segundo plano en este equipo se ha atascado. Es posible que la escritura y las terminales nuevas no funcionen. Reiniciar el servicio de terminal finaliza sus terminales y comandos en ejecución.",
       "review": "Revisar las opciones de reinicio",

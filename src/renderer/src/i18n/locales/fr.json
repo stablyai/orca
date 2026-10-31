@@ -21814,6 +21814,10 @@
     },
     "restartedInputNotSent": "Le terminal a redémarré pendant votre saisie, une partie ne lui est peut-être pas parvenue. Vérifiez le nouveau shell avant de la saisir à nouveau.",
     "typingBeforeStartNotSent": "Certaines touches saisies pendant le démarrage du terminal n'ont pas été envoyées.",
+    "daemonStartupFallbackBanner": {
+      "body": "Le service de terminal n'a pas démarré : les terminaux s'exécutent donc dans Orca et se ferment lorsqu'il quitte ou se met à jour. Terminez ou enregistrez leur travail, puis quittez et rouvrez Orca pour redémarrer le service de terminal.",
+      "title": "Les terminaux se fermeront à la fermeture d'Orca"
+    },
     "stalledDaemonBanner": {
       "body": "Le travail en arrière-plan sur cet ordinateur est bloqué. La saisie et les nouveaux terminaux peuvent ne pas fonctionner. Le redémarrage du service de terminal met fin à ses terminaux et commandes en cours d'exécution.",
       "review": "Vérifier les options de redémarrage",
