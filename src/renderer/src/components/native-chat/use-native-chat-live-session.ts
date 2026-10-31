@@ -41,6 +41,9 @@ export type UseNativeChatLiveSessionArgs = {
   enabled?: boolean
 }
 
+// Paging is the user's own click, so it may start a stopped WSL distro.
+const USER_PAGING = { wakeWslDistro: true } as const
+
 // Keep the base axis stable through non-ready reads.
 const EMPTY_MESSAGES: readonly NativeChatMessage[] = []
 
@@ -83,6 +86,9 @@ export function useNativeChatLiveSession(
   useLayoutEffect(() => {
     latestEnabled.current = enabled
   }, [enabled])
+  // Read, not a dependency: the source key below already changes with the pane.
+  const latestPaneKey = useRef(paneKey)
+  latestPaneKey.current = paneKey
   const latestSessionId = useRef<string | null>(sessionId)
   latestSessionId.current = sessionId
   // Owner flips can retain sessionId; transport identity must also fence stale pagination.
@@ -141,7 +147,7 @@ export function useNativeChatLiveSession(
     replaceList(appendMergerRef.current, [])
     setAppended([])
     setHasMore(false)
-    const wakeWslDistro = takeNativeChatOpenWake(sourceKey)
+    const wake = { wakeWslDistro: takeNativeChatOpenWake(latestPaneKey.current, sourceKey) }
 
     // Seed independently for silent streams, but never overwrite an authoritative frame.
     function loadSession(attempt: number): void {
@@ -149,9 +155,7 @@ export function useNativeChatLiveSession(
         return
       }
       void transport
-        .readSession(agent, activeSessionId, limitRef.current, transcriptPath ?? undefined, {
-          wakeWslDistro
-        })
+        .readSession(agent, activeSessionId, limitRef.current, transcriptPath ?? undefined, wake)
         .then((result) => {
           if (cancelled || !latestEnabled.current || frameArrived) {
             return
@@ -193,7 +197,7 @@ export function useNativeChatLiveSession(
         sessionId,
         transcriptPath: transcriptPath ?? undefined,
         limit: limitRef.current,
-        wakeWslDistro
+        wakeWslDistro: wake.wakeWslDistro
       },
       (frame) => {
         if (cancelled || !latestEnabled.current) {
@@ -260,10 +264,7 @@ export function useNativeChatLiveSession(
     const loadedCount = read.messages.length
     setLoadingEarlier(true)
     const promise = transport
-      // Paging is the user's own click.
-      .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined, {
-        wakeWslDistro: true
-      })
+      .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined, USER_PAGING)
       .then((result): NativeChatOlderPageResult => {
         if (
           !latestEnabled.current ||

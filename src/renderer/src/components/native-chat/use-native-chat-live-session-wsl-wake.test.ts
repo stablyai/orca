@@ -24,7 +24,7 @@ import {
 } from './use-native-chat-live-session'
 
 const ARGS: UseNativeChatLiveSessionArgs = {
-  paneKey: 'tab-1:leaf-1',
+  paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
   agent: 'claude',
   sessionId: 'sess-1',
   transcriptPath: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\-repo\\sess-1.jsonl'
@@ -37,11 +37,11 @@ function Probe(props: UseNativeChatLiveSessionArgs): null {
 
 const roots: Root[] = []
 
-async function mount(): Promise<void> {
+async function mount(args: UseNativeChatLiveSessionArgs = ARGS): Promise<void> {
   const root = createRoot(document.createElement('div'))
   roots.push(root)
   await act(async () => {
-    root.render(createElement(Probe, ARGS))
+    root.render(createElement(Probe, args))
   })
 }
 
@@ -56,7 +56,12 @@ function lastWakes(): { read: unknown; subscribe: unknown } {
 describe('useNativeChatLiveSession: WSL distro wake', () => {
   beforeEach(() => {
     resetWorkspaceSwitchUserActsForTests()
-    useAppStore.setState({ activeWorktreeId: 'wt-1', agentStatusByPaneKey: {} })
+    useAppStore.setState({
+      activeWorktreeId: 'wt-1',
+      agentStatusByPaneKey: {},
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wake only reads each tab's id.
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }], 'wt-2': [{ id: 'tab-2' }] } as never
+    })
     transport.readSession.mockReset().mockResolvedValue({ messages: [] })
     transport.subscribe.mockReset().mockReturnValue(() => {})
   })
@@ -80,6 +85,12 @@ describe('useNativeChatLiveSession: WSL distro wake', () => {
 
     act(() => roots.splice(0).forEach((root) => root.unmount()))
     await mount()
+    expect(lastWakes()).toEqual({ read: { wakeWslDistro: false }, subscribe: false })
+  })
+
+  it("a chat in another workspace mounting in the switch window doesn't ask", async () => {
+    noteUserWorkspaceSwitch('wt-1')
+    await mount({ ...ARGS, paneKey: 'tab-2:11111111-1111-4111-8111-111111111111' })
     expect(lastWakes()).toEqual({ read: { wakeWslDistro: false }, subscribe: false })
   })
 })
