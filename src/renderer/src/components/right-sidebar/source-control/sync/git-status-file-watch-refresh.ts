@@ -17,6 +17,7 @@ import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail
 } from '@/hooks/worktree-file-change-event'
+import { buildIgnoredSet, isPathIgnored } from './status-display'
 
 const WATCH_REFRESH_DEBOUNCE_MS = 125
 
@@ -37,13 +38,24 @@ type UseGitStatusFileWatchRefreshParams = {
 
 export function shouldRefreshGitStatusForFileChange(
   payload: FsChangedPayload,
-  worktreePath: string
+  worktreePath: string,
+  ignoredPaths?: readonly string[]
 ): boolean {
   if (
     normalizeRuntimePathForComparison(payload.worktreePath) !==
     normalizeRuntimePathForComparison(worktreePath)
   ) {
     return false
+  }
+
+  // Why: `git status` without --ignored cannot change for gitignored paths, so build churn there is pure overhead (#30500).
+  const ignored = buildIgnoredSet(ignoredPaths)
+  const canAffectStatus = (absolutePath: string): boolean => {
+    const relativePath = relativePathInsideRoot(worktreePath, absolutePath)
+    if (relativePath === null) {
+      return false
+    }
+    return relativePath.split('/').pop() === '.gitignore' || !isPathIgnored(ignored, relativePath)
   }
 
   return payload.events.some((event) => {
@@ -53,7 +65,10 @@ export function shouldRefreshGitStatusForFileChange(
     if (event.isDirectory === true) {
       return false
     }
-    return relativePathInsideRoot(worktreePath, event.absolutePath) !== null
+    return (
+      canAffectStatus(event.absolutePath) ||
+      (event.oldAbsolutePath !== undefined && canAffectStatus(event.oldAbsolutePath))
+    )
   })
 }
 
@@ -124,7 +139,10 @@ export function useGitStatusFileWatchRefresh({
         return
       }
       const { payload } = detail
-      if (shouldRefreshGitStatusForFileChange(payload, worktreePath)) {
+      const ignoredPaths = activeWorktreeId
+        ? useAppStore.getState().gitIgnoredPathsByWorktree[activeWorktreeId]
+        : undefined
+      if (shouldRefreshGitStatusForFileChange(payload, worktreePath, ignoredPaths)) {
         scheduleRefresh()
       }
     }
@@ -136,5 +154,5 @@ export function useGitStatusFileWatchRefresh({
       }
       window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleFsChanged as EventListener)
     }
-  }, [activeRuntimeEnvironmentId, shouldSubscribe, worktreePath])
+  }, [activeRuntimeEnvironmentId, activeWorktreeId, shouldSubscribe, worktreePath])
 }
