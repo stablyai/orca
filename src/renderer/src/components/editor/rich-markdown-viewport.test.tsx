@@ -75,13 +75,15 @@ function fixture() {
     target = top
     act(() => hook.result.current.searchActions.moveToMatch(1))
   }
-  const nativeReturn = (between?: () => void) => {
-    input.dispatchEvent(
+  const nativeReturn = (between?: () => void, reset = true, source: HTMLElement = input) => {
+    source.dispatchEvent(
       new FocusEvent('focusout', { bubbles: true, relatedTarget: editor.view.dom })
     )
     between?.()
-    container.scrollTop = 0
-    editor.view.dom.dispatchEvent(new FocusEvent('focus', { relatedTarget: input }))
+    if (reset) {
+      container.scrollTop = 0
+    }
+    editor.view.dom.dispatchEvent(new FocusEvent('focus', { relatedTarget: source }))
   }
   cleanups.push(() => {
     retire()
@@ -198,30 +200,43 @@ describe('rich Markdown live viewport', () => {
     expect(f.editor.state.doc.textContent).toBe('betabeta')
   })
 
-  it('resumes the actual smooth anchor writer from current layout and lets newer Find supersede it', () => {
-    const f = fixture()
-    const heading = document.createElement('h2')
-    f.editor.view.dom.append(heading)
-    let headingTop = 1700
-    vi.spyOn(heading, 'getBoundingClientRect').mockImplementation(
-      () => new DOMRect(0, headingTop - f.container.scrollTop, 200, 30)
-    )
-    const anchor = vi.spyOn(heading, 'scrollIntoView').mockImplementation(() => {})
-    scrollRichMarkdownElementIntoView(heading, { block: 'start', behavior: 'smooth' })
-    f.container.scrollTop = 600
-    headingTop = 1800
-    f.nativeReturn()
-    expect(f.container.scrollTop).toBe(600)
-    expect(anchor).toHaveBeenCalledTimes(2)
-    // An interrupted animation's late completion must not retire the resumed operation.
-    f.container.dispatchEvent(new Event('scrollend'))
-    f.nativeReturn()
-    expect(anchor).toHaveBeenCalledTimes(3)
-    f.navigate(0)
-    f.nativeReturn()
-    expect(anchor).toHaveBeenCalledTimes(3)
-    expect(f.container.scrollTop).toBe(0)
-  })
+  it.each([true, false])(
+    'continues the real smooth anchor writer after native focus (reset=%s) until superseded',
+    (reset) => {
+      const f = fixture()
+      const heading = document.createElement('h2')
+      f.editor.view.dom.append(heading)
+      let headingTop = 1700
+      vi.spyOn(heading, 'getBoundingClientRect').mockImplementation(
+        () => new DOMRect(0, headingTop - f.container.scrollTop, 200, 30)
+      )
+      const anchor = vi.spyOn(heading, 'scrollIntoView').mockImplementation(() => {})
+      scrollRichMarkdownElementIntoView(heading, { block: 'start', behavior: 'smooth' })
+      f.container.scrollTop = 600
+      headingTop = 1800
+      f.nativeReturn(undefined, reset)
+      expect(f.container.scrollTop).toBe(600)
+      expect(anchor).toHaveBeenCalledTimes(2)
+      // An interrupted animation's late completion must not retire the resumed operation.
+      f.container.dispatchEvent(new Event('scrollend'))
+      f.nativeReturn(undefined, reset)
+      expect(anchor).toHaveBeenCalledTimes(3)
+      f.navigate(0)
+      f.nativeReturn()
+      expect(anchor).toHaveBeenCalledTimes(3)
+      expect(f.container.scrollTop).toBe(0)
+
+      scrollRichMarkdownElementIntoView(heading, { block: 'start', behavior: 'smooth' })
+      const control = document.createElement('button')
+      f.container.append(control)
+      f.container.scrollTop = 700
+      control.focus()
+      const controlTop = f.container.scrollTop
+      f.nativeReturn(undefined, reset, control)
+      expect(anchor).toHaveBeenCalledTimes(4)
+      expect(f.container.scrollTop).toBe(controlTop)
+    }
+  )
 
   it('retires actual key/container ownership, restores its descriptor and cancels owned frames', () => {
     const f = fixture()

@@ -186,7 +186,16 @@ class RichMarkdownViewport {
   private onFocus = (event: FocusEvent): void => {
     const pending = this.pending
     this.pending = null
-    if (event.target !== this.dom || this.methodDepth || !pending || !this.current()) {
+    if (!this.current()) {
+      return
+    }
+    if (event.target !== this.dom) {
+      if (event.target instanceof Node && this.container.contains(event.target)) {
+        this.navigation = null
+      }
+      return
+    }
+    if (this.methodDepth || !pending) {
       return
     }
     const body = this.dom.ownerDocument.body
@@ -197,10 +206,10 @@ class RichMarkdownViewport {
       return
     }
     const navigation = this.navigation
-    if (this.container.scrollTop === pending.top && this.container.scrollLeft === pending.left) {
-      return
+    if (this.container.scrollTop !== pending.top || this.container.scrollLeft !== pending.left) {
+      this.container.scrollTo({ top: pending.top, left: pending.left, behavior: 'instant' })
     }
-    this.container.scrollTo({ top: pending.top, left: pending.left, behavior: 'instant' })
+    // Native caret reveal cancels smooth scrolling even when the viewport does not move.
     if (navigation && this.navigation === navigation && this.current()) {
       navigation.destination = navigation.scroll()
       this.observeWrite()
