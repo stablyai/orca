@@ -147,21 +147,39 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
       watchChanges: () => ({ close: () => {}, current: () => true })
     }
     desktop.setMobileDesktopRelayHosts(hosts)
-    const session = await authenticateMobileWsSession(pairingUrl(desktop, 'mobile'))
+    const phoneCall = await connectClient(desktop, 'mobile')
+    return { box, contact, desktop, phoneCall }
+  }
+
+  async function connectClient(desktop: OrcaRuntimeRpcServer, scope: 'mobile' | 'runtime') {
+    const session = await authenticateMobileWsSession(pairingUrl(desktop, scope))
     const replies = createEncryptedWsResponseReader(session)
     cleanups.push(() => {
       replies.dispose()
       session.ws.close()
     })
     let sequence = 0
-    const phoneCall = async (method: string, params?: unknown) => {
-      const id = `phone-${++sequence}`
+    return async (method: string, params?: unknown) => {
+      const id = `${scope}-${++sequence}`
       sendEncryptedWsRequest(session, { id, method, params })
       return z.object({ ok: z.literal(true), result: z.unknown() }).parse(await replies.next(id))
         .result
     }
-    return { box, contact, phoneCall }
   }
+
+  it('answers a paired desktop client the same list, untargeted, so it can show those servers', async () => {
+    const { desktop, phoneCall } = await startTopology()
+    const clientCall = await connectClient(desktop, 'runtime')
+
+    const listed = await clientCall('mobileRelay.hosts.list')
+    expect(listed).toEqual(await phoneCall('mobileRelay.hosts.list'))
+    expect(listed).toMatchObject({ hosts: [{ hostId: 'runtime:box', relay: 'ready' }, {}] })
+    await expect(
+      clientCall('mobileRelay.hosts.worktrees', { hostId: 'runtime:box' })
+    ).resolves.toMatchObject({
+      worktrees: [{ worktreeId: 'repo-1::/tmp/worktree-a', branch: 'feature/foo' }]
+    })
+  })
 
   it('lists rows live through the desktop, then its last rows once a server is unreachable', async () => {
     const { box, contact, phoneCall } = await startTopology()
