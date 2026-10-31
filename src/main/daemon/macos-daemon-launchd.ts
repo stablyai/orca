@@ -209,7 +209,8 @@ export async function launchMacDaemonFromStableBundle(
   }
 
   const client = new DaemonClient({ socketPath: options.socketPath, tokenPath: options.tokenPath })
-  const readyByMs = Date.now() + STARTUP_TIMEOUT_MS
+  // A loaded Mac can need longer; a running job cannot be released, so quitting early fails startup.
+  const readyByMs = Math.max(Date.now() + STARTUP_TIMEOUT_MS, deadlineMs)
   for (;;) {
     try {
       await client.ensureConnectedWithin(Math.max(1, readyByMs - Date.now()))

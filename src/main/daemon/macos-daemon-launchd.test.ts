@@ -419,11 +419,28 @@ it('hands off as soon as the job exits, and drops the copy so the next launch re
 it('waits out a silent job that is still running and never forks beside it', async () => {
   launchctl.print = [missing, running]
   const elapsed = elapseOnEachConnectAttempt(2_000)
-  const error = await launchFailure()
+  const error = await launchFailure(Date.now() + 45_000)
   expect(error).toHaveProperty('message', 'ECONNREFUSED')
-  expect(elapsed()).toBeGreaterThanOrEqual(10_000)
+  expect(elapsed()).toBeGreaterThanOrEqual(45_000)
   expect(launchctlCalls('bootout')).toHaveLength(0)
   expect(await exists(copyDir)).toBe(true)
+})
+
+it('adopts a running job that becomes ready after the base readiness window', async () => {
+  launchctl.print = [missing, running]
+  const startedAt = beginRetirementClock()
+  ensureWithinMock.mockImplementation(async () => {
+    retirementClock.now += 2_000
+    if (retirementClock.now - startedAt < 30_000) {
+      throw new Error('ECONNREFUSED')
+    }
+  })
+  await expect(
+    launchMacDaemonFromStableBundle(options, Date.now() + 45_000)
+  ).resolves.not.toBeNull()
+  expect(retirementClock.now - startedAt).toBeGreaterThanOrEqual(30_000)
+  expect(launchctlCalls('bootstrap')).toHaveLength(1)
+  expect(launchctlCalls('bootout')).toHaveLength(0)
 })
 
 it('retries a connection refusal within the same job', async () => {
