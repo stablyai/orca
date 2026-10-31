@@ -85,8 +85,8 @@ export function formatOrchestrationCheckText(
     : ''
   const deliveryNotice =
     formatCurrentDeliveryNotice(prepared.legacyCompatibility?.currentDelivery) +
-    (prepared.deliveryId && prepared.deliveryAcknowledged !== true
-      ? `\nThis Orca version does not acknowledge batches automatically. After handling every message, rerun this check with --ack ${prepared.deliveryId}.`
+    (prepared.deliveryAcknowledged !== true
+      ? formatUnacknowledgedDeliveryNotice(prepared.deliveryId)
       : '')
   if (prepared.formatted) {
     return `${legacyHeader}${prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n` : ''}${prepared.formatted}${deliveryNotice}`
@@ -112,6 +112,12 @@ export function formatOrchestrationCheckText(
   )
   const output = prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n${rendered}` : rendered
   return `${legacyHeader}${output}${deliveryNotice}`
+}
+
+export function formatUnacknowledgedDeliveryNotice(deliveryId: string | null | undefined): string {
+  return deliveryId
+    ? `\nThis Orca version does not acknowledge batches automatically. After handling every message, rerun this check with --ack ${deliveryId}.`
+    : ''
 }
 
 export function prepareOrchestrationCheckOutput<T extends OrchestrationCheckOutput>(

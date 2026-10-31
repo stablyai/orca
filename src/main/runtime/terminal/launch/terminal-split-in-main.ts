@@ -116,6 +116,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       ...(opts.wslUserAct ? { wslUserAct: true } : {}),
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
+      resolvedWorkspace: workspace,
       preAllocatedHandle,
       tabId: source.tabId,
       leafId,

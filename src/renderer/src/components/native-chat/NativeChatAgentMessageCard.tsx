@@ -1,12 +1,10 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
-import { AgentStateDot } from '@/components/AgentStateDot'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { AgentMessageAvatar } from '@/components/AgentMessageAvatar'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import {
@@ -19,7 +17,6 @@ import {
 } from '../../../../shared/agent-session/agent-message-presentation'
 import { agentMessageTranscriptText } from '../../../../shared/agent-session/agent-message-display-text'
 import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
-import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
@@ -160,28 +157,6 @@ export function NativeChatAgentMessageCard({
           </Button>
         ) : null}
       </div>
-    </div>
-  )
-}
-
-function AgentMessageAvatar({
-  sender,
-  worktreeId,
-  target
-}: {
-  sender: AgentMessageSource['senders'][number] | undefined
-  worktreeId: string | null
-  target?: RuntimeClientTarget
-}): React.JSX.Element {
-  const view = useAgentMessageSenderView(sender, worktreeId, target)
-  return (
-    <div className="relative mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
-      <AgentTypeIcon agentType={view.agentType} size={16} />
-      {view.dot ? (
-        <span className="absolute -right-0.5 -bottom-0.5 rounded-full bg-card ring-2 ring-card">
-          <AgentStateDot state={view.dot} size="md" progress={view.progress} />
-        </span>
-      ) : null}
     </div>
   )
 }

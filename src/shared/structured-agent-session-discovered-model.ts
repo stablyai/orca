@@ -57,6 +57,9 @@ export function discoveredModel(
   const effort = effortOption(model, agent)
   const serviceTier = model.serviceTiers?.length ? serviceTierOption(model.serviceTiers) : null
   return {
+    ...(model.declaredDefaultEffort !== undefined
+      ? { declaredDefaultEffort: model.declaredDefaultEffort }
+      : {}),
     id: model.id,
     label: model.label,
     ...(model.description ? { description: model.description } : {}),

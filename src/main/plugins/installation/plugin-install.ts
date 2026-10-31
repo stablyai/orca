@@ -101,6 +101,8 @@ export async function installPluginFromGit(input: {
   url: string
   /** `#ref` suffix: branch, tag, or full commit SHA. Empty = default branch. */
   ref: string
+  /** Commit the user was shown before installing; a ref that moved since fails. */
+  expectedCommit?: string
   hostVersion: string
   blockedPluginReason?: (pluginKey: string) => string | null
 }): Promise<PluginInstallResult> {
@@ -122,6 +124,9 @@ export async function installPluginFromGit(input: {
         destination: stagingDir,
         workingDirectory: tmpdir()
       })
+      if (input.expectedCommit && resolvedCommit !== input.expectedCommit) {
+        return { ok: false, error: 'plugin Git ref moved after it was checked; try again' }
+      }
       // Why the declared one last: a URL with no owner segment (`host/repo.git`) names nobody.
       const publisher =
         reinstall ?? gitUrlPluginPublisher(input.url) ?? (await declaredPublisher(stagingDir))

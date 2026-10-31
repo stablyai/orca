@@ -13,6 +13,8 @@ import {
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 import { withReceiptNext } from './receipt-next-text'
+import { printOrchestrationResult } from './agent-view'
+import { formatMessageViewText, toMessageView, type MessageView } from './message-agent-views'
 
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration reply': async ({ flags, client, cwd, json }) => {
@@ -28,6 +30,15 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
         from
       }
     )
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (value) => ({
+          messageId: value.message.id,
+          next: value.next
+        })
+      })
+      return
+    }
     printResult(result, json, (value) => withReceiptNext(`Replied ${value.message.id}`, value))
   },
 
@@ -40,6 +51,18 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
       terminal: getPresentStringFlag(flags, 'terminal')
     })
+    if (!full) {
+      printOrchestrationResult(result, json, {
+        fields: (value): { messages: MessageView[] } => ({
+          messages: value.messages.map((message) => toMessageView(message, { recipient: true }))
+        }),
+        text: (fields) =>
+          fields.messages.length === 0
+            ? 'No messages.'
+            : fields.messages.map((view) => formatMessageViewText(view)).join('\n\n')
+      })
+      return
+    }
     printResult(result, json, (value) => {
       if (value.count === 0) {
         return 'No messages.'

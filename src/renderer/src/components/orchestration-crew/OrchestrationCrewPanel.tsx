@@ -14,13 +14,9 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
-import {
-  CrewRowDetails,
-  CrewRowTime as Time,
-  CrewRowAvatar as Avatar,
-  CrewRowStatusDot as CrewStatusIndicator
-} from './CrewRowDetails'
+import { CrewRowDetails, CrewRowTime as Time } from './CrewRowDetails'
 import { CrewRowMenu } from './CrewRowMenu'
+import { CrewAgentAvatar } from './CrewAgentAvatar'
 
 function IconButton({
   label,
@@ -213,7 +209,7 @@ export function CrewPanelContent({
               ref={tab}
               variant="outline"
               size="xs"
-              className="pointer-events-auto absolute right-0 top-2 max-w-full"
+              className="pointer-events-auto absolute right-0 top-2 h-auto max-w-full"
               aria-label={translate('components.orchestrationCrew.show', 'Show crew: {{label}}', {
                 label
               })}
@@ -223,15 +219,10 @@ export function CrewPanelContent({
               <PanelRight />
               <span className="flex -space-x-2">
                 {summary.slice(0, 3).map((row) => (
-                  <Avatar key={row.partyKey} row={row} />
+                  <CrewAgentAvatar key={row.partyKey} row={row} target={target} />
                 ))}
               </span>
               <span className="truncate">{label}</span>
-              <span className="flex gap-0.5">
-                {managing.map((row) => (
-                  <CrewStatusIndicator key={row.partyKey} row={row} />
-                ))}
-              </span>
               {pending > 0 ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -292,10 +283,9 @@ function CrewRowView({
           onPointerDown={(event) => event.preventDefault()}
           onClick={mention}
         >
-          <Avatar row={row} tooltip />
+          <CrewAgentAvatar row={row} target={target} tooltip />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
-              <CrewStatusIndicator row={row} />
               <span className="truncate text-sm font-medium">{row.label}</span>
             </span>
             <span

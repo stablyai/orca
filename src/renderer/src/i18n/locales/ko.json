@@ -222,7 +222,7 @@
       },
       "userAgent": {
         "title": "브라우저 ID",
-        "description": "모든 브라우저 프로필과 페이지에 대한 사용자 에이전트를 선택하세요. 기본 모드에서는 Google 로그인이 비활성화됩니다. 변경 사항은 다시 시작한 후에 적용됩니다.",
+        "description": "모든 브라우저 프로필과 페이지에 대한 사용자 에이전트를 선택하세요. 변경 사항은 다시 시작한 후에 적용됩니다.",
         "remoteUnsupported": "Orca CLI를 사용하여 원격 호스트에서 브라우저 ID를 관리합니다.",
         "loading": "로드 중…",
         "resetRequired": "ID 데이터를 변경하려면 먼저 명시적으로 재설정해야 합니다.",
@@ -230,7 +230,7 @@
         "optionClean": "정리됨",
         "optionCleanTooltip": "가져온 Chrome 세션과 일치하도록 Orca 및 Electron 토큰을 제거합니다.",
         "optionNative": "네이티브",
-        "optionNativeTooltip": "정리된 ID를 거부하는 사이트에 대해 Electron의 내장 ID를 유지합니다. 기본 모드에서는 Google 로그인을 사용할 수 없습니다.",
+        "optionNativeTooltip": "정리된 ID를 거부하는 사이트에 대해 Electron의 내장 ID를 유지합니다.",
         "restartRequired": "다시 시작해야 함",
         "unavailable": "브라우저 ID를 사용할 수 없습니다."
       },
@@ -379,6 +379,20 @@
       "chatRuntime": "채팅 런타임",
       "chatChoiceTitle": "채팅 또는 CLI로 열기",
       "chatChoiceDescription": "각 에이전트를 채팅으로 열지 CLI로 열지 선택합니다.",
+      "defaultSurfaceTitle": "에이전트 열기 방식",
+      "defaultSurfaceDescription": "이 컴퓨터에서 에이전트를 여는 기본 방식입니다.",
+      "defaultSurfaceChatDescription": "서식 있는 메시지, 시각 자료, 이미지.",
+      "defaultSurfaceTerminal": "터미널",
+      "defaultSurfaceTerminalDescription": "각 에이전트의 자체 CLI.",
+      "defaultSurfacePerAgent": "에이전트별로 선택",
+      "defaultSurfaceNowChat": "이제 에이전트가 채팅으로 열립니다",
+      "defaultSurfaceNowTerminal": "이제 에이전트가 터미널에서 열립니다",
+      "defaultSurfaceKeptTerminal_one": "{{agents}}은(는) 설정한 대로 터미널에서 열립니다.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}}은(는) 설정한 대로 터미널에서 열립니다.",
+      "defaultSurfaceKeptChat_one": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
+      "defaultSurfaceKeptChat_other": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
+      "defaultSurfaceSetAllChat": "모두 채팅으로 설정",
+      "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
       "sameAsChoice": "{{agent}}와 동일 · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -7241,8 +7255,6 @@
             "toggleLabel": "새 카드 스타일 전환"
           },
           "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Chat UI 전환",
             "shellEnvNamesLabel": "셸에서 전달할 변수",
             "shellEnvNamePlaceholder": "변수 이름",
             "shellEnvNameAdd": "추가",
@@ -7254,9 +7266,7 @@
             "shellEnvToggleLabel": "셸 환경 사용 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
-            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환",
-            "description": "Chat UI에서 지원되는 새 에이전트를 엽니다.",
-            "copy": "구조화된 채팅에서 지원되는 새 에이전트가 열립니다. 터미널에 다른 에이전트가 열립니다. 기존 채팅은 계속 사용할 수 있습니다."
+            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환"
           },
           "agentDashboard": {
             "title": "에이전트 대시보드",
@@ -9411,19 +9421,6 @@
               "worktree": "워크트리",
               "worktrees": "worktrees"
             },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "네이티브",
-              "chat": "채팅",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "터미널",
-              "agent": "에이전트",
-              "description": "Chat UI에서 지원되는 새 에이전트를 엽니다."
-            },
             "agentDashboard": {
               "title": "에이전트 대시보드",
               "description": "워크트리 전반에 걸친 에이전트를 모니터링하는 칸반 보드. 윈도우 내 또는 팝업으로 표시됩니다.",
@@ -11286,8 +11283,7 @@
         "PluginInstallDialog": {
           "localRequired": "플러그인 폴더 경로를 입력하세요.",
           "gitUrlRequired": "저장소 URL을 입력하세요.",
-          "gitUrlInvalid": "HTTPS 또는 SSH Git URL을 사용하세요.",
-          "gitRefRequired": "#tag 또는 #commit을 추가하세요(예: #v0.1.0).",
+          "gitUrlInvalid": "https://github.com/owner/repo, owner/repo 또는 SSH URL 같은 저장소 링크를 사용하세요.",
           "title": "플러그인 설치",
           "description": "활성화하기 전에는 아무것도 실행되지 않습니다.",
           "source": "설치 소스",
@@ -11297,12 +11293,23 @@
           "localPlaceholder": "플러그인 폴더 경로",
           "localHelp": "orca-plugin.json이 있는 폴더",
           "gitLabel": "저장소 URL",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "#tag 또는 #commit으로 끝내 버전을 고정하세요",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "저장소, 릴리스 또는 태그 링크를 붙여넣으세요. #tag나 #commit이 없으면 최신 버전 태그를 사용합니다.",
           "cancel": "취소",
           "installing": "설치 중…",
           "install": "설치",
-          "installFailed": "플러그인 설치에 실패했습니다. 소스를 확인하고 다시 시도하세요."
+          "installFailed": "플러그인 설치에 실패했습니다. 소스를 확인하고 다시 시도하세요.",
+          "checking": "확인 중…",
+          "continue": "계속",
+          "gitUrlCredentials": "URL에서 사용자 이름이나 토큰을 제거하세요. Orca는 사용자의 Git 로그인을 사용합니다.",
+          "gitRefInvalid": "# 뒤의 버전이 올바른 태그, 브랜치 또는 커밋 이름이 아닙니다.",
+          "gitRefNotFound": "이 저장소에는 {{value0}}(이)라는 태그나 브랜치가 없습니다.",
+          "gitUnreachable": "이 저장소를 읽을 수 없습니다. URL과 Git 계정의 접근 권한을 확인하세요.",
+          "resolvedLatestTag": "최신 버전 {{value0}}(커밋 {{value1}})을 설치합니다.",
+          "resolvedTag": "{{value0}}(커밋 {{value1}})을 설치합니다.",
+          "resolvedBranch": "브랜치 {{value0}}의 현재 상태(커밋 {{value1}})를 설치합니다.",
+          "resolvedCommit": "커밋 {{value0}}을 설치합니다.",
+          "resolvedDefaultBranch": "버전 태그가 없어 최신 커밋 {{value0}}을 설치합니다."
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "워크스페이스에서만"
@@ -11472,7 +11479,8 @@
           "invalidManifest": "orca-plugin.json이 유효하지 않습니다. 수정한 후 플러그인을 새로고침하세요.",
           "installedManifestUnloadable": "이 버전은 이 Orca에서 불러올 수 없습니다. 업데이트하거나 다시 설치하세요.",
           "invalidArtifact": "워커 또는 패널 파일이 없거나 안전하지 않습니다. 수정한 후 새로 고치세요.",
-          "consentChanged": "검토하는 동안 이 플러그인이 변경되었습니다. 다시 검토하세요."
+          "consentChanged": "검토하는 동안 이 플러그인이 변경되었습니다. 다시 검토하세요.",
+          "installGitMoved": "Orca가 확인한 후 저장소가 변경되었습니다. 다시 시도하세요."
         },
         "plugins": {
           "search": {
@@ -12542,7 +12550,9 @@
           "license": "라이선스",
           "whatsNew": "새로운 기능",
           "hashCopied": "콘텐츠 해시를 복사했습니다",
-          "hashCopyFailed": "해시를 복사할 수 없습니다."
+          "hashCopyFailed": "해시를 복사할 수 없습니다.",
+          "readme": "{{value0}}에서 README 읽기",
+          "installs": "설치 수"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "이 필터와 일치하는 플러그인이 없습니다",
@@ -14567,27 +14577,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7일",
-            "a3d5476811": "5시간",
-            "8a350a4784": "계정 사용량",
-            "e27fdaee51": "새 워크스페이스",
-            "4405f3c440": "데스크탑 페어링",
-            "0b00c98506": "빠른 작업",
-            "0bad5b07c8": "GitHub 및 Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "작업",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "재개",
             "cf3f98fa3f": "연결이 끊김",
-            "091355da3d": "M1 미니 · 집",
-            "0bc1881bc4": "연결됨 · 워크트리 40개 · 활성 5개",
             "19c212e25e": "맥북 프로",
             "2f1a1d10c4": "데스크탑",
-            "156db8a68a": "생성된 PR",
-            "4a40af029b": "Agent 시간",
-            "00a6903322": "시작된 Agents",
-            "c0e2e9dcd9": "다시 오신 것을 환영합니다",
             "af761a0c0d": "설정",
             "5d94e8ddcc": "Orca"
           },
@@ -17089,7 +17082,8 @@
         },
         "capturedOwner": {
           "orphan": "이 자동화에는 실행할 호스트가 없습니다. 삭제하거나 해당 호스트를 다시 추가하세요.",
-          "unfenced": "실행 기록을 보거나 이 자동화를 관리하려면 이 호스트의 Orca를 업데이트해야 합니다. 예약된 실행은 호스트에서 계속 계속될 수 있습니다."
+          "unfenced": "실행 기록을 보거나 이 자동화를 관리하려면 이 호스트의 Orca를 업데이트해야 합니다. 예약된 실행은 호스트에서 계속 계속될 수 있습니다.",
+          "hostReselection": "자동화를 편집하고 실행하기 전에 호스트를 다시 선택하세요."
         },
         "hostStatus": {
           "authority": {
@@ -17217,6 +17211,9 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "호스트 {{count}}개 중 {{failed}}개를 불러오지 못했습니다"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "저장된 실행 호스트가 더 이상 이 프로젝트 설정과 일치하지 않습니다."
         }
       },
       "agent": {
@@ -18154,6 +18151,9 @@
           "PluginsSectionDescription": {
             "openWith": "다음으로 열기 (편집 가능한 필드에 포커스가 없을 때)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}}회 설치"
         }
       }
     },
@@ -18839,7 +18839,10 @@
         "orcaStopCrash": "이 응답이 진행되는 동안 {{machine}}의 Orca가 예기치 않게 중지되었습니다.",
         "orcaStopRemote": "이 응답이 진행되는 동안 {{machine}}의 Orca가 중지되었습니다.",
         "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다.",
-        "orcaStopUnnamedServer": "원격 서버"
+        "orcaStopUnnamedServer": "원격 서버",
+        "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
+        "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
+        "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트)."
       },
       "providerFrame": {
         "byteCount_other": "{{count}}바이트"
@@ -20234,18 +20237,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "새 기능",
-      "title": "기본 채팅이 업그레이드되었습니다",
-      "intro": "이제 지원되는 Agent의 새 채팅은 업그레이드된 채팅 보기에서 열립니다. 채팅과 CLI 사이를 오가려면 오른쪽 사이드바에서 {{panel}}을 여세요:",
-      "resumeInNativeChat": "{{action}}: 지원되는 CLI 대화를 기본 채팅에서 엽니다.",
-      "resumeInCli": "{{action}}: Claude 또는 Codex 채팅을 새 CLI 세션으로 복사합니다. 원래 채팅은 그대로 유지됩니다.",
-      "gotIt": "확인",
-      "leaveOff": "꺼진 상태 유지",
-      "enableNow": "지금 활성화",
-      "enableError": "채팅 모드를 활성화하지 못했습니다.",
-      "manageInSettings": "<link>설정 → 실험적</link>에서 Chat UI를 관리하세요."
-    },
     "voice": {
       "demoPrompt": "극단적인 경우에 대해 이 차이점을 검토하고 찾은 항목에 대한 테스트를 추가하세요.",
       "startDictation": "받아쓰기 시작",
@@ -20317,7 +20308,26 @@
       "title": "<shortcut> 키로 워크트리 이동",
       "description": "워크트리 검색, 탭 전환, 설정 조정, 새 워크트리 생성까지 모두 키보드만으로 하세요."
     },
-    "gotIt": "확인"
+    "gotIt": "확인",
+    "chatUiHere": {
+      "title": "채팅 UI가 나왔습니다",
+      "offIntro": "이제 에이전트를 채팅으로 열 수 있습니다. 서식 있는 메시지, 시각 자료, 이미지를 지원합니다.",
+      "offTerminal": "터미널이 더 편하신가요? 터미널은 앞으로도 완전히 지원됩니다. 채팅을 선택하기 전까지 에이전트는 계속 터미널에서 열립니다.",
+      "onIntro": "채팅 UI가 실험적 기능에서 벗어나 이제 Orca의 정식 기능이 되었습니다. 에이전트는 계속 채팅으로 열리며 서식 있는 메시지, 시각 자료, 이미지를 지원합니다.",
+      "onTerminal": "터미널도 계속 완전히 지원됩니다. 언제든지 에이전트를 다시 터미널로 바꿀 수 있습니다.",
+      "changeInSettings": "<link>설정 → 에이전트</link>에서 언제든지 변경할 수 있습니다.",
+      "stayInTerminal": "터미널 계속 사용",
+      "cta": "채팅 UI 사용",
+      "saveFailed": "채팅 UI를 켜지 못했습니다. 설정 → 에이전트에서 채팅을 선택하세요.",
+      "demoTabTitle": "로그인 설명",
+      "demoPrompt": "로그인이 어떻게 동작하는지 정리해 줘",
+      "demoReply": "로그인은 {{file}}에서 시작합니다. 브라우저가 /login으로 보내면 서버가 비밀번호를 확인하고 세션을 만든 뒤 앱으로 리디렉션합니다. 흐름은 다음과 같습니다:",
+      "demoBrowser": "브라우저",
+      "demoSession": "세션",
+      "demoApp": "앱",
+      "demoPassword": "비밀번호",
+      "demoCookie": "쿠키"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "더 많은 일치 항목을 사용할 수 있습니다. 검색 결과를 좁히려면 검색을 구체화하세요.",

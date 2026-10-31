@@ -185,7 +185,7 @@ export function QuickCommandRow({
 }
 
 const styles = themedStyleSheet(() => ({
-  pressed: { backgroundColor: colors.bgRaised },
+  pressed: { backgroundColor: colors.borderSubtle },
   disabled: { opacity: 0.45 },
   row: { flexDirection: 'row', alignItems: 'center' },
   rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
@@ -202,7 +202,7 @@ const styles = themedStyleSheet(() => ({
     width: 26,
     height: 26,
     borderRadius: radii.tile,
-    backgroundColor: colors.bgRaised,
+    backgroundColor: colors.borderSubtle,
     alignItems: 'center',
     justifyContent: 'center'
   },

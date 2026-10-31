@@ -285,7 +285,8 @@ it('shows one collapsed avatar and question per party with reverse-role relation
       </TooltipProvider>
     )
     const tab = screen.getByRole('button', { name: 'Show crew: 2 workers' })
-    expect(tab.querySelectorAll('span[aria-hidden="true"]')).toHaveLength(2)
+    expect(within(tab).getAllByLabelText('Needs attention')).toHaveLength(1)
+    expect(within(tab).getAllByLabelText('Working')).toHaveLength(1)
     expect(error).not.toHaveBeenCalled()
     expect(within(tab).getByText('1')).toBeInTheDocument()
     await user.click(tab)
@@ -336,7 +337,9 @@ it.each(['working', 'waiting', 'done'] as const)(
     const user = userEvent.setup()
     mount({ ...worker, status })
     const tab = screen.getByRole('button', { name: 'Show crew: 1 workers' })
-    const indicator = tab.querySelector(`[aria-label="${status}"]`)
+    const label =
+      status === 'working' ? 'Working' : status === 'waiting' ? 'Needs attention' : 'Done'
+    const indicator = within(tab).getByLabelText(label)
     expect(indicator).toBeInTheDocument()
     const glyph = indicator?.innerHTML
     if (status === 'working') {
@@ -344,11 +347,11 @@ it.each(['working', 'waiting', 'done'] as const)(
     } else if (status === 'waiting') {
       expect(indicator?.querySelector('.text-agent-question')).toBeInTheDocument()
     } else {
-      expect(indicator?.querySelector('.bg-emerald-500')).toBeInTheDocument()
+      expect(indicator?.querySelector('.lucide-circle-check')).toBeInTheDocument()
     }
     await user.click(tab)
     const panel = screen.getByRole('complementary', { name: 'Agent crew' })
-    expect(panel.querySelector(`[aria-label="${status}"]`)?.innerHTML).toBe(glyph)
+    expect(within(panel).getByLabelText(label).innerHTML).toBe(glyph)
     expect(screen.queryByText('Sending unavailable')).not.toBeInTheDocument()
   }
 )

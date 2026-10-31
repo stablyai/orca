@@ -1,6 +1,4 @@
-import { crewRecipientAvailability } from './crew-recipient-availability'
-import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
-import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
+import { crewRecipientAvailability, type CrewActionCandidate } from './crew-recipient-availability'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
 import {
   emptyCrew,
@@ -8,13 +6,8 @@ import {
   type OrchestrationCrewRow
 } from '../../../../shared/orchestration-crew'
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
-import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration-fleet-agent-status-evidence'
 import { isPublicOrchestrationAddress } from '../../../../shared/orchestration-agent-reference'
-import type { OrchestrationDb } from '../db'
-import {
-  createLineageRunningSessionResolver,
-  type AgentSessionRecordReader
-} from '../structured-session-lineage'
+import { createLineageRunningSessionResolver } from '../structured-session-lineage'
 import { crewDisplayName, crewTaskDisplay } from './crew-rules'
 import {
   readCrewOwnedRunAddresses,
@@ -31,38 +24,8 @@ import { projectLiveness } from '../../../../shared/orchestration-fleet-worker-p
 import { federatedMessageNamesOnlyHome } from '../dispatch-report-mailbox'
 import { workerReportRefusal } from '../worker-report-admission'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
-export type CrewReadDependencies = {
-  db: OrchestrationDb | null
-  retainedDbExists: boolean
-  hostKey: string
-  records: AgentSessionRecordReader | null
-  liveHandle: (handle: string) => boolean
-  handleForPane: (pane: string) => string | null
-  paneForHandle: (handle: string) => string | null
-  name: (
-    party: AgentMessageSender['party'],
-    taskName: string | null,
-    records: AgentSessionRecordReader | null
-  ) => string | null
-  callerPaneForHandle?: (handle: string) => string | null
-  livePaneForHandle?: (handle: string) => string | null
-  processForHandle?: (handle: string) => string | null
-  statuses: readonly FleetAgentStatusEvidence[]
-  now?: number
-  openIdentityRead?: () => CrewIdentityRead
-  openRuntimeIdentityRead?: () => TerminalIdentityReadContext
-}
-
-export type CrewIdentityRead = Pick<
-  CrewReadDependencies,
-  | 'liveHandle'
-  | 'handleForPane'
-  | 'paneForHandle'
-  | 'processForHandle'
-  | 'callerPaneForHandle'
-  | 'livePaneForHandle'
-  | 'name'
->
+import type { CrewReadDependencies } from './crew-read-dependencies'
+export type { CrewReadDependencies, CrewIdentityRead } from './crew-read-dependencies'
 
 function preview(body: string): string {
   const bytes = Buffer.from(body)
@@ -146,7 +109,21 @@ export function buildCrewSnapshot(
   }
   const selfAliases = () => aliasesFor(self.address)
   const traffic = readCrewTraffic(db, selfAliases(), cutoff)
-  hydrate(traffic.map((message) => message.peer))
+  const questions = readCrewQuestions(db, selfAliases())
+  hydrate([
+    ...new Set([
+      ...traffic.map((message) => message.peer),
+      ...questions.map((question) => `dispatch:${question.dispatch_id}`)
+    ])
+  ])
+  const attention = new Map<string, { target: Party; question: (typeof questions)[number] }>()
+  for (const question of questions) {
+    const address = `dispatch:${question.dispatch_id}`
+    const targetAddress = addressOf(address) ?? party(null, null, null, address)?.address
+    if (targetAddress && targetAddress !== self.address && !attention.has(targetAddress)) {
+      attention.set(targetAddress, { target: getParty(targetAddress)!, question })
+    }
+  }
   for (const run of host.sourceInputs.runInputs(traffic.map((message) => message.peer))) {
     const coordinator = party(run.session, run.handle, run.pane, `run:${run.id}`)
     if (coordinator) {
@@ -154,6 +131,7 @@ export function buildCrewSnapshot(
     }
   }
   const rows = new Map<string, OrchestrationCrewRow>()
+  const actions = new Map<OrchestrationCrewRow, CrewActionCandidate>()
   const decorate = (
     target: Party,
     role: OrchestrationCrewRow['role'],
@@ -205,8 +183,7 @@ export function buildCrewSnapshot(
       ...(assignment?.stage && !['accepted', 'ready'].includes(assignment.stage)
         ? { progress: assignment.stage.replaceAll('_', ' ') }
         : {}),
-      ...(assignment?.host_label ? { hostLabel: assignment.host_label } : {}),
-      ...(sendAddress && isPublicOrchestrationAddress(sendAddress) ? { sendAddress } : {})
+      ...(assignment?.host_label ? { hostLabel: assignment.host_label } : {})
     }
     if (live?.kind === 'here') {
       row.openTarget = {
@@ -219,6 +196,7 @@ export function buildCrewSnapshot(
     } else if (assignment && !assignment.host_label) {
       row.openTarget = { kind: 'dispatch', address: `dispatch:${assignment.id}` }
     }
+    actions.set(row, { party: target, preferred: sendAddress })
     rows.set(target.address, row)
     return row
   }
@@ -247,16 +225,6 @@ export function buildCrewSnapshot(
     }
     return [{ message, target: getParty(targetAddress)! }]
   })
-  const sessionPeers = [
-    ...new Set(
-      selectedTraffic.flatMap(({ target }) =>
-        target.orcaSessionId && !rows.has(target.address) && canAddressPeer(target.address)
-          ? [target.orcaSessionId]
-          : []
-      )
-    )
-  ]
-  const available = crewRecipientAvailability(host, self, sessionPeers, deps)
   for (const { message, target } of selectedTraffic) {
     const targetAddress = target.address
     let row = rows.get(targetAddress)
@@ -267,15 +235,7 @@ export function buildCrewSnapshot(
           (target.address.startsWith('dispatch:') || target.address.startsWith('run:')
             ? target.address
             : undefined))
-      row = decorate(
-        target,
-        'peer',
-        undefined,
-        canAddressPeer(sendAddress) &&
-          (!target.orcaSessionId || available?.(target.orcaSessionId) === true)
-          ? sendAddress
-          : undefined
-      )
+      row = decorate(target, 'peer', undefined, sendAddress)
       snapshot.sections.talkingWith.push(row)
     }
     if (!row.latest || message.sequence > row.latest.sequence) {
@@ -287,12 +247,26 @@ export function buildCrewSnapshot(
       }
     }
   }
-  const questions = readCrewQuestions(db, selfAliases())
-  for (const question of questions) {
-    const target = addressOf(`dispatch:${question.dispatch_id}`)
-    const row = target ? rows.get(target) : undefined
-    if (row && !row.pendingQuestion) {
-      row.pendingQuestion = { preview: preview(question.body), at: question.created_at }
+  for (const [address, { target, question }] of attention) {
+    let row = rows.get(address)
+    if (!row) {
+      row = decorate(target, 'peer', undefined, target.address)
+      snapshot.sections.talkingWith.push(row)
+    }
+    row.pendingQuestion = { preview: preview(question.body), at: question.created_at }
+  }
+  const available = crewRecipientAvailability(
+    host,
+    self,
+    [...actions.values()],
+    deps,
+    canAddressPeer,
+    Boolean(remoteAttachment)
+  )
+  for (const [row, candidate] of actions) {
+    const address = available.get(candidate)
+    if (address && isPublicOrchestrationAddress(address)) {
+      row.sendAddress = address
     }
   }
   return snapshot

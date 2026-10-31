@@ -232,7 +232,7 @@ it.each(['row', 'all', 'menu'] as const)(
       })
       const button =
         route === 'row'
-          ? pane.getByRole('button', { name: 'Codex working Worker Inspect' })
+          ? pane.getByRole('button', { name: 'Codex Worker Inspect' })
           : route === 'all'
             ? pane.getByRole('button', { name: 'Mention all' })
             : test.more

@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { CrewReadModel } from './crew-read-model'
@@ -524,4 +525,202 @@ it('charges actual repeated reverse visits, per-resolver forward discovery and e
     }
   })
   process.stdout.write(`C2 complete lineage ${JSON.stringify(samples)}\n`)
+})
+
+it('charges the full pending provenance/all-row authority trigger at N/10N, including actual rows/chars and downstream selections', () => {
+  const samples = [3, 30].map((population) => {
+    const f = deltaFixture()
+    f.records.clear()
+    f.visible.clear()
+    const pendingIds: string[] = []
+    const trafficIds: string[] = []
+    const add = (handle: string, i: number) =>
+      f.handles.set(handle, `tab_${handle}:aaaaaaaa-aaaa-4aaa-8aaa-${String(i).padStart(12, '0')}`)
+    let now = 0
+    for (let i = 0; i < population; i++) {
+      const parentHandle = `term_parent_${i}`
+      const askerHandle = `term_asker_${i}`
+      const managedHandle = `term_managed_${i}`
+      const peerHandle = `term_recent_${i}`
+      for (const [offset, handle] of [
+        parentHandle,
+        askerHandle,
+        managedHandle,
+        peerHandle
+      ].entries()) {
+        add(handle, 4 * i + offset)
+      }
+      const parent = f.assign(parentHandle)
+      const asker = f.assign(askerHandle, parentHandle)
+      f.assign(managedHandle)
+      const question = f.db.createQuestion({
+        runId: f.run.id,
+        dispatchId: asker.id,
+        askerHandle,
+        question: `aged question ${i}`
+      })
+      now = Date.parse(question.message.created_at) + 30 * 60 * 1000 + 1
+      pendingIds.push(asker.id)
+      f.db.completeDispatch(parent.id)
+      f.db.db
+        .prepare('UPDATE dispatch_contexts SET completed_at = ? WHERE id = ?')
+        .run('2000-01-01T00:00:00.000Z', parent.id)
+      const recent = f.db.insertMessage({
+        from: peerHandle,
+        to: 'term_coord',
+        subject: 'ordinary terminal',
+        body: `recent ${i}`
+      })
+      trafficIds.push(recent.id)
+    }
+    for (const id of trafficIds) {
+      f.db.db
+        .prepare('UPDATE messages SET created_at = ? WHERE id = ?')
+        .run(new Date(now).toISOString(), id)
+    }
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+    const selection = vi.spyOn(ownerSelection, 'selectBareRecipientOwner')
+    const names = vi.fn(f.deps.name)
+    f.deps.name = names
+    const livePane = vi.fn(f.deps.livePaneForHandle!)
+    const process = vi.fn(f.deps.processForHandle!)
+    f.deps.livePaneForHandle = livePane
+    f.deps.processForHandle = process
+    const meter = meterCrewSql(f.db.db)
+    const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
+    const stop = model.subscribe(() => {})
+    try {
+      const output = model.read('term_coord')
+      expect(output.sections.managing).toHaveLength(population)
+      expect(output.sections.talkingWith).toHaveLength(2 * population)
+      expect(
+        output.sections.talkingWith.filter((row) => row.pendingQuestion && !row.latest)
+      ).toHaveLength(population)
+      expect(
+        output.sections.talkingWith.filter((row) => row.latest && !row.pendingQuestion)
+      ).toHaveLength(population)
+      expect(
+        Object.values(output.sections)
+          .flat()
+          .every((row) => row.sendAddress && row.openTarget)
+      ).toBe(true)
+      const provenance = meter.executions.filter(
+        (entry) =>
+          entry.sql.includes('WHERE d.rowid IN') &&
+          typeof entry.parameters[4] === 'string' &&
+          pendingIds.every((id) => String(entry.parameters[4]).includes(id))
+      )
+      expect(provenance).toHaveLength(1)
+      const raw = meter.executions.slice()
+      const totals = sqlTotals(raw)
+      const keyWork = {
+        identity: 0,
+        currentSession: 0,
+        currentPane: 0,
+        namedRun: 0,
+        activeHandle: 0,
+        activePane: 0,
+        activeSuffix: 0,
+        explicitDispatch: 0,
+        history: 0
+      }
+      for (const entry of raw) {
+        if (!selectedKeyMultiplier(entry.sql) || typeof entry.parameters[0] !== 'string') {
+          continue
+        }
+        const requests = z
+          .array(z.record(z.string(), z.unknown()))
+          .parse(JSON.parse(entry.parameters[0]))
+        for (const request of requests) {
+          if (entry.sql.includes('AS recorded')) {
+            keyWork.identity += 2
+          } else if (entry.sql.includes("'handle' AS branch")) {
+            if (typeof request.id === 'string') {
+              keyWork.explicitDispatch++
+            } else {
+              keyWork.activeHandle++
+              if (typeof request.pane === 'string') {
+                keyWork.activePane++
+              }
+              if (typeof request.suffix === 'string') {
+                keyWork.activeSuffix++
+              }
+            }
+          } else if (entry.sql.includes('coordinator.run_id FROM json_each')) {
+            keyWork.history++
+          } else {
+            if (typeof request.id === 'string') {
+              keyWork.namedRun++
+            }
+            if (typeof request.session === 'string') {
+              keyWork.currentSession++
+            }
+            if (typeof request.suffix === 'string') {
+              keyWork.currentPane++
+            }
+          }
+        }
+      }
+      const boundChars = raw.reduce(
+        (sum, entry) =>
+          sum +
+          entry.parameters.reduce<number>(
+            (chars, value) => chars + (typeof value === 'string' ? value.length : 0),
+            0
+          ),
+        0
+      )
+      const work = {
+        selectors: selection.mock.calls.length,
+        livePane: livePane.mock.calls.length,
+        process: process.mock.calls.length,
+        names: names.mock.calls.length
+      }
+      expect(work.selectors).toBe(2 * population)
+      expect(model.read('term_coord')).toEqual(output)
+      expect(sqlTotals(meter.executions).selected).toBe(totals.selected)
+      f.db.crewChanges.notify(new Set(['topology']))
+      expect(model.read('term_coord')).toEqual(output)
+      expect(sqlTotals(meter.executions).selected).toBe(2 * totals.selected)
+      return {
+        population,
+        totals,
+        keyWork,
+        boundChars,
+        work,
+        outputChars: JSON.stringify(output).length,
+        output,
+        raw,
+        plans: crewQueryPlans(f.db.db, raw)
+      }
+    } finally {
+      stop()
+      meter.restore()
+      selection.mockRestore()
+      clock.mockRestore()
+    }
+  })
+  expect(samples[1].totals.selected).toBe(samples[0].totals.selected)
+  for (const field of ['all', 'get', 'rows', 'bytes', 'stringChars', 'requestChars'] as const) {
+    expect(samples[1].totals[field]).toBeLessThanOrEqual(10 * samples[0].totals[field])
+  }
+  for (const field of ['selectors', 'livePane', 'process', 'names'] as const) {
+    expect(samples[1].work[field]).toBeLessThanOrEqual(10 * samples[0].work[field])
+  }
+  for (const field of [
+    'identity',
+    'currentSession',
+    'currentPane',
+    'namedRun',
+    'activeHandle',
+    'activePane',
+    'activeSuffix',
+    'explicitDispatch',
+    'history'
+  ] as const) {
+    expect(samples[1].keyWork[field]).toBeLessThanOrEqual(10 * samples[0].keyWork[field])
+  }
+  expect(samples[1].boundChars).toBeLessThanOrEqual(10 * samples[0].boundChars)
+  expect(samples[1].outputChars).toBeLessThanOrEqual(10 * samples[0].outputChars)
+  process.stdout.write(`C2 pending all-row complete work ${JSON.stringify(samples)}\n`)
 })

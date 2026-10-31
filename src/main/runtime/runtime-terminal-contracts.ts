@@ -1,3 +1,4 @@
+import type { RuntimePtyWorktreeRecord, RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
@@ -188,6 +189,16 @@ export type HookLiveAgentRow = Pick<
   | 'worktreeId'
   | 'programStatus'
 >
+
+export type TerminalHandlePty = {
+  record: TerminalHandleRecord
+  pty: RuntimePtyWorktreeRecord
+}
+
+export type TerminalHandleLeaf = {
+  record: TerminalHandleRecord
+  leaf: RuntimeLeafRecord
+}
 
 export type TerminalHandleRecord = Readonly<{
   handle: string
