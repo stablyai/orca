@@ -76,6 +76,7 @@ async function launchOpenCodePane(options: {
     id: options.ptyId,
     incarnationId: 'incarnation-1'
   }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeStore supplies repo/worktree/settings methods reached by this real runtime; committed spawn and certified hook receipts exercise launch/end authority without a fabricated full store.
   const runtime = new MeasuredRuntime(makeStore() as never, undefined, {
     captureAgentHookCompatibilityRetirement: options.captureAgentHookCompatibilityRetirement,
     attestAgentHookCompatibilityAuthority:

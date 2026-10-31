@@ -168,6 +168,7 @@ export function registerPersistedResidentAuthorityTests(fixture: {
           }
         }
       })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mock xterm/manager and saved binding refs implement this real paired-transport path; actual wire admission, accepted-input ordering and cleanup exercise the partial surface.
       const connection = connectPanePty(pane as never, createManager(1) as never, deps as never)
       const transport = transportFactory.mock.results[0]?.value
       if (!transport) {

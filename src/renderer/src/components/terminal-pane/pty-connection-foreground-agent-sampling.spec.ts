@@ -117,16 +117,11 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           restoredPtyIdByLeafId: { [LEAF_1]: ptyId },
           ...(args.isVisibleRef ? { isVisibleRef: args.isVisibleRef } : {})
         })
-        const binding = connectPanePty(
+        const binding: ReturnType<typeof connectPanePty> = connectPanePty(
           createPane(1) as never,
           createManager(1) as never,
           deps as never
-        ) as unknown as {
-          dispose: () => void
-          noteVisibilityResume: () => void
-          sampleForegroundAgentOnFocus: () => void
-          requestWindowsShiftEnterReconfirmation: () => void
-        }
+        )
         await vi.advanceTimersByTimeAsync(20)
         await flushAsyncTicks(20)
         return { binding, deps, transport, cacheKey: makePaneKey(tabId, LEAF_1) }

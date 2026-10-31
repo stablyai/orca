@@ -202,6 +202,7 @@ export function readDaemonToken(tokenPath: string): string {
   try {
     return readFileSync(tokenPath, 'utf-8').trim()
   } catch (error) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: readFileSync reports Node errno codes; this optional projection handles ENOENT and rethrows every other caught value unchanged, without adding a runtime error guard.
     if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
       return ''
     }

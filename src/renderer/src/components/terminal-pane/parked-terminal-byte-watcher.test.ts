@@ -163,7 +163,8 @@ describe('startParkedTerminalByteWatcher', () => {
     holdRemoteAdmission = false
     remoteNeedsSnapshots.mockResolvedValue(true)
     mockStoreState = createMockStoreState()
-    ;(globalThis as { window: typeof window }).window = {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The partial Window exposes actual parked PTY admission/inspection/data/replay/exit methods; these full watcher cases exercise that same producer without fabricating the rest of preload.
+    globalThis.window = {
       ...originalWindow,
       api: {
         pty: {

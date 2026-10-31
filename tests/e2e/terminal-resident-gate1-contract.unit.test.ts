@@ -244,7 +244,7 @@ it('routes full-screen keyboard actions with passive equal to absent and indepen
   const manager = createManager(1)
   manager.getActivePane.mockReturnValue(pane)
   state.runtimePaneTitlesByTabId = {}
-  // SAFETY: This fixture supplies every dependency reached by Option+Delete classification.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The partial manager supplies active-pane buffer/title/action evidence and option refs used by resolveShortcutEvent; absent/passive/read-backed owner assertions exercise the real keyboard classifier.
   const runtime = createTerminalKeyboardRuntime({
     tabId: 'tab-1',
     worktreeId: 'wt-1',
@@ -320,8 +320,10 @@ it.each(['absent', 'partial'] as const)(
     // SAFETY: The real layout action only reads/writes the supplied terminal and foreground slices.
     const actions = createTerminalLayoutActions(
       (update) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setTabLayout reads this fixture's layouts/foreground map and writes its returned retraction patch; removed-row, sibling identity and held-read assertions exercise that updater.
         Object.assign(state, typeof update === 'function' ? update(state as never) : update)
       },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The real layout action reads terminal layout/ownership slices supplied by this live fixture; using a full AppState annotation would require unrelated emitted fixture behavior.
       () => state as never
     )
     actions.setTabLayout('tab-1', {

@@ -125,11 +125,13 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         Object.assign(mockStoreState, {
           pendingStartupByTabId: {},
           remountTerminalTabForRecovery: createRemountTerminalTabForRecovery(
-            set as never,
+            set,
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Remount's full AppState getter parameter is unused; retain the live partial fixture without fabricating unrelated slices.
             (() => mockStoreState) as never
           ),
           settleTerminalTabRecovery: createSettleTerminalTabRecovery(
-            set as never,
+            set,
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Settlement's full AppState getter parameter is unused; the fixture retains its actual current store identity.
             (() => mockStoreState) as never
           )
         })
@@ -161,6 +163,7 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const pane = createPane(1)
         const send = attachUserInputSignal(pane)
         const deps = createDeps()
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Mock xterm/manager and dependency refs implement this local IPC input/recovery path; failed-write, liveness-wake and generation assertions exercise the real connection.
         const first = connectPanePty(pane as never, createManager(1) as never, deps as never)
         await flushAsyncTicks(40)
         const resident = handler.getTerminalSemanticResident('pty-local-recovery')
@@ -218,8 +221,10 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
           restoredPtyIdByLeafId: mockStoreState.terminalLayoutsByTabId['tab-1'].ptyIdsByLeafId
         })
         const second = connectPanePty(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The replacement mock xterm supplies the same input/buffer/disposal members; the real reattach proves the recovered line terminator is discarded.
           nextPane as never,
           createManager(1) as never,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These partial refs retain restored leaf/PTY ownership; real IPC reattach writes later input to the original resident without adding unrelated dependencies.
           nextDeps as never
         )
         await flushAsyncTicks(40)
@@ -279,6 +284,7 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         transportFactoryQueue.push(transport)
         const pane = createPane(1)
         const deps = createDeps()
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mock pane/manager and partial refs drive real prebinding input admission; this case proves held ACK settlement and completion survive detach.
         const connection = connectPanePty(pane as never, createManager(1) as never, deps as never)
         sendTerminalInputThroughPane(pane, '\x03')
         expect(transport.sendInputAccepted).toHaveBeenCalledOnce()
@@ -348,6 +354,7 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
           createManager(1) as never,
           deps as never
         )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: transportMockFactory installs this captured spawn callback before return; invoking it admits pty-resident, whose identity/policy the test then verifies.
         const spawned = createdTransportOptions[0]?.onPtySpawn as (id: string) => void
         spawned('pty-resident')
         const source = new TerminalSnapshotState()

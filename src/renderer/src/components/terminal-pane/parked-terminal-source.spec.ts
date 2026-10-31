@@ -162,6 +162,7 @@ export function registerParkedTerminalSourceTests(context: {
     const first = context.getRemoteSubscriptions().at(-1)!
     expect(first).toBeDefined()
     first.data('\x1b]0;part', { seq: 9 })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The resident close callback ignores this legacy event payload and retries the captured epoch; the test proves retry, parser continuity and obsolete-source refusal.
     first.options?.onTransportClose?.({ reason: 'closed' } as never)
     await vi.advanceTimersByTimeAsync(250)
     const retry = context.getRemoteSubscriptions().at(-1)!

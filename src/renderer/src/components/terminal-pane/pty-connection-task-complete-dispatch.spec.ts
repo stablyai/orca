@@ -19,6 +19,7 @@ import {
   buildActiveRuntimeEnvironmentState
 } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
+import type { IpcPtyTransportOptions } from './pty-transport-types'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -28,7 +29,9 @@ import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 export function registerPtyConnectionTaskCompleteDispatchTests(): void {
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
-  let createdTransportOptions: Record<string, unknown>[] = []
+  let createdTransportOptions: (IpcPtyTransportOptions & {
+    productionOptions?: IpcPtyTransportOptions
+  })[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
@@ -357,9 +360,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
       connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
-      expect(
-        (createdTransportOptions[0]?.productionOptions as Record<string, unknown>)?.onAgentStatus
-      ).toBeUndefined()
+      expect(createdTransportOptions[0]?.productionOptions?.onAgentStatus).toBeUndefined()
     })
 
     it('queues the idle cursor reset behind hidden agent output', async () => {

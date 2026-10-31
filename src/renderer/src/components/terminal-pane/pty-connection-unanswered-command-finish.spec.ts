@@ -95,6 +95,7 @@ export function registerPtyConnectionUnansweredCommandFinishTests(): void {
         const binding = connectPanePty(
           createPane(1) as never,
           createManager(1) as never,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The partial deps preserve this tab and visibility refs; held process reads, live/end controls and dispatch-once assertions exercise the real connection without a full UI object.
           createDeps({ tabId, isVisibleRef }) as never
         )
         await vi.advanceTimersByTimeAsync(20)

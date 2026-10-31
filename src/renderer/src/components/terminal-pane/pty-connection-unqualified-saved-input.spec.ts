@@ -53,6 +53,7 @@ export function registerUnqualifiedSavedInputTest(context: {
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: savedId }
     })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mock xterm/manager and partial saved-PTY refs supply this real IPC path; held hasPty/write ACK prove immediate input without inventing a resident or process receipt.
     const connection = connectPanePty(pane as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(40)
     expect(window.api.pty.hasPty).toHaveBeenCalledWith(savedId)

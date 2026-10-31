@@ -67,7 +67,7 @@ export function registerPtyConnectionForegroundHostRoutingTests(context: {
           mockStoreState.worktreesByRepo.repo1.find((row) => row.id === id && row.hostId === host)
       })
       expect(
-        // SAFETY: this fixture supplies the host-qualified catalog, tab and lookup read by this resolver.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial store supplies unified tab host, same-ID host-qualified catalogs and getKnownWorktreeById; the resolver must return local before any source admission or foreground read.
         resolveTerminalPaneOwnerContext(mockStoreState as never, 'wt-1', 'tab-1', null)
       ).toMatchObject({ executionHostId: 'local', connectionId: null, unresolved: false })
       const spawn = createDeferred<{ id: string; incarnationId: string }>()

@@ -136,12 +136,12 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const deps = createDeps()
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks()
-      // SAFETY: The registering transport exposes these real resident callbacks.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: transportMockFactory forwards this captured title callback to the admitted resident; the loop verifies both GPU routing and status-owner isolation for absent/passive evidence.
       const title = createdTransportOptions[0]?.onTitleChange as (
         title: string,
         raw: string
       ) => void
-      // SAFETY: The payload matches the actual OSC status callback.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The captured onAgentStatus forwarder accepts this working Pi payload and dispatches the same admitted policy; both loop branches verify the resulting Pi status row.
       const status = createdTransportOptions[0]?.onAgentStatus as (payload: {
         state: 'working'
         prompt: string
@@ -213,16 +213,22 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(2, 1)
 
       connectPanePty(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This mock xterm supplies leaf1 buffer/input/title members; the genuine split source title must affect only pane1 GPU calls.
         pane1 as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The partial manager implements split lookup/GPU methods used for pane1; sibling GPU-call assertions verify the accessed surface.
         manager as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These partial dependency refs pin pane1 to its own restored leaf/PTY; the real split callback and opposite-pane GPU refusals prove that routing without a full UI dependency object.
         createDeps({
           restoredLeafId: pane1.leafId,
           restoredPtyIdByLeafId: { [pane1.leafId]: 'pty-split-1' }
         }) as never
       )
       connectPanePty(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This mock xterm supplies leaf2 buffer/input/title members; its separate PTY binding must not receive pane1 title effects.
         pane2 as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The same partial split manager preserves pane2 identity; the test rejects any GPU call targeting that sibling.
         manager as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These partial dependency refs pin pane2 to its own restored leaf/PTY; the real split callback and opposite-pane GPU refusals prove that routing without a full UI dependency object.
         createDeps({
           restoredLeafId: pane2.leafId,
           restoredPtyIdByLeafId: { [pane2.leafId]: 'pty-split-2' }

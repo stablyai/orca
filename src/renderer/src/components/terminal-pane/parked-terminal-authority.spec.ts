@@ -337,7 +337,7 @@ export function registerParkedTerminalAuthorityTests(context: {
       context.getStore().settings = {
         ...context.getStore().settings,
         terminalHiddenDeliveryGate: false
-      } as MockStoreState['settings']
+      }
       const setHiddenRendererPty = vi.fn()
       ;(
         window as unknown as { api: { pty: Record<string, unknown> } }

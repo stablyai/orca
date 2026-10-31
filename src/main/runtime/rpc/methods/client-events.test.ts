@@ -11,6 +11,7 @@ import {
 import { ALL_RPC_METHODS } from './index'
 import { RuntimeClientEventBus } from '../../runtime-client-event-bus'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The registry declares this exact name as streaming and the predicate checks isStreamingMethod; find still types absence, while all three cases invoke the real registered handler.
 const subscribeMethod = eraseRpcMethods(ALL_RPC_METHODS).find(
   (method) => method.name === 'runtime.clientEvents.subscribe' && isStreamingMethod(method)
 ) as RpcStreamingMethod
@@ -30,6 +31,7 @@ function makeRuntime(): {
       return () => {}
     }
   )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The real subscribe handler uses these settings/listener/cleanup members plus optional snapshots; a full runtime needs unrelated services, and the real bus case proves ready-before-live initialization.
   const runtime = {
     getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
     onClientEvent,
@@ -46,7 +48,7 @@ describe('runtime.clientEvents.subscribe', () => {
 
     const done = subscribeMethod.handler(
       undefined,
-      { runtime, connectionId: 'conn-1', clientKind: 'mobile' } as RpcContext,
+      { runtime, connectionId: 'conn-1', clientKind: 'mobile' } satisfies RpcContext,
       () => {}
     )
 
@@ -63,7 +65,7 @@ describe('runtime.clientEvents.subscribe', () => {
 
     const done = subscribeMethod.handler(
       undefined,
-      { runtime, connectionId: 'conn-1' } as RpcContext,
+      { runtime, connectionId: 'conn-1' } satisfies RpcContext,
       () => {}
     )
 
@@ -102,7 +104,7 @@ describe('runtime.clientEvents.subscribe', () => {
         runtime,
         connectionId: 'ordering',
         clientCapabilities: ['terminal-side-effect-state.v1']
-      } as RpcContext,
+      } satisfies RpcContext,
       (event) => {
         if (typeof event !== 'object' || event === null || !('type' in event)) {
           throw new Error('Runtime event must have a type')
