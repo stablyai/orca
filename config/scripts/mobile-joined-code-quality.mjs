@@ -62,6 +62,7 @@ export async function runMobileJoinedOxlintScan(root, scan, files) {
       const args = [
         ...prefixArgs,
         ...scan.args,
+        '--type-check',
         '--tsconfig',
         MOBILE_JOINED_PROJECT,
         '--format',

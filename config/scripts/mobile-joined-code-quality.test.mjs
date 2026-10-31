@@ -74,7 +74,8 @@ describe('Mobile joined analyzer routing', () => {
       mobilePhase.MOBILE_JOINED_PROJECT
     ])
     const command = execute.mock.calls[0][0]
-    expect(command.args.slice(-5)).toEqual([
+    expect(command.args.slice(-6)).toEqual([
+      '--type-check',
       '--tsconfig',
       mobilePhase.MOBILE_JOINED_PROJECT,
       '--format',
