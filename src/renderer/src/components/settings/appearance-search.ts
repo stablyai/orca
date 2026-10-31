@@ -59,6 +59,7 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       ...translateSearchKeyword('settings.appearance.language.russian', 'Русский'),
       ...translateSearchKeyword('settings.appearance.language.turkish', 'Türkçe'),
       ...translateSearchKeyword('settings.appearance.language.german', 'Deutsch'),
+      ...translateSearchKeyword('settings.appearance.language.galician', 'Galego'),
       // Index native language words in every locale so users can find their language from an unfamiliar UI.
       '语言',
       '語言',

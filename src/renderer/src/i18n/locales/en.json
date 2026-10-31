@@ -615,7 +615,8 @@
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
         "turkish": "Türkçe",
-        "german": "Deutsch"
+        "german": "Deutsch",
+        "galician": "Galego"
       },
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",

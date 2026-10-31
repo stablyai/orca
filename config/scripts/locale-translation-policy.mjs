@@ -223,7 +223,8 @@ export const NATIVE_PICKER_LABELS = {
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
-    french: 'Français'
+    french: 'Français',
+    galician: 'Galego'
   },
   ko: {
     chinese: '中文（简体）',
@@ -231,7 +232,8 @@ export const NATIVE_PICKER_LABELS = {
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
-    french: 'Français'
+    french: 'Français',
+    galician: 'Galego'
   },
   ja: {
     chinese: '中文（简体）',
@@ -239,7 +241,8 @@ export const NATIVE_PICKER_LABELS = {
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
-    french: 'Français'
+    french: 'Français',
+    galician: 'Galego'
   },
   es: {
     chinese: '中文（简体）',
@@ -247,7 +250,8 @@ export const NATIVE_PICKER_LABELS = {
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
-    french: 'Français'
+    french: 'Français',
+    galician: 'Galego'
   },
   fr: {
     chinese: '中文（简体）',
@@ -255,7 +259,17 @@ export const NATIVE_PICKER_LABELS = {
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
-    french: 'Français'
+    french: 'Français',
+    galician: 'Galego'
+  },
+  gl: {
+    chinese: '中文（简体）',
+    chineseTraditional: '繁體中文（台灣）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    french: 'Français',
+    galician: 'Galego'
   }
 }
 

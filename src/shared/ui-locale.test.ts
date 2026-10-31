@@ -7,7 +7,12 @@ import {
   normalizeUiLocaleTag,
   shouldShowLanguageSwitcher
 } from './ui-locale'
-import { UI_LANGUAGE_GERMAN, UI_LANGUAGE_RUSSIAN, UI_LANGUAGE_SYSTEM } from './ui-language'
+import {
+  UI_LANGUAGE_GERMAN,
+  UI_LANGUAGE_GALICIAN,
+  UI_LANGUAGE_RUSSIAN,
+  UI_LANGUAGE_SYSTEM
+} from './ui-language'
 
 describe('ui-locale', () => {
   it.each(['ru', 'ru-RU', 'ru-KZ', 'ru_RU.UTF-8'])('resolves Russian %s', (tag) => {
@@ -20,6 +25,13 @@ describe('ui-locale', () => {
     expect(detectUiLanguage([tag], 'native')).toMatchObject({ locale: 'de', status: 'supported' })
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, tag)).toBe('de')
     expect(resolveUiLocale(UI_LANGUAGE_GERMAN, 'en-US')).toBe('de')
+  })
+  it.each(['gl', 'gl-ES', 'gl_ES.UTF-8'])('resolves Galician %s', (tag) => {
+    expect(detectUiLanguage([tag], 'native')).toMatchObject({ locale: 'gl', status: 'supported' })
+    expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, tag)).toBe('gl')
+    expect(resolveUiLocale(UI_LANGUAGE_GALICIAN, 'en-US')).toBe('gl')
+    expect(shouldShowLanguageSwitcher(detectUiLanguage([tag], 'native'))).toBe(true)
+  })
   })
   it('maps Traditional Chinese system locales to zh-Hant and keeps Simplified on zh', () => {
     for (const tag of ['zh-TW', 'zh-HK', 'zh-MO', 'zh-Hant']) {
@@ -42,6 +54,7 @@ describe('system language detection', () => {
     ['en-US', 'en', 'supported'],
     ['fr_CA.UTF-8', 'fr', 'supported'],
     ['pt-PT', 'pt', 'supported'],
+    ['gl-ES', 'gl', 'supported'],
     ['tr_TR.UTF-8', 'tr', 'supported'],
     ['zh-Hans-TW', 'zh', 'supported'],
     ['zh-Hant-CN', 'zh-Hant', 'supported'],
