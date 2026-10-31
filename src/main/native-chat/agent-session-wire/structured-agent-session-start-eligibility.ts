@@ -6,6 +6,7 @@ import {
   type AgentSessionRefusalDetailsByCode,
   type AgentSessionWireRefusalCode
 } from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionReplyOnlyFacts } from '../../../shared/agent-session-reply-refusal-facts'
 import { terminalOwnerRefusalMessage } from '../../../shared/agent-session-legacy-handoff-lease'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
@@ -84,7 +85,7 @@ export function structuredAgentSessionStartParams(
 
 export function refusedStructuredAgentSessionStart<C extends AgentSessionWireRefusalCode>(
   code: C,
-  details: NoInfer<AgentSessionRefusalDetailsByCode[C]>,
+  details: NoInfer<AgentSessionRefusalDetailsByCode[C] & AgentSessionReplyOnlyFacts<C>>,
   message: string
 ): Extract<StructuredAgentSessionResumeOutcome, { ok: false }> {
   return { ok: false, refusal: refuse(code, details, message) }

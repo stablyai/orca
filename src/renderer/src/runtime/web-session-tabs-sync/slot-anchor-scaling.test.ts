@@ -19,7 +19,7 @@ vi.mock('./slot-anchor', async (load) => {
 })
 
 type Row = RuntimeMobileSessionTabsResult['tabs'][number]
-const terminal = (hostTabId: string): Row => ({
+const terminal = (hostTabId: string): Extract<Row, { type: 'terminal' }> => ({
   type: 'terminal',
   id: `${hostTabId}::${LEAF_ID}`,
   parentTabId: hostTabId,

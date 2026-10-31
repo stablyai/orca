@@ -4,7 +4,10 @@ import {
   readAgentSessionRefusalReference,
   type AgentSessionRefusalReference
 } from '../../../shared/agent-session-wire-refusals'
-import type { AgentSessionConversationOwner } from '../../../shared/agent-session-refusal-details'
+import {
+  readAgentSessionRefusalDetails,
+  type AgentSessionConversationOwner
+} from '../../../shared/agent-session-refusal-details'
 import {
   agentSessionRefusalFailure,
   readAgentSessionErrorRefusal,
@@ -79,7 +82,7 @@ export function structuredLaunchFailure(error: unknown): StructuredLaunchFailure
     ...(owner ? { owner } : {}),
     ...((refusal.code === 'agent_session_conflict' ||
       refusal.code === 'agent_session_ownership_unknown') &&
-    refusal.details?.source
+    replyNamesSource(error, refusal.code)
       ? { source: true as const }
       : {})
   }
@@ -99,6 +102,23 @@ export function structuredLaunchConversationOwner(
 ): AgentSessionConversationOwner | undefined {
   const details = launchRefusal(error)?.details
   return details && 'owner' in details ? details.owner : undefined
+}
+
+/** A fact only the live reply carries (its reference drops it): the switch's own source pane
+ *  still writes the conversation. */
+function replyNamesSource(
+  error: unknown,
+  code: 'agent_session_conflict' | 'agent_session_ownership_unknown'
+): boolean {
+  const reply =
+    error instanceof Error &&
+    'refusal' in error &&
+    typeof error.refusal === 'object' &&
+    error.refusal !== null &&
+    'details' in error.refusal
+      ? readAgentSessionRefusalDetails(code, error.refusal.details)
+      : undefined
+  return reply?.source === true
 }
 
 function launchRefusal(error: unknown): AgentSessionRefusalReference | undefined {
