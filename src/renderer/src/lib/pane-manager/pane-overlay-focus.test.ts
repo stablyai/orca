@@ -39,15 +39,18 @@ function fixture() {
     options: { onActivePaneChange }
   })
   const host = {
-    options: {},
+    options: { onActivePaneChange },
     root,
     panes,
     createPaneInternal: () => pane,
-    setActivePaneId: vi.fn(),
-    getActivePaneId: () => pane.id,
+    setActivePaneId: vi.fn((activePaneId: number | null) => {
+      Object.assign(manager, { activePaneId })
+    }),
+    getActivePaneId: () => manager.getActivePane()?.id ?? null,
     getStyleOptions: () => ({}),
     publishPaneCreated
   } as unknown as PaneManagerHost
+  Object.assign(manager, { host })
   return { root, container, textarea, pane, host, manager, publishPaneCreated, onActivePaneChange }
 }
 
