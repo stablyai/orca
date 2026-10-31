@@ -30,13 +30,15 @@ export function useMobileStructuredPromptResponses(args: {
   mutate: StructuredAgentSessionMutate
   // Older hosts require answers packed into optionId.
   formSubmitEnabled?: boolean
+  sourceKey?: string
   questionAnswersSupported: boolean | null
   onSendError: (message: string) => void
 }): {
   respondPermission: MobilePermissionResponse
   respondQuestion: (answer: string, rendered?: MobileChatQuestion['prompt']) => Promise<boolean>
 } {
-  const { formSubmitEnabled, mutate, onSendError, questionAnswersSupported, stateRef } = args
+  const { formSubmitEnabled, sourceKey, mutate, onSendError, questionAnswersSupported, stateRef } =
+    args
 
   const respondPermission = useCallback<MobilePermissionResponse>(
     async (optionId, content, rendered): Promise<boolean> => {
@@ -47,6 +49,7 @@ export function useMobileStructuredPromptResponses(args: {
         const prompt = actionableStructuredApproval(stateRef.current)
         if (
           !prompt?.body.form ||
+          rendered?.sourceKey !== sourceKey ||
           rendered?.itemId !== prompt.itemId ||
           rendered.expectedRevision !== prompt.revision
         ) {
@@ -86,7 +89,7 @@ export function useMobileStructuredPromptResponses(args: {
       }
       return result.status === 'accepted'
     },
-    [formSubmitEnabled, mutate, onSendError, stateRef]
+    [formSubmitEnabled, sourceKey, mutate, onSendError, stateRef]
   )
 
   const sendAnswers = useCallback(

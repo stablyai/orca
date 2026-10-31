@@ -27,7 +27,8 @@ export type NativeChatResolvedPrompt = (AgentJournalApprovalItem | AgentJournalQ
 export type NativeChatReceiptAnswer = { question: string | null; answer: string | null }
 
 export function nativeChatReceiptAnswers(
-  body: NativeChatResolvedPrompt
+  body: NativeChatResolvedPrompt,
+  booleanLabels?: { yes: string; no: string }
 ): NativeChatReceiptAnswer[] {
   if (body.resolution.state !== 'resolved') {
     return []
@@ -43,8 +44,8 @@ export function nativeChatReceiptAnswers(
         {
           question: field.schema.title ?? field.name,
           answer:
-            agentSessionFormChoices(field).find((choice) => choice.value === value)?.label ??
-            String(value)
+            agentSessionFormChoices(field, booleanLabels).find((choice) => choice.value === value)
+              ?.label ?? String(value)
         }
       ]
     })

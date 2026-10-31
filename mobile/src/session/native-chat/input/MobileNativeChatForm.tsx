@@ -1,3 +1,8 @@
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import {
+  agentSessionFormBooleanLabels,
+  agentSessionFormErrorMessage
+} from '../../../../../src/shared/agent-session-form-copy'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { colors, spacing } from '../../../theme/mobile-theme'
@@ -23,8 +28,9 @@ export function MobileNativeChatForm({
   onSubmit: (content: AgentSessionFormContent) => Promise<boolean>
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [draft, setDraft] = useState(() => initialAgentSessionFormDraft(form))
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
   const edit = (name: string, value: string | boolean | undefined): void => {
     setDraft((current) => {
       const next = new Map(current)
@@ -44,7 +50,7 @@ export function MobileNativeChatForm({
     try {
       await onSubmit(agentSessionFormDraftContent(form, draft))
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Check the form values.')
+      setError(cause)
     }
   }
   return (
@@ -52,12 +58,12 @@ export function MobileNativeChatForm({
       {form.fields.map((field) => {
         const title = field.schema.title ?? field.name
         const value = draft.get(field.name)
-        const choices = agentSessionFormChoices(field)
+        const choices = agentSessionFormChoices(field, agentSessionFormBooleanLabels(t))
         return (
           <View key={field.name} style={styles.field}>
             <Text style={styles.text}>
               {title}
-              {field.required ? '' : ' (Optional)'}
+              {field.required ? '' : ` (${t('components.native-chat.form.optional', 'Optional')})`}
             </Text>
             {field.schema.description ? (
               <Text style={styles.text}>{field.schema.description}</Text>
@@ -65,11 +71,13 @@ export function MobileNativeChatForm({
             {!field.required && value !== undefined ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Clear ${title}`}
+                accessibilityLabel={t('components.native-chat.form.clearField', 'Clear {{field}}', {
+                  field: title
+                })}
                 disabled={disabled}
                 onPress={() => edit(field.name, undefined)}
               >
-                <Text style={styles.text}>Clear</Text>
+                <Text style={styles.text}>{t('components.native-chat.form.clear', 'Clear')}</Text>
               </Pressable>
             ) : null}
             {choices.length ? (
@@ -101,19 +109,19 @@ export function MobileNativeChatForm({
           </View>
         )
       })}
-      {error ? (
+      {error !== null ? (
         <Text accessibilityRole="alert" style={styles.text}>
-          {error}
+          {agentSessionFormErrorMessage(error, t)}
         </Text>
       ) : null}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Submit"
+        accessibilityLabel={t('chat.question.submit', 'Submit')}
         disabled={disabled || submitDisabled}
         onPress={submit}
         style={styles.control}
       >
-        <Text style={styles.text}>Submit</Text>
+        <Text style={styles.text}>{t('chat.question.submit', 'Submit')}</Text>
       </Pressable>
     </ScrollView>
   )

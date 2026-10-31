@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
+import { NativeChatForm } from './NativeChatForm'
+import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
+import type { AgentSessionForm } from '../../../../shared/agent-session-form'
 import recordedFrames from '../../../../main/codex/__fixtures__/codex-app-server-mcp-elicitations.json'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
@@ -47,6 +51,7 @@ beforeEach(() => {
 })
 afterEach(async () => {
   cleanup()
+  await i18n.changeLanguage('en')
   await adapter.closeAll()
 })
 
@@ -222,4 +227,95 @@ it('keeps invalid edits local; selecting a choice replaces its default and Clear
     ])
   )
   expect(h.answerPrompt).toHaveBeenCalledOnce()
+})
+
+it('re-derives pending errors, controls and saved Boolean labels on locale changes without changing draft or typed content', async () => {
+  const form: AgentSessionForm = {
+    fields: [
+      {
+        name: 'Name',
+        required: true,
+        schema: { type: 'string', minLength: 3, default: 'initial' }
+      },
+      { name: 'Boolean', required: true, schema: { type: 'boolean', default: false } },
+      { name: 'Number', required: true, schema: { type: 'number', default: 0 } },
+      { name: 'Enum', required: true, schema: { type: 'string', enum: ['Yes'], default: 'Yes' } },
+      { name: 'Empty', required: true, schema: { type: 'string', default: '' } },
+      { name: 'Omitted', required: false, schema: { type: 'string', default: '' } }
+    ]
+  }
+  const submitted = vi.fn()
+  const view = render(<NativeChatForm form={form} disabled={false} onSubmit={submitted} />)
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+  expect(screen.getByRole('alert').textContent).toBe('Enter at least 3 characters.')
+  await loadRendererUiLanguage('fr')
+  // Fixture translations prove new-key lookup/interpolation; target catalogs stay untouched.
+  i18n.addResourceBundle(
+    'fr',
+    'translation',
+    {
+      components: {
+        'native-chat': {
+          form: {
+            yes: 'Oui',
+            no: 'Non',
+            optional: 'Facultatif',
+            clear: 'Effacer',
+            clearField: 'Effacer {{field}}',
+            error: { minLength: 'Au moins {{minimum}} caractères.' }
+          }
+        }
+      }
+    },
+    true,
+    true
+  )
+  try {
+    await act(async () => {
+      await i18n.changeLanguage('fr')
+    })
+    expect(screen.getByRole('button', { name: 'Valider' })).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toBe('Au moins 3 caractères.')
+    expect(Reflect.get(screen.getByLabelText('Name'), 'value')).toBe('x')
+    expect(screen.getByRole('radio', { name: 'Non' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('radio', { name: 'Yes' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Effacer Omitted' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '  texte  ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }))
+    const content = { Boolean: false, Empty: '', Enum: 'Yes', Name: '  texte  ', Number: 0 }
+    expect(submitted).toHaveBeenCalledExactlyOnceWith(content)
+    view.unmount()
+    render(
+      <NativeChatResolutionReceipt
+        body={{
+          kind: 'approval',
+          title: 'Provider title',
+          detail: null,
+          options: [],
+          form,
+          resolution: {
+            state: 'resolved',
+            selectedOptionId: null,
+            resolvedBy: null,
+            resolvedAt: null,
+            formContent: content
+          }
+        }}
+      />
+    )
+    expect(screen.getByText('Non')).toBeTruthy()
+    expect(screen.getByText('Yes')).toBeTruthy()
+    expect(screen.getByText('0')).toBeTruthy()
+    expect(screen.getByText('texte').textContent).toBe('  texte  ')
+    expect(screen.queryByText('Omitted')).toBeNull()
+    await act(async () => {
+      await i18n.changeLanguage('en')
+    })
+    expect(screen.getByText('No')).toBeTruthy()
+    expect(screen.getByText('Yes')).toBeTruthy()
+    expect(content.Boolean).toBe(false)
+  } finally {
+    i18n.removeResourceBundle('fr', 'translation')
+  }
 })

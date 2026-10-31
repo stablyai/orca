@@ -108,6 +108,27 @@
       "unsentNotes_one": "{{count}} unsent note",
       "unsentNotes_other": "{{count}} unsent notes"
     },
+    "native-chat": {
+      "form": {
+        "error": {
+          "check": "Check the form values.",
+          "choice": "Choose an offered value.",
+          "draftNumber": "{{field}}: Enter a number.",
+          "format": "Enter a valid {{format}} value.",
+          "integer": "Enter a whole number within the supported range.",
+          "maxLength": "Enter at most {{maximum}} characters.",
+          "maximum": "Enter a value of at most {{maximum}}.",
+          "minLength": "Enter at least {{minimum}} characters.",
+          "minimum": "Enter a value of at least {{minimum}}.",
+          "number": "Enter a finite number.",
+          "required": "{{field}}: Enter a value.",
+          "text": "Enter text.",
+          "unknownField": "The response includes an unknown field."
+        },
+        "no": "No",
+        "yes": "Yes"
+      }
+    },
     "worktreeListRow": {
       "children_one": "{{count}} child",
       "children_other": "{{count}} children"

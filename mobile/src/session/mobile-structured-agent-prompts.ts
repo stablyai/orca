@@ -124,7 +124,8 @@ function decodeQuestionFreeTextAnswer(value: string): {
 
 export function projectStructuredPermission(
   prompt: StructuredApprovalItem | null,
-  formSubmitEnabled?: boolean
+  formSubmitEnabled?: boolean,
+  sourceKey?: string
 ): MobileChatPermission | null {
   if (prompt?.body.kind !== 'approval') {
     return null
@@ -132,7 +133,11 @@ export function projectStructuredPermission(
   return {
     ...chatApprovalFromJournal(prompt.body),
     ...(prompt.body.form && formSubmitEnabled !== undefined ? { formSubmitEnabled } : {}),
-    prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision },
+    prompt: {
+      itemId: prompt.itemId,
+      expectedRevision: prompt.revision,
+      ...(sourceKey === undefined ? {} : { sourceKey })
+    },
     options: prompt.body.options.map((option) => ({
       label: option.label,
       send: encodePromptToken({

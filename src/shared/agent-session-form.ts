@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AgentSessionFormValidationError } from './agent-session-form-copy'
 
 const base = { title: z.string().optional(), description: z.string().optional() }
 export const AgentSessionFormFieldSchema = z.union([
@@ -71,7 +72,8 @@ export type AgentSessionFormContent = z.infer<typeof AgentSessionFormContentSche
 export type AgentSessionFormDraft = ReadonlyMap<string, string | boolean>
 
 export function agentSessionFormChoices(
-  field: AgentSessionFormField
+  field: AgentSessionFormField,
+  booleanLabels = { yes: 'Yes', no: 'No' }
 ): { label: string; value: string | boolean }[] {
   const schema = field.schema
   if ('enum' in schema) {
@@ -82,8 +84,8 @@ export function agentSessionFormChoices(
   }
   return schema.type === 'boolean'
     ? [
-        { label: 'Yes', value: true },
-        { label: 'No', value: false }
+        { label: booleanLabels.yes, value: true },
+        { label: booleanLabels.no, value: false }
       ]
     : []
 }
@@ -93,18 +95,18 @@ export function validateAgentSessionFormField(field: AgentSessionFormField, valu
   const choices = agentSessionFormChoices(field)
   if (choices.length > 0) {
     if (!choices.some((choice) => choice.value === value)) {
-      throw new Error('Choose an offered value.')
+      throw new AgentSessionFormValidationError('choice')
     }
   } else if (schema.type === 'string') {
     if (typeof value !== 'string') {
-      throw new Error('Enter text.')
+      throw new AgentSessionFormValidationError('text')
     }
     const length = [...value].length
     if ('minLength' in schema && schema.minLength !== undefined && length < schema.minLength) {
-      throw new Error(`Enter at least ${schema.minLength} characters.`)
+      throw new AgentSessionFormValidationError('minLength', { minimum: schema.minLength })
     }
     if ('maxLength' in schema && schema.maxLength !== undefined && length > schema.maxLength) {
-      throw new Error(`Enter at most ${schema.maxLength} characters.`)
+      throw new AgentSessionFormValidationError('maxLength', { maximum: schema.maxLength })
     }
     if ('format' in schema && schema.format) {
       const formats = {
@@ -114,21 +116,21 @@ export function validateAgentSessionFormField(field: AgentSessionFormField, valu
         'date-time': z.iso.datetime({ offset: true })
       }
       if (!formats[schema.format].safeParse(value).success) {
-        throw new Error(`Enter a valid ${schema.format} value.`)
+        throw new AgentSessionFormValidationError('format', { format: schema.format })
       }
     }
   } else if (schema.type === 'number' || schema.type === 'integer') {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
-      throw new Error('Enter a finite number.')
+      throw new AgentSessionFormValidationError('number')
     }
     if (schema.type === 'integer' && !Number.isSafeInteger(value)) {
-      throw new Error('Enter a whole number within the supported range.')
+      throw new AgentSessionFormValidationError('integer')
     }
     if (schema.minimum !== undefined && value < schema.minimum) {
-      throw new Error(`Enter a value of at least ${schema.minimum}.`)
+      throw new AgentSessionFormValidationError('minimum', { minimum: schema.minimum })
     }
     if (schema.maximum !== undefined && value > schema.maximum) {
-      throw new Error(`Enter a value of at most ${schema.maximum}.`)
+      throw new AgentSessionFormValidationError('maximum', { maximum: schema.maximum })
     }
   }
 }
@@ -140,12 +142,14 @@ export function validateAgentSessionFormContent(
   const content = AgentSessionFormContentSchema.parse(value)
   const names = new Set(form.fields.map((field) => field.name))
   if (Object.keys(content).some((name) => !names.has(name))) {
-    throw new Error('The response includes an unknown field.')
+    throw new AgentSessionFormValidationError('unknownField')
   }
   for (const field of form.fields) {
     if (!Object.hasOwn(content, field.name)) {
       if (field.required) {
-        throw new Error(`${field.schema.title ?? field.name}: Enter a value.`)
+        throw new AgentSessionFormValidationError('required', {
+          field: field.schema.title ?? field.name
+        })
       }
       continue
     }
@@ -191,7 +195,9 @@ export function agentSessionFormDraftContent(
       }
       if (field.schema.type === 'number' || field.schema.type === 'integer') {
         if (typeof value !== 'string') {
-          throw new Error(`${field.schema.title ?? field.name}: Enter a number.`)
+          throw new AgentSessionFormValidationError('draftNumber', {
+            field: field.schema.title ?? field.name
+          })
         }
         if (value.trim() === '') {
           return []

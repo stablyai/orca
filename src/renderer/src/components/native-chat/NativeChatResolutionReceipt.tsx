@@ -1,3 +1,5 @@
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { agentSessionFormBooleanLabels } from '../../../../shared/agent-session-form-copy'
 import { useNativeChatSettledBody } from './native-chat-settled-body'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
@@ -22,6 +24,7 @@ export function NativeChatResolutionReceipt({
   /** False once the prompting agent ends: report the pending question without implying anyone still waits. */
   awaiting?: boolean
 }): React.JSX.Element | null {
+  useUiLanguageRevision()
   const hydrated = useNativeChatSettledBody(presentation)
   const body =
     presentation.deferredBody && hydrated.status === 'ready' ? hydrated.body : presentation
@@ -40,7 +43,9 @@ export function NativeChatResolutionReceipt({
   const { resolution } = body
   const title = body.kind === 'approval' ? (body.displayName ?? body.title) : body.question
   // Non-empty only once resolved, and then each question is listed with its answer.
-  const answers = incomplete ? [] : nativeChatReceiptAnswers(body)
+  const answers = incomplete
+    ? []
+    : nativeChatReceiptAnswers(body, agentSessionFormBooleanLabels(translate))
   return (
     <div
       className="space-y-1 border-l border-border pl-3 text-xs text-chat-foreground-faint"

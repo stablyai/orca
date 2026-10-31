@@ -115,10 +115,12 @@ export function useMobileStructuredAgentSession(
     [conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption]
   )
 
+  const promptSourceKey = encodeNativeChatTranscriptIdentity([sessionKey, state.epoch])
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     stateRef,
     mutate,
     formSubmitEnabled,
+    sourceKey: promptSourceKey,
     questionAnswersSupported: hostSupport?.questionAnswers ?? null,
     onSendError
   })
@@ -298,7 +300,7 @@ export function useMobileStructuredAgentSession(
       requestCancel(prompt ?? promptCancel.pendingStructuredPromptIdentity(stateRef.current)),
     receipts: questions.structuredQuestionTranscript(transcriptItems).receipts,
     actionablePromptIds: state.actionablePromptIds,
-    permission: projectStructuredPermission(approvalPrompt, formSubmitEnabled),
+    permission: projectStructuredPermission(approvalPrompt, formSubmitEnabled, promptSourceKey),
     question: projectStructuredQuestion(questionPrompt),
     respondPermission,
     respondQuestion,

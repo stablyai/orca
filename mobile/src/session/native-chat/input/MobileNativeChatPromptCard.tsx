@@ -95,7 +95,7 @@ export function MobileNativeChatPromptCard({
       />
     ) : permission ? (
       <MobileNativeChatPermission
-        key={JSON.stringify(permission)}
+        key={JSON.stringify(permission.form && permission.prompt ? permission.prompt : permission)}
         permission={permission}
         onRespond={async (send, content, rendered) =>
           (await onRespondPermission?.(send, content, rendered)) ?? false

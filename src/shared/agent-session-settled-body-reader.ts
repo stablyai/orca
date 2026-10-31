@@ -40,6 +40,7 @@ const entries = new Set<Entry>()
 const pending = new Set<Entry>()
 let active = 0
 let draining = false
+const WORKING_BYTES = 6 * AGENT_SESSION_SETTLED_BODY_MAX_UNITS + 256 * 1024
 function drain(): void {
   if (draining) {
     return
@@ -47,13 +48,18 @@ function drain(): void {
   draining = true
   queueMicrotask(() => {
     draining = false
+    let refusedBytes = Infinity
     for (const entry of pending) {
       if (active >= 8) {
         break
       }
+      const bytes = entry.metadataBytes + WORKING_BYTES
+      if (bytes >= refusedBytes) {
+        continue
+      }
       const result = entry.start()
       if (result === 'pressure') {
-        break
+        refusedBytes = bytes
       }
       if (result === 'started') {
         pending.delete(entry)
@@ -167,9 +173,7 @@ export function createAgentSessionSettledBodyReader(
       if (entry.running || entry.retired || ownerRunning) {
         return 'occupied'
       }
-      const lease = reserveRemoteRuntimeRetainedBytes(
-        metadataBytes + 6 * AGENT_SESSION_SETTLED_BODY_MAX_UNITS + 256 * 1024
-      )
+      const lease = reserveRemoteRuntimeRetainedBytes(metadataBytes + WORKING_BYTES)
       if (!lease) {
         return 'pressure'
       }
@@ -252,6 +256,14 @@ export function createAgentSessionSettledBodyReader(
       remove(entry)
     }
   }
+  function clear(): void {
+    for (const selected of owned.values()) {
+      for (const entry of selected) {
+        retire(entry)
+      }
+    }
+    drain()
+  }
   return {
     getSnapshot(source: AgentSessionSettledBodySource): SettledBodyReadState {
       return find(source)?.state ?? ERROR
@@ -273,14 +285,7 @@ export function createAgentSessionSettledBodyReader(
         }
       }
     },
-    clear(): void {
-      for (const selected of owned.values()) {
-        for (const entry of selected) {
-          retire(entry)
-        }
-      }
-      drain()
-    },
+    clear,
     retry(): void {
       for (const selected of owned.values()) {
         for (const entry of selected) {
@@ -291,12 +296,7 @@ export function createAgentSessionSettledBodyReader(
     },
     dispose(): void {
       disposed = true
-      for (const selected of owned.values()) {
-        for (const entry of selected) {
-          retire(entry)
-        }
-      }
-      drain()
+      clear()
     }
   }
 }

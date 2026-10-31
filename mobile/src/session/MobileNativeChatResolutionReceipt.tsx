@@ -1,3 +1,4 @@
+import { agentSessionFormBooleanLabels } from '../../../src/shared/agent-session-form-copy'
 import { ActivityIndicator } from 'react-native'
 import { useMobileNativeChatSettledBody } from './mobile-native-chat-settled-body'
 import { StyleSheet, Text, View } from 'react-native'
@@ -48,7 +49,7 @@ export function MobileNativeChatResolutionReceipt({
   const { resolution } = body
   const copy = nativeChatReceiptCopy(t, resolution.resolvedBy ?? undefined)
   const cancelled = resolution.state === 'cancelled'
-  const answers = incomplete ? [] : nativeChatReceiptAnswers(body)
+  const answers = incomplete ? [] : nativeChatReceiptAnswers(body, agentSessionFormBooleanLabels(t))
   const outcome = [
     cancelled ? copy.cancelled : copy.resolved,
     resolution.resolvedBy ? (cancelled ? copy.cancelledBy : copy.resolver) : null

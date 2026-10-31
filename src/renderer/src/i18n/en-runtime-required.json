@@ -1635,6 +1635,25 @@
         "usageLimitWindowWeeklyModel": "weekly model",
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
       },
+      "form": {
+        "error": {
+          "check": "Check the form values.",
+          "choice": "Choose an offered value.",
+          "draftNumber": "{{field}}: Enter a number.",
+          "format": "Enter a valid {{format}} value.",
+          "integer": "Enter a whole number within the supported range.",
+          "maxLength": "Enter at most {{maximum}} characters.",
+          "maximum": "Enter a value of at most {{maximum}}.",
+          "minLength": "Enter at least {{minimum}} characters.",
+          "minimum": "Enter a value of at least {{minimum}}.",
+          "number": "Enter a finite number.",
+          "required": "{{field}}: Enter a value.",
+          "text": "Enter text.",
+          "unknownField": "The response includes an unknown field."
+        },
+        "no": "No",
+        "yes": "Yes"
+      },
       "goalControl": {
         "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",

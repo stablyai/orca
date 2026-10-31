@@ -1,3 +1,4 @@
+import { activateMobileUiLocale, mobileI18n } from '../../../i18n/mobile-i18n'
 import { MobileNativeChatSettledBodyContext } from '../../mobile-native-chat-settled-body'
 import { createAgentSessionSettledBodyReader } from '../../../../../src/shared/agent-session-settled-body-reader'
 import { agentSessionJsonPiece } from '../../../../../src/shared/agent-session-json-pieces'
@@ -8,7 +9,7 @@ import type { AskPrompt } from '../../../../../src/shared/native-chat/input/nati
 import { createElement, useRef } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { Pressable, TextInput } from 'react-native'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 import { nativeChatAskDismissKey } from '../../../../../src/shared/native-chat-ask-dismiss-key'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
@@ -45,6 +46,11 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
+
+afterEach(async () => {
+  await activateMobileUiLocale('en')
+  mobileI18n.removeResourceBundle('fr', 'translation')
+})
 
 const textInput = (root: ReactTestInstance) =>
   root.find((node) => node.props.placeholder === 'Type your answer')
@@ -194,6 +200,24 @@ it('renders saved whole-form receipt values on phone through the existing receip
   }
   expect(text).not.toContain('omitted')
   expect(text).not.toContain('Selected answer unavailable')
+  mobileI18n.addResourceBundle(
+    'fr',
+    'translation',
+    { components: { 'native-chat': { form: { no: 'Non' } } } },
+    true,
+    true
+  )
+  await act(async () => {
+    await activateMobileUiLocale('fr')
+  })
+  const french = mounted.root
+    .findAll((node) => node.type === 'Text')
+    .map((node) => node.children.join(''))
+  expect(french).toContain('Non')
+  expect(french).toContain('Red label')
+  expect(french).toContain('0')
+  expect(french).toContain('  ')
+  expect(french).not.toContain('No')
   await act(async () => mounted.unmount())
 })
 
@@ -234,21 +258,33 @@ it('submits the actual mobile form through its hook with exact defaults, editabl
     sent.push(fields)
     return { status: 'rejected' }
   }
-  function Form() {
+  let latestRespond: ReturnType<typeof useMobileStructuredPromptResponses>['respondPermission']
+  function Form({
+    supported = true,
+    current = prompt,
+    sourceKey = 'source-a'
+  }: {
+    supported?: boolean
+    current?: StructuredApprovalItem
+    sourceKey?: string
+  }) {
     const stateRef = useRef({
       ...EMPTY_STRUCTURED_AGENT_SESSION,
       status: 'ready' as const,
       items: [prompt]
     })
+    stateRef.current = { ...stateRef.current, items: [current] }
     const actions = useMobileStructuredPromptResponses({
       stateRef,
+      sourceKey,
       mutate,
-      formSubmitEnabled: true,
+      formSubmitEnabled: supported,
       questionAnswersSupported: true,
       onSendError: vi.fn()
     })
+    latestRespond = actions.respondPermission
     return createElement(MobileNativeChatPromptCard, {
-      permission: projectStructuredPermission(prompt),
+      permission: projectStructuredPermission(current, supported, sourceKey),
       onRespondPermission: actions.respondPermission
     })
   }
@@ -274,23 +310,94 @@ it('submits the actual mobile form through its hook with exact defaults, editabl
         content: { count: 0, confirmed: false, color: 'blue', name: '  ', note: '' }
       }
     ])
+    edit('name', 'my draft')
     edit('count', '11')
     await press('Submit')
     expect(sent).toHaveLength(1)
     expect(tree!.root.findByProps({ accessibilityRole: 'alert' }).children.join('')).toContain(
       'at most 10'
     )
+    await act(async () => {
+      tree!.update(createElement(Form, { supported: false }))
+    })
+    expect(tree!.root.findByProps({ accessibilityLabel: 'Submit' }).props.disabled).toBe(true)
+    expect(tree!.root.findByProps({ accessibilityRole: 'alert' }).children.join('')).toContain(
+      'at most 10'
+    )
+    await press('Submit')
+    expect(sent).toHaveLength(1)
+    mobileI18n.addResourceBundle(
+      'fr',
+      'translation',
+      {
+        chat: { question: { submit: 'Valider' } },
+        components: {
+          'native-chat': {
+            form: {
+              no: 'Non',
+              yes: 'Oui',
+              clear: 'Effacer',
+              clearField: 'Effacer {{field}}',
+              optional: 'Facultatif',
+              error: { maximum: 'Au plus {{maximum}}.' }
+            }
+          }
+        }
+      },
+      true,
+      true
+    )
+    await act(async () => {
+      await activateMobileUiLocale('fr')
+    })
+    expect(tree!.root.findByProps({ accessibilityRole: 'alert' }).children.join('')).toBe(
+      'Au plus 10.'
+    )
+    expect(tree!.root.findByProps({ accessibilityLabel: 'Valider' }).props.disabled).toBe(true)
+    expect(
+      tree!.root.findByProps({ accessibilityLabel: 'confirmed: Non' }).props.accessibilityState
+        .checked
+    ).toBe(true)
+    expect(tree!.root.findByProps({ accessibilityLabel: 'Effacer note' })).toBeTruthy()
+    await act(async () => {
+      await activateMobileUiLocale('en')
+    })
+    expect(tree!.root.findByProps({ accessibilityRole: 'alert' }).children.join('')).toContain(
+      'at most 10'
+    )
+    await act(async () => {
+      tree!.update(createElement(Form, { supported: true }))
+    })
+    expect(tree!.root.findByProps({ accessibilityLabel: 'name' }).props.value).toBe('my draft')
     edit('count', '0')
+    await press('Submit')
+    expect(sent[1]).toMatchObject({ content: { name: 'my draft', count: 0, confirmed: false } })
     edit('name', '')
     await press('confirmed: Yes')
     await press('color: red')
     await press('Clear note')
     await press('Submit')
-    expect(sent[1]).toEqual({
+    expect(sent[2]).toEqual({
       itemId: 'form-item',
       expectedRevision: 1,
       content: { count: 0, confirmed: true, color: 'red', name: '' }
     })
+    const defaultsForStale = { count: 0, confirmed: false, color: 'blue', name: '  ', note: '' }
+    const stale = projectStructuredPermission(prompt, true, 'source-a')!.prompt
+    for (const props of [
+      { current: { ...prompt, revision: 2 } },
+      { current: { ...prompt, itemId: 'replacement' } },
+      { sourceKey: 'source-b' }
+    ]) {
+      edit('name', 'discard on replacement')
+      await act(async () => {
+        tree!.update(createElement(Form, props))
+      })
+      expect(tree!.root.findByProps({ accessibilityLabel: 'name' }).props.value).toBe('  ')
+      const before = sent.length
+      expect(await latestRespond!('', defaultsForStale, stale)).toBe(false)
+      expect(sent).toHaveLength(before)
+    }
   } finally {
     await act(async () => tree?.unmount())
   }

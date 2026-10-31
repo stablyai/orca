@@ -4,7 +4,7 @@ import type { ChatApproval } from '../../../../../src/shared/native-chat-interac
 export type MobileChatPermission = ChatApproval & {
   formSubmitEnabled?: boolean
   /** Structured prompt identity, present only when the host can cancel it exactly. */
-  prompt?: { itemId: string; expectedRevision: number }
+  prompt?: { itemId: string; expectedRevision: number; sourceKey?: string }
 }
 
 export type MobilePermissionResponse = (

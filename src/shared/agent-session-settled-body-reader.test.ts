@@ -5,8 +5,10 @@ import {
   getAgentSessionSettledBodyDemandEvidence
 } from './agent-session-settled-body-reader'
 import { agentSessionJsonPiece } from './agent-session-json-pieces'
+import { agentJournalItemKey } from './agent-session-journal-item-key'
 import {
   AGENT_SESSION_SETTLED_BODY_CAPABILITY,
+  AGENT_SESSION_SETTLED_BODY_MAX_UNITS,
   type AgentSessionSettledBodySource,
   type AgentSessionSettledBodyRead
 } from './agent-session-settled-body'
@@ -321,6 +323,76 @@ it.each(['bytes', 'count'] as const)(
     })
   }
 )
+
+it('progresses the oldest eligible owner past a larger refused source, then wakes the older source on real capacity', async () => {
+  vi.useFakeTimers()
+  const selections = ['t'.repeat(128), 'thread-a'].map((thread) => ({
+    ...source,
+    itemId: agentJournalItemKey({
+      provider: 'orca',
+      clientMessageId: `codex-prompt:${thread}:mcp-elicitation:00000000-0000-4000-8000-000000000000:0`
+    })
+  }))
+  const charge = (selected: AgentSessionSettledBodySource) =>
+    JSON.stringify(selected).length * 3 +
+    256 +
+    6 * AGENT_SESSION_SETTLED_BODY_MAX_UNITS +
+    256 * 1024
+  expect(charge(selections[0])).toBeGreaterThan(charge(selections[1]))
+  const pool = 64 * 1024 * 1024
+  const pressure = reserveRemoteRuntimeRetainedBytes(pool)!
+  const calls: string[] = []
+  const owned = selections.map((selected) => {
+    const reader = createAgentSessionSettledBodyReader(async (request) => {
+      calls.push(selected.itemId)
+      return { source: selected, ...agentSessionJsonPiece(json, request.cursor) }
+    })
+    readers.push(reader)
+    return { reader, stop: reader.subscribe(selected, () => {}) }
+  })
+  try {
+    await vi.advanceTimersByTimeAsync(30000)
+    owned.forEach(({ reader }) => reader.retry())
+    await vi.advanceTimersByTimeAsync(0)
+    expect(calls).toEqual([])
+    expect(owned.map(({ reader }, i) => reader.getSnapshot(selections[i]).status)).toEqual([
+      'error',
+      'error'
+    ])
+    expect(pressure.resize(pool - charge(selections[1]))).toBe(true)
+    const proof = reserveRemoteRuntimeRetainedBytes(charge(selections[1]))
+    expect(proof).not.toBeNull()
+    proof!.release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(owned[1].reader.getSnapshot(selections[1])).toEqual({ status: 'ready', body })
+    expect(calls).toEqual(Array(Math.ceil(json.length / 24576)).fill(selections[1].itemId))
+    expect(owned[0].reader.getSnapshot(selections[0]).status).toBe('error')
+    owned.forEach(({ reader }) => reader.retry())
+    await vi.advanceTimersByTimeAsync(30000)
+    expect(owned[0].reader.getSnapshot(selections[0]).status).toBe('error')
+    expect(pressure.resize(pool - charge(selections[0]) - 1024 * 1024)).toBe(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(owned[0].reader.getSnapshot(selections[0])).toEqual({ status: 'ready', body })
+    expect(calls.slice(Math.ceil(json.length / 24576))).toEqual(
+      Array(Math.ceil(json.length / 24576)).fill(selections[0].itemId)
+    )
+  } finally {
+    owned.forEach(({ stop }) => stop())
+    pressure.release()
+  }
+  expect(getAgentSessionSettledBodyDemandEvidence()).toMatchObject({
+    selected: 0,
+    listeners: 0,
+    active: 0,
+    pending: 0,
+    metadataBytes: 0
+  })
+  expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+    pendingRequestCount: 0,
+    retainedBytes: 0
+  })
+  expect(vi.getTimerCount()).toBe(0)
+})
 
 it('bounds queued and running presentation; contact during a timed-out call keeps ERROR until actual late progress and settlement', async () => {
   vi.useFakeTimers()
