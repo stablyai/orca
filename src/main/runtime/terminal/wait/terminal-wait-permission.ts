@@ -300,7 +300,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
 
   protected getPtyAgent(ptyId: string): TerminalAgent | null {
     const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    return pty?.foregroundAgent ?? pty?.launchAgent ?? null
   }
 
   protected isAgentPromptPermissionBlocked(

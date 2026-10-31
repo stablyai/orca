@@ -33,3 +33,27 @@ export function wrapTerminalBracketedPasteText(text: string): string {
   const normalizedText = normalizeTerminalPasteLineEndings(text)
   return `${BRACKETED_PASTE_START}${sanitizeBracketedPasteText(normalizedText)}${BRACKETED_PASTE_END}`
 }
+
+export type WindowsInputRecordNewline = 'alt-enter' | 'csi-u'
+
+export function encodeWindowsInputRecordPasteText(
+  text: string,
+  newline: WindowsInputRecordNewline
+): string {
+  const newlineSequence = newline === 'csi-u' ? '\x1b[13;2u' : '\x1b\r'
+  let encoded = ''
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]
+    if (char === '\r') {
+      encoded += newlineSequence
+      if (text[index + 1] === '\n') {
+        index += 1
+      }
+    } else if (char === '\n') {
+      encoded += newlineSequence
+    } else {
+      encoded += char === ESCAPE ? '\u241b' : char
+    }
+  }
+  return encoded
+}

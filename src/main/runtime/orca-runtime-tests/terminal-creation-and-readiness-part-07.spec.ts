@@ -524,6 +524,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const writes: string[] = []
       const runtime = new OrcaRuntimeService(store)
+      Object.defineProperty(runtime, 'getPtyWriteHostPlatform', { value: () => 'linux' })
       runtime.setPtyController({
         spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
         write: (_ptyId, data) => {
@@ -566,6 +567,7 @@ describe('OrcaRuntimeService', () => {
         let prematureEnters = 0
         let submissions = 0
         const runtime = new OrcaRuntimeService(store)
+        Object.defineProperty(runtime, 'getPtyWriteHostPlatform', { value: () => 'linux' })
         runtime.setPtyController({
           spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
           write: (_ptyId, data) => {

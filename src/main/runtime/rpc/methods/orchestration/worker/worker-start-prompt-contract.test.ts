@@ -89,6 +89,7 @@ async function createPromptContractHarness(
     }
   }, agent)
   const { runtime, handle } = fixture
+  Object.defineProperty(runtime, 'getPtyWriteHostPlatform', { value: () => 'linux' })
   runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
 
   const temporaryRoot = mkdtempSync(join(tmpdir(), 'orca-worker-prompt-contract-'))
