@@ -109,7 +109,8 @@ export type ProviderRateLimits = {
   extraUsage?: ExtraUsageBalance | null
   /** Named per-model buckets (Gemini models, Cursor plan pools). */
   buckets?: RateLimitBucket[]
-  /** Available earned Codex rate-limit reset credits, if reported. */
+  /** Available earned Codex rate-limit reset credits, if reported. The week pool rides the
+   *  optional fields — zcode's GLM plan issues weekly-window cards from the same endpoint. */
   rateLimitResetCredits?: {
     availableCount: number
     /** Total earned reset credits, including spent or expired credits, if reported. */
@@ -121,6 +122,8 @@ export type ProviderRateLimits = {
       expiresAt: number | null
       grantedAt: number | null
     }[]
+    weekAvailableCount?: number
+    weekNextExpiresAt?: number | null
   } | null
   /** Subscription plan tier for the active account (Codex `plan_type`, e.g. "plus"). */
   planType?: string | null

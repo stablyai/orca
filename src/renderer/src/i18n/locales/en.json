@@ -4638,7 +4638,13 @@
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
-            "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account."
+            "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account.",
+            "zcode": {
+              "oneFiveHourCard": "1 five-hour rate-limit reset available",
+              "fiveHourCards": "{{value0}} five-hour rate-limit resets available",
+              "oneWeekCard": "1 weekly rate-limit reset available",
+              "weekCards": "{{value0}} weekly rate-limit resets available"
+            }
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",

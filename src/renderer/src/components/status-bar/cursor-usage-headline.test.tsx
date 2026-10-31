@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import { getUsageTone, ProviderSegment, UsageOverflowChip } from './StatusBarProviderSegment'
 import {
+  getStatusBarPrioritySection,
   getTightestUsageSection,
   getUsageHeadlineSection,
   UsageRosterPanel,
@@ -48,6 +49,50 @@ function cursorPools(primary: number, other: number, onDemand?: number): Provide
   }
 }
 
+describe('ZCode status bar priority', () => {
+  it('uses Coding Plan urgency instead of a more depleted MCP window', () => {
+    const p: ProviderRateLimits = {
+      provider: 'zcode',
+      session: { ...windowAt(12), windowMinutes: 300 },
+      weekly: { ...windowAt(24), windowMinutes: 10_080 },
+      monthly: windowAt(99),
+      updatedAt: 0,
+      error: null,
+      status: 'ok'
+    }
+
+    expect(getTightestUsageSection(p)?.window).toBe(p.monthly)
+    expect(getStatusBarPrioritySection(p)?.window).toBe(p.weekly)
+    expect(getUsageHeadlineSection(p)?.window).toBe(p.weekly)
+    expect(getUsageTone(p)).toBe('normal')
+
+    const codex: ProviderRateLimits = {
+      provider: 'codex',
+      session: { ...windowAt(60), windowMinutes: 300 },
+      weekly: null,
+      updatedAt: 0,
+      error: null,
+      status: 'ok'
+    }
+    const roster = renderToStaticMarkup(
+      <UsageRosterPanel
+        providers={[p, codex]}
+        display="used"
+        statusBarUsageMode="compact"
+        onStatusBarUsageModeChange={() => {}}
+        isRefreshing={false}
+        onRefresh={() => {}}
+        onOpenProvider={() => {}}
+        onSignIn={() => {}}
+        canSignIn={() => false}
+        onManageAccounts={() => {}}
+        onUsageDetails={() => {}}
+      />
+    )
+    expect(roster.indexOf('Codex')).toBeLessThan(roster.indexOf('ZCode'))
+  })
+})
+
 describe('Cursor compact usage headline', () => {
   it.each([0, 7, 41])('shows primary pool %s with the chosen percentage display', (primary) => {
     const p = cursorPools(primary, 90, 100)
@@ -79,6 +124,7 @@ describe('Cursor compact usage headline', () => {
       const p = bucket === 'Other Models' ? cursorPools(7, 100) : cursorPools(0, 0, 100)
       expect(getUsageTone(p)).toBe('urgent')
       expect(getTightestUsageSection(p)?.label).toBe(bucket)
+      expect(getStatusBarPrioritySection(p)?.label).toBe(bucket)
       expect(getUsageHeadlineSection(p)?.label).toBe('Cursor Models')
       const overflow = renderToStaticMarkup(
         <UsageOverflowChip hidden={[p]} providerCount={1} display="used" />
