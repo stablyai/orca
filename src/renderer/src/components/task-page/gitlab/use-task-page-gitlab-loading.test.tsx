@@ -1,9 +1,15 @@
 // @vitest-environment happy-dom
 
-import { cleanup, renderHook, waitFor } from '@testing-library/react'
+import { cleanup, render, renderHook, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
+import { i18n } from '@/i18n/i18n'
+
+vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 
 const rpc = vi.hoisted(() => ({ call: vi.fn() }))
 
@@ -16,6 +22,8 @@ import {
   GITLAB_TASK_FETCH_CONCURRENCY,
   useTaskPageGitLabLoading
 } from './use-task-page-gitlab-loading'
+
+import { TaskPageGitLabItemList } from './ItemList'
 
 const serverRepo: Repo = {
   id: 'server-repo',
@@ -36,6 +44,143 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('useTaskPageGitLabLoading', () => {
+  function GitLabListHarness({
+    view,
+    executionHostId = 'local'
+  }: {
+    view: 'issues' | 'mrs'
+    executionHostId?: ExecutionHostId
+  }) {
+    const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
+    const [gitlabError, setGitlabError] = useState<string | null>(null)
+    const [gitlabLoading, setGitlabLoading] = useState(false)
+    const repo: Repo = { ...serverRepo, executionHostId }
+    useTaskPageGitLabLoading({
+      selectedRepos: [repo],
+      selectedReposKey: executionHostId,
+      primaryRepo: repo,
+      taskSource: 'gitlab',
+      setGitlabItems,
+      setGitlabLoading,
+      setGitlabError,
+      gitlabRefreshNonce: 0,
+      gitlabView: view,
+      setGitlabTodos: vi.fn(),
+      setGitlabTodosLoading: vi.fn(),
+      activeGitlabFilter: 'opened'
+    })
+    const model = {
+      gitlabItems,
+      gitlabError,
+      gitlabLoading,
+      gitlabEmptyState: { title: 'No items', description: '' },
+      displayedGitLabItems: gitlabItems,
+      openGitLabDetailPage: vi.fn(),
+      handleUseGitLabItem: vi.fn()
+    } satisfies Partial<TaskPageComposerActionsModel>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ItemList reads only the fields supplied above.
+    return <TaskPageGitLabItemList model={model as unknown as TaskPageComposerActionsModel} />
+  }
+
+  it.each(['issues', 'mrs'] as const)(
+    'shows a plain message for a wrapped %s rejection',
+    async (view) => {
+      const channel = view === 'issues' ? 'gitlab:listIssues' : 'gitlab:listMRs'
+      const rejectList = vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            `Error invoking remote method '${channel}': Error: Access denied: unknown repository path`
+          )
+        )
+      Object.assign(window.api.gl, { listIssues: rejectList, listMRs: rejectList })
+      const { container } = render(<GitLabListHarness view={view} />)
+
+      expect(await screen.findByText('Access denied: unknown repository path')).toBeTruthy()
+      expect(container.textContent).not.toContain('Error invoking remote method')
+    }
+  )
+
+  it.each([new Error("Error invoking remote method 'gitlab:listIssues': Error: "), null, {}])(
+    'shows a readable fallback for rejection %s',
+    async (reason) => {
+      glListIssues.mockRejectedValue(reason)
+      render(<GitLabListHarness view="issues" />)
+
+      expect(
+        await screen.findByText('Could not load GitLab work items. Refresh to try again.')
+      ).toBeTruthy()
+    }
+  )
+
+  it.each([
+    {
+      failure: 'unknown owner with multiline recovery',
+      executionHostId: 'runtime:unresolved-owner',
+      expected:
+        'No se conoce el equipo de este repositorio.\nVuelve a conectarlo e inténtalo de nuevo.'
+    },
+    {
+      failure: 'unreadable rejection with translated fallback',
+      executionHostId: 'local',
+      expected: 'No se pudieron cargar los elementos de GitLab. Actualiza para volver a intentarlo.'
+    }
+  ] as const)('renders $failure', async ({ executionHostId, expected }) => {
+    const language = i18n.language
+    const resources = i18n.getResourceBundle('es', 'translation')
+    try {
+      i18n.removeResourceBundle('es', 'translation')
+      i18n.addResourceBundle('es', 'translation', {
+        auto: {
+          runtime: {
+            forgeCredentialTarget: {
+              unknownHost:
+                'No se conoce el equipo de este repositorio.\nVuelve a conectarlo e inténtalo de nuevo.'
+            }
+          },
+          components: {
+            TaskPage: {
+              gitlabLoadFailed:
+                'No se pudieron cargar los elementos de GitLab. Actualiza para volver a intentarlo.'
+            }
+          }
+        }
+      })
+      await i18n.changeLanguage('es')
+      glListIssues.mockRejectedValue(null)
+      render(<GitLabListHarness view="issues" executionHostId={executionHostId} />)
+
+      const banner = await screen.findByText(expected.replace(/\s+/g, ' '))
+      expect(banner.textContent).toBe(expected)
+      if (executionHostId === 'runtime:unresolved-owner') {
+        expect(glListIssues).not.toHaveBeenCalled()
+        expect(rpc.call).not.toHaveBeenCalled()
+      }
+    } finally {
+      cleanup()
+      i18n.removeResourceBundle('es', 'translation')
+      if (resources) {
+        i18n.addResourceBundle('es', 'translation', resources)
+      }
+      await i18n.changeLanguage(language)
+    }
+  })
+
+  it('suppresses a rejected project error when another project returns rows', async () => {
+    rpc.call.mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'gitlab:listIssues': Error: Access denied: unknown repository path"
+      )
+    )
+    const setGitlabItems = vi.fn()
+    const setGitlabError = vi.fn()
+    renderIssuesHook(manyServerRepos(2), setGitlabItems, setGitlabError)
+
+    await waitFor(() => expect(setGitlabItems).toHaveBeenCalled())
+    expect(setGitlabItems.mock.lastCall?.[0]).toHaveLength(1)
+    expect(setGitlabError).toHaveBeenCalledExactlyOnceWith(null)
+  })
+
   it('lists a server-owned repo on its server (#14603)', async () => {
     const setGitlabItems = vi.fn()
     const setGitlabError = vi.fn()
@@ -143,7 +288,7 @@ describe('useTaskPageGitLabLoading', () => {
     }))
   }
 
-  function renderIssuesHook(repos: Repo[], setGitlabItems = vi.fn()) {
+  function renderIssuesHook(repos: Repo[], setGitlabItems = vi.fn(), setGitlabError = vi.fn()) {
     return renderHook(() =>
       useTaskPageGitLabLoading({
         selectedRepos: repos,
@@ -152,7 +297,7 @@ describe('useTaskPageGitLabLoading', () => {
         taskSource: 'gitlab',
         setGitlabItems,
         setGitlabLoading: vi.fn(),
-        setGitlabError: vi.fn(),
+        setGitlabError,
         gitlabRefreshNonce: 0,
         gitlabView: 'issues',
         setGitlabTodos: vi.fn(),

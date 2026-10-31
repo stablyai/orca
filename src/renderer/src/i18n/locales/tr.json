@@ -210,6 +210,11 @@
     },
     "cardProperties": {
       "agentModel": "Aracı modeli"
+    },
+    "wslHostOffer": {
+      "title": "{{distro}} dağıtımını ana makine olarak çalıştır (önerilir)",
+      "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
+      "accept": "Ana makine olarak çalıştır"
     }
   },
   "app": {
@@ -7115,13 +7120,15 @@
           "distro": "Dağıtım",
           "loading": "WSL dağıtımları aranıyor…",
           "placeholder": "Dağıtım seçin",
-          "none": "WSL dağıtımı bulunamadı. Yüklemek için: wsl --install",
           "stoppedHint": "{{value0}} durdurulmuş. Eklemek onu başlatır.",
           "addingHint": "Orca sunucusu dağıtıma yüklenip başlatılıyor. İlk seferinde bir dakika sürebilir.",
           "adding": "Kuruluyor…",
           "startAndAdd": "Başlat ve ekle",
           "add": "Ana makine ekle",
-          "refresh": "Yenile"
+          "refresh": "Yenile",
+          "wsl1Reason": "WSL 1 bir Orca ana makinesi çalıştıramaz; {{command}} ile dönüştürün",
+          "noWsl2Title": "WSL 2 dağıtımı bulunamadı",
+          "noWsl2Install": "Bir Windows terminalinde {{command}} ile bir dağıtım yükleyin, ardından Yenile'yi seçin."
         },
         "wslHostRowStatus": {
           "connecting": "Başlatılıyor",
@@ -13006,7 +13013,8 @@
           "previous": "Önceki",
           "updated": "Güncellendi",
           "license": "Lisans",
-          "whatsNew": "Yenilikler"
+          "whatsNew": "Yenilikler",
+          "installs": "Yüklemeler"
         },
         "PluginDetailPage": {
           "back": "Eklentiler",
@@ -15079,27 +15087,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7g",
-            "a3d5476811": "5 sa",
-            "8a350a4784": "Hesap kullanımı",
-            "e27fdaee51": "Yeni Çalışma Alanı",
-            "4405f3c440": "Masaüstünü Eşleştir",
-            "0b00c98506": "Hızlı İşlemler",
-            "0bad5b07c8": "GitHub ve Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Görevler",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "Devam Et",
             "cf3f98fa3f": "Bağlantı Kesildi",
-            "091355da3d": "M1 Mini · ev",
-            "0bc1881bc4": "Bağlandı · 40 worktree · 5 etkin",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Masaüstleri",
-            "156db8a68a": "Oluşturulan PR'lar",
-            "4a40af029b": "Ajan süresi",
-            "00a6903322": "Oluşturulan ajanlar",
-            "c0e2e9dcd9": "Tekrar hoş geldiniz",
             "af761a0c0d": "Ayarlar",
             "5d94e8ddcc": "Orca"
           },
@@ -17573,7 +17564,8 @@
         },
         "capturedOwner": {
           "orphan": "Bu otomasyonun çalışacağı bir sunucusu yok. Silin veya ait olduğu sunucuyu yeniden ekleyin.",
-          "unfenced": "Çalıştırma geçmişini görüntülemeden veya bu otomasyonu yönetmeden önce bu sunucudaki Orca'nın güncellenmesi gerekiyor. Planlanan çalıştırmalar sunucuda devam edebilir."
+          "unfenced": "Çalıştırma geçmişini görüntülemeden veya bu otomasyonu yönetmeden önce bu sunucudaki Orca'nın güncellenmesi gerekiyor. Planlanan çalıştırmalar sunucuda devam edebilir.",
+          "hostReselection": "Otomasyonu düzenleyin ve çalıştırmadan önce ana makinesini yeniden seçin."
         },
         "hostStatus": {
           "authority": {
@@ -17751,6 +17743,9 @@
         "hostSummary": {
           "partialFailureOfHosts_one": "{{count}} sunucudan {{failed}} tanesi yüklenemedi",
           "partialFailureOfHosts_other": "{{count}} sunucudan {{failed}} tanesi yüklenemedi"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "Kaydedilen çalıştırma ana makinesi artık bu proje kurulumuyla eşleşmiyor."
         }
       },
       "agent": {
@@ -18655,6 +18650,9 @@
           "PluginsSectionDescription": {
             "openWith": "Birlikte aç (odak düzenlenebilir bir alanda değilken)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} yükleme"
         }
       }
     },
@@ -19069,7 +19067,10 @@
         "orcaStopCrash": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca beklenmedik biçimde durdu.",
         "orcaStopRemote": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca durdu.",
         "orcaStopCanContinue": "Bu konuşmada devam edebilirsiniz.",
-        "orcaStopUnnamedServer": "uzak sunucu"
+        "orcaStopUnnamedServer": "uzak sunucu",
+        "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+        "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
+        "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt)."
       },
       "composer": {
         "send": "Gönder",

@@ -75,6 +75,14 @@ export const pluginsApi = {
   },
   getAutoUpdateState: () => ipcRenderer.invoke('plugins:getAutoUpdateState'),
   takeUpdateReviewNotices: () => ipcRenderer.invoke('plugins:takeUpdateReviewNotices'),
+  getInstallCounts: () => ipcRenderer.invoke('plugins:getInstallCounts'),
+  onInstallCountsChanged: (callback): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('plugins:installCountsChanged', listener)
+    return () => {
+      ipcRenderer.removeListener('plugins:installCountsChanged', listener)
+    }
+  },
   onAutoUpdateChanged: (callback): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, change: PluginAutoUpdateEvent): void =>
       callback(change)

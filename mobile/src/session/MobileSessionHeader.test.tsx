@@ -7,10 +7,12 @@ import type { SessionTitleCard } from './use-session-title-card'
 
 const layout = vi.hoisted(() => ({ sideRail: true, width: 927 }))
 vi.mock('react-native', () => ({
+  Animated: { View: 'View' },
   View: 'View',
   Text: 'Text',
   Pressable: 'Pressable',
-  Platform: { OS: 'web' }
+  Platform: { OS: 'web' },
+  StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 }
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
 vi.mock('lucide-react-native', () => ({
@@ -21,15 +23,15 @@ vi.mock('lucide-react-native', () => ({
   PanelLeftOpen: 'Icon',
   Columns2: 'Icon',
   Plus: 'Icon',
-  SquareChevronRight: 'Icon'
+  SquareChevronRight: 'Icon',
+  ListChecks: 'Icon'
 }))
-vi.mock('./MobileSessionHeaderIconButton', () => ({
-  MobileSessionHeaderIconButton: 'HeaderButton'
+vi.mock('../components/nav-bar/NavBarButton', () => ({ NavBarButton: 'HeaderButton' }))
+vi.mock('../components/nav-bar/PullDownMenu', () => ({ PullDownMenu: 'PullDownMenu' }))
+vi.mock('../agent-history/MobileAgentSessionHistoryIcon', () => ({
+  MobileAgentSessionHistoryIcon: () => null
 }))
 vi.mock('./MobileSessionTabStrip', () => ({ MobileSessionTabStrip: 'TabStrip' }))
-vi.mock('./MobileSessionHeaderMoreActionsSheet', () => ({
-  MobileSessionHeaderMoreActionsSheet: 'MoreActionsSheet'
-}))
 vi.mock('../components/StatusDot', () => ({ StatusDot: 'StatusDot' }))
 vi.mock('./mobile-session-styles', () => ({ styles: {} }))
 vi.mock('../layout/host-sidebar-reveal', () => ({ useHostSidebarReveal: () => null }))
@@ -39,9 +41,17 @@ vi.mock('../layout/responsive-layout', () => ({
 vi.mock('../layout/use-top-chrome-space', () => ({ useTopChromeSpace: () => ({}) }))
 vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => layout.sideRail }))
 
+import { NavBar } from '../components/nav-bar/NavBar'
+import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { MobileSessionHeader } from './MobileSessionHeader'
 
 let tree: ReactTestRenderer | undefined
+
+const nodes = (type: string) => tree!.root.findAll((node) => String(node.type) === type)
+const labels = (found: { props: { accessibilityLabel?: string } }[]) =>
+  found.map((node) => node.props.accessibilityLabel)
+const menuGroups = (): ActionSheetAction[][] => nodes('PullDownMenu')[0].props.groups
+const menuLabels = () => menuGroups().map((group) => group.map((action) => action.label))
 
 afterEach(() => {
   act(() => tree?.unmount())
@@ -76,7 +86,7 @@ function renderHeader(
     titleRef: { current: null },
     boundaryRefs: { current: [] },
     active: false,
-    requestedOpen: false,
+    titleRequestedOpen: false,
     closeFirst: () => false,
     onAnchorLayout: () => {},
     toggle: () => {}
@@ -133,34 +143,70 @@ it('gives narrow Duo tabs the header width and keeps every collapsed action reac
     handleOpenNewTab: vi.fn(),
     handleOpenQuickCommands: vi.fn(),
     handlePanelTap: vi.fn(),
-    setShowHeaderMoreActions: vi.fn(),
-    showHeaderMoreButton: false
+    setShowHeaderMoreActions: vi.fn()
   }
   renderHeader(false, controller)
   const strip = tree!.root.find((node) => String(node.type) === 'TabStrip')
   expect(strip.props.actionsCollapsed).toBe(true)
-  const buttons = tree!.root.findAll((node) => String(node.type) === 'HeaderButton')
-  expect(buttons.map((button) => button.props.accessibilityLabel)).toEqual([
-    'Back to worktrees',
-    'More session actions'
-  ])
+  const buttons = nodes('HeaderButton')
+  expect(labels(buttons)).toEqual(['Back to worktrees', 'More session actions'])
   act(() => buttons[1].props.onPress())
   expect(controller.setShowHeaderMoreActions).toHaveBeenCalledWith(true)
-  const sheet = tree!.root.find((node) => String(node.type) === 'MoreActionsSheet')
-  expect(sheet.props.additionalActions.map((action: { label: string }) => action.label)).toEqual([
-    'Terminal layout',
-    'New tab',
-    'Quick commands',
-    'File explorer',
-    'Source control'
+  expect(menuLabels()).toEqual([
+    ['File explorer', 'Source control', 'Quick commands'],
+    ['Terminal layout'],
+    ['New tab']
   ])
-  for (const action of sheet.props.additionalActions) {
+  for (const action of menuGroups().flat()) {
     act(() => action.onPress())
   }
   expect(controller.setShowTerminalLayout).toHaveBeenCalledWith(true)
   expect(controller.handleOpenNewTab).toHaveBeenCalledOnce()
   expect(controller.handleOpenQuickCommands).toHaveBeenCalledOnce()
   expect(controller.handlePanelTap.mock.calls).toEqual([['files'], ['sourceControl']])
+})
+
+it('puts a portrait session in one NavBar with source control and the ⋯ menu', () => {
+  layout.sideRail = false
+  const controller = {
+    activePanel: 'files' as const,
+    showChecksAction: true,
+    showAgentSessionHistoryAction: true,
+    canSplitTerminals: true,
+    handlePanelTap: vi.fn(),
+    openAgentSessionHistory: vi.fn()
+  }
+  renderHeader(false, controller)
+  const bar = tree!.root.findByType(NavBar)
+  expect(bar.findAllByProps({ 'aria-expanded': false })).toHaveLength(1)
+  const buttons = nodes('HeaderButton')
+  expect(labels(buttons)).toEqual([
+    'Back to worktrees',
+    'Open source control',
+    'More session actions'
+  ])
+  expect(buttons.map((button) => button.props.active)).toEqual([undefined, false, true])
+  expect(tree!.root.find((node) => String(node.type) === 'TabStrip').props.inTopBar).toBe(false)
+  expect(menuLabels()).toEqual([
+    ['File explorer', 'Checks', 'Agent History', 'Quick commands'],
+    ['Terminal layout'],
+    []
+  ])
+  const checks = menuGroups()[0][1]
+  act(() => checks.onPress())
+  act(() => menuGroups()[0][2].onPress())
+  expect(controller.handlePanelTap.mock.calls).toEqual([['pr']])
+  expect(controller.openAgentSessionHistory).toHaveBeenCalledOnce()
+})
+
+it.each([
+  { route: { isFolderWorkspaceRoute: true }, files: true },
+  { route: { isFloatingWorkspaceRoute: true }, files: false }
+])('keeps workspace restrictions in the portrait bar and menu ($route)', ({ route, files }) => {
+  layout.sideRail = false
+  renderHeader(false, route)
+  expect(labels(nodes('HeaderButton'))).toEqual(['Back to worktrees', 'More session actions'])
+  expect(menuLabels()[0]).toEqual(files ? ['File explorer', 'Quick commands'] : ['Quick commands'])
 })
 
 it('uses the measured header width when a sidebar leaves a wide window with little tab space', () => {

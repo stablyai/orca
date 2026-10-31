@@ -41,11 +41,13 @@ vi.mock('react-native-gesture-handler', () => {
     GestureHandlerRootView: 'GestureHandlerRootView'
   }
 })
+vi.mock('./AutoHeight', () => ({ AutoHeight: ({ children }: { children: unknown }) => children }))
 vi.mock('react-native-reanimated', () => {
   function isTiming(value: unknown): value is Timing {
     return typeof value === 'object' && value !== null && 'to' in value
   }
   return {
+    Easing: { bezier: () => (t: number) => t },
     default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
     useSharedValue: (initial: number) => {
       let value = initial

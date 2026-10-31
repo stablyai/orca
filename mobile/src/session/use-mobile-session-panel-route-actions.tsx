@@ -213,7 +213,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     repoContextLoaded: prRepoContextLoaded,
     hostedChecksSupported: prIsGithubRepo
   })
-  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
   const createTabBusy = creating || creatingBrowser || creatingMarkdown
   const handleOpenNewTab = () => {
     setCreateError('')
@@ -245,7 +244,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     openAgentSessionHistory,
     showAgentSessionHistoryAction,
     showChecksAction,
-    showHeaderMoreButton,
     createTabBusy,
     handleOpenNewTab,
     handleOpenQuickCommands

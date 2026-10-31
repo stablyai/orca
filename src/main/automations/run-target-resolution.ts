@@ -1,3 +1,5 @@
+import { findAutomationRepo } from '../../shared/automation-repo-target'
+import { findProjectHostSetup } from '../../shared/project-host-setup-target'
 import type { Store } from '../persistence'
 import type { Automation } from '../../shared/automations-types'
 import { getAutomationLegacyRepoId } from '../../shared/automation-run-identity'
@@ -5,6 +7,7 @@ import {
   AUTOMATION_ORPHAN_ISSUES,
   type AutomationCapturedHostIssue
 } from '../../shared/automation-list-scope'
+import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../shared/automation-owner-conflict'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
@@ -26,6 +29,12 @@ export type AutomationRunTargetResult =
 
 // Keep diagnoses distinct and stable: skip coalescing keys on exact error text.
 const CAPTURED_HOST_REFUSALS: Record<AutomationCapturedHostIssue, () => AutomationRunFailure> = {
+  [AUTOMATION_ORPHAN_ISSUES.hostReselection]: () => ({
+    error: AUTOMATION_CAPTURED_HOST_REFUSALS[AUTOMATION_ORPHAN_ISSUES.hostReselection]
+  }),
+  [AUTOMATION_ORPHAN_ISSUES.malformed]: () => ({
+    error: AUTOMATION_CAPTURED_HOST_REFUSALS[AUTOMATION_ORPHAN_ISSUES.malformed]
+  }),
   [AUTOMATION_ORPHAN_ISSUES.targetMissing]: () => automationRunFailure('targetMissing'),
   [AUTOMATION_ORPHAN_ISSUES.targetReplaced]: () => automationRunFailure('targetReplaced'),
   [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]: () =>
@@ -160,9 +169,10 @@ export function resolveAutomationRunTarget(
     return { ok: false, ...CAPTURED_HOST_REFUSALS[hostIssue]() }
   }
 
-  const setup = store
-    .getProjectHostSetups()
-    .find((candidate) => candidate.id === context.projectHostSetupId)
+  const setup = findProjectHostSetup(store.getProjectHostSetups(), {
+    setupId: context.projectHostSetupId,
+    hostId: context.hostId
+  })
   if (!setup) {
     return { ok: false, ...automationRunFailure('projectSetupMissing') }
   }
@@ -177,7 +187,10 @@ export function resolveAutomationRunTarget(
     return { ok: false, ...automationRunFailure('targetSetupMismatch') }
   }
 
-  const repo = store.getRepo(context.repoId)
+  const repo = findAutomationRepo(store.getRepos(), context.repoId, {
+    hostId: context.hostId,
+    path: setup.path
+  })
   if (!repo) {
     return { ok: false, ...automationRunFailure('repoUnavailable') }
   }

@@ -6509,13 +6509,15 @@
           "distro": "ディストリビューション",
           "loading": "WSL ディストリビューションを探しています…",
           "placeholder": "ディストリビューションを選択",
-          "none": "WSL ディストリビューションが見つかりません。次のコマンドでインストールできます: wsl --install",
           "stoppedHint": "{{value0}} は停止しています。追加すると起動します。",
           "addingHint": "ディストリビューション内に Orca サーバーをインストールして起動しています。初回は 1 分ほどかかることがあります。",
           "adding": "セットアップ中…",
           "startAndAdd": "起動して追加",
           "add": "ホストを追加",
-          "refresh": "更新"
+          "refresh": "更新",
+          "wsl1Reason": "WSL 1 では Orca ホストを実行できません。{{command}} で変換してください",
+          "noWsl2Title": "WSL 2 ディストリビューションが見つかりません",
+          "noWsl2Install": "Windows ターミナルで {{command}} を実行してインストールし、[更新] を選択してください。"
         },
         "wslHostRowStatus": {
           "connecting": "起動中",
@@ -12551,7 +12553,8 @@
           "whatsNew": "新機能",
           "hashCopied": "コンテンツハッシュをコピーしました",
           "hashCopyFailed": "ハッシュをコピーできませんでした。",
-          "readme": "{{value0}} で README を読む"
+          "readme": "{{value0}} で README を読む",
+          "installs": "インストール数"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "これらのフィルターに一致するプラグインはありません",
@@ -14576,27 +14579,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7日",
-            "a3d5476811": "5時間",
-            "8a350a4784": "アカウントの使用状況",
-            "e27fdaee51": "新規ワークスペース",
-            "4405f3c440": "デスクトップのペアリング",
-            "0b00c98506": "クイック操作",
-            "0bad5b07c8": "GitHub と Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "タスク",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "再開",
             "cf3f98fa3f": "切断済み",
-            "091355da3d": "M1ミニ・ホーム",
-            "0bc1881bc4": "接続済み · 40 ワークツリー · 5 アクティブ",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "デスクトップ",
-            "156db8a68a": "作成された PR",
-            "4a40af029b": "Agent 時間",
-            "00a6903322": "Agent が生成されました",
-            "c0e2e9dcd9": "おかえり",
             "af761a0c0d": "設定",
             "5d94e8ddcc": "Orca"
           },
@@ -17098,7 +17084,8 @@
         },
         "capturedOwner": {
           "orphan": "このオートメーションには実行するホストがありません。削除するか、所属するホストを再度追加してください。",
-          "unfenced": "実行履歴を表示したり、この自動化を管理したりするには、このホスト上の Orca を更新する必要があります。スケジュールされた実行はホスト上で引き続き続行される可能性があります。"
+          "unfenced": "実行履歴を表示したり、この自動化を管理したりするには、このホスト上の Orca を更新する必要があります。スケジュールされた実行はホスト上で引き続き続行される可能性があります。",
+          "hostReselection": "オートメーションを編集し、実行する前にホストを選択し直してください。"
         },
         "hostStatus": {
           "authority": {
@@ -17226,6 +17213,9 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "{{count}} 台中 {{failed}} 台のホストを読み込めませんでした"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "保存された実行ホストが、このプロジェクトの設定と一致しなくなりました。"
         }
       },
       "agent": {
@@ -18163,6 +18153,9 @@
           "PluginsSectionDescription": {
             "openWith": "次で開く（編集可能なフィールドにフォーカスがない場合）"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} 件のインストール"
         }
       }
     },
@@ -18848,7 +18841,10 @@
         "orcaStopCrash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
         "orcaStopRemote": "この応答の途中で、{{machine}} の Orca が停止しました。",
         "orcaStopCanContinue": "この会話で続行できます。",
-        "orcaStopUnnamedServer": "リモートサーバー"
+        "orcaStopUnnamedServer": "リモートサーバー",
+        "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
+        "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
+        "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} バイト"
@@ -20213,6 +20209,11 @@
     },
     "cardProperties": {
       "agentModel": "Agent のモデル"
+    },
+    "wslHostOffer": {
+      "title": "{{distro}} をホストとして実行（推奨）",
+      "why": "Git、ファイル、ターミナルが Windows のファイル共有を経由せず、Linux 上でネイティブに動作します。",
+      "accept": "ホストとして実行"
     }
   },
   "editor": {

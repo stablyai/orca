@@ -284,6 +284,14 @@ function capturedOption<K extends keyof Options>(key: K): NonNullable<Options[K]
 
 describe('headless automation dispatch', () => {
   it('hands the launched run to its watcher instead of awaiting one tui-idle wait itself', async () => {
+    const repo = {
+      id: 'repo-1',
+      path: '/repo',
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1
+    }
+    const managedWorktree = { id: 'wt-1', displayName: 'repo', hostId: 'local' as const }
     const runtime = {
       setAutomationService: vi.fn(),
       notifyAutomationsChanged: vi.fn(),
@@ -294,7 +302,10 @@ describe('headless automation dispatch', () => {
         ptyId: 'pty-1',
         worktreeId: 'wt-1'
       })),
-      showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
+      resolveManagedTerminalWorkspaceTarget: vi.fn(async () => ({
+        managedWorktree,
+        scope: { folderWorkspace: null }
+      })),
       waitForTerminal: vi.fn(),
       getTerminalHandleForPaneKey: vi.fn(() => null),
       getAgentStatusRowsForPane: vi.fn(() => [])
@@ -316,18 +327,26 @@ describe('headless automation dispatch', () => {
       } as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the title and trigger are read.
       run: { title: 'Nightly', trigger: 'scheduled' } as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unused for an existing workspace.
-      target: {} as never
+      target: { ok: true, cwd: '/repo', repo }
     })
 
     expect(launch.completion).toBeUndefined()
     expect(launch.terminalPaneKey).toBe('tab-1:pane-1')
-    expect(runtime.launchAgentTerminal).toHaveBeenCalledWith('id:wt-1', {
-      agent: 'goose',
-      prompt: '',
-      title: 'Nightly',
-      suppressStartupUpdatePrompt: true
-    })
+    expect(runtime.resolveManagedTerminalWorkspaceTarget).toHaveBeenCalledWith(
+      'id:wt-1',
+      'local',
+      false
+    )
+    expect(runtime.launchAgentTerminal).toHaveBeenCalledWith(
+      'id:wt-1',
+      {
+        agent: 'goose',
+        prompt: '',
+        title: 'Nightly',
+        suppressStartupUpdatePrompt: true
+      },
+      { worktree: managedWorktree, repo, folderWorkspace: undefined }
+    )
     expect(runtime.waitForTerminal).not.toHaveBeenCalled()
     const observer = capturedOption('terminalObserver')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolution reads only the pane key.

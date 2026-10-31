@@ -21,7 +21,10 @@ import {
 export function reconcileEditorBufferRecords(
   state: EditorBufferReconcileState,
   identityOf: (file: OpenFile) => string,
-  keep?: EditorBufferKeepRequest & { drafts: Readonly<Record<string, string>> },
+  keep?: EditorBufferKeepRequest & {
+    drafts: Readonly<Record<string, string>>
+    resourceKeys?: ReadonlyMap<string, string | null>
+  },
   rejoin = false
 ): EditorBufferReconcileResult {
   const detached: EditorBufferDetachments = {}
@@ -122,7 +125,8 @@ export function reconcileEditorBufferRecords(
         viewIds.every((id) => keep.viewIds.has(id)) &&
         isDirtyEditorBufferSide(side)
       ) {
-        write.setKept(recordId, { ...side, viewIds, notice: keep.notice })
+        const resourceKey = keep.resourceKeys?.get(viewIds[0]) ?? undefined
+        write.setKept(recordId, { ...side, viewIds, notice: keep.notice, resourceKey })
       }
       write.records = write.records === state.editorBuffers ? { ...write.records } : write.records
       delete write.records[recordId]

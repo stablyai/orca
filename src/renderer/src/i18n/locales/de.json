@@ -210,6 +210,11 @@
     },
     "cardProperties": {
       "agentModel": "Agentenmodell"
+    },
+    "wslHostOffer": {
+      "title": "{{distro}} als Host ausführen (empfohlen)",
+      "why": "Git, Dateien und Terminals laufen dann nativ in Linux statt über die Windows-Dateifreigabe.",
+      "accept": "Als Host ausführen"
     }
   },
   "app": {
@@ -7129,13 +7134,15 @@
           "distro": "Distribution",
           "loading": "WSL-Distributionen werden gesucht…",
           "placeholder": "Distribution auswählen",
-          "none": "Keine WSL-Distributionen gefunden. Installation mit: wsl --install",
           "stoppedHint": "{{value0}} ist gestoppt. Das Hinzufügen startet die Distribution.",
           "addingHint": "Der Orca-Server wird in der Distribution installiert und gestartet. Beim ersten Mal kann dies eine Minute dauern.",
           "adding": "Wird eingerichtet…",
           "startAndAdd": "Starten und hinzufügen",
           "add": "Host hinzufügen",
-          "refresh": "Aktualisieren"
+          "refresh": "Aktualisieren",
+          "wsl1Reason": "WSL 1 kann keinen Orca-Host ausführen; konvertieren mit {{command}}",
+          "noWsl2Title": "Keine WSL-2-Distributionen gefunden",
+          "noWsl2Install": "Installiere eine in einem Windows-Terminal mit {{command}} und wähle dann Aktualisieren."
         },
         "wslHostRowStatus": {
           "connecting": "Wird gestartet",
@@ -13020,7 +13027,8 @@
           "previous": "Vorherige",
           "updated": "Aktualisiert",
           "license": "Lizenz",
-          "whatsNew": "Neuigkeiten"
+          "whatsNew": "Neuigkeiten",
+          "installs": "Installationen"
         },
         "PluginDetailPage": {
           "back": "Plugins",
@@ -15093,27 +15101,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7 Tage",
-            "a3d5476811": "5 h",
-            "8a350a4784": "Kontonutzung",
-            "e27fdaee51": "Arbeitsbereich erstellen",
-            "4405f3c440": "Desktop koppeln",
-            "0b00c98506": "Schnellaktionen",
-            "0bad5b07c8": "GitHub und Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Aufgaben",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "Fortsetzen",
             "cf3f98fa3f": "Getrennt",
-            "091355da3d": "M1 Mini · zu Hause",
-            "0bc1881bc4": "Verbunden · 40 Worktrees · 5 aktiv",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Desktop-Computer",
-            "156db8a68a": "Erstellte PRs",
-            "4a40af029b": "Agentenzeit",
-            "00a6903322": "Gestartete Agenten",
-            "c0e2e9dcd9": "Willkommen zurück",
             "af761a0c0d": "Einstellungen",
             "5d94e8ddcc": "Orca"
           },
@@ -17587,7 +17578,8 @@
         },
         "capturedOwner": {
           "orphan": "Dieser Automatisierung fehlt ein Host zur Ausführung. Die Automatisierung löschen oder den zugehörigen Host erneut hinzufügen.",
-          "unfenced": "Orca auf diesem Host muss aktualisiert werden, bevor der Ausführungsverlauf angezeigt oder diese Automatisierung verwaltet werden kann. Geplante Ausführungen können auf dem Host weiterhin stattfinden."
+          "unfenced": "Orca auf diesem Host muss aktualisiert werden, bevor der Ausführungsverlauf angezeigt oder diese Automatisierung verwaltet werden kann. Geplante Ausführungen können auf dem Host weiterhin stattfinden.",
+          "hostReselection": "Bearbeite die Automatisierung und wähle ihren Host erneut aus, bevor du sie ausführst."
         },
         "hostStatus": {
           "authority": {
@@ -17765,6 +17757,9 @@
         "hostSummary": {
           "partialFailureOfHosts_one": "Laden fehlgeschlagen: {{failed}} von {{count}} Host",
           "partialFailureOfHosts_other": "Laden fehlgeschlagen: {{failed}} von {{count}} Hosts"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "Der gespeicherte Ausführungshost stimmt nicht mehr mit dieser Projekteinrichtung überein."
         }
       },
       "agent": {
@@ -18669,6 +18664,9 @@
           "PluginsSectionDescription": {
             "openWith": "Öffnen mit (wenn der Fokus nicht in einem bearbeitbaren Feld liegt)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} Installationen"
         }
       }
     },
@@ -19082,7 +19080,10 @@
         "orcaStopCrash": "Orca auf {{machine}} wurde während dieser Antwort unerwartet beendet.",
         "orcaStopRemote": "Orca auf {{machine}} wurde während dieser Antwort gestoppt.",
         "orcaStopCanContinue": "Die Unterhaltung kann fortgesetzt werden.",
-        "orcaStopUnnamedServer": "dem entfernten Server"
+        "orcaStopUnnamedServer": "dem entfernten Server",
+        "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
+        "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
+        "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes)."
       },
       "composer": {
         "send": "Senden",

@@ -6991,13 +6991,15 @@
           "distro": "Distro",
           "loading": "Recherche des distros WSL…",
           "placeholder": "Choisissez une distro",
-          "none": "Aucune distro WSL trouvée. Installez-en une avec : wsl --install",
           "stoppedHint": "{{value0}} est arrêtée. L'ajouter la démarre.",
           "addingHint": "Installation et démarrage du serveur Orca dans la distro. La première fois peut prendre une minute.",
           "adding": "Configuration…",
           "startAndAdd": "Démarrer et ajouter",
           "add": "Ajouter un hôte",
-          "refresh": "Actualiser"
+          "refresh": "Actualiser",
+          "wsl1Reason": "WSL 1 ne peut pas exécuter d’hôte Orca ; convertissez-la avec {{command}}",
+          "noWsl2Title": "Aucune distribution WSL 2 trouvée",
+          "noWsl2Install": "Installez-en une depuis un terminal Windows avec {{command}}, puis choisissez Actualiser."
         },
         "wslHostRowStatus": {
           "connecting": "Démarrage",
@@ -13063,7 +13065,8 @@
           "whatsNew": "Nouveautés",
           "hashCopied": "Empreinte du contenu copiée",
           "hashCopyFailed": "Impossible de copier l’empreinte.",
-          "readme": "Lire le README sur {{value0}}"
+          "readme": "Lire le README sur {{value0}}",
+          "installs": "Installations"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Aucun plugin ne correspond à ces filtres",
@@ -15175,27 +15178,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7 j",
-            "a3d5476811": "5 h",
-            "8a350a4784": "Utilisation du compte",
-            "e27fdaee51": "Nouvel espace de travail",
-            "4405f3c440": "Appairer l'ordinateur",
-            "0b00c98506": "Actions rapides",
-            "0bad5b07c8": "GitHub et Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Tâches",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "Reprendre",
             "cf3f98fa3f": "Déconnecté",
-            "091355da3d": "M1 Mini · accueil",
-            "0bc1881bc4": "Connecté · 40 worktrees · 5 actifs",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Ordinateurs",
-            "156db8a68a": "PRs créées",
-            "4a40af029b": "Temps agent",
-            "00a6903322": "Agents lancés",
-            "c0e2e9dcd9": "Bon retour",
             "af761a0c0d": "Paramètres",
             "5d94e8ddcc": "Orca"
           },
@@ -17698,7 +17684,8 @@
         },
         "capturedOwner": {
           "orphan": "Cette automatisation n'a pas d'hôte sur lequel s'exécuter. Supprimez-le ou ajoutez à nouveau l'hôte auquel il appartient.",
-          "unfenced": "Orca sur cet hôte a besoin d'une mise à jour avant de pouvoir afficher l'historique d'exécution ou gérer cette automatisation. Les exécutions planifiées peuvent toujours se poursuivre sur l'hôte."
+          "unfenced": "Orca sur cet hôte a besoin d'une mise à jour avant de pouvoir afficher l'historique d'exécution ou gérer cette automatisation. Les exécutions planifiées peuvent toujours se poursuivre sur l'hôte.",
+          "hostReselection": "Modifiez l’automatisation et sélectionnez à nouveau son hôte avant de l’exécuter."
         },
         "hostStatus": {
           "authority": {
@@ -17883,6 +17870,9 @@
           "partialFailureOfHosts_one": "Échec du chargement de {{failed}} sur {{count}} hôte",
           "partialFailureOfHosts_other": "Échec du chargement de {{failed}} sur {{count}} hôtes",
           "partialFailureOfHosts_many": "Échec du chargement de {{failed}} sur {{count}} hôtes"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "L’hôte d’exécution enregistré ne correspond plus à cette configuration du projet."
         }
       },
       "agent": {
@@ -18857,6 +18847,9 @@
           "PluginsSectionDescription": {
             "openWith": "Ouvrir avec (lorsqu’aucun champ modifiable n’a le focus)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} installations"
         }
       }
     },
@@ -19561,7 +19554,10 @@
         "orcaStopCrash": "Orca sur {{machine}} s'est arrêté de manière inattendue pendant que cette réponse était en cours.",
         "orcaStopRemote": "Orca sur {{machine}} s'est arrêté pendant que cette réponse était en cours.",
         "orcaStopCanContinue": "Vous pouvez continuer dans cette conversation.",
-        "orcaStopUnnamedServer": "le serveur distant"
+        "orcaStopUnnamedServer": "le serveur distant",
+        "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
+        "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
+        "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets)."
       },
       "providerFrame": {
         "byteCount_one": "{{count}} octet",
@@ -20946,6 +20942,11 @@
     },
     "cardProperties": {
       "agentModel": "Modèle de l’agent"
+    },
+    "wslHostOffer": {
+      "title": "Exécuter {{distro}} comme hôte (recommandé)",
+      "why": "Git, les fichiers et les terminaux s’exécutent alors nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
+      "accept": "Exécuter comme hôte"
     }
   },
   "editor": {

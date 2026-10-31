@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
-import { View, ScrollView } from 'react-native'
-import { Plus, Columns2 } from 'lucide-react-native'
+import { View, ScrollView, StyleSheet } from 'react-native'
+import { Plus } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { AgentStateDot } from '../components/AgentStateDot'
@@ -11,9 +11,9 @@ import {
   getMobileSessionTabTitle,
   resolveMobileTerminalTabAgentId
 } from './mobile-terminal-tab-agent'
+import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
-import { QuickCommandsTabButton } from './QuickCommandsTabButton'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import {
   resolveTabStripEdgeHint,
   resolveTabStripHiddenTabs,
@@ -53,7 +53,6 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     connState,
     createTabBusy,
     handleOpenNewTab,
-    handleOpenQuickCommands,
     scrollActiveTabIntoView,
     holdTabStripReveal,
     cancelHeldTabStripReveal,
@@ -62,9 +61,6 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     setRenameTarget,
     activeHandleRef,
     visibleTabs,
-    canSplitTerminals,
-    terminalSplitActive,
-    setShowTerminalLayout,
     terminals
   } = controller
   const stripBarRef = useRef<View>(null)
@@ -277,28 +273,23 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
           </View>
         ) : null}
       </View>
-      {!actionsCollapsed && (canSplitTerminals || terminalSplitActive) && (
-        <MobileSessionHeaderIconButton
-          active={terminalSplitActive}
-          accessibilityLabel={t('session.tabStrip.terminalLayout', 'Terminal layout')}
-          icon={Columns2}
-          onPress={() => setShowTerminalLayout(true)}
-        />
-      )}
+      {/* Terminal layout and Quick commands live in the header's ⋯ menu. */}
       {!actionsCollapsed ? (
-        <>
-          <MobileSessionHeaderIconButton
+        <View style={newTabStyles.slot}>
+          <NavBarButton
             disabled={createTabBusy || connState !== 'connected'}
             onPress={handleOpenNewTab}
             accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
             icon={Plus}
           />
-          <QuickCommandsTabButton
-            disabled={createTabBusy || connState !== 'connected'}
-            onPress={handleOpenQuickCommands}
-          />
-        </>
+        </View>
       ) : null}
     </View>
   )
+})
+
+const newTabStyles = StyleSheet.create({
+  slot: {
+    paddingHorizontal: spacing.sm
+  }
 })
