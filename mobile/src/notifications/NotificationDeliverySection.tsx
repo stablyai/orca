@@ -73,7 +73,7 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
 const styles = themedStyleSheet(() => ({
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     overflow: 'hidden',
     marginTop: spacing.md
   },

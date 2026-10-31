@@ -6,6 +6,7 @@ import type { TerminalInputCall } from '../terminal-input-call'
 import { installPtyResizeForward } from './pty-resize-forward'
 
 import { subscribeToTerminalInputData } from '../terminal-user-input-signal'
+import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 import { installTerminalImeCompositionRoute } from '../terminal-ime-composition-route'
 import { useAppStore } from '@/store'
 import { clearUnchangedTitleOnlyWorking } from './terminal-pane-input'
@@ -86,6 +87,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     if (session.captureAgentPreReadyInput?.(data, wasUserInput)) {
       session.clearPendingTerminalInputIntent()
       return
+    }
+    if (!wasUserInput && !isPassiveTerminalInputReport(data)) {
+      session.noteTerminalInputForPty(currentPtyId)
     }
     // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
     const inputKind = wasUserInput ? 'driving' : 'query-reply'

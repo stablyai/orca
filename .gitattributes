@@ -28,6 +28,7 @@
 # PTY transcripts must retain captured CR and CRLF bytes.
 /src/main/runtime/__fixtures__/*.txt -text
 /src/main/daemon/__fixtures__/pty-transcripts/*.txt -text
+/src/main/daemon/__fixtures__/git-bash-installed-dll-format-capacity.bin -text
 /src/renderer/src/components/terminal-pane/terminal-link-transcripts/*.txt -text whitespace=cr-at-eol
 # verify:localization-runtime-catalog compares LF bytes.
 /src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf

@@ -2,6 +2,7 @@ import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
+import { VISIBLE_PTY_SETTLE_MS } from './pty-connection-test-constants'
 import {
   LEAF_1,
   LEAF_2,
@@ -321,7 +322,7 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
         expect.objectContaining({ sessionId: 'pty-restarted' })
       )
       expect(remountTransport.attach).not.toHaveBeenCalled()
-      await Promise.resolve()
+      await flushAsyncTicks()
       expect(remountDeps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-restarted')
     })
 
@@ -336,6 +337,15 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       const deps = createDeps()
 
       connectPanePty(pane as never, manager as never, deps as never)
+      await vi.advanceTimersByTimeAsync(VISIBLE_PTY_SETTLE_MS)
+      await flushAsyncTicks()
+      const { getTerminalSemanticResident } = await import('./terminal-semantic-residents')
+      expect(transport.connect).toHaveBeenCalledOnce()
+      expect(transport.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'tab-pty' })
+      )
+      expect(transport.getPtyId()).toBe('tab-pty')
+      expect(getTerminalSemanticResident('tab-pty')?.isLive).toBe(true)
 
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       if (!bellHandler) {

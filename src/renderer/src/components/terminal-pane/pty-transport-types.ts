@@ -275,6 +275,8 @@ export type PtyTransport = {
 export type IpcPtyTransportOptions = {
   /** Actual accepted provider/source result, before data and input publication. */
   onSourceAdmitted?: (ptyId: string, incarnationId?: string | null) => void
+  /** Renderer-local observation before admission; never controls dispatch. */
+  onDrivingInputAttempt?: (ptyId: string | null) => void
   cwd?: string
   /** Retain bounded user input until the pane's first PTY connection binds. */
   bufferInputUntilConnect?: boolean

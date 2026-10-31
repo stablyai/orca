@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
@@ -85,7 +85,7 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   },
   filterGroup: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden',
     marginBottom: spacing.md
   },
@@ -153,7 +153,7 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   filterRepoDot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   confirmContent: {
     paddingBottom: spacing.lg
@@ -176,7 +176,7 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   confirmBtn: {
     flex: 1,
     paddingVertical: spacing.sm + 2,
-    borderRadius: 10,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   confirmBtnCancel: {

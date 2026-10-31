@@ -118,6 +118,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
         attachTerminalResidentPresentation(session, resident)
       }
     },
+    onDrivingInputAttempt: (ptyId) => session.noteTerminalInputForPty(ptyId),
     terminalKittyKeyboardProtocol:
       session.pane.terminal.options.vtExtensions?.kittyKeyboard === true,
     cwd: session.deps.cwd,
