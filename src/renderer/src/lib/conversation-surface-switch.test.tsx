@@ -188,10 +188,10 @@ it.each([false, true])(
         _target: unknown,
         _method: string,
         _params: unknown,
-        options: { beforeSend: (sentAt?: number) => void }
+        options: { onSent: (sentAt?: number) => void }
       ) => {
         if (sent) {
-          options.beforeSend()
+          options.onSent()
         }
         throw new Error('Runtime request closed before agentSession.switchToTerminal completed')
       }
@@ -269,12 +269,12 @@ it.each([
         _target: unknown,
         _method: string,
         _params: unknown,
-        options: { beforeSend: (sentAt?: number) => void }
+        options: { onSent: (sentAt?: number) => void }
       ) => {
         if (outcome === 'unsent') {
           throw new Error('Remote Orca runtime is not connected.')
         }
-        options.beforeSend()
+        options.onSent()
         if (outcome === 'lost') {
           throw new Error('Runtime request closed before agentSession.switchToChat completed')
         }

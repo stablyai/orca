@@ -145,7 +145,7 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
           {
             signal: deadline.signal,
             dispatchObservation: deadline.delegateSend,
-            beforeSend: (sentAt) => {
+            onSent: (sentAt) => {
               deadline.beforeSend(sentAt)
               sent = true
             }

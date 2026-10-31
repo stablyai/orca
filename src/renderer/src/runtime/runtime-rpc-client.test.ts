@@ -101,6 +101,55 @@ describe('runtime RPC client routing', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it.each([false, true])(
+    'never sends a paired-runtime request whose pre-send guard throws (abortable=%s)',
+    async (abortable) => {
+      const onSent = vi.fn()
+      const request = callRuntimeRpc(
+        { kind: 'environment', environmentId: 'env-1' },
+        'status.get',
+        undefined,
+        {
+          ...(abortable ? { signal: new AbortController().signal } : {}),
+          beforeSend: () => {
+            throw new Error('superseded')
+          },
+          onSent
+        }
+      )
+
+      await expect(request).rejects.toThrow('superseded')
+      expect(runtimeEnvironmentSubscribe).not.toHaveBeenCalled()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(onSent).not.toHaveBeenCalled()
+    }
+  )
+
+  it("reports the paired host's send time separately from the pre-send guard", async () => {
+    const order: string[] = []
+    runtimeEnvironmentSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: { onSent: (sentAt?: number) => void }) => {
+        order.push('dispatch')
+        callbacks.onSent(1234)
+        return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+      }
+    )
+    const controller = new AbortController()
+    const request = callRuntimeRpc(
+      { kind: 'environment', environmentId: 'env-1' },
+      'status.get',
+      undefined,
+      {
+        signal: controller.signal,
+        beforeSend: () => order.push('guard'),
+        onSent: (sentAt) => order.push(`sent ${sentAt}`)
+      }
+    )
+    await vi.waitFor(() => expect(order).toEqual(['guard', 'dispatch', 'sent 1234']))
+    controller.abort()
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
   it('rejects an abortable paired-runtime request at the response deadline', async () => {
     vi.useFakeTimers()
     try {

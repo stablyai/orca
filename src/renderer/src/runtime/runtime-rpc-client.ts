@@ -1,8 +1,8 @@
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type {
   RuntimeRpcDispatchObservation,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
@@ -40,7 +40,9 @@ export async function callRuntimeRpc<TResult>(
     signal?: AbortSignal
     expectedEnvironmentPairingRevision?: number
     expectedEnvironmentRuntimeId?: string
-    beforeSend?: (sentAt?: number) => void
+    beforeSend?: () => void
+    /** When the request actually left; a remote host may report a later time than dispatch. */
+    onSent?: (sentAt?: number) => void
     dispatchObservation?: () => RuntimeRpcDispatchObservation
   } = {}
 ): Promise<TResult> {
@@ -73,18 +75,19 @@ export async function callRuntimeRpc<TResult>(
   const nextParams = options.suppressFeatureInteraction
     ? withBrowserPaneUiRuntimeRpcSource(params)
     : params
+  options.beforeSend?.()
+  if (target.kind === 'local') {
+    options.onSent?.()
+  }
   const response =
     target.kind === 'local'
-      ? await (() => {
-          options.beforeSend?.()
-          return window.api.runtime.call({ method, params: nextParams })
-        })()
+      ? await window.api.runtime.call({ method, params: nextParams })
       : await callRuntimeEnvironmentWithRevision({
           environmentId: target.environmentId,
           method,
           params: nextParams,
           timeoutMs: options.timeoutMs,
-          beforeSend: options.beforeSend,
+          onSent: options.onSent,
           dispatchObservation: options.dispatchObservation,
           signal: options.signal,
           expectedEnvironmentPairingRevision,

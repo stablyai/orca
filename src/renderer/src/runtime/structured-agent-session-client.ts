@@ -170,7 +170,8 @@ export async function callStructuredAgentSession<TResult>(
   /** For a caller that checked the remote host's compatibility itself, just before. */
   options: {
     skipCompatibilityCheck?: true
-    beforeSend?: (sentAt?: number) => void
+    beforeSend?: () => void
+    onSent?: (sentAt?: number) => void
     dispatchObservation?: () => RuntimeRpcDispatchObservation
     signal?: AbortSignal
     expectedEnvironmentPairingRevision?: number

@@ -13,7 +13,7 @@ async function callRuntimeEnvironmentOnce(args: {
   method: string
   params: unknown
   timeoutMs?: number
-  beforeSend?: (sentAt?: number) => void
+  onSent?: (sentAt?: number) => void
   dispatchObservation?: () => RuntimeRpcDispatchObservation
   signal?: AbortSignal
   expectedEnvironmentPairingRevision?: number
@@ -28,11 +28,11 @@ async function callRuntimeEnvironmentOnce(args: {
       args.signal,
       args.expectedEnvironmentPairingRevision,
       args.expectedEnvironmentRuntimeId,
-      args.beforeSend,
+      args.onSent,
       args.dispatchObservation?.()
     )
   }
-  args.beforeSend?.()
+  args.onSent?.()
   return window.api.runtimeEnvironments.call({
     selector: args.environmentId,
     method: args.method,

@@ -18,7 +18,7 @@ export async function callAbortableRuntimeEnvironment(
   signal: AbortSignal,
   expectedEnvironmentPairingRevision?: number,
   expectedEnvironmentRuntimeId?: string,
-  beforeSend?: (sentAt?: number) => void,
+  onSent?: (sentAt?: number) => void,
   dispatchObservation?: RuntimeRpcDispatchObservation
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (signal.aborted) {
@@ -78,7 +78,7 @@ export async function callAbortableRuntimeEnvironment(
           timeoutMs,
           expectedEnvironmentPairingRevision,
           expectedEnvironmentRuntimeId,
-          observeDispatch: Boolean(beforeSend),
+          observeDispatch: Boolean(onSent),
           dispatchObservation
         },
         {
@@ -88,7 +88,7 @@ export async function callAbortableRuntimeEnvironment(
             }
             sent = true
             try {
-              beforeSend?.(sentAt)
+              onSent?.(sentAt)
             } catch (error) {
               finish(() => reject(error))
               return
