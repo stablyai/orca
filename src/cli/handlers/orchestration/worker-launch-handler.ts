@@ -12,7 +12,8 @@ import {
   WORKER_START_VIEW,
   type WorkerStartAgentReceipt
 } from './worker-start-agent-view'
-import { printOrchestrationResult } from './agent-view'
+import { printOrchestrationResult, renderOrchestrationArgv } from './agent-view'
+import type { WorkerReleaseReceipt } from './worker-output'
 import { explainOlderRuntimeRunRequired } from './older-runtime-run-binding'
 import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
 import { readTextOrFileFlag } from '../../command-body-input'
@@ -71,12 +72,14 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     ).catch(async (error: unknown) => {
       throw await explainOlderRuntimeRunRequired(client, error)
     })
-    const keptOpen = flags.has('keep-open') && (await keepStartedWorkerOpen(client, result.result))
+    const keepOpen = flags.has('keep-open')
+      ? await keepStartedWorkerOpen(client, result.result)
+      : undefined
     const renderedResult = {
       ...result,
       result: {
         ...result.result,
-        ...(keptOpen ? { keptOpen } : {}),
+        ...(keepOpen ? { keepOpen } : {}),
         ...(result.result.nextCommands
           ? {
               nextCommands: result.result.nextCommands.map((command) =>
@@ -94,20 +97,23 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
 async function keepStartedWorkerOpen(
   client: RuntimeClient,
   receipt: WorkerStartAgentReceipt
-): Promise<boolean> {
+): Promise<WorkerReleaseReceipt | undefined> {
   if (receipt.state !== 'ready' && !isUnobservedTurnStart(receipt)) {
-    return false
+    return undefined
   }
   try {
-    await client.call('orchestration.workerRetain', { dispatch: receipt.dispatchId })
-    return true
+    return (
+      await client.call<WorkerReleaseReceipt>('orchestration.workerRetain', {
+        dispatch: receipt.dispatchId
+      })
+    ).result
   } catch (error) {
     const code = error instanceof RuntimeClientError ? error.code : 'keep_open_failed'
     const message = error instanceof Error ? error.message : String(error)
     // The worker is running, so recovery is the keep-open call, never a second start.
     throw new RuntimeClientError(
       code,
-      `Started ${receipt.dispatchId} but could not keep it open: ${message} Run orca orchestration worker-keep-open --dispatch ${receipt.dispatchId}.`
+      `Started ${receipt.dispatchId} but could not keep it open: ${message} Run ${renderOrchestrationArgv(['orchestration', 'worker-keep-open', '--dispatch', receipt.dispatchId])}.`
     )
   }
 }

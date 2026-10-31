@@ -10,8 +10,10 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
-import { normalizeCommandPositionals, parseArgs, validateCommandAndFlags } from '../args'
+import { parseArgs, validateCommandAndFlags } from '../args'
 import { formatCommandHelp } from '../help'
+import { buildAgentContext } from '../agent-context'
+import { suggestCommands } from '../command-suggestion'
 import { okFixture } from '../test-fixtures'
 import { RuntimeClient } from '../runtime-client'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from '../specs/orchestration-worker-specs'
@@ -766,13 +768,17 @@ describe('orchestration worker-start CLI contract', () => {
     expect(callMock).toHaveBeenCalledWith('orchestration.workerRetain', { dispatch: 'ctx_1' })
   })
 
-  it('still runs worker-retain as the keep-open command', () => {
-    const parsed = normalizeCommandPositionals(
-      ORCHESTRATION_WORKER_COMMAND_SPECS,
-      parseArgs(['orchestration', 'worker-retain', '--dispatch', 'ctx_1'])
+  it('still runs worker-retain without listing or suggesting it', () => {
+    const parsed = parseArgs(['orchestration', 'worker-retain', '--dispatch', 'ctx_1'])
+    expect(() => validateCommandAndFlags(ORCHESTRATION_WORKER_COMMAND_SPECS, parsed)).not.toThrow()
+    expect(ORCHESTRATION_HANDLERS['orchestration worker-retain']).toBe(
+      ORCHESTRATION_HANDLERS['orchestration worker-keep-open']
     )
-    expect(parsed.commandPath).toEqual(['orchestration', 'worker-keep-open'])
-    expect(parsed.flags.get('dispatch')).toBe('ctx_1')
+    const listed = buildAgentContext(ORCHESTRATION_WORKER_COMMAND_SPECS).commands
+    expect(JSON.stringify(listed)).not.toContain('worker-retain')
+    expect(
+      suggestCommands(ORCHESTRATION_WORKER_COMMAND_SPECS, ['orchestration', 'worker-retai'])
+    ).not.toContain('orchestration worker-retain')
   })
 
   it('keeps a worker started with --keep-open open after it finishes', async () => {
@@ -791,6 +797,35 @@ describe('orchestration worker-start CLI contract', () => {
     )
     expect(callMock).toHaveBeenLastCalledWith('orchestration.workerRetain', { dispatch: 'ctx_1' })
     expect(printedText()).toContain('keptOpen=true')
+  })
+
+  it('reports a --keep-open start whose terminal was not kept open as a failure', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    callMock.mockImplementation(async (method: string) =>
+      method === 'orchestration.workerStart'
+        ? { result: { taskId: 'task_1', dispatchId: 'ctx_1', state: 'ready', effects: [] } }
+        : {
+            result: {
+              dispatchId: 'ctx_1',
+              state: 'already_released',
+              processAction: 'none',
+              archive: null
+            }
+          }
+    )
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'codex'],
+        ['keep-open', true]
+      ]),
+      false
+    )
+    const text = printedText()
+    expect(text).not.toContain('keptOpen')
+    expect(text).toContain('keepOpenState=already_released')
+    expect(text).toContain('worker-read --dispatch ctx_1')
+    expect(process.exitCode).toBe(1)
   })
 
   it('does not tell a coordinator that chat workers skip automatic release', () => {

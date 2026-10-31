@@ -25,6 +25,16 @@ const WORKER_TERMINAL_LIST_STATES = [
   'released'
 ] as const
 
+const keepWorkerOpen: CommandHandler = async ({ flags, client, json }) => {
+  const result = await callOrchestrationMutation<WorkerReleaseReceipt>(
+    client,
+    flags,
+    'orchestration.workerRetain',
+    { dispatch: getRequiredStringFlag(flags, 'dispatch') }
+  )
+  printOrchestrationResult(result, { flags, json }, WORKER_RELEASE_VIEW)
+}
+
 export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-stop': async ({ flags, client, json }) => {
     const result = await callOrchestrationMutation<{
@@ -70,15 +80,8 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     printOrchestrationResult(result, { flags, json }, WORKER_RELEASE_VIEW)
   },
 
-  'orchestration worker-keep-open': async ({ flags, client, json }) => {
-    const result = await callOrchestrationMutation<WorkerReleaseReceipt>(
-      client,
-      flags,
-      'orchestration.workerRetain',
-      { dispatch: getRequiredStringFlag(flags, 'dispatch') }
-    )
-    printOrchestrationResult(result, { flags, json }, WORKER_RELEASE_VIEW)
-  },
+  'orchestration worker-keep-open': keepWorkerOpen,
+  'orchestration worker-retain': keepWorkerOpen,
 
   'orchestration worker-list': async ({ flags, client, cwd, json }) => {
     const terminalState = getOptionalStringFlag(flags, 'terminal-state')

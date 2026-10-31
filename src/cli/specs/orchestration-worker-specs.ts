@@ -118,8 +118,6 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'worker-keep-open'],
-    // Old name, kept so existing scripts still run.
-    aliases: [['orchestration', 'worker-retain']],
     summary: 'Keep a worker open after it finishes',
     usage:
       'orca orchestration worker-keep-open --dispatch <dispatch_id> [--retry-request <id>] [--json]',
@@ -131,6 +129,15 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
       'Performs no process or filesystem action.'
     ]
+  },
+  {
+    // Old name of worker-keep-open; hidden so it runs for existing scripts but is never suggested.
+    path: ['orchestration', 'worker-retain'],
+    hidden: true,
+    summary: 'Keep a worker open after it finishes (old name of worker-keep-open)',
+    usage:
+      'orca orchestration worker-retain --dispatch <dispatch_id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request']
   },
   {
     path: ['orchestration', 'worker-list'],
