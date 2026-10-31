@@ -47,7 +47,8 @@ export function createStructuredAgentSessionOptionsReadOwner(
 ) {
   let snapshot: ReadSnapshot = { optionState: seed, support: null }
   let previous: ReadContext | undefined
-  let lease: ReadContext | undefined
+  let lease: (ReadContext & { key: string }) | undefined
+  let leases = 0
   let version = 0
   let dirty = true
   const listeners = new Set<() => void>()
@@ -67,7 +68,8 @@ export function createStructuredAgentSessionOptionsReadOwner(
     if (!attached?.eligible) {
       return
     }
-    void run('options', 'latest', async () => {
+    // Coalesce within a lease; a new lease reads at once and the old lease's reply stays inert.
+    void run(attached.key, 'latest', async () => {
       if (lease !== attached || !dirty || !attached.isCurrent()) {
         return
       }
@@ -150,7 +152,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
         notify()
       }
       previous = context
-      const attached = { ...context }
+      const attached = { ...context, key: String(++leases) }
       lease = attached
       invalidate()
       return () => {

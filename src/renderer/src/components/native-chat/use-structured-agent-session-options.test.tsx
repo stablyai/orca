@@ -87,16 +87,14 @@ describe('useStructuredAgentSessionOptions', () => {
     })
     expect(descriptor(result.current.optionSnapshot, 'model')?.settable).toBe(true)
     expect(descriptor(result.current.optionSnapshot, 'effort')).toBeUndefined()
-    // Returning to the view queues one current read behind the superseded response.
+    // Returning to the view starts a current reader while the superseded response is still in flight.
     rerender({ ...REOPENED, agent: 'antigravity', hidden: true })
     rerender({ ...REOPENED, agent: 'antigravity' })
-    expect(reads).toBe(2)
-    await act(async () => older.resolve({ ...menu('family', 'low'), acceptsImages: false }))
-    expect(result.current.acceptsImages).toBe(true)
-    expect(currentValue(result.current.optionSnapshot, 'model')).toBe('newer')
     await waitFor(() => expect(reads).toBe(3))
     await act(async () => latest.resolve({ ...menu('newer', 'high'), acceptsImages: true }))
     await waitFor(() => expect(currentValue(result.current.optionSnapshot, 'effort')).toBe('high'))
+    await act(async () => older.resolve({ ...menu('family', 'low'), acceptsImages: false }))
+    expect(result.current.acceptsImages).toBe(true)
     expect(currentValue(result.current.optionSnapshot, 'model')).toBe('newer')
     expect(descriptor(result.current.optionSnapshot, 'effort')).toMatchObject({
       settable: true,
