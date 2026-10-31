@@ -1,3 +1,4 @@
+import { workspaceSourceWrite } from '../store/workspace-composition'
 import { restoreStructuredLaunchSurfaces } from '@/lib/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
 import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
@@ -173,6 +174,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           throw catalogOutcome.reason
         }
         const sessionRead = sessionOutcome.value
+        const presentations = (await window.api.session.getPresentations?.()) ?? {}
         await keybindingsPromise
         await timeRendererStartupStep('repo-catalog-final-settlement', () =>
           actions.awaitLocalRepoCatalogSettlement()
@@ -202,6 +204,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               useAppStore.getState().reconcileWorktreeTabModels
             )
           })
+          useAppStore.setState(workspaceSourceWrite({ workspacePresentations: presentations }))
           restoreStructuredLaunchSurfaces()
           // Discovery must not wait for terminal or SSH restoration.
           const startupWorktreeRefresh = refreshStartupWorktrees(actions, () => cancelled)

@@ -1,3 +1,4 @@
+import { isWorkspacePresentationKey } from '../../../shared/workspace-presentation'
 import {
   serializeCompleteProfileStateDomains,
   serializeSelectiveProfileStateDomains
@@ -114,6 +115,10 @@ export class StateSerializationSecretHandlingOperations {
           stateToSave[domain] = this.runtime.state[domain]
           break
         default:
+          if (isWorkspacePresentationKey(domain)) {
+            stateToSave[domain] = this.runtime.state[domain]
+            break
+          }
           return undefined
       }
     }

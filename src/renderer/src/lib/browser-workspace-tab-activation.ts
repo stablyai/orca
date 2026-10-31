@@ -42,9 +42,7 @@ export function getActivatableBrowserWorkspaceTab(params: BrowserWorkspaceTabTar
   const unifiedTab = browserTabs[0]
   if (
     browserTabs.some(
-      (tab) =>
-        tab.worktreeId !== params.worktreeId ||
-        (worktree && !isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds))
+      (tab) => worktree && !isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
     ) ||
     !unifiedTab ||
     tabs.filter((candidate) => candidate.id === unifiedTab.id).length !== 1

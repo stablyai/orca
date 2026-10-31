@@ -1,3 +1,4 @@
+import type { WorkspacePresentationDocuments } from './workspace-presentation'
 import type { ExecutionHostId } from './execution-host'
 import type {
   RemovedSshTargetTombstone,
@@ -55,7 +56,7 @@ export type PersistedMobileClientTabSelections = Record<
   Record<string, PersistedMobileClientTabSelection>
 >
 
-export type PersistedState = {
+export type PersistedState = WorkspacePresentationDocuments & {
   schemaVersion: number
   repos: Repo[]
   projects: Project[]

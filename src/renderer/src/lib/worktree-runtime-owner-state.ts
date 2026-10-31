@@ -1,3 +1,4 @@
+import type { WorkspacePresentationDocuments } from '../../../shared/workspace-presentation'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -6,6 +7,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
 export type WorktreeRuntimeOwnerState = {
+  workspacePresentations?: WorkspacePresentationDocuments
   repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   worktreesByRepo?: Record<

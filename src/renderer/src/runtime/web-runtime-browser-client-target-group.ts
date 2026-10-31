@@ -1,3 +1,4 @@
+import { workspaceSourceGroup } from '@/store/workspace-composition'
 import type { AppState } from '@/store/types'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 import type { CreateWebRuntimeSessionBrowserTabArgs } from './web-runtime-browser-creation-context'
@@ -5,7 +6,10 @@ import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 
 /** Requested splits use client-only groups unknown to the host; failed creation removes them. */
 export function resolveWebRuntimeBrowserClientTargetGroup(
-  state: Pick<AppState, 'createEmptySplitGroup'>,
+  state: Pick<AppState, 'createEmptySplitGroup'> &
+    Partial<
+      Pick<AppState, 'workspacePresentations' | 'groupsByWorktree' | 'activeGroupIdByWorktree'>
+    >,
   request: { workspaceId: string; targetGroupId?: string; split?: TabSplitTarget },
   environmentId: string
 ): Pick<
@@ -25,7 +29,7 @@ export function resolveWebRuntimeBrowserClientTargetGroup(
     return { clientTargetGroupId: splitGroupId, clientTargetGroupCreated: true }
   }
   return {
-    targetGroupId: request.targetGroupId,
+    targetGroupId: workspaceSourceGroup(state, request.workspaceId, request.targetGroupId),
     // Client placement survives older hosts publishing a page before the create response.
     ...(request.targetGroupId ? { clientTargetGroupId: request.targetGroupId } : {})
   }

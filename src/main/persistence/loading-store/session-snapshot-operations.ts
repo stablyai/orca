@@ -1,3 +1,15 @@
+import { applyWorkspacePresentationCommand } from './workspace-presentation-command'
+import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import {
+  presentationMutation,
+  storedWorkspacePresentations,
+  writeWorkspacePresentation
+} from './workspace-presentation-publication'
+import {
+  readWorkspacePresentations,
+  isWorkspacePresentationKey,
+  type WorkspacePresentationCommit
+} from '../../../shared/workspace-presentation'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   WorkspaceSessionPatch,
@@ -30,6 +42,7 @@ type SessionSnapshotOperationsRuntime = Pick<
   | 'profileMaintenancePending'
   | 'quitFlushStarted'
   | 'state'
+  | 'runDurableMutation'
   | 'terminalScrollbackSnapshotStorage'
   | 'retainedScrollbackRefsByMigrationId'
   | 'writesFrozen'
@@ -53,6 +66,95 @@ export class SessionSnapshotOperations {
     scheduling: WriteSchedulingOperations
   ) {
     this[sessionSnapshotOperationsContext] = { runtime, sessions, bindingRecovery, scheduling }
+  }
+
+  applyWorkspacePresentationCommand(command: LayoutCommand) {
+    const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
+    return applyWorkspacePresentationCommand(runtime, scheduling, command)
+  }
+
+  getWorkspacePresentations(keys?: readonly string[]) {
+    return storedWorkspacePresentations(this[sessionSnapshotOperationsContext].runtime.state, keys)
+  }
+
+  stageWorkspacePresentationCommit(
+    commit: WorkspacePresentationCommit,
+    beforeUnload = false
+  ): void {
+    this.assertSnapshotAdmission(true)
+    const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
+    const documents = readWorkspacePresentations(commit.presentations)
+    if (Object.keys(documents).length !== Object.keys(commit.presentations).length) {
+      throw new Error('Invalid workspace presentation')
+    }
+    const finish = presentationMutation(runtime.state)
+    const local = runtime.state.workspaceSession
+    const hosts = runtime.state.workspaceSessionsByHostId
+    try {
+      // Stage U first: the source adapter compares incoming records against this same captured base.
+      const dirty: string[] = []
+      const removed = new Set(commit.removedPresentations ?? [])
+      if (commit.replacePresentations) {
+        for (const key of Object.keys(this.getWorkspacePresentations())) {
+          if (isWorkspacePresentationKey(key) && !documents[key]) {
+            removed.add(key)
+          }
+        }
+      }
+      for (const key of removed) {
+        if (!isWorkspacePresentationKey(key)) {
+          throw new Error('Invalid workspace presentation key')
+        }
+        writeWorkspacePresentation(runtime.state, key, undefined)
+        dirty.push(key)
+      }
+      for (const [key, value] of Object.entries(documents)) {
+        if (isWorkspacePresentationKey(key) && value) {
+          writeWorkspacePresentation(runtime.state, key, value)
+          dirty.push(key)
+        }
+      }
+      for (const { state, hostId } of commit.sessions) {
+        if (commit.mode === 'patch') {
+          this.patchWorkspaceSession(state, hostId)
+        } else if (beforeUnload) {
+          this.stageWorkspaceSessionBeforeUnload(state, hostId)
+        } else {
+          this.setWorkspaceSession(state, hostId)
+        }
+      }
+      if (dirty.length) {
+        scheduleSave(scheduling, dirty)
+      }
+    } catch (error) {
+      runtime.state.workspaceSession = local
+      runtime.state.workspaceSessionsByHostId = hosts
+      finish()()
+      throw error
+    }
+    finish()
+  }
+
+  commitWorkspacePresentation(commit: WorkspacePresentationCommit): Promise<void> {
+    const { runtime } = this[sessionSnapshotOperationsContext]
+    return runtime.runDurableMutation(() => {
+      const local = runtime.state.workspaceSession
+      const hosts = runtime.state.workspaceSessionsByHostId
+      this.stageWorkspacePresentationCommit(commit)
+      const writtenLocal = runtime.state.workspaceSession
+      const writtenHosts = runtime.state.workspaceSessionsByHostId
+      return {
+        value: undefined,
+        rollback: () => {
+          if (runtime.state.workspaceSession === writtenLocal) {
+            runtime.state.workspaceSession = local
+          }
+          if (runtime.state.workspaceSessionsByHostId === writtenHosts) {
+            runtime.state.workspaceSessionsByHostId = hosts
+          }
+        }
+      }
+    })
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession'], hostId?: string | null): void {

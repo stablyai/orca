@@ -1,3 +1,4 @@
+import { rawWorkspaceState } from '../store/workspace-composition'
 import type { AppState } from '../store'
 import { isDecorativeAgentTitleFrameChange } from '../../../shared/agent-decorative-title-signature'
 import type { WorkspaceSessionPatch } from '../../../shared/workspace-session-state-types'
@@ -122,7 +123,7 @@ export function createSessionWriteSubscriber({
     const changed = new Set(pendingChangedFields)
     pendingChangedFields.clear()
     const patch = buildWorkspaceSessionPatch(fresh, changed)
-    if (Object.keys(patch).length === 0) {
+    if (Object.keys(patch).length === 0 && !changed.has('workspacePresentations')) {
       return
     }
     writing = true
@@ -185,7 +186,8 @@ export function createSessionWriteSubscriber({
     return false
   }
 
-  const evaluateSessionState = (state: AppState): void => {
+  const evaluateSessionState = (view: AppState): void => {
+    const state = rawWorkspaceState(view)
     if (!shouldPersistWorkspaceSession(state)) {
       return
     }

@@ -1,3 +1,4 @@
+import { strictWorktreeIdentityKey } from '../../../../shared/workspace-presentation'
 import {
   hasUnroutableTerminalWorktreeOwner,
   resolveTerminalWorktreeRoute
@@ -67,7 +68,10 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
     return
   }
   const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
-  const currentEditorFiles = state.openFiles.filter((file) => file.worktreeId === activeWorktreeId)
+  const currentEditorFiles = state.openFiles.filter(
+    (file) =>
+      strictWorktreeIdentityKey(file.worktreeId) === strictWorktreeIdentityKey(activeWorktreeId)
+  )
   const runtimeEnvironmentId = resolveTerminalWorktreeRoute(
     state,
     activeWorktreeId

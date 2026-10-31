@@ -28,15 +28,24 @@ export function findGroupForTab(
 
 export function findGroupAndWorktree(
   groupsByWorktree: Record<string, TabGroup[]>,
-  groupId: string
+  groupId: string,
+  workspaceId?: string
 ): { group: TabGroup; worktreeId: string } | null {
+  if (workspaceId) {
+    const group = groupsByWorktree[workspaceId]?.find((candidate) => candidate.id === groupId)
+    return group ? { group, worktreeId: workspaceId } : null
+  }
+  let found: { group: TabGroup; worktreeId: string } | null = null
   for (const [worktreeId, groups] of Object.entries(groupsByWorktree)) {
     const group = groups.find((candidate) => candidate.id === groupId)
     if (group) {
-      return { group, worktreeId }
+      if (found) {
+        return null
+      }
+      found = { group, worktreeId }
     }
   }
-  return null
+  return found
 }
 
 export function findTabByEntityInGroup(

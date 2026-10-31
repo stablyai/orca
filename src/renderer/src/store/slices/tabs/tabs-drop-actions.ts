@@ -27,7 +27,11 @@ export function createTabsDropActions(
       let moved = false
       set((state) => {
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
-        const foundTarget = findGroupAndWorktree(state.groupsByWorktree, target.groupId)
+        const foundTarget = findGroupAndWorktree(
+          state.groupsByWorktree,
+          target.groupId,
+          foundTab?.worktreeId
+        )
         if (!foundTab || !foundTarget || foundTab.worktreeId !== foundTarget.worktreeId) {
           return state
         }

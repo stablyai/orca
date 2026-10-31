@@ -1,3 +1,5 @@
+import { admittedWindowPresentationCommit } from './workspace-presentation-window-commit'
+import type { WorkspacePresentationCommit } from '../../shared/workspace-presentation'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -24,6 +26,35 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   // Optional hostId preserves local-partition behavior for older renderers.
   ipcMain.handle('session:get', (_event, hostId?: string | null) => {
     return store.getWorkspaceSession(hostId)
+  })
+
+  ipcMain.handle('session:get-presentations', () => store.getWorkspacePresentations())
+  ipcMain.handle('session:commit-presentation', (_event, commit: WorkspacePresentationCommit) => {
+    const sessions = commit.sessions
+      .filter(({ hostId }) => !isFenced(hostId))
+      .map(({ state, hostId }) => ({
+        hostId,
+        state: ORCA_LAYOUT_OWNER_IS_MAIN
+          ? commit.mode === 'patch'
+            ? patchForMain(state, hostId)
+            : sessionForMain(state, hostId)
+          : windowSaveKeepingMainSleepRecords(
+              store.getWorkspaceSession(hostId),
+              state,
+              commit.mode === 'patch' ? 'patch' : 'set'
+            )
+      }))
+    return store.commitWorkspacePresentation(
+      admittedWindowPresentationCommit(
+        { ...commit, sessions },
+        store.getWorkspacePresentations(
+          commit.replacePresentations
+            ? undefined
+            : [...Object.keys(commit.presentations), ...(commit.removedPresentations ?? [])]
+        ),
+        isFenced
+      )
+    )
   })
 
   // Repo catalogs omit folder-only SSH hosts; enumerate session partitions directly (#12723).

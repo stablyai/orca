@@ -1,3 +1,4 @@
+import { rawWorkspaceState, workspaceSourceWrite } from '../../workspace-composition'
 import { applyAgentStatusBatchUpdate } from './agent-status-batch-update'
 import { projectAgentPaneConversation } from '../agent-pane-conversation'
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../shared/structural-value-equality'
@@ -204,7 +205,7 @@ export function createAgentStatusRuntime(
     if (batchedAgentStatusState) {
       return operation(batchTransaction)
     }
-    const initialState = storeGet()
+    const initialState = rawWorkspaceState(storeGet())
     const touchedKeys = new Set<keyof AppState>()
     const paneKeys = new Set<string>()
     batchedPaneKeys = paneKeys
@@ -229,7 +230,7 @@ export function createAgentStatusRuntime(
       batchedAgentStatusFreshnessRequested = false
       if (hasStagedWrites) {
         commit(
-          buildAgentStatusBatchPatch(initialState, nextState, touchedKeys),
+          workspaceSourceWrite(buildAgentStatusBatchPatch(initialState, nextState, touchedKeys)),
           initialState,
           paneKeys
         )

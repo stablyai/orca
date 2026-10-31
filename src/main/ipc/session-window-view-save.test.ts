@@ -1,3 +1,11 @@
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { applyWindowLayoutCommand } from '../runtime/runtime-layout-apply'
+import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
+import {
+  workspacePresentationKey,
+  sourceBaseline,
+  type WorkspacePresentation
+} from '../../shared/workspace-presentation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -103,6 +111,96 @@ describe('a window save in a layout-owner build', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('reduces composed placement in main and retains it through stale full/quit snapshots', async () => {
+    const O = 'repo-1::C:\\repo',
+      D = 'repo-1::C:/repo'
+    const session = addWorkspace(
+      addWorkspace(emptySession(), O, [
+        { id: 'left', tabs: [{ id: 'one', leaves: [[leaf(1), 'pty-1']] }] }
+      ]),
+      D,
+      [{ id: 'right', tabs: [{ id: 'two', leaves: [[leaf(2), 'pty-2']] }] }]
+    )
+    const baseline = [O, D].map((workspaceId) =>
+      sourceBaseline(session, { hostId: 'local', workspaceId })
+    )
+    const key = workspacePresentationKey('main', { hostId: 'local', workspaceId: D })
+    const document: WorkspacePresentation = {
+      schemaVersion: 1,
+      owner: 'main',
+      anchor: { hostId: 'local', workspaceId: D },
+      displayWorkspaceId: D,
+      tabs: baseline.flatMap((base) => base.tabs),
+      groups: baseline.flatMap((base) => base.groups).map((group) => ({ ...group, worktreeId: D })),
+      layout: {
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.37,
+        first: { type: 'leaf', groupId: 'left' },
+        second: { type: 'leaf', groupId: 'right' }
+      },
+      activeGroupId: 'left',
+      baseline
+    }
+    await store.commitWorkspacePresentation({
+      mode: 'replace',
+      sessions: [{ state: session }],
+      presentations: { [key]: document }
+    })
+    const layout = document.layout
+    const result = await applyWindowLayoutCommand(store, () => ['local'], {
+      type: 'setGroupRatios',
+      workspace: D,
+      ratios: [{ path: '', ratio: 0.61 }]
+    })
+    expect(result.ok).toBe(true)
+    expect(store.getWorkspacePresentations()[key]?.layout).toEqual({ ...layout, ratio: 0.61 })
+    expect(store.getWorkspaceSession().unifiedTabs?.[O]?.map((tab) => tab.id)).toEqual(['one'])
+    expect(store.getWorkspaceSession().unifiedTabs?.[D]?.map((tab) => tab.id)).toEqual(['two'])
+    vi.spyOn(store, 'getRepos').mockReturnValue([
+      { id: 'repo-1', path: 'C:/repo', displayName: 'repo', badgeColor: 'blue', addedAt: 1 }
+    ])
+    const headless = new OrcaRuntimeService(store)
+    headless.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(undefined, { force: true })
+    const originalRows = await headless.listMobileSessionTabs(`id:${O}`)
+    const destinationRows = await headless.listMobileSessionTabs(`id:${D}`)
+    expect(originalRows.tabs.map((tab) => tab.parentTabId)).toEqual(['one'])
+    expect(destinationRows.tabs.map((tab) => tab.parentTabId)).toEqual(['two'])
+    expect(originalRows.tabGroups?.flatMap((group) => group.tabOrder)).toEqual(['one'])
+    expect(destinationRows.tabGroups?.flatMap((group) => group.tabOrder)).toEqual(['two'])
+
+    await call('session:commit-presentation', {
+      mode: 'replace',
+      sessions: [{ state: session }],
+      presentations: { [key]: document },
+      replacePresentations: true
+    })
+    expect(store.getWorkspacePresentations()[key]?.layout).toEqual({ ...layout, ratio: 0.61 })
+    registerRendererShutdownCheckpointHandler(store)
+    const event: { returnValue?: unknown } = {}
+    handlers.get('app:stage-before-unload-sync')!(event, {
+      sessions: [{ state: session }],
+      presentations: { [key]: document },
+      ui: {}
+    })
+    expect(event.returnValue).toEqual({ ok: true })
+    await call('app:await-before-unload-checkpoint')
+    expect(store.getWorkspacePresentations()[key]?.layout).toEqual({ ...layout, ratio: 0.61 })
+    const moved = await applyWindowLayoutCommand(store, () => ['local'], {
+      type: 'moveTab',
+      workspace: D,
+      tabId: 'one',
+      toGroupId: 'right',
+      index: 1
+    })
+    expect(moved.ok).toBe(true)
+    expect(
+      store.getWorkspacePresentations()[key]?.tabs.find((tab) => tab.id === 'one')?.groupId
+    ).toBe('right')
+    expect(store.getWorkspaceSession().unifiedTabs?.[O]?.[0].groupId).toBe('left')
+    expect(store.getWorkspaceSession().unifiedTabs?.[D]?.map((tab) => tab.id)).toEqual(['two'])
   })
 
   it('keeps main’s tabs and panes, and takes the window’s view and titles', async () => {

@@ -1,3 +1,8 @@
+import {
+  rawWorkspaceState,
+  workspaceSourceWrite,
+  noteWorkspacePresentationChanges
+} from '../../../workspace-composition'
 import type { AppState } from '../../../types'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import type { WorktreePurgeTarget, WorktreePurgeTargets } from '../../worktree-helpers'
@@ -23,12 +28,59 @@ import { mergeEditorBufferKeepRequests } from '../../editor/buffers/editor-buffe
 import { buildHostTwinPurgeState, collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
+export function buildWorktreePurgeState(
+  view: AppState,
+  worktreeTargets: WorktreePurgeTargets,
+  changedPaneKeys?: Set<string>
+): Partial<AppState> {
+  const state = rawWorkspaceState(view)
+  const targets = worktreeTargets.map((target) =>
+    typeof target === 'string' ? { id: target } : target
+  )
+  const expanded = [...targets]
+  const documents = { ...state.workspacePresentations }
+  const removed: string[] = []
+  for (const [key, saved] of Object.entries(documents)) {
+    if (!saved) {
+      continue
+    }
+    if (
+      targets.some(
+        (target) =>
+          (!target.hostId ||
+            target.hostId === saved.anchor.hostId ||
+            target.hostId === saved.anchor.executionHostId) &&
+          (target.id === saved.displayWorkspaceId ||
+            saved.baseline.some(({ source }) => source.workspaceId === target.id))
+      )
+    ) {
+      expanded.push(
+        ...saved.baseline.map(({ source }) => ({ id: source.workspaceId, hostId: source.hostId }))
+      )
+      if (key.startsWith('workspacePresentation:v1:')) {
+        removed.push(key)
+        Reflect.deleteProperty(documents, key)
+      }
+    }
+  }
+  if (removed.length) {
+    noteWorkspacePresentationChanges(documents, removed)
+  }
+  return workspaceSourceWrite(
+    {
+      ...buildSourceWorktreePurgeState(state, expanded, changedPaneKeys),
+      ...(removed.length ? { workspacePresentations: documents } : {})
+    },
+    { sources: expanded.map(({ id }) => id), documents: removed }
+  )
+}
+
 /**
  * Builds a bulk cleanup patch and clears auxiliary warning records without requiring individual
  * terminal teardown. A host target whose id another host still publishes purges only that host's
  * attributable state; everything else purges every bucket under the id.
  */
-export function buildWorktreePurgeState(
+function buildSourceWorktreePurgeState(
   s: AppState,
   worktreeTargets: WorktreePurgeTargets,
   changedPaneKeys?: Set<string>

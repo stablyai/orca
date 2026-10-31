@@ -1,3 +1,4 @@
+import type { WorkspacePresentationDocuments } from '../../shared/workspace-presentation'
 import type { UiLanguageDetection } from '../../shared/ui-locale'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { E2EConfig } from '../../shared/e2e-config'
@@ -34,6 +35,7 @@ export type AppApi = {
   /** Main classifies teardown before Electron emits process-gone events. */
   reload: () => Promise<void>
   stageBeforeUnloadSync: (args: {
+    presentations?: WorkspacePresentationDocuments
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
     ui: Partial<PersistedUIState>
   }) => void

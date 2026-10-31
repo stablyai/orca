@@ -1,3 +1,4 @@
+import type { WorkspaceCompositionState } from './workspace-composition'
 import type { RepoSlice } from './repos/repo-state'
 import type { SparsePresetsSlice } from './slices/sparse-presets'
 import type { WorktreeSlice } from './slices/worktrees'
@@ -50,7 +51,8 @@ import type { StructuredSessionLaunchDirectorySlice } from './slices/structured-
 import type { StructuredChatSleptAtSlice } from './slices/structured-chat-slept-at'
 import type { WorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-contract'
 
-export type AppState = RepoSlice &
+export type AppState = WorkspaceCompositionState &
+  RepoSlice &
   SparsePresetsSlice &
   WorktreeSlice &
   TerminalSlice &

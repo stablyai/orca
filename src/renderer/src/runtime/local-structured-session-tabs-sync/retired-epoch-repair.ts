@@ -20,4 +20,5 @@ export const scheduleRetiredEpochRepair = localRepairLane.schedule
 export function forgetRetiredEpochRepairsOutside(knownWorktreeIds: ReadonlySet<string>): void {
   localRepairLane.forget((worktreeId) => !knownWorktreeIds.has(worktreeId))
 }
-export const resetRetiredEpochRepairsForTests = localRepairLane.resetForTests
+export const clearRetiredEpochRepairs = localRepairLane.resetForTests
+export const resetRetiredEpochRepairsForTests = clearRetiredEpochRepairs

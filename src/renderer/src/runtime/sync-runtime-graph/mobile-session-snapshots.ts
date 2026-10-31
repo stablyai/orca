@@ -1,3 +1,4 @@
+import { rawWorkspaceState } from '@/store/workspace-composition'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import type { AppState } from '@/store/types'
 import type {
@@ -39,10 +40,10 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 export function buildMobileSessionTabSnapshots(
   state: AppState,
   systemPrefersDark = getSystemPrefersDark(),
-  ambiguousTerminalTabIds: ReadonlySet<string> = collectAmbiguousTerminalTabIds(
-    state.tabsByWorktree
-  )
+  ambiguousTerminalTabIds?: ReadonlySet<string>
 ): RuntimeMobileSessionTabsSnapshot[] {
+  state = rawWorkspaceState(state)
+  ambiguousTerminalTabIds ??= collectAmbiguousTerminalTabIds(state.tabsByWorktree)
   const openFileIndexes = getOpenFileIndexes(state.openFiles)
   const browserTabsByWorktree = state.browserTabsByWorktree ?? {}
   const publicationInputs: MobileSessionPublicationInputs = {

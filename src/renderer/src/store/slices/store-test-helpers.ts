@@ -1,3 +1,4 @@
+import { withWorkspaceComposition } from '../workspace-composition'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -66,7 +67,7 @@ export {
 } from './store-session-test-harness'
 
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
-  withEditorBufferRecords(withAgentConversationRetention(creator), check)
+  withEditorBufferRecords(withWorkspaceComposition(withAgentConversationRetention(creator)), check)
 
 export function createTestStore() {
   // Why the record middleware: views of one file share a record only through it, as in the app.

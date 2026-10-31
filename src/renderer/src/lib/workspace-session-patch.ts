@@ -1,3 +1,4 @@
+import { rawWorkspaceSnapshot } from '../store/workspace-composition'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
@@ -55,7 +56,7 @@ export function buildWorkspaceSessionPatch(
   fullSnapshot: WorkspaceSessionSnapshot,
   changedFields: Iterable<SessionRelevantField>
 ): WorkspaceSessionPatch {
-  const snapshot = withoutStagedBrowserTabs(fullSnapshot)
+  const snapshot = withoutStagedBrowserTabs(rawWorkspaceSnapshot(fullSnapshot))
   const changed = new Set(changedFields)
   const patch: WorkspaceSessionPatch = {}
 

@@ -83,7 +83,8 @@ function reacceptHostSessionTabs(
   worktreeId: string,
   intentOwner: WebSessionIntentOwner,
   /** This machine's host still lists the chat. */
-  stillListed?: { sessionId: string; reopen: () => void }
+  stillListed?: { sessionId: string; reopen: () => void },
+  afterReadback?: () => void
 ): void {
   // Lazy imports: both refresh paths apply frames through this module.
   const reread =
@@ -111,9 +112,11 @@ function reacceptHostSessionTabs(
             }
           }
         )
-  reread.catch((error: unknown) =>
-    console.warn('[structured-agent-session] tab re-read after a close failed', error)
-  )
+  reread
+    .then(() => afterReadback?.())
+    .catch((error: unknown) =>
+      console.warn('[structured-agent-session] tab re-read after a close failed', error)
+    )
 }
 
 /** Mark cancellation before removing the row so a late host publication cannot resurrect it. */
@@ -126,6 +129,7 @@ export function beginStructuredAgentSessionTabClose(args: {
   onError?: (error: unknown) => void
   /** Main dropped the tab before the host answered: a host still listing the chat shows it again. */
   reopen?: () => void
+  afterFailedCloseReadback?: () => void
 }): void {
   forgetUnlistedCreatedChat(args.worktreeId, args.sessionId)
   if (args.provisional) {
@@ -160,7 +164,8 @@ export function beginStructuredAgentSessionTabClose(args: {
         intentOwner,
         !hostTabClosed && args.reopen
           ? { sessionId: args.sessionId, reopen: args.reopen }
-          : undefined
+          : undefined,
+        !hostTabClosed ? args.afterFailedCloseReadback : undefined
       )
     }
   })

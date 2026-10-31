@@ -78,6 +78,7 @@ export type RuntimeStore = {
   getLayoutEditorViews?: Store['getLayoutEditorViews']
   admitTerminalPane?: Store['admitTerminalPane']
   withdrawTerminalPane?: Store['withdrawTerminalPane']
+  applyWorkspacePresentationCommand?: Store['applyWorkspacePresentationCommand']
   applyLayoutCommand?: Store['applyLayoutCommand']
   applyTabRenames?: Store['applyTabRenames']
   moveTerminalLeafToNewTab?: Store['moveTerminalLeafToNewTab']

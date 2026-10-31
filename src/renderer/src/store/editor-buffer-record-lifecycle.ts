@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand'
+import { sourceWrites } from './workspace-source-state'
 import {
   editorBufferMirrorMismatch,
   type EditorBufferState
@@ -52,7 +53,12 @@ function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
     records === state.editorBuffers &&
     detachments === state.editorBufferDetached &&
     kept === state.editorBufferKept &&
-    !editorBufferRouteInputsChanged(state, write)
+    !editorBufferRouteInputsChanged(
+      state,
+      write,
+      sourceWrites.get(write)?.catalogRepoIds,
+      openFiles
+    )
   ) {
     // Why only drafts: this runs per keystroke, and nothing else about the views changed.
     if (checkInvariant && drafts !== state.editorDrafts) {

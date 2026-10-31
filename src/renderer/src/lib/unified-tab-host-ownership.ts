@@ -1,3 +1,4 @@
+import { strictWorktreeIdentityKey } from '../../../shared/workspace-presentation'
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { OpenFile } from '@/store/slices/editor'
@@ -67,7 +68,10 @@ export function isUnifiedTabOwnedByWorktree(
   worktree: Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>,
   ambiguousWorktreeIds: ReadonlySet<string>
 ): boolean {
-  if (!tab || tab.worktreeId !== worktree.id) {
+  if (
+    !tab ||
+    strictWorktreeIdentityKey(tab.worktreeId) !== strictWorktreeIdentityKey(worktree.id)
+  ) {
     return false
   }
   if (tab.executionHostId) {
@@ -83,7 +87,7 @@ export function isOpenFileOwnedByWorktree(
   >,
   worktree: Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>
 ): boolean {
-  if (file.worktreeId !== worktree.id) {
+  if (strictWorktreeIdentityKey(file.worktreeId) !== strictWorktreeIdentityKey(worktree.id)) {
     return false
   }
   return isExecutionHostAliasForWorktree(getOpenFileExecutionHostId(file), worktree)

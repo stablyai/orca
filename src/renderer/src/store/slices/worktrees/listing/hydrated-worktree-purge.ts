@@ -1,8 +1,9 @@
+import { strictWorktreeIdentityKey } from '../../../../../../shared/workspace-presentation'
 import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { getRepoIdFromWorktreeId, worktreeIdentityKey } from '../../../../../../shared/worktree/id'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { findWslMovedProjectForWorkspace } from '../../../repos/wsl-moved-projects'
 import {
   selectDetectedWorktreesByRepo,
@@ -67,14 +68,14 @@ export function purgeHydratedWorktrees(
   }
   for (const key of Object.keys(state.restoredRuntimeHostIdByWorkspaceSessionKey ?? {})) {
     if (parseWorkspaceKey(key)?.type === 'folder') {
-      validIds.add(worktreeIdentityKey(key))
+      validIds.add(strictWorktreeIdentityKey(key))
     }
   }
   // Why: hydration kept only a moved project's chats, which stay on this computer.
   if ((state.wslMovedProjects ?? []).length > 0) {
     for (const key of Object.keys(state.unifiedTabsByWorktree)) {
       if (findWslMovedProjectForWorkspace(state, key)) {
-        validIds.add(worktreeIdentityKey(key))
+        validIds.add(strictWorktreeIdentityKey(key))
       }
     }
   }
@@ -83,11 +84,11 @@ export function purgeHydratedWorktrees(
       continue
     }
     for (const worktree of result.worktrees) {
-      validIds.add(worktreeIdentityKey(worktree.id))
+      validIds.add(strictWorktreeIdentityKey(worktree.id))
     }
   }
   const stale = Object.keys(state.tabsByWorktree).filter(
-    (id) => !validIds.has(worktreeIdentityKey(id))
+    (id) => !validIds.has(strictWorktreeIdentityKey(id))
   )
   if (stale.length > 0) {
     console.warn(

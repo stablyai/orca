@@ -1,3 +1,4 @@
+import { rawWorkspaceState, workspaceSourceWrite } from '../../workspace-composition'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
@@ -79,7 +80,7 @@ export function createTabsSessionActions(
     },
 
     hydrateTabsSession: (session, options) => {
-      const state = get()
+      const state = rawWorkspaceState(get())
       const persistedWorktreeIds = collectPersistedWorktreeIdsForSessionHydration(session)
       const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(state, persistedWorktreeIds)
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
@@ -94,32 +95,35 @@ export function createTabsSessionActions(
         new Set(options?.wslMovedChatWorkspaceKeys)
       )
       if (!options?.replaceWorkspaceKeys) {
-        set(hydrated)
+        set(workspaceSourceWrite(hydrated))
         return
       }
       const replaceWorkspaceKeys = new Set(options.replaceWorkspaceKeys)
-      set((current) => ({
-        unifiedTabsByWorktree: replaceWorkspaceRecordKeys(
-          current.unifiedTabsByWorktree,
-          hydrated.unifiedTabsByWorktree,
-          replaceWorkspaceKeys
-        ),
-        groupsByWorktree: replaceWorkspaceRecordKeys(
-          current.groupsByWorktree,
-          hydrated.groupsByWorktree,
-          replaceWorkspaceKeys
-        ),
-        activeGroupIdByWorktree: replaceWorkspaceRecordKeys(
-          current.activeGroupIdByWorktree,
-          hydrated.activeGroupIdByWorktree,
-          replaceWorkspaceKeys
-        ),
-        layoutByWorktree: replaceWorkspaceRecordKeys(
-          current.layoutByWorktree,
-          hydrated.layoutByWorktree,
-          replaceWorkspaceKeys
-        )
-      }))
+      set((view) => {
+        const current = rawWorkspaceState(view)
+        return workspaceSourceWrite({
+          unifiedTabsByWorktree: replaceWorkspaceRecordKeys(
+            current.unifiedTabsByWorktree,
+            hydrated.unifiedTabsByWorktree,
+            replaceWorkspaceKeys
+          ),
+          groupsByWorktree: replaceWorkspaceRecordKeys(
+            current.groupsByWorktree,
+            hydrated.groupsByWorktree,
+            replaceWorkspaceKeys
+          ),
+          activeGroupIdByWorktree: replaceWorkspaceRecordKeys(
+            current.activeGroupIdByWorktree,
+            hydrated.activeGroupIdByWorktree,
+            replaceWorkspaceKeys
+          ),
+          layoutByWorktree: replaceWorkspaceRecordKeys(
+            current.layoutByWorktree,
+            hydrated.layoutByWorktree,
+            replaceWorkspaceKeys
+          )
+        })
+      })
     }
   }
 }

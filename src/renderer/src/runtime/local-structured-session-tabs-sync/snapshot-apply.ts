@@ -13,12 +13,10 @@ import {
   noteRetiredValue,
   sameSessionTabsPublicationLineage
 } from '../web-session-tabs-sync/publisher-identity-fences'
-import { knownStructuredSessionWorktreeIds } from '../local-structured-session-tab-retirement'
 import {
   localStructuredSessionEpochHistoryByWorktree,
   localStructuredSessionVersionByWorktree
 } from './inventory-generation-fence'
-import { forgetRetiredEpochRepairsOutside } from './retired-epoch-repair'
 import { projectLocalStructuredSessionTabs } from './snapshot-projection'
 import {
   hostSnapshotAffirmsAgentSessions,
@@ -214,14 +212,5 @@ export function applyLocalStructuredSessionTabSnapshots<
       noteRetiredValue(epochHistory, snapshot.publicationEpoch, 8)
     )
   }
-  // Deleted worktrees must release publisher cursors instead of retaining them for renderer lifetime.
-  const knownWorktreeIds = knownStructuredSessionWorktreeIds(next)
-  for (const worktreeId of localStructuredSessionVersionByWorktree.keys()) {
-    if (!knownWorktreeIds.has(worktreeId)) {
-      localStructuredSessionVersionByWorktree.delete(worktreeId)
-      localStructuredSessionEpochHistoryByWorktree.delete(worktreeId)
-    }
-  }
-  forgetRetiredEpochRepairsOutside(knownWorktreeIds)
   return next
 }

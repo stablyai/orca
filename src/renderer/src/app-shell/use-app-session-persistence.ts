@@ -82,6 +82,7 @@ export function useAppSessionPersistence(): void {
           freshState
         )
       },
+      buildPresentations: () => ({ ...useAppStore.getState().workspacePresentations }),
       buildUiPatch: () => buildActiveViewUnloadPatch(useAppStore.getState()),
       hasDirtyOpenFiles: () => useAppStore.getState().openFiles.some((file) => file.isDirty),
       // Allow quit fallback too; SIGKILL to escape a blocked quit loses more state (#15352).

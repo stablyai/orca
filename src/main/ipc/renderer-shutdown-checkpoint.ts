@@ -1,3 +1,5 @@
+import { admittedWindowPresentationCommit } from './workspace-presentation-window-commit'
+import type { WorkspacePresentationDocuments } from '../../shared/workspace-presentation'
 import { ipcMain } from 'electron'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -17,6 +19,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { formatShutdownCheckpointFailureReason } from '../../shared/renderer-shutdown-events'
 
 type StageBeforeUnloadSyncArgs = {
+  presentations?: WorkspacePresentationDocuments
   sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
   ui: Partial<PersistedUIState>
 }
@@ -105,7 +108,35 @@ export function registerRendererShutdownCheckpointHandler(
     try {
       // A window a WSL move rewrote under is stale; main reloads it and keeps what is on disk.
       const sessions = isWslMoveWindowWriteHeld() ? [] : args.sessions
-      for (const { state, hostId } of sessions) {
+      if (args.presentations && !isWslMoveWindowWriteHeld()) {
+        store.stageWorkspacePresentationCommit(
+          admittedWindowPresentationCommit(
+            {
+              mode: 'replace',
+              presentations: args.presentations,
+              replacePresentations: true,
+              sessions: sessions
+                .filter(({ hostId }) => !isFrozenOrcadSourceSessionPartition(store, hostId))
+                .map(({ state, hostId }) => ({
+                  hostId,
+                  state: ORCA_LAYOUT_OWNER_IS_MAIN
+                    ? stagedSessionForMain(
+                        store,
+                        state,
+                        hostId,
+                        quitResumeRecordsFor,
+                        reconnectFactsFor
+                      )
+                    : state
+                }))
+            },
+            store.getWorkspacePresentations(),
+            (hostId) => isFrozenOrcadSourceSessionPartition(store, hostId)
+          ),
+          true
+        )
+      }
+      for (const { state, hostId } of args.presentations ? [] : sessions) {
         if (!isFrozenOrcadSourceSessionPartition(store, hostId)) {
           store.stageWorkspaceSessionBeforeUnload(
             ORCA_LAYOUT_OWNER_IS_MAIN

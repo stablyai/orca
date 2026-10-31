@@ -1,3 +1,11 @@
+import {
+  presentationSourceBaselines,
+  reconcileWorkspacePresentation
+} from '../../../shared/workspace-presentation-reconcile'
+import {
+  readWorkspacePresentations,
+  isWorkspacePresentationKey
+} from '../../../shared/workspace-presentation'
 import { normalizePersistedMobileClientTabSelections } from '../../runtime/client-session-tab-selection-persistence'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
@@ -42,7 +50,7 @@ export function normalizeLoadedProfileState(
   // Normalize local first; host partitions drop global fields already owned here.
   const workspaceSession = normalizeLoadedLocalSession(parsed, defaults, markNeedsSave)
 
-  return {
+  const state: PersistedState = {
     ...defaults,
     ...parsed,
     featureInteractionTelemetryBuckets: normalizeFeatureInteractionTelemetryBuckets(
@@ -117,4 +125,30 @@ export function normalizeLoadedProfileState(
     ),
     onboarding: normalizedOnboarding
   }
+  const presentations = readWorkspacePresentations(parsed)
+  for (const key of Object.keys(state)) {
+    if (isWorkspacePresentationKey(key)) {
+      if (presentations[key]) {
+        const saved = presentations[key]
+        const settled = reconcileWorkspacePresentation(
+          saved,
+          presentationSourceBaselines(saved, (host) =>
+            host === 'local'
+              ? state.workspaceSession
+              : (state.workspaceSessionsByHostId?.[host] ?? {
+                  tabsByWorktree: {},
+                  activeTabIdByWorktree: {}
+                })
+          )
+        )
+        state[key] = settled
+        if (settled !== saved) {
+          markNeedsSave()
+        }
+      } else {
+        delete state[key]
+      }
+    }
+  }
+  return state
 }

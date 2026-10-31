@@ -1,9 +1,11 @@
+import type { WorkspacePresentationDocuments } from '../../../shared/workspace-presentation'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import { formatShutdownCheckpointFailureReason } from '../../../shared/renderer-shutdown-events'
 import type { WorkspaceSessionHostSnapshot } from '../lib/workspace-session-host-persistence'
 import { recordRendererCrashBreadcrumb } from '../lib/crash-breadcrumb-recorder'
 
 export type ShutdownCheckpointStageArgs = {
+  presentations?: WorkspacePresentationDocuments
   sessions: WorkspaceSessionHostSnapshot[]
   ui: Partial<PersistedUIState>
 }
@@ -14,6 +16,7 @@ export type ShutdownCheckpointPersistDeps = {
   captureTerminalBuffers: () => void
   captureSleepingAgentSessions: () => void
   buildSessionSnapshots: () => WorkspaceSessionHostSnapshot[]
+  buildPresentations?: () => WorkspacePresentationDocuments
   buildUiPatch: () => Partial<PersistedUIState>
   hasDirtyOpenFiles: () => boolean
   /** Allow durable-session fallback during intentional restart or app quit/close, subject to draft protection. */
@@ -61,6 +64,7 @@ export function createShutdownCheckpointPersist(
     }
     try {
       deps.stageBeforeUnloadSync({
+        presentations: degraded ? undefined : deps.buildPresentations?.(),
         sessions: degraded ? [] : sessionSnapshots,
         ui: deps.buildUiPatch()
       })

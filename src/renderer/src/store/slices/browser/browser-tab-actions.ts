@@ -180,7 +180,8 @@ export function createBrowserTabActions(
       const state = get()
       // Why: the invoking group owns its workspace; global selection may already point elsewhere.
       const worktreeId =
-        findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId ?? state.activeWorktreeId
+        findGroupAndWorktree(state.groupsByWorktree, groupId, state.activeWorktreeId ?? undefined)
+          ?.worktreeId ?? state.activeWorktreeId
       if (!worktreeId) {
         return
       }

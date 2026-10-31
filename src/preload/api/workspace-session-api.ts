@@ -1,3 +1,7 @@
+import type {
+  WorkspacePresentationCommit,
+  WorkspacePresentationDocuments
+} from '../../shared/workspace-presentation'
 import type { IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
 import type {
   WorkspaceSessionPatch,
@@ -8,6 +12,8 @@ import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-c
 
 export type WorkspaceSessionApi = {
   session: {
+    getPresentations: () => Promise<WorkspacePresentationDocuments>
+    commitPresentation: (args: WorkspacePresentationCommit) => Promise<void>
     // Omitted hostId selects the local persistence partition.
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     /** Read persisted partitions at boot; the host catalog may omit some. */

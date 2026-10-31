@@ -1,3 +1,4 @@
+import { rawWorkspaceState, workspaceSourceWrite } from '../../../workspace-composition'
 import { preserveConcurrentManualOrder } from './worktree-listing-manual-order'
 import { mergeListedWorktreeSpellings } from '../session/worktree-spelling-merge'
 import type { StateCreator } from 'zustand'
@@ -149,6 +150,7 @@ export function mergeFetchedWorktrees(
       return s
     }
     decision.outcome = 'applied'
+    s = rawWorkspaceState(s)
     const spellingPatch = mergeListedWorktreeSpellings(
       s,
       args.repoId,
@@ -249,37 +251,40 @@ export function mergeFetchedWorktrees(
     ) {
       return s
     }
-    return {
-      ...spellingPatch,
-      ...versionPatch,
-      ...(worktreesChanged
-        ? {
-            worktreesByRepo: {
-              ...s.worktreesByRepo,
-              [args.repoId]: mergedWorktrees
-            },
-            // Why: an order save re-reads as a sortOrder-only change; re-sorting on it would schedule the next save (#27268).
-            ...(worktreesDifferOnlyInSortOrder(s.worktreesByRepo[args.repoId], mergedWorktrees)
-              ? { sortOrderEpoch: s.sortOrderEpoch + 1 }
-              : { sortEpoch: s.sortEpoch + 1 })
-          }
-        : {}),
-      ...(detectedChanged
-        ? {
-            detectedWorktreesByRepo: {
-              ...s.detectedWorktreesByRepo,
-              [args.repoId]: mergedDetected
+    return workspaceSourceWrite(
+      {
+        ...spellingPatch,
+        ...versionPatch,
+        ...(worktreesChanged
+          ? {
+              worktreesByRepo: {
+                ...s.worktreesByRepo,
+                [args.repoId]: mergedWorktrees
+              },
+              // Why: an order save re-reads as a sortOrder-only change; re-sorting on it would schedule the next save (#27268).
+              ...(worktreesDifferOnlyInSortOrder(s.worktreesByRepo[args.repoId], mergedWorktrees)
+                ? { sortOrderEpoch: s.sortOrderEpoch + 1 }
+                : { sortEpoch: s.sortEpoch + 1 })
             }
-          }
-        : {}),
-      ...(removedIds.length > 0
-        ? buildWorktreePurgeState(
-            s,
-            removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId })),
-            changedPaneKeys
-          )
-        : {})
-    }
+          : {}),
+        ...(detectedChanged
+          ? {
+              detectedWorktreesByRepo: {
+                ...s.detectedWorktreesByRepo,
+                [args.repoId]: mergedDetected
+              }
+            }
+          : {}),
+        ...(removedIds.length > 0
+          ? buildWorktreePurgeState(
+              s,
+              removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId })),
+              changedPaneKeys
+            )
+          : {})
+      },
+      { catalogRepoIds: [args.repoId] }
+    )
   })
   if (decision.outcome === 'applied') {
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.

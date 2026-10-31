@@ -15,15 +15,11 @@ import { renameWorktreeLayoutKeys } from '../../tabs/worktree-layout-lifecycle'
 import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 
 // Inventory non-layout worktree-keyed maps; layout migrates separately, while surviving tab/file IDs keep their keys.
-export const WORKTREE_ID_KEYED_MAP_KEYS = [
-  'restoredRuntimeHostIdByWorkspaceSessionKey',
-  'contestedPrimaryHostBySessionKey',
+const WORKTREE_ID_KEYED_MAP_KEYS = [
   'worktreeLineageById',
   'deleteStateByWorktreeId',
   'baseStatusByWorktreeId',
   'remoteBranchConflictByWorktreeId',
-  'fileSearchStateByWorktree',
-  'recentlyClosedBrowserTabsByWorktree',
   'pendingReconnectTabByWorktree',
   'rightSidebarTabByWorktree',
   'rightSidebarExplorerViewByWorktree',
@@ -49,8 +45,7 @@ export const WORKTREE_ID_KEYED_MAP_KEYS = [
 export function buildWorktreeRenameState(
   s: AppState,
   oldWorktreeId: string,
-  newWorktreeId: string,
-  mergeExisting = false
+  newWorktreeId: string
 ): Partial<AppState> {
   if (oldWorktreeId === newWorktreeId) {
     return {}
@@ -58,21 +53,15 @@ export function buildWorktreeRenameState(
   renameCombinedDiffViewOwner(oldWorktreeId, newWorktreeId)
   const renamed: Record<string, unknown> = {}
   const renameKey = <T>(
-    key: keyof AppState,
+    key: string,
+    map: Record<string, T> | undefined,
     mapValue: (value: T) => T = (value) => value
   ): void => {
-    const map = s[key as keyof AppState] as Record<string, unknown> | undefined
     if (!map || !(oldWorktreeId in map)) {
       return
     }
     const next = { ...map }
-    // SAFETY: Each caller pairs its map value type with the mapper for that field.
-    const value = mapValue(next[oldWorktreeId] as T)
-    if (!mergeExisting || !(newWorktreeId in map)) {
-      next[newWorktreeId] = value
-    } else if (Array.isArray(next[newWorktreeId]) && Array.isArray(value)) {
-      next[newWorktreeId] = [...next[newWorktreeId], ...value]
-    }
+    next[newWorktreeId] = mapValue(next[oldWorktreeId])
     delete next[oldWorktreeId]
     renamed[key] = next
   }
@@ -95,22 +84,22 @@ export function buildWorktreeRenameState(
         }
       : renamedValue
   }
-  const renameValueByKey: Partial<Record<(typeof WORKTREE_ID_KEYED_MAP_KEYS)[number], unknown>> = {
-    recentlyClosedBrowserTabsByWorktree: (
-      snapshots: { workspace: BrowserWorkspace; pages: BrowserPage[] }[]
-    ) =>
+  renameKey(
+    'recentlyClosedBrowserTabsByWorktree',
+    s.recentlyClosedBrowserTabsByWorktree,
+    (snapshots) =>
       snapshots.map((snapshot) => ({
         ...snapshot,
         workspace: withNewBrowserWorktreeId(snapshot.workspace),
         pages: snapshot.pages.map(withNewBrowserWorktreeId)
-      })),
-    fileSearchStateByWorktree: (searchState: AppState['fileSearchStateByWorktree'][string]) => ({
-      ...searchState,
-      resultOwner: searchState.resultOwner ? withNewWorktreeId(searchState.resultOwner) : null
-    })
-  }
+      }))
+  )
+  renameKey('fileSearchStateByWorktree', s.fileSearchStateByWorktree, (searchState) => ({
+    ...searchState,
+    resultOwner: searchState.resultOwner ? withNewWorktreeId(searchState.resultOwner) : null
+  }))
   for (const key of WORKTREE_ID_KEYED_MAP_KEYS) {
-    renameKey(key, renameValueByKey[key] as ((value: unknown) => unknown) | undefined)
+    renameKey<unknown>(key, s[key])
   }
   // Recency keys may carry a host prefix. Preserve that prefix while moving
   // the path-derived id so a rename cannot merge host twins.
@@ -123,7 +112,7 @@ export function buildWorktreeRenameState(
     }
     const nextKey =
       rawId === key ? newWorktreeId : `${key.slice(0, key.length - rawId.length)}${newWorktreeId}`
-    nextVisitRecency[nextKey] = mergeExisting ? (nextVisitRecency[nextKey] ?? value) : value
+    nextVisitRecency[nextKey] = value
     delete nextVisitRecency[key]
     visitRecencyChanged = true
   }
@@ -131,16 +120,21 @@ export function buildWorktreeRenameState(
     renamed.lastVisitedAtByWorktreeId = nextVisitRecency
   }
   // Re-key on rename so a renamed worktree keeps its editor-undo + push/pull state.
-  renameKey('recentlyClosedEditorTabsByWorktree', (files: { worktreeId: string }[]) =>
-    files.map(withNewWorktreeId)
+  renameKey(
+    'recentlyClosedEditorTabsByWorktree',
+    s.recentlyClosedEditorTabsByWorktree,
+    (files: { worktreeId: string }[]) => files.map(withNewWorktreeId)
   )
   // Remap absolute startupCwd in reopen snapshots or Cmd+Shift+T spawns into the vanished old directory.
-  renameKey('recentlyClosedTerminalTabsByWorktree', (snapshots: ClosedTerminalTabSnapshot[]) =>
-    oldWorktreePath && newWorktreePath
-      ? remapClosedTerminalTabSnapshotCwds(snapshots, oldWorktreePath, newWorktreePath)
-      : snapshots
+  renameKey(
+    'recentlyClosedTerminalTabsByWorktree',
+    s.recentlyClosedTerminalTabsByWorktree,
+    (snapshots: ClosedTerminalTabSnapshot[]) =>
+      oldWorktreePath && newWorktreePath
+        ? remapClosedTerminalTabSnapshotCwds(snapshots, oldWorktreePath, newWorktreePath)
+        : snapshots
   )
-  renameKey('remoteStatusesByWorktree')
+  renameKey('remoteStatusesByWorktree', s.remoteStatusesByWorktree)
 
   const currentBrowserPagesByWorkspace = s.browserPagesByWorkspace ?? {}
   const browserPagesByWorkspace = Object.values(currentBrowserPagesByWorkspace).some((pages) =>
@@ -234,14 +228,8 @@ export function buildWorktreeRenameState(
     : s.sleepingAgentSessionsByPaneKey
 
   return {
-    ...renameWorktreeLayoutKeys(
-      s,
-      oldWorktreeId,
-      newWorktreeId,
-      withNewBrowserWorktreeId,
-      mergeExisting
-    ),
-    ...(renamed as Partial<AppState>),
+    ...renameWorktreeLayoutKeys(s, oldWorktreeId, newWorktreeId, withNewBrowserWorktreeId),
+    ...renamed,
     ...(browserPagesByWorkspace !== s.browserPagesByWorkspace ? { browserPagesByWorkspace } : {}),
     ...(recentlyClosedBrowserPagesByWorkspace !== s.recentlyClosedBrowserPagesByWorkspace
       ? { recentlyClosedBrowserPagesByWorkspace }

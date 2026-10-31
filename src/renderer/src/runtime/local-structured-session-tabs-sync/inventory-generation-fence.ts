@@ -1,3 +1,4 @@
+import { clearRetiredEpochRepairs } from './retired-epoch-repair'
 import type { SessionTabsPublicationEpochHistory } from '../web-session-tabs-sync/state'
 import type { StructuredSessionTabPublicationVersion } from '../local-structured-session-tab-retirement'
 
@@ -31,8 +32,12 @@ export function latchLocalStructuredSessionRestore(start: () => Promise<void>): 
   return restorePromise
 }
 
-export function resetLocalStructuredSessionVersionForTests(): void {
+export function retireLocalStructuredSessionGeneration(): void {
   syncGeneration += 1
+  clearRetiredEpochRepairs()
+  restorePromise = null
   localStructuredSessionVersionByWorktree.clear()
   localStructuredSessionEpochHistoryByWorktree.clear()
 }
+
+export const resetLocalStructuredSessionVersionForTests = retireLocalStructuredSessionGeneration

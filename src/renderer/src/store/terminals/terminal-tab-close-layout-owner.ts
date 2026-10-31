@@ -11,10 +11,11 @@ export function recordTerminalTabCloseThroughLayoutOwner(
   reason: 'user' | 'cleanup'
 ): boolean {
   // Main's layout names a tab by its tab-bar entry, which a legacy terminal's id can differ from.
-  const entryId =
-    state.unifiedTabsByWorktree[worktreeId]?.find(
-      (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
-    )?.id ?? tabId
+  const entry = state.unifiedTabsByWorktree[worktreeId]?.find(
+    (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
+  )
+  const entryId = entry?.id ?? tabId
+  worktreeId = entry?.worktreeId ?? worktreeId
   const keep = (): void => {}
   return sendLayoutApply(
     state,

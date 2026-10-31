@@ -1,3 +1,4 @@
+import { rawWorkspaceState, workspaceSourceWrite } from '@/store/workspace-composition'
 import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
 import {
   markStructuredAgentSessionLaunchesPublished,
@@ -62,6 +63,7 @@ export function applyWebSessionTabsStorePatch(
     state: AppState,
     changedAgentPaneKeys: Set<string>
   ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
+    state = rawWorkspaceState(state)
     const patch = buildPatch(state, changedAgentPaneKeys)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
@@ -192,7 +194,7 @@ export function applyWebSessionTabsStorePatch(
       )
     }
     patchCommitted = true
-    return patch
+    return workspaceSourceWrite(patch, { sources: affectedWorkspaces })
   }
 
   try {

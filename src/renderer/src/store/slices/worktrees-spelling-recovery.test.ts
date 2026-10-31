@@ -1,3 +1,5 @@
+import { createTestStore } from './store-test-helpers'
+import { rawWorkspaceState } from '../workspace-composition'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildValidWorktreeIdsForSessionHydration } from '../../../../shared/worktree/degraded-repo-worktree-validity'
@@ -14,7 +16,6 @@ import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 import { purgeHydratedWorktrees } from './worktrees/listing/hydrated-worktree-purge'
 import { getRemovedWorktreeIdsAfterAuthoritativeScan } from './worktrees/listing/worktree-host-ownership'
 import {
-  createTestStore,
   mockApi,
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory,
@@ -123,13 +124,13 @@ describe('saved worktree spelling recovery', () => {
     await store.getState().fetchWorktrees(repo.id)
 
     const state = store.getState()
-    expect(state.tabsByWorktree[OLD]).toBeUndefined()
+    expect(state.tabsByWorktree[OLD]).toBe(state.tabsByWorktree[NEW])
     expect(state.tabsByWorktree[NEW].map((tab) => tab.id)).toEqual(['kept', 'recovered'])
     expect(
       state.unifiedTabsByWorktree[NEW].map((tab) => [tab.id, tab.groupId, tab.worktreeId])
     ).toEqual([
       ['kept', 'destination', NEW],
-      ['recovered', 'destination', NEW]
+      ['recovered', 'destination', OLD]
     ])
     expect(state.groupsByWorktree[NEW][1]).toMatchObject({
       activeTabId: 'kept',
@@ -139,17 +140,21 @@ describe('saved worktree spelling recovery', () => {
     expect(state.activeGroupIdByWorktree[NEW]).toBe('destination')
     expect(state.activeTabIdByWorktree[NEW]).toBe('kept')
     expect(state.terminalLayoutsByTabId.recovered).toBe(paneLayout)
-    expect(state.browserTabsByWorktree[OLD]).toBeUndefined()
+    expect(state.browserTabsByWorktree[OLD]).toBe(state.browserTabsByWorktree[NEW])
     expect(state.browserTabsByWorktree[NEW].map((tab) => [tab.id, tab.worktreeId])).toEqual([
       ['kept-browser', NEW],
-      ['source-browser', NEW]
+      ['source-browser', OLD]
     ])
     expect(state.activeBrowserTabIdByWorktree[NEW]).toBe('kept-browser')
     expect(state.openFiles.map((file) => [file.id, file.worktreeId])).toEqual([
-      ['kept-file', NEW],
-      ['source-file', NEW]
+      ['source-file', OLD],
+      ['kept-file', NEW]
     ])
-    expect(recentlyRenamedWorktreeIdExpiry.get(OLD)).toBeGreaterThan(now)
+    expect(rawWorkspaceState(state).tabsByWorktree[OLD]?.map((tab) => tab.id)).toEqual([
+      'recovered',
+      'kept'
+    ])
+    expect(recentlyRenamedWorktreeIdExpiry.size).toBe(0)
     expect(mockApi.runtime.call).not.toHaveBeenCalled()
   })
 
@@ -159,6 +164,20 @@ describe('saved worktree spelling recovery', () => {
     store.setState({
       repos: [repo],
       tabsByWorktree: { [OLD]: [makeTab({ id: 'saved', worktreeId: OLD })] },
+      unifiedTabsByWorktree: {
+        [OLD]: [makeUnifiedTab({ id: 'saved', worktreeId: OLD, groupId: 'original' })]
+      },
+      groupsByWorktree: {
+        [OLD]: [
+          makeTabGroup({
+            id: 'original',
+            worktreeId: OLD,
+            tabOrder: ['saved'],
+            activeTabId: 'saved'
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [OLD]: 'original' },
       layoutByWorktree: { [OLD]: layout },
       activeTabIdByWorktree: { [OLD]: 'saved' }
     })

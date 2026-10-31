@@ -2,6 +2,8 @@ import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 
 export const sessionApi = {
+  getPresentations: () => ipcRenderer.invoke('session:get-presentations'),
+  commitPresentation: (args) => ipcRenderer.invoke('session:commit-presentation', args),
   get: (hostId) => ipcRenderer.invoke('session:get', hostId),
   listHostIds: () => ipcRenderer.invoke('session:list-host-ids'),
   set: (args, hostId) => ipcRenderer.invoke('session:set', args, hostId),

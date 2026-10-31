@@ -51,6 +51,10 @@ export async function applyWindowLayoutCommand(
   ) {
     return { ok: false, code: 'wsl_move_in_progress' }
   }
+  const presentation = store.applyWorkspacePresentationCommand?.(command)
+  if (presentation) {
+    return presentation
+  }
   if (command.type === 'moveTabToWorkspace') {
     return moveTabToWorkspace(store, hostIdsFor, command)
   }

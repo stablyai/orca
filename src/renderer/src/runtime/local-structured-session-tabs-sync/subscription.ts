@@ -4,7 +4,8 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import { refreshLocalRuntimeCapabilities } from '../local-runtime-capabilities'
 import {
   isCurrentLocalStructuredSessionGeneration,
-  localStructuredSessionGeneration
+  localStructuredSessionGeneration,
+  retireLocalStructuredSessionGeneration
 } from './inventory-generation-fence'
 import {
   refreshLocalStructuredSessionTabs,
@@ -126,6 +127,9 @@ export async function startLocalStructuredSessionTabsSync(args: {
     }
   }
   args.setUnsubscribe(() => {
+    if (isCurrentLocalStructuredSessionGeneration(syncGeneration)) {
+      retireLocalStructuredSessionGeneration()
+    }
     if (reconnectTimer !== null) {
       clearTimeout(reconnectTimer)
       reconnectTimer = null

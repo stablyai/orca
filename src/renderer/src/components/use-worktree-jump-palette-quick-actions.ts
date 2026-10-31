@@ -100,7 +100,8 @@ export function useWorktreeJumpPaletteQuickActions({
     const state = useAppStore.getState()
     // Why: the invoking group owns its workspace, as for New Browser Tab.
     const workspaceId =
-      findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId ?? state.activeWorktreeId
+      findGroupAndWorktree(state.groupsByWorktree, groupId, state.activeWorktreeId ?? undefined)
+        ?.worktreeId ?? state.activeWorktreeId
     if (!workspaceId) {
       return
     }

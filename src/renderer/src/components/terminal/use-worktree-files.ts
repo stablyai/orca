@@ -1,3 +1,4 @@
+import { strictWorktreeIdentityKey } from '../../../../shared/workspace-presentation'
 import { useMemo } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 
@@ -8,7 +9,11 @@ export function useWorktreeFiles(
   return useMemo(
     () =>
       renderedActiveWorktreeId
-        ? openFiles.filter((file) => file.worktreeId === renderedActiveWorktreeId)
+        ? openFiles.filter(
+            (file) =>
+              strictWorktreeIdentityKey(file.worktreeId) ===
+              strictWorktreeIdentityKey(renderedActiveWorktreeId)
+          )
         : [],
     [openFiles, renderedActiveWorktreeId]
   )

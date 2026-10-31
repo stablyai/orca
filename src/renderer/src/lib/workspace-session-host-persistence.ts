@@ -1,3 +1,11 @@
+import {
+  hasWorkspacePresentationDocuments,
+  workspacePresentationDocumentDelta
+} from '../../../shared/workspace-presentation-documents'
+import type {
+  WorkspacePresentationCommit,
+  WorkspacePresentationDocuments
+} from '../../../shared/workspace-presentation'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   WorkspaceSessionPatch,
@@ -40,6 +48,7 @@ import {
 } from '../../../shared/workspace-session-host-records'
 
 export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
+  workspacePresentations?: WorkspacePresentationDocuments
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   projectGroups?: readonly { id: string; executionHostId?: string | null }[]
   folderWorkspaces?: readonly {
@@ -59,6 +68,7 @@ export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
 }
 
 type SessionApi = {
+  commitPresentation?: (args: WorkspacePresentationCommit) => Promise<void>
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
   patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
 }
@@ -223,6 +233,13 @@ function splitWorkspaceSessionForWrite(
   return slices
 }
 
+const committedPresentations = new WeakMap<SessionApi, WorkspacePresentationDocuments>()
+function presentationDelta(api: SessionApi, documents: WorkspacePresentationDocuments | undefined) {
+  const previous = committedPresentations.get(api) ?? {}
+  const { changed, removed } = workspacePresentationDocumentDelta(previous, documents ?? {})
+  return { changed, removed, acknowledge: () => committedPresentations.set(api, documents ?? {}) }
+}
+
 /** Split patches by owner. localWrite orders SSH upload; written waits for all partitions and rejects failures so callers requeue fields. */
 export function patchWorkspaceSessionByHost(
   api: SessionApi,
@@ -230,6 +247,28 @@ export function patchWorkspaceSessionByHost(
   state: HostPersistenceState
 ): { localWrite: Promise<void>; written: Promise<void> } {
   const slices = splitWorkspaceSessionForWrite(patch as WorkspaceSessionState, state, 'patch')
+  const delta = presentationDelta(api, state.workspacePresentations)
+  if (
+    api.commitPresentation &&
+    (Object.keys(delta.changed).length ||
+      delta.removed.length ||
+      hasWorkspacePresentationDocuments(state.workspacePresentations))
+  ) {
+    const written = api
+      .commitPresentation({
+        mode: 'patch',
+        presentations: delta.changed,
+        removedPresentations: delta.removed,
+        sessions: Object.entries(slices).map(([hostId, source]) => ({
+          state: source,
+          hostId: parseExecutionHostId(hostId)?.id
+        }))
+      })
+      .then(() => {
+        delta.acknowledge()
+      })
+    return { localWrite: written, written }
+  }
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
   const localWrite = api.patch(local)
   const hostWrites = nonLocalHostSessionEntries(slices).map(([hostId, slice]) =>
@@ -256,9 +295,19 @@ export async function persistWorkspaceSessionByHost(
   payload: WorkspaceSessionState,
   state: HostPersistenceState
 ): Promise<void> {
-  await Promise.all(
-    buildWorkspaceSessionHostSnapshots(payload, state).map((s) => api.set(s.state, s.hostId))
-  )
+  if (api.commitPresentation && state.workspacePresentations) {
+    await api.commitPresentation({
+      mode: 'replace',
+      presentations: { ...state.workspacePresentations },
+      replacePresentations: true,
+      sessions: buildWorkspaceSessionHostSnapshots(payload, state)
+    })
+    committedPresentations.set(api, state.workspacePresentations)
+  } else {
+    await Promise.all(
+      buildWorkspaceSessionHostSnapshots(payload, state).map((s) => api.set(s.state, s.hostId))
+    )
+  }
   await api.flush()
 }
 

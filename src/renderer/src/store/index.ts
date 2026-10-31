@@ -1,3 +1,4 @@
+import { withWorkspaceComposition } from './workspace-composition'
 import { registerStructuredSelectionCatalogStore } from '@/lib/structured-agent-session-selection-controller'
 import { canOfferHttpLinkGroupAction } from '@/lib/http-link-in-group-availability'
 import { create, type StateCreator } from 'zustand'
@@ -83,7 +84,7 @@ const withDevelopmentStoreProbes = (createState: StateCreator<AppState, [], []>)
     : createState
 
 const withAppStoreWritePolicies = (createState: StateCreator<AppState, [], []>) =>
-  withAgentConversationRetention(withDevelopmentStoreProbes(createState))
+  withWorkspaceComposition(withAgentConversationRetention(withDevelopmentStoreProbes(createState)))
 
 // Why buffer records outermost: the probes must see each caller's own partial and frame.
 // Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.

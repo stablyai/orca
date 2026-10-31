@@ -1,3 +1,4 @@
+import { reconcileStoredWorkspacePresentations } from './workspace-presentation-publication'
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
@@ -96,6 +97,17 @@ export function scheduleSave(
   writtenHostId?: ExecutionHostId
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
+  if (
+    !dirtyDomains ||
+    dirtyDomains.some(
+      (domain) => domain === 'workspaceSession' || domain === 'workspaceSessionsByHostId'
+    )
+  ) {
+    const presentationDomains = reconcileStoredWorkspacePresentations(runtime.state, writtenHostId)
+    if (dirtyDomains && presentationDomains.length) {
+      dirtyDomains = [...dirtyDomains, ...presentationDomains]
+    }
+  }
   notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId)
   for (const listener of runtime.stateWriteListeners) {
     listener(dirtyDomains)

@@ -1,7 +1,7 @@
+import { rawWorkspaceState, workspaceSourceWrite } from '@/store/workspace-composition'
 // Layout-owner windows draw main’s locally owned, held workspaces; paired servers remain mirror-owned. Local tab changes stay drawn until main answers (layout-owner-drawn-tab-holds). Records frames apply binding/title deltas directly and rebuild other changed workspaces from store. Startup/reopen/new/whole workspaces use full save/Loader builds (E2a/E2b).
 
 import { showFramePatch, withMovedTabsSelected } from '@/store/slices/tabs/moved-tab-selection'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { applyLayoutFrame, EMPTY_WORKSPACE_LAYOUT_CACHE } from '@/store/workspace-layout-cache'
@@ -31,10 +31,7 @@ import {
   type PendingWorkspaceChanges
 } from './workspace-layout-frame-pending'
 import { layoutFrameApplyObserver } from './workspace-layout-frame-apply-observer'
-import {
-  provideLayoutFrameTerminalPanes,
-  type LayoutFrameTerminalQueries
-} from './layout-frame-terminal-panes'
+import type { LayoutFrameTerminalQueries } from './layout-frame-terminal-panes'
 import {
   isTabPaneTreeHeld,
   onTabPaneTreeRedraw,
@@ -89,7 +86,18 @@ export function openWorkspaceLayoutFrameSync(
   /** The moved tabs' selections this flush's writes took. */
   let selectionsTaken: MovedTabSelection[] = []
   const show = (patch: LayoutFrameBuildPatch, rebuiltWorkspaces?: readonly string[]): void => {
-    selectionsTaken.push(...showFramePatch(store, patch, rebuiltWorkspaces))
+    selectionsTaken.push(
+      ...showFramePatch(
+        {
+          ...store,
+          getState: () => rawWorkspaceState(store.getState()),
+          setState: (sourcePatch) =>
+            store.setState(workspaceSourceWrite(sourcePatch, { sources: rebuiltWorkspaces }))
+        },
+        patch,
+        rebuiltWorkspaces
+      )
+    )
   }
 
   // Each change against the cache's copy it applies to, before the frame replaces it.
@@ -130,7 +138,7 @@ export function openWorkspaceLayoutFrameSync(
       pending.clear()
       return
     }
-    const state = store.getState()
+    const state = rawWorkspaceState(store.getState())
     const drawn = source.draws(state)
     const rowFieldsTaken = new Map<string, Partial<TerminalTab>>()
     const holds: LayoutFrameBuildHolds = {
@@ -330,14 +338,4 @@ const FRAME_BUILD_HOLDS: Omit<LayoutFrameBuildHolds, 'newRowFields'> = {
   held: { isTabHeld: isDrawnTabHeld, isGroupLayoutHeld: isDrawnGroupLayoutHeld }
 }
 
-let startupFrames: WorkspaceLayoutFrameSync | null = null
-
-/** After restore: the window's one layout stream shows the frames' workspaces from now on. */
-export function showStartupLayoutFrames(): void {
-  // Kept for the document's life: a local stream ends only with main, and a re-run boot reuses it.
-  if (!startupFrames) {
-    startupFrames = openWorkspaceLayoutFrameSync(useAppStore)
-    provideLayoutFrameTerminalPanes(startupFrames)
-  }
-  startupFrames.start()
-}
+export { showStartupLayoutFrames } from './startup-layout-frames'

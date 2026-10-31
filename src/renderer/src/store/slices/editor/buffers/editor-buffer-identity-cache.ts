@@ -3,6 +3,7 @@ import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route
 import { worktreeOwnerRowsTokenOf } from '@/lib/worktree-owner-rows-token'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { editorBufferIdentityOf } from './editor-buffer-identity'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 
 /** Route state plus the counter bumped when the runtime revision registry changes. */
 export type EditorBufferRouteState = WorktreeOperationRouteState & {
@@ -66,6 +67,15 @@ export function editorBufferRouteEpochOf(state: EditorBufferRouteState): object 
 }
 
 const identityCache = new WeakMap<OpenFile, { epoch: object; key: string | null }>()
+const fileRepos = new WeakMap<readonly OpenFile[], ReadonlySet<string>>()
+function containsCatalogFiles(files: readonly OpenFile[], repos: readonly string[]): boolean {
+  let indexed = fileRepos.get(files)
+  if (!indexed) {
+    indexed = new Set(files.map((file) => getRepoIdFromWorktreeId(file.worktreeId)))
+    fileRepos.set(files, indexed)
+  }
+  return repos.some((id) => indexed.has(id))
+}
 
 /** The file's identity key, cached per tab object and route inputs. */
 export function editorBufferIdentityKeyOf(
@@ -94,10 +104,15 @@ export function editorBufferIdForFile(file: OpenFile, state: EditorBufferRouteSt
 /** Whether `write` replaces a route input of `state`. */
 export function editorBufferRouteInputsChanged(
   state: EditorBufferRouteState,
-  write: Partial<EditorBufferRouteState>
+  write: Partial<EditorBufferRouteState>,
+  catalogRepoIds?: readonly string[],
+  files?: readonly OpenFile[]
 ): boolean {
+  // Listing batches cannot change a different repo's file owner; index files once per membership.
+  const unrelatedCatalog = catalogRepoIds && files && !containsCatalogFiles(files, catalogRepoIds)
   return EDITOR_BUFFER_ROUTE_INPUT_KEYS.some(
     (key) =>
+      !(unrelatedCatalog && (key === 'worktreesByRepo' || key === 'detectedWorktreesByRepo')) &&
       Object.hasOwn(write, key) &&
       write[key] !== state[key] &&
       routeInputOf(write, key) !== routeInputOf(state, key)

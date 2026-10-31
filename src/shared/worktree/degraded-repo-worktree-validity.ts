@@ -1,8 +1,9 @@
+import { strictWorktreeIdentityKey } from '../workspace-presentation'
 import type { Repo } from '../repo-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import type { DetectedWorktreeListResult, Worktree } from './types'
 import { parseWorkspaceKey } from '../workspace-scope'
-import { getRepoIdFromWorktreeId, worktreeIdentityKey } from './id'
+import { getRepoIdFromWorktreeId } from './id'
 
 type WorktreeValidityCatalog = {
   repos: readonly Pick<Repo, 'id'>[]
@@ -41,7 +42,7 @@ export function buildValidWorktreeIdsForSessionHydration(
       .flat()
       .map((worktree) => worktree.id)
   )
-  const validIdentityKeys = new Set([...validWorktreeIds].map(worktreeIdentityKey))
+  const validIdentityKeys = new Set([...validWorktreeIds].map(strictWorktreeIdentityKey))
   const knownRepoIds = new Set(catalog.repos.map((repo) => repo.id))
   const detectedWorktreesByRepo = catalog.detectedWorktreesByRepo ?? {}
   const repoIdsWithLoadedWorktrees = new Set(
@@ -60,7 +61,7 @@ export function buildValidWorktreeIdsForSessionHydration(
   )
 
   for (const worktreeId of persistedWorktreeIds) {
-    if (validIdentityKeys.has(worktreeIdentityKey(worktreeId))) {
+    if (validIdentityKeys.has(strictWorktreeIdentityKey(worktreeId))) {
       validWorktreeIds.add(worktreeId)
       continue
     }

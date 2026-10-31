@@ -1,3 +1,4 @@
+import { strictWorktreeIdentityKey } from '../../../../../shared/workspace-presentation'
 import type { AppState } from '../../types'
 import { toVisibleTabType } from '../../../../../shared/tab-types'
 import type { WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
@@ -47,7 +48,11 @@ export function deriveActiveSurfaceForWorktree(
   const browserTabs = state.browserTabsByWorktree[worktreeId] ?? []
   const terminalTabs = state.tabsByWorktree[worktreeId] ?? []
   const fileStillOpen = restoredFileId
-    ? state.openFiles.some((file) => file.id === restoredFileId && file.worktreeId === worktreeId)
+    ? state.openFiles.some(
+        (file) =>
+          file.id === restoredFileId &&
+          strictWorktreeIdentityKey(file.worktreeId) === strictWorktreeIdentityKey(worktreeId)
+      )
     : false
   const browserTabStillOpen = restoredBrowserTabId
     ? browserTabs.some((tab) => tab.id === restoredBrowserTabId)
@@ -103,7 +108,11 @@ export function deriveActiveSurfaceForWorktree(
     activeBrowserTabId = browserTabs[0]?.id ?? null
     activeTabType = 'editor'
   } else {
-    const fallbackFile = state.openFiles.find((file) => file.worktreeId === worktreeId) ?? null
+    const fallbackFile =
+      state.openFiles.find(
+        (file) =>
+          strictWorktreeIdentityKey(file.worktreeId) === strictWorktreeIdentityKey(worktreeId)
+      ) ?? null
     const fallbackBrowserTab = browserTabs[0] ?? null
     activeFileId = fallbackFile?.id ?? null
     activeBrowserTabId = fallbackBrowserTab?.id ?? null

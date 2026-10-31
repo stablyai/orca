@@ -1,3 +1,7 @@
+import {
+  presentationMutation,
+  reconcileStoredWorkspacePresentations
+} from './workspace-presentation-publication'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import {
   parseCodexResetCreditAttemptLedger,
@@ -63,13 +67,27 @@ export class PrimaryStateWriteOperations {
         runtime.profileStateAuthority.assertWritable()
       }
       let mutation: DurableProfileStateMutation<T>
+      const finishPresentation = presentationMutation(runtime.state)
       try {
         mutation = this.runAdmittedMutationCallback(
           'mutate',
           mutate,
           (result) => result.writtenHostIds
         )
+        for (const domain of reconcileStoredWorkspacePresentations(runtime.state)) {
+          runtime.dirtyProfileStateDomains?.add(domain)
+        }
+        const restorePresentation = finishPresentation()
+        const restoreSources = mutation.rollback
+        mutation = {
+          ...mutation,
+          rollback: () => {
+            restoreSources?.()
+            restorePresentation()
+          }
+        }
       } catch (error) {
+        finishPresentation()()
         await stopAfterFailedPrimaryStateMutation(runtime, error)
         throw error
       }

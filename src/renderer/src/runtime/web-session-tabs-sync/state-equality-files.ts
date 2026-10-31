@@ -30,47 +30,52 @@ export function sameOpenFiles(a: readonly OpenFile[], b: readonly OpenFile[]): b
   return a.every((file, index) => openFileEqual(file, b[index]!))
 }
 
-/** Index worktree-local files so each snapshot avoids scanning the global array. */
+const openFileIndexes = new WeakMap<readonly OpenFile[], Map<string, OpenFile[]>>()
+function indexedOpenFiles(files: readonly OpenFile[]): Map<string, OpenFile[]> {
+  let index = openFileIndexes.get(files)
+  if (!index) {
+    index = new Map()
+    for (const file of files) {
+      const id = file.worktreeId
+      const bucket = index.get(id) ?? []
+      bucket.push(file)
+      index.set(id, bucket)
+    }
+    openFileIndexes.set(files, index)
+  }
+  return index
+}
+/** All ingress paths share one file index per immutable array, including direct old-peer reads. */
 export function webSessionOpenFilesForWorktree(
   state: WebSessionTabsSyncState,
   worktreeId: string,
   batchContext?: WebSessionTabsBatchContext
 ): readonly OpenFile[] {
   if (!batchContext) {
-    return state.openFiles.filter((file) => file.worktreeId === worktreeId)
+    return indexedOpenFiles(state.openFiles).get(worktreeId) ?? []
   }
   let index = batchContext.openFilesIndex
   if (!index || index.source !== state.openFiles) {
-    const byWorktree = new Map<string, OpenFile[]>()
-    for (const file of state.openFiles) {
-      const bucket = byWorktree.get(file.worktreeId) ?? []
-      bucket.push(file)
-      byWorktree.set(file.worktreeId, bucket)
-    }
-    index = { source: state.openFiles, byWorktree }
+    index = { source: state.openFiles, byWorktree: indexedOpenFiles(state.openFiles) }
     batchContext.openFilesIndex = index
   }
   return index.byWorktree.get(worktreeId) ?? []
 }
 
-/** Rebucket only the changed worktree when retargeting; full rebuild per snapshot defeats the index’s cost bound. */
+/** Share the next immutable array’s index with every subsequent source in this batch. */
 export function advanceWebSessionOpenFilesIndex(
   batchContext: WebSessionTabsBatchContext | undefined,
   nextOpenFiles: readonly OpenFile[],
-  worktreeId: string
+  _worktreeId: string
 ): void {
   const index = batchContext?.openFilesIndex
-  if (!index || index.source === nextOpenFiles) {
+  if (!batchContext || !index || index.source === nextOpenFiles) {
     return
   }
-  const bucket: OpenFile[] = []
-  for (const file of nextOpenFiles) {
-    if (file.worktreeId === worktreeId) {
-      bucket.push(file)
-    }
+  batchContext.openFilesIndex = {
+    source: nextOpenFiles,
+    byWorktree: indexedOpenFiles(nextOpenFiles)
   }
-  index.byWorktree.set(worktreeId, bucket)
-  index.source = nextOpenFiles
 }
 
 export function tabEqual(a: Tab, b: Tab): boolean {
