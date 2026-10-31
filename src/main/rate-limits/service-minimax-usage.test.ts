@@ -57,6 +57,11 @@ vi.mock('./cursor-auth', () => ({
   readCursorAuthSession: vi.fn()
 }))
 
+vi.mock('./deepseek-fetcher', () => ({
+  fetchDeepSeekRateLimits: vi.fn(),
+  isDeepSeekAuthConfigured: vi.fn(() => false)
+}))
+
 vi.mock('./grok-auth', () => ({
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
 }))

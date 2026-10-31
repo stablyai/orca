@@ -141,6 +141,7 @@ describe('createUISlice hydratePersistedUI', () => {
       'antigravity',
       'grok',
       'cursor',
+      'deepseek',
       'zcode'
     ])
     expect(setUI).toHaveBeenCalledWith({
@@ -153,6 +154,7 @@ describe('createUISlice hydratePersistedUI', () => {
         'antigravity',
         'grok',
         'cursor',
+        'deepseek',
         'zcode'
       ],
       _portsStatusBarDefaultAdded: true,
@@ -161,6 +163,7 @@ describe('createUISlice hydratePersistedUI', () => {
       _antigravityStatusBarDefaultAdded: true,
       _grokStatusBarDefaultAdded: true,
       _cursorStatusBarDefaultAdded: true,
+      _deepseekStatusBarDefaultAdded: true,
       _zcodeStatusBarDefaultAdded: true
     })
   })
@@ -179,6 +182,7 @@ describe('createUISlice hydratePersistedUI', () => {
         _antigravityStatusBarDefaultAdded: true,
         _grokStatusBarDefaultAdded: true,
         _cursorStatusBarDefaultAdded: true,
+        _deepseekStatusBarDefaultAdded: true,
         _zcodeStatusBarDefaultAdded: true
       })
     )
