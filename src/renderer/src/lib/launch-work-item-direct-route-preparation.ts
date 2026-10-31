@@ -1,4 +1,3 @@
-import type { DirectWorkItemLaunchInputs } from './launch-work-item-direct-types'
 import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AppState } from '@/store/types'
@@ -20,7 +19,10 @@ import type {
 } from '@/lib/agent-session-launch-plan'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import { directLaunchSurfaceRequest } from './launch-work-item-direct-preflight'
-import type { LaunchWorkItemDirectArgs } from './launch-work-item-direct-types'
+import type {
+  DirectWorkItemLaunchInputs,
+  LaunchWorkItemDirectArgs
+} from './launch-work-item-direct-types'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   buildDirectWorkItemStartup,

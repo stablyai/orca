@@ -1,4 +1,3 @@
-import type { DirectWorkItemLaunchInputs } from './launch-work-item-direct-types'
 import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
 import { useAppStore, type AppState } from '@/store'
 import {
@@ -26,7 +25,10 @@ import type { Repo } from '../../../shared/repo-types'
 import type { OrcaHooks, RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
 import type { SetupDecision } from '../../../shared/worktree/create-types'
 import type { GitHubPrStartPoint } from '../../../shared/worktree/types'
-import type { LaunchWorkItemDirectArgs } from './launch-work-item-direct-types'
+import type {
+  DirectWorkItemLaunchInputs,
+  LaunchWorkItemDirectArgs
+} from './launch-work-item-direct-types'
 
 export async function resolveDirectPrStartPoint(
   repoId: string,
