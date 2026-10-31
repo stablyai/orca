@@ -1,3 +1,4 @@
+import type { JournalPublication } from '../native-chat/agent-session-wire/structured-agent-session-conversations'
 import {
   attentionOriginWasRead,
   type StructuredAttentionOrigin,
@@ -42,7 +43,7 @@ export class AutomationAttentionCorrelation {
 
   observe(
     sessionId: string,
-    source: object | null,
+    source: JournalPublication['source'],
     cursor: AgentJournalCursor | undefined,
     terminal: AutomationTerminalPublication | undefined,
     historical: boolean
