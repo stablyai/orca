@@ -13,6 +13,39 @@ import type { KeybindingActionId } from './keybindings'
 import { ALL_TUI_AGENTS } from './tui-agent-display-names'
 
 describe('keybindings', () => {
+  it.each([
+    ['darwin', 'Mod+Alt+X'],
+    ['linux', 'Mod+Shift+Y'],
+    ['win32', 'Mod+Shift+Y']
+  ] as const)('uses the Plugins default on %s while preserving overrides', (platform, binding) => {
+    expect(getEffectiveKeybindingsForAction('view.plugins', platform)).toEqual([binding])
+    expect(
+      getEffectiveKeybindingsForAction('view.plugins', platform, {
+        'view.plugins': ['Mod+Shift+X']
+      })
+    ).toEqual(['Mod+Shift+X'])
+    expect(
+      getEffectiveKeybindingsForAction('view.plugins', platform, { 'view.plugins': [] })
+    ).toEqual([])
+  })
+
+  it('matches the macOS Plugins shortcut when Option produces a composed character', () => {
+    expect(
+      keybindingMatchesAction(
+        'view.plugins',
+        {
+          key: '≈',
+          code: 'KeyX',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toBe(true)
+  })
+
   it('defines a default shortcut for opening markdown notes', () => {
     expect(getEffectiveKeybindingsForAction('tab.openMarkdown', 'darwin')).toEqual(['Mod+Shift+O'])
     expect(formatKeybindingList(['Mod+Shift+O'], 'darwin')).toBe('⌘⇧O')
