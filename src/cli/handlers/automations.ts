@@ -8,10 +8,7 @@ import {
   buildWorkspaceRunContext,
   type WorkspaceRunContext
 } from '../../shared/task-source-context'
-import type {
-  AutomationDestination,
-  AutomationOwnerPrecondition
-} from '../../shared/automation-owner-precondition'
+import type { AutomationDestination } from '../../shared/automation-owner-precondition'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { CommandHandler } from '../dispatch'
 import {
@@ -36,13 +33,7 @@ import {
   readAllAutomationRuns,
   readAutomationRunsPage
 } from '../automation-runs-paging'
-import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
-import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import {
-  EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED,
-  hasExtraAgentArgs
-} from '../../shared/automation-extra-agent-args'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import { RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
 import {
   assertWorkspaceTargetFlagsCompatible,
@@ -59,7 +50,11 @@ import {
   getSourceContextFlag,
   getWorkspaceModeFlag
 } from './automation-handler-flags'
-import { getExtraAgentArgsFlag } from './automation-extra-agent-args-flag'
+import {
+  assertExtraAgentArgsSupported,
+  getExtraAgentArgsFlag
+} from './automation-extra-agent-args-flag'
+import { assertAutomationSetupMode, getAutomationSetupFlag } from './automation-setup-flag'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
   destination?: AutomationDestination
@@ -138,12 +133,12 @@ async function getExplicitTarget(
 }
 
 // Read the authoritative owner for fencing; older hosts omit it and impose no precondition.
-async function resolveExpectedOwner(
+async function resolveAutomationMutationState(
   client: Parameters<CommandHandler>[0]['client'],
   id: string
-): Promise<AutomationOwnerPrecondition | undefined> {
+): Promise<AutomationShowPayload> {
   const result = await client.call<AutomationShowPayload>('automation.show', { id })
-  return result.result.owner
+  return result.result
 }
 
 function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceRunContext {
@@ -163,20 +158,6 @@ function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceR
   return runContext
 }
 
-// Older runtimes silently strip extraAgentArgs and would run without the requested arguments.
-async function assertExtraAgentArgsSupported(
-  client: RuntimeClient,
-  extraAgentArgs: string | undefined
-): Promise<void> {
-  if (!hasExtraAgentArgs(extraAgentArgs)) {
-    return
-  }
-  const status = await client.call<RuntimeStatus>('status.get')
-  if (!status.result.capabilities?.includes(AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY)) {
-    throw new RuntimeClientError('incompatible_runtime', EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED)
-  }
-}
-
 export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
   'automations list': async ({ client, json }) => {
     const result = await client.call<{ automations: Automation[] }>('automation.list')
@@ -189,6 +170,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatAutomationShow)
   },
   'automations create': async ({ flags, client, cwd, json }) => {
+    const setupDecision = getAutomationSetupFlag(flags)
     const schedule = getScheduleFlag(flags, true)
     if (!schedule) {
       throw new RuntimeClientError('invalid_argument', 'Missing required --trigger')
@@ -197,6 +179,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const sourceContext = getSourceContextFlag(flags)
     const workspaceMode =
       getWorkspaceModeFlag(flags) ?? (target.workspace ? 'existing' : 'new_per_run')
+    assertAutomationSetupMode(setupDecision, workspaceMode)
     // Built before the destination read so a contradictory flag still fails without a runtime call.
     const create = {
       name: getRequiredStringFlag(flags, 'name'),
@@ -204,6 +187,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       precheck: getPrecheckFlag(flags),
       agentId: getProviderFlag(flags),
       extraAgentArgs: getExtraAgentArgsFlag(flags),
+      ...(setupDecision !== undefined ? { setupDecision } : {}),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
@@ -225,6 +209,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatAutomationShow)
   },
   'automations edit': async ({ flags, client, cwd, json }) => {
+    const setupDecision = getAutomationSetupFlag(flags)
     const target = await getExplicitTarget(flags, cwd, client)
     const schedule = getScheduleFlag(flags, false)
     const sourceContext = getSourceContextFlag(flags)
@@ -236,6 +221,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       precheck: getPrecheckFlag(flags),
       agentId: getOptionalProviderFlag(flags),
       extraAgentArgs: getExtraAgentArgsFlag(flags),
+      ...(setupDecision !== undefined ? { setupDecision } : {}),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
@@ -249,7 +235,14 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       ...schedule
     } satisfies AutomationUpdateParams
     await assertExtraAgentArgsSupported(client, updates.extraAgentArgs)
-    const expectedOwner = await resolveExpectedOwner(client, id)
+    const { owner: expectedOwner, automation: current } = await resolveAutomationMutationState(
+      client,
+      id
+    )
+    assertAutomationSetupMode(
+      setupDecision,
+      updates.workspaceMode ?? (target.workspace ? 'existing' : current.workspaceMode)
+    )
     // Owner fencing covers the source host; moves must fence the destination too.
     const destination = await resolveAutomationDestination(client, target)
     const result = await client.call<{ automation: Automation }>('automation.update', {
@@ -262,7 +255,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
   },
   'automations remove': async ({ flags, client, json }) => {
     const id = getRequiredStringFlag(flags, 'id')
-    const expectedOwner = await resolveExpectedOwner(client, id)
+    const { owner: expectedOwner } = await resolveAutomationMutationState(client, id)
     const result = await client.call<{ removed: boolean; id: string }>('automation.delete', {
       id,
       ...(expectedOwner ? { expectedOwner } : {})
@@ -271,7 +264,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
   },
   'automations run': async ({ flags, client, json }) => {
     const id = getRequiredStringFlag(flags, 'id')
-    const expectedOwner = await resolveExpectedOwner(client, id)
+    const { owner: expectedOwner } = await resolveAutomationMutationState(client, id)
     const result = await client.call<{ run: AutomationRun }>('automation.runNow', {
       id,
       ...(expectedOwner ? { expectedOwner } : {})
