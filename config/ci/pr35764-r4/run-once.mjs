@@ -17,12 +17,13 @@ const packet = import.meta.dirname,
 const output = resolve(root, 'r4-evidence'),
   prefix = 'config/ci/pr35764-r4/'
 const productionHead = '2dbb5681fad6542581f0d8802120faccb371a20f'
-const subject = 'PR35764 R4 lock lookup continuation one held comparison'
-const continuationParent = '9f6b35c47806de90dd59ec4e80cf852148660c1b'
+const subject = 'PR35764 R4 scoped observation final comparison'
+const continuationParent = '9de79ff96bd865f626569b06fb257f1f3af1a606'
 const modifiedPaths = [
   '.github/workflows/pr35764-r4-once.yml',
-  'config/ci/pr35764-r4/installation-metadata.mjs',
-  'config/ci/pr35764-r4/run-once.mjs'
+  'config/ci/pr35764-r4/module-observation.mjs',
+  'config/ci/pr35764-r4/run-once.mjs',
+  'config/ci/pr35764-r4/vitest.config.mjs'
 ]
 const overlayFiles = [
   'engine/logging-only.diff',
@@ -80,7 +81,7 @@ function identity() {
     git('show', '-s', '--format=%P', 'HEAD') !== continuationParent ||
     git('show', '-s', '--format=%s', 'HEAD') !== subject
   ) {
-    throw new Error('R4 requires the one lock-lookup continuation child of published9f6b35c')
+    throw new Error('R4 requires the one final scoped-observation child of published9de79ff')
   }
   const changed = git('diff', '--name-status', productionHead, 'HEAD').split('\n')
   if (
@@ -100,7 +101,7 @@ function identity() {
       return status !== 'M' || !modifiedPaths.includes(path)
     })
   ) {
-    throw new Error('R4 continuation changed a path beyond the exact decoder/trigger inventory')
+    throw new Error('R4 continuation changed a path beyond the exact observation/trigger inventory')
   }
   if (git('status', '--porcelain', '--untracked-files=no')) {
     throw new Error('R4 tracked/index inputs dirty')
@@ -117,10 +118,15 @@ function identity() {
   return {
     head,
     continuationParent,
-    continuationOrdinal: 3,
-    priorConsumedRuns: ['41157454166', '41179615237'],
-    priorConsumedHeads: ['33ac33e9ed25c206086afe561bfd2bf1ae694b0a', continuationParent],
-    priorActualDirectCliInvocations: 2,
+    continuationOrdinal: 4,
+    priorConsumedRuns: ['41157454166', '41179615237', '41182757751'],
+    priorConsumedHeads: [
+      '33ac33e9ed25c206086afe561bfd2bf1ae694b0a',
+      '9f6b35c47806de90dd59ec4e80cf852148660c1b',
+      continuationParent
+    ],
+    priorActualDirectCliInvocations: 3,
+    priorActualDirectCliChildren: [3058, 3314, 3116],
     modified,
     productionHead,
     mainSelectionRouteHead: pins.mainSelectionRouteHead,

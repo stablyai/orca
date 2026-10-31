@@ -1,12 +1,11 @@
-import { readFileSync, writeFileSync, realpathSync, lstatSync } from 'node:fs'
-import { resolve, isAbsolute } from 'node:path'
-import { containedFile, exists, within, same } from './installation-metadata.mjs'
+import { readFileSync, writeFileSync, realpathSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { containedFile, same } from './installation-metadata.mjs'
 
 export function createModuleObservation({
   root,
-  canonicalRoot,
   output,
-  proven,
+  seams,
   engineId,
   protocolMap,
   source,
@@ -15,21 +14,14 @@ export function createModuleObservation({
   const editor = '/src/renderer/src/components/editor/'
   const moduleReceipts = [],
     moduleReceiptKeys = new Set()
+  const seamById = new Map()
+  for (const seam of seams) {
+    seamById.set(seam.id, seam)
+    seamById.set(seam.canonical, seam)
+  }
   function moduleReceipt(id, code, protocol, stage) {
-    const filename = id.split('?')[0]
-    const relevant =
-      /(?:prosemirror-|@tiptap|react|vitest|vite|happy-dom|pr35764-n1|components[\\/]editor)/.test(
-        id
-      )
-    let physical,
-      info,
-      local = false
-    if (isAbsolute(filename) && exists(filename) && lstatSync(filename).isFile()) {
-      physical = realpathSync(filename)
-      info = [...proven.values()].find((p) => within(p.directory, physical))
-      local = within(canonicalRoot, physical)
-    }
-    if (!info && !local && !relevant) {
+    const seam = seamById.get(id.split('?')[0])
+    if (!seam) {
       return
     }
     const key = `${protocol}:${stage}:${id}`
@@ -44,10 +36,10 @@ export function createModuleObservation({
       protocol,
       stage,
       id,
-      canonical: info || local ? physical : null,
-      package: info?.name,
-      sourceReadableThroughProvenRoute: Boolean(info || local),
-      sourceSha256: info || local ? sha(readFileSync(physical)) : null,
+      canonical: seam.canonical,
+      package: seam.package,
+      sourceReadableThroughProvenRoute: true,
+      sourceSha256: sha(readFileSync(seam.canonical)),
       transformedSha256: code === undefined ? undefined : sha(code)
     })
     writeFileSync(
@@ -55,6 +47,8 @@ export function createModuleObservation({
       JSON.stringify(
         {
           limit: 2000,
+          scope: 'partial-declared-selection-engine-seams-only',
+          declaredSeams: [...seamById].map(([id, seam]) => ({ ...seam, id })),
           idsAreNotExecutionProof: true,
           externalizedModulesMayBeAbsent: true,
           modules: moduleReceipts
@@ -92,10 +86,10 @@ export function createModuleObservation({
         return null
       },
       load(id) {
+        moduleReceipt(id, undefined, protocol, 'load')
         if (id.split('?')[0] === engineId) {
           return source('engine/observed-index.source')
         }
-        moduleReceipt(id, undefined, protocol, 'load')
         const path = normal(id)
         if (path.endsWith(`${editor}drag-selection-guard.ts`)) {
           ownOverlay(id, 'drag-selection-guard.ts')

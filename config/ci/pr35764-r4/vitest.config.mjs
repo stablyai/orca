@@ -292,16 +292,6 @@ const protocolMap = {
   routed: 'protocols/routed.ts'
 }
 const engineId = resolve(packet, 'engine/observed-index.mjs')
-const { overlay } = createModuleObservation({
-  root,
-  canonicalRoot,
-  output,
-  proven,
-  engineId,
-  protocolMap,
-  source,
-  sha
-})
 if (
   !Array.isArray(base.test?.projects) ||
   base.test.projects.some((p) => !p || typeof p !== 'object' || !p.test)
@@ -332,6 +322,62 @@ const aliases = [
   },
   ...(node.resolve?.alias || [])
 ]
+const seams = [
+  ...[
+    'RichMarkdownEditor.tsx',
+    'useRichMarkdownEditorInstance.ts',
+    'useRichMarkdownProgrammaticSync.ts',
+    'drag-selection-guard.ts',
+    'rich-markdown-editor-config.ts',
+    'rich-markdown-selection-flush.ts',
+    'rich-markdown-search-focus.ts'
+  ].map((file) => {
+    const id = resolve(root, 'src/renderer/src/components/editor', file)
+    return { id, canonical: containedFile(root, id), kind: 'production-selection' }
+  }),
+  ...[
+    ...node.test.setupFiles,
+    named,
+    ...[
+      'observer.setup.mjs',
+      'retained/adversarial.ts',
+      'retained/lifetime.ts',
+      'retained/editor-surface.ts',
+      'retained/mapping-contracts.ts',
+      'retained/release-contracts.ts',
+      'retained/focus-contracts.ts'
+    ].map((file) => resolve(packet, file))
+  ].map((file) => {
+    const id = resolve(root, file)
+    return { id, canonical: containedFile(root, id), kind: 'fixture-setup' }
+  }),
+  ...provenance.map((entry) => ({
+    id: entry.selectedFile,
+    canonical: entry.canonicalSelectedFile,
+    package: entry.name,
+    kind: 'proved-dependency-entry'
+  })),
+  ...dependencySourceReceipts.map((entry) => ({
+    id: entry.installed,
+    canonical: entry.installed,
+    package: entry.name,
+    kind: 'proved-dependency-source'
+  })),
+  {
+    id: engineId,
+    canonical: containedFile(packet, resolve(packet, 'engine/observed-index.source')),
+    kind: 'logging-only-engine-overlay'
+  }
+]
+const { overlay } = createModuleObservation({
+  root,
+  output,
+  seams,
+  engineId,
+  protocolMap,
+  source,
+  sha
+})
 const variants = Object.keys(protocolMap).map((protocol, index) => ({
   ...node,
   plugins: [overlay(protocol), ...(node.plugins || [])],
