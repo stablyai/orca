@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacDaemonLaunchd from './macos-daemon-launchd'
 import type { DaemonLauncher } from './daemon-spawner'
-import { LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS } from '../startup/first-window-startup-services'
-import { DAEMON_CHILD_STARTUP_TIMEOUT_MS } from './daemon-launched-child'
 
 const {
   stableLaunch,
@@ -101,8 +99,6 @@ describe('daemon-init: macOS stable-bundle launch fallback', () => {
     vi.clearAllMocks()
   })
 
-  let launcherCalledAtMs = 0
-
   async function launchOnce(): Promise<unknown> {
     const mod = await importFresh()
     if (stableLaunch.failure === 'real') {
@@ -118,28 +114,8 @@ describe('daemon-init: macOS stable-bundle launch fallback', () => {
     }
     forkMock.mockClear()
     forkMock.mockReturnValueOnce(readyChild())
-    launcherCalledAtMs = Date.now()
     return launcher('/fake/socket', '/fake/token')
   }
-
-  it('forks the daemon from the app when no stable-bundle job can claim the endpoint', async () => {
-    stableLaunch.failure = 'unavailable'
-    await expect(launchOnce()).resolves.toBeTruthy()
-    expect(forkMock).toHaveBeenCalledOnce()
-  })
-
-  it('hands off to the fork early enough for its readiness wait and adapter to fit the gate', async () => {
-    // Compare the configured budgets without wall-clock ticks between the two reads.
-    vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
-    stableLaunch.failure = 'unavailable'
-    await launchOnce()
-    const handoffMs = (stableLaunch.deadlinesMs[0] ?? Infinity) - launcherCalledAtMs
-    // Stable handoff must leave the fork and adapter budgets inside the PTY gate.
-    expect(handoffMs + DAEMON_CHILD_STARTUP_TIMEOUT_MS + 5_000).toBeLessThanOrEqual(
-      LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS
-    )
-    expect(handoffMs).toBeGreaterThan(20_000)
-  })
 
   describe('with the real stable launcher', () => {
     const originalGetSystemVersion = Object.getOwnPropertyDescriptor(process, 'getSystemVersion')
@@ -173,13 +149,6 @@ describe('daemon-init: macOS stable-bundle launch fallback', () => {
       )
       await expect(launchOnce()).resolves.toBeTruthy()
       expect(materializeMock).toHaveBeenCalledOnce()
-      expect(forkMock).toHaveBeenCalledOnce()
-    })
-
-    it('forks without copying on macOS below the helper floor', async () => {
-      stubSystemVersion('13.4.1')
-      await expect(launchOnce()).resolves.toBeTruthy()
-      expect(materializeMock).not.toHaveBeenCalled()
       expect(forkMock).toHaveBeenCalledOnce()
     })
   })

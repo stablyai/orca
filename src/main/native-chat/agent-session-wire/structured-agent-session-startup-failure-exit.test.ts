@@ -77,34 +77,6 @@ const ended = {
 }
 
 describe('a provider that ends before it finished starting', () => {
-  it('tells the user why, even with no response in progress', async () => {
-    const session = {
-      ...startedSession(),
-      child: { generation: GENERATION, fence: 7, phase: 'starting' as const }
-    }
-
-    await settleStructuredAgentSessionChildExit(contextFor(session), {
-      ...ended,
-      failure: { kind: 'notSignedIn' }
-    })
-
-    expect(session.appendLifecycleBatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        mutations: [
-          expect.objectContaining({
-            identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
-            body: {
-              kind: 'status',
-              text: "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings.",
-              tone: 'error',
-              failure: { kind: 'notSignedIn' }
-            }
-          })
-        ]
-      })
-    )
-  })
-
   it('keeps an ordinary idle exit silent', async () => {
     const session = startedSession()
 

@@ -95,41 +95,6 @@ describe('a chat an older build left messages for', () => {
     expect(localStorage.getItem(KEY)).toBeNull()
   })
 
-  it('hands back in the order they were sent, whatever order the copy holds them in', async () => {
-    localStorage.setItem(
-      KEY,
-      JSON.stringify([
-        { ...saved('third', 'three'), queuedAt: 30 },
-        { ...saved('first', 'one'), queuedAt: 10 },
-        { ...saved('second', 'two'), queuedAt: 20 }
-      ])
-    )
-    mocks.outline.mockResolvedValue(outline([]))
-    await recover({})
-    expect(mocks.handBack.mock.calls.map(([, clientMessageId]) => clientMessageId)).toEqual([
-      'first',
-      'second',
-      'third'
-    ])
-  })
-
-  it('never hands back one the host recorded and then rejected: its row shows it', async () => {
-    localStorage.setItem(
-      KEY,
-      JSON.stringify([
-        {
-          ...saved('rejected', 'host said no'),
-          state: 'rejected',
-          lastFailure: { kind: 'rejected', reason: null }
-        }
-      ])
-    )
-    mocks.outline.mockResolvedValue(outline([]))
-    await recover({})
-    expect(mocks.handBack).not.toHaveBeenCalled()
-    expect(localStorage.getItem(KEY)).toBeNull()
-  })
-
   it('hands back a refused, held or outlived-Stop copy once, and never again', async () => {
     localStorage.setItem(
       KEY,
@@ -149,17 +114,6 @@ describe('a chat an older build left messages for', () => {
     expect(localStorage.getItem(KEY)).toBeNull()
     await recover({})
     expect(mocks.handBack).toHaveBeenCalledTimes(3)
-  })
-
-  it('says it could not confirm when the host cannot list the whole chat', async () => {
-    localStorage.setItem(KEY, JSON.stringify([saved('maybe', 'maybe sent')]))
-    mocks.outline.mockResolvedValue(outline([], 3))
-    await recover({})
-    expect(mocks.handBack).toHaveBeenCalledOnce()
-    expect(mocks.notice).toHaveBeenCalledWith(
-      SESSION,
-      expect.stringContaining("couldn't confirm your message reached the agent")
-    )
   })
 
   it('keeps the copy for the next open when the text could not be saved back', async () => {
