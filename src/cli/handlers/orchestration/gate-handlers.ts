@@ -50,7 +50,7 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       ? runScopedSessionCaller(flags)
       : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
-      gates: { id: string; task_id: string; question: string; status: string }[]
+      gates: { id: string; task_id: string; question: string; options?: string; status: string }[]
       count: number
       runId?: string
     }>('orchestration.gateList', {
@@ -60,14 +60,15 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       from
     })
     if (!flags.has('full')) {
-      // Rows also carry options, resolutions, and timestamps that no next command takes.
+      // Rows also carry resolutions and timestamps that no next command takes.
       printOrchestrationResult(result, json, {
         fields: (value) => ({
           gates: value.gates.map((gate) => ({
             id: gate.id,
             taskId: gate.task_id,
             status: gate.status,
-            question: gate.question
+            question: gate.question,
+            options: gate.options && gate.options !== '[]' ? gate.options : undefined
           })),
           runId: value.runId
         })
