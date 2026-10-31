@@ -1,3 +1,4 @@
+import { handleRichMarkdownViewportReveal } from './rich-markdown-viewport'
 import type { Editor, UseEditorOptions } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
@@ -160,6 +161,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     content: encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
     contentType: 'markdown' as const,
     editorProps: {
+      handleScrollToSelection: handleRichMarkdownViewportReveal,
       attributes: {
         class: 'rich-markdown-editor',
         spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled)

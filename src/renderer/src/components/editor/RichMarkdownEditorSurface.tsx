@@ -43,6 +43,7 @@ type RichMarkdownEditorSurfaceProps = {
   rootRef: (node: HTMLDivElement | null) => void
   onFocusLeave: (event: React.FocusEvent<HTMLDivElement>) => void
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  scrollContainerCallbackRef: (node: HTMLDivElement | null) => void
   headerSlot?: React.ReactNode
   reviewRailExpanded: boolean
   reviewRailVisible: boolean
@@ -134,6 +135,7 @@ export function RichMarkdownEditorSurface({
   rootRef,
   onFocusLeave,
   scrollContainerRef,
+  scrollContainerCallbackRef,
   headerSlot,
   reviewRailExpanded,
   reviewRailVisible,
@@ -213,7 +215,7 @@ export function RichMarkdownEditorSurface({
         {headerSlot}
         <div className="relative min-h-0 flex-1">
           <div
-            ref={scrollContainerRef}
+            ref={scrollContainerCallbackRef}
             // Image layout must not anchor-scroll over the restored tab position.
             className="relative h-full overflow-auto scrollbar-editor [overflow-anchor:none]"
             onMouseDown={(event) => {
