@@ -16107,19 +16107,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Zoom avant",
-          "6c89c73d9f": "Réinitialiser le zoom",
           "be27304574": "Zoom arrière",
-          "77bfc9b35a": "Ouvrir l'image dans une fenêtre indépendante",
           "3ef9551ba2": "Chargement de l'aperçu...",
           "d9d2944855": "Échec du chargement de l'aperçu du fichier",
           "fitToView": "Ajuster à la vue",
           "actualSize": "Taille réelle",
           "expand": "Agrandir l’image"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Appuyez sur Échap pour fermer",
-          "535f4e2b56": "Fermer",
-          "9e27b2ecaf": "Aperçu de l'image en taille réelle"
         },
         "IpynbViewer": {
           "859bf9fc21": "Exécuter la cellule",

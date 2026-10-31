@@ -16257,19 +16257,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Zoom in",
-          "6c89c73d9f": "Reset zoom",
           "be27304574": "Zoom out",
-          "77bfc9b35a": "Open image in popup",
           "3ef9551ba2": "Loading preview...",
           "d9d2944855": "Failed to load file preview",
           "fitToView": "Fit to view",
           "actualSize": "Actual size",
           "expand": "Expand image"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Press Esc to close",
-          "535f4e2b56": "Close",
-          "9e27b2ecaf": "Full-size image preview"
         },
         "IpynbViewer": {
           "859bf9fc21": "Run cell",
