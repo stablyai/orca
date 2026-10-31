@@ -107,6 +107,12 @@ export type AiVaultSessionSubagentInfo = {
   status: AiVaultSubagentRunStatus | null
 }
 
+export type AiVaultSessionOpenTab = {
+  worktreeId: string
+  tabId: string
+  leafId?: string
+}
+
 export type AiVaultSession = {
   /** Recorded account home; null proves System default, absent means unknown. */
   accountHome?: AgentSessionAccountHome | null
@@ -149,6 +155,8 @@ export type AiVaultSession = {
     sessionId: string
     workspaceId: string
   }
+  /** Present when this session is currently open in a workspace tab on the host. */
+  openTab?: AiVaultSessionOpenTab
   /** The client's pairing with the listing server when it listed this row; host mutations are fenced to it. */
   hostPairingRevision?: number
 }
