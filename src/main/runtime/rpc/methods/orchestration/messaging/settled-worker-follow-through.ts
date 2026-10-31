@@ -2,7 +2,6 @@ import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-a
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { MessageRow } from '../../../../orchestration/types'
-import { ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES } from '../../../../../../shared/orchestration-worker-start-prompt-budget'
 import {
   clearFollowUpMail,
   markUnreadFollowUpMail,
@@ -50,9 +49,9 @@ export function continueUnreadWorkerMail(
   })
 }
 
-// One Task takes a bounded batch, well inside the spec budget; the rest follows as mail once it is ready.
+// One Task takes a bounded batch, well inside the ~1.2 MB spec budget; the rest follows as mail once it is ready.
 const FOLLOW_UP_MAIL_BATCH = 20
-const FOLLOW_UP_MAIL_MAX_BYTES = Math.floor(ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES / 2)
+const FOLLOW_UP_MAIL_MAX_BYTES = 200 * 1024
 
 function followUpMailBatch(unread: MessageRow[]): MessageRow[] {
   let bytes = 0
