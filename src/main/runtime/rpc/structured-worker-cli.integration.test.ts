@@ -60,7 +60,7 @@ beforeEach(async () => {
   rig = await authorityProfile([])
   await mkdir(join(root, 'codex-home'))
   rig.profile.updateSettings({
-    experimentalNativeChat: true,
+    agentDefaultSurface: 'chat',
     nativeChatInheritShellEnvironment: false,
     agentCmdOverrides: { codex: process.execPath },
     agentWorkspaceTrustEnabled: false
@@ -197,7 +197,7 @@ async function cli(argv: string[]) {
   vi.mocked(console.log).mockClear()
   vi.mocked(console.error).mockClear()
   process.exitCode = 0
-  await main([...argv, '--json'], root)
+  await main([...argv, '--json', ...(argv[0] === 'orchestration' ? ['--full'] : [])], root)
   const stdout = vi
     .mocked(console.log)
     .mock.calls.map(([line]) => String(line))
