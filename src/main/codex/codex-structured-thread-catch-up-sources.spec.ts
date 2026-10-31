@@ -417,6 +417,189 @@ export function registerCodexHistorySourcesTests(input: {
     }
   })
 
+  it('conserves saved invocation facts after disk reopen without adopting incompatible dependents', async () => {
+    const c = await chat({ now: 1_000 })
+    const open = async (turns: Record<string, unknown>[]) => {
+      const adapter = adapterFor(
+        fakeCodex({
+          'thread/resume': () => ({ thread: { id: THREAD, turns } })
+        }),
+        { resumeThreadId: THREAD }
+      )
+      try {
+        await acquireReadyCodexForTest(adapter, {
+          identity: {
+            sessionId: SESSION,
+            workspaceId: 'workspace-1',
+            hostId: 'local',
+            agent: 'codex',
+            providerHandle: codexProviderHandle(THREAD)
+          },
+          fence: 1,
+          spawnToken: 'saved-invocation-facts',
+          events: c.deferred.sink
+        })
+        await c.deferred.drained()
+      } finally {
+        await adapter.closeAll()
+      }
+    }
+    const mcp = {
+      type: 'mcpToolCall',
+      server: 's',
+      tool: 'lookup',
+      arguments: {},
+      status: 'completed'
+    }
+    const command = { type: 'commandExecution', command: 'pwd', cwd: '/work', status: 'completed' }
+    const collisions = [
+      { id: 'mcp-command', saved: mcp, incoming: command },
+      {
+        id: 'mcp-file',
+        saved: mcp,
+        incoming: { type: 'fileChange', changes: [{ path: 'a', diff: '+a' }] }
+      },
+      {
+        id: 'mcp-web',
+        saved: mcp,
+        incoming: {
+          type: 'webSearch',
+          query: 'lookup',
+          action: { type: 'search', query: 'lookup' }
+        }
+      },
+      {
+        id: 'mcp-collab',
+        saved: mcp,
+        incoming: {
+          type: 'collabAgentToolCall',
+          tool: 'sendInput',
+          prompt: 'lookup',
+          status: 'completed'
+        }
+      },
+      { id: 'command-mcp', saved: command, incoming: mcp },
+      {
+        id: 'command-web',
+        saved: command,
+        incoming: { type: 'webSearch', query: 'pwd', action: { type: 'search', query: 'pwd' } }
+      },
+      {
+        id: 'collab-command',
+        saved: {
+          type: 'collabAgentToolCall',
+          tool: 'sendInput',
+          prompt: 'retained input',
+          status: 'completed'
+        },
+        incoming: command
+      }
+    ]
+    const placeholder = { type: 'fileChange', id: 'patch', status: 'inProgress' }
+    const source = {
+      ...turn(1),
+      items: [
+        ...collisions.map(({ id, saved }) => ({ ...saved, id })),
+        { ...command, id: 'sparse-command' },
+        placeholder
+      ]
+    }
+    await open([source])
+    const saved = collisions.map(({ id }) =>
+      c.journal.snapshot().items.find(({ body }) => body.kind === 'tool-call' && body.callId === id)
+    )
+    expect(saved).toHaveLength(collisions.length)
+    for (const row of saved) {
+      expect(row?.body.kind).toBe('tool-call')
+    }
+    expect(saved[0]?.body).toMatchObject({
+      mcpIdentity: { server: 's', tool: 'lookup' },
+      input: null
+    })
+    const sparse = c.journal
+      .snapshot()
+      .items.find(({ body }) => body.kind === 'tool-call' && body.callId === 'sparse-command')
+    expect(sparse?.body).toMatchObject({
+      kind: 'tool-call',
+      input: { command: 'pwd', cwd: '/work' }
+    })
+    const originalPatch = c.journal
+      .snapshot()
+      .items.find(({ body }) => body.kind === 'tool-call' && body.callId === 'patch')
+    expect(originalPatch?.revision).toBe(1)
+    await c.reopen()
+    const transitions = vi.spyOn(c.deferred.sink, 'tryAppendTransition')
+    const incoming = {
+      ...source,
+      items: [
+        ...collisions.flatMap(({ id, incoming }) => [
+          { ...incoming, id },
+          { type: 'plan', id: `bad-child-${id}`, parentCallId: id, text: `must not attach ${id}` }
+        ]),
+        { type: 'commandExecution', id: 'sparse-command' },
+        { ...placeholder, status: 'completed', changes: [{ path: 'a', diff: '+a' }] },
+        { type: 'plan', id: 'good', text: 'independent good display' }
+      ]
+    }
+    await open([incoming, turn(2)])
+    for (const row of saved) {
+      expect(row && c.journal.item(row.itemId)).toEqual(row)
+    }
+    expect(sparse && c.journal.item(sparse.itemId)).toEqual(sparse)
+    const snapshot = c.journal.snapshot()
+    expect(snapshot.items.filter(({ body }) => body.kind === 'tool-call')).toEqual([
+      ...saved,
+      sparse
+    ])
+    expect(
+      snapshot.items.some(
+        ({ body }) => body.kind === 'status' && body.text.startsWith('must not attach')
+      )
+    ).toBe(false)
+    const good = snapshot.items.find(
+      ({ body }) => body.kind === 'status' && body.text === 'independent good display'
+    )
+    expect(good?.turnScope).toEqual({
+      kind: 'turn',
+      turnItemId: agentJournalItemKey(codexTurnLifecycleIdentity(SESSION, 'turn-1'))
+    })
+    expect(snapshot.items.map(({ body }) => body)).toContainEqual({
+      kind: 'diff',
+      path: 'a',
+      patch: journalPayload('+a')
+    })
+    expect(c.texts()).toEqual([
+      '(continued-outside)',
+      '(plan-document)',
+      'user:ask 2',
+      'assistant:answer 2'
+    ])
+    expect(
+      transitions.mock.calls.flatMap(([call]) =>
+        call.steps.filter(
+          (step) =>
+            step.kind === 'settlement' && step.settlementId.startsWith('codex-history-import:')
+        )
+      )
+    ).toHaveLength(1)
+    const display = snapshot.items.filter(
+      ({ body }) =>
+        body.kind === 'diff' || (body.kind === 'status' && body.presentation === 'plan-document')
+    )
+    expect(display).toHaveLength(2)
+    expect(display.find(({ body }) => body.kind === 'diff')).toMatchObject({
+      itemId: originalPatch?.itemId,
+      sequence: originalPatch?.sequence,
+      sequenceIndex: originalPatch?.sequenceIndex,
+      turnScope: originalPatch?.turnScope,
+      revision: 2
+    })
+    await c.reopen()
+    expect(c.journal.snapshot()).toEqual(snapshot)
+    await open([incoming, turn(2)])
+    expect(c.journal.snapshot()).toEqual(snapshot)
+  })
+
   it('keeps cross-turn live aliases and saved image constraints while allowing valid history fallback and generation', async () => {
     const c = await chat({ now: 1_000 })
     await c.open([], { paginate: false, returnedTurns: [turn(1), turn(2)] })

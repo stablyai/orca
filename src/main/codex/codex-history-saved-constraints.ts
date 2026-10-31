@@ -1,12 +1,14 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import {
+  codexItemBody,
   codexMessageBlocks,
   codexCommandOutput,
   mcpToolOutput,
   type CodexThreadItem
 } from './codex-structured-item-translation'
 import { readRecord } from './codex-item-field-readers'
+import { historyInvocationFields } from './codex-history-source-facts'
 
 /** Saved presentation supplies only the constraints and sparse payload it actually retains. */
 export function constrainSavedHistoryItem(
@@ -107,6 +109,28 @@ export function constrainSavedHistoryItem(
     }
     if (item.type === 'fileChange' && item.changes === undefined && fields.changes !== undefined) {
       item.changes = fields.changes
+    }
+    const invocation = codexItemBody({
+      ...historyInvocationFields(item),
+      type: item.type,
+      id: item.id
+    })
+    if (
+      body.mcpIdentity &&
+      (invocation?.kind !== 'tool-call' ||
+        !isDeepStrictEqual(invocation.mcpIdentity, body.mcpIdentity))
+    ) {
+      return null
+    }
+    const interpreted = readRecord(invocation?.kind === 'tool-call' ? invocation.input : null)
+    for (const key of ['command', 'cwd', 'prompt']) {
+      if (
+        fields[key] !== undefined &&
+        fields[key] !== null &&
+        !isDeepStrictEqual(interpreted[key], fields[key])
+      ) {
+        return null
+      }
     }
     if (['commandExecution', 'mcpToolCall', 'collabAgentToolCall'].includes(item.type)) {
       if (body.state !== 'running' && item.status === 'inProgress') {
