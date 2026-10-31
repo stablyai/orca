@@ -97,13 +97,36 @@ describe('substituteTerminalQuickCommandPlaceholders', () => {
     '/repo/a";touch pwned;".py',
     '/repo/a\nb.py',
     '/repo/run!9999.py',
-    '/repo/%USERNAME%/a.py'
+    '/repo/%USERNAME%/a.py',
+    '/repo/a\u201D; Start-Process calc; Write-Output \u201C.py',
+    '/repo/a\u201E.py',
+    '/repo/trail\\'
   ])('refuses a path a shell could execute: %j', (filePath) => {
     expect(
       substituteTerminalQuickCommandPlaceholders('python "${file}"', {
         filePath,
         relativePath: 'a.py',
         workspaceFolder: '/repo'
+      })
+    ).toEqual({ status: 'unsafe-path' })
+  })
+
+  it('keeps a drive root, the one value that ends in a backslash', () => {
+    expect(
+      substituteTerminalQuickCommandPlaceholders('cd "${fileDirname}"', {
+        filePath: 'C:\\script.py',
+        relativePath: 'script.py',
+        workspaceFolder: 'C:\\'
+      })
+    ).toEqual({ status: 'ok', command: 'cd "C:\\"' })
+  })
+
+  it('refuses a ${workspaceFolder} ending in a backslash', () => {
+    expect(
+      substituteTerminalQuickCommandPlaceholders('echo "${workspaceFolder}"', {
+        filePath: null,
+        relativePath: null,
+        workspaceFolder: '/repo/trail\\'
       })
     ).toEqual({ status: 'unsafe-path' })
   })
@@ -127,7 +150,9 @@ describe('substituteTerminalQuickCommandPlaceholders', () => {
     ['python ${file}', '/repo/(id).py'],
     ['bash -c \'python "${file}"\'', "/repo/a'; id; echo '.py"],
     ['echo "$(cat ${file})"', '/repo/a;id;.py'],
-    ['python \\"${file}', '/repo/a;id;.py']
+    ['python \\"${file}', '/repo/a;id;.py'],
+    ["python '${file}'", '/repo/a\u2019; id; echo \u2018.py'],
+    ['python \u201C"${file}', '/repo/a;id;.py']
   ])('refuses %j when the path can leave its quoting: %j', (command, filePath) => {
     expect(
       substituteTerminalQuickCommandPlaceholders(command, {
@@ -166,6 +191,16 @@ describe('substituteTerminalQuickCommandPlaceholders', () => {
         workspaceFolder: '/repo'
       })
     ).toEqual({ status: 'ok', command: 'python "/repo/Matt\'s notes.py"' })
+  })
+
+  it('keeps a typographic apostrophe inside plain double quotes', () => {
+    expect(
+      substituteTerminalQuickCommandPlaceholders('python "${file}"', {
+        filePath: '/repo/Matt\u2019s notes.py',
+        relativePath: 'Matt\u2019s notes.py',
+        workspaceFolder: '/repo'
+      })
+    ).toEqual({ status: 'ok', command: 'python "/repo/Matt\u2019s notes.py"' })
   })
 
   it('passes commands without placeholders through', () => {

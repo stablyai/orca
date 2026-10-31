@@ -23,11 +23,16 @@ export type TerminalQuickCommandPlaceholderResult =
 
 // Why: values are pasted into a shell line, so a file named `$(touch x).py` would run even inside
 // the documented `"${file}"` quoting. `!` is bash history expansion and `%NAME%` is a cmd.exe
-// variable; both expand inside double quotes too.
-const UNSAFE_PATH_VALUE = /[\p{Cc}$`"!]|%[^%]+%/u
+// variable; both expand inside double quotes too. PowerShell reads U+201C-U+201E as double quotes.
+const UNSAFE_PATH_VALUE = /[\p{Cc}$`"!\u201C-\u201E]|%[^%]+%/u
 
 // Why: inert inside plain double quotes, but they end `'${file}'` or chain a bare `${file}`.
-const UNSAFE_PATH_VALUE_OUTSIDE_DOUBLE_QUOTES = /[';&|<>()]/
+// PowerShell reads U+2018-U+201B as single quotes.
+const UNSAFE_PATH_VALUE_OUTSIDE_DOUBLE_QUOTES = /[';&|<>()\u2018-\u201B]/
+
+// Why: bash reads `"/repo/a\"` as an escaped quote and waits for input. `C:\` stays usable because
+// fileDirname returns it for files at a drive root, and cmd and PowerShell do not escape with `\`.
+const TRAILING_BACKSLASH_OUTSIDE_DRIVE_ROOT = /^(?![A-Za-z]:\\$).*\\$/su
 
 const PLACEHOLDER_NAME_SET = new Set<string>(TERMINAL_QUICK_COMMAND_PLACEHOLDER_NAMES)
 
@@ -47,6 +52,7 @@ export function substituteTerminalQuickCommandPlaceholders(
   const usable = (value: string, offset: number): string => {
     unsafePath ||=
       UNSAFE_PATH_VALUE.test(value) ||
+      TRAILING_BACKSLASH_OUTSIDE_DRIVE_ROOT.test(value) ||
       (UNSAFE_PATH_VALUE_OUTSIDE_DOUBLE_QUOTES.test(value) &&
         !isPlainlyDoubleQuoted(command, offset))
     return value
@@ -103,7 +109,7 @@ export function fileDirname(filePath: string): string {
 
 // Why: nesting and escapes differ by shell, so only simple double quotes count as quoted.
 function isPlainlyDoubleQuoted(command: string, offset: number): boolean {
-  if (/['`]|\\"|\$\(/.test(command)) {
+  if (/['`\u2018-\u201E]|\\"|\$\(/.test(command)) {
     return false
   }
   const quotesBefore = command.slice(0, offset).match(/"/g)?.length ?? 0
