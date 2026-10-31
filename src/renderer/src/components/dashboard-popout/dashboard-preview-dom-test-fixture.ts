@@ -134,7 +134,8 @@ export function observePreviewListeners(elements: HTMLElement[]) {
 export function mountPreviewLinkInteraction(
   source: DashboardPreviewLinkSource,
   readSettings: () => GlobalSettings | null,
-  trackInstance: (instance: ReturnType<typeof openStandaloneTerminal>) => void
+  trackInstance: (instance: ReturnType<typeof openStandaloneTerminal>) => void,
+  withInteraction = true
 ) {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -151,14 +152,18 @@ export function mountPreviewLinkInteraction(
     getSettings: readSettings,
     getMacOptionAsAlt: () => 'false',
     getTerminalInput: () => null,
-    linkHandlers: (defaults) => {
-      defaultHandlers = defaults
-      return {
-        activate: (e, uri, range) => interaction?.handlers.activate(e, uri, range),
-        hover: (e, uri, range) => interaction?.handlers.hover?.(e, uri, range),
-        leave: (e, uri, range) => interaction?.handlers.leave?.(e, uri, range)
-      }
-    }
+    ...(withInteraction
+      ? {
+          linkHandlers: (defaults: ILinkHandler): ILinkHandler => {
+            defaultHandlers = defaults
+            return {
+              activate: (e, uri, range) => interaction?.handlers.activate(e, uri, range),
+              hover: (e, uri, range) => interaction?.handlers.hover?.(e, uri, range),
+              leave: (e, uri, range) => interaction?.handlers.leave?.(e, uri, range)
+            }
+          }
+        }
+      : {})
   })
   if (!instance) {
     throw new Error('Actual standalone constructor failed')

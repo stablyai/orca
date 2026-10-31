@@ -13,9 +13,9 @@ import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remot
 import { resetRemoteRuntimeTerminalPreviewSessionsForTests } from './remote-runtime-terminal-preview-api'
 import {
   installPreviewDomFixture,
-  observePreviewListeners,
   mountPreviewLinkInteraction
 } from './dashboard-preview-dom-test-fixture'
+import { verifyPreviewLinkPopulation } from './dashboard-preview-link-population-test-fixture'
 import { Terminal } from '@xterm/xterm'
 import { toast } from 'sonner'
 import { runtimeStatuses } from '@/store/slices/browser-slice-test-harness'
@@ -132,6 +132,10 @@ beforeEach(() => {
   disposeDom = installPreviewDomFixture()
   Object.assign(window.api, {
     shell: { ...window.api.shell, openUrl },
+    dashboard: {
+      ...window.api.dashboard,
+      ackAgent: vi.fn(async (_pane: string, _intent: 'view' | 'explicit') => {})
+    },
     terminalPreview: {
       connect: vi.fn(async () => ({
         snapshot: { data: '', cols: 80, rows: 8, seq: 1 },
@@ -509,67 +513,16 @@ function mountedInteraction() {
 it.each([10, 100])(
   'bounds actual registration, document callbacks and target input/output at P=%s; reset/dispose leave zero adapter residue',
   async (population) => {
-    const provider = vi.spyOn(Terminal.prototype, 'registerLinkProvider')
-    const previews = Array.from({ length: population }, mountedInteraction)
-    expect(provider).toHaveBeenCalledTimes(population)
-    const observation = observePreviewListeners(previews.map((p) => p.instance.terminal.element!))
-    const { active } = observation
-    const interactions = previews.map((preview) => preview.install())
-    expect(provider).toHaveBeenCalledTimes(population)
-    expect(active.size).toBe(9 * population)
-    document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
-    expect(observation.callbacks).toBe(population)
-    observation.resetCallbacks()
-    const first = previews[0]!
-    await new Promise<void>((resolve) => first.instance.write(osc, { live: true, onDone: resolve }))
-    const gettersBefore = previews.map((p) => [
-      p.getSource.mock.calls.length,
-      p.getSettings.mock.calls.length
-    ])
-    for (let i = 0; i < 10; i++) {
-      first.instance.terminal.input('typed')
-    }
-    expect(first.sink).toHaveBeenCalledTimes(10)
-    expect(previews.slice(1).every((p) => p.sink.mock.calls.length === 0)).toBe(true)
-    await new Promise<void>((resolve) =>
-      first.instance.write(' output', { live: true, onDone: resolve })
+    await verifyPreviewLinkPopulation(
+      population,
+      source,
+      () => store.getState().settings,
+      (instance) => instances.push(instance),
+      osc,
+      URL_TO_OPEN,
+      pointer,
+      screenFor
     )
-    expect(
-      previews.map((p) => [p.getSource.mock.calls.length, p.getSettings.mock.calls.length])
-    ).toEqual(gettersBefore)
-    expect(first.instance.terminal.buffer.active.getLine(0)?.translateToString(true)).toContain(
-      'output'
-    )
-    const screen = screenFor(first.container)
-    const timers = vi.spyOn(window, 'setTimeout')
-    const cancelTimers = vi.spyOn(window, 'clearTimeout')
-    pointer(screen, 'mousedown')
-    // Ten deferral listeners plus xterm's own bounded drag listeners, independent of P.
-    expect(active.size).toBeLessThanOrEqual(9 * population + 16)
-    pointer(screen, 'mouseup')
-    expect(first.request).toHaveBeenCalledOnce()
-    // Count real schedules, including any native emulator work, on this one target.
-    expect(timers.mock.calls.length).toBeLessThanOrEqual(3)
-    for (const interaction of interactions) {
-      interaction.dispose()
-    }
-    const scheduled = timers.mock.results
-      .filter((result) => result.type === 'return')
-      .map((result) => result.value)
-    expect(
-      scheduled.every((id) => cancelTimers.mock.calls.some(([cleared]) => cleared === id))
-    ).toBe(true)
-    timers.mockRestore()
-    cancelTimers.mockRestore()
-    expect(active.size).toBe(0)
-    const reset = previews.map((p) => p.install())
-    expect(provider).toHaveBeenCalledTimes(population)
-    expect(active.size).toBe(9 * population)
-    for (const interaction of reset) {
-      interaction.dispose()
-    }
-    expect(active.size).toBe(0)
-    observation.restore()
   }
 )
 
@@ -633,6 +586,7 @@ it('adds no provider or preview connection when the real board grows from 10 to 
     <AgentKanbanBoard snapshot={{ generatedAt: 3, cards: [{ ...cards(1)[0]!, ...source }] }} />
   )
   fireEvent.click(popout.getByRole('button', { name: /Workspace 0/ }))
+  expect(window.api.dashboard.ackAgent).toHaveBeenCalledExactlyOnceWith('pane-0', 'explicit')
   await waitFor(() => screenFor(document.body))
   await output(osc)
   const screen = screenFor(document.body)
@@ -734,7 +688,7 @@ it('refuses real selected/drag/nonlink requests and forwards their mouse reports
     '\x1b[<0;1;1M',
     '\x1b[<0;1;1m',
     '\x1b[<0;1;1M',
-    '\x1b[<0;3;1m',
+    '\x1b[<0;4;1m',
     '\x1b[<0;71;1M',
     '\x1b[<0;71;1m'
   ])

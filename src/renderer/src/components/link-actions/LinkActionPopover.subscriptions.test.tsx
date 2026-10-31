@@ -11,7 +11,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { LinkActionPopover } from './LinkActionPopover'
 import type { LinkActionRequest } from './link-action-request'
 
-const census = vi.hoisted(() => ({ live: 0, added: 0, removed: 0, notifications: 0 }))
+type Census = { api: object; live: number; added: number; removed: number; notifications: number }
+const registry = vi.hoisted(() => ({ byStateReader: new WeakMap<object, Census>() }))
 const fixture = vi.hoisted(
   (): { useStore: ReturnType<typeof createBrowserLinkTestStore> | undefined } => ({
     useStore: undefined
@@ -33,6 +34,8 @@ vi.mock('zustand', async (importOriginal) => {
   const actual = await importOriginal<typeof Zustand>()
   function instrument<T>(creator: StateCreator<T, [], []>) {
     return actual.create<T>()((set, get, api) => {
+      const census: Census = { api, live: 0, added: 0, removed: 0, notifications: 0 }
+      registry.byStateReader.set(api.getState, census)
       const subscribe = api.subscribe
       api.subscribe = (listener) => {
         census.live++
@@ -76,6 +79,16 @@ it.each([10, 100])(
   async (population) => {
     const store = createBrowserLinkTestStore()
     fixture.useStore = store
+    const census = registry.byStateReader.get(store.getState)
+    if (!census) {
+      throw new Error('Missing captured current-store API census')
+    }
+    const otherStore = createBrowserLinkTestStore()
+    const otherCensus = registry.byStateReader.get(otherStore.getState)
+    if (!otherCensus) {
+      throw new Error('Missing captured other-store API census')
+    }
+    expect(otherCensus.api).not.toBe(census.api)
     const baseline = census.live
     const initialAdded = census.added
     const initialRemoved = census.removed
@@ -122,6 +135,12 @@ it.each([10, 100])(
     expect(census.live - baseline).toBeLessThanOrEqual(4 * population)
     const settled = [...renders]
     const live = census.live
+    const ownNotices = census.notifications
+    const otherNotices = otherCensus.notifications
+    await act(async () => otherStore.setState({ activeView: 'settings' }))
+    expect(census.notifications).toBe(ownNotices)
+    expect(otherCensus.notifications - otherNotices).toBe(otherCensus.live)
+    expect(renders).toEqual(settled)
     for (const host of ['own-host', 'other-host']) {
       const notices = census.notifications
       await act(async () =>
