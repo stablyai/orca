@@ -40,3 +40,51 @@ it('hands the startup queued target and later real openRun listener target to vi
   await Promise.resolve()
   expect(open).toHaveBeenCalledTimes(2)
 })
+
+it('finishes an already consumed target across cleanup/remount and deduplicates listener plus startup pulls', async () => {
+  const target = { automationId: 'a', runId: 'failed', hostId: 'runtime:box', pairingRevision: 7 }
+  const answer = Promise.withResolvers<typeof target | null>()
+  let queued: typeof target | null = target
+  const consume = vi.fn(() => {
+    const value = queued
+    queued = null
+    return value ? answer.promise : Promise.resolve(null)
+  })
+  const listeners = new Set<() => void>()
+  const setPending = vi.fn()
+  const open = vi.fn()
+  const seen = vi.fn()
+  await loadIpcEventsHarness(
+    createHarnessStoreState({
+      tabsByWorktree: {},
+      setPendingAutomationRunNavigation: setPending,
+      openAutomationsPage: open
+    }),
+    {
+      automationsApi: {
+        consumePendingOpenRun: consume,
+        runSeen: seen,
+        onOpenRun: (listener: () => void) => {
+          listeners.add(listener)
+          return () => {
+            listeners.delete(listener)
+          }
+        }
+      }
+    }
+  )
+  const { installAppLifetimeIpcEvents } = await import('./ipc-events/app-lifetime-ipc-bridge')
+  const stop = installAppLifetimeIpcEvents()
+  listeners.forEach((listener) => listener())
+  stop()
+  expect(listeners.size).toBe(0)
+  const stopAgain = installAppLifetimeIpcEvents()
+  listeners.forEach((listener) => listener())
+  answer.resolve(target)
+  await vi.waitFor(() => expect(setPending).toHaveBeenCalledExactlyOnceWith(target))
+  expect(open).toHaveBeenCalledOnce()
+  expect(consume).toHaveBeenCalledTimes(4)
+  expect(seen).not.toHaveBeenCalled()
+  stopAgain()
+  expect(listeners.size).toBe(0)
+})

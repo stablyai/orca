@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { Store } from '../persistence'
+import { stubRuntime } from '../runtime/rpc/terminal-multiplex-test-harness'
+import { fixture } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import type { AutomationRunOutcome } from '../../shared/automation-run-outcome'
 const mocks = vi.hoisted(() => ({
@@ -53,23 +53,24 @@ const settledRun: AutomationRunOutcome = {
 }
 let local: (event: RuntimeClientEvent) => void
 let stopped: ReturnType<typeof vi.fn>
-function start() {
+async function start() {
   stopped = vi.fn()
-  // SAFETY: startup observes only the onClientEvent subscription in this runtime fixture.
-  const runtime = {
+  const runtime = stubRuntime({
     onClientEvent: vi.fn((listener) => {
       local = listener
       return stopped
     })
-  } as unknown as OrcaRuntimeService
-  // SAFETY: fixture implements every Store getter read by the app-owned producer.
-  const store = {
-    getSshTargets: () => [],
-    getWorkspaceSession: () => ({ activeWorktreeId: 'workspace' }),
-    getUI: () => ({ activeView: 'automations' }),
-    getSettings: () => ({ notifications: { enabled: true } })
-  } as unknown as Store
-  return startAutomationOutcomeNotifications(runtime, store)
+  })
+  const { store } = await fixture()
+  vi.spyOn(store, 'getSshTargets').mockReturnValue([])
+  vi.spyOn(store, 'getWorkspaceSession').mockReturnValue({
+    ...store.getWorkspaceSession(),
+    activeWorktreeId: 'workspace'
+  })
+  vi.spyOn(store, 'getUI').mockReturnValue({ ...store.getUI(), activeView: 'automations' })
+  const notifications = { ...store.getSettings().notifications, enabled: true }
+  vi.spyOn(store, 'getSettings').mockReturnValue({ ...store.getSettings(), notifications })
+  return { stop: startAutomationOutcomeNotifications(runtime, store), notifications }
 }
 beforeEach(() => {
   vi.clearAllMocks()
@@ -80,7 +81,7 @@ beforeEach(() => {
   mocks.dispatch.mockResolvedValue({ delivered: true })
 })
 it('delivers a live local outcome without a renderer, presents its sound/fallback, and tears down', async () => {
-  const stop = start()
+  const { stop, notifications } = await start()
   local({ type: 'automationsChanged', settledRun })
   await Promise.resolve()
   await Promise.resolve()
@@ -90,7 +91,7 @@ it('delivers a live local outcome without a renderer, presents its sound/fallbac
       isActiveWorktree: false
     })
   )
-  expect(mocks.present).toHaveBeenCalledWith({ delivered: true }, { enabled: true })
+  expect(mocks.present).toHaveBeenCalledWith({ delivered: true }, notifications)
   stop()
   local({ type: 'automationsChanged', settledRun })
   expect(mocks.dispatch).toHaveBeenCalledOnce()
@@ -107,7 +108,7 @@ it('fences paired remote streams and never produces historical banners on replay
       status: { runtimeId: 'runtime', capabilities: ['automation.run-seen.v1'] }
     }
   ])
-  const stop = start()
+  const { stop } = await start()
   await Promise.resolve()
   expect(mocks.subscribe).toHaveBeenCalledOnce()
   const event = mocks.subscribe.mock.calls[0][5].onEvent
@@ -134,7 +135,7 @@ it('fences paired remote streams and never produces historical banners on replay
   expect(mocks.dispatch).toHaveBeenCalledOnce()
   stop()
 })
-it('does not subscribe to old or unverified hosts', () => {
+it('does not subscribe to old or unverified hosts', async () => {
   mocks.snapshots.mockReturnValue([
     {
       environmentId: 'old',
@@ -143,7 +144,7 @@ it('does not subscribe to old or unverified hosts', () => {
       status: { capabilities: [] }
     }
   ])
-  const stop = start()
+  const { stop } = await start()
   expect(mocks.subscribe).not.toHaveBeenCalled()
   stop()
 })

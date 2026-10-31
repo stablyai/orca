@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AUTOMATION_HANDLERS } from './automations'
-import type { RuntimeClient } from '../runtime-client'
+import { RuntimeClient } from '../runtime-client'
+import type { RuntimeRpcSuccess } from '../runtime/types'
 
 const owner = { selector: { kind: 'ssh', targetId: 'box', targetGeneration: 4 } }
 
-function ok(result: unknown): unknown {
+function ok<T>(result: T): RuntimeRpcSuccess<T> {
   return { id: 'request-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
@@ -101,10 +102,12 @@ it('prints additive failure attention fields in list/runs JSON without acknowled
     { id: 'r1', automationId: 'a1', status: 'dispatch_failed', failureSeenAt: 123 },
     { id: 'r2', automationId: 'a1', status: 'dispatch_failed' }
   ]
-  const call = vi.fn(async (method: string) => ok(method === 'automation.list' ? list : { runs }))
+  const client = new RuntimeClient('/fixture', 60_000, null, null)
+  const call = vi
+    .spyOn(client, 'call')
+    .mockResolvedValueOnce(ok(list))
+    .mockResolvedValueOnce(ok({ runs }))
   const print = vi.spyOn(console, 'log').mockImplementation(() => {})
-  // SAFETY: these read-only CLI handlers use RuntimeClient.call only.
-  const client = { call } as unknown as RuntimeClient
   await AUTOMATION_HANDLERS['automations list']!({
     client,
     cwd: '/tmp',

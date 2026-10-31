@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { AUTOMATION_RUN_SEEN_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { useAppStore } from '@/store'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { getHostSettingOverride } from '../../../../shared/host-setting-overrides'
@@ -17,6 +26,7 @@ import {
   createAutomationHostQueryController,
   type AutomationHostQueryController
 } from './automation-host-cache-controller'
+import { automationHostFailureSummary } from './automation-host-cache-rows'
 import { automationHostCatalogEntryFingerprint } from './automation-host-catalog-generation'
 import type { AutomationAuthorityChangeEvent } from './automation-host-invalidation'
 import type {
@@ -117,21 +127,7 @@ export function useAutomationHostCatalog(
     }
   }, [controller, makeController])
 
-  const countSelection = useRef<{ catalog: AutomationHostCatalog; key: string } | null>(null)
   const [cacheVersion, setCacheVersion] = useState(0)
-  useEffect(() => {
-    return controller.cache.subscribe(() => {
-      const selected = countSelection.current
-      if (options.failureCountOnly && selected) {
-        const next = failureSummary(controller, selected.catalog)
-        if (next.key === selected.key) {
-          return
-        }
-        selected.key = next.key
-      }
-      setCacheVersion((version) => version + 1)
-    })
-  }, [controller, options.failureCountOnly])
 
   const orphanCount = useCallback(
     (authority: StableAutomationAuthorityRef) => controller.authorityOrphanCount(authority),
@@ -141,6 +137,20 @@ export function useAutomationHostCatalog(
     desktopSshGenerations,
     runtimeEnvironments
   })
+  const unsupportedFailureAuthorities = useMemo(
+    () =>
+      new Set(
+        sourceState.runtimes
+          .filter(({ status }) => {
+            const capabilities = status?.status?.capabilities
+            return (
+              capabilities !== undefined && !capabilities.includes(AUTOMATION_RUN_SEEN_CAPABILITY)
+            )
+          })
+          .map((runtime) => runtime.environmentId)
+      ),
+    [sourceState.runtimes]
+  )
   const hostFilter = useMemo(
     () => foldDesktopHostFilter(automationHostFilter, sourceState.desktopAliasEnvironmentId),
     [automationHostFilter, sourceState.desktopAliasEnvironmentId]
@@ -261,8 +271,30 @@ export function useAutomationHostCatalog(
     void controller.applyCatalog(queryCatalog, { selectedStableKey, force: true })
   }, [controller, queryCatalog, selectedStableKey])
 
-  const summary = failureSummary(controller, catalog)
-  countSelection.current = { catalog, key: summary.key }
+  const summary = automationHostFailureSummary(controller, catalog, unsupportedFailureAuthorities)
+  useLayoutEffect(() => {
+    let key = summary.key
+    const changed = () => {
+      if (options.failureCountOnly) {
+        const next = automationHostFailureSummary(
+          controller,
+          catalog,
+          unsupportedFailureAuthorities
+        )
+        if (next.key === key) {
+          return
+        }
+        key = next.key
+      }
+      setCacheVersion((version) => version + 1)
+    }
+    const release = controller.cache.subscribe(changed)
+    // A cache commit between render and attachment must reach the committed selection.
+    if (options.failureCountOnly) {
+      changed()
+    }
+    return release
+  }, [controller, catalog, summary.key, unsupportedFailureAuthorities, options.failureCountOnly])
 
   return {
     unseenFailureCount: summary.count,
@@ -275,30 +307,5 @@ export function useAutomationHostCatalog(
     recover,
     refreshHosts,
     notifyAuthorityChange: controller.handleAuthorityEvent
-  }
-}
-
-function failureSummary(controller: AutomationHostQueryController, catalog: AutomationHostCatalog) {
-  const seen = new Set<string>()
-  let unseenFailureCount = 0
-  for (const entry of catalog.entries) {
-    if (entry.catalogState === 'removed') {
-      continue
-    }
-    for (const row of controller.cache.getByKey(entry.stableKey)?.data ?? []) {
-      const key = JSON.stringify([entry.stableRef.authority, row.automation.id])
-      if (!seen.has(key)) {
-        unseenFailureCount += row.unseenFailureCount ?? 0
-      }
-      seen.add(key)
-    }
-  }
-
-  return {
-    count: unseenFailureCount,
-    key: JSON.stringify([
-      unseenFailureCount,
-      ...catalog.entries.map((entry) => controller.authorityOrphanCount(entry.stableRef.authority))
-    ])
   }
 }

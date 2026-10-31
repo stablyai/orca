@@ -14,6 +14,8 @@ import type {
 } from '../../../../shared/automation-owner-ref'
 import type { ScopedAutomationList } from './automation-scoped-list-client'
 import type { AutomationHostRow } from './automation-host-cache-types'
+import type { AutomationHostQueryController } from './automation-host-cache-controller'
+import type { AutomationHostCatalog } from './automation-host-catalog-types'
 
 function ownerForItem(
   authority: AutomationAuthorityRef,
@@ -103,4 +105,37 @@ export function partitionLegacyAutomationHostRows(
     )
   }
   return { rowsByStableKey, orphanCount: partition.orphanCount }
+}
+
+export function automationHostFailureSummary(
+  controller: AutomationHostQueryController,
+  catalog: AutomationHostCatalog,
+  unsupportedAuthorities: ReadonlySet<string>
+) {
+  const seen = new Set<string>()
+  let unseenFailureCount = 0
+  for (const entry of catalog.entries) {
+    if (
+      entry.catalogState === 'removed' ||
+      (entry.stableRef.authority.kind === 'runtime' &&
+        unsupportedAuthorities.has(entry.stableRef.authority.environmentId))
+    ) {
+      continue
+    }
+    for (const row of controller.cache.getByKey(entry.stableKey)?.data ?? []) {
+      const key = JSON.stringify([entry.stableRef.authority, row.automation.id])
+      if (!seen.has(key)) {
+        unseenFailureCount += row.unseenFailureCount ?? 0
+      }
+      seen.add(key)
+    }
+  }
+
+  return {
+    count: unseenFailureCount,
+    key: JSON.stringify([
+      unseenFailureCount,
+      ...catalog.entries.map((entry) => controller.authorityOrphanCount(entry.stableRef.authority))
+    ])
+  }
 }

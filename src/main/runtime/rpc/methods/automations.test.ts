@@ -7,6 +7,7 @@ import { fixture } from '../../../persistence/loading-store/profile-state-delaye
 import { RuntimeAutomationController } from '../../runtime-automation-controller'
 import { OrcaRuntimeWithAutomationOperations } from '../../workspaces/persisted-surfaces/automation-operations'
 import { AUTOMATION_METHODS } from './automations'
+import { stubRuntime } from '../terminal-multiplex-test-harness'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -199,19 +200,14 @@ it('runs runSeen through the actual owner fence and primary save before replying
     }
   })
   const changed = vi.fn()
-  // SAFETY: this real runtime method reads only the Store/controller and its change publication port.
-  const receiver = {
-    store,
-    automation: controller,
+  const runtime = stubRuntime({
+    getRuntimeId: () => 'seen-contract',
     notifyAutomationsChanged: changed,
     automationChangeSelector: store.automationChangeSelector.bind(store)
-  } as unknown as OrcaRuntimeWithAutomationOperations
-  // SAFETY: the dispatcher exercises only runtime id and the production bound runSeen method.
-  const runtime = {
-    getRuntimeId: () => 'seen-contract',
-    markAutomationRunSeen:
-      OrcaRuntimeWithAutomationOperations.prototype.markAutomationRunSeen.bind(receiver)
-  } as unknown as OrcaRuntimeService
+  })
+  Object.assign(runtime, { store, automation: controller })
+  runtime.markAutomationRunSeen =
+    OrcaRuntimeWithAutomationOperations.prototype.markAutomationRunSeen.bind(runtime)
   const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
   const request = (expectedOwner: unknown, runId = run.id) =>
     makeRequest('automation.runSeen', { id: automation.id, runId, expectedOwner })

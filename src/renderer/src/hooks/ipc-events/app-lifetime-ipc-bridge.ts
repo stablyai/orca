@@ -56,12 +56,11 @@ function remountTerminalTabsAwaitingHostHydration(): void {
 
 export function installAppLifetimeIpcEvents(): () => void {
   const unsubs: (() => void)[] = []
-  let alive = true
   const openPendingRun = (): void => {
     void window.api.automations
       .consumePendingOpenRun?.()
       .then((target) => {
-        if (!alive || !target) {
+        if (!target) {
           return
         }
         const store = useAppStore.getState()
@@ -74,9 +73,6 @@ export function installAppLifetimeIpcEvents(): () => void {
   if (stopOpenRun) {
     unsubs.push(stopOpenRun)
   }
-  unsubs.push(() => {
-    alive = false
-  })
   openPendingRun()
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)

@@ -1,6 +1,5 @@
 import { fixture } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
-import type { Store } from '../persistence'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { stubRuntime } from '../runtime/rpc/terminal-multiplex-test-harness'
 import { describe, expect, it, vi } from 'vitest'
 import type { AutomationRunOutcome } from '../../shared/automation-run-outcome'
 import {
@@ -113,17 +112,19 @@ it('honors the existing switches while hidden-workspace list settings do not mut
 
 it.each(['completed', 'dispatch_failed'] as const)(
   'publishes one host-owned mobile %s result and retains the desktop outcome descriptor',
-  (status) => {
+  async (status) => {
     const dispatchMobileNotification = vi.fn()
     const notifyAutomationsChanged = vi.fn()
-    // SAFETY: the publisher uses only these two runtime delivery entry points.
-    const runtime = {
+    const runtime = stubRuntime({
       dispatchMobileNotification,
       notifyAutomationsChanged
-    } as unknown as OrcaRuntimeService
+    })
     const settings = { enabled: false, agentTaskComplete: true }
-    // SAFETY: the host producer reads notification switches only, never workspace-list filters.
-    const store = { getSettings: () => ({ notifications: settings }) } as Store
+    const { store } = await fixture()
+    vi.spyOn(store, 'getSettings').mockReturnValue({
+      ...store.getSettings(),
+      notifications: { ...store.getSettings().notifications, ...settings }
+    })
     const settledRun = outcome({ status })
     publishAutomationOutcome(runtime, store, { reason: 'run', settledRun })
     expect(dispatchMobileNotification).toHaveBeenCalledOnce()
@@ -154,11 +155,10 @@ it.each([true, false])(
     const phone = new RuntimeMobileNotificationController()
     const delivered = vi.fn()
     const stop = phone.onDispatched(delivered)
-    // SAFETY: publisher needs the established phone dispatcher and ordinary change publication only.
-    const runtime = {
+    const runtime = stubRuntime({
       dispatchMobileNotification: phone.dispatch.bind(phone),
       notifyAutomationsChanged: vi.fn()
-    } as unknown as OrcaRuntimeService
+    })
     publishAutomationOutcome(runtime, store, {
       settledRun: {
         ...outcome(),

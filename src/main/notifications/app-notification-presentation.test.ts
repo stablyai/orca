@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { NotificationSettings } from '../../shared/notification-settings-types'
+import { getDefaultSettings } from '../../shared/constants'
 const mocks = vi.hoisted(() => ({
   ui: vi.fn(),
   execute: vi.fn(),
@@ -27,8 +27,7 @@ import {
   presentAppNotificationResult,
   closeAppNotificationPresentation
 } from './app-notification-presentation'
-// SAFETY: presentation reads only sound selection and volume; selection is supplied by the existing selector mock.
-const settings = { customSoundVolume: 37 } as NotificationSettings
+const settings = { ...getDefaultSettings('/fixture').notifications, customSoundVolume: 37 }
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.selection.mockReturnValue('bong')

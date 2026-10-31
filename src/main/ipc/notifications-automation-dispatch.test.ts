@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import { fixture } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { getDefaultSettings } from '../../shared/constants'
 import {
   getDispatchHandler,
@@ -41,8 +41,8 @@ it('shares the IPC service and cooldown, is unavailable outside registration, an
     delivered: false,
     reason: 'unavailable'
   })
-  // SAFETY: notification registration reads only settings in this fixture.
-  const store = { getSettings: () => getDefaultSettings('/fixture') } as Store
+  const { store } = await fixture()
+  vi.spyOn(store, 'getSettings').mockReturnValue(getDefaultSettings('/fixture'))
   registerNotificationHandlers(store)
   expect(await dispatchRegisteredNotification(request)).toEqual({ delivered: true })
   expect(await getDispatchHandler()({}, request)).toEqual({ delivered: false, reason: 'cooldown' })

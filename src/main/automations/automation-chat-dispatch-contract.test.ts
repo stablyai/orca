@@ -9,7 +9,7 @@ import { AutomationService } from './service'
 import { observeAutomationChatRun } from './runtime-chat-run-observer'
 import { automationRunOperationId, AUTOMATION_AGENT_CALLER } from './automation-run-operation'
 import { rpcCallerOperationKey } from '../runtime/rpc/rpc-caller-identity'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { stubRuntime } from '../runtime/rpc/terminal-multiplex-test-harness'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -20,10 +20,13 @@ import { resolveAutomationRunTarget } from './run-target-resolution'
 import { STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS } from '../runtime/rpc/methods/structured-agent-session-turn-completion-stream'
 import { eraseRpcMethods, isStreamingMethod } from '../runtime/rpc/core'
 
-const held = vi.hoisted(() => ({
-  host: null as StructuredAgentSessionHost | null,
-  precheck: vi.fn()
-}))
+const held = vi.hoisted(() => {
+  const initial: { host: StructuredAgentSessionHost | null; precheck: ReturnType<typeof vi.fn> } = {
+    host: null,
+    precheck: vi.fn()
+  }
+  return initial
+})
 vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => held.host
 }))
@@ -85,8 +88,7 @@ it('delivers B while real scheduled A parks, closes/reconnects, then settles A e
     }
   })
   const cleanups = new Map<string, () => void>()
-  // SAFETY: only the host initialization, canonical receipt store and stream cleanup runtime ports are exercised.
-  const runtime = {
+  const runtime = stubRuntime({
     ensureStructuredAgentSessionHost: async () => {},
     openAgentSessionRecordStore: async () => rig.store,
     registerSubscriptionCleanup: (id: string, cleanup: () => void) => cleanups.set(id, cleanup),
@@ -94,7 +96,7 @@ it('delivers B while real scheduled A parks, closes/reconnects, then settles A e
       cleanups.get(id)?.()
       cleanups.delete(id)
     }
-  } as unknown as OrcaRuntimeService
+  })
   const publish = vi.fn()
   let message = ''
   const service = new AutomationService(store, {
@@ -209,11 +211,10 @@ it('keeps a finished exact root owned when withdrawal exposes it after its outco
     chatSessionId: SESSION,
     workspaceId: 'workspace-1'
   })
-  const runtime = {
+  const runtime = stubRuntime({
     ensureStructuredAgentSessionHost: async () => {},
     openAgentSessionRecordStore: async () => rig.store
-    // SAFETY: the real observer uses only the host admission and canonical receipt store ports.
-  } as unknown as OrcaRuntimeService
+  })
   const observed = observeAutomationChatRun(runtime, accepted, new AbortController().signal)
   const listener = listen(rig)
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledOnce())
@@ -266,13 +267,12 @@ it('restores retained final and nonfinal receipts before adoption, then retires 
   await store.flushPendingOrThrowAsync()
   await rig.restartHostProcess()
   held.host = rig.host
-  const runtime = {
+  const runtime = stubRuntime({
     setAutomationService: () => {},
     getAgentStatusRowsForPane: () => [],
     ensureStructuredAgentSessionHost: async () => {},
     openAgentSessionRecordStore: async () => rig.store
-    // SAFETY: construction and ownership attachment exercise these runtime ports; scheduling is not started.
-  } as unknown as OrcaRuntimeService
+  })
   const service = createRuntimeAutomationService({ store, runtime, headless: false })
   try {
     service.attachChatOwnership?.(rig.host, rig.store)
