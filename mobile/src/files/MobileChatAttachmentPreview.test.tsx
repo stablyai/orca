@@ -53,6 +53,7 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   BackHandler: {
     addEventListener: (...args: unknown[]) => {
       mocks.addBack(...args)
@@ -632,7 +633,8 @@ it('commits mobile page drafts and resets only committed scroll presentation whi
   const normal = mocks.send.getMockImplementation()!
   const gate = Promise.withResolvers<void>()
   const pageCalls = vi.spyOn(AttachmentTextSource.prototype, 'page')
-  const scrollTo = vi.fn()
+  const resetPages: string[] = []
+  const scrollTo = vi.fn(() => resetPages.push(input().props.value))
   const offsets: number[] = []
   let held = false
   mocks.send.mockImplementation(
@@ -740,15 +742,23 @@ it('commits mobile page drafts and resets only committed scroll presentation whi
     expect(scroll()).toBe(scrollNode)
     expect(offsets).toEqual(reads)
     expect(scrollTo).toHaveBeenCalledTimes(6)
+    const beforeFirst = pageCalls.mock.calls.length
+    const beforeFirstResets = scrollTo.mock.calls.length
     edit('9')
     await act(async () => button('First').props.onPress())
+    expect(pageCalls.mock.calls.slice(beforeFirst)).toEqual([
+      [8, 0],
+      [0, 0]
+    ])
+    expect(resetPages.slice(beforeFirstResets)).toEqual(['9', '1'])
+    expect(pageCalls.mock.contexts.at(-1)).toBe(owner)
     expect(input().props.value).toBe('1')
-    expect(scrollTo).toHaveBeenCalledTimes(7)
+    expect(scrollTo).toHaveBeenCalledTimes(8)
     edit('8')
     await act(async () => button('Retry').props.onPress())
     expect(input().props.value).toBe('1')
     expect(pageCalls.mock.contexts.at(-1)).not.toBe(owner)
-    expect(scrollTo).toHaveBeenCalledTimes(8)
+    expect(scrollTo).toHaveBeenCalledTimes(9)
     const retriedOwner = pageCalls.mock.contexts.at(-1)
     edit('7')
     await act(async () => {
@@ -758,7 +768,7 @@ it('commits mobile page drafts and resets only committed scroll presentation whi
     expect(input().props.value).toBe('1')
     expect(pageCalls.mock.contexts.at(-1)).not.toBe(retriedOwner)
     expect(scroll()).toBe(scrollNode)
-    expect(scrollTo).toHaveBeenCalledTimes(9)
+    expect(scrollTo).toHaveBeenCalledTimes(10)
     console.info(
       'PR35636 mobile pager presentation',
       JSON.stringify({

@@ -22,7 +22,7 @@ import { chatTextAttachmentName } from '../../../src/shared/native-chat-text-att
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../src/shared/mobile-bridge-frame-bytes'
 import { useClipboardWriter } from '../platform/clipboard'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { chatAttachmentPreviewStyles as styles } from './mobile-file-preview-styles'
 import type { MobileFilePreviewRouteParams } from './mobile-file-preview-route'
 
 const useAttachmentTextPreview = createAttachmentTextPreviewHook({

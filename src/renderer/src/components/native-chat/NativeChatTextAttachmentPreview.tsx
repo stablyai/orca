@@ -7,13 +7,11 @@ import {
   type PointerEvent,
   type MouseEvent
 } from 'react'
-import { XIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
   SheetContent,
-  SheetClose,
   SheetHeader,
   SheetTitle,
   SheetDescription
@@ -249,7 +247,10 @@ export function NativeChatTextAttachmentPreview({
         }
       }}
     >
-      <SheetContent className="flex w-full flex-col sm:max-w-2xl" showCloseButton={false}>
+      <SheetContent
+        className="flex w-full flex-col sm:max-w-2xl"
+        closeButtonProps={activationProps(false, () => {})}
+      >
         <SheetHeader>
           <SheetTitle>{name}</SheetTitle>
           <SheetDescription className="break-all">
@@ -370,15 +371,6 @@ export function NativeChatTextAttachmentPreview({
             {translate('components.native-chat.textAttachmentPreview.last', 'Last')}
           </Button>
         </div>
-        <SheetClose
-          className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
-          {...activationProps(false, () => {})}
-        >
-          <XIcon />
-          <span className="sr-only">
-            {translate('auto.components.ui.sheet.1189e9fe0a', 'Close')}
-          </span>
-        </SheetClose>
       </SheetContent>
     </Sheet>
   )

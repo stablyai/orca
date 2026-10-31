@@ -384,6 +384,11 @@ it('lifts the focused pager only for reported keyboard occlusion and restores th
     return node
   }
   const layout = (lift: number, safeBottom: number) => {
+    const row = getComputedStyle(footer())
+    expect(row.flexDirection).toBe('row')
+    expect(row.flexWrap).toBe('wrap')
+    expect(row.minHeight).toBe('58px')
+    expect(row.gap).toBe('12px')
     expect(viewer().style.paddingBottom).toBe(`${lift}px`)
     expect(footer().style.paddingBottom).toBe(`${safeBottom}px`)
   }
