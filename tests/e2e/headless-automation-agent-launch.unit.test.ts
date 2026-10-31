@@ -213,9 +213,7 @@ describe('automations through agent.launch', () => {
   it('refuses an expired admission without minting another launch identity', async () => {
     const { runtime } = fixture()
     mocks.launch.mockRejectedValue(new Error('agent_session_operation_expired'))
-    await expect(
-      launchChat(runtime, { automation, run, target, runs: [] })
-    ).rejects.toThrow(
+    await expect(launchChat(runtime, { automation, run, target, runs: [] })).rejects.toThrow(
       'Claude could not start because this run waited too long. Run the automation again.'
     )
     expect(mocks.launch).toHaveBeenCalledTimes(1)
