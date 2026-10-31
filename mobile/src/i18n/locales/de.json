@@ -1007,6 +1007,11 @@
       "title": "Etwas ist schiefgelaufen",
       "tryAgain": "Erneut versuchen",
       "home": "Startseite"
+    },
+    "native-chat": {
+      "userMessage": {
+        "automationInstructions": "Automatisierungsanweisungen"
+      }
     }
   },
   "connection": {

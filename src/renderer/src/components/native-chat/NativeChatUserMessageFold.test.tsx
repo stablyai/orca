@@ -8,6 +8,7 @@ import {
   useNativeChatDisclosures
 } from './native-chat-disclosure-store'
 import { MessageRow } from './NativeChatMessageRow'
+import { buildAutomationRunPreamble } from '../../../../shared/automation-run-preamble'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 vi.mock('@/components/confirmation-dialog-context', () => ({
@@ -96,5 +97,28 @@ describe('a long sent prompt', () => {
     show(prompt('prompt'))
     expect(folded()).toBeNull()
     expect(showLess()).toBeInTheDocument()
+  })
+})
+
+describe('automation instructions', () => {
+  it('discloses the exact preamble separately from the task and remembers the reader choice', () => {
+    const message = prompt('automation', `${buildAutomationRunPreamble('orca-dev')}Write the brief`)
+    const { show } = renderPrompt(message)
+    const toggle = () => screen.getByRole('button', { name: 'Automation instructions' })
+    expect(screen.getByText('Write the brief')).toBeInTheDocument()
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText(/You are running an Orca automation/)).toBeNull()
+    expect(showFull()).toBeNull()
+
+    fireEvent.click(toggle())
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText(/You are running an Orca automation/)).toBeInTheDocument()
+    expect(screen.queryByText('=== TASK ===')).toBeNull()
+    expect(showFull()).toBeNull()
+    show(null)
+    show(message)
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(toggle())
+    expect(screen.queryByText(/You are running an Orca automation/)).toBeNull()
   })
 })

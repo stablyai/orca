@@ -19847,6 +19847,7 @@
       "deliveryUnconfirmed": "Delivery unconfirmed — check chat before retrying",
       "messageSending": "Sending…",
       "userMessage": {
+        "automationInstructions": "Automation instructions",
         "showFull": "Show full message",
         "showLess": "Show less"
       },

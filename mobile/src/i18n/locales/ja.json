@@ -1003,6 +1003,11 @@
       "title": "問題が発生しました",
       "tryAgain": "再試行",
       "home": "ホーム"
+    },
+    "native-chat": {
+      "userMessage": {
+        "automationInstructions": "自動化の指示"
+      }
     }
   },
   "connection": {

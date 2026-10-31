@@ -18936,6 +18936,7 @@
       "deliveryUnconfirmed": "配信を確認できません — 再試行する前にチャットを確認してください",
       "messageSending": "送信中…",
       "userMessage": {
+        "automationInstructions": "自動化の指示",
         "showFull": "メッセージ全体を表示",
         "showLess": "折りたたむ"
       },

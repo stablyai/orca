@@ -19212,6 +19212,7 @@
       "deliveryUnconfirmed": "無法確認送達 — 重試前請檢查聊天",
       "messageSending": "正在傳送…",
       "userMessage": {
+        "automationInstructions": "自動化指示",
         "showFull": "顯示完整訊息",
         "showLess": "收合"
       },

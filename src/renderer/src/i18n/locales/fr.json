@@ -19691,6 +19691,7 @@
       "deliveryUnconfirmed": "Livraison non confirmée — vérifiez le chat avant de réessayer",
       "messageSending": "Envoi…",
       "userMessage": {
+        "automationInstructions": "Instructions d’automatisation",
         "showFull": "Afficher le message complet",
         "showLess": "Afficher moins"
       },

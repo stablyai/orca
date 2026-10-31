@@ -19267,6 +19267,7 @@
       "deliveryUnconfirmed": "Entrega sin confirmar — revisa el chat antes de reintentar",
       "messageSending": "Enviando…",
       "userMessage": {
+        "automationInstructions": "Instrucciones de automatización",
         "showFull": "Mostrar mensaje completo",
         "showLess": "Mostrar menos"
       },

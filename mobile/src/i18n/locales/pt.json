@@ -1050,6 +1050,11 @@
       "title": "Algo deu errado",
       "tryAgain": "Tentar novamente",
       "home": "Início"
+    },
+    "native-chat": {
+      "userMessage": {
+        "automationInstructions": "Instruções de automação"
+      }
     }
   },
   "connection": {

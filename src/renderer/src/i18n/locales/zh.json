@@ -18906,6 +18906,7 @@
       "deliveryUnconfirmed": "无法确认送达 — 重试前请检查聊天",
       "messageSending": "正在发送…",
       "userMessage": {
+        "automationInstructions": "自动化指令",
         "showFull": "显示完整消息",
         "showLess": "收起"
       },
