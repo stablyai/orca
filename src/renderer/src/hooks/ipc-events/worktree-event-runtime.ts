@@ -1,3 +1,4 @@
+import { recentlyRenamedWorktreeIdExpiry } from '@/store/slices/worktrees/listing/authoritative-worktree-removal-memory'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -39,7 +40,6 @@ const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 function runtimeSortOrderFence(environmentId: string): string {
   return buildRuntimeClientEventEnvironmentKey([environmentId])
 }
-const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 
 function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): Set<string> | null {
   const detected = selectDetectedWorktreesByRepo(state)[repoId]

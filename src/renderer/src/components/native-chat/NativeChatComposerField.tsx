@@ -87,6 +87,7 @@ export type NativeChatComposerFieldProps = {
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
   goalMode?: NativeChatComposerGoalMode
   agent?: string
+  launchPrompt?: { placeholder: string }
 }
 
 export type NativeChatComposerImageAttachment = {
@@ -169,7 +170,8 @@ export function NativeChatComposerField({
   contextUsage,
   sessionOptionsPickerRequest,
   goalMode,
-  agent
+  agent,
+  launchPrompt
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
   const optionCount =
@@ -259,10 +261,14 @@ export function NativeChatComposerField({
   // Stable so the memoized option pickers keep their identity.
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
 
+  // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
+  const launch = launchPrompt !== undefined
   return (
-    <div className="shrink-0 bg-chat-canvas">
-      <div className="px-3 pt-2 pb-4 sm:px-4">
-        <div className="relative mx-auto w-full max-w-(--chat-content-max-width)">
+    <div className={launch ? undefined : 'shrink-0 bg-chat-canvas'}>
+      <div className={launch ? undefined : 'px-3 pt-2 pb-4 sm:px-4'}>
+        <div
+          className={cn('relative w-full', !launch && 'mx-auto max-w-(--chat-content-max-width)')}
+        >
           {autocomplete.mode === 'slash' ? (
             <NativeChatPickerMenu
               autocomplete={autocomplete}
@@ -298,8 +304,10 @@ export function NativeChatComposerField({
           <div
             className={cn(
               // Use a constant container border so focus changes cannot flash it.
-              'rounded-xl border border-chat-composer-border p-1.5 shadow-xs',
-              'bg-chat-composer-surface',
+              'group/composer rounded-xl border p-1.5 shadow-xs',
+              launch
+                ? 'border-foreground/10 bg-background dark:bg-foreground/[0.04]'
+                : 'border-chat-composer-border bg-chat-composer-surface',
               // Contain caret-blink repaint to the composer; keep 4px slack around overhanging attachment buttons, while menus use portals.
               '[contain:paint]'
             )}
@@ -341,24 +349,39 @@ export function NativeChatComposerField({
                   : undefined
               }
               placeholder={
-                editSession
-                  ? translate('components.native-chat.queuedMessages.editMessage', 'Edit message')
-                  : goalMode?.active
-                    ? translate(
-                        'components.native-chat.goal.placeholder',
-                        'Describe your goal, define measurable outcomes for best results'
-                      )
-                    : (unavailableHint ?? nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
+                launchPrompt
+                  ? launchPrompt.placeholder
+                  : editSession
+                    ? translate('components.native-chat.queuedMessages.editMessage', 'Edit message')
+                    : goalMode?.active
+                      ? translate(
+                          'components.native-chat.goal.placeholder',
+                          'Describe your goal, define measurable outcomes for best results'
+                        )
+                      : (unavailableHint ??
+                        nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
               }
-              // Let layout handle wrapping and touch targets; scroll after eight lines without JavaScript measurement.
+              // Let layout handle wrapping and touch targets; scroll after eight lines (a launch prompt: one line growing to six) without JavaScript measurement.
               className={cn(
-                'min-h-12 w-full bg-transparent px-2 py-1 text-sm text-chat-foreground-strong outline-none pointer-coarse:min-h-14',
-                'max-h-[calc(8lh+0.5rem)] overflow-y-auto scrollbar-sleek',
+                'w-full bg-transparent px-2 py-1 text-sm outline-none',
+                launch
+                  ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground'
+                  : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14',
+                'overflow-y-auto scrollbar-sleek',
                 // Why: the editor is a contenteditable, which `:disabled` never matches.
-                'placeholder:text-chat-foreground-faint [&[contenteditable=false]]:cursor-not-allowed [&[contenteditable=false]]:opacity-50'
+                '[&[contenteditable=false]]:cursor-not-allowed [&[contenteditable=false]]:opacity-50'
               )}
             />
-            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            <div
+              className={cn(
+                'flex flex-wrap items-center gap-2 pt-0.5',
+                // An empty launch prompt is one line; Attach appears once it has focus or content.
+                launch &&
+                  draft === '' &&
+                  imageAttachments.length === 0 &&
+                  'hidden group-focus-within/composer:flex'
+              )}
+            >
               <NativeChatComposerActions
                 editSession={editSession}
                 attachDisabled={attachDisabled}
@@ -382,6 +405,7 @@ export function NativeChatComposerField({
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
                 focusComposer={focusComposer}
                 onExitGoalMode={goalMode?.active ? exitGoalMode : undefined}
+                attachOnly={launch}
                 {...(agent ? { agent } : {})}
               />
             </div>

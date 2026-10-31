@@ -46,7 +46,7 @@ export function AgentLaunchSetupButton({
   open?: boolean
   replacedByAnotherSetup?: boolean
   onOpenChange?: (open: boolean) => void
-  onUse: (draft: AgentPickerDraft) => void
+  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
   const draftKey = JSON.stringify([entry.ownerKey, entry.agent, initial])
   const [localOpen, setOpen] = useState(false)
@@ -148,6 +148,12 @@ export function AgentLaunchSetupButton({
         onClick={(event) => event.stopPropagation()}
         // Hovering another menu row moves focus there; only a click outside or Escape closes the panel.
         onFocusOutside={(event) => event.preventDefault()}
+        // The prompt's open / or @ menu takes Escape first.
+        onEscapeKeyDown={(event) => {
+          if (content.current?.querySelector('[contenteditable][aria-expanded="true"]')) {
+            event.preventDefault()
+          }
+        }}
         onCloseAutoFocus={(event) => {
           if (!closeFocus.current.restore) {
             event.preventDefault()
@@ -162,8 +168,11 @@ export function AgentLaunchSetupButton({
             disabled={disabled}
             onDraftChange={(draft) => sessionDrafts.set(draftKey, draft)}
             onUse={(draft) => {
-              onUse(draft)
-              changeOpen(false)
+              const accepted = onUse(draft)
+              if (accepted !== false) {
+                changeOpen(false)
+              }
+              return accepted
             }}
           />
         </div>

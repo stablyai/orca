@@ -159,3 +159,47 @@ describe('project catalog ingest with non-string row fields', () => {
     expect(projection.setups[1]).toBe(clean[1])
   })
 })
+
+import { createTestStore } from '../slices/store-test-helpers'
+import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+
+it.each([false, true])(
+  'actual host-setup deletion retires project sources only for a returned registered repo=%s',
+  async (registered) => {
+    launchDrafts.clearNativeChatComposerDraftsForTests()
+    const setup = badSetups()[0]
+    const store = createTestStore()
+    store.setState({ repos, projects, projectHostSetups: [setup] })
+    const deleteSetup = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('refused'))
+      .mockResolvedValue({ project: projects[0], setup, ...(registered ? { repo: repos[0] } : {}) })
+    vi.stubGlobal('window', { api: { projects: { deleteHostSetup: deleteSetup } } })
+    const key = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+      'repo-1::/source-only',
+      'codex',
+      'local'
+    )
+    const other = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+      'repo-1::/source-only',
+      'codex',
+      'ssh:other'
+    )
+    for (const scope of [key, other]) {
+      launchDrafts.updateNativeChatComposerDraft(scope, { text: 'task' }, 'immediate')
+    }
+    const attempt = launchDrafts.captureNativeChatComposerSubmission(key)
+    expect(
+      await store.getState().deleteProjectHostSetup({ setupId: setup.id, hostId: 'local' })
+    ).toBeNull()
+    expect(attempt.draft?.text).toBe('task')
+    expect(
+      await store.getState().deleteProjectHostSetup({ setupId: setup.id, hostId: 'local' })
+    ).not.toBeNull()
+    expect(attempt.draft === undefined).toBe(registered)
+    expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe(registered ? '' : 'task')
+    expect(launchDrafts.readNativeChatComposerDraft(other).text).toBe('task')
+    launchDrafts.clearNativeChatComposerDraftsForTests()
+    vi.unstubAllGlobals()
+  }
+)

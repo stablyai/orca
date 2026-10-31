@@ -39,6 +39,7 @@ function harness(options: {
   threadGoal?: NativeChatStructuredComposerTransport['threadGoal']
   imageAttachments?: NativeChatComposerImageAttachment[]
   lane?: 'pty'
+  submitEmpty?: () => void
   capturePresentation?: NativeChatStructuredComposerTransport['capturePresentation']
 }) {
   const onError = vi.fn()
@@ -66,6 +67,7 @@ function harness(options: {
         caret: props.caret,
         imageAttachments: options.imageAttachments ?? [],
         disabled: false,
+        submitEmpty: options.submitEmpty,
         ...calls
       }),
     { initialProps: { draft: options.draft, caret: options.caret ?? options.draft.length } }
@@ -298,4 +300,165 @@ describe('composer goal mode', () => {
     expect(calls.setDraft).toHaveBeenCalledExactlyOnceWith(GOAL_ITEM)
     expect(hook.result.current.goalMode.active).toBe(false)
   })
+})
+
+it('admits optional empty launch only after the shared pending-attachment boundary', () => {
+  const submitEmpty = vi.fn()
+  const ordinary = harness({ draft: '' })
+  act(() => ordinary.hook.result.current.send())
+  expect(ordinary.calls.sendStructured).not.toHaveBeenCalled()
+  ordinary.hook.unmount()
+  const held = harness({
+    draft: '',
+    submitEmpty,
+    imageAttachments: [{ id: 'pending', path: '', pending: true }]
+  })
+  act(() => held.hook.result.current.send())
+  expect(submitEmpty).not.toHaveBeenCalled()
+  held.hook.unmount()
+  const launch = harness({ draft: '   ', submitEmpty })
+  act(() => launch.hook.result.current.send())
+  expect(submitEmpty).toHaveBeenCalledOnce()
+  expect(launch.calls.sendStructured).not.toHaveBeenCalled()
+})
+
+import * as draftStore from './native-chat-composer-draft-store'
+import {
+  readNativeChatComposerDraft,
+  clearNativeChatComposerDraftsForTests
+} from './native-chat-composer-draft-store'
+import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
+import { useNativeChatDraft } from './use-native-chat-draft'
+import { promptSkillRefs } from './native-chat-prompt-document'
+
+it('recovers two distinct rich submissions across remount/new input without late success clearing either recovery', async () => {
+  clearNativeChatComposerDraftsForTests()
+  const scope = draftStore.nativeChatLaunchPromptDraftScopeKey('workspace', 'codex', 'ssh:host')
+  const replies = Array.from({ length: 3 }, () => Promise.withResolvers<boolean>())
+  const transport: NativeChatStructuredComposerTransport = {
+    capturePresentation: () => () => true,
+    dispatchCommand: async () => ({ handled: false, accepted: false, error: null }),
+    optionsSurface: {
+      getSnapshot: () => [],
+      setOption: vi.fn(),
+      invokeAction: vi.fn(),
+      subscribe: () => () => {}
+    },
+    optionSnapshot: [],
+    onError: vi.fn(),
+    runtime: 'local',
+    sessionId: scope,
+    runtimeEnvironmentId: null,
+    send: vi
+      .fn()
+      .mockImplementationOnce(() => replies[0].promise)
+      .mockImplementationOnce(() => replies[1].promise)
+      .mockImplementationOnce(() => replies[2].promise)
+      .mockReturnValue(true)
+  }
+  const rich = (path: string) => ({
+    text: '$review',
+    images: [{ id: path, path: `${path}.png` }],
+    pastedTextFiles: {},
+    document: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'nativeChatSkill', attrs: { token: '$review', path } }]
+        }
+      ]
+    }
+  })
+  const mount = () =>
+    renderHook(() => {
+      const draft = useNativeChatDraft(scope, () => false)
+      return useNativeChatStructuredComposerSend({
+        agent: 'codex',
+        draftScopeKey: scope,
+        imageAttachments: [],
+        structuredTransport: transport,
+        isComposing: () => false,
+        clearSkillOrigin: () => {},
+        setDraft: draft.setDraft,
+        setCaret: () => {}
+      })
+    })
+  let hook = mount()
+  const pending: Promise<void>[] = []
+  for (const path of ['/one/SKILL.md', '/two/SKILL.md', '/success/SKILL.md']) {
+    act(() => updateNativeChatComposerDraft(scope, rich(path), 'immediate'))
+    await act(async () => {
+      pending.push(hook.result.current('$review', readNativeChatComposerDraft(scope).images))
+    })
+    expect(readNativeChatComposerDraft(scope).text).toBe('')
+  }
+  hook.unmount()
+  const otherHost = draftStore.nativeChatLaunchPromptDraftScopeKey('workspace', 'codex', 'local')
+  updateNativeChatComposerDraft(otherHost, { text: 'other host' }, 'immediate')
+  const pasteId = '00000000-0000-4000-8000-000000000000'
+  const newer = `new [Pasted text](orca-paste:${pasteId}) @/new/file`
+  updateNativeChatComposerDraft(
+    scope,
+    {
+      text: newer,
+      document: undefined,
+      images: [],
+      pastedTextFiles: { [pasteId]: '/saved/paste.txt' }
+    },
+    'immediate'
+  )
+  await act(async () => {
+    replies[0].resolve(false)
+    await pending[0]
+  })
+  await act(async () => {
+    replies[1].reject(new Error('connection lost'))
+    await pending[1]
+  })
+  const recovered = readNativeChatComposerDraft(scope)
+  expect(promptSkillRefs(recovered.document)).toEqual([
+    { name: 'review', path: '/one/SKILL.md' },
+    { name: 'review', path: '/two/SKILL.md' }
+  ])
+  expect(recovered.text).toContain(newer)
+  expect(recovered.pastedTextFiles).toEqual({ [pasteId]: '/saved/paste.txt' })
+  expect(recovered.images.map(({ path }) => path)).toEqual([
+    '/one/SKILL.md.png',
+    '/two/SKILL.md.png'
+  ])
+  await act(async () => {
+    replies[2].resolve(true)
+    await pending[2]
+  })
+  expect(readNativeChatComposerDraft(scope)).toBe(recovered)
+  expect(readNativeChatComposerDraft(otherHost).text).toBe('other host')
+  hook = mount()
+  await act(async () => hook.result.current(recovered.text, recovered.images))
+  expect(transport.send).toHaveBeenCalledTimes(4)
+  expect(readNativeChatComposerDraft(scope).text).toBe('')
+  hook.unmount()
+  for (const accepted of [false, true]) {
+    const reply = Promise.withResolvers<boolean>()
+    vi.mocked(transport.send).mockReturnValueOnce(reply.promise)
+    hook = mount()
+    act(() => updateNativeChatComposerDraft(scope, rich('/retired/SKILL.md'), 'immediate'))
+    let old: Promise<void> | undefined
+    await act(async () => {
+      old = hook.result.current('$review', [])
+    })
+    hook.unmount()
+    draftStore.deleteNativeChatComposerDraftsOwnedBy({
+      workspaceId: 'workspace',
+      executionHostId: 'ssh:host'
+    })
+    updateNativeChatComposerDraft(scope, rich('/recreated/SKILL.md'), 'immediate')
+    const recreated = readNativeChatComposerDraft(scope)
+    await act(async () => {
+      reply.resolve(accepted)
+      await old
+    })
+    expect(readNativeChatComposerDraft(scope)).toBe(recreated)
+  }
+  clearNativeChatComposerDraftsForTests()
 })

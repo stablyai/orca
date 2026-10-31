@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
+import { agentLaunchPromptOwnership, newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { AgentSurfaceLaunchButton } from '@/components/agent/AgentSurfaceLaunchButton'
@@ -79,7 +79,7 @@ export function useTabAgentMenuLaunch({
   const runLaunch = useCallback(
     (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, pickerEntry?: AgentPickerEntry) => {
       if (disabled || row.kind === 'chat-unavailable') {
-        return
+        return false
       }
       const { agent } = row
       const entry = getCatalogEntry(agent)
@@ -97,7 +97,8 @@ export function useTabAgentMenuLaunch({
         ...(draft ? agentPickerLaunchInputs(draft, pickerEntry) : {}),
         worktreeId,
         groupId,
-        ...(prompt !== undefined ? { prompt } : {}),
+        // A caller's prompt (notes) owns the launch; otherwise the picker panel's typed one.
+        ...(prompt !== undefined ? { prompt } : draft?.prompt ? { prompt: draft.prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
         ...(launchSource !== undefined ? { launchSource } : {}),
         ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {}),
@@ -112,7 +113,7 @@ export function useTabAgentMenuLaunch({
             { value0: label }
           )
         )
-        return
+        return false
       }
       if (onPromptHandedOff && result.promptDeliveryResult) {
         const outcome = newAgentPromptOutcome({ delivery: result.promptDeliveryResult })
@@ -136,13 +137,13 @@ export function useTabAgentMenuLaunch({
       }
       if (result.surface.kind === 'local-chat') {
         onFocusChat?.(result.surface.tabId)
-        return
-      }
-      if (result.surface.kind !== 'local-terminal') {
+      } else if (result.surface.kind !== 'local-terminal') {
         onFocusHostTerminal?.()
-        return
+      } else {
+        onFocusTerminal(result.surface.tabId)
       }
-      onFocusTerminal(result.surface.tabId)
+      // A setup submission waits for actual prompt ownership, not just surface dispatch.
+      return !draft?.prompt || agentLaunchPromptOwnership(result.promptDeliveryResult)
     },
     [
       worktreeId,
@@ -180,7 +181,7 @@ export function ProjectedAgentMenuItems({
 }: {
   disabled?: boolean
   model: NewTabAgentMenuModel
-  runLaunch: (row: NewTabAgentMenuRow, draft?: AgentPickerDraft) => void
+  runLaunch: React.ComponentProps<typeof AgentLaunchPickerMenu>['runLaunch']
   pickerEntries?: AgentPickerEntry[]
   onSelectPickerAgent?: (agent: AgentPickerEntry['agent']) => void
   hidePickerSearch?: boolean

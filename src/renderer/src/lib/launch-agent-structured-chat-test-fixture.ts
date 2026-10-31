@@ -20,6 +20,8 @@ import type { createStructuredAgentSessionLaunchIntent as create } from './launc
 import type { launchStructuredAgentSession as launch } from './structured-agent-session-launch-create-call'
 import type { refreshLocalStructuredSessionTabs as refreshTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import type { toast } from 'sonner'
+import type * as WebEnvironment from '@/runtime/web-runtime-session-environment'
+import type * as TerminalSurface from '../../../shared/terminal-surface-id'
 import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 
 const mockCreateTab = vi.hoisted(() => vi.fn<AppState['createTab']>())
@@ -122,14 +124,12 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
-  createWebRuntimeSessionTerminal: vi.fn(),
-  createWebRuntimeAgentSessionTerminalWithLaunchDraft: vi.fn()
-}))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-runtime-session-environment', async (original) => ({
+  ...(await original<typeof WebEnvironment>()),
   isWebRuntimeSessionActive: vi.fn(() => false)
 }))
-vi.mock('../../../shared/terminal-surface-id', () => ({
+vi.mock('../../../shared/terminal-surface-id', async (original) => ({
+  ...(await original<typeof TerminalSurface>()),
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
 const launchErrorMocks = vi.hoisted(() => {

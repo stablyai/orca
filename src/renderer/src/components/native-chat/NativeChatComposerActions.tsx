@@ -45,6 +45,8 @@ export type NativeChatComposerActionsProps = {
   contextUsage?: NativeChatContextUsageSummary | null
   /** The chat's agent, whose permission modes the picker describes. */
   agent?: string
+  /** A launch prompt: Attach is its only control; launching is the panel's. */
+  attachOnly?: boolean
 }
 
 // Memoized: typing re-renders the composer per keystroke, and these controls rarely change with it.
@@ -71,7 +73,8 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   onExitGoalMode,
   contextUsage,
   focusComposer,
-  agent
+  agent,
+  attachOnly = false
 }: NativeChatComposerActionsProps): React.JSX.Element {
   useUiLanguageRevision()
   const stops = isWorking
@@ -123,27 +126,34 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     </Button>
   )
 
+  const attach = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={translate('components.native-chat.composer.attach', 'Attach file')}
+          disabled={attachDisabled}
+          onClick={onAttach}
+          className="pointer-coarse:size-11"
+        >
+          <Plus className="size-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {translate('components.native-chat.composer.attach', 'Attach file')}
+      </TooltipContent>
+    </Tooltip>
+  )
+  if (attachOnly) {
+    return <div className="flex w-full items-center text-muted-foreground">{attach}</div>
+  }
+
   return (
     <div className="flex w-full items-center justify-between gap-2 text-chat-foreground-faint">
       <div className="flex min-w-0 items-center gap-0.5">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={translate('components.native-chat.composer.attach', 'Attach file')}
-              disabled={attachDisabled}
-              onClick={onAttach}
-              className="pointer-coarse:size-11"
-            >
-              <Plus className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {translate('components.native-chat.composer.attach', 'Attach file')}
-          </TooltipContent>
-        </Tooltip>
+        {attach}
         <NativeChatComposerPermissionPicker
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}

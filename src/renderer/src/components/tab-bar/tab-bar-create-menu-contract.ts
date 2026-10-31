@@ -17,7 +17,7 @@ export type TabBarCreateMenuController = {
   createMenuOptions: TabCreateMenuOption[]
   windowsShellEntries: WindowsShellMenuEntry[] | undefined
   handleSelectCreateMenuOption: (option: TabCreateMenuOption) => void
-  launchAgentFromNewTabEntry: (option: TabAgentLaunchOption) => void
+  launchAgentFromNewTabEntry: (option: TabAgentLaunchOption) => boolean | Promise<boolean>
   runPendingNewTabMenuFocusAfterClose: () => void
   clearPendingNewTabMenuFocusOnUnmount: (node: HTMLDivElement | null) => void
   queueNewActiveTerminalFocusAfterNewTabMenuClose: () => void

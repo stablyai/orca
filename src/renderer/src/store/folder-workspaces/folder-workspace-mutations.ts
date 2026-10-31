@@ -34,7 +34,8 @@ import {
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
 import {
   captureWorkspaceChatDraftKeys,
-  deleteWorkspaceChatDrafts
+  deleteWorkspaceChatDrafts,
+  deleteWorkspaceChatDraftOwners
 } from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 
 export type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates
@@ -290,13 +291,14 @@ export function createFolderWorkspaceMutationActions(
           ),
           folderWorkspacePathStatuses: {}
         }))
+        deleteWorkspaceChatDraftOwners(chatDraftKeys)
         if (!get().folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
           // Folder/worktree browser registry keys coincide; retire Chromium guests before renderer cleanup.
           await Promise.resolve(get().shutdownWorktreeBrowsers(workspaceKey))
           // Why here too: a server-hosted folder's local pages use this desktop's profile, which the server can't reach.
           void get().deleteManagedBrowserSessionProfile({ kind: 'worktree', id: workspaceKey })
           get().purgeWorktreeTerminalState([workspaceKey])
-          deleteWorkspaceChatDrafts(chatDraftKeys)
+          deleteWorkspaceChatDrafts({ ...chatDraftKeys, owners: [] })
         }
         return true
       } catch (err) {

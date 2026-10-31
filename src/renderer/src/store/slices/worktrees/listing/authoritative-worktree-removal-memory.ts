@@ -1,3 +1,4 @@
+import { deleteLaunchPromptDraftsWhere } from '../teardown/removed-worktree-chat-drafts'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import { AUTHORITATIVE_REMOVAL_MEMORY_LIMIT } from './worktree-slice-constants'
 
@@ -73,4 +74,22 @@ export function getAuthoritativelyRemovedWorktreeIds(
   hostId: ExecutionHostId
 ): Set<string> | undefined {
   return authoritativelyRemovedWorktreeIdsByHost.get(hostId)
+}
+
+export const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
+
+export function retireLaunchPromptDraftsAfterScan(
+  hostId: ExecutionHostId,
+  removedIds: readonly string[]
+): void {
+  if (removedIds.length === 0) {
+    return
+  }
+  const now = Date.now()
+  const removed = new Set(
+    removedIds.filter((id) => (recentlyRenamedWorktreeIdExpiry.get(id) ?? 0) <= now)
+  )
+  deleteLaunchPromptDraftsWhere(
+    (owner) => owner.executionHostId === hostId && removed.has(owner.workspaceId)
+  )
 }
