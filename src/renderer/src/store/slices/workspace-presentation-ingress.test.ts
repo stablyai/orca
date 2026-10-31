@@ -1,4 +1,5 @@
 import type * as RuntimeRpcClient from '../../runtime/runtime-rpc-client'
+import type { WorkspacePresentationDelta } from '../../../../shared/workspace-presentation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../index'
 import {
@@ -28,6 +29,7 @@ import { buildHydratedTabState } from './tabs-hydration'
 import { startLocalStructuredSessionTabsSync } from '../../runtime/local-structured-session-tabs-sync/subscription'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { createTestStore } from './store-test-helpers'
+import { workspaceLayoutFrameSourceStore } from '../../runtime/workspace-layout-frame-source-store'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('../../runtime/runtime-rpc-client', async (load) => ({
@@ -44,6 +46,7 @@ createStoreSessionMockApi()
 beforeEach(() => {
   vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] })
   resetLocalStructuredSessionVersionForTests()
+  vi.mocked(callRuntimeRpc).mockClear()
 })
 afterEach(() => {
   vi.restoreAllMocks()
@@ -380,3 +383,187 @@ it('dispatches native sibling retirement with original source handles before acc
   applyStructuredSessionTabSnapshots([original])
   expect(rawWorkspaceState(store.getState()).unifiedTabsByWorktree[O]).toBeUndefined()
 })
+
+it.each([true, false])(
+  'keeps an accepted genuine source-local move, read settlement succeeds=%s',
+  async (succeeds) => {
+    const store = seed()
+    vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
+    applyStructuredSessionTabSnapshots([frame(O, 'chat1', 200)])
+    let answerRead: (value: unknown) => void = () => {
+      throw new Error('not started')
+    }
+    let rejectRead: (error: unknown) => void = () => {
+      throw new Error('not started')
+    }
+    let started = false
+    const read = new Promise((resolve, reject) => {
+      answerRead = resolve
+      rejectRead = reject
+    })
+    vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method) => {
+      if (method === 'session.tabs.close') {
+        throw new Error('host close refused')
+      }
+      if (method === 'session.tabs.list') {
+        started = true
+        return read
+      }
+      throw new Error(`unexpected ${method}`)
+    })
+    store.getState().closeUnifiedTab(C1)
+    await vi.waitFor(() => expect(started).toBe(true))
+    const returning = frame(O, 'chat1', 201)
+    applyStructuredSessionTabSnapshots([returning])
+    const raw = rawWorkspaceState(store.getState())
+    // A genuine source-owner publication: move the live O chat into the new source-new group.
+    // Membership stays O; this is the existing old-source semantic edit contract, not U mutation.
+    const moved = raw.unifiedTabsByWorktree[O].map((tab) => ({ ...tab, groupId: 'source-new' }))
+    workspaceLayoutFrameSourceStore(store, { kind: 'local' }, [O]).setState({
+      unifiedTabsByWorktree: { ...raw.unifiedTabsByWorktree, [O]: moved },
+      groupsByWorktree: {
+        ...raw.groupsByWorktree,
+        [O]: [{ id: 'source-new', worktreeId: O, tabOrder: [C1], activeTabId: C1 }]
+      },
+      layoutByWorktree: { ...raw.layoutByWorktree, [O]: { type: 'leaf', groupId: 'source-new' } },
+      activeGroupIdByWorktree: { ...raw.activeGroupIdByWorktree, [O]: 'source-new' }
+    })
+    const accepted = store.getState().unifiedTabsByWorktree[D].find((tab) => tab.id === C1)
+    expect(accepted?.groupId).toBe('source-new')
+    if (succeeds) {
+      answerRead(returning)
+    } else {
+      rejectRead(new Error('read unavailable'))
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const after = store.getState().unifiedTabsByWorktree[D].find((tab) => tab.id === C1)
+    expect(after?.groupId).toBe('source-new')
+  }
+)
+
+it.each([
+  { order: [O, D], success: undefined },
+  { order: [D, O], success: undefined },
+  { order: [O, D], success: O },
+  { order: [D, O], success: D }
+])(
+  'settles overlapping native closes against pre-contraction topology ($order; success=$success)',
+  async ({ order, success }) => {
+    const store = seed()
+    vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
+    applyStructuredSessionTabSnapshots([frame(O, 'chat1', 200), frame(D, 'chat2', 3)])
+    const reads = new Map<string, (value: unknown) => void>()
+    const closes = new Map<
+      string,
+      { resolve: (value: unknown) => void; reject: (error: Error) => void }
+    >()
+    vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method, params) => {
+      if (
+        !params ||
+        typeof params !== 'object' ||
+        !('worktree' in params) ||
+        typeof params.worktree !== 'string'
+      ) {
+        throw new Error('missing source selector')
+      }
+      const id = params.worktree.slice(3)
+      if (method === 'session.tabs.close') {
+        return new Promise((resolve, reject) => closes.set(id, { resolve, reject }))
+      }
+      if (method === 'session.tabs.list') {
+        return new Promise((resolve) => reads.set(id, resolve))
+      }
+      throw new Error(`unexpected ${method}`)
+    })
+    store.getState().closeUnifiedTab(C1)
+    store.getState().closeUnifiedTab(C2)
+    await vi.waitFor(() => expect(closes.size).toBe(2))
+    for (const id of order) {
+      if (id === success) {
+        closes.get(id)!.resolve({})
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      } else {
+        closes.get(id)!.reject(new Error('host close refused'))
+        await vi.waitFor(() => expect(reads.has(id)).toBe(true))
+        reads.get(id)!(id === O ? frame(O, 'chat1', 201) : frame(D, 'chat2', 4))
+        await vi.waitFor(() =>
+          expect(
+            store
+              .getState()
+              .unifiedTabsByWorktree[D]?.some((tab) => tab.id === (id === O ? C1 : C2))
+          ).toBe(true)
+        )
+      }
+    }
+    const after = store.getState()
+    if (!success) {
+      assertU(store)
+    } else {
+      const remaining = success === O ? C2 : C1
+      const groupId = success === O ? 'right' : 'left'
+      expect(after.unifiedTabsByWorktree[D].map((tab) => tab.id)).toEqual([remaining])
+      expect(after.groupsByWorktree[D].find((group) => group.id === groupId)?.tabOrder).toEqual([
+        remaining
+      ])
+      expect(after.layoutByWorktree[D]).toEqual({ type: 'leaf', groupId })
+    }
+    expect(
+      vi.mocked(callRuntimeRpc).mock.calls.filter(([, method]) => method === 'session.tabs.close')
+    ).toHaveLength(2)
+  }
+)
+
+it.each([false, true])(
+  'distinguishes automatic owner mirrors from accepted main command intent during held close readback (user=%s)',
+  async (user) => {
+    const { workspacePresentationMirror } = await import('../workspace-presentation-mirror')
+    const store = seed()
+    vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
+    applyStructuredSessionTabSnapshots([frame(O, 'chat1', 200)])
+    let answer: (value: unknown) => void = () => {
+      throw new Error('read not started')
+    }
+    let started = false
+    vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method) => {
+      if (method === 'session.tabs.close') {
+        throw new Error('host close refused')
+      }
+      if (method === 'session.tabs.list') {
+        started = true
+        return new Promise((resolve) => {
+          answer = resolve
+        })
+      }
+      throw new Error(`unexpected ${method}`)
+    })
+    store.getState().closeUnifiedTab(C1)
+    await vi.waitFor(() => expect(started).toBe(true))
+    const returning = frame(O, 'chat1', 201)
+    applyStructuredSessionTabSnapshots([returning])
+    let publish: (delta: WorkspacePresentationDelta) => void = () => {
+      throw new Error('not subscribed')
+    }
+    const mirror = workspacePresentationMirror(store, (listener) => {
+      publish = listener
+      return () => {}
+    })
+    mirror.activate()
+    const [key, saved] = Object.entries(store.getState().workspacePresentations!)[0]
+    if (!saved || saved.layout?.type !== 'split') {
+      throw new Error('missing live split')
+    }
+    const chosen = { ...saved.layout, ratio: 0.61 }
+    publish({
+      changed: {
+        [key]: { ...saved, anchor: { ...saved.anchor }, layout: chosen }
+      },
+      removed: [],
+      ...(user ? { intent: { [key]: ['layout'] } } : {})
+    })
+    answer(returning)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(store.getState().layoutByWorktree[D]).toEqual(user ? chosen : split)
+    expect(store.getState().unifiedTabsByWorktree[D].some((tab) => tab.id === C1)).toBe(true)
+    mirror.close()
+  }
+)

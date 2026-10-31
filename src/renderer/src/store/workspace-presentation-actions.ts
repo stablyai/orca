@@ -3,7 +3,10 @@ import { isWorkspacePresentationKey } from '../../../shared/workspace-presentati
 import { reduceWorkspacePresentation } from '../../../shared/workspace-presentation-intent'
 import type { TabsSliceSet } from './slices/tabs/tabs-slice-contract'
 import type { AppState } from './types'
-import { noteWorkspacePresentationSelection } from '../../../shared/workspace-presentation-user-intent'
+import {
+  noteWorkspacePresentationUserIntent,
+  noteWorkspacePresentationSelection
+} from '../../../shared/workspace-presentation-user-intent'
 import {
   noteWorkspacePresentationChanges,
   workspaceReadState,
@@ -30,7 +33,7 @@ const layoutKeys = [
 ] as const
 
 /** An explicit U reducer adapter for tab-placement actions, never the default source setter. */
-export function presentationActionSet(set: TabsSliceSet): TabsSliceSet {
+export function presentationActionSet(set: TabsSliceSet, recordIntent = true): TabsSliceSet {
   const write: TabsSliceSet = (partial) =>
     set((raw) => {
       const view = workspaceReadState(raw)
@@ -80,17 +83,17 @@ export function presentationActionSet(set: TabsSliceSet): TabsSliceSet {
         if (!layoutKeys.some((field) => after[field][id] !== view[field][id])) {
           continue
         }
-        documents = editWorkspacePresentationDocuments(
-          documents,
-          key,
-          reduceWorkspacePresentation(saved, {
-            type: 'layout',
-            tabs: after.unifiedTabsByWorktree[id] ?? [],
-            groups: after.groupsByWorktree[id] ?? [],
-            layout: after.layoutByWorktree[id],
-            activeGroupId: after.activeGroupIdByWorktree[id]
-          })
-        )
+        const edited = reduceWorkspacePresentation(saved, {
+          type: 'layout',
+          tabs: after.unifiedTabsByWorktree[id] ?? [],
+          groups: after.groupsByWorktree[id] ?? [],
+          layout: after.layoutByWorktree[id],
+          activeGroupId: after.activeGroupIdByWorktree[id]
+        })
+        if (recordIntent) {
+          noteWorkspacePresentationUserIntent(saved, edited)
+        }
+        documents = editWorkspacePresentationDocuments(documents, key, edited)
         changed.push(key)
       }
       const result: Partial<AppState> = { ...patch }

@@ -2,6 +2,8 @@ import type { AppState } from '../../../types'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import {
   currentWorkspaceRemovalSources,
+  currentWorkspaceRemovalSource,
+  workspaceRemovalBrowserIsCurrent,
   workspaceRemovalTabIsCurrent,
   assertWorkspaceRemovalScopeCurrent,
   type WorkspaceRemovalScope
@@ -47,8 +49,12 @@ export async function closeWorkspaceRemovalNativeSources(
   scope: WorkspaceRemovalScope,
   allowUnverified: boolean
 ): Promise<void> {
-  for (const entry of currentWorkspaceRemovalSources(get(), scope)) {
-    if (entry.source.workspaceId === scope.target.id) {
+  for (const captured of scope.sources) {
+    if (captured.source.workspaceId === scope.target.id) {
+      continue
+    }
+    const entry = currentWorkspaceRemovalSource(get(), scope, captured)
+    if (!entry) {
       continue
     }
     for (const tab of entry.tabs.filter((tab) => tab.contentType === 'agent-session')) {
@@ -101,7 +107,11 @@ export async function tearDownWorkspaceRemovalResources(
   confirmedDiscards?: ConfirmedUnsavedDiscards
 ): Promise<void> {
   assertWorkspaceRemovalScopeCurrent(get(), scope)
-  for (const entry of currentWorkspaceRemovalSources(get(), scope)) {
+  for (const captured of scope.sources) {
+    const entry = currentWorkspaceRemovalSource(get(), scope, captured)
+    if (!entry) {
+      continue
+    }
     const id = entry.source.workspaceId
     const host = entry.source.hostId
     // Advance the real source fence before owner callbacks or ordered failed-close readbacks can publish.
@@ -116,10 +126,7 @@ export async function tearDownWorkspaceRemovalResources(
       const closed = await new Promise<boolean>((resolve) =>
         get().closeBrowserTab(browser.id, {
           preserveWorktreeSelection: true,
-          admitClose: () =>
-            currentWorkspaceRemovalSources(get(), scope).some((current) =>
-              current.browsers.some((row) => row.id === browser.id)
-            ),
+          admitClose: () => workspaceRemovalBrowserIsCurrent(get(), scope, captured, browser),
           onSettled: resolve
         })
       )
@@ -127,9 +134,7 @@ export async function tearDownWorkspaceRemovalResources(
         destroyWorkspaceWebviews(pages, browser.id)
       }
     }
-    const refreshed = currentWorkspaceRemovalSources(get(), scope).find(
-      (current) => current.source.workspaceId === id
-    )
+    const refreshed = currentWorkspaceRemovalSource(get(), scope, captured)
     if (!refreshed) {
       continue
     }
@@ -139,16 +144,15 @@ export async function tearDownWorkspaceRemovalResources(
       backendOwnsPtyTeardown: true,
       onlyTabIds: terminalIds,
       canCommit: () =>
-        currentWorkspaceRemovalSources(get(), scope).some(
-          (current) =>
-            current.source.workspaceId === id &&
-            [...terminalIds].every((tabId) => current.removed.terminalTabIds.has(tabId))
-        )
+        (() => {
+          const current = currentWorkspaceRemovalSource(get(), scope, captured)
+          return Boolean(
+            current && [...terminalIds].every((tabId) => current.removed.terminalTabIds.has(tabId))
+          )
+        })()
     })
     assertWorkspaceRemovalScopeCurrent(get(), scope)
-    const current = currentWorkspaceRemovalSources(get(), scope).find(
-      (current) => current.source.workspaceId === id
-    )
+    const current = currentWorkspaceRemovalSource(get(), scope, captured)
     if (!current) {
       continue
     }
@@ -164,10 +168,9 @@ export async function tearDownWorkspaceRemovalResources(
       }
     }
     retireRemovedNativeChatDraftPositions(current.tabs, [])
+    const retiredTabIds = new Set(current.tabs.map((tab) => tab.id))
     const unremoved =
-      (raw.unifiedTabsByWorktree[id] ?? []).some(
-        (tab) => !current.tabs.some((old) => old.id === tab.id)
-      ) ||
+      (raw.unifiedTabsByWorktree[id] ?? []).some((tab) => !retiredTabIds.has(tab.id)) ||
       (raw.browserTabsByWorktree[id] ?? []).some(
         (tab) => !current.removed.browserTabIds.has(tab.id)
       )

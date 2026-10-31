@@ -1,12 +1,13 @@
 import { editWorkspacePresentationDocuments } from '../../../shared/workspace-presentation-documents'
 import {
   isWorkspacePresentationKey,
-  type WorkspacePresentationDocuments
+  type WorkspacePresentationDelta
 } from '../../../shared/workspace-presentation'
 import type { AppState } from './types'
 import { noteWorkspacePresentationChanges, workspaceSourceWrite } from './workspace-source-state'
+import { recordWorkspacePresentationIntent } from '../../../shared/workspace-presentation-user-intent'
 
-type Delta = { changed: WorkspacePresentationDocuments; removed: readonly string[] }
+type Delta = WorkspacePresentationDelta
 /** Buffer owner publications while startup hydrates sources; a late checkpoint cannot reset U. */
 export function workspacePresentationMirror(
   store: { getState: () => AppState; setState: (patch: Partial<AppState>) => void },
@@ -14,11 +15,16 @@ export function workspacePresentationMirror(
 ) {
   let active = false
   let pending: Delta[] = []
-  const apply = ({ changed, removed }: Delta): void => {
+  const apply = ({ changed, removed, intent }: Delta): void => {
     let documents = store.getState().workspacePresentations ?? {}
     const keys = [...Object.keys(changed), ...removed]
     for (const key of keys) {
       if (isWorkspacePresentationKey(key)) {
+        const before = documents[key],
+          after = changed[key]
+        if (before && after && intent?.[key]) {
+          recordWorkspacePresentationIntent(before, intent[key], after)
+        }
         documents = editWorkspacePresentationDocuments(documents, key, changed[key])
       }
     }

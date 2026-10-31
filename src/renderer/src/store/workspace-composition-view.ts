@@ -1,4 +1,5 @@
 import type { AppState } from './types'
+import { ImmutableInputCache, absentImmutableInput } from '../../../shared/immutable-input-cache'
 import { WorkspacePresentationIndex } from './workspace-presentation-index'
 import { deriveActiveSurfaceForWorktree } from './slices/tabs/tabs-surface'
 import {
@@ -65,11 +66,8 @@ export function createWorkspaceCompositionView() {
     }
   }
   const views = new WeakMap<AppState, AppState>()
-  let previousRaw: AppState | undefined
-  let projection: Partial<AppState> = {}
-  let projectionInputs: unknown[] = []
-  let surfaceInputs: unknown[] = []
-  let activeSurface: Partial<AppState> = {}
+  const projections = new ImmutableInputCache<Partial<AppState>>()
+  const surfaces = new ImmutableInputCache<Partial<AppState>>()
   const project = (raw: AppState): AppState => {
     const known = views.get(raw)
     if (known) {
@@ -79,7 +77,7 @@ export function createWorkspaceCompositionView() {
     readViews.set(raw, project)
     bindingIndexes.set(raw, index)
     const inputs = [
-      raw.workspacePresentations,
+      raw.workspacePresentations ?? absentImmutableInput,
       raw.unifiedTabsByWorktree,
       raw.groupsByWorktree,
       raw.layoutByWorktree,
@@ -91,8 +89,8 @@ export function createWorkspaceCompositionView() {
       raw.activeBrowserTabIdByWorktree,
       raw.activeTabTypeByWorktree
     ]
-    if (!previousRaw || inputs.some((value, at) => value !== projectionInputs[at])) {
-      projectionInputs = inputs
+    let projection = projections.get(inputs, 'projection')
+    if (!projection) {
       projection = buildWorkspaceProjection(
         {
           workspacePresentations: raw.workspacePresentations,
@@ -109,38 +107,34 @@ export function createWorkspaceCompositionView() {
         },
         index
       )
+      projections.set(inputs, 'projection', projection)
     }
     const bindingIndex = index
     const id = raw.activeWorktreeId
     const activeKey = id ? bindingIndex.get(id) : undefined
     const activeSaved = activeKey ? raw.workspacePresentations?.[activeKey] : undefined
     const active = activeSaved ? composedWorkspace(raw, activeSaved) : undefined
-    const nextSurfaceInputs = [
-      id,
-      active?.tabs,
-      active?.groups,
-      active?.activeGroupId,
-      active?.layout,
-      active?.terminals,
-      active?.browsers,
+    const surfaceInputs = [
       raw.openFiles,
-      id && raw.activeFileIdByWorktree[id],
-      id && raw.activeBrowserTabIdByWorktree[id],
-      id && raw.activeTabIdByWorktree[id],
-      id && raw.activeTabTypeByWorktree[id]
+      active ?? absentImmutableInput,
+      raw.activeFileIdByWorktree,
+      raw.activeBrowserTabIdByWorktree,
+      raw.activeTabIdByWorktree,
+      raw.activeTabTypeByWorktree
     ]
-    if (nextSurfaceInputs.some((value, at) => value !== surfaceInputs[at])) {
-      surfaceInputs = nextSurfaceInputs
+    const surfaceKey = id ?? ''
+    let activeSurface = surfaces.get(surfaceInputs, surfaceKey)
+    if (!activeSurface) {
       activeSurface =
-        raw.activeWorktreeId && activeSaved
+        id && activeSaved
           ? (() => {
               const surfaceState = { ...raw, ...projection }
               bindingIndexes.set(surfaceState, bindingIndex)
-              return deriveActiveSurfaceForWorktree(surfaceState, raw.activeWorktreeId ?? '')
+              return deriveActiveSurfaceForWorktree(surfaceState, id)
             })()
           : {}
+      surfaces.set(surfaceInputs, surfaceKey, activeSurface)
     }
-    previousRaw = raw
     const view = { ...raw, ...projection, ...activeSurface }
     bindingIndexes.set(raw, bindingIndex)
     bindingIndexes.set(view, bindingIndex)

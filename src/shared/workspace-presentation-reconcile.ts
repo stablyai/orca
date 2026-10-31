@@ -1,10 +1,7 @@
-import type { Tab, TabGroup } from './tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import {
   prunePresentationLayout,
   sourceBaseline,
-  sourceTabPresentation,
-  workspaceSourceOwnsTab,
   workspaceEntityKey,
   type WorkspacePresentation,
   type WorkspaceSourceBaseline,
@@ -17,7 +14,8 @@ const same = (left: unknown, right: unknown): boolean =>
 /** Baselines compare edits, never supply missing members. Content always comes from the raw source. */
 export function reconcileWorkspacePresentation(
   saved: WorkspacePresentation,
-  sources: readonly WorkspaceSourceBaseline[]
+  sources: readonly WorkspaceSourceBaseline[],
+  semanticEdit?: (key: string) => void
 ): WorkspacePresentation {
   if (
     sources.length === saved.baseline.length &&
@@ -69,16 +67,25 @@ export function reconcileWorkspacePresentation(
       ] as const) {
         if (tab[field] !== undefined && tab[field] !== base[field]) {
           Object.assign(edited, { [field]: tab[field] })
+          semanticEdit?.(`tab:${placed.id}:${field}`)
         }
       }
       if (tab.groupId !== base.groupId) {
         edited.groupId = tab.groupId
+        semanticEdit?.(`tab:${placed.id}:groupId`)
       }
       placements.set(key, same(edited, placed) ? placed : edited)
     }
     if (prior) {
       const priorGroups = new Map(prior.groups.map((group) => [group.id, group]))
       const sourceIds = new Set(source.tabs.map((tab) => tab.id))
+      const commonIds = new Set(
+        source.tabs.filter((tab) => before.has(workspaceEntityKey(tab.entity))).map((tab) => tab.id)
+      )
+      const movedExisting = source.tabs.some((tab) => {
+        const old = before.get(workspaceEntityKey(tab.entity))
+        return old && old.groupId !== tab.groupId
+      })
       for (const group of source.groups) {
         const base = priorGroups.get(group.id)
         const current = groups.get(group.id)
@@ -93,6 +100,18 @@ export function reconcileWorkspacePresentation(
           group.tabOrder.filter((id) => common.has(id))
         )
         const selectionEdited = base && group.activeTabId !== base.activeTabId
+        if (reordered && base) {
+          semanticEdit?.(`order:${group.id}`)
+        }
+        if (
+          selectionEdited &&
+          (!base.activeTabId || commonIds.has(base.activeTabId)) &&
+          (group.activeTabId
+            ? commonIds.has(group.activeTabId)
+            : group.tabOrder.some((id) => commonIds.has(id)))
+        ) {
+          semanticEdit?.(`selection:${group.id}`)
+        }
         if (reordered || selectionEdited) {
           let at = 0
           const order = group.tabOrder.filter((id) => sourceIds.has(id))
@@ -109,6 +128,10 @@ export function reconcileWorkspacePresentation(
       }
       if (source.activeGroupId !== prior.activeGroupId && source.activeGroupId) {
         activeGroupId = source.activeGroupId
+        const priorActive = prior.groups.find((group) => group.id === prior.activeGroupId)
+        if (movedExisting || priorActive?.tabOrder.some((id) => commonIds.has(id))) {
+          semanticEdit?.('selection')
+        }
       }
       const ownGroups = new Set(
         source.groups.filter((group) => group.tabOrder.length > 0).map((group) => group.id)
@@ -116,6 +139,23 @@ export function reconcileWorkspacePresentation(
       const oldLayout = prunePresentationLayout(prior.layout, ownGroups)
       const newLayout = prunePresentationLayout(source.layout, ownGroups)
       if (!same(oldLayout, newLayout) && newLayout) {
+        const commonGroups = new Set(
+          source.tabs
+            .filter((tab) => {
+              const old = before.get(workspaceEntityKey(tab.entity))
+              return old && old.groupId === tab.groupId
+            })
+            .map((tab) => tab.groupId)
+        )
+        if (
+          movedExisting ||
+          !same(
+            prunePresentationLayout(prior.layout, commonGroups),
+            prunePresentationLayout(source.layout, commonGroups)
+          )
+        ) {
+          semanticEdit?.('layout')
+        }
         const sourceEntities = new Set(source.tabs.map((tab) => workspaceEntityKey(tab.entity)))
         const otherGroups = new Set(
           [...placements.values()]
@@ -233,52 +273,4 @@ export function presentationSourceBaselines(
   return saved.baseline.map(({ source }) => sourceBaseline(sessionFor(source.hostId), source))
 }
 
-/** A presentation places genuine entities once, retaining their actual raw workspace and command IDs. */
-export function composeWorkspacePresentation(
-  saved: WorkspacePresentation,
-  sources: readonly { baseline: WorkspaceSourceBaseline; tabs: readonly Tab[] }[]
-): {
-  tabs: Tab[]
-  groups: TabGroup[]
-  layout: WorkspacePresentation['layout']
-  activeGroupId: string | undefined
-} {
-  const raw = new Map<string, Tab>()
-  for (const { baseline, tabs } of [...sources].sort(
-    (a, b) =>
-      Number(b.baseline.source.workspaceId === saved.displayWorkspaceId) -
-      Number(a.baseline.source.workspaceId === saved.displayWorkspaceId)
-  )) {
-    for (const tab of tabs.filter((tab) => workspaceSourceOwnsTab(tab, baseline.source))) {
-      const key = workspaceEntityKey(sourceTabPresentation(tab, baseline.source).entity)
-      if (!raw.has(key)) {
-        raw.set(key, tab)
-      }
-    }
-  }
-  const livePlacements = reconcileWorkspacePresentation(
-    saved,
-    sources.map(({ baseline, tabs }) => ({
-      ...baseline,
-      tabs: tabs
-        .filter((tab) => workspaceSourceOwnsTab(tab, baseline.source))
-        .map((tab) => sourceTabPresentation(tab, baseline.source))
-    }))
-  )
-  const tabs = livePlacements.tabs.flatMap((placement) => {
-    const tab = raw.get(workspaceEntityKey(placement.entity))
-    if (!tab) {
-      return []
-    }
-    const { entity: _entity, ...view } = placement
-    return [
-      { ...tab, ...view, executionHostId: placement.entity.hostId, worktreeId: tab.worktreeId }
-    ]
-  })
-  return {
-    tabs,
-    groups: livePlacements.groups,
-    layout: livePlacements.layout,
-    activeGroupId: livePlacements.activeGroupId
-  }
-}
+export { composeWorkspacePresentation } from './workspace-presentation-compose'

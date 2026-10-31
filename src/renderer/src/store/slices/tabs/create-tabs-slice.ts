@@ -25,7 +25,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   ...createTabsCloseActions(set, get),
   ...createTabsBulkCloseActions(set, get),
   ...createTabsLabelActions(set, get),
-  ...createTabsGroupActions(presentationActionSet(set), () => workspaceReadState(get())),
+  ...createTabsGroupActions(
+    presentationActionSet(set),
+    () => workspaceReadState(get()),
+    presentationActionSet(set, false)
+  ),
   ...createTabsMoveActions(presentationActionSet(set), () => workspaceReadState(get())),
   ...createTabsDropActions(presentationActionSet(set), () => workspaceReadState(get())),
   ...createTabsSplitRatioActions(presentationActionSet(set)),

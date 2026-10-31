@@ -16,6 +16,12 @@ import {
   createTestStore
 } from './store-test-helpers'
 import { createStoreSessionMockApi } from './store-session-test-harness'
+import { makeBrowserTab } from './store-session-test-harness'
+import {
+  captureWorkspaceRemovalScope,
+  currentWorkspaceRemovalSources,
+  workspaceRemovalBrowserIsCurrent
+} from './worktrees/teardown/workspace-removal-scope'
 import { rawWorkspaceState } from '../workspace-source-state'
 import { workspaceAdmittedFiles } from '../workspace-admitted-files'
 import { useWorktreeFiles } from '../../components/terminal/use-worktree-files'
@@ -126,6 +132,8 @@ it.each([10, 100])(
   async (count) => {
     const projection = await import('../workspace-composition-projection')
     const build = vi.spyOn(projection, 'buildWorkspaceProjection')
+    const { ImmutableInputCache } = await import('../../../../shared/immutable-input-cache')
+    const cache = vi.spyOn(ImmutableInputCache.prototype, 'set')
     const store = seed()
     const files = Array.from({ length: count }, (_, at) =>
       makeOpenFile({ id: `old-input-${at}`, worktreeId: O, isPreview: false })
@@ -157,7 +165,14 @@ it.each([10, 100])(
     )
     const calls = build.mock.calls.length
     const proxy = before.unifiedTabsByWorktree
-    store.getState().markFileDirty('old-input-0', true)
+    const dirty = before.markFileDirty
+    dirty('old-input-0', true)
+    // Inspect actual derivation owners before any post-write getter or helper can refresh them.
+    for (const root of new Set(cache.mock.contexts)) {
+      const reached = strongInputs(root)
+      expect(reached.has(files)).toBe(false)
+      expect(reached.has(rawWorkspaceState(before))).toBe(false)
+    }
     const current = store.getState()
     expect(current.openFiles[0].isDirty).toBe(true)
     expect(current.openFiles).not.toBe(before.openFiles)
@@ -508,5 +523,123 @@ it.each([false, true])(
       'removal-terminal'
     ])
     expect(Object.keys(after.workspacePresentations ?? {})).toHaveLength(1)
+  }
+)
+
+it.each([10, 100])(
+  'does not allocate permanent absent-source memo owners for %i recovered baselines',
+  async (count) => {
+    const { sourceBaseline } = await import('../../../../shared/workspace-presentation')
+    const { ImmutableInputCache } = await import('../../../../shared/immutable-input-cache')
+    const write = vi.spyOn(ImmutableInputCache.prototype, 'set')
+    for (let at = 0; at < count; at++) {
+      const source = { hostId: 'local' as const, workspaceId: `absent-${at}::C:/repo` }
+      expect(sourceBaseline({}, source)).toEqual({
+        source,
+        tabs: [],
+        groups: [],
+        layout: undefined,
+        activeGroupId: undefined
+      })
+    }
+    expect(write).not.toHaveBeenCalled()
+  }
+)
+
+it.each([100, 1000])(
+  'indexes current removal resources and repeated browser admission at %i, retaining all outputs and replacement checks',
+  (count) => {
+    const store = createTestStore()
+    let reads = 0
+    const observe = <Row extends { id: string }>(row: Row): Row =>
+      new Proxy(row, {
+        get: (target, key, receiver) => {
+          if (key === 'id') {
+            reads++
+          }
+          return Reflect.get(target, key, receiver)
+        }
+      })
+    const terminals = Array.from({ length: count }, (_, at) =>
+      observe(makeTab({ id: `term-${at}`, worktreeId: D, generation: 1, ptyId: `pty-${at}` }))
+    )
+    const files = Array.from({ length: count }, (_, at) =>
+      observe(makeOpenFile({ id: `file-${at}`, worktreeId: D }))
+    )
+    const browsers = Array.from({ length: count }, (_, at) =>
+      observe(makeBrowserTab({ id: `browser-${at}`, worktreeId: D }))
+    )
+    const tabs = [
+      ...terminals.map((tab) =>
+        makeUnifiedTab({
+          id: `unified-${tab.id}`,
+          entityId: tab.id,
+          worktreeId: D,
+          contentType: 'terminal',
+          executionHostId: 'local'
+        })
+      ),
+      ...files.map((file) =>
+        makeUnifiedTab({
+          id: `unified-${file.id}`,
+          entityId: file.id,
+          worktreeId: D,
+          contentType: 'editor',
+          executionHostId: 'local'
+        })
+      ),
+      ...browsers.map((tab) =>
+        makeUnifiedTab({
+          id: `unified-${tab.id}`,
+          entityId: tab.id,
+          worktreeId: D,
+          contentType: 'browser',
+          executionHostId: 'local'
+        })
+      )
+    ]
+    store.setState({
+      tabsByWorktree: { [D]: terminals },
+      unifiedTabsByWorktree: { [D]: tabs },
+      openFiles: files,
+      browserTabsByWorktree: { [D]: browsers }
+    })
+    const scope = captureWorkspaceRemovalScope(store.getState(), { id: D, hostId: 'local' })
+    reads = 0
+    const result = currentWorkspaceRemovalSources(store.getState(), scope)
+    expect(result[0].terminals).toHaveLength(count)
+    expect(result[0].files).toHaveLength(count)
+    expect(result[0].browsers).toHaveLength(count)
+    expect(result[0].tabs).toHaveLength(3 * count)
+    const populatedReads = reads
+    expect(populatedReads).toBeLessThanOrEqual(20 * count)
+    const source = scope.sources[0]
+    for (const browser of source.browsers) {
+      expect(workspaceRemovalBrowserIsCurrent(store.getState(), scope, source, browser)).toBe(true)
+    }
+    const pointReads = reads - populatedReads
+    expect(pointReads).toBeLessThanOrEqual(3 * count)
+    expect(currentWorkspaceRemovalSources(store.getState(), scope)[0]).toBe(result[0])
+    console.log(
+      JSON.stringify({
+        count,
+        populatedReads,
+        pointReads,
+        terminals: result[0].terminals.length,
+        files: result[0].files.length,
+        browsers: result[0].browsers.length
+      })
+    )
+    store.setState({
+      browserTabsByWorktree: {
+        [D]: browsers.map((tab, at) => (at ? tab : { ...tab, sessionProfileId: 'replacement' }))
+      }
+    })
+    expect(
+      workspaceRemovalBrowserIsCurrent(store.getState(), scope, source, source.browsers[0])
+    ).toBe(false)
+    const current = currentWorkspaceRemovalSources(store.getState(), scope)[0]
+    expect(current.browsers).toHaveLength(count - 1)
+    expect(current.tabs).toHaveLength(3 * count - 1)
   }
 )

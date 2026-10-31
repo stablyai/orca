@@ -56,7 +56,8 @@ export function emptySplitGroup(worktreeId: string, groupId: string): TabGroup {
 
 export function createTabsGroupActions(
   set: TabsSliceSet,
-  get: TabsSliceGet
+  get: TabsSliceGet,
+  automaticSet: TabsSliceSet = set
 ): Pick<
   TabsSlice,
   'ensureWorktreeRootGroup' | 'focusGroup' | 'closeEmptyGroup' | 'createEmptySplitGroup'
@@ -69,7 +70,7 @@ export function createTabsGroupActions(
       }
 
       let groupId = workspaceRootGroupId(worktreeId)
-      set((state) => {
+      automaticSet((state) => {
         const groups = state.groupsByWorktree[worktreeId] ?? []
         const reserved =
           orderSlot && groups.find((group) => group.tabOrder.includes(orderSlot.tabId))
@@ -132,7 +133,7 @@ export function createTabsGroupActions(
     },
 
     focusGroup: (worktreeId, groupId, options) =>
-      set((state) => {
+      (options?.recordIntent === false ? automaticSet : set)((state) => {
         if (options?.recordIntent !== false) {
           acceptWorkspacePresentationSelection(state, worktreeId, groupId)
         }

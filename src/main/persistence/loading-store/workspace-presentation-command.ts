@@ -18,6 +18,7 @@ import {
   type PresentationState
 } from './workspace-presentation-publication'
 import { applyCommandToSession } from '../terminal-topology/terminal-pane-admission'
+import { noteWorkspacePresentationUserIntent } from '../../../shared/workspace-presentation-user-intent'
 
 /** Main reduces client group intents against a transient view, never a projected membership codec. */
 export function applyWorkspacePresentationCommand(
@@ -109,6 +110,7 @@ export function reduceStoredPresentationCommand(
     layout: after.tabGroupLayouts?.[workspace],
     activeGroupId: after.activeGroupIdByWorktree?.[workspace]
   })
+  noteWorkspacePresentationUserIntent(saved, edited)
   writeWorkspacePresentation(state, key, edited)
   return change.value
 }

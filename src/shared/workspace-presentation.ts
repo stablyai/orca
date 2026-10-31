@@ -227,7 +227,8 @@ export function sourceBaseline(
     groups ?? absentImmutableInput,
     layout ?? absentImmutableInput
   ]
-  const old = baselineCaches.get(inputs, key)
+  const cacheable = Boolean(tabs || groups || layout)
+  const old = cacheable ? baselineCaches.get(inputs, key) : undefined
   if (old) {
     return old
   }
@@ -240,7 +241,9 @@ export function sourceBaseline(
     layout,
     activeGroupId: active
   }
-  baselineCaches.set(inputs, key, baseline)
+  if (cacheable) {
+    baselineCaches.set(inputs, key, baseline)
+  }
   return baseline
 }
 
@@ -274,4 +277,5 @@ export type WorkspacePresentationCommit = {
 export type WorkspacePresentationDelta = {
   changed: WorkspacePresentationDocuments
   removed: readonly string[]
+  intent?: Record<string, readonly string[]>
 }

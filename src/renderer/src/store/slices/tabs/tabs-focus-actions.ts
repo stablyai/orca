@@ -125,7 +125,10 @@ export function createTabsFocusActions(
         }))
       }
       const promoted: Tab[] = []
-      set((state) => {
+      presentationActionSet(
+        _set,
+        opts?.recordFocus !== false
+      )((state) => {
         const scopedWorktreeId = opts?.worktreeId
         let found: ReturnType<typeof findTabAndWorktree>
         if (scopedWorktreeId !== undefined) {

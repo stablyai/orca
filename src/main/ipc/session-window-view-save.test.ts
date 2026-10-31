@@ -167,7 +167,8 @@ describe('a window save in a layout-owner build', () => {
       changed: {
         [key]: expect.objectContaining({ layout: expect.objectContaining({ ratio: 0.61 }) })
       },
-      removed: []
+      removed: [],
+      intent: { [key]: ['layout'] }
     })
 
     expect(store.getWorkspacePresentations()[key]?.layout).toEqual({ ...layout, ratio: 0.61 })

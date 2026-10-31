@@ -7,7 +7,6 @@ import {
   type WorkspaceSourceRef
 } from './workspace-presentation'
 import { editWorkspacePresentationDocuments } from './workspace-presentation-documents'
-import { noteWorkspacePresentationUserIntent } from './workspace-presentation-user-intent'
 
 export function isPresentationOnlyCommand(command: {
   type: string
@@ -54,7 +53,6 @@ export function reduceWorkspacePresentation(
     layout: intent.layout,
     activeGroupId: intent.activeGroupId
   }
-  noteWorkspacePresentationUserIntent(saved, next)
   return next
 }
 

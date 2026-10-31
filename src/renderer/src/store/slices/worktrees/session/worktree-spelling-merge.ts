@@ -10,7 +10,7 @@ import {
   workspacePresentationKey,
   type WorkspacePresentation
 } from '../../../../../../shared/workspace-presentation'
-import { reconcileWorkspacePresentation } from '../../../../../../shared/workspace-presentation-reconcile'
+import { settleWorkspacePresentation } from '../../../../../../shared/workspace-presentation-settlement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
   noteWorkspacePresentationChanges,
@@ -217,7 +217,7 @@ export function mergeListedWorktreeSpellings(
         baseline: []
       }
     }
-    const next: WorkspacePresentation = reconcileWorkspacePresentation(
+    const next: WorkspacePresentation = settleWorkspacePresentation(
       saved.displayWorkspaceId === listed.id ? saved : { ...saved, displayWorkspaceId: listed.id },
       baseline
     )

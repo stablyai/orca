@@ -66,8 +66,9 @@ export function failedWorkspaceTabCloseRestore(
 ): (() => void) & { dispose: () => void } {
   const saved = workspacePresentationFor(state, workspaceId)
   const placement = saved?.tabs.find((tab) => tab.id === tabId)
-  const group = saved?.groups.find((group) => group.id === placement?.groupId)
   const intent = saved && workspacePresentationUserIntent(saved)
+  const topology = intent?.topology
+  const group = topology?.groups.find((group) => group.id === placement?.groupId)
   const source = workspaceSourceOccurrence(state, tabId, workspaceId)
   const target = source && structuredAgentSessionTargetForTab(state, source.tab)
   const owner =
@@ -76,7 +77,7 @@ export function failedWorkspaceTabCloseRestore(
   const addressRevision = localSourceAddressRevision()
   let settled = false
   const restore = () => {
-    if (settled || !saved || !placement || !group || !intent) {
+    if (settled || !saved || !placement || !group || !intent || !topology) {
       return
     }
     settled = true
@@ -155,15 +156,17 @@ export function failedWorkspaceTabCloseRestore(
           ? group.activeTabId
           : (existing?.activeTabId ?? tab.id)
       }
-      const following = saved.groups
-        .slice(saved.groups.indexOf(group) + 1)
+      const following = topology.groups
+        .slice(topology.groups.indexOf(group) + 1)
         .find((entry) => groups.some((candidate) => candidate.id === entry.id))
       groups.splice(
         following ? groups.findIndex((entry) => entry.id === following.id) : groups.length,
         0,
         restoredGroup
       )
-      const original = new Set(saved.groups.map((entry) => entry.id))
+      const original = new Set(
+        topology.groups.filter((entry) => !entry.tabOrder.length).map((entry) => entry.id)
+      )
       groups = groups.filter((entry) => entry.tabOrder.length || original.has(entry.id))
       const retained = new Set(
         groups
@@ -171,11 +174,11 @@ export function failedWorkspaceTabCloseRestore(
           .map((entry) => entry.id)
       )
       layout = restoreWorkspacePresentationGroup(
-        saved.layout,
+        topology.layout,
         prunePresentationLayout(current.layout, retained),
         group.id
       )
-      if (untouched('selection') && saved.activeGroupId === group.id) {
+      if (untouched('selection') && topology.activeGroupId === group.id) {
         activeGroupId = group.id
       }
     } else if (!live) {

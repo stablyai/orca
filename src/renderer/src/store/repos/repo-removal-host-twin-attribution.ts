@@ -159,7 +159,9 @@ export function collectRemovedHostTwinState(
         }
       }
     }
-    for (const file of webSessionOpenFilesForWorktree(state, worktreeId)) {
+    const files = webSessionOpenFilesForWorktree(state, worktreeId)
+    const fileIds = new Set(files.map((file) => file.id))
+    for (const file of files) {
       if (file.worktreeId !== worktreeId) {
         continue
       }
@@ -195,7 +197,7 @@ export function collectRemovedHostTwinState(
       } else if (
         toVisibleTabType(tab.contentType) !== 'editor' ||
         // Why: a stale editor tab with no open file has nothing for the file close to find.
-        !webSessionOpenFilesForWorktree(state, worktreeId).some((file) => file.id === tab.entityId)
+        !fileIds.has(tab.entityId)
       ) {
         removed.otherTabIds.add(tab.id)
         if (tab.contentType === 'agent-session') {

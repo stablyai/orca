@@ -1,3 +1,4 @@
+import { workspaceTabCandidates } from '@/lib/structured-chat-tab-index'
 import { collectPtyIdsForTab } from '../../terminal-tab-retirement'
 import { webSessionOpenFilesForWorktree } from '@/runtime/web-session-tabs-sync/state-equality-files'
 import type { AppState } from '../../../types'
@@ -77,7 +78,7 @@ export function captureWorkspaceRemovalScope(
     )
     if (row && host === 'local' && !survivors.length) {
       for (const tab of state.tabsByWorktree[id] ?? []) {
-        const stamp = (state.unifiedTabsByWorktree[id] ?? []).find(
+        const stamp = workspaceTabCandidates(state.unifiedTabsByWorktree[id], tab.id).find(
           (entry) => entry.entityId === tab.id
         )?.executionHostId
         if (!stamp && !tab.ptyId && !state.ptyIdsByTabId[tab.id]?.length) {
@@ -133,5 +134,7 @@ export {
   workspaceRemovalScopeIsCurrent,
   assertWorkspaceRemovalScopeCurrent,
   currentWorkspaceRemovalSources,
+  currentWorkspaceRemovalSource,
+  workspaceRemovalBrowserIsCurrent,
   workspaceRemovalTabIsCurrent
 } from './workspace-removal-currentness'

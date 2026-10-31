@@ -1,4 +1,3 @@
-import { acceptWorkspacePresentationUserIntent } from '../../../shared/workspace-presentation-user-intent'
 import { editWorkspacePresentationDocuments } from '../../../shared/workspace-presentation-documents'
 import type { StateCreator } from 'zustand'
 import type { AppState } from './types'
@@ -13,7 +12,7 @@ import {
   bindingIndexes
 } from './workspace-source-state'
 import { isWorkspacePresentationKey, sourceBaseline } from '../../../shared/workspace-presentation'
-import { reconcileWorkspacePresentation } from '../../../shared/workspace-presentation-reconcile'
+import { settleWorkspacePresentation } from '../../../shared/workspace-presentation-settlement'
 export * from './workspace-source-state'
 export {
   workspaceSourceClaims,
@@ -32,7 +31,7 @@ function settleSources(state: AppState, keys?: ReadonlySet<string>): AppState {
     if (!saved) {
       continue
     }
-    const next = reconcileWorkspacePresentation(
+    const next = settleWorkspacePresentation(
       saved,
       saved.baseline.map(({ source }) => sourceBaseline(session, source))
     )
@@ -75,30 +74,6 @@ export function withWorkspaceComposition(
         const scope = sourceWrites.get(patch)
         if (scope?.sources?.length) {
           next = { ...next, ...discoverWorkspacePresentations(next, scope.sources) }
-        }
-        if (
-          patch.workspacePresentations &&
-          patch.workspacePresentations !== raw.workspacePresentations
-        ) {
-          const session = workspaceSourceSession(next)
-          for (const key of scope?.documents ?? Object.keys(patch.workspacePresentations)) {
-            if (!isWorkspacePresentationKey(key)) {
-              continue
-            }
-            const before = raw.workspacePresentations?.[key]
-            const accepted = next.workspacePresentations?.[key]
-            if (before && accepted && before !== accepted) {
-              acceptWorkspacePresentationUserIntent(
-                before,
-                () =>
-                  reconcileWorkspacePresentation(
-                    before,
-                    before.baseline.map(({ source }) => sourceBaseline(session, source))
-                  ),
-                accepted
-              )
-            }
-          }
         }
         indexDocuments(next.workspacePresentations, scope?.documents)
         // Discovery already reconciled the changed presentation, without a source mutation.

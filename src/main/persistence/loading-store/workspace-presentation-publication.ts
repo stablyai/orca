@@ -7,10 +7,8 @@ import {
   type WorkspacePresentation,
   type WorkspacePresentationDocuments
 } from '../../../shared/workspace-presentation'
-import {
-  presentationSourceBaselines,
-  reconcileWorkspacePresentation
-} from '../../../shared/workspace-presentation-reconcile'
+import { presentationSourceBaselines } from '../../../shared/workspace-presentation-reconcile'
+import { settleWorkspacePresentation } from '../../../shared/workspace-presentation-settlement'
 
 export type PresentationState = Pick<
   PersistedState,
@@ -216,7 +214,7 @@ export function reconcileStoredWorkspacePresentations(
     if (!document) {
       continue
     }
-    const next = reconcileWorkspacePresentation(
+    const next = settleWorkspacePresentation(
       document,
       presentationSourceBaselines(document, (host) =>
         host === 'local'
