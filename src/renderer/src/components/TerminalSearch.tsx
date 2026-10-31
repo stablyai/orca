@@ -93,6 +93,11 @@ export default function TerminalSearch({
   }, [searchAddon])
 
   useEffect(() => {
+    // Why: the addon stores new options before comparing them, so a same-term re-search keeps stale results.
+    searchAddon?.clearDecorations()
+  }, [searchAddon, caseSensitive, regex, wholeWord])
+
+  useEffect(() => {
     // Global match-navigation shortcuts read the same query as the panel.
     searchStateRef.current = { query: requestQuery ?? '', caseSensitive, regex, wholeWord }
 

@@ -206,4 +206,20 @@ describe('TerminalSearch whole-word matching', () => {
       wholeWord: true
     })
   })
+
+  it('invalidates the addon cache before re-searching the same query', async () => {
+    const { addon } = createSearchAddon()
+    const view = renderSearch(addon, 'cat')
+    await waitFor(() => expect(addon.findNext).toHaveBeenCalled())
+    vi.mocked(addon.clearDecorations).mockClear()
+    vi.mocked(addon.findNext).mockClear()
+
+    fireEvent.click(view.getByTitle('Match Whole Word'))
+
+    await waitFor(() => expect(addon.findNext).toHaveBeenCalledTimes(1))
+    expect(addon.clearDecorations).toHaveBeenCalledWith()
+    expect(vi.mocked(addon.clearDecorations).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(addon.findNext).mock.invocationCallOrder[0]
+    )
+  })
 })
