@@ -450,8 +450,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
   experimentalAgentDashboardPopout?: boolean
-  /** Experimental: arrange a worktree's AI agent tabs side by side in one resizable grid. */
-  experimentalTiledAgents?: boolean
   /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
   agentsSidebarIntroShown?: boolean
   /** True when the profile previously opted into the legacy Agents view. */
