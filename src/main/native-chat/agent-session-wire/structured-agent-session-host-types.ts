@@ -1,4 +1,5 @@
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
+import type { ConfirmedQuotaCut } from '../quota-fallback-journal-cut'
 import type { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 import type { StructuredAgentSessionIdleSweepDeps } from './structured-agent-session-idle-sweep'
 import type {
@@ -203,6 +204,9 @@ export type StructuredAgentSessionHostDeps = {
    *  drop exactly the failures nobody sees in the UI. */
   logger: StructuredAgentSessionLogger
   onRequestFailure?: (failure: StructuredAgentSessionRequestFailure) => void
+  quotaFallbackSendAllowed?: (sessionId: string, operationId: string, callerKey: string) => boolean
+  quotaFallbackDeliveryAllowed?: (sessionId: string, operationId: string) => boolean
+  onConfirmedQuotaCut?: (cut: ConfirmedQuotaCut) => void | Promise<void>
   /** replay distinguishes restored/projected state from fresh journal events. */
   onSessionStatusChanged?: (
     summary: AgentSessionStatusSummary,

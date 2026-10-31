@@ -37,6 +37,8 @@ import {
   type StructuredAgentSessionTurnCompletionSubscriber
 } from './structured-agent-session-turn-completion-feed'
 
+import { observeConfirmedQuotaCut } from '../quota-fallback-journal-cut'
+
 export class StructuredAgentSessionClientDelivery {
   readonly subscribers: AgentSessionSubscribers
   readonly waitForSendSettlement: StructuredAgentSessionSendSettlement['wait']
@@ -320,6 +322,13 @@ export class StructuredAgentSessionClientDelivery {
     // Observe completion after status projection updates, even without subscribers for background chats.
     this.turnCompletionFeed.observe(sessionId, journal)
     this.queue.onJournalActivity(sessionId, activity, inputChanged)
+    observeConfirmedQuotaCut(
+      this.deps(),
+      sessionId,
+      journal,
+      this.currentWork(sessionId, journal),
+      this.childWorkOpen(sessionId) || this.childWorkIncomplete(sessionId)
+    )
     this.journalObservers.publish(sessionId, journal)
   }
 

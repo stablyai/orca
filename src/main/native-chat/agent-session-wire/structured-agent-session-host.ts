@@ -17,6 +17,7 @@ import * as lifetime from './structured-agent-session-conversation-lifetime'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
+import { nativeQuotaLeaseForHost } from '../quota-fallback-native-lease'
 import type * as HostTypes from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel as BackgroundTasks } from './structured-agent-session-background-task-channel'
@@ -162,8 +163,8 @@ export class StructuredAgentSessionHost {
     this.eventRecovery.handle(event)
 
   // Keep inference so publishStatus stays required in the attach-context spread.
-  private lifetimeContext() {
-    return {
+  private lifetimeContext = () =>
+    ({
       deps: this.deps,
       runtimeState: this.runtimeState,
       sessions: this.sessions,
@@ -172,8 +173,7 @@ export class StructuredAgentSessionHost {
       generationEnded: this.clientDelivery.publishGenerationEnded,
       wakeDelivery: (sessionId: string) => this.conversationDelivery.loop.wake(sessionId),
       endExitedChild: this.eventRecovery.endExitedChildUnderSerialize
-    } satisfies StructuredAgentSessionLifetimeContext
-  }
+    }) satisfies StructuredAgentSessionLifetimeContext
 
   private attachContext = (): StructuredAgentSessionAttachContext => ({
     ...this.lifetimeContext(),
@@ -267,6 +267,8 @@ export class StructuredAgentSessionHost {
       now: () => this.now()
     })
 
+  readonly quotaContinuation = nativeQuotaLeaseForHost(this)
+
   send = this.conversationCommands.send
 
   queuedMessageSend = this.queued.queuedMessageSend
@@ -348,6 +350,7 @@ export class StructuredAgentSessionHost {
   collaboratorsForTests = () => ({
     sessions: this.sessions,
     subscribers: this.subscribers,
+    clientDelivery: this.clientDelivery,
     runtimeState: this.runtimeState,
     conversationDelivery: this.conversationDelivery,
     lifetime: this.lifetime,
