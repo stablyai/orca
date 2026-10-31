@@ -20,6 +20,9 @@ import {
   updateTestJournalRowJson
 } from './journal-host-database-test-support'
 import { admitOutcomeFormat1 } from './journal-outcome-format-1'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { storedFailureFact } from './journal-storage-schema'
+import type { UndeclaredStorageKeys } from './journal-storage-strict'
 import { restoreJournal } from './journal-open'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
 import { finishCatchUp } from './journal-projection-test-support'
@@ -251,4 +254,16 @@ it('folds the checked-in input rows into the same chat, every value of which sto
   for (const value of stored) {
     expect(admitOutcomeFormat1({ ...value, deleted: false })).toBeUndefined()
   }
+})
+
+function declared<Undeclared extends never>(): Undeclared | undefined {
+  return undefined
+}
+
+it('compiles only when storage declares every key a persisted type holds, at any depth', () => {
+  type Stored = z.output<typeof storedFailureFact>
+  type Later = AgentSessionFailureFact & { retry?: { later?: number } }
+  expect(declared<UndeclaredStorageKeys<AgentSessionFailureFact, Stored>>()).toBeUndefined()
+  // @ts-expect-error `retry.later` is a key the stored failure fact does not declare
+  expect(declared<UndeclaredStorageKeys<Later, Stored>>()).toBeUndefined()
 })
