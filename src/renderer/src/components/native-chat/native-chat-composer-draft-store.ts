@@ -4,7 +4,6 @@ export { deleteNativeChatComposerDraftsWhere } from './native-chat-composer-draf
 import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
 // Own complete unsent drafts in memory so each write repairs storage from one authoritative record.
 
-import type { JSONContent } from '@tiptap/react'
 import {
   sameNativeChatComposerDraftDocument,
   sameNativeChatComposerDraftImages
@@ -12,14 +11,16 @@ import {
 import {
   placeNativeChatComposerDraftAddition,
   withNativeChatComposerDraftAddition,
+  withIndependentNativeChatComposerDraft,
   type NativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
-import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal'
+import {
+  journalNativeChatComposerDraftAddition,
+  journalNativeChatComposerDraftChanges
+} from './native-chat-composer-draft-journal'
 import {
   clearDraftMemoryForTests,
   resolveNativeChatComposerDraftOwner,
-  releaseNativeChatComposerSubmission,
-  type DraftSubmission,
   installNativeChatDraftRecord,
   type NativeChatDraftPosition,
   dirtyScopes,
@@ -36,7 +37,8 @@ import {
   isNativeChatMemoryOnlyDraft,
   reconcileRestoredImageChecks,
   type DraftAppend,
-  type DraftRecord
+  type DraftRecord,
+  transferSources
 } from './native-chat-composer-draft-memory'
 import {
   persistNativeChatComposerDraft,
@@ -49,7 +51,7 @@ import {
 import {
   setNativeChatComposerDraftStorageForTests,
   type NativeChatComposerDraft,
-  type NativeChatComposerDraftImage,
+  type NativeChatComposerDraftChange,
   type NativeChatComposerDraftOwner,
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
@@ -66,18 +68,7 @@ export {
   waitForNativeChatComposerDrafts
 } from './native-chat-composer-draft-load'
 
-export type NativeChatComposerDraftChange = {
-  text?: string
-  pastedTextFiles?: Readonly<Record<string, string>>
-  /** Present, even as undefined, to replace the document. */
-  document?: JSONContent
-  images?: readonly NativeChatComposerDraftImage[]
-  /** Text shown but never saved while the draft still holds exactly it. */
-  unsavedText?: string
-  /** A new draft's owner when its chat may no longer be open to name it: the one it was begun in. */
-  owner?: NativeChatComposerDraftOwner
-}
-
+export type { NativeChatComposerDraftChange } from './native-chat-composer-draft-storage'
 /** Edit scopes share input machinery but never enter draft persistence. */
 export function openNativeChatEditDraft(scopeKey: string, draft: NativeChatComposerDraft): void {
   ephemeralDrafts.set(scopeKey, { scopeKey, active: true })
@@ -121,27 +112,7 @@ export function readNativeChatComposerDraft(
   return records.get(currentDraftScope(scopeKey)) ?? EMPTY_DRAFT
 }
 
-export function finishNativeChatComposerSubmission(
-  scopeKey: string,
-  submission: DraftSubmission,
-  recover = false
-): void {
-  scopeKey = submission.scopeKey
-  const draft = releaseNativeChatComposerSubmission(scopeKey, submission)
-  if (recover && draft) {
-    const held = readNativeChatComposerDraft(scopeKey)
-    appendToNativeChatComposerDraft(
-      scopeKey,
-      {
-        ...draft,
-        images: draft.images.filter(
-          (image) => !held.images.some((current) => current.id === image.id)
-        )
-      },
-      resolveNativeChatComposerDraftOwner(scopeKey) ?? draft.owner
-    )
-  }
-}
+export { finishNativeChatComposerSubmission } from './native-chat-composer-draft-transfer'
 
 /** Coalesce typing, persist hand-backs/clears immediately, and remove empty drafts so sent input cannot return. */
 export function updateNativeChatComposerDraft(
@@ -176,6 +147,9 @@ export function updateNativeChatComposerDraft(
       persistNativeChatComposerDraft(scopeKey, 'immediate')
     }
     return
+  }
+  for (const transfer of transferSources.get(scopeKey) ?? []) {
+    transfer.sourceWritable = false
   }
   if (isEmptyDraft({ text, images })) {
     installNativeChatDraftRecord(scopeKey)
@@ -224,13 +198,20 @@ function withAddition<T extends NativeChatComposerDraft>(
 export function appendToNativeChatComposerDraft(
   scopeKey: string,
   addition: NativeChatComposerDraftAddition,
-  owner?: NativeChatComposerDraftOwner
+  owner?: NativeChatComposerDraftOwner,
+  independent = false
 ): boolean {
   scopeKey = currentDraftScope(scopeKey)
   const before = records.get(scopeKey)
   const current = readNativeChatComposerDraft(scopeKey)
   const placed = placeNativeChatComposerDraftAddition(current, addition)
-  const { text, images, document, pastedTextFiles } = withAddition(current, placed)
+  const compose = independent
+    ? (base: StoredNativeChatComposerDraft) => ({
+        ...base,
+        ...withIndependentNativeChatComposerDraft(base, placed)
+      })
+    : (base: StoredNativeChatComposerDraft) => withAddition(base, placed)
+  const { text, images, document, pastedTextFiles } = compose({ ...current, savedAt: 0 })
   updateNativeChatComposerDraft(
     scopeKey,
     {
@@ -241,7 +222,7 @@ export function appendToNativeChatComposerDraft(
       ...(owner ? { owner } : {})
     },
     'immediate',
-    (loaded) => withAddition(loaded, placed)
+    Object.assign(compose, { journalFull: independent })
   )
   if (text !== current.text) {
     notifyDraftAppend(scopeKey, placed, current)
@@ -253,6 +234,14 @@ export function appendToNativeChatComposerDraft(
   // Why: a hand-back the draft already holds changes nothing, but that draft may not be saved yet.
   if (after === before && !hasLocalChange(scopeKey) && !refusedScopes.has(scopeKey)) {
     return true
+  }
+  if (independent) {
+    if (load.hydrated || load.editedBeforeLoad.has(scopeKey)) {
+      journalNativeChatComposerDraftChanges(
+        new Map([[scopeKey, { draft: after, at: after.savedAt }]])
+      )
+    }
+    return false
   }
   return (
     isNativeChatMemoryOnlyDraft(scopeKey) ||

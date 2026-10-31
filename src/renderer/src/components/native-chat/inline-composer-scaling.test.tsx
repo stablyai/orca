@@ -420,7 +420,17 @@ it.each([10, 100])(
 )
 
 import { useCallback, useSyncExternalStore } from 'react'
-import { nativeChatLaunchPromptDraftScopeKey } from './native-chat-composer-draft-store'
+import {
+  nativeChatLaunchPromptDraftScopeKey,
+  readNativeChatComposerDraft,
+  hydrateNativeChatComposerDrafts,
+  nativeChatComposerDraftWritesSettled
+} from './native-chat-composer-draft-store'
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from './native-chat-composer-draft-storage'
+import { useRestoredNativeChatComposerDraftImageCheck } from './native-chat-composer-draft-image-check'
 import {
   readLaunchSetupOptions,
   writeLaunchSetupOptions,
@@ -429,8 +439,17 @@ import {
 it.each([10, 100])(
   'isolates actual setup prompt/options/pending consumers across %s workspaces and another host',
   async (count) => {
+    const storage = createMemoryNativeChatComposerDraftStorage()
+    storage.drafts.set('agent-setup:["ssh:new","repo::/own","codex"]', {
+      text: 'saved target',
+      images: [{ id: 'saved', path: '/saved.png' }],
+      savedAt: 1
+    })
+    const loaded = Promise.withResolvers<ReadonlyMap<string, unknown>>()
+    setNativeChatComposerDraftStorageForTests({ ...storage, loadAll: () => loaded.promise })
+    const loading = hydrateNativeChatComposerDrafts()
     const scopes = [
-      nativeChatLaunchPromptDraftScopeKey('repo::/own', 'codex', 'local'),
+      nativeChatLaunchPromptDraftScopeKey('repo::/own', 'codex', 'ssh:old'),
       nativeChatLaunchPromptDraftScopeKey('repo::/own', 'codex', 'ssh:other'),
       ...Array.from({ length: count }, (_, i) =>
         nativeChatLaunchPromptDraftScopeKey(`repo::/other${i}`, 'codex', 'local')
@@ -445,9 +464,27 @@ it.each([10, 100])(
         [scope]
       )
       const options = useSyncExternalStore(subscribe, () => readLaunchSetupOptions(scope))
+      const subscribeDraft = useCallback(
+        (listener: () => void) => subscribeToNativeChatComposerDraft(scope, listener),
+        [scope]
+      )
+      const images = useSyncExternalStore(
+        subscribeDraft,
+        () => readNativeChatComposerDraft(scope).images
+      )
+      const document = useSyncExternalStore(
+        subscribeDraft,
+        () => readNativeChatComposerDraft(scope).document
+      )
+      const checks = useRestoredNativeChatComposerDraftImageCheck(scope, subscribeDraft)
       renders[index]++
       return (
-        <output data-probe={index}>
+        <output
+          data-probe={index}
+          data-images={images.length}
+          data-document={!!document}
+          data-checks={checks.size}
+        >
           {draft.draft}|{options?.choices.model}|{pending.length}
         </output>
       )
@@ -476,6 +513,37 @@ it.each([10, 100])(
     )
     expect(renders.slice(1)).toEqual(initial.slice(1))
     expect(view.container.querySelector('[data-probe="0"]')?.textContent).toBe('own input|chosen|1')
+    act(() =>
+      updateNativeChatComposerDraft(
+        scopes[0],
+        { document: { type: 'doc', content: [{ type: 'paragraph' }] } },
+        'deferred'
+      )
+    )
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-document')).toBe(
+      'true'
+    )
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    const { createTestStore } = await import('@/store/slices/store-test-helpers')
+    act(() =>
+      createTestStore()
+        .getState()
+        .recordSshRepoReadoptions([{ oldTargetId: 'old', newTargetId: 'new', repoIds: ['repo'] }])
+    )
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    await act(async () => {
+      loaded.resolve(new Map(storage.drafts))
+      await loading
+      await nativeChatComposerDraftWritesSettled()
+    })
+    expect(view.container.querySelector('[data-probe="0"]')?.textContent).toBe(
+      'saved target\n\nown input|chosen|1'
+    )
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-images')).toBe('1')
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    act(() => settleNativeChatPendingAttachment(scopes[0], 'own-chip', '/chip.png'))
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-images')).toBe('2')
+    expect(renders.slice(1)).toEqual(initial.slice(1))
     const ownRenders = renders[0]
     act(() =>
       writeLaunchSetupOptions(scopes[1], {

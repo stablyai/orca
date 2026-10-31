@@ -481,13 +481,31 @@ it.each([
   [false, false],
   [true, false],
   [false, true],
-  [true, true]
+  [true, true],
+  [false, false, true],
+  [true, false, true]
 ])(
-  'two actual send iterations retain rich source through collision, move, remount, reverse=%s firstAccepted=%s',
-  async (reverse, firstAccepted) => {
+  'two actual send iterations retain rich source through collision, move, remount, reverse=%s firstAccepted=%s delayed=%s',
+  async (reverse, firstAccepted, delayed) => {
     clearNativeChatComposerDraftsForTests()
     const store = createTestStore()
     const workspace = 'repo::/work'
+    const seedStorage = createMemoryNativeChatComposerDraftStorage()
+    const gate = Promise.withResolvers<ReadonlyMap<string, unknown>>()
+    const lastKey = 'agent-setup:["ssh:third","repo::/work","codex"]'
+    seedStorage.drafts.set(lastKey, {
+      text: 'unread target',
+      images: [{ id: 'shared', path: '/shared.png' }],
+      savedAt: 1
+    })
+    const snapshot = new Map(seedStorage.drafts)
+    setNativeChatComposerDraftStorageForTests(
+      delayed ? { ...seedStorage, loadAll: () => gate.promise } : seedStorage
+    )
+    const loading = draftStore.hydrateNativeChatComposerDrafts()
+    if (!delayed) {
+      await loading
+    }
     const from = draftStore.nativeChatLaunchPromptDraftScopeKey(workspace, 'codex', 'ssh:old')
     const target = draftStore.nativeChatLaunchPromptDraftScopeKey(workspace, 'codex', 'ssh:new')
     const replies = [Promise.withResolvers<boolean>(), Promise.withResolvers<boolean>()]
@@ -574,6 +592,16 @@ it.each([
     expect(handle).toMatchObject({ scopeKey: currentDraftScope(target), active: true })
     old.unmount()
     next.unmount()
+    if (delayed) {
+      act(() =>
+        store
+          .getState()
+          .recordSshRepoReadoptions([
+            { oldTargetId: 'new', newTargetId: 'third', repoIds: ['repo'] }
+          ])
+      )
+    }
+
     old = mount(from)
     next = mount(target)
     await act(async () => {
@@ -583,6 +611,17 @@ it.each([
       replies[1 - first].reject(new Error('no recipient'))
       await operations[1 - first]
     })
+    if (delayed) {
+      await act(async () => {
+        gate.resolve(snapshot)
+        await loading
+        await draftStore.nativeChatComposerDraftWritesSettled()
+      })
+      expect(readNativeChatComposerDraft(target).text).toContain('unread target')
+      expect(seedStorage.drafts.get(lastKey)?.document).toEqual(
+        readNativeChatComposerDraft(target).document
+      )
+    }
     const recovered = readNativeChatComposerDraft(target)
     expect(recovered.text).toContain('new source input')
     expect(recovered.text).toContain('new target input')
@@ -673,3 +712,8 @@ it.each([
     clearNativeChatComposerDraftsForTests()
   }
 )
+
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from './native-chat-composer-draft-storage'

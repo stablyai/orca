@@ -169,7 +169,6 @@ export function relocateLaunchDraftSource(
     source.handles.clear()
   }
   setups.set(key, target)
-  target.optionListeners.forEach((listener) => listener())
   return target
 }
 export const captureLaunchDraftDestination = (scope: string): SetupHandle | undefined =>

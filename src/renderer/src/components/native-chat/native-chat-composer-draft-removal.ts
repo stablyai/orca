@@ -1,3 +1,4 @@
+import { deleteNativeChatDraftTransfersAt } from './native-chat-composer-draft-transfer'
 import {
   installNativeChatDraftRecord,
   notifyScope,
@@ -20,6 +21,7 @@ export function deleteNativeChatComposerDraftsWhere(
   for (const scope of new Set([...records.keys(), ...scopeListeners.keys()])) {
     const draft = records.get(scope)
     if (matches(scope, draft)) {
+      deleteNativeChatDraftTransfersAt(scope)
       installNativeChatDraftRecord(scope)
       reconcileRestoredImageChecks(scope, [])
       notifyScope(scope)

@@ -1,4 +1,6 @@
-import { describe } from 'vitest'
+import { afterEach, describe } from 'vitest'
+
+afterEach(() => vi.restoreAllMocks())
 import { registerReposCatalogMergeIdentityTests } from './repos-catalog-merge-identity.spec'
 import { registerReposRefreshIdentityTests } from './repos-refresh-identity.spec'
 import { registerReposCatalogNotificationsTests } from './repos-catalog-notifications.spec'
@@ -238,12 +240,10 @@ it.each([10, 100])(
         yield entry
       }
     })
-    const loadingIterator = memory.load.handoffsBeforeLoad.values.bind(
-      memory.load.handoffsBeforeLoad
-    )
-    vi.spyOn(memory.load.handoffsBeforeLoad, 'values').mockImplementation(function* () {
+    const loadingIterator = memory.transferSources[Symbol.iterator].bind(memory.transferSources)
+    vi.spyOn(memory.transferSources, Symbol.iterator).mockImplementation(function* () {
       for (const entry of loadingIterator()) {
-        work.loading++
+        work.loading += entry[1].size
         yield entry
       }
     })

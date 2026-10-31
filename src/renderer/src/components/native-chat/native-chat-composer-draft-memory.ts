@@ -119,7 +119,9 @@ export function reconcileRestoredImageChecks(
 export const scopeListeners = new Map<string, Set<() => void>>()
 
 /** Pre-hydration appends replay over loaded drafts; ordinary edits replace them. */
-export type DraftAppend = (draft: StoredNativeChatComposerDraft) => StoredNativeChatComposerDraft
+export type DraftAppend = ((
+  draft: StoredNativeChatComposerDraft
+) => StoredNativeChatComposerDraft) & { journalFull?: boolean }
 
 /** Atomically append in storage, then replay onto hydration if that load could not have read it. */
 export type AppendBeforeLoad = {
@@ -127,7 +129,15 @@ export type AppendBeforeLoad = {
   readonly sequence: number
   readonly append: DraftAppend
   committed: boolean
+  before?: StoredNativeChatComposerDraft
+  appliedAt?: number
 }
+
+import type { DraftTransfer } from './native-chat-composer-draft-transfer'
+export type { DraftTransfer } from './native-chat-composer-draft-transfer'
+// Two memberships index the same finite operation, never another rich authority.
+export const transferSources = new Map<string, Set<DraftTransfer>>()
+export const transferDestinations = new Map<string, Set<DraftTransfer>>()
 
 type LoadBookkeeping = {
   hydrated: boolean
@@ -135,10 +145,6 @@ type LoadBookkeeping = {
   appendSequence: number
   readonly editedBeforeLoad: Set<string>
   readonly appendsBeforeLoad: Map<string, AppendBeforeLoad[]>
-  readonly handoffsBeforeLoad: Map<
-    string,
-    { to: string; owner: NativeChatComposerDraftOwner; hasCurrent: boolean }
-  >
   readonly deletionsBeforeLoad: ((
     scopeKey: string,
     draft: StoredNativeChatComposerDraft
@@ -150,7 +156,6 @@ export const load: LoadBookkeeping = {
   appendSequence: 0,
   editedBeforeLoad: new Set(),
   appendsBeforeLoad: new Map(),
-  handoffsBeforeLoad: new Map(),
   deletionsBeforeLoad: []
 }
 
@@ -192,7 +197,8 @@ export function clearDraftMemoryForTests(): void {
   load.appendSequence = 0
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()
-  load.handoffsBeforeLoad.clear()
+  transferSources.clear()
+  transferDestinations.clear()
   load.deletionsBeforeLoad.length = 0
 }
 

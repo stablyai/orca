@@ -162,13 +162,16 @@ export function moveNativeChatPendingAttachments(from: string, to: string): void
     ...pending.filter(({ id }) => !held.has(id))
   ])
   writePending(from, [])
+}
+
+/** Only continuing setup views follow association; ordinary closing editors remain keyed. */
+export function moveLaunchPendingAttachmentListeners(from: string, to: string): void {
   const target = listeners.get(to) ?? new Set<() => void>()
   for (const listener of listeners.get(from) ?? []) {
     target.add(listener)
   }
   listeners.delete(from)
   listeners.set(to, target)
-  target.forEach((listener) => listener())
 }
 
 function pendingDestination(scope: string, id: string): string {

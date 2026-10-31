@@ -1,5 +1,7 @@
-import { withNativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
-import { appendToNativeChatComposerDraft } from './native-chat-composer-draft-store'
+import {
+  completeNativeChatDraftTransfers,
+  abandonNativeChatDraftTransfers
+} from './native-chat-composer-draft-transfer'
 // Preserve pre-hydration edits and replay appends on top of loaded drafts plus the unload journal.
 
 import {
@@ -46,7 +48,13 @@ function withAppends(
   if (missing.length === 0) {
     return { draft: loaded, changed: false }
   }
-  const merged = missing.reduce((draft, entry) => entry.append(draft), loaded)
+  const merged = missing.reduce(
+    (draft, entry) =>
+      entry.appliedAt !== undefined && draft.savedAt >= entry.appliedAt
+        ? draft
+        : entry.append(draft),
+    loaded
+  )
   return { draft: { ...merged, savedAt: nextSavedAt() }, changed: true }
 }
 
@@ -64,31 +72,6 @@ function applyLoaded(
   for (const scopeKey of replayNativeChatComposerDraftJournal(drafts, journal)) {
     dirtyScopes.add(scopeKey)
   }
-  for (const [from, handoff] of load.handoffsBeforeLoad) {
-    const source = drafts.get(from)
-    drafts.delete(from)
-    dirtyScopes.add(from)
-    if (!source || handoff.hasCurrent) {
-      continue
-    }
-    const target = drafts.get(handoff.to) ?? { text: '', images: [], savedAt: 0 }
-    const addition = {
-      ...source,
-      images: source.images.filter((image) => !target.images.some((held) => held.id === image.id))
-    }
-    if (load.editedBeforeLoad.has(handoff.to)) {
-      appendToNativeChatComposerDraft(handoff.to, addition, handoff.owner)
-    } else {
-      drafts.set(handoff.to, {
-        ...target,
-        ...withNativeChatComposerDraftAddition(target, addition),
-        owner: handoff.owner,
-        savedAt: nextSavedAt()
-      })
-      dirtyScopes.add(handoff.to)
-    }
-  }
-
   for (const [scopeKey, appends] of load.appendsBeforeLoad) {
     // Appended with nothing saved before: an empty draft is what the load would have read.
     if (!drafts.has(scopeKey) && appends.some((entry) => !entry.committed)) {
@@ -117,9 +100,9 @@ function applyLoaded(
     notifyScope(scopeKey)
   }
   load.hydrated = true
+  completeNativeChatDraftTransfers(drafts)
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()
-  load.handoffsBeforeLoad.clear()
   load.deletionsBeforeLoad.length = 0
   flushNativeChatComposerDrafts()
 }
@@ -133,9 +116,9 @@ function retryLater(error: unknown): void {
   if (delay === undefined) {
     // Given up: what was changed meanwhile is all there is, so nothing waits on a load any more.
     load.hydrated = true
+    abandonNativeChatDraftTransfers()
     load.editedBeforeLoad.clear()
     load.appendsBeforeLoad.clear()
-    load.handoffsBeforeLoad.clear()
     load.deletionsBeforeLoad.length = 0
     return
   }

@@ -1,3 +1,4 @@
+import { confirmNativeChatDraftTransfers } from './native-chat-composer-draft-transfer'
 // Persist whole memory records, journal unconfirmed changes on unload, and adopt other windows’ confirmed writes.
 
 import { basename } from '@/lib/path'
@@ -79,6 +80,7 @@ function confirm(scopeKey: string, change: UnconfirmedDraftChange): void {
       notifyScope(scopeKey)
     }
   }
+  confirmNativeChatDraftTransfers(scopeKey, change.at)
   pruneNativeChatComposerDraftJournal(scopeKey, change.at)
   channel?.postMessage({ scopeKey })
 }
@@ -178,10 +180,16 @@ function appendBeforeLoad(scopeKey: string, append: DraftAppend): void {
   const written = nativeChatComposerDraftStorage()
     .update(scopeKey, (stored) => {
       const base = parseStoredNativeChatComposerDraft(stored) ?? empty
-      return savedForm({
+      entry.before = base
+      const draft = savedForm({
         ...append({ ...base, ...(base.owner || !owner ? {} : { owner }) }),
         savedAt: nextSavedAt()
       })
+      entry.appliedAt = draft?.savedAt
+      if (append.journalFull && draft) {
+        journalNativeChatComposerDraftChanges(new Map([[scopeKey, { draft, at: draft.savedAt }]]))
+      }
+      return draft
     })
     .then(
       () => {

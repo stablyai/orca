@@ -608,3 +608,71 @@ it.each([
     expect(launchDrafts.readNativeChatComposerDraft(other).text).toBe('other host task')
   }
 )
+
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from '@/components/native-chat/native-chat-composer-draft-storage'
+it('actual normal removal cancels held accepted hydration while refusal and later manual input retain authority', async () => {
+  launchDrafts.clearNativeChatComposerDraftsForTests()
+  pendingChips.clearNativeChatPendingAttachmentsForTests()
+  const storage = createMemoryNativeChatComposerDraftStorage()
+  const originalKey = `agent-setup:${JSON.stringify(['ssh:old', WORKTREE_ID, 'codex'])}`
+  storage.drafts.set(originalKey, {
+    text: 'old saved task',
+    images: [{ id: 'old', path: '/old.png' }],
+    savedAt: 1,
+    owner: { workspaceId: WORKTREE_ID, executionHostId: 'ssh:old' }
+  })
+  const snapshot = new Map(storage.drafts)
+  const gate = Promise.withResolvers<ReadonlyMap<string, unknown>>()
+  setNativeChatComposerDraftStorageForTests({ ...storage, loadAll: () => gate.promise })
+  const loading = launchDrafts.hydrateNativeChatComposerDrafts()
+  const source = launchDrafts.nativeChatLaunchPromptDraftScopeKey(WORKTREE_ID, 'codex', 'ssh:old')
+  const current = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    WORKTREE_ID,
+    'codex',
+    HOST_B_HOST_ID
+  )
+  const live = launchDrafts.nativeChatLaunchPromptDraftScopeKey('repo1::/live', 'codex', 'local')
+  launchDrafts.updateNativeChatComposerDraft(current, { text: 'current target' }, 'immediate')
+  launchDrafts.updateNativeChatComposerDraft(live, { text: 'live control' }, 'immediate')
+  pendingChips.addNativeChatPendingAttachment(source, {
+    id: 'old-pending',
+    path: '',
+    pending: true
+  })
+  const store = createTestStore()
+  seedStore(store, {
+    worktreesByRepo: {
+      repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', hostId: HOST_B_HOST_ID })]
+    }
+  })
+  store
+    .getState()
+    .recordSshRepoReadoptions([{ oldTargetId: 'old', newTargetId: 'ssh-1', repoIds: ['repo1'] }])
+  mockApi.worktrees.remove.mockRejectedValueOnce(new Error('refused'))
+  expect(
+    (await store.getState().removeWorktree({ id: WORKTREE_ID, executionHostId: HOST_B_HOST_ID })).ok
+  ).toBe(false)
+  expect(launchDrafts.readNativeChatComposerDraft(current).text).toBe('current target')
+  expect(storage.drafts.has(originalKey)).toBe(true)
+  mockApi.worktrees.remove.mockResolvedValueOnce({})
+  expect(
+    (await store.getState().removeWorktree({ id: WORKTREE_ID, executionHostId: HOST_B_HOST_ID })).ok
+  ).toBe(true)
+  expect(pendingChips.nativeChatPendingAttachmentSnapshot(source)).toHaveLength(0)
+  launchDrafts.updateNativeChatComposerDraft(current, { text: 'new explicit input' }, 'immediate')
+  gate.resolve(snapshot)
+  await loading
+  await launchDrafts.nativeChatComposerDraftWritesSettled()
+  expect(launchDrafts.readNativeChatComposerDraft(source).text).toBe('new explicit input')
+  expect(launchDrafts.readNativeChatComposerDraft(source).images).toHaveLength(0)
+  expect(storage.drafts.has(originalKey)).toBe(false)
+  expect(launchDrafts.readNativeChatComposerDraft(live).text).toBe('live control')
+  expect(pendingChips.settleNativeChatPendingAttachment(source, 'old-pending', '/late.png')).toBe(
+    false
+  )
+  launchDrafts.clearNativeChatComposerDraftsForTests()
+  pendingChips.clearNativeChatPendingAttachmentsForTests()
+})
