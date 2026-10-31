@@ -6,6 +6,7 @@ import { ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES } from '../../../../../.
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
 import {
   getFollowUpDispatch,
+  listMarkedFollowUpAncestors,
   readWorkerResumeSession
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { watchMovedWorkerResumeSessions } from './worker-resume-session-capture'
@@ -271,6 +272,61 @@ describe('a follow-up to a finished terminal worker', () => {
     await vi.waitFor(() =>
       expect(h.db.getUnreadMessages(`dispatch:${retry}`)).toMatchObject([{ body: 'DO NOT PUSH' }])
     )
+  })
+
+  it('moves held mail as new to the follow-up, except a pointer whose Enter is still in flight', async () => {
+    h.setup()
+    const { taskId, dispatchId } = await h.startWorker()
+    await send(dispatchId, 'typed, Enter in flight')
+    await send(dispatchId, 'woken before')
+    const [inFlight, delivered] = h.db.getUnreadMessages(`dispatch:${dispatchId}`)
+    h.db.db
+      .prepare(
+        "UPDATE messages SET pointer_enter_pending = 3, pointer_pty_id = 'pty_old' WHERE id = ?"
+      )
+      .run(inFlight!.id)
+    h.db.markAsDelivered([delivered!.id], `dispatch:${dispatchId}`)
+    h.settle(taskId, dispatchId, 'succeeded')
+    const winner = h.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 9,
+      taskSpec: 'first',
+      taskRunId: h.activeRunId,
+      startOptions: { agent: 'codex' },
+      followUpOf: dispatchId
+    })
+    h.db.markWorkerDispatchReady(winner.dispatch.id)
+
+    continueAllUnreadWorkerMail(h.runtime, h.db)
+
+    expect(h.db.getMessageById(inFlight!.id)).toMatchObject({
+      pointer_enter_pending: 3,
+      pointer_pty_id: 'pty_old'
+    })
+    expect(h.db.getMessageById(delivered!.id)).toMatchObject({ delivered_at: null })
+  })
+
+  it('finds the held mail along a follow-up chain nearest first', async () => {
+    h.setup()
+    const { dispatchId } = await h.startSettledWorker()
+    const follow = (of: string) =>
+      h.db.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: 9,
+        taskSpec: 'next',
+        taskRunId: h.activeRunId,
+        startOptions: { agent: 'codex' },
+        followUpOf: of
+      }).dispatch.id
+    const second = follow(dispatchId)
+    const third = follow(second)
+    h.db.db
+      .prepare(
+        "UPDATE dispatch_contexts SET follow_up_mail_at = datetime('now') WHERE id IN (?, ?)"
+      )
+      .run(dispatchId, second)
+
+    expect(listMarkedFollowUpAncestors(h.db, third)).toEqual([second, dispatchId])
   })
 
   it('from a follow-up that never got a worker, continues the worker before it', async () => {

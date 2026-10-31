@@ -177,18 +177,20 @@ export function clearFollowUpMail(db: OrchestrationDb, dispatchId: string): void
     .run(dispatchId)
 }
 
-/** The Dispatches before this one in its follow-up chain that hold unread mail, nearest first. */
+/** The Dispatches before this one in its follow-up chain that hold unread mail, nearest first; the depth cap only stops a corrupt cycle. */
 export function listMarkedFollowUpAncestors(db: OrchestrationDb, dispatchId: string): string[] {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this projection selects exactly the id column.
   const rows = db.db
     .prepare(
-      `WITH RECURSIVE chain(id) AS (
-         SELECT follow_up_of_dispatch_id FROM dispatch_contexts WHERE id = ?
-         UNION
-         SELECT d.follow_up_of_dispatch_id FROM dispatch_contexts d JOIN chain ON d.id = chain.id
+      `WITH RECURSIVE chain(id, depth) AS (
+         SELECT follow_up_of_dispatch_id, 1 FROM dispatch_contexts WHERE id = ?
+         UNION ALL
+         SELECT d.follow_up_of_dispatch_id, chain.depth + 1
+           FROM dispatch_contexts d JOIN chain ON d.id = chain.id
+          WHERE chain.depth < 10000
        )
        SELECT d.id FROM chain JOIN dispatch_contexts d ON d.id = chain.id
-        WHERE d.follow_up_mail_at IS NOT NULL`
+        WHERE d.follow_up_mail_at IS NOT NULL ORDER BY chain.depth`
     )
     .all(dispatchId) as { id: string }[]
   return rows.map((row) => row.id)

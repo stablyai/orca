@@ -161,14 +161,14 @@ export function passHeldWorkerMail(
         const reason = worker?.last_error ?? worker?.state ?? 'unknown'
         noticeUnreadMailNotContinued(runtime, db, source, reason)
       }
-      // Mail new to this worker: its earlier wake went to the worker before.
-      db.markAsUndelivered(db.getUnreadMessages(`dispatch:${source}`).map((message) => message.id))
       let page
       do {
         page = db.routeUnreadDirectMessagesToDispatchMailbox(
           followUpId,
           first.run_id,
-          `dispatch:${source}`
+          `dispatch:${source}`,
+          undefined,
+          true
         )
         for (const type of custody === 'failed' ? [] : page.types) {
           runtime.notifyMessageArrived(`dispatch:${followUpId}`, type)
