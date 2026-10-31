@@ -120,6 +120,17 @@ export class PiRpcOptionObservations {
     this.observed = { models: [], modelsKnown: false, current: piRpcStateOptions(state) }
   }
 
+  /** Launch flags already applied these, so dispatch finds them current and never writes them again.
+   *  Keep the selector exactly as launched: Pi resolves `--model` by pattern, and a bare selector
+   *  cannot be re-applied later (`set_model` needs `provider/id`), so only this value can be
+   *  compared against the opening submission's execution options. `read()` still reports the model
+   *  and level Pi says it runs. */
+  adoptLaunchIntent(launchIntent: Readonly<Record<string, string>> | undefined): void {
+    for (const [key, value] of Object.entries(launchIntent ?? {})) {
+      this.proof.current.set(key, value)
+    }
+  }
+
   prepare(): (options: AgentSessionOptionsResult) => boolean {
     const writes = new Map(this.proof.writes)
     const consumed = new Map(this.proof.current)

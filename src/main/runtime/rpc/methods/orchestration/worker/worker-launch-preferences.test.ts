@@ -117,6 +117,34 @@ describe('orchestration worker launch preferences', () => {
     ).toThrow('does not support effort turbo')
   })
 
+  it('passes a Pi provider/id model and thinking level through the shared catalog', () => {
+    const model = 'anthropic/claude-sonnet-4-5'
+    const launch = resolveWorkerLaunchPreferences({ agent: 'pi', model, effort: 'low' })
+    expect(launch).toEqual({
+      preferences: { model, effort: 'low' },
+      receipt: {
+        requested: { agent: 'pi', model, effort: 'low' },
+        effective: { agent: 'pi', model, effort: 'low' }
+      }
+    })
+    expect(resolveAgentSessionOptionLaunch('pi', launch.preferences, [], false).args).toEqual([
+      '--model',
+      model,
+      '--thinking',
+      'low'
+    ])
+  })
+
+  it('rejects Pi effort values outside its thinking levels', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'pi',
+        model: 'anthropic/claude-sonnet-4-5',
+        effort: 'turbo'
+      })
+    ).toThrow('does not support effort turbo')
+  })
+
   it('refuses an OpenCode model on an unsupported execution host', () => {
     expect(() =>
       resolveWorkerLaunchPreferences({ agent: 'opencode', model: 'meta/muse-spark-1.3' })
