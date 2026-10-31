@@ -203,8 +203,19 @@ export function applyLocalStructuredSessionTabSnapshots<
       }
     } else {
       next = patch === next ? next : ({ ...next, ...patch } as State)
+      // Main stamps the slot on every frame for the chat's life; only a replaced tab still shown
+      // has anything to close, found through one index rather than a scan per chat.
+      let shownTerminals: Set<string> | undefined
       for (const tab of effectiveSnapshot.tabs) {
-        if (tab.type === 'agent-session' && tab.replaces) {
+        if (tab.type !== 'agent-session' || !tab.replaces) {
+          continue
+        }
+        shownTerminals ??= new Set(
+          (next.unifiedTabsByWorktree[snapshot.worktree] ?? []).flatMap((shown) =>
+            shown.contentType === 'terminal' ? [shown.id, shown.entityId] : []
+          )
+        )
+        if (shownTerminals.has(tab.replaces.tabId)) {
           options.onReplacedTab?.({
             worktreeId: snapshot.worktree,
             tabId: tab.replaces.tabId,
