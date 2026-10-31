@@ -111,7 +111,7 @@ function TerminalSwitchAction({
       onClick={() => void runCliChatResume(source, confirm)}
     >
       {busy ? <Loader2 className="animate-spin" /> : <MessagesSquare />}
-      {translate('components.tab.bar.switch.toNativeChat', 'Switch to native chat')}
+      {translate('components.tab.bar.switch.toNativeChat', 'Switch to Chat UI')}
     </Button>
   )
 }

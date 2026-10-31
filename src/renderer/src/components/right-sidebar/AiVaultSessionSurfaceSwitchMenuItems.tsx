@@ -65,7 +65,7 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
                 'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
                 'Resume in New Chat'
               )
-            : translate('components.tab.bar.switch.toNativeChat', 'Switch to native chat')}
+            : translate('components.tab.bar.switch.toNativeChat', 'Switch to Chat UI')}
         </Item>
       ) : null}
       {onResumeInNewCli ? (

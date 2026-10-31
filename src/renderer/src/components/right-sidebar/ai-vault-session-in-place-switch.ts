@@ -42,7 +42,7 @@ export function switchAiVaultSessionToCli(
   return true
 }
 
-/** History's "Switch to native chat": in place when a pane in this window last reported the
+/** History's "Switch to Chat UI": in place when a pane in this window last reported the
  *  conversation. False otherwise, so the row opens or reveals its chat in a new tab. */
 export function switchAiVaultSessionToNativeChat(
   session: AiVaultSession,

@@ -187,7 +187,7 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     }
     mocks.cliSource = source
     renderItemsNow()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to native chat' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Chat UI' }))
     await act(async () => {})
     expect(mocks.runCliChatResume).toHaveBeenCalledWith(source, expect.any(Function))
     expect(mocks.listSessions).not.toHaveBeenCalled()

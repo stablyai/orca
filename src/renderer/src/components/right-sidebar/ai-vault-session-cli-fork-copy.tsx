@@ -28,7 +28,7 @@ export function SwitchToCliTooltipText({ agent }: { agent: AiVaultAgent }): Reac
     <>
       {translate(
         'components.tab.bar.switch.toCliTooltip',
-        'Switch to CLI: stops {{agent}} in native chat and continues the same conversation in a terminal.',
+        'Switch to CLI: stops {{agent}} in Chat UI and continues the same conversation in a terminal.',
         { agent: agentLabel(agent) }
       )}
     </>

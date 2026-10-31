@@ -36,7 +36,7 @@ export function TerminalPaneResumeInChatButton({
   )
   const busy = useConversationSwitchBusy(readiness.pending)
 
-  const label = translate('components.tab.bar.switch.toNativeChat', 'Switch to native chat')
+  const label = translate('components.tab.bar.switch.toNativeChat', 'Switch to Chat UI')
   const updateRequired = source?.hostUpdateRequired === true
   const tooltip = updateRequired
     ? translate(
@@ -53,7 +53,7 @@ export function TerminalPaneResumeInChatButton({
           ? label
           : translate(
               'components.tab.bar.switch.toNativeChatTooltip',
-              'Switch to native chat: continues the same conversation in a chat, in this tab.'
+              'Switch to Chat UI: continues the same conversation in a chat, in this tab.'
             )))
 
   return (

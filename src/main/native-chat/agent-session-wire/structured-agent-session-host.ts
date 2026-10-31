@@ -204,7 +204,6 @@ export class StructuredAgentSessionHost extends StructuredAgentSessionHostContex
   captureSwitchWork = (
     ...args: Parameters<ReturnType<typeof structuredAgentSessionSwitchSource>['captureSwitchWork']>
   ) => this.switchSource().captureSwitchWork(...args)
-  switchExecuting = (id: string) => this.lifetime.switchExecuting(id)
 
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>
     providerSupport.adapterSupportsCreate(this.deps.adapter, location, agent)

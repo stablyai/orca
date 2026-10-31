@@ -19219,10 +19219,10 @@
         },
         "switch": {
           "toCli": "CLI に切り替える",
-          "toNativeChat": "ネイティブチャットに切り替える",
-          "toCliTooltip": "CLI に切り替え: ネイティブチャットで {{agent}} を停止し、ターミナルで同じ会話を続けます。",
+          "toNativeChat": "チャット UI に切り替える",
+          "toCliTooltip": "CLI に切り替え: チャット UI で {{agent}} を停止し、ターミナルで同じ会話を続けます。",
           "openedInWorkspace": "{{workspace}} でチャットを開きました。",
-          "toNativeChatTooltip": "ネイティブチャットに切り替え: このタブのチャットで同じ会話を続けます。",
+          "toNativeChatTooltip": "チャット UI に切り替え: このタブのチャットで同じ会話を続けます。",
           "noConversation": "このターミナルには、保存された会話がまだありません。"
         },
         "BrowserTab": {

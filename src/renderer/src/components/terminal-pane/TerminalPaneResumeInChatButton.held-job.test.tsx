@@ -55,7 +55,7 @@ it.each(['suspended'] as const)(
         <TerminalPaneResumeInChatButton tabId="shell" worktreeId="wt-1" paneKey={paneKey} />
       </TooltipProvider>
     )
-    const header = screen.getByRole('button', { name: 'Switch to native chat', hidden: true })
+    const header = screen.getByRole('button', { name: 'Switch to Chat UI', hidden: true })
     expect(header.hasAttribute('disabled')).toBe(false)
     act(() =>
       useAppStore.getState().setPaneForegroundAgent(paneKey, { agent: null, shellForeground: true })

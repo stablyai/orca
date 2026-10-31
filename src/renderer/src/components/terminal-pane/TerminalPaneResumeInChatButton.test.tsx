@@ -46,8 +46,8 @@ beforeEach(() => {
 })
 
 it.each([
-  ['claude', 'Switch to native chat'],
-  ['codex', 'Switch to native chat']
+  ['claude', 'Switch to Chat UI'],
+  ['codex', 'Switch to Chat UI']
 ] as const)('offers the %s action for the exact pane and shares pending', (agent, label) => {
   mocks.source.agent = agent
   if (agent === 'claude') {
@@ -87,7 +87,7 @@ it('keeps an older host visible but disabled, telling the user to update it', as
     </TooltipProvider>
   )
   const button = screen.getByRole('button', {
-    name: 'Switch to native chat. Update Orca on this host to continue in Chat UI.'
+    name: 'Switch to Chat UI. Update Orca on this host to continue in Chat UI.'
   })
   expect(button.hasAttribute('disabled')).toBe(true)
   const trigger = button.parentElement

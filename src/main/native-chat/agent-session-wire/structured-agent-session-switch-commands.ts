@@ -80,7 +80,6 @@ export function createStructuredAgentSessionSwitchCommands(
         }
       },
       switchGeneration: (id: string) => commands.get(id)?.generation,
-      switchExecuting: (id: string) => Boolean(commands.get(id) && !commands.get(id)?.settled),
       /** Stop and spawn work already dispatched settles even when the observing request expired. */
       trackSwitchPhysical: <T>(id: string, work: Promise<T>): Promise<T> => {
         const command = commands.get(id)

@@ -19219,10 +19219,10 @@
         },
         "switch": {
           "toCli": "CLI로 전환",
-          "toNativeChat": "네이티브 채팅으로 전환",
-          "toCliTooltip": "CLI로 전환: 네이티브 채팅에서 {{agent}}을(를) 중지하고 터미널에서 같은 대화를 이어갑니다.",
+          "toNativeChat": "채팅 UI로 전환",
+          "toCliTooltip": "CLI로 전환: 채팅 UI에서 {{agent}}을(를) 중지하고 터미널에서 같은 대화를 이어갑니다.",
           "openedInWorkspace": "{{workspace}}에서 채팅을 열었습니다.",
-          "toNativeChatTooltip": "네이티브 채팅으로 전환: 이 탭의 채팅에서 같은 대화를 이어갑니다.",
+          "toNativeChatTooltip": "채팅 UI로 전환: 이 탭의 채팅에서 같은 대화를 이어갑니다.",
           "noConversation": "이 터미널에는 아직 저장된 대화가 없습니다."
         },
         "BrowserTab": {

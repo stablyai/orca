@@ -19753,10 +19753,10 @@
         },
         "switch": {
           "toCli": "Cambiar a la CLI",
-          "toNativeChat": "Cambiar al chat nativo",
-          "toCliTooltip": "Cambiar a la CLI: detiene {{agent}} en el chat nativo y continúa la misma conversación en una terminal.",
+          "toNativeChat": "Cambiar a la interfaz de chat",
+          "toCliTooltip": "Cambiar a la CLI: detiene {{agent}} en la interfaz de chat y continúa la misma conversación en una terminal.",
           "openedInWorkspace": "Chat abierto en {{workspace}}.",
-          "toNativeChatTooltip": "Cambiar al chat nativo: continúa la misma conversación en un chat, en esta pestaña.",
+          "toNativeChatTooltip": "Cambiar a la interfaz de chat: continúa la misma conversación en un chat, en esta pestaña.",
           "noConversation": "Todavía no hay una conversación guardada disponible en este terminal."
         },
         "BrowserTab": {

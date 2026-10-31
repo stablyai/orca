@@ -19973,10 +19973,10 @@
         },
         "switch": {
           "toCli": "Passer à la CLI",
-          "toNativeChat": "Passer au chat natif",
-          "toCliTooltip": "Passer à la CLI : arrête {{agent}} dans le chat natif et poursuit la même conversation dans un terminal.",
+          "toNativeChat": "Passer à l'interface de chat",
+          "toCliTooltip": "Passer à la CLI : arrête {{agent}} dans l'interface de chat et poursuit la même conversation dans un terminal.",
           "openedInWorkspace": "Chat ouvert dans {{workspace}}.",
-          "toNativeChatTooltip": "Passer au chat natif : poursuit la même conversation dans un chat, dans cet onglet.",
+          "toNativeChatTooltip": "Passer à l'interface de chat : poursuit la même conversation dans un chat, dans cet onglet.",
           "noConversation": "Aucune conversation enregistrée n’est encore disponible dans ce terminal."
         },
         "BrowserTab": {

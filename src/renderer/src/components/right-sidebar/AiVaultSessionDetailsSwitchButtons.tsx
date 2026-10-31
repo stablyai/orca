@@ -48,7 +48,7 @@ export function AiVaultSessionDetailsSwitchButtons({
         >
           <MessagesSquare className="size-3.5" />
           {inPlaceAgent
-            ? translate('components.tab.bar.switch.toNativeChat', 'Switch to native chat')
+            ? translate('components.tab.bar.switch.toNativeChat', 'Switch to Chat UI')
             : translate(
                 'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
                 'Resume in New Chat'

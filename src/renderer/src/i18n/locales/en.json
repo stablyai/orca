@@ -20086,10 +20086,10 @@
         "switch": {
           "legacyCopy": "A copy of this {{agent}} conversation opens in a new terminal. The original chat stays open.",
           "toCli": "Switch to CLI",
-          "toNativeChat": "Switch to native chat",
-          "toCliTooltip": "Switch to CLI: stops {{agent}} in native chat and continues the same conversation in a terminal.",
+          "toNativeChat": "Switch to Chat UI",
+          "toCliTooltip": "Switch to CLI: stops {{agent}} in Chat UI and continues the same conversation in a terminal.",
           "openedInWorkspace": "Opened chat in {{workspace}}.",
-          "toNativeChatTooltip": "Switch to native chat: continues the same conversation in a chat, in this tab.",
+          "toNativeChatTooltip": "Switch to Chat UI: continues the same conversation in a chat, in this tab.",
           "noConversation": "No saved conversation is available in this terminal yet.",
           "openElsewhere": "{{agent}} is open in another chat or terminal. Continue there, then try switching again.",
           "stopUnknown": "Orca could not confirm {{agent}} stopped. Check its open chats and terminals, then try switching again.",

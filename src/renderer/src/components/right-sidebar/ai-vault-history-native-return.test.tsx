@@ -190,7 +190,7 @@ it.each(['local', 'runtime:paired'] as const)(
       runtimeStatusByEnvironmentId: new Map([['paired', pairedHistoryStatus()]])
     })
     render(<History session={{ ...row, executionHostId: host }} />)
-    const button = await screen.findByRole('button', { name: 'Switch to native chat' })
+    const button = await screen.findByRole('button', { name: 'Switch to Chat UI' })
     expect(button.hasAttribute('disabled')).toBe(false)
     await userEvent.setup().click(button)
     expect(mocks.startOwner).toHaveBeenCalledWith(
