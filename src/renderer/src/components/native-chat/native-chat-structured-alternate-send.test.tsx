@@ -14,7 +14,6 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import { promptValue } from './native-chat-prompt-editor.test-support'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), ptySend: vi.fn(() => null) }))
@@ -91,7 +90,7 @@ import { useStructuredAgentSession } from './use-structured-agent-session'
 import { useNativeChatStructuredComposerTransport } from './use-native-chat-structured-composer-transport'
 import * as queueRequests from './structured-agent-session-queue-request'
 import { nativeChatStructuredStopControls } from './native-chat-structured-stop-controls'
-import { changePrompt } from './native-chat-prompt-editor.test-support'
+import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
 
 function Chat({
   queueFollowUps,
