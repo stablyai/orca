@@ -1,3 +1,5 @@
+import { readAgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
+import { orchestrationNoticeMessage } from '../../../../shared/native-chat-orchestration-notice.test-fixture'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
@@ -264,4 +266,27 @@ describe('rail outline merge', () => {
       loaded
     )
   })
+})
+
+it('maps human authors only, preserving slot offsets past typed and newer agent inputs', () => {
+  const notice = orchestrationNoticeMessage()
+  const newer = readAgentMessageSource({
+    kind: 'agent',
+    senders: [],
+    orchestration: { message: 'future' }
+  })
+  expect(newer?.kind).toBe('agent')
+  const messages = [
+    { ...notice, id: 'person', from: undefined },
+    notice,
+    { ...notice, id: 'task', from: { ...notice.from!, orchestration: null } },
+    { ...notice, id: 'future', from: newer },
+    text('last', 'Last human prompt', 'user')
+  ]
+  const slots = slotsOf(messages)
+  expect(slots).toHaveLength(5)
+  expect(buildNativeChatRailItems(slots).map(({ id, slotIndex }) => ({ id, slotIndex }))).toEqual([
+    { id: 'person', slotIndex: 0 },
+    { id: 'last', slotIndex: 4 }
+  ])
 })

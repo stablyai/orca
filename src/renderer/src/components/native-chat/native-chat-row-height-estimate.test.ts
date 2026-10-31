@@ -1,3 +1,4 @@
+import { orchestrationNoticeMessage } from '../../../../shared/native-chat-orchestration-notice.test-fixture'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
@@ -268,4 +269,13 @@ describe('transcript row height estimate', () => {
     expect(standard).toBe(24)
     expect(large).toBeGreaterThan(standard)
   })
+})
+
+it('estimates typed mail as one collapsed line while human lookalike text keeps bubble height', () => {
+  const notice = orchestrationNoticeMessage()
+  const person = { ...notice, from: undefined }
+  expect(estimateNativeChatRowHeight(nativeChatRowContentMetrics(notice), NO_CHROME)).toBe(24)
+  expect(
+    estimateNativeChatRowHeight(nativeChatRowContentMetrics(person), NO_CHROME)
+  ).toBeGreaterThan(24)
 })

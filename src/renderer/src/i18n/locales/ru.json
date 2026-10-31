@@ -19881,7 +19881,8 @@
         "orcaStopUnnamedServer": "удалённом сервере",
         "permissionDenied": "{{agent}} отказал в разрешении. Подробнее.",
         "safetyReview": "{{agent}} сообщил о предупреждении проверки безопасности. Подробнее.",
-        "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт)."
+        "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт).",
+        "orchestrationMail": "Служебные сообщения агентов"
       },
       "composer": {
         "send": "Отправить",

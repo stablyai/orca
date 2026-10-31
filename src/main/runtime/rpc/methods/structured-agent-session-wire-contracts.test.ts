@@ -146,6 +146,7 @@ describe('agentSession.conversationOutline', () => {
         sessionId: SESSION,
         cursor: { epoch: 'epoch-a', sequence: 12 },
         entries: [{ itemId: 'prompt-1', sequence: 4, preview: 'Fix it', imageCount: 0 }],
+        humanMessagesOnly: true,
         omittedEntries: 0
       }
     })

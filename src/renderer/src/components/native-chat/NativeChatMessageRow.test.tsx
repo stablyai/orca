@@ -24,6 +24,10 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import {
+  ORCHESTRATION_NOTICE_SOURCE,
+  orchestrationNoticeMessage
+} from '../../../../shared/native-chat-orchestration-notice.test-fixture'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
@@ -314,5 +318,49 @@ describe('what a user message says about its delivery', () => {
     expect(screen.queryByText('Sending…')).toBeNull()
     expect(screen.getByRole('time').parentElement).toBe(meta)
     expect(meta).toHaveClass('can-hover:opacity-0')
+  })
+})
+
+describe('typed orchestration mail activity', () => {
+  it('starts collapsed and expands the original command without changing the message', () => {
+    const message = orchestrationNoticeMessage()
+    const before = JSON.stringify(message)
+    render(<MessageRow message={message} expandSignal={false} onScrollMessageToTop={vi.fn()} />)
+    const trigger = screen.getByRole('button', { name: 'Orchestration mail' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText(/You have 2 orchestration messages/)).toBeNull()
+    expect(screen.queryByText('Message from')).toBeNull()
+    fireEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('orca orchestration check')).toBeVisible()
+    expect(screen.getByText('Message from')).toBeVisible()
+    fireEvent.click(trigger)
+    expect(screen.queryByText('orca orchestration check')).toBeNull()
+    expect(JSON.stringify(message)).toBe(before)
+  })
+
+  it.each(['person', 'task', 'unknown'] as const)('leaves %s prose readable', (kind) => {
+    const notice = orchestrationNoticeMessage()
+    const message = {
+      ...notice,
+      from:
+        kind === 'person'
+          ? undefined
+          : {
+              ...ORCHESTRATION_NOTICE_SOURCE,
+              orchestration:
+                kind === 'task'
+                  ? {
+                      message: 'task' as const,
+                      runId: 'run',
+                      taskId: 'task',
+                      dispatchId: 'dispatch'
+                    }
+                  : null
+            }
+    }
+    render(<MessageRow message={message} expandSignal={false} onScrollMessageToTop={vi.fn()} />)
+    expect(screen.getByText('orca orchestration check')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Orchestration mail' })).toBeNull()
   })
 })

@@ -15,6 +15,8 @@ export type StructuredRailOutlineWindow = {
 export type StructuredRailOutlineView =
   /** Everything is loaded, or nothing is: the loaded rail is already the whole thread. */
   | { kind: 'complete' }
+  /** Older hosts cannot establish authorship for retained entries. */
+  | { kind: 'unattributed' }
   | { kind: 'fresh'; entries: readonly NativeChatRailOutlineEntry[] }
   | { kind: 'stale' }
 
@@ -40,6 +42,9 @@ export function selectStructuredRailOutline(
     outline.cursor.sequence < oldestLoadedSequence - 1
   ) {
     return STALE
+  }
+  if (outline.humanMessagesOnly !== true) {
+    return { kind: 'unattributed' }
   }
   // Reuse view identity until covered entries change; streaming often moves the edge without crossing a prompt.
   const prior = views.get(outline)

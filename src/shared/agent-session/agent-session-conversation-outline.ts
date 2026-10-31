@@ -1,4 +1,4 @@
-// Project every journal user row, including unloaded pages, with the transcript projection so rail identity, order and preview cannot disagree.
+// Project every human-authored journal user row, including unloaded pages, with the transcript projection so rail identity, order and preview cannot disagree.
 
 import type {
   AgentJournalCursor,
@@ -32,7 +32,9 @@ export type AgentSessionConversationOutlineEntry = {
 
 export type AgentSessionConversationOutline = {
   sessionId: string
-  /** Journal position the outline is current through: every user message created
+  /** Absent on older hosts whose outlines can include agent-authored turn inputs. */
+  humanMessagesOnly?: true
+  /** Journal position the outline is current through: every human-authored message created
    *  at or before `cursor.sequence` is listed, unless `omittedEntries` says otherwise. */
   cursor: AgentJournalCursor
   entries: AgentSessionConversationOutlineEntry[]
@@ -173,6 +175,7 @@ export function projectAgentSessionConversationOutline(
       sequence === undefined ||
       stopped.has(message.id) ||
       message.role !== 'user' ||
+      message.from !== undefined ||
       !nativeChatRowRendersContent(message.blocks)
     ) {
       continue

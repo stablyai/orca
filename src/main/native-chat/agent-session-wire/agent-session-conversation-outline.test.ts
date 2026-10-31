@@ -105,3 +105,13 @@ describe('conversation outline read', () => {
     expect(outline.entries.at(-1)?.itemId).toBe('user-10000')
   })
 })
+
+it('marks even an empty successful outline as human-only', () => {
+  expect(readAgentSessionConversationOutline(snapshot([]))).toEqual({
+    sessionId: 'session-1',
+    humanMessagesOnly: true,
+    cursor: { epoch: 'epoch-1', sequence: 0 },
+    entries: [],
+    omittedEntries: 0
+  })
+})
