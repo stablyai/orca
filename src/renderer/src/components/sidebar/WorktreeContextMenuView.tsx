@@ -36,6 +36,7 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
+import { ProjectGroupMoveMenuItems } from './ProjectGroupMoveMenuItems'
 import {
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   getWorktreeParentPickerLabel,
@@ -229,15 +230,11 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                         )}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent>
-                        {projectGroups.map((group) => (
-                          <DropdownMenuItem
-                            key={group.id}
-                            disabled={repo.projectGroupId === group.id}
-                            onSelect={() => handleMoveProjectToGroup(group.id)}
-                          >
-                            <span className="max-w-48 truncate">{group.name}</span>
-                          </DropdownMenuItem>
-                        ))}
+                        <ProjectGroupMoveMenuItems
+                          projectGroups={projectGroups}
+                          currentGroupId={repo.projectGroupId}
+                          onMove={handleMoveProjectToGroup}
+                        />
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
                   ) : null}

@@ -13,11 +13,14 @@ import {
   getProjectGroupingForRepo,
   type ProjectGroupingModel
 } from '../../../../../../shared/project-section-grouping'
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { getHostContextLabel } from '../../../../../../shared/worktree/host-context-labels'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
 import type { SshConnectionState } from '../../../../../../shared/ssh-types'
+
+type ProjectGroupHostRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
 
 export type ProjectHeaderHostContext = {
   hostId: ExecutionHostId
@@ -25,28 +28,66 @@ export type ProjectHeaderHostContext = {
   detail: string
 }
 
-export function getProjectHeaderHostContexts(args: {
-  rows: readonly HostSectionRow[]
-  visibleProjectRepoIdsBySection?: ReadonlyMap<string, ReadonlySet<string>>
+type HostContextSources = {
   hosts: readonly ExecutionHostRegistryEntry[]
   runtimeEnvironments?: readonly ManagedOrcadEnvironmentSummary[]
   sshConnectionStates?: ReadonlyMap<string, Pick<SshConnectionState, 'managedServer'>>
-  repoMap: Map<string, Repo>
-  projectGrouping?: ProjectGroupingModel
-}): ReadonlyMap<string, ProjectHeaderHostContext> {
-  const hostRegistry = new Map(args.hosts.map((host) => [host.id, host]))
+}
+
+type HostContextResolver = {
+  canonicalHostId: (hostId: ExecutionHostId) => ExecutionHostId
+  contextFor: (hostId: ExecutionHostId) => ProjectHeaderHostContext
+}
+
+function createHostContextResolver(sources: HostContextSources): HostContextResolver {
+  const hostRegistry = new Map(sources.hosts.map((host) => [host.id, host]))
   annotateManagedOrcadExecutionHosts({
     hosts: hostRegistry,
     // Preserve authoritative aliases; feed options need owner configuration to fill them in.
-    runtimeEnvironments: (args.runtimeEnvironments ?? []).filter((environment) => {
+    runtimeEnvironments: (sources.runtimeEnvironments ?? []).filter((environment) => {
       const host = hostRegistry.get(toRuntimeExecutionHostId(environment.id))
       return !host?.mergedIntoHostId && !host?.aliasHostIds?.length
     }),
-    sshConnectionStates: args.sshConnectionStates
+    sshConnectionStates: sources.sshConnectionStates
   })
   const hostsById = indexExecutionHostsById([...hostRegistry.values()])
   const canonicalHostId = (hostId: ExecutionHostId): ExecutionHostId =>
     hostsById.get(hostId)?.id ?? hostId
+  return {
+    canonicalHostId,
+    contextFor: (hostId) => {
+      const canonical = canonicalHostId(hostId)
+      const host = hostsById.get(canonical)
+      return {
+        hostId: canonical,
+        label: host?.label ?? getHostContextLabel(canonical),
+        detail: host?.detail ?? getHostContextLabel(canonical)
+      }
+    }
+  }
+}
+
+/** Each project group's computer, in the groups' order; empty unless the groups span computers. */
+export function getProjectGroupHostContexts(
+  args: HostContextSources & { groups: readonly ProjectGroupHostRecord[] }
+): readonly ProjectHeaderHostContext[] {
+  const resolver = createHostContextResolver(args)
+  // Why: by position, since same-id copies of a group can sit on several computers (#30045).
+  const contexts = args.groups.map((group) => resolver.contextFor(getRepoExecutionHostId(group)))
+  // Why: a group lives on the computer that made it, which only matters once groups come from several.
+  return new Set(contexts.map(({ hostId }) => hostId)).size > 1 ? contexts : []
+}
+
+export function getProjectHeaderHostContexts(
+  args: HostContextSources & {
+    rows: readonly HostSectionRow[]
+    visibleProjectRepoIdsBySection?: ReadonlyMap<string, ReadonlySet<string>>
+    repoMap: Map<string, Repo>
+    projectGrouping?: ProjectGroupingModel
+  }
+): ReadonlyMap<string, ProjectHeaderHostContext> {
+  const resolver = createHostContextResolver(args)
+  const { canonicalHostId } = resolver
   const projectIndex = buildProjectGroupingIndex(args.projectGrouping)
   const repoHostId = (repo: Repo): ExecutionHostId =>
     canonicalHostId(
@@ -104,14 +145,9 @@ export function getProjectHeaderHostContexts(args: {
     } else {
       continue
     }
-    const hostId = canonicalHostId(ownerHostId)
-    labelHosts.add(hostId)
-    const host = hostsById.get(hostId)
-    candidates.set(row.key, {
-      hostId,
-      label: host?.label ?? getHostContextLabel(hostId),
-      detail: host?.detail ?? getHostContextLabel(hostId)
-    })
+    const context = resolver.contextFor(ownerHostId)
+    labelHosts.add(context.hostId)
+    candidates.set(row.key, context)
   }
   // Only colliding names across machines need a host label.
   return new Map(
