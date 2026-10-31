@@ -53,7 +53,7 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('../components/PickerModal', () => ({ PickerModal: () => null }))
 vi.mock('../components/TerminalShortcutSettings', () => ({ TerminalShortcutSettings: () => null }))
-vi.mock('../transport/host-store', () => ({ loadHosts: async () => [] }))
+vi.mock('../transport/host-store', () => ({ loadHosts: async () => [], peekHosts: () => null }))
 vi.mock('../transport/settings-host-client-connections', () => ({
   useFocusedSettingsHostClients: () => ({ clients: [], focused: true })
 }))

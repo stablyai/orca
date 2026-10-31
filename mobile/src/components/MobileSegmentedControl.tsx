@@ -1,5 +1,6 @@
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native'
-import { colors, concentricRadius, radii, spacing } from '../theme/mobile-theme'
+import { triggerSelection } from '../platform/haptics'
+import { colors, concentricRadius, feedback, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -46,11 +47,19 @@ export function MobileSegmentedControl<Value extends string>(props: Props<Value>
             disabled={props.disabled}
             accessibilityLabel={segment.accessibilityLabel ?? segment.label}
             testID={props.testIDPrefix ? `${props.testIDPrefix}${segment.value}` : undefined}
-            onPress={() => props.onSelect(segment.value)}
-            style={[
+            onPress={() => {
+              if (!active) {
+                triggerSelection()
+              }
+              props.onSelect(segment.value)
+            }}
+            // Stretches the 34 pt segment to a 44 pt touch box.
+            hitSlop={{ top: 5, bottom: 5 }}
+            style={({ pressed }) => [
               styles.segment,
               props.fill && styles.segmentFill,
-              active && (props.onSheet ? styles.segmentActiveOnSheet : styles.segmentActive)
+              active && (props.onSheet ? styles.segmentActiveOnSheet : styles.segmentActive),
+              pressed && !active && styles.segmentPressed
             ]}
           >
             <Text
@@ -89,5 +98,6 @@ const styles = themedStyleSheet(() => ({
   // bgRaised is the sheet group's own color in dark; the switch's grey fill lifts off it in both themes.
   segmentActiveOnSheet: { backgroundColor: colors.translucentFill },
   segmentText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
-  segmentTextActive: { color: colors.textPrimary }
+  segmentTextActive: { color: colors.textPrimary },
+  segmentPressed: { opacity: feedback.pressedOpacity }
 }))

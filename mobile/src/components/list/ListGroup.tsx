@@ -1,5 +1,7 @@
 import { Children, Fragment, isValidElement, type ReactNode } from 'react'
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { ChevronDown } from 'lucide-react-native'
+import { DisclosureChevron } from '../DisclosureChevron'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -41,4 +43,80 @@ const styles = themedStyleSheet(() => ({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle
   }
+}))
+
+// Kept beside ListGroup: as its own module it costs the page bundle a shared chunk under the asset ceiling.
+type SectionHeaderProps = {
+  title: string
+  /** Right-aligned, e.g. "Optional" or a compact action. */
+  trailing?: ReactNode
+  /** Makes the header a disclosure button whose chevron turns with the state. */
+  expanded?: boolean
+  onToggle?: () => void
+  /** Less space above, for the first section under a header. */
+  first?: boolean
+}
+
+/** A section's label above a ListGroup: 13 pt in sentence case, lined up with the row text. */
+export function SectionHeader({
+  title,
+  trailing,
+  expanded,
+  onToggle,
+  first = false
+}: SectionHeaderProps) {
+  useMobileColorScheme()
+  const label = (
+    <>
+      <Text style={sectionHeaderStyles.title} numberOfLines={1}>
+        {title}
+      </Text>
+      <View style={sectionHeaderStyles.spacer} />
+      {typeof trailing === 'string' ? (
+        <Text style={sectionHeaderStyles.title}>{trailing}</Text>
+      ) : (
+        trailing
+      )}
+    </>
+  )
+  if (onToggle === undefined) {
+    return (
+      <View style={[sectionHeaderStyles.header, first && sectionHeaderStyles.first]}>{label}</View>
+    )
+  }
+  return (
+    <Pressable
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ expanded: expanded === true }}
+      style={({ pressed }) => [
+        sectionHeaderStyles.header,
+        sectionHeaderStyles.toggle,
+        first && sectionHeaderStyles.first,
+        pressed && sectionHeaderStyles.pressed
+      ]}
+    >
+      {label}
+      <DisclosureChevron expanded={expanded === true} collapsedDeg={-90} expandedDeg={0}>
+        <ChevronDown size={15} color={colors.textMuted} strokeWidth={2.2} />
+      </DisclosureChevron>
+    </Pressable>
+  )
+}
+
+const sectionHeaderStyles = themedStyleSheet(() => ({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingTop: spacing.lg,
+    paddingBottom: 6
+  },
+  toggle: { minHeight: 44, paddingBottom: spacing.xs },
+  first: { paddingTop: spacing.xs },
+  pressed: { opacity: 0.6 },
+  title: { fontSize: 13, fontWeight: '500', color: colors.textSecondary, flexShrink: 1 },
+  spacer: { flex: 1 }
 }))

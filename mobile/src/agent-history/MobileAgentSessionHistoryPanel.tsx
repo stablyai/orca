@@ -2,7 +2,7 @@ import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft, CircleAlert, History, RefreshCw, SearchX } from 'lucide-react-native'
+import { ChevronLeft, History, RefreshCw } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSegmentedControl, type MobileSegment } from '../components/MobileSegmentedControl'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
@@ -32,7 +32,12 @@ import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
 import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
-import { AgentHistoryStateView } from './AgentHistoryStateView'
+import {
+  MobileLoadErrorState,
+  MobileNoMatchState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/MobileStateView'
 import { AgentHistoryResumeNotice, AgentHistorySkippedNotice } from './AgentHistoryNotices'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
@@ -323,12 +328,12 @@ function MobileAgentSessionHistoryPanelContent({
       </SafeAreaView>
 
       {screenState.kind === 'loading' ? (
-        <AgentHistoryStateView
+        <MobileStateView
           loading
           title={t('agentHistory.panel.loading', 'Loading agent sessions…')}
         />
       ) : screenState.kind === 'unsupported' ? (
-        <AgentHistoryStateView
+        <MobileStateView
           icon={History}
           title={t('agentHistory.panel.unavailable', 'Agent Session History Unavailable')}
           message={t(
@@ -336,13 +341,10 @@ function MobileAgentSessionHistoryPanelContent({
             'Update Orca on this host to browse agent session history.'
           )}
         />
+      ) : screenState.kind === 'error' && connState !== 'connected' ? (
+        <MobileOfflineState onReconnect={retry} />
       ) : screenState.kind === 'error' ? (
-        <AgentHistoryStateView
-          icon={CircleAlert}
-          title={t('agentHistory.panel.loadFailed', 'Unable to Load')}
-          message={screenState.message}
-          action={retry ? { label: t('common.retry', 'Retry'), onPress: retry } : undefined}
-        />
+        <MobileLoadErrorState error={screenState.message} onRetry={retry} />
       ) : (
         <>
           {issues.length > 0 ? <AgentHistorySkippedNotice issues={issues} /> : null}
@@ -354,18 +356,13 @@ function MobileAgentSessionHistoryPanelContent({
           ) : null}
           {sections.length === 0 ? (
             query ? (
-              <AgentHistoryStateView
-                icon={SearchX}
-                title={t('agentHistory.panel.noMatches', 'No matches')}
+              <MobileNoMatchState
                 message={t('agentHistory.panel.noSearchResults', 'No sessions match your search.')}
-                action={{
-                  label: t('agentHistory.panel.clearSearch', 'Clear search'),
-                  onPress: () => setQuery('')
-                }}
+                onClear={() => setQuery('')}
                 bottomInset={searchBarHeight}
               />
             ) : (
-              <AgentHistoryStateView
+              <MobileStateView
                 icon={History}
                 title={t('agentHistory.panel.noSessions', 'No agent sessions')}
                 message={t(

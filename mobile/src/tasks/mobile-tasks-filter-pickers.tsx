@@ -259,6 +259,7 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
 export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentationModel) {
   const {
     linearStates,
+    linearStatesError,
     linearStatesLoading,
     linearStatusPickerItem,
     mutatingStatus,
@@ -289,6 +290,8 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
               {translate('tasks.filterPickers.loadingStates', 'Loading states...')}
             </Text>
           </View>
+        ) : linearStatesError ? (
+          <Text style={[styles.emptyInlineText, styles.errorText]}>{linearStatesError}</Text>
         ) : linearStates.length === 0 ? (
           <Text style={styles.emptyInlineText}>
             {translate('tasks.filterPickers.noStates', 'No states available')}

@@ -9,7 +9,6 @@ import {
   ScrollView,
   Pressable,
   Platform,
-  ActivityIndicator,
   type ListRenderItem
 } from 'react-native'
 import { Copy, MessageSquare, Send } from 'lucide-react-native'
@@ -35,7 +34,7 @@ import type {
 } from './mobile-session-route-types'
 import { DiffLineRow } from './MobileSessionDiffLineRow'
 import { sendableMobileDiffComments } from './mobile-diff-comments'
-import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { MobileLoadErrorState, MobileStateView } from '../components/MobileStateView'
 
 type FileReaderProps = {
   doc: FileDocState | undefined
@@ -186,14 +185,10 @@ function FileReaderDocument({
   }, [doc, syntaxLanguage])
 
   if (!doc || doc.status === 'loading') {
-    return (
-      <View style={styles.markdownState}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    )
+    return <MobileStateView loading title={t('session.fileReader.loading', 'Loading file…')} />
   }
   if (doc.status === 'error') {
-    return <MobileLoadErrorState message={doc.message} />
+    return <MobileLoadErrorState error={doc.message} />
   }
 
   if (doc.kind === 'diff') {

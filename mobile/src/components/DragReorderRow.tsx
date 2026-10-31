@@ -21,7 +21,8 @@ import {
   orderedKeysFromDragReorderPositions,
   type DragReorderPositions
 } from './drag-reorder-positions'
-const ROW_SPRING = { damping: 28, stiffness: 350 }
+// Critically damped: Reanimated 4's default mass of 4 made the old damping/stiffness pair wobble.
+const ROW_SPRING = { dampingRatio: 1, duration: 250 } as const
 const LONG_PRESS_ACTIVATION_MS = 200
 
 export type DragSharedState = {

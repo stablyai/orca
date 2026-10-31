@@ -144,7 +144,8 @@ describe('message selection actions', () => {
     ]
   ] as const)('copies the %s source %j through Android message actions', (role, text, expected) => {
     render({ ...message, role, blocks: [{ type: 'text', text }] })
-    expect(nodes('Pressable').map((node) => node.props.disabled)).toEqual([undefined, undefined])
+    expect(nodes('Pressable')).toHaveLength(2)
+    expect(nodes('Pressable').some((node) => node.props.disabled)).toBe(false)
     pressAction(0)
     expect(writeText.mock.calls).toEqual([[expected]])
     expect(onClose).not.toHaveBeenCalled()

@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronRight, FileText, Minus, Plus, Trash2 } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { SectionHeader } from '../components/list/ListGroup'
 import { STATUS_LABELS } from '../../../src/shared/git-status-labels'
 import type { GitConflictKind } from '../../../src/shared/git-status-types'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -247,19 +248,17 @@ export function BranchCompareHeader({ state }: { state: BranchState }) {
 
   return (
     <View style={styles.branchCompareBlock}>
-      <View style={styles.sectionHeader}>
-        <View style={styles.branchSectionTitleBlock}>
-          <Text style={styles.sectionTitle}>
-            {t('sourceControl.fileRows.committedSection', 'Committed on Branch')}
-          </Text>
-          {branchCompareSummaryText ? (
-            <Text style={styles.branchSectionSubtitle} numberOfLines={1}>
-              {branchCompareSummaryText}
-            </Text>
-          ) : null}
-        </View>
-        <Text style={styles.sectionCount}>{branchEntries.length}</Text>
+      <View style={styles.sectionHeaderBleed}>
+        <SectionHeader
+          title={t('sourceControl.fileRows.committedSection', 'Committed on Branch')}
+          trailing={String(branchEntries.length)}
+        />
       </View>
+      {branchCompareSummaryText ? (
+        <Text style={styles.branchSectionSubtitle} numberOfLines={1}>
+          {branchCompareSummaryText}
+        </Text>
+      ) : null}
       {branchCompareState.kind === 'loading' ? (
         <View style={styles.branchStateRow}>
           <ActivityIndicator size="small" color={colors.textSecondary} />

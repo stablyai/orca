@@ -13,7 +13,7 @@ import { colors, spacing } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import type { Translate } from '../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { loadHosts } from '../src/transport/host-store'
+import { loadHosts, peekHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc-client'
@@ -163,7 +163,7 @@ export default function TerminalSettingsScreen() {
   const t = useMobileTranslation()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const [hosts, setHosts] = useState<HostProfile[]>([])
+  const [hosts, setHosts] = useState<HostProfile[]>(() => peekHosts() ?? [])
   useEffect(() => {
     void loadHosts().then(setHosts)
   }, [])

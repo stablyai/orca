@@ -3,8 +3,9 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-nati
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
-import { loadHosts } from '../transport/host-store'
-import { useHostClient } from '../transport/host-client-hooks'
+import { loadHosts, peekHosts } from '../transport/host-store'
+import { useForceReconnect, useHostClient } from '../transport/host-client-hooks'
+import { MobileAccountsLoadState } from './MobileAccountsLoadState'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -45,7 +46,11 @@ export function MobileAccountsScreen() {
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
-  const [hostName, setHostName] = useState<string>('')
+  const forceReconnect = useForceReconnect()
+  // Seed from the last host read so the subtitle is there on the first frame.
+  const [hostName, setHostName] = useState(
+    () => peekHosts()?.find((host) => host.id === hostId)?.name ?? ''
+  )
   const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -110,27 +115,6 @@ export function MobileAccountsScreen() {
     }
   }, [hostId, t])
 
-  // Stream desktop poll/account-switch updates, falling back to one-shot accounts.list on subscription error.
-  useEffect(() => {
-    if (!client || connState !== 'connected') {
-      return
-    }
-    const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
-      if (!payload || typeof payload !== 'object') {
-        return
-      }
-      const evt = payload as { type?: string; snapshot?: unknown }
-      if (evt.type === 'ready' || evt.type === 'snapshot') {
-        try {
-          acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
-        } catch {
-          rejectInvalidSnapshot()
-        }
-      }
-    })
-    return unsubscribe
-  }, [acceptSnapshot, client, connState, rejectInvalidSnapshot])
-
   const refresh = useCallback(async () => {
     if (!client) {
       return
@@ -153,6 +137,31 @@ export function MobileAccountsScreen() {
       setRefreshing(false)
     }
   }, [acceptSnapshot, client, rejectInvalidSnapshot])
+
+  // Stream desktop poll/account-switch updates, falling back to one-shot accounts.list on subscription error.
+  useEffect(() => {
+    if (!client || connState !== 'connected') {
+      return
+    }
+    const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
+      if (!payload || typeof payload !== 'object') {
+        return
+      }
+      const evt = payload as { type?: string; snapshot?: unknown }
+      if (evt.type === 'error') {
+        void refresh()
+        return
+      }
+      if (evt.type === 'ready' || evt.type === 'snapshot') {
+        try {
+          acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
+        } catch {
+          rejectInvalidSnapshot()
+        }
+      }
+    })
+    return unsubscribe
+  }, [acceptSnapshot, client, connState, refresh, rejectInvalidSnapshot])
 
   const selectAccount = useCallback(
     async (provider: ProviderKey, accountId: string | null) => {
@@ -350,28 +359,20 @@ export function MobileAccountsScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.xl }]}
+        contentContainerStyle={[
+          styles.scroll,
+          !snapshot && { flexGrow: 1 },
+          { paddingBottom: insets.bottom + spacing.xl }
+        ]}
       >
-        {connState !== 'connected' && !snapshot ? (
-          <View style={styles.placeholder}>
-            <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>
-              {hostName
-                ? t('accounts.screen.connectingTo', 'Connecting to {{name}}…', { name: hostName })
-                : t('accounts.screen.connecting', 'Connecting to host…')}
-            </Text>
-          </View>
-        ) : error && !snapshot ? (
-          <View style={styles.placeholder}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : !snapshot ? (
-          <View style={styles.placeholder}>
-            <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>
-              {t('accounts.screen.loadingAccounts', 'Loading accounts…')}
-            </Text>
-          </View>
+        {!snapshot ? (
+          <MobileAccountsLoadState
+            connState={connState}
+            hostName={hostName}
+            error={error}
+            onRetry={() => void refresh()}
+            onReconnect={hostId && forceReconnect ? () => void forceReconnect(hostId) : null}
+          />
         ) : (
           <>
             {renderProviderSection('claude', 'Claude')}

@@ -115,6 +115,19 @@
       "labels": [],
       "text": []
     },
+    "336b30aaf13b": {
+      "commitRow": "unrendered",
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ActivityIndicator": 1,
+        "Text": 1,
+        "View": 1
+      },
+      "labels": [],
+      "text": ["Loading commits…"]
+    },
     "3897e5e98ea7": {
       "name": "git.commitCompare#1",
       "ordinal": 3,
@@ -313,18 +326,6 @@
           "ok": false
         }
       }
-    },
-    "8271d8fc83a6": {
-      "commitRow": "unrendered",
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ActivityIndicator": 1,
-        "View": 1
-      },
-      "labels": [],
-      "text": []
     },
     "93866d571e27": {
       "name": "git.commitCompare#1",
@@ -633,7 +634,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "8271d8fc83a6",
+          "state": "336b30aaf13b",
           "effects": []
         }
       },
