@@ -6,6 +6,7 @@ import {
   claudeProviderHandle,
   codexProviderHandle
 } from '../../shared/agent-session-provider-handle-encoding'
+import { StructuredAgentSessionAccountMoveError } from '../native-chat/agent-session-wire/structured-agent-session-account-follow'
 import { createStructuredAgentAccountFollow } from './structured-agent-account-follow'
 
 const codexHome = (path: string): AgentSessionAccountHome => ({ variable: 'CODEX_HOME', path })
@@ -44,6 +45,14 @@ function follow(selected: AgentSessionAccountHome, options: { owns?: boolean } =
     resolveSelectedHome,
     getSettings: () => ({
       codexManagedAccounts: [
+        {
+          id: 'codex-a',
+          email: 'a@example.com',
+          managedHomePath: '/homes/a',
+          createdAt: 0,
+          updatedAt: 0,
+          lastAuthenticatedAt: 0
+        },
         {
           id: 'codex-b',
           email: 'b@example.com',
@@ -91,6 +100,26 @@ describe('createStructuredAgentAccountFollow', () => {
         sourceHomes: ['/claude/work'],
         targetHome: '/claude/default'
       })
+    )
+  })
+
+  it('names both accounts when carrying fails, so the chat can say where it stayed', async () => {
+    const f = follow(codexHome('/homes/b'))
+    f.carryCodex.mockRejectedValue(new Error('A different rollout already occupies the path.'))
+    const failed = await f.move(chat('codex', codexHome('/homes/a'), true)).catch((e) => e)
+    expect(failed).toBeInstanceOf(StructuredAgentSessionAccountMoveError)
+    expect(failed.accounts).toEqual({ account: 'b@example.com', from: 'a@example.com' })
+
+    const unknown = await f.move(chat('codex', codexHome('/homes/gone'), true)).catch((e) => e)
+    expect(unknown.accounts).toEqual({ account: 'b@example.com' })
+  })
+
+  it('keeps a failed quiet seed out of the chat: the user switched nothing', async () => {
+    const f = follow(claudeHome('/claude/default'))
+    const cause = new Error('transcript unreadable')
+    f.carryClaude.mockRejectedValue(cause)
+    await expect(f.move(chat('claude', claudeHome('/claude/work'), true, false))).rejects.toBe(
+      cause
     )
   })
 

@@ -43,6 +43,8 @@ export async function installConversationFileWithoutOverwrite(
   }
 }
 
+const RENAME_RETRY_MS = 150
+
 /** Like `installConversationFileWithoutOverwrite`, but a stale copy at `targetPath` (one `sourcePath`
  *  grew past, as separate copies across filesystems do) is replaced. A copy that diverged is kept. */
 export async function refreshConversationFileCopy(
@@ -71,7 +73,14 @@ export async function refreshConversationFileCopy(
   const staged = `${targetPath}.${randomUUID()}.tmp`
   try {
     await link(sourcePath, staged).catch(() => copyFile(sourcePath, staged))
-    await rename(staged, targetPath)
+    await rename(staged, targetPath).catch(async (error: unknown) => {
+      // Windows refuses a rename while a reader holds the file open; one short retry rides that out.
+      if (!['EPERM', 'EBUSY'].includes(errnoCodeOrUnknown(error))) {
+        throw error
+      }
+      await new Promise((resolve) => setTimeout(resolve, RENAME_RETRY_MS))
+      await rename(staged, targetPath)
+    })
   } finally {
     await rm(staged, { force: true })
   }

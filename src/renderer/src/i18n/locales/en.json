@@ -19414,7 +19414,9 @@
         "permissionDenied": "{{agent}} denied permission. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
-        "accountSwitched": "Now on {{account}} · same conversation"
+        "accountSwitched": "Now on {{account}} · same conversation",
+        "accountSwitchFailed": "Couldn't move this chat to {{account}}; it stays on its current account",
+        "accountSwitchFailedFrom": "Couldn't move this chat to {{account}}; it's still on {{from}}"
       },
       "composer": {
         "send": "Send",

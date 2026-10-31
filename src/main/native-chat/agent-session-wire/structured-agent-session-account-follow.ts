@@ -2,7 +2,17 @@
 // to that account, repins the record, and leaves a quiet row saying so.
 
 import { randomUUID } from 'node:crypto'
-import { agentSessionAccountSwitchBody } from '../../../shared/agent-session-account-switch-row'
+import {
+  AGENT_SESSION_ACCOUNT_SWITCH_FAILED_PRESENTATION,
+  AGENT_SESSION_ACCOUNT_SWITCH_PRESENTATION,
+  agentSessionAccountSwitchBody,
+  agentSessionAccountSwitchFailedBody,
+  type AgentSessionAccountSwitch
+} from '../../../shared/agent-session-account-switch-row'
+import type {
+  AgentJournalItemBody,
+  AgentJournalPlainStatusItem
+} from '../../../shared/agent-session-journal-types'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
@@ -24,6 +34,16 @@ export type StructuredAgentSessionAccountMove = {
   account?: string
   /** Repin without the row: the chat may already run there. */
   quiet?: true
+}
+
+/** A move that failed once it knew both accounts, so the chat can say where it stayed. */
+export class StructuredAgentSessionAccountMoveError extends Error {
+  constructor(
+    readonly accounts: AgentSessionAccountSwitch,
+    options: { cause: unknown }
+  ) {
+    super('moving a chat to the selected account failed', options)
+  }
 }
 
 /** The execution host's account selection, as a chat sees it. */
@@ -79,6 +99,16 @@ export async function followSelectedAccountBeforeStart(
       sessionId,
       error
     })
+    if (error instanceof StructuredAgentSessionAccountMoveError) {
+      const body = agentSessionAccountSwitchFailedBody(error.accounts)
+      await lock.commit(async () => {
+        // A restart forgets the attempt; the chat already says so if nothing changed since.
+        const journal = context.sessions.get(sessionId)?.journal
+        if (!journal || newestAccountRowText(journal) !== body.text) {
+          await appendAccountRow(context, sessionId, body)
+        }
+      })
+    }
     return
   }
   if (
@@ -100,23 +130,52 @@ export async function followSelectedAccountBeforeStart(
       return
     }
     await deps.store.repinAccountHome(sessionId, accountHome)
-    const journal = context.sessions.get(sessionId)?.journal
-    if (quiet || !journal || !activeProviderContext(current).head) {
-      return
+    if (!quiet && activeProviderContext(current).head) {
+      await appendAccountRow(context, sessionId, agentSessionAccountSwitchBody(account))
     }
-    const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
-    await journal
-      .appendItem(
-        { provider: 'orca', clientMessageId: `account-switch:${randomUUID()}` },
-        agentSessionAccountSwitchBody(account),
-        { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-      )
-      .catch((error: unknown) =>
-        deps.logger.warn('recording a chat account move failed', {
-          scope: 'account-follow',
-          sessionId,
-          error
-        })
-      )
   })
+}
+
+function newestAccountRowText(journal: {
+  visitItems: (
+    visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
+  ) => void
+}): string | undefined {
+  let newest: { sequence: number; text: string } | undefined
+  journal.visitItems((_itemId, sequence, body) => {
+    if (
+      body.kind === 'status' &&
+      (body.presentation === AGENT_SESSION_ACCOUNT_SWITCH_PRESENTATION ||
+        body.presentation === AGENT_SESSION_ACCOUNT_SWITCH_FAILED_PRESENTATION) &&
+      (!newest || sequence > newest.sequence)
+    ) {
+      newest = { sequence, text: body.text }
+    }
+  })
+  return newest?.text
+}
+
+async function appendAccountRow(
+  context: Pick<StructuredAgentSessionAttachContext, 'deps' | 'sessions'>,
+  sessionId: string,
+  body: AgentJournalPlainStatusItem
+): Promise<void> {
+  const { deps } = context
+  const journal = context.sessions.get(sessionId)?.journal
+  if (!journal) {
+    return
+  }
+  const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
+  await journal
+    .appendItem({ provider: 'orca', clientMessageId: `account-switch:${randomUUID()}` }, body, {
+      fence,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    .catch((error: unknown) =>
+      deps.logger.warn('recording a chat account move failed', {
+        scope: 'account-follow',
+        sessionId,
+        error
+      })
+    )
 }

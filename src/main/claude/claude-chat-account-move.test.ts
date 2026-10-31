@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mkdirSync,
   mkdtempSync,
@@ -10,7 +10,26 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
+import type * as SessionFileResolver from '../native-chat/session-file-resolver'
 import { carryClaudeConversationToAccountHome } from './claude-chat-account-move'
+
+const unreadable = new Map<string, string>()
+vi.mock('../native-chat/session-file-resolver', async (importOriginal) => {
+  const actual = await importOriginal<typeof SessionFileResolver>()
+  return {
+    ...actual,
+    resolveSessionFilePath: vi.fn(
+      async (...args: Parameters<typeof actual.resolveSessionFilePath>) => {
+        const code = unreadable.get(args[2]?.claudeProjectsDir ?? '')
+        if (code) {
+          throw Object.assign(new Error(`${code}: unreadable`), { code })
+        }
+        return actual.resolveSessionFilePath(...args)
+      }
+    )
+  }
+})
 
 const SESSION = '11111111-2222-4333-8444-555555555555'
 const PROJECT = '-Users-dev-repo'
@@ -32,6 +51,7 @@ describe('carryClaudeConversationToAccountHome', () => {
   })
 
   afterEach(() => {
+    unreadable.clear()
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -82,6 +102,34 @@ describe('carryClaudeConversationToAccountHome', () => {
     writeTranscript(homeA, 'turn 1\nturn 2a\nturn 3a\n')
     expect(await carry()).toBe(true)
     expect(readFileSync(own, 'utf8')).toBe('turn 1\nturn 2b\n')
+  })
+
+  it.each(['EACCES', 'EPERM'])(
+    'skips another account it cannot read (%s; Windows reports EPERM) instead of giving up on the rest',
+    async (code) => {
+      unreadable.set(join(homeC, 'projects'), code)
+      writeTranscript(homeA, 'from a\n')
+      expect(await carry()).toBe(true)
+      expect(readFileSync(join(homeB, 'projects', PROJECT, `${SESSION}.jsonl`), 'utf8')).toBe(
+        'from a\n'
+      )
+      expect(resolveSessionFilePath).toHaveBeenCalledWith('claude', SESSION, {
+        claudeProjectsDir: join(homeC, 'projects')
+      })
+    }
+  )
+
+  it('fails when the account it ran on cannot be read, so an older copy cannot win', async () => {
+    unreadable.set(join(homeA, 'projects'), 'EACCES')
+    writeTranscript(homeC, 'older copy\n')
+    await expect(carry()).rejects.toThrow('EACCES')
+    expect(() => readFileSync(join(homeB, 'projects', PROJECT, `${SESSION}.jsonl`))).toThrow()
+  })
+
+  it('fails on an unexpected read error in any account', async () => {
+    unreadable.set(join(homeC, 'projects'), 'EIO')
+    writeTranscript(homeA)
+    await expect(carry()).rejects.toThrow('EIO')
   })
 
   it('reports a conversation no known account holds', async () => {

@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_SESSION_ACCOUNT_SWITCH_PRESENTATION } from '../../../shared/agent-session-account-switch-row'
+import {
+  AGENT_SESSION_ACCOUNT_SWITCH_FAILED_PRESENTATION,
+  AGENT_SESSION_ACCOUNT_SWITCH_PRESENTATION
+} from '../../../shared/agent-session-account-switch-row'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -10,9 +13,10 @@ import {
   restTestSend,
   type RestTestRig
 } from './structured-agent-session-rest-test-rig'
-import type {
-  StructuredAgentSessionAccountFollow,
-  StructuredAgentSessionAccountMove
+import {
+  StructuredAgentSessionAccountMoveError,
+  type StructuredAgentSessionAccountFollow,
+  type StructuredAgentSessionAccountMove
 } from './structured-agent-session-account-follow'
 import { retireOutgrownStructuredAgentSessionChild } from './structured-agent-session-outgrown-child'
 
@@ -48,6 +52,16 @@ describe('a chat after the account picker changed', () => {
   })
 
   const fence = () => rig.store.getRecord(SESSION)?.lease.runtimeFence ?? 1
+  const failedRows = () =>
+    rig.host
+      .collaboratorsForTests()
+      .sessions.get(SESSION)
+      ?.journal.snapshot()
+      .items.filter(
+        (item) =>
+          item.body.kind === 'status' &&
+          item.body.presentation === AGENT_SESSION_ACCOUNT_SWITCH_FAILED_PRESENTATION
+      ) ?? []
   const switchRows = () =>
     rig.host
       .collaboratorsForTests()
@@ -114,6 +128,51 @@ describe('a chat after the account picker changed', () => {
     expect(rig.adapter.acquire.mock.calls[1]?.[0].launch?.accountHome).toEqual(HOME_A)
     expect(rig.store.getRecord(SESSION)?.accountHome).toEqual(HOME_A)
     expect(switchRows()).toHaveLength(0)
+    // Nothing named the accounts, so there is nothing to tell the reader.
+    expect(failedRows()).toHaveLength(0)
+  })
+
+  it('says so in the chat when the conversation could not be carried', async () => {
+    await foundRestTestChat(rig)
+    picker.picker.home = HOME_B
+    picker.move.mockImplementation(async () => {
+      throw new StructuredAgentSessionAccountMoveError(
+        { account: 'b@example.com', from: 'a@example.com' },
+        { cause: new Error('EBUSY') }
+      )
+    })
+    expect((await rig.host.send(CALLER, restTestSend('next', fence()))).ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
+
+    expect(rig.adapter.acquire.mock.calls[1]?.[0].launch?.accountHome).toEqual(HOME_A)
+    expect(failedRows().map((row) => row.body)).toEqual([
+      expect.objectContaining({
+        text: "Couldn't move this chat to b@example.com; it's still on a@example.com",
+        accountSwitch: { account: 'b@example.com', from: 'a@example.com' }
+      })
+    ])
+    // One attempt per selection: the next send neither retries nor repeats the line.
+    expect((await rig.host.send(CALLER, restTestSend('again', fence()))).ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(3))
+    expect(failedRows()).toHaveLength(1)
+
+    // A restart forgets the attempt and tries again, but the chat already says so.
+    await rig.restart({ accountFollow: picker.follow })
+    expect((await rig.host.send(CALLER, restTestSend('after restart', fence()))).ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(4))
+    expect(picker.move).toHaveBeenCalledTimes(2)
+    expect(failedRows()).toHaveLength(1)
+
+    // A different account is news, so it gets its own line.
+    picker.move.mockImplementation(async () => {
+      throw new StructuredAgentSessionAccountMoveError(
+        { account: 'c@example.com', from: 'a@example.com' },
+        { cause: new Error('EBUSY') }
+      )
+    })
+    picker.picker.home = { variable: 'CODEX_HOME', path: '/homes/c' }
+    expect((await rig.host.send(CALLER, restTestSend('third', fence()))).ok).toBe(true)
+    await vi.waitFor(() => expect(failedRows()).toHaveLength(2))
   })
 })
 
