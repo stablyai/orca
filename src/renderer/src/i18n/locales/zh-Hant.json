@@ -20055,7 +20055,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "複製時移除左側留白",
         "copyTrimsGutterDescription": "移除代理程式輸出左側的共用縮排，讓複製的文字不會多出空格。只會移除所有選取行共同擁有的縮排。",
-        "copyOnSelectDescription": "自動將在終端機或聊天中選取的文字複製到剪貼簿。"
+        "copyOnSelectDescription": "自動將在終端機或聊天中選取的文字複製到剪貼簿。",
+        "scrollOnUserInput": "輸入時捲動到底部",
+        "scrollOnUserInputDescription": "在已向上捲動的窗格中鍵入或貼上時，跳回最新輸出。關閉此項可保留在回捲記錄中的位置。"
       },
       "terminal": {
         "clipboard": {
@@ -20070,6 +20072,15 @@
             "whitespace": "空白字元",
             "spaces": "空格"
           }
+        },
+        "search": {
+          "typing": "鍵入",
+          "input": "輸入",
+          "jump": "跳轉",
+          "bottom": "底部",
+          "scrollback": "回捲",
+          "snap": "貼齊",
+          "position": "位置"
         }
       },
       "nativeChat": {

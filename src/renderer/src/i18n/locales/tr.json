@@ -20353,7 +20353,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Kopyalarken Kenar Boşluğunu Kırp",
         "copyTrimsGutterDescription": "Ajan çıktısının arkasına çizildiği sol kenar boşluğunu kaldırır, böylece kopyalanan metin girintili olmaz. Yalnızca seçilen tüm satırların paylaştığı girinti kaldırılır.",
-        "copyOnSelectDescription": "Terminalde veya sohbette seçtiğiniz metni otomatik olarak panoya kopyalayın."
+        "copyOnSelectDescription": "Terminalde veya sohbette seçtiğiniz metni otomatik olarak panoya kopyalayın.",
+        "scrollOnUserInput": "Girişte en alta kaydır",
+        "scrollOnUserInputDescription": "Yukarı kaydırılmış bir bölmede yazdığınızda veya yapıştırdığınızda en son çıktıya döner. Kaydırma geçmişindeki konumunuzu korumak için bunu kapatın."
       },
       "terminal": {
         "clipboard": {
@@ -20368,6 +20370,15 @@
             "whitespace": "boşluk",
             "spaces": "boşluklar"
           }
+        },
+        "search": {
+          "typing": "yazma",
+          "input": "giriş",
+          "jump": "atla",
+          "bottom": "alt",
+          "scrollback": "kaydırma geçmişi",
+          "snap": "hizala",
+          "position": "konum"
         }
       },
       "nativeChat": {

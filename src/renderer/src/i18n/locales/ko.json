@@ -19656,7 +19656,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "복사 시 여백 자르기",
         "copyTrimsGutterDescription": "복사한 텍스트에서 에이전트 출력의 왼쪽 여백을 제거합니다. 선택한 모든 줄에 공통된 들여쓰기만 제거됩니다.",
-        "copyOnSelectDescription": "터미널이나 채팅에서 선택한 내용을 클립보드에 자동으로 복사합니다."
+        "copyOnSelectDescription": "터미널이나 채팅에서 선택한 내용을 클립보드에 자동으로 복사합니다.",
+        "scrollOnUserInput": "입력 시 맨 아래로 스크롤",
+        "scrollOnUserInputDescription": "위로 스크롤한 창에서 입력하거나 붙여넣으면 최신 출력으로 이동합니다. 스크롤백 위치를 유지하려면 이 옵션을 끄세요."
       },
       "terminal": {
         "clipboard": {
@@ -19671,6 +19673,15 @@
             "highlight": "강조",
             "chat": "채팅"
           }
+        },
+        "search": {
+          "typing": "타이핑",
+          "input": "입력",
+          "jump": "이동",
+          "bottom": "맨 아래",
+          "scrollback": "스크롤백",
+          "snap": "스냅",
+          "position": "위치"
         }
       },
       "nativeChat": {

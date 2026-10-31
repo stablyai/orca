@@ -20204,7 +20204,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Recortar margen al copiar",
         "copyTrimsGutterDescription": "Elimina el margen izquierdo tras el que se dibuja la salida del agente, para que el texto copiado no quede indentado. Solo se quita la indentación que comparten todas las líneas seleccionadas.",
-        "copyOnSelectDescription": "Copia automáticamente al portapapeles el texto que selecciones en un terminal o un chat."
+        "copyOnSelectDescription": "Copia automáticamente al portapapeles el texto que selecciones en un terminal o un chat.",
+        "scrollOnUserInput": "Desplazar al final al escribir",
+        "scrollOnUserInputDescription": "Al escribir o pegar en un panel desplazado hacia arriba, vuelve a la salida más reciente. Desactívalo para mantener tu posición en el historial."
       },
       "terminal": {
         "clipboard": {
@@ -20219,6 +20221,15 @@
             "highlight": "resaltar",
             "chat": "chat"
           }
+        },
+        "search": {
+          "typing": "escritura",
+          "input": "entrada",
+          "jump": "saltar",
+          "bottom": "final",
+          "scrollback": "historial",
+          "snap": "ajustar",
+          "position": "posición"
         }
       }
     },

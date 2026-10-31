@@ -20,6 +20,10 @@ export function normalizeTerminalFastScrollSensitivity(value: number | undefined
     : DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY
 }
 
+export function resolveTerminalScrollOnUserInput(value: boolean | undefined): boolean {
+  return value !== false
+}
+
 export function resolveTerminalCursorInactiveStyle(
   cursorStyle: TerminalCursorStyle | undefined
 ): TerminalCursorInactiveStyle {
@@ -45,6 +49,7 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     // A small wheel multiplier offsets Orca’s taller default terminal cells.
     scrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
     fastScrollSensitivity: DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
+    scrollOnUserInput: true,
     allowTransparency: false,
     // Initial value only; applyTerminalAppearance re-gates by background luminance (#7934) before any content paints.
     minimumContrastRatio: LIGHT_BG_MIN_CONTRAST,
