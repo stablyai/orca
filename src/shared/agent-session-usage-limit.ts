@@ -11,6 +11,7 @@ export const AGENT_SESSION_USAGE_LIMIT_WINDOWS = [
 export type AgentSessionUsageLimitWindow = (typeof AGENT_SESSION_USAGE_LIMIT_WINDOWS)[number]
 
 export type AgentSessionUsageLimit = {
+  providerCode?: 'usage_limit_reached' | 'usageLimitExceeded'
   window?: AgentSessionUsageLimitWindow
   /** Epoch ms. Absent when the provider gave none, or any limit it hit had none. */
   resetsAt?: number
@@ -40,8 +41,16 @@ export function readAgentSessionUsageLimit(value: unknown): AgentSessionUsageLim
     typeof record.resetsAt === 'number' && Number.isFinite(record.resetsAt) && record.resetsAt > 0
       ? record.resetsAt
       : undefined
-  return window || resetsAt
-    ? { ...(window ? { window } : {}), ...(resetsAt ? { resetsAt } : {}) }
+  const providerCode =
+    record.providerCode === 'usage_limit_reached' || record.providerCode === 'usageLimitExceeded'
+      ? record.providerCode
+      : undefined
+  return window || resetsAt || providerCode
+    ? {
+        ...(window ? { window } : {}),
+        ...(resetsAt ? { resetsAt } : {}),
+        ...(providerCode ? { providerCode } : {})
+      }
     : undefined
 }
 

@@ -20,6 +20,7 @@ import type {
 } from './structured-agent-session-host-types'
 
 export type StructuredAgentSessionDeliveryLoopDeps = {
+  quotaFallbackDeliveryAllowed?: (sessionId: string, operationId: string) => boolean
   startFlights?: Pick<StructuredAgentSessionStartFlights, 'get'>
   deliveryOrder: StructuredAgentSessionDeliveryOrder
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
