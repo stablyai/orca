@@ -158,6 +158,41 @@ describe('ClaudeAccountService', () => {
     expect(f.service.listAccounts().systemDefaultMayBeCopied).toBe(true)
   })
 
+  it("reports System default's login with no saved accounts, the login a paired server runs", () => {
+    const f = fixture([])
+    mkdirSync(join(f.root, 'personal'))
+    writeFileSync(
+      join(f.root, 'personal', '.claude.json'),
+      JSON.stringify({
+        oauthAccount: { emailAddress: 'me@example.test', organizationUuid: 'me-org' }
+      })
+    )
+    expect(f.service.listAccounts()).toMatchObject({
+      accounts: [],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} },
+      systemDefaultEmail: 'me@example.test',
+      systemDefaultOrganizationUuid: 'me-org'
+    })
+    expect(f.service.listAccounts().systemDefaultMayBeCopied).toBeUndefined()
+  })
+
+  it.each([undefined, '{invalid json', '{}'])(
+    'lists an empty roster when the personal login is unavailable: %s',
+    (contents) => {
+      const f = fixture([])
+      if (contents !== undefined) {
+        mkdirSync(join(f.root, 'personal'))
+        writeFileSync(join(f.root, 'personal', '.claude.json'), contents)
+      }
+      expect(f.service.listAccounts()).toEqual({
+        accounts: [],
+        activeAccountId: null,
+        activeAccountIdsByRuntime: { host: null, wsl: {} }
+      })
+    }
+  )
+
   it('saves an account only once its folder holds a login', async () => {
     const f = fixture()
     const begun = await f.service.beginSignIn({ runtime: 'host' })
