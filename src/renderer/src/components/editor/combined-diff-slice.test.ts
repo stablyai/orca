@@ -469,3 +469,15 @@ it('resolves a new target after queued geometry from the coherent forward pane m
   expect(980 - f.viewport.scrollTop).toBeLessThanOrEqual(700)
   f.dispose()
 })
+
+it('maps provisional native geometry through the retained body extent until current geometry publishes', () => {
+  const f = fixture()
+  f.body.style.height = '3819px'
+  f.setContentHeight(100)
+  f.owner.navigate(2000)
+  f.viewport.dispatchEvent(new Event('scroll'))
+  expect(f.host.style.height).toBe('668px')
+  expect(f.host.style.top).toBe('1432px')
+  expect(f.viewport.scrollTop).toBe(2000)
+  f.dispose()
+})

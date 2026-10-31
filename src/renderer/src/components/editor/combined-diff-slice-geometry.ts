@@ -81,6 +81,7 @@ export function createCombinedDiffSliceLayout(
   host: HTMLElement,
   viewport: HTMLElement,
   geometry: {
+    contentHeight?: () => number
     headerHeight: () => number
     bodyTop: () => number
     acknowledge: (action: () => void) => void
@@ -94,7 +95,8 @@ export function createCombinedDiffSliceLayout(
     if (geometry.disposed() || !viewport.clientHeight || !body.clientWidth) {
       return
     }
-    const content = Math.max(...panes.map((pane) => pane.getContentHeight()))
+    const content =
+      geometry.contentHeight?.() ?? Math.max(...panes.map((pane) => pane.getContentHeight()))
     const slice = getCombinedDiffSlice(
       content,
       viewport.clientHeight,

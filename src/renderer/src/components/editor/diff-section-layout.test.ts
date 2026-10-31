@@ -51,9 +51,12 @@ describe('diff section layout', () => {
   })
 
   // Match actual fallback height in every viewer or repeated measurement drifts virtualized rows.
-  it('estimates deferred and in-flight large rows at the rendered fallback height', () => {
+  it('bounds uncached large loading rows and retains a live file measurement during reload', () => {
     expect(getDiffSectionRowEstimatedHeight(largeTextSection, undefined)).toBe(188)
-    expect(getDiffSectionRowEstimatedHeight(largeTextSection, 3_800_000)).toBe(188)
+    expect(getDiffSectionRowEstimatedHeight(largeTextSection, 20_021)).toBe(20_068)
+    expect(
+      getDiffSectionRowEstimatedHeight({ ...largeTextSection, loadOnDemand: true }, 20_021)
+    ).toBe(188)
     expect(
       getDiffSectionRowEstimatedHeight(
         { ...largeTextSection, added: undefined, removed: undefined, path: 'vendor/blob.bin' },

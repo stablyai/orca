@@ -4,6 +4,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { DiffSection } from '../../diff-section-types'
+import type { SetDiffSectionHeights } from '../../diff-section-height-cache'
 import { buildCombinedGitStatusSignature } from '../resolve-changes/combined-diff-git-status-signature'
 import { combinedDiffSectionsMatchEntryMetadata } from '../resolve-changes/combined-diff-section-cache-match'
 import { getCombinedDiffFileTreeSectionKey } from '../resolve-changes/combined-diff-section-identity'
@@ -52,7 +53,7 @@ export function useCombinedDiffViewRestore({
   gitStatusEntries: GitStatusEntry[]
   registry: CombinedDiffSectionLoadRegistry
   setGeneration: React.Dispatch<React.SetStateAction<number>>
-  setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
+  setSectionHeights: SetDiffSectionHeights
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
   setSideBySide: React.Dispatch<React.SetStateAction<boolean>>
   /** Set for tab-scoped keys so a reopened tab restores the view its closed predecessor left. */
@@ -218,7 +219,7 @@ export function useCombinedDiffViewRestore({
             }))
       sectionsRef.current = restoredSections
       setSections(restoredSections)
-      setSectionHeights(cached.sectionHeights)
+      setSectionHeights(cached.sectionHeights, restoredSections)
       setSideBySide(combinedDiffViewPreferences.sideBySide ?? cached.sideBySide)
       loadedIndicesRef.current = new Set(
         cached.loadedIndices.filter((index) => {
@@ -262,7 +263,6 @@ export function useCombinedDiffViewRestore({
         }
       })
     )
-    setSectionHeights({})
     loadedIndicesRef.current.clear()
     loadingIndicesRef.current.clear()
     sectionLoadTokensRef.current.clear()

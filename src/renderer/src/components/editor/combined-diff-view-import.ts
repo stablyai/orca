@@ -4,6 +4,24 @@ import type {
   CombinedDiffViewImport
 } from './combined-diff-extent'
 
+export function getCombinedDiffRestorationIndex(
+  state: CombinedDiffViewImport | null,
+  anchor: CombinedDiffItemAnchor | null,
+  items: readonly CombinedDiffExtentItem[],
+  indices: ReadonlyMap<CombinedDiffItemAnchor['key'], number>
+): number | undefined {
+  if (!state) {
+    const index = anchor && indices.get(anchor.key)
+    return index !== null && index !== undefined && items[index]?.settled === false
+      ? index
+      : undefined
+  }
+  if (state.anchor) {
+    return indices.get(state.anchor.key)
+  }
+  return items.find((item) => item.end > state.scrollTop)?.index ?? items.at(-1)?.index
+}
+
 export function getCombinedDiffImportedPoint(
   state: CombinedDiffViewImport,
   items: readonly CombinedDiffExtentItem[],

@@ -1,7 +1,6 @@
 import { useCallback } from 'react'
 import type React from 'react'
 import type { DiffSection } from '../../diff-section-types'
-import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
 import { shouldRequestCombinedDiffSectionLoad } from './combined-diff-section-load-state'
 import {
   COMBINED_DIFF_SECTION_RELOAD_COALESCE_MS,
@@ -17,7 +16,6 @@ export type CombinedDiffSectionRetryActions = {
 export function useCombinedDiffSectionRetry({
   invalidateViewStateCache,
   registry,
-  setSectionHeights,
   setSections
 }: {
   invalidateViewStateCache: () => void
@@ -50,7 +48,6 @@ export function useCombinedDiffSectionRetry({
         window.clearTimeout(coalesced)
         reloadTimersRef.current.delete(index)
       }
-      setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
@@ -83,7 +80,6 @@ export function useCombinedDiffSectionRetry({
       reloadTimersRef,
       sectionLoadTokensRef,
       sectionsRef,
-      setSectionHeights,
       setSections
     ]
   )

@@ -1,6 +1,5 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { translate } from '@/i18n/i18n'
-import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff-section-height-cache'
 import {
   getPRFileContentsRenderLimit,
   getPRFileDiffResult
@@ -78,8 +77,7 @@ export function usePRFileSectionLoader(args: {
     prRepo,
     headSha,
     baseSha,
-    setSections,
-    setSectionHeights
+    setSections
   } = args
   const loadSection = useCallback(
     (index: number) => {
@@ -211,7 +209,6 @@ export function usePRFileSectionLoader(args: {
     (index: number) => {
       loadedIndicesRef.current.delete(index)
       loadingIndicesRef.current.delete(index)
-      setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
@@ -222,14 +219,15 @@ export function usePRFileSectionLoader(args: {
                 modifiedContent: '',
                 loading: true,
                 error: undefined,
-                largeDiffRenderLimit: null
+                largeDiffRenderLimit: null,
+                contentGeneration: (section.contentGeneration ?? 0) + 1
               }
             : section
         )
       )
       loadSection(index)
     },
-    [loadSection, loadedIndicesRef, loadingIndicesRef, setSectionHeights, setSections]
+    [loadSection, loadedIndicesRef, loadingIndicesRef, setSections]
   )
 
   const toggleSection = useCallback(

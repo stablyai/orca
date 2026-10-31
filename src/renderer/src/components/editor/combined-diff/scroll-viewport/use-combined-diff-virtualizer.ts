@@ -10,6 +10,7 @@ import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import type { DiffSection } from '../../diff-section-types'
 import { getDiffSectionRowEstimatedHeight } from '../../diff-section-layout'
+import type { DiffSectionHeightAuthority } from '../../diff-section-height-cache'
 import { getCombinedDiffRenderRange } from './combined-diff-render-range'
 
 const COMBINED_DIFF_OVERSCAN = 5
@@ -21,6 +22,7 @@ export function useCombinedDiffVirtualizer({
   scrollContainerRef,
   scrollOffsetRef,
   sectionHeights,
+  heightAuthority,
   sections,
   sideBySide
 }: {
@@ -29,14 +31,17 @@ export function useCombinedDiffVirtualizer({
   rowKeys: readonly string[]
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   scrollOffsetRef: React.RefObject<number>
+  heightAuthority?: DiffSectionHeightAuthority
   sectionHeights: Record<number, number>
   sections: DiffSection[]
   sideBySide: boolean
 }): Virtualizer<HTMLDivElement, Element> {
-  const estimateSize = (index: number): number => {
-    const section = sections[index]
-    return section ? getDiffSectionRowEstimatedHeight(section, sectionHeights[index]) : 88
-  }
+  const estimateSize =
+    heightAuthority?.estimateSize ??
+    ((index: number): number => {
+      const section = sections[index]
+      return section ? getDiffSectionRowEstimatedHeight(section, sectionHeights[index]) : 88
+    })
   const rangeExtractor = useCombinedDiffFocusRange(scrollContainerRef, (range) =>
     getCombinedDiffRenderRange(range, estimateSize, scrollContainerRef.current?.clientHeight ?? 0)
   )
@@ -46,7 +51,7 @@ export function useCombinedDiffVirtualizer({
     getScrollElement: () => scrollContainerRef.current,
     estimateSize,
     // Retain visible heights while hidden rows measure zero so anchors survive reopening.
-    measureElement: measureVirtualRowRetainingHiddenSize,
+    measureElement: heightAuthority?.measureElement ?? measureVirtualRowRetainingHiddenSize,
     rangeExtractor,
     overscan: COMBINED_DIFF_OVERSCAN,
     initialOffset: () => scrollOffsetRef.current,

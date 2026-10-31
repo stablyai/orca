@@ -21,7 +21,14 @@ export function useDiffSectionLayoutMetrics({
   isLargeDiffLimited: boolean
 } {
   const renderLimit = section.largeDiffRenderLimit
-  const isLargeDiffLimited = usesLargeDiffFallbackHeight(section)
+  const isLargeDiffLimited =
+    usesLargeDiffFallbackHeight(section) &&
+    !(
+      section.loading &&
+      sectionHeight !== undefined &&
+      !section.loadOnDemand &&
+      !section.largeDiffRenderLimit?.limited
+    )
   const lineStats = useMemo(
     () =>
       section.loading || section.error || isLargeDiffLimited

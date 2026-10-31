@@ -1,3 +1,4 @@
+import { useDiffSectionHeights } from '@/components/editor/diff-section-height-cache'
 import {
   useCombinedDiffExtent,
   useCombinedDiffViewport
@@ -15,7 +16,6 @@ import type { editor as monacoEditor } from 'monaco-editor'
 import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
-import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
@@ -148,7 +148,10 @@ function PRFilesCombinedDiffSections({
       }),
     [comments, prNumber, repoId]
   )
-  const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
+  const [sectionHeights, setSectionHeights, heightAuthority] = useDiffSectionHeights(
+    signature,
+    sections
+  )
   const [activeTreeSectionKey, setActiveTreeSectionKey] = useState<string | null>(null)
   const { scrollContainerRef, viewportNode, setViewport } = useCombinedDiffViewport()
   const loadedIndicesRef = useRef<Set<number>>(new Set())
@@ -194,7 +197,7 @@ function PRFilesCombinedDiffSections({
         loadSection
       })
     },
-    [loadSection]
+    [loadSection, setSectionHeights]
   )
 
   const toggleSection = useCallback(
@@ -236,13 +239,8 @@ function PRFilesCombinedDiffSections({
     scrollToFn: (_offset, _options, instance) => reconcileCombinedDiffViewport(instance),
     count: sections.length,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: (index) => {
-      const section = sections[index]
-      if (!section) {
-        return 88
-      }
-      return getDiffSectionRowEstimatedHeight(section, sectionHeights[index])
-    },
+    estimateSize: heightAuthority.estimateSize,
+    measureElement: heightAuthority.measureElement,
     overscan: PR_DIFF_OVERSCAN,
     getItemKey: (index) => {
       const section = sections[index]

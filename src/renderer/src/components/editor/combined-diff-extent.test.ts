@@ -410,3 +410,12 @@ it('exports scroll persistence without scanning all retained file keys at N and 
     expect(reads).toBeLessThanOrEqual(20)
   }
 })
+
+it('retains the numeric point across ordinary same-model mode reflow', () => {
+  const f = fixture([4000, 4000])
+  f.owner.navigate(3500)
+  f.owner.publish(items([3000, 4000]))
+  expect(f.position()).toBe(3000)
+  f.owner.publish(items([4000, 4000]))
+  expect(f.position()).toBe(3500)
+})

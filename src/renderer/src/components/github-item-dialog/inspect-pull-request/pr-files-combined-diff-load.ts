@@ -3,7 +3,6 @@ import { toast } from 'sonner'
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import { addPRReviewCommentForRepo } from '@/components/github/github-work-item-comment-mutations'
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff-section-height-cache'
 import {
   getStoredTextDiffContent,
   getStoredTextDiffResult
@@ -157,7 +156,6 @@ export function retryPRFilesCombinedDiffSection({
   index,
   loadedIndicesRef,
   loadingIndicesRef,
-  setSectionHeights,
   setSections,
   loadSection
 }: {
@@ -170,7 +168,6 @@ export function retryPRFilesCombinedDiffSection({
 }): void {
   loadedIndicesRef.current.delete(index)
   loadingIndicesRef.current.delete(index)
-  setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
   setSections((prev) =>
     prev.map((section, sectionIndex) =>
       sectionIndex === index
@@ -181,7 +178,8 @@ export function retryPRFilesCombinedDiffSection({
             modifiedContent: '',
             loading: true,
             error: undefined,
-            largeDiffRenderLimit: null
+            largeDiffRenderLimit: null,
+            contentGeneration: (section.contentGeneration ?? 0) + 1
           }
         : section
     )

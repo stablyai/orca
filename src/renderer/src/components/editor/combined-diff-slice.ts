@@ -12,6 +12,7 @@ import {
 } from './combined-diff-slice-geometry'
 import { registerCombinedDiffNavigation } from './combined-diff-navigation'
 import { createCombinedDiffExpansion } from './combined-diff-expansion'
+import { getMeasuredDiffSectionBodyHeight } from './diff-section-layout'
 
 export function installCombinedDiffSlice(
   diff: editor.IStandaloneDiffEditor,
@@ -61,7 +62,13 @@ export function installCombinedDiffSlice(
       transaction -= 1
     }
   }
+  let preparingExpansion = false
   const forward = createCombinedDiffSliceLayout(diff, body, host, viewport, {
+    contentHeight: () =>
+      preparingExpansion
+        ? Math.max(...panes.map((pane) => pane.getContentHeight()))
+        : Math.max(1, Number.parseFloat(body.style.height) - getMeasuredDiffSectionBodyHeight(0)) ||
+          Math.max(...panes.map((pane) => pane.getContentHeight())),
     headerHeight,
     bodyTop,
     acknowledge,
@@ -79,7 +86,14 @@ export function installCombinedDiffSlice(
         ? pane.getContentHeight()
         : pane.getTopForLineNumber(line)) -
       pane.getScrollTop(),
-    prepare: forward,
+    prepare: (target) => {
+      preparingExpansion = true
+      try {
+        forward(target)
+      } finally {
+        preparingExpansion = false
+      }
+    },
     publish: publishExtent,
     acknowledge
   })

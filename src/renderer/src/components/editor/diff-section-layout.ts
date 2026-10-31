@@ -142,7 +142,14 @@ export function getDiffSectionRowEstimatedHeight(
         ? undefined
         : (section.added ?? 0) + (section.removed ?? 0),
     useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
-    isLargeDiffLimited: usesLargeDiffFallbackHeight(section),
+    isLargeDiffLimited:
+      usesLargeDiffFallbackHeight(section) &&
+      !(
+        section.loading &&
+        measuredContentHeight !== undefined &&
+        !section.loadOnDemand &&
+        !section.largeDiffRenderLimit?.limited
+      ),
     lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
   })
 }

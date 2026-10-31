@@ -9,7 +9,6 @@ import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { DiffSection } from '../../diff-section-types'
 import { getLargeDiffRenderLimit } from '../../large-diff-render-limit'
 import { getStoredTextDiffContent, getStoredTextDiffResult } from '../../large-diff-section-content'
-import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { fetchCombinedDiffSection } from './fetch-combined-diff-section'
 import { getDiffSectionLoadErrorMessage } from './combined-diff-section-load-timeout'
@@ -24,7 +23,6 @@ export function useCombinedDiffSectionLoader({
   generation,
   registry,
   sectionCount,
-  setSectionHeights,
   setSections
 }: {
   entrySet: CombinedDiffEntrySet
@@ -161,9 +159,6 @@ export function useCombinedDiffSectionLoader({
         // Persist the newly loaded index even when the body and its model stay unchanged.
         setSections((prev) => [...prev])
         return
-      }
-      if (wasShowingContent) {
-        setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       }
       setSections((prev) => {
         return prev.map((s, i) =>

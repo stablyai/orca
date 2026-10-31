@@ -1,5 +1,48 @@
 import type { VirtualItem } from '@tanstack/react-virtual'
-import type { CombinedDiffItemAnchor, CombinedDiffViewImport } from './combined-diff-extent'
+import type {
+  CombinedDiffExtentItem,
+  CombinedDiffItemAnchor,
+  CombinedDiffViewImport
+} from './combined-diff-extent'
+
+export function combinedDiffItemsChanged(
+  items: readonly CombinedDiffExtentItem[],
+  previousItems: readonly CombinedDiffExtentItem[],
+  prefix: number
+): boolean {
+  return (
+    items.length !== previousItems.length ||
+    items.some((item, index) => {
+      const previous = previousItems[index]
+      return (
+        !previous ||
+        item.key !== previous.key ||
+        item.size !== previous.size ||
+        item.settled !== previous.settled ||
+        item.contentGeneration !== previous.contentGeneration ||
+        item.start + prefix !== previous.start
+      )
+    })
+  )
+}
+
+export function getCombinedDiffSurvivingAnchor(
+  anchor: CombinedDiffItemAnchor | null,
+  items: readonly CombinedDiffExtentItem[],
+  indices: ReadonlyMap<VirtualItem['key'], number>
+): CombinedDiffItemAnchor | null {
+  const fallback =
+    anchor && !indices.has(anchor.key)
+      ? items
+          .slice(items.findIndex((item) => item.key === anchor.key) + 1)
+          .find((item) => indices.has(item.key))
+      : undefined
+  return anchor && indices.has(anchor.key)
+    ? anchor
+    : fallback
+      ? { key: fallback.key, offset: 0, gap: anchor?.gap ?? 0 }
+      : null
+}
 
 export function getCombinedDiffViewExport(
   items: readonly VirtualItem[],

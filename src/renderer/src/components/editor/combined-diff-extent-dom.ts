@@ -159,6 +159,7 @@ export function publishCombinedDiffMeasurements(
     identity.logical = measured.map((item) => ({
       ...item,
       key: sections[item.index]?.key ?? item.key,
+      contentGeneration: sections[item.index]?.contentGeneration,
       settled: isCombinedDiffSectionSettled(viewport, sections[item.index], item)
     }))
   }

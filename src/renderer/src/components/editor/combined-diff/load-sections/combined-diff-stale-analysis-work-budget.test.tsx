@@ -509,7 +509,7 @@ describe('combined diff live result compatibility', () => {
     expect(hook.result.current.sections).toEqual([
       { ...expectedSection(initial, next), contentGeneration: 1 }
     ])
-    expect(hook.result.current.sectionHeights).toEqual({ 1: 80 })
+    expect(hook.result.current.sectionHeights).toEqual({ 0: 640, 1: 80 })
     expect(mocks.fetch).toHaveBeenCalledTimes(3)
   })
 

@@ -16,7 +16,6 @@ import {
   getStoredTextDiffResult,
   isPrunedTextDiffResult
 } from '../../large-diff-section-content'
-import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
 import type { DiffSection } from '../../diff-section-types'
 import type { DiffSectionItemProps } from '../../diff-section-item-props'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
@@ -42,7 +41,6 @@ export function useCombinedDiffSectionActions({
   isBranchMode,
   isCommitMode,
   sectionsRef,
-  setSectionHeights,
   setSections
 }: {
   activeGroupId: string | undefined
@@ -226,7 +224,6 @@ export function useCombinedDiffSectionActions({
         if (savedIndex === -1) {
           return
         }
-        setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, savedIndex))
         setSections((prev) =>
           prev.map((s) => {
             if (s.key !== sectionKey) {
@@ -267,7 +264,6 @@ export function useCombinedDiffSectionActions({
       file.runtimeEnvironmentId,
       file.worktreeId,
       sectionsRef,
-      setSectionHeights,
       setSections
     ]
   )

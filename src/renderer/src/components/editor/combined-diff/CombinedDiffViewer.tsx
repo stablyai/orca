@@ -8,6 +8,7 @@ import { useVisibleWorktreeDiffComments } from '../../diff-comments/use-visible-
 import type { OpenFile } from '@/store/slices/editor'
 import '@/lib/monaco-setup'
 import type { DiffSection } from '../diff-section-types'
+import { useDiffSectionHeights } from '../diff-section-height-cache'
 import {
   EMPTY_GIT_BRANCH_ENTRIES,
   EMPTY_GIT_STATUS_ENTRIES,
@@ -71,7 +72,19 @@ export default function CombinedDiffViewer({
   const isDark = useDocumentDarkTheme()
 
   const [sections, setSections] = useState<DiffSection[]>([])
-  const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
+  const [sectionHeights, setSectionHeights, heightAuthority] = useDiffSectionHeights(
+    JSON.stringify([
+      viewStateKey,
+      file.worktreeId,
+      file.filePath,
+      file.runtimeEnvironmentId,
+      file.diffSource,
+      file.combinedAreaFilter,
+      file.branchCompare,
+      file.commitCompare
+    ]),
+    sections
+  )
   const [generation, setGeneration] = useState(0)
   const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
   const { scrollContainerRef, viewportNode, setViewport, beforeDetachRef, releaseViewport } =
@@ -148,6 +161,7 @@ export default function CombinedDiffViewer({
     scrollContainerRef,
     scrollOffsetRef: restore.scrollOffsetRef,
     sectionHeights,
+    heightAuthority,
     sections,
     sideBySide: preferences.sideBySide
   })

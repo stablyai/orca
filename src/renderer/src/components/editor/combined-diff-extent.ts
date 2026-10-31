@@ -1,11 +1,16 @@
 import type { VirtualItem } from '@tanstack/react-virtual'
-import { getCombinedDiffImportedPoint } from './combined-diff-view-import'
 import {
+  getCombinedDiffImportedPoint,
+  getCombinedDiffRestorationIndex
+} from './combined-diff-view-import'
+import {
+  combinedDiffItemsChanged,
+  getCombinedDiffSurvivingAnchor,
   getCombinedDiffTopAnchor,
   getCombinedDiffViewExport
 } from './combined-diff-extent-geometry'
 
-export type CombinedDiffExtentItem = VirtualItem & { settled?: boolean }
+export type CombinedDiffExtentItem = VirtualItem & { settled?: boolean; contentGeneration?: number }
 
 export type CombinedDiffItemAnchor = {
   key: VirtualItem['key']
@@ -24,6 +29,7 @@ export class CombinedDiffExtent {
   private source: readonly CombinedDiffExtentItem[] | null = null
   private sourcePrefix = 0
   private anchor: CombinedDiffItemAnchor | null = null
+  private anchorGeneration: number | undefined
   private pendingImport: CombinedDiffViewImport | null = null
   private edit: CombinedDiffItemAnchor | null = null
   private target = 0
@@ -82,18 +88,7 @@ export class CombinedDiffExtent {
     }
     this.source = items
     this.sourcePrefix = prefix
-    const changed =
-      items.length !== this.items.length ||
-      items.some((item, index) => {
-        const previous = this.items[index]
-        return (
-          !previous ||
-          item.key !== previous.key ||
-          item.size !== previous.size ||
-          item.settled !== previous.settled ||
-          item.start + prefix !== previous.start
-        )
-      })
+    const changed = combinedDiffItemsChanged(items, this.items, prefix)
     if (!changed) {
       if (this.pendingImport && this.applyImport(true)) {
         return
@@ -102,13 +97,11 @@ export class CombinedDiffExtent {
       return
     }
     const anchor = this.anchor ?? this.topAnchor(priority)
+    const anchorGeneration = this.anchor
+      ? this.anchorGeneration
+      : this.items[this.indices.get(anchor?.key ?? '') ?? -1]?.contentGeneration
     const indices = new Map(items.map((item, index) => [item.key, index] as const))
-    const fallback =
-      anchor && !indices.has(anchor.key)
-        ? this.items
-            .slice(this.items.findIndex((item) => item.key === anchor.key) + 1)
-            .find((item) => indices.has(item.key))
-        : undefined
+    const nextAnchor = getCombinedDiffSurvivingAnchor(anchor, this.items, indices)
     this.items = items.map((item) => ({
       ...item,
       start: item.start + prefix,
@@ -119,14 +112,20 @@ export class CombinedDiffExtent {
       this.edit = null
     }
     this.revision += 1
-    this.anchor =
-      anchor && indices.has(anchor.key)
-        ? anchor
-        : fallback
-          ? { key: fallback.key, offset: 0, gap: anchor?.gap ?? 0 }
-          : null
+    this.anchor = nextAnchor
     if (this.pendingImport && this.applyImport(true)) {
       return
+    }
+    const anchoredItem = this.anchor && this.items[indices.get(this.anchor.key) ?? -1]
+    this.anchorGeneration = anchorGeneration
+    if (this.anchor && anchoredItem && anchoredItem.settled !== false) {
+      if (
+        anchoredItem.contentGeneration !== anchorGeneration &&
+        this.anchor.offset > anchoredItem.size
+      ) {
+        this.anchor = { ...this.anchor, offset: anchoredItem.size }
+      }
+      this.anchorGeneration = anchoredItem.contentGeneration
     }
     if (!this.edit) {
       const target = this.position(this.anchor)
@@ -201,6 +200,8 @@ export class CombinedDiffExtent {
       return false
     }
     this.anchor = point.anchor
+    this.anchorGeneration =
+      this.items[this.indices.get(point.anchor?.key ?? '') ?? -1]?.contentGeneration
     this.apply(point.target)
     if (point.settled && this.view.position() === this.target) {
       this.pendingImport = null
@@ -210,14 +211,12 @@ export class CombinedDiffExtent {
   }
 
   restorationIndex(): number | undefined {
-    const state = this.pendingImport
-    if (!state) {
-      return undefined
-    }
-    if (state.anchor) {
-      return this.indices.get(state.anchor.key)
-    }
-    return this.items.find((item) => item.end > state.scrollTop)?.index ?? this.items.at(-1)?.index
+    return getCombinedDiffRestorationIndex(
+      this.pendingImport,
+      this.anchor,
+      this.items,
+      this.indices
+    )
   }
 
   restore(anchor: CombinedDiffItemAnchor): boolean {
@@ -228,6 +227,7 @@ export class CombinedDiffExtent {
     }
     this.pendingImport = null
     this.anchor = anchor
+    this.anchorGeneration = this.items[this.indices.get(anchor.key) ?? -1]?.contentGeneration
     return this.apply(target)
   }
 
@@ -265,6 +265,8 @@ export class CombinedDiffExtent {
     this.anchor = null
     const changed = this.apply(next)
     this.anchor = this.topAnchor()
+    this.anchorGeneration =
+      this.items[this.indices.get(this.anchor?.key ?? '') ?? -1]?.contentGeneration
     return changed
   }
 

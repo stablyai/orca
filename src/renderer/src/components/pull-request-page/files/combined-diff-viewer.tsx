@@ -23,7 +23,6 @@ import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
-import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
@@ -44,7 +43,7 @@ import { addPullRequestLineComment } from './line-comment'
 import { usePRFileSectionLoader } from './section-loader'
 import { usePRFilesDiffViewPersistence } from './view-restore'
 import { buildInlineReviewComments } from './inline-comments'
-import { usePRFileSectionHeights } from './section-heights'
+import { useDiffSectionHeights } from '@/components/editor/diff-section-height-cache'
 import { usePRFileActiveSection } from './active-section'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
 
@@ -121,7 +120,10 @@ export function PRFilesCombinedDiffViewer({
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sideBySide, setSideBySide] = useState(false)
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
-  const [sectionHeights, setSectionHeights] = usePRFileSectionHeights(entrySignature)
+  const [sectionHeights, setSectionHeights, heightAuthority] = useDiffSectionHeights(
+    viewStateKey,
+    sections
+  )
   const [activeTreeSectionKey, setActiveTreeSectionKey] = usePRFileActiveSection(entrySignature)
   // Why: short virtualizer-key token; entrySignature serializes every file and would be copied into every item key.
   const [entryRevision, setEntryRevision] = useState(0)
@@ -154,7 +156,7 @@ export function PRFilesCombinedDiffViewer({
       )
       loadingIndicesRef.current.clear()
       setSections(restoredSections)
-      setSectionHeights(cached.sectionHeights)
+      setSectionHeights(cached.sectionHeights, restoredSections)
       setSideBySide(cached.sideBySide)
       setFileTreeCollapsed(cached.fileTreeCollapsed)
       setActiveTreeSectionKey(cached.activeTreeSectionKey)
@@ -210,13 +212,8 @@ export function PRFilesCombinedDiffViewer({
     scrollToFn: (_offset, _options, instance) => reconcileCombinedDiffViewport(instance),
     count: sections.length,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: (index) => {
-      const section = sections[index]
-      if (!section) {
-        return 88
-      }
-      return getDiffSectionRowEstimatedHeight(section, sectionHeights[index])
-    },
+    estimateSize: heightAuthority.estimateSize,
+    measureElement: heightAuthority.measureElement,
     overscan: PR_DIFF_OVERSCAN,
     getItemKey: (index) => {
       const section = sections[index]
