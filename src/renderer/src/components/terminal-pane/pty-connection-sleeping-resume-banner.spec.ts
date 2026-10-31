@@ -137,7 +137,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           // The record holds no launch recipe, so the resume adds no permission bypass.
-          command: "codex 'resume' 'codex-session-1'",
+          command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'",
           launchAgent: 'codex',
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,

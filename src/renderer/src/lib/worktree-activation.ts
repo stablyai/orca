@@ -1,3 +1,5 @@
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
+import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
@@ -7,7 +9,6 @@ import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-regist
 import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   folderWorkspaceActivationBlocked,
@@ -53,13 +54,10 @@ export type ActivateAndRevealResult = {
   primaryTabId: string | null
 }
 
-function canInspectAgentActivationInventory(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.api?.runtime?.call === 'function' &&
-    typeof window.api?.pty?.listSessions === 'function'
-  )
-}
+const canInspectAgentActivationInventory = (): boolean =>
+  typeof window !== 'undefined' &&
+  typeof window.api?.runtime?.call === 'function' &&
+  typeof window.api?.pty?.listSessions === 'function'
 
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
@@ -118,7 +116,7 @@ export function activateAndRevealFolderWorkspace(
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   const providesInitialSurface = activationProvidesInitialSurface(opts)
   const seedUserDefaultSurface = activationSeedsUserDefaultSurface(opts)
-  markVisited(state, workspaceKey, previousActive, opts?.executionHostId)
+  markVisited(state, workspaceKey, previousActive, opts?.executionHostId, opts?.navigationIntent)
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
   }
@@ -209,6 +207,7 @@ export function activateAndRevealWorktree(
   if (state.activeView !== 'terminal') {
     state.setActiveView('terminal')
   }
+  noteUserWorkspaceOpen(worktreeId, opts?.navigationIntent)
 
   state.setActiveWorktree(
     worktreeId,
@@ -221,10 +220,10 @@ export function activateAndRevealWorktree(
     })
   )
   const postActivationState = useAppStore.getState()
-  const ownerRuntimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
-    postActivationState,
-    wt.id
-  )
+  const ownerRuntimeEnvironmentId =
+    opts && 'runtimeEnvironmentId' in opts
+      ? (opts.runtimeEnvironmentId ?? null)
+      : runtimeEnvironmentIdOrLocalUnlessTwin(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection, so the desktop host publishes session surfaces without treating it as a nav command.
     void activateWebRuntimeSessionWorktree({
@@ -253,9 +252,8 @@ export function activateAndRevealWorktree(
     })
   }
 
-  const primaryTabId = shouldGateAgentActivation
-    ? null
-    : providesInitialSurface && !hasActivationWork
+  const primaryTabId =
+    shouldGateAgentActivation || (providesInitialSurface && !hasActivationWork)
       ? null
       : ensureWorktreeHasInitialTerminal(
           useAppStore.getState(),
@@ -301,6 +299,9 @@ export function activateAndRevealWorktree(
     opts?.providesInitialSurface !== true
   ) {
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
+      ...(opts && 'runtimeEnvironmentId' in opts
+        ? { runtimeEnvironmentId: ownerRuntimeEnvironmentId }
+        : {}),
       startup: opts?.startup,
       agent: opts?.agent
     })

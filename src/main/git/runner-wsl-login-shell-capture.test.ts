@@ -23,6 +23,8 @@ import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admi
 afterEach(() => _resetGitAdmissionForTests())
 import { resetWslGitReadEnvironmentForTests } from './wsl-git-read-environment'
 
+const originalPlatform = process.platform
+
 const DISTRO = 'Ubuntu'
 const WSL_CWD = String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`
 const BANNER = 'To run a command as administrator (user "root"), use "sudo <command>".\n\n'
@@ -38,8 +40,8 @@ function createMockChild(): EventEmitter & { stdout: EventEmitter; stderr: Event
 }
 
 /** Stand in for the guest shell: banner first, then the payload inside the command's fence. */
-function respondWithFencedPayload(payload: Buffer | string): void {
-  execFileMock.mockImplementation((_command, args, _options, callback) => {
+function respondWithFencedPayload(payload: Buffer | string, error: Error | null = null): void {
+  execFileMock.mockImplementation((_command, args, options, callback) => {
     const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(String(args.at(-1)))?.[1] ?? ''
     const body = typeof payload === 'string' ? Buffer.from(payload, 'utf8') : payload
     const stdout = Buffer.concat([
@@ -48,7 +50,10 @@ function respondWithFencedPayload(payload: Buffer | string): void {
       body,
       Buffer.from(`__ORCA_WSL_CAPTURE_END_${nonce}__`, 'utf8')
     ])
-    queueMicrotask(() => callback?.(null, stdout, Buffer.alloc(0)))
+    const asText = options?.encoding !== 'buffer'
+    queueMicrotask(() =>
+      callback?.(error, asText ? stdout.toString('utf8') : stdout, asText ? '' : Buffer.alloc(0))
+    )
     return createMockChild()
   })
 }
@@ -63,19 +68,8 @@ describe('WSL login-shell reads are fenced', () => {
   })
 
   afterEach(() => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: process.platform })
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     resetWslGitReadEnvironmentForTests()
-  })
-
-  it('returns blob bytes without the login-shell banner', async () => {
-    respondWithFencedPayload('line one\nline two\n')
-
-    const { stdout } = await gitExecFileAsyncBuffer(['show', ':file.txt'], {
-      cwd: WSL_CWD,
-      wslDistro: DISTRO
-    })
-
-    expect(stdout.toString('utf8')).toBe('line one\nline two\n')
   })
 
   it('keeps binary blob bytes intact through the fence', async () => {
@@ -88,6 +82,29 @@ describe('WSL login-shell reads are fenced', () => {
     })
 
     expect(Buffer.compare(stdout, binary)).toBe(0)
+  })
+
+  it('fences buffered text reads without a per-call opt-in', async () => {
+    respondWithFencedPayload('3\t1\ta.txt\0')
+
+    const { stdout } = await gitExecFileAsync(['diff', '--numstat', '-z'], {
+      cwd: WSL_CWD,
+      wslDistro: DISTRO
+    })
+
+    expect(stdout).toBe('3\t1\ta.txt\0')
+  })
+
+  it('strips the fence from stdout of a non-zero exit', async () => {
+    respondWithFencedPayload('ignored.log\0', Object.assign(new Error('exit 1'), { code: 1 }))
+
+    const failure = await gitExecFileAsync(['check-ignore', '-z', '--stdin'], {
+      cwd: WSL_CWD,
+      wslDistro: DISTRO,
+      stdin: 'ignored.log\0'
+    }).catch((error: unknown) => error)
+
+    expect(failure).toMatchObject({ code: 1, stdout: 'ignored.log\0' })
   })
 
   /** Answer the core.sshCommand probe with `configured`, and any other command with ok. */

@@ -39,6 +39,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   const storageWrites: { key: string; value: string | null }[] = []
   const pageFaults: BridgeErrorCapture[] = []
   const backClaims: boolean[] = []
+  const terminalKeyRailClaims: boolean[] = []
   let pageReadies = 0
   let pagePaints = 0
   const routeParamClears: { param: string; value: string }[] = []
@@ -66,6 +67,8 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     route: options.route ?? { pathname: '/h/host-a' },
     ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
     ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset }),
+    ...(options.foldDivision === undefined ? {} : { foldDivision: options.foldDivision }),
+    ...(options.terminalKeyRail === undefined ? {} : { terminalKeyRail: options.terminalKeyRail }),
     readClientIdentity: () =>
       options.clientIdentity === undefined ? PORT_PAIR_CLIENT_IDENTITY : options.clientIdentity,
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
@@ -101,6 +104,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     },
     onPageBackClaim: (claimed) => backClaims.push(claimed),
     onPageLocation: () => {},
+    onTerminalKeyRailClaim: (claimed) => terminalKeyRailClaims.push(claimed),
     onRouteParamClear: (param, value) => routeParamClears.push({ param, value }),
     onRouteRefused: (issue) => routeRefusals.push(issue),
     onDiagnostic: (diagnostic) => hostDiagnostics.push(diagnostic)
@@ -165,6 +169,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     pageReadyCount: () => pageReadies,
     pagePaintCount: () => pagePaints,
     backClaims,
+    terminalKeyRailClaims,
     routeParamClears: () => routeParamClears,
     routeRefusals,
     async flush(): Promise<void> {

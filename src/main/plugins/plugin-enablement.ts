@@ -16,7 +16,6 @@ export async function applyPluginConsent(input: {
   pluginKey: PluginConsentRequest['pluginKey']
   reviewedFingerprint: PluginConsentRequest['reviewedFingerprint']
   decision: PluginConsentRequest['decision']
-  originWebContentsId?: number
 }): Promise<void> {
   const { store, pluginService, pluginKey } = input
   const plugin = pluginService.findValidPlugin(pluginKey)
@@ -41,9 +40,11 @@ export async function applyPluginConsent(input: {
   } else {
     disabled.add(pluginKey)
   }
+  // Why every window, the clicking one too: its store never applied this write itself, and
+  // theme resolution reads `disabledPlugins` from it.
   store.updateSettings(
     { disabledPlugins: [...disabled], pluginConsents: consents },
-    { notifyListeners: true, originWebContentsId: input.originWebContentsId }
+    { notifyListeners: true }
   )
   await pluginService.reconcileActivationState()
 }
@@ -54,7 +55,6 @@ export async function applyPluginEnablement(input: {
   pluginService: PluginService
   pluginKey: string
   enabled: boolean
-  originWebContentsId?: number
 }): Promise<void> {
   const { store, pluginService, pluginKey, enabled } = input
   const plugin = pluginService.findValidPlugin(pluginKey)
@@ -68,9 +68,6 @@ export async function applyPluginEnablement(input: {
   } else {
     disabled.add(pluginKey)
   }
-  store.updateSettings(
-    { disabledPlugins: [...disabled] },
-    { notifyListeners: true, originWebContentsId: input.originWebContentsId }
-  )
+  store.updateSettings({ disabledPlugins: [...disabled] }, { notifyListeners: true })
   await pluginService.reconcileActivationState()
 }

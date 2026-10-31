@@ -79,7 +79,10 @@ describe('issue edits retain the displayed repository', () => {
   ) {
     const payload = { ...UPSTREAM, number: 12, updates }
     if (sourceContext.hostId === 'local') {
-      expect(window.api.gh.updateIssueBySlug).toHaveBeenCalledExactlyOnceWith(payload)
+      expect(window.api.gh.updateIssueBySlug).toHaveBeenCalledExactlyOnceWith({
+        ...payload,
+        wakeWslDistro: true
+      })
       expect(callRuntimeRpc).not.toHaveBeenCalled()
     } else {
       expect(callRuntimeRpc).toHaveBeenCalledExactlyOnceWith(

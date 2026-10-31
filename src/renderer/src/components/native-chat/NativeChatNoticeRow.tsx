@@ -20,7 +20,7 @@ import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from '../../../../shared/native-chat/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
-import { ProviderFrameRow } from './NativeChatTranscriptChrome'
+import { NativeChatDetailsDisclosure, ProviderFrameRow } from './NativeChatTranscriptChrome'
 import { Button } from '@/components/ui/button'
 import {
   isClaudeSignInFailureKind,
@@ -136,9 +136,42 @@ export function NativeChatNoticeRow({
       </Card>
     )
   }
+  if (look.kind === 'settled-permission') {
+    const agent = agentName ?? look.agent
+    const summary =
+      look.decision === 'denied'
+        ? translate(
+            'components.native-chat.notices.permissionDenied',
+            '{{agent}} denied permission. View details.',
+            { agent }
+          )
+        : translate(
+            'components.native-chat.notices.safetyReview',
+            '{{agent}} reported a safety review warning. View details.',
+            { agent }
+          )
+    const payload = block.providerFrame?.payload
+    return (
+      <NativeChatDetailsDisclosure
+        summary={summary}
+        bodyClassName={look.tone === 'error' ? 'text-destructive' : 'text-chat-warning'}
+      >
+        {block.text}
+        {payload ? '\n\n' : ''}
+        {payload?.truncated
+          ? `${translate(
+              'components.native-chat.notices.truncatedResponse',
+              'Provider response truncated (original size: {{bytes}} bytes).',
+              { bytes: payload.byteLength }
+            )}\n`
+          : ''}
+        {payload?.head}
+      </NativeChatDetailsDisclosure>
+    )
+  }
   // Name Orca and its host as the stop cause; without host context, preserve the original words.
   const { orcaStop } = block
-  const { hostLabel, remoteHost, continueAvailable } = orcaStopView
+  const { hostLabel, remoteHost, continueAvailable, wslDistro } = orcaStopView
   // A paired server with no name to show is still a remote server; its id is not a name.
   const machine =
     hostLabel ?? (remoteHost ? sayNativeChatOrcaStopTranslated('unnamedServer') : null)
@@ -150,6 +183,13 @@ export function NativeChatNoticeRow({
   // Only reword auth text fully described by its fact; host text may also carry command advice.
   const authSurface =
     failure?.kind === 'notSignedIn'
+      ? (['row', 'rejection'] as const).find(
+          (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
+        )
+      : undefined
+  // The host can't tell it's a WSL host; name the distro only over its plain not-installed words.
+  const wslMissingSurface =
+    failure?.kind === 'cliMissing' && wslDistro
       ? (['row', 'rejection'] as const).find(
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
@@ -178,7 +218,14 @@ export function NativeChatNoticeRow({
             { agentName },
             sayAgentSessionFailureTranslated
           )
-        : agentSessionGoalControlWords(block.text)
+        : failure && wslMissingSurface && wslDistro
+          ? agentSessionFailureSentence(
+              failure,
+              wslMissingSurface,
+              { agentName, wslDistro },
+              sayAgentSessionFailureTranslated
+            )
+          : agentSessionGoalControlWords(block.text)
   const failureDetail = agentSessionFailureDetailText(failure)
   const detail = failureDetail?.trim() !== text.trim() ? failureDetail : undefined
   const tone = named ? 'notice' : look.kind === 'line' ? look.tone : null

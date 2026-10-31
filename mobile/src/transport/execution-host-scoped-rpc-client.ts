@@ -58,6 +58,7 @@ export function routeRpcClientCalls(
     carriesRpcEnvelope: client.carriesRpcEnvelope && (() => client.carriesRpcEnvelope?.() ?? true),
     onStateChange: (listener) => client.onStateChange(listener),
     notifyForeground: (reason) => client.notifyForeground(reason),
+    probeLivenessNow: client.probeLivenessNow && (() => client.probeLivenessNow?.()),
     close: () => {}
   }
 }

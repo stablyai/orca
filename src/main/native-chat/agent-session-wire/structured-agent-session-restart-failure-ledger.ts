@@ -67,7 +67,6 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
   retryable: (marker: AgentSessionResumeMarker) => boolean
   /** Preserve newer-chat failures for compatible builds, hidden here. */
   savedByNewerOrca: (sessionId: string) => boolean
-  reveal: (markers: readonly AgentSessionResumeMarker[]) => Promise<void>
   logger: StructuredAgentSessionLogger
   now: () => number
   /** Share the capsule mutation lane with offer operations. */
@@ -116,7 +115,6 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
 
   const list = async (): Promise<StructuredAgentSessionResumeFailure[]> => {
     const failures = await read()
-    await deps.reveal(failures.map((failure) => failure.marker))
     return failures.flatMap(toRow)
   }
 

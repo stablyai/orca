@@ -194,7 +194,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         // Kept per incarnation: the report can land before its own spawn reply.
         this.inputClosedIncarnations.record(event.sessionId, event.payload.incarnationId)
       } else if (event.event === 'exit') {
-        const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
+        const currentIncarnationId = this.ptyInventory.currentIncarnation(event.sessionId)
         const pendingOperations = new Set([
           ...(this.pendingSpawnOperationsBySessionId.get(event.sessionId) ?? []),
           ...this.pendingClaimSpawnOperations
@@ -205,11 +205,11 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             continue
           }
           const exits = operation.exitsBySessionId.get(event.sessionId) ?? []
-          exits.push(
-            event.payload.incarnationId
-              ? { code: event.payload.code, incarnationId: event.payload.incarnationId }
-              : { code: event.payload.code }
-          )
+          exits.push({
+            code: event.payload.code,
+            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}),
+            ...(event.payload.cause ? { cause: event.payload.cause } : {})
+          })
           operation.exitsBySessionId.set(event.sessionId, exits)
         }
         const wslDistro = this.wslDistrosBySessionId.get(event.sessionId)

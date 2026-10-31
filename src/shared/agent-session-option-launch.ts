@@ -1,15 +1,23 @@
+import {
+  agentChoiceSettingsOccurrences,
+  rewriteAgentChoiceSettings,
+  readAgentChoiceSettings
+} from './agent-choice-settings'
+import { hasAgentModelOptionValues, yieldAgentChoicesToArgs } from './agent-choice-layers'
 import type { AgentType } from './agent-status-types'
-import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
+import {
+  findCatalogModel,
+  getAgentSessionOptionLaunchCatalog
+} from './agent-session-option-catalog'
+export { getAgentSessionOptionLaunchCatalog } from './agent-session-option-catalog'
 import type {
   AgentSessionOptionCatalog,
   CatalogModel,
-  CatalogOption,
-  CatalogOptionApply
+  CatalogOption
 } from './agent-session-option-catalog-types'
 import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
-import { agentPermissionArgsForLaunch } from './tui-agent-launch-defaults'
+import { agentPermissionArgsForLaunch } from './agent-permission-args'
 import {
   readLaunchPermissionChoice,
   agentPermissionHasTerminalChoice
@@ -24,22 +32,14 @@ export type ResolvedSessionOptionLaunch = {
   appliedValues: Record<string, SessionOptionValue>
 }
 
-function isOverriddenByAgentArgs(apply: CatalogOptionApply, tokens: readonly string[]): boolean {
-  const kept = apply.removeAgentArgs?.(tokens)
-  return kept !== undefined && kept.length < tokens.length
-}
-
-export function getAgentSessionOptionLaunchCatalog(
-  agent: AgentType
-): AgentSessionOptionCatalog | null {
-  return agent === 'opencode' ? OPENCODE_LAUNCH_OPTION_CATALOG : getAgentSessionOptionCatalog(agent)
-}
-
 export function removeOverriddenAgentSessionArgs(
   agent: AgentType,
   values: Record<string, SessionOptionValue> | null | undefined,
   tokens: readonly string[]
-): string[] {
+): readonly string[] {
+  if (!hasAgentModelOptionValues(values)) {
+    return tokens
+  }
   let result = [...tokens]
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
   if (!catalog || !values) {
@@ -49,9 +49,16 @@ export function removeOverriddenAgentSessionArgs(
   if (modelId) {
     result = catalog.modelApply.removeAgentArgs?.(result) ?? result
   }
-  for (const option of launchOptionsFor(catalog, modelId).options) {
-    if (values[option.id] !== undefined && option.apply.removeAgentArgs) {
-      result = option.apply.removeAgentArgs(result)
+  for (const option of launchOptionsFor(catalog, modelId, values).options) {
+    const value = values[option.id]
+    if (value !== undefined && option.apply.removeAgentArgs) {
+      const settings = option.apply.cli?.find((form) => form.kind === 'settings')
+      const decoded = decodeCatalogOptionValue(option.kind, value)
+      result = settings
+        ? decoded === undefined
+          ? result
+          : rewriteAgentChoiceSettings(agent, settings.names, result, settings.key, decoded)
+        : option.apply.removeAgentArgs(result)
     }
   }
   return result
@@ -60,10 +67,26 @@ export function removeOverriddenAgentSessionArgs(
 /** Without a model, the catalog's model-independent options still apply; nothing composes. */
 function launchOptionsFor(
   catalog: AgentSessionOptionCatalog,
-  modelId: string | null
+  modelId: string | null,
+  values: Readonly<Record<string, unknown>>
 ): { model: CatalogModel | null; options: CatalogOption[] } {
   const model = (modelId ? findCatalogModel(catalog, modelId) : null) ?? null
-  return { model, options: model?.options ?? catalog.unknownModelOptions ?? [] }
+  const options = model?.options ?? catalog.unknownModelOptions ?? []
+  return {
+    model,
+    options: [
+      ...options,
+      ...(catalog.unknownModelOptions ?? []).filter(
+        (option) =>
+          !options.some((existing) => existing.id === option.id) &&
+          ((option.kind.type === 'select' && option.kind.choices.length === 0) ||
+            (values[option.id] !== undefined &&
+              !option.apply.composedIntoModel &&
+              !!option.apply.cli?.length &&
+              !!option.apply.launchArgs))
+      )
+    ]
+  }
 }
 
 export function resolveAgentSessionOptionLaunch(
@@ -77,7 +100,8 @@ export function resolveAgentSessionOptionLaunch(
     agent,
     values,
     trailingAgentArgs,
-    includeCatalogDefaults
+    includeCatalogDefaults,
+    permissionTrailingArgs
   )
   const permission = readLaunchPermissionChoice(values)
   if (!permission || !isTuiAgent(agent) || !agentPermissionHasTerminalChoice(agent, permission)) {
@@ -101,20 +125,30 @@ function resolveModelOptionLaunch(
   agent: AgentType,
   values: Record<string, SessionOptionValue> | null | undefined,
   trailingAgentArgs: readonly string[],
-  includeCatalogDefaults: boolean
+  includeCatalogDefaults: boolean,
+  originalArgs: readonly string[]
 ): ResolvedSessionOptionLaunch {
+  if (!hasAgentModelOptionValues(values)) {
+    return { args: [], appliedValues: {} }
+  }
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
   const modelId = typeof values?.model === 'string' ? values.model : null
   if (!catalog || !values) {
     return { args: [], appliedValues: {} }
   }
 
-  const { model, options: modelOptions } = launchOptionsFor(catalog, modelId)
+  const { model, options: modelOptions } = launchOptionsFor(catalog, modelId, values)
   const appliedValues: Record<string, SessionOptionValue> = {}
   const args: string[] = []
-  const modelValues = launchModelValues(model, modelOptions, values, includeCatalogDefaults)
-  const modelOverridden =
-    modelId !== null && isOverriddenByAgentArgs(catalog.modelApply, trailingAgentArgs)
+  const modelValues = yieldAgentChoicesToArgs(
+    agent,
+    {
+      ...launchModelValues(model, modelOptions, values, includeCatalogDefaults),
+      ...(modelId ? { model: modelId } : {})
+    },
+    trailingAgentArgs
+  )
+  const modelOverridden = modelId !== null && modelValues.model === undefined
   const appliesModel = Boolean(modelId && catalog.modelApply.launchArgs && !modelOverridden)
 
   // Why: a repeated model flag can prevent the CLI from starting.
@@ -137,14 +171,17 @@ function resolveModelOptionLaunch(
       continue
     }
     // Why: options belong to the picked model and may be invalid for the user's model.
-    if (
-      !option.apply.launchArgs ||
-      modelOverridden ||
-      isOverriddenByAgentArgs(option.apply, trailingAgentArgs)
-    ) {
+    if (!option.apply.launchArgs || modelOverridden) {
       continue
     }
-    args.push(...option.apply.launchArgs(value))
+    const settings = option.apply.cli?.find((form) => form.kind === 'settings')
+    const effective =
+      settings && agentChoiceSettingsOccurrences(agent, settings.names, originalArgs).at(-1)
+    if (effective && !readAgentChoiceSettings(effective.value)) {
+      continue
+    }
+    const compiled = option.apply.launchArgs(value, originalArgs)
+    args.push(...compiled)
     appliedValues[option.id] = value
   }
   return { args, appliedValues }
@@ -167,13 +204,19 @@ function launchModelValues(
         if (
           !model &&
           option.kind.type === 'select' &&
+          option.kind.choices.length > 0 &&
           !option.kind.choices.some((choice) => choice.value === explicitValue)
         ) {
           return []
         }
         return [[option.id, explicitValue]]
       }
-      return model && includeCatalogDefaults ? [[option.id, option.kind.defaultValue]] : []
+      const launchDefault =
+        !option.apply.cli?.some((form) => form.kind === 'settings') &&
+        !(option.kind.type === 'select' && option.kind.choices.length === 0)
+      return model && includeCatalogDefaults && launchDefault
+        ? [[option.id, option.kind.defaultValue]]
+        : []
     })
   )
 }
@@ -188,6 +231,6 @@ export function composeAgentLaunchModel(
   if (!modelId || !catalog?.composeModelValue) {
     return modelId || undefined
   }
-  const { model, options } = launchOptionsFor(catalog, modelId)
+  const { model, options } = launchOptionsFor(catalog, modelId, values)
   return catalog.composeModelValue(modelId, launchModelValues(model, options, values, false))
 }

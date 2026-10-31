@@ -3,19 +3,20 @@
 Default to free GitHub-hosted standard runners: the repository is public and the
 Enterprise plan allows 1,000 concurrent jobs (50 macOS). Use Blacksmith only for:
 
-- The PR layout oracle gate (`e2e.yml` with `fast_runners: true`). Advisory e2e
-  lanes run hosted. Unit tests run as 12 shards on hosted `ubuntu-24.04-arm`,
-  which match the old five 8-vCPU Blacksmith shards;
-  `ORCA_UNIT_FULL_SHARD_COUNT` tunes the count. Preflight (lint and typecheck)
-  also runs on hosted ARM: shards, packaging and the layout oracle do not wait
-  for it, so its slower runner stays off the gate's critical path.
-- `pr.yml` Git compatibility: its parallel real-Git lanes, two through Docker,
-  exceed test timeouts on 4-vCPU hosted runners.
 - macOS packaging: adhoc, hourly, daily and `release-mac-build.yml`. Hosted
   `macos-15` cannot boot the packaged x64 terminal host that `afterPack` verifies.
 - The adhoc Windows build (a developer is waiting).
 - Hardware-sensitive performance benchmarks. Operation-count contracts
   (`performance-contracts.yml`) are not, and run hosted.
+
+PR checks run entirely on hosted runners. Unit tests
+run as 12 shards on `ubuntu-24.04-arm`, which match the old five 8-vCPU
+Blacksmith shards; `ORCA_UNIT_FULL_SHARD_COUNT` tunes the count. Preflight (lint
+and typecheck) also runs on hosted ARM: shards, packaging and the layout oracle
+do not wait for it, so its slower runner stays off the gate's critical path.
+The layout oracle and advisory e2e lanes run on `ubuntu-24.04`. Git
+compatibility runs one Git version per hosted job: three lanes sharing one
+4-vCPU runner pushed real-Git tests past their timeouts.
 
 Everything else, including the hourly and daily Windows builds, template
 qualification and node-server lanes, runs on hosted `ubuntu-*`, `macos-15` and

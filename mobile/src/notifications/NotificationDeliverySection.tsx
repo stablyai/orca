@@ -1,9 +1,10 @@
-import { Switch, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { NotificationDeliveryPreferences } from './notification-delivery-preferences'
+import { MobileSwitch } from '../components/MobileSwitch'
 
 type Props = {
   value: NotificationDeliveryPreferences
@@ -21,14 +22,12 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
           <Text style={styles.label}>{label}</Text>
           {hint && <Text style={styles.hint}>{hint}</Text>}
         </View>
-        <Switch
+        <MobileSwitch
           accessibilityLabel={label}
           testID={`notification-${key}`}
           value={value[key]}
           disabled={disabled}
           onValueChange={(enabled) => onChange({ ...value, [key]: enabled })}
-          trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-          thumbColor={colors.textPrimary}
         />
       </View>
     )
@@ -73,7 +72,7 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
 const styles = themedStyleSheet(() => ({
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     overflow: 'hidden',
     marginTop: spacing.md
   },

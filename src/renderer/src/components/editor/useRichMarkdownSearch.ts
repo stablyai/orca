@@ -15,6 +15,7 @@ import {
 import { createRichMarkdownSearchMatchesCache } from './rich-markdown-search-matches-cache'
 import { useRichMarkdownSearchHighlights } from './useRichMarkdownSearchHighlights'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 
 export function useRichMarkdownSearch({
   editor,
@@ -89,8 +90,9 @@ export function useRichMarkdownSearch({
     })
   }, [editor, findMatches, isSearchOpen, matchCase, searchQuery, wholeWord])
 
-  // Derive disabled state from the same live atom guards as replacement, including during the highlight debounce.
-  const replaceDisabled = getLiveMatches().some((match) => match.touchesReadOnlyAtom)
+  // Hidden replace controls must not bypass the find debounce with a live scan.
+  const replaceDisabled =
+    isReplaceMode && getLiveMatches().some((match) => match.touchesReadOnlyAtom)
 
   const activeMatchIndex =
     !isSearchOpen || matchCount === 0
@@ -122,14 +124,16 @@ export function useRichMarkdownSearch({
   }, [isSearchOpen])
 
   const closeSearch = useCallback(() => {
+    // Focus the editor before Find unmounts its input; a deferred focus leaves Mod+F landing outside the editor.
+    if (editor && !editor.isDestroyed) {
+      editor.view.focus()
+    }
     setIsSearchOpen(false)
     setIsReplaceMode(false)
     setSearchQuery('')
     setReplaceQuery('')
     setDebouncedQuery('')
     setRawActiveMatchIndex(-1)
-    // Return focus after search unmounts its input so editor-scoped shortcuts can reopen it without a click.
-    editor?.commands.focus()
   }, [editor])
 
   const toggleMatchCase = useCallback(() => setMatchCase((value) => !value), [])
@@ -268,29 +272,24 @@ export function useRichMarkdownSearch({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       const root = rootRef.current
-      if (!root) {
+      if (!root || isImeOwnedKeyboardEvent(event)) {
         return
       }
 
       const target = event.target
       const targetInsideEditor = target instanceof Node && root.contains(target)
-      if (
-        isMarkdownPreviewFindShortcut(event, getShortcutPlatform(), keybindings) &&
-        targetInsideEditor
-      ) {
+      const platform = getShortcutPlatform()
+      const openFromShortcut = !targetInsideEditor
+        ? null
+        : isMarkdownPreviewFindShortcut(event, platform, keybindings)
+          ? openSearch
+          : isMarkdownPreviewReplaceShortcut(event, platform, keybindings)
+            ? openReplace
+            : null
+      if (openFromShortcut) {
         event.preventDefault()
         event.stopPropagation()
-        openSearch()
-        return
-      }
-
-      if (
-        isMarkdownPreviewReplaceShortcut(event, getShortcutPlatform(), keybindings) &&
-        targetInsideEditor
-      ) {
-        event.preventDefault()
-        event.stopPropagation()
-        openReplace()
+        openFromShortcut()
         return
       }
 

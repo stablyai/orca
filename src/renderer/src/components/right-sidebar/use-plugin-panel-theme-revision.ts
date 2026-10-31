@@ -11,7 +11,7 @@ function readPanelThemeSnapshot(): string {
 
 export function usePluginPanelThemeRevision(): number {
   const [revision, setRevision] = useState(0)
-  // Compare baked shell values: rAF root-style writes during sidebar drags must not remount iframes and destroy panel state.
+  // Compare baked shell values: unrelated root-style writes must not remount iframes and destroy panel state.
   const snapshotRef = useRef<string | null>(null)
   useEffect(() => {
     snapshotRef.current ??= readPanelThemeSnapshot()

@@ -136,7 +136,7 @@ function KeycapArt({ shortcut }: { shortcut: string | null }): React.JSX.Element
     ? formatKeybinding(shortcut, platform)
     : isMac()
       ? ['⌘', '⌥', '⇧']
-      : ['Ctrl', 'Alt', 'Shift']
+      : ['Ctrl', 'Alt', '⇧']
   return (
     <div className="absolute inset-0 flex items-center justify-center gap-2.5">
       {keys.map((key, index) => (

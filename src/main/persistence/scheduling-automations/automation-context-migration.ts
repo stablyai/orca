@@ -1,3 +1,5 @@
+import type { AutomationDefinitionOperations } from './automation-definition-operations'
+import type { WorkspaceRunContext } from '../../../shared/task-source-context'
 import type {
   Automation,
   AutomationPrecheckResult,
@@ -134,9 +136,7 @@ export function getAutomationContextsForRepo(
   const setup =
     projectHostSetups.find(
       (candidate) => candidate.repoId === repo.id && candidate.hostId === repoHostId
-    ) ??
-    projectHostSetups.find((candidate) => candidate.repoId === repo.id) ??
-    projectedSetup
+    ) ?? projectedSetup
   const runContext = setup
     ? buildWorkspaceRunContext({
         projectId: setup.projectId,
@@ -242,4 +242,40 @@ export function backfillLegacyAutomationContexts(
     },
     changed: true
   }
+}
+
+/**
+ * Writes the run target a legacy record resolved to, once: a record that already has one keeps it,
+ * so a stamp can never retarget an automation the user or a migration placed.
+ */
+export function stampLegacyAutomationRunContext(
+  operations: AutomationDefinitionOperations,
+  id: string,
+  runContext: WorkspaceRunContext
+): boolean {
+  const current = (operations.state.automations ?? []).find((entry) => entry.id === id)
+  if (!current || current.runContext) {
+    return false
+  }
+  // Replaced, not patched in place: the list projection caches on array identity.
+  operations.state.automations = operations.state.automations.map((entry) =>
+    entry.id === id ? { ...entry, runContext } : entry
+  )
+  operations.flush()
+  return true
+}
+
+export function automationContextAfterUpdate<T>(
+  saved: T | null | undefined,
+  update: T | null | undefined,
+  registry: T | null | undefined,
+  retargeted: boolean
+): T | null | undefined {
+  return update === null
+    ? null
+    : retargeted
+      ? (registry ?? update ?? null)
+      : saved === undefined
+        ? registry
+        : saved
 }

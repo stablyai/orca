@@ -25,12 +25,15 @@ export type PtyRuntimeControllerDeps = PtySpawnCodexResumeDeps & {
   assertWorkspaceAcceptsNewPty: (
     worktreeId: string | undefined,
     sessionId?: string,
-    cwd?: string
+    cwd?: string,
+    passiveWslRestore?: boolean,
+    connectionId?: string | null
   ) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,
     cwd: string | undefined,
-    missingDirFallback?: TerminalStartupCwdMissingDirFallback
+    missingDirFallback?: TerminalStartupCwdMissingDirFallback,
+    connectionId?: string | null
   ) => string | undefined
   requestSerializedBuffer: (
     ptyId: string,

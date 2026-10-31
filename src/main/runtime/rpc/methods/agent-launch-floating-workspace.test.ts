@@ -88,7 +88,7 @@ describe('agent.launch with the real floating workspace resolver', () => {
       vi.spyOn(runtime, 'requireStore').mockReturnValue({
         getSettings: () => ({
           ...STRUCTURED_PREFERENCE,
-          experimentalNativeChat: structuredPreference
+          nativeChatProviders: { codex: structuredPreference }
         })
       } as never)
       const scope = vi.spyOn(runtime, 'showTerminalWorkspaceLaunchScope')
@@ -128,6 +128,7 @@ describe('agent.launch with the real floating workspace resolver', () => {
         expect(createTerminal).toHaveBeenCalledExactlyOnceWith(
           `id:${FLOATING_TERMINAL_WORKTREE_ID}`,
           {
+            wslUserAct: true,
             startupAgent: 'codex',
             terminalImageViewerSupported: false,
             // Derived on the host by the window's rule, from the same chat-view setting.

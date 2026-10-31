@@ -35,23 +35,6 @@
         "startedAt": 0
       }
     },
-    "035edfd9a1b9": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "Pressable": 5,
-        "RefreshCw": 1,
-        "SafeAreaView": 1,
-        "SectionList": 1,
-        "Text": 5,
-        "TextInput": 1,
-        "View": 5
-      },
-      "labels": ["Back", "Refresh agent sessions"],
-      "text": ["Agent Session History", "orca-history", "Workspace", "Project", "All"]
-    },
     "0ddf5d4952fd": {
       "name": "aiVault.listSessions#1",
       "ordinal": 8,
@@ -160,6 +143,22 @@
           }
         }
       }
+    },
+    "3f48bd7d1369": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ActivityIndicator": 1,
+        "ChevronLeft": 1,
+        "Pressable": 2,
+        "RefreshCw": 1,
+        "SafeAreaView": 1,
+        "Text": 3,
+        "View": 7
+      },
+      "labels": ["Back", "Refresh agent sessions"],
+      "text": ["Agent Session History", "orca-history", "Loading agent sessions…"]
     },
     "40fa6811eb00": {
       "name": "streams-registered-at-teardown",
@@ -270,6 +269,36 @@
         "startedAt": 0
       }
     },
+    "9ace0f68da61": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronLeft": 1,
+        "Defs": 1,
+        "LinearGradient": 1,
+        "Pressable": 5,
+        "Rect": 1,
+        "RefreshCw": 1,
+        "SafeAreaView": 1,
+        "Search": 1,
+        "SectionList": 1,
+        "Stop": 2,
+        "Svg": 1,
+        "Text": 5,
+        "TextInput": 1,
+        "View": 13
+      },
+      "labels": [
+        "Back",
+        "Refresh agent sessions",
+        "Workspace",
+        "Project",
+        "All",
+        "Search sessions, repo:, path:"
+      ],
+      "text": ["Agent Session History", "orca-history", "Workspace", "Project", "All"]
+    },
     "a26eb8ffaa7c": {
       "name": "status.get#2",
       "ordinal": 7,
@@ -309,22 +338,6 @@
         }
       }
     },
-    "d22bb2f62cea": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ActivityIndicator": 1,
-        "ChevronLeft": 1,
-        "Pressable": 2,
-        "RefreshCw": 1,
-        "SafeAreaView": 1,
-        "Text": 2,
-        "View": 4
-      },
-      "labels": ["Back", "Refresh agent sessions"],
-      "text": ["Agent Session History", "orca-history"]
-    },
     "e28c488ce6b2": {
       "name": "agentSession.subscribeStatus#1",
       "ordinal": 1,
@@ -350,7 +363,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -368,7 +381,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -386,7 +399,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "035edfd9a1b9",
+          "state": "9ace0f68da61",
           "effects": []
         }
       },
@@ -404,7 +417,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "035edfd9a1b9",
+          "state": "9ace0f68da61",
           "effects": ["40fa6811eb00"]
         }
       }

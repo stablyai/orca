@@ -7,6 +7,7 @@ import {
   BRIDGE_PROTOCOL_VERSION
 } from './bridge-envelope'
 import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { BRIDGE_LIVENESS_PROBE_NOTIFY } from './bridge-liveness-probe-notify'
 import { GRANTS, INIT, createPageClient as createPage } from './bridge-page-client-test-harness'
 
 const resources = new Set<ReturnType<typeof createPage>>()
@@ -244,5 +245,17 @@ describe('bridge client haptics', () => {
     page.client.close()
     expect(page.client.notifyHaptics('selection')).toBe(false)
     expect(page.frames().at(-1)).toEqual({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
+  })
+})
+
+// No grant gates it: an older shell refuses the frame with one diagnostic and keeps its idle watchdog.
+describe('bridge client liveness probe', () => {
+  it('posts a probe frame once the session is up', () => {
+    const page = createPageClient()
+    page.start()
+    page.client.probeLivenessNow?.()
+    expect(page.frames().slice(1)).toEqual([
+      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_LIVENESS_PROBE_NOTIFY }
+    ])
   })
 })

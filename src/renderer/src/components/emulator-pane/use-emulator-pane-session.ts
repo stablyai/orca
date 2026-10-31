@@ -22,7 +22,11 @@ import { buildEmulatorPaneSessionView } from './emulator-pane-session-view'
 import { resolveEmulatorAttachTarget } from './emulator-attach-target'
 import { useEmulatorPaneLifecycle } from './use-emulator-pane-lifecycle'
 import { useEmulatorPaneShutdown } from './use-emulator-pane-shutdown'
-import { emulatorPaneErrorMessage } from './emulator-pane-error-message'
+import {
+  emulatorListDevicesErrorText,
+  emulatorStartErrorText,
+  noEmulatorDevicesError
+} from './emulator-pane-error-copy'
 import { SIMULATOR_DEFAULT_TAB_LABEL, formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
 
 type UseEmulatorPaneSessionArgs = {
@@ -92,7 +96,7 @@ export function useEmulatorPaneSession({
       deviceRefreshErrorRef.current = error
       if (mountedRef.current) {
         setDevices([])
-        setError(emulatorPaneErrorMessage(error, 'Could not list emulator devices.'))
+        setError(emulatorListDevicesErrorText(error))
       }
       return []
     }
@@ -183,9 +187,7 @@ export function useEmulatorPaneSession({
           selectedUdid
         })
         if (!target) {
-          throw new Error(
-            'No emulator devices found. Add an iOS Simulator in Xcode, or an Android Virtual Device in Android Studio.'
-          )
+          throw noEmulatorDevicesError()
         }
         requestedTarget = target
         setSelectedUdid(target)
@@ -222,11 +224,7 @@ export function useEmulatorPaneSession({
         }
         // Prevent mount auto-attach from erasing actionable setup errors.
         suppressAutoAttachRef.current = true
-        const msg = emulatorPaneErrorMessage(
-          e,
-          'Could not start the emulator. Make sure Xcode (iOS) or Android Studio (Android) is set up, then try another device.'
-        )
-        setError(msg)
+        setError(emulatorStartErrorText(e))
         if (tabId) {
           useAppStore.getState().setTabLabel(tabId, SIMULATOR_DEFAULT_TAB_LABEL)
         }

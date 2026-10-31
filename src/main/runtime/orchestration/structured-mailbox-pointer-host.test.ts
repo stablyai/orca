@@ -225,7 +225,8 @@ describe('structured mailbox pointer host', () => {
         operationId: 'op1',
         expectedRuntimeFence: 1,
         body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE },
-        holdWhileWorking: false
+        holdWhileWorking: false,
+        stillOwed: () => true
       })
     ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
     expect(send.mock.calls[0]![1]).toMatchObject({ body: { from: NOTICE_SOURCE } })

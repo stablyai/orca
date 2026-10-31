@@ -164,7 +164,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       openingFrameGeneration = 0
     }
     // First resumed batch replaces detached state; apply alone so coalescing cannot turn it into unchanged state.
-    if (opensSubscription && event.type === 'batch') {
+    if (opensSubscription) {
       coalescer.flush()
       if (isCurrentOpenGeneration(eventOpenGeneration)) {
         args.applyEvent(event, { opensSubscription: true })

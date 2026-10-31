@@ -5,11 +5,17 @@ import { PLUGIN_CONTENT_HASH_PATTERN } from '../../shared/plugins/installation/p
 import {
   PLUGIN_MANIFEST_FILENAME,
   isQualifiedPluginKey,
+  parseHostPluginManifest,
   parsePluginManifest,
   qualifiedPluginKey,
   satisfiesOrcaEngineRange,
   type PluginManifest
 } from '../../shared/plugins/manifest/plugin-manifest'
+import {
+  localPluginPublisher,
+  withPluginPublisher
+} from '../../shared/plugins/installation/plugin-publisher-derivation'
+import { splitQualifiedPluginKey } from '../../shared/plugins/catalog/plugin-marketplace'
 import { pluginManifestCompatibilityError } from '../../shared/plugins/manifest/plugin-manifest-compatibility'
 import {
   fingerprintPluginConsent,
@@ -30,6 +36,7 @@ const INSTALLED_PLUGIN_DISCOVERY_CONCURRENCY = 8
 export type ValidDiscoveredPlugin = {
   pluginKey: string
   rootDir: string
+  /** `publisher` is always the derived one (the install directory's or the dev folder's). */
   manifest: PluginManifest
   /** Fingerprint of the capabilities and trusted-worker execution tier. */
   consentFingerprint: string
@@ -67,6 +74,8 @@ async function readManifestDir(
   rootDir: string,
   hostVersion: string,
   isDev: boolean,
+  /** Installed trees take it from their directory name; dev folders derive it. */
+  installedPublisher?: string,
   installedContentHash?: string
 ): Promise<DiscoveredPlugin> {
   let rawText: string
@@ -92,12 +101,16 @@ async function readManifestDir(
       isDev
     }
   }
-  const parsed = parsePluginManifest(raw)
+  // Why strict for dev trees: they are the author's working copy, so authoring errors belong there.
+  const parsed = isDev ? parsePluginManifest(raw) : parseHostPluginManifest(raw)
   if (!parsed.ok) {
     const incompatible = pluginManifestCompatibilityError(raw, hostVersion)
     return { rootDir, error: incompatible ?? `invalid manifest: ${parsed.error}`, isDev }
   }
-  const manifest = parsed.manifest
+  const manifest = withPluginPublisher(
+    parsed.manifest,
+    installedPublisher ?? localPluginPublisher(parsed.manifest.publisher)
+  )
   const pluginKey = qualifiedPluginKey(manifest)
   if (!satisfiesOrcaEngineRange(hostVersion, manifest.engines.orca)) {
     return {
@@ -180,7 +193,8 @@ async function readInstalledPlugin(
     }
   }
   const versionDir = join(pluginDir, contentHash)
-  const discovered = await readManifestDir(versionDir, hostVersion, false, contentHash)
+  const publisher = splitQualifiedPluginKey(dirName)?.publisher ?? ''
+  const discovered = await readManifestDir(versionDir, hostVersion, false, publisher, contentHash)
   if (isInvalidDiscoveredPlugin(discovered)) {
     return { ...discovered, pluginKey: dirName }
   }
@@ -189,7 +203,7 @@ async function readInstalledPlugin(
     return {
       pluginKey: dirName,
       rootDir: versionDir,
-      error: `manifest identity "${discovered.pluginKey}" does not match install directory "${dirName}"`,
+      error: `manifest id "${discovered.manifest.id}" does not match install directory "${dirName}"`,
       isDev: false
     }
   }

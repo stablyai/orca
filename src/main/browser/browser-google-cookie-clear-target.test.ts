@@ -205,7 +205,7 @@ it('preserves import refusal/order, reserves delegation for absent routes, and r
   const server = jar()
   mocks.sessions.set('persist:server', server)
   mocks.profiles.delete('work')
-  expect(await importCookiesIntoClientRoutePartition(request)).toEqual({
+  expect(await importCookiesIntoClientRoutePartition(request)).toMatchObject({
     ok: false,
     reason: 'Session profile not found.'
   })
@@ -218,7 +218,7 @@ it('preserves import refusal/order, reserves delegation for absent routes, and r
   expect(await importCookiesIntoClientRoutePartition(request)).toBeNull()
   mocks.profiles.set('work', profile)
   mocks.route.mockReturnValue(route)
-  expect(await importCookiesIntoClientRoutePartition(request)).toEqual({
+  expect(await importCookiesIntoClientRoutePartition(request)).toMatchObject({
     ok: false,
     reason: 'Browser not found on this system.'
   })

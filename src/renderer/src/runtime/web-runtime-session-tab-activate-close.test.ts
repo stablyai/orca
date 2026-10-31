@@ -1,3 +1,4 @@
+import { registerHistoricalSessionTabActivationTests } from './web-runtime-session-tab-historical-activation.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TrackingDecisions from './web-session-tabs-sync/tracking-decisions'
 import {
@@ -29,6 +30,7 @@ import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixtu
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
+  revealWorktree: vi.fn(() => true),
   setState: vi.fn(),
   subscribe: vi.fn(),
   setActiveWorktree: vi.fn(),
@@ -46,6 +48,11 @@ const mocks = vi.hoisted(() => ({
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.revealWorktree,
+  activateAndRevealFolderWorkspace: mocks.revealWorktree
 }))
 
 vi.mock('../store', () => ({
@@ -126,9 +133,12 @@ describe('web runtime session tab actions', () => {
 
   afterEach(() => {
     resetWebSessionFocusIntentForTests()
+    replaceRuntimeEnvironmentRevisions([])
     vi.unstubAllGlobals()
     vi.clearAllMocks()
   })
+
+  registerHistoricalSessionTabActivationTests(mocks, { ENVIRONMENT_ID, WORKTREE_ID })
 
   it('maps mirrored local browser unified ids for activate and close', async () => {
     const runtimeCall = vi

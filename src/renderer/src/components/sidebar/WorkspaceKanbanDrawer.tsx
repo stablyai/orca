@@ -94,6 +94,7 @@ function WorkspaceKanbanDrawerContent({
     renderedBoardWorktrees,
     search: { query, setQuery, clearQuery, matchingWorktreeIds, hasQuery, isQueryTooLarge },
     worktreeById,
+    worktreeByKey,
     worktreesByStatus
   } = useWorkspaceKanbanBoardProjection({
     activeWorktreeId,
@@ -125,7 +126,7 @@ function WorkspaceKanbanDrawerContent({
     useWorkspaceKanbanColumnResize(workspaceBoardColumnWidth, setWorkspaceBoardColumnWidth)
   const maybeSyncWorkspaceBoardTaskStatuses = useWorkspaceBoardTaskStatusSync({
     enabled: syncTaskStatusFromWorkspaceBoard,
-    worktreesById: worktreeById,
+    worktreesByKey: worktreeByKey,
     workspaceStatuses: offeredStatuses
   })
   const {
@@ -146,6 +147,7 @@ function WorkspaceKanbanDrawerContent({
     updateWorktreesMeta,
     workspaceStatuses: boardStatuses,
     worktreeById,
+    worktreeByKey,
     manualOrderCatalog,
     worktreesByStatus
   })

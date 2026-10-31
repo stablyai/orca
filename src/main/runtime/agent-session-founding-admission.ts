@@ -24,7 +24,8 @@ import { setAgentSessionTabVisibility } from './agent-session/agent-session-tab-
 /** Use create admission without requiring owner acquisition. */
 export function commitAgentSessionFounding(
   state: AgentSessionStoreState,
-  request: AgentSessionReserveRequest
+  request: AgentSessionReserveRequest,
+  legacyIds: readonly string[] = []
 ): AgentSessionReserveResult {
   const decision = evaluateAgentSessionReserveOperation(state, request)
   if (decision.decision === 'refused') {
@@ -61,7 +62,7 @@ export function commitAgentSessionFounding(
     }
     throw error
   }
-  assertReservedTabUnheld(state, request)
+  assertReservedTabUnheld(state, request, legacyIds)
   const founded = foundAgentSessionRecord(request, request)
   const record = request.adoptedHandleLink
     ? { ...founded, providerHandleChain: [request.adoptedHandleLink] }
@@ -75,6 +76,6 @@ export function commitAgentSessionFounding(
     agentSessionOperationKey(operationRow.callerKey, operationRow.operationId),
     operationRow
   )
-  setAgentSessionTabVisibility(state, request.sessionId, true, request.surfaceTabId)
+  setAgentSessionTabVisibility(state, request.sessionId, true, request.surfaceTabId, legacyIds)
   return { record, disposition: 'created', operationRow }
 }

@@ -16,6 +16,7 @@ import { getDevicePushToken } from './push-token'
 import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => ({ storage: new Map<string, string>(), replace: vi.fn() }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(async (key: string) => mocks.storage.get(key) ?? null),
@@ -42,6 +43,7 @@ vi.mock('react-native', () => ({
   Linking: { openSettings: vi.fn() },
   useWindowDimensions: () => ({ width: 390, height: 844 })
 }))
+vi.mock('expo-notifications', () => ({ scheduleNotificationAsync: vi.fn() }))
 vi.mock('expo-router', () => ({
   useFocusEffect: vi.fn(),
   useLocalSearchParams: () => ({ hostId: 'host', steps: 'notifications' }),

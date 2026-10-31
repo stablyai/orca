@@ -9,7 +9,6 @@ export {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View
 } from 'react-native'
 // Use the platform seam: WebView window.open is refused by both shells despite resolving successfully.
@@ -30,10 +29,12 @@ export {
   ExternalLink,
   GitBranch,
   Lock,
+  MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
-  Send,
+  Search,
+  SlidersHorizontal,
   X
 } from 'lucide-react-native'
 export type { RpcClient } from '../transport/rpc-client'
@@ -53,6 +54,8 @@ export { ConfirmModal } from '../components/ConfirmModal'
 export { MobileMarkdown } from '../components/MobileMarkdown'
 export { MobileAgentIcon } from '../components/MobileAgentIcon'
 export { MobileWorkspaceNameInput } from '../components/MobileWorkspaceNameInput'
+export { MessageBox } from '../components/composer-input/MessageBox'
+export { TextField } from '../components/composer-input/TextField'
 export { MobileSearchField } from '../components/MobileSearchField'
 export { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 export { PickerModal } from '../components/PickerModal'

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import {
   PLUGIN_COMMAND_ACTION_SINCE,
   PLUGIN_COMMAND_ALIAS_ACTION_IDS
@@ -35,15 +36,11 @@ export const pluginCommandContributionSchema = z
         ['jupyter.restartKernel']
       )
     ),
-    title: z
-      .string()
-      .min(1)
-      .max(256)
-      .meta(
-        pluginFieldDoc('Title shown in the command palette.', PLUGIN_SCHEMA_SINCE_V1, [
-          'Restart kernel'
-        ])
-      ),
+    title: safePluginDisplayText(z.string().min(1).max(256)).meta(
+      pluginFieldDoc('Title shown in the command palette.', PLUGIN_SCHEMA_SINCE_V1, [
+        'Restart kernel'
+      ])
+    ),
     when: pluginCommandWhenSchema.optional().meta({
       ...pluginFieldDoc(
         'Where the command is available. `workspace` hides it when no workspace is active. Defaults to `global`.',

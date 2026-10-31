@@ -1,10 +1,7 @@
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
@@ -45,12 +42,8 @@ export function buildOnboardingFolderAgentStartup(
   }
 
   const startupPlan = buildAgentStartupPlan({
-    agent,
+    ...resolveAgentStartupPlanInputs({ agent, settings, ...host }),
     prompt: '',
-    cmdOverrides: settings.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, settings),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings, host.platform),
-    ...host,
     allowEmptyPromptLaunch: true
   })
   if (!startupPlan) {

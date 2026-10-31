@@ -89,7 +89,7 @@ describe('computer RPC methods', () => {
     computerMocks.getComputerUsePermissionStatus.mockReturnValue(result)
 
     await expect(call('computer.permissionsStatus', {})).resolves.toBe(result)
-    expect(computerMocks.getComputerUsePermissionStatus).toHaveBeenCalledWith()
+    expect(computerMocks.getComputerUsePermissionStatus).toHaveBeenCalledWith(expect.any(Function))
   })
 
   it('lists windows through the sidecar', async () => {

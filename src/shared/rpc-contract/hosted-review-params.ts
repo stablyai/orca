@@ -1,11 +1,13 @@
 import { z } from 'zod'
-import { requiredString } from './rpc-param-primitives'
+import { OptionalBoolean, requiredString } from './rpc-param-primitives'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 
 export const HostedReviewForBranch = z.object({
   repo: requiredString('Missing repo selector'),
   branch: requiredString('Missing branch'),
   force: z.boolean().optional(),
+  userRefresh: z.boolean().optional(),
+  reportReadOutcome: z.boolean().optional(),
   admissionTier: OptionalGitAdmissionTier,
   currentHeadOid: z.string().nullable().optional(),
   // Only the caller's selected worktree; the host caps how many earn the fast tier.
@@ -32,7 +34,9 @@ export const HostedReviewCreationEligibility = z.object({
   linkedGitLabMR: z.number().int().positive().nullable().optional(),
   linkedBitbucketPR: z.number().int().positive().nullable().optional(),
   linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
-  linkedGiteaPR: z.number().int().positive().nullable().optional()
+  linkedGiteaPR: z.number().int().positive().nullable().optional(),
+  /** The user's Create PR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
 })
 
 export const HostedReviewCreate = z.object({

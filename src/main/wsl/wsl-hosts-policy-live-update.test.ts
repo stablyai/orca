@@ -1,8 +1,12 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { parseWslHostsPolicy, wslHostsPolicyState } from '../../shared/wsl-hosts-policy'
+import {
+  parseWslHostsPolicy,
+  wslHostsPolicyMovedProjects,
+  wslHostsPolicyState
+} from '../../shared/wsl-hosts-policy'
 import {
   readCachedWslHostsPolicy,
   WslHostsPolicyLiveUpdater,
@@ -34,6 +38,28 @@ describe('WSL hosts policy parsing', () => {
     ['an oversized file', `${policy(1, 'block')}${' '.repeat(17 * 1024)}`]
   ])('rejects %s', (_label, text) => {
     expect(parseWslHostsPolicy(text).ok).toBe(false)
+  })
+
+  it('reads moved projects as keep unless a block asks for them back', () => {
+    const parse = (fields: Record<string, unknown>) => {
+      const parsed = parseWslHostsPolicy(JSON.stringify({ version: 1, revision: 1, ...fields }))
+      if (!parsed.ok) {
+        throw new Error(parsed.error)
+      }
+      return parsed.policy
+    }
+    expect(wslHostsPolicyMovedProjects(null)).toBe('keep')
+    expect(wslHostsPolicyMovedProjects(parse({ wslHosts: 'block' }))).toBe('keep')
+    expect(
+      wslHostsPolicyMovedProjects(parse({ wslHosts: 'block', movedProjects: 'bring-back' }))
+    ).toBe('bring-back')
+    expect(
+      wslHostsPolicyMovedProjects(parse({ wslHosts: 'allow', movedProjects: 'bring-back' }))
+    ).toBe('keep')
+    // A later value must not drop the block it rides on.
+    const later = parse({ wslHosts: 'block', movedProjects: 'some-later-mode' })
+    expect(wslHostsPolicyState(later)).toBe('block')
+    expect(wslHostsPolicyMovedProjects(later)).toBe('keep')
   })
 
   it('reads no policy as missing, never as a block', () => {
@@ -92,6 +118,28 @@ describe('WSL hosts policy live update', () => {
       revision: 1,
       wslHosts: 'block'
     })
+  })
+
+  // A build that doesn't know a field must not strip it for the newer build sharing the profile.
+  it('caches the downloaded text verbatim, fields this build does not know included', async () => {
+    const text = JSON.stringify({
+      version: 1,
+      revision: 3,
+      wslHosts: 'block',
+      someLaterField: { keep: true }
+    })
+    const live = updater(respond(text))
+    await live.start()
+    live.stop()
+
+    const cachedText = readFileSync(
+      join(userDataPath, wslHostsPolicyCacheFileName('stable')),
+      'utf8'
+    )
+    expect(cachedText).toBe(text)
+    // This build reads its own fields from it, and a newer parser still finds the later one.
+    expect(readCachedWslHostsPolicy(userDataPath, STABLE)?.wslHosts).toBe('block')
+    expect(JSON.parse(cachedText)).toMatchObject({ someLaterField: { keep: true } })
   })
 
   it('never lets a lower or equal revision replace the cache', async () => {

@@ -8,8 +8,6 @@ import { SourceControlAgentActionDialog } from '../SourceControlAgentActionDialo
 import { ChecksPanelUpdatedAtMetadata } from '../checks-panel-updated-at-metadata'
 import { getChecksPanelRefreshErrorBannerLine } from '../github-refresh-error-copy'
 import { resolveChecksPanelHostedReviewModifierDestination } from '../checks-panel-hosted-review-click-routing'
-import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control-launch-agent-selection'
-import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control-ai'
 import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
 import { getBrokenChecks } from '../../../../../shared/pr-checks-fix-prompt'
 import { PRTriageStrip } from './triage-strip'
@@ -75,6 +73,7 @@ export function ChecksPanelActiveContent({
     isRefreshing,
     isResolvingConflictsWithAI,
     linkedGitLabMR,
+    manualRefreshError,
     pendingCommentResolutionRef,
     pr,
     prRefreshState,
@@ -102,15 +101,19 @@ export function ChecksPanelActiveContent({
     settings,
     Boolean(activeWorktreeId)
   )
+  // A classified GitHub failure says more than a manual one, so it wins; one banner either way.
+  const refreshError =
+    (activeReview.provider === 'github' && prRefreshState?.status === 'error'
+      ? getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType)
+      : null) ?? manualRefreshError
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
-      {/* Show background GitHub failures above cached PR data so outages cannot look like a healthy panel. */}
-      {activeReview?.provider === 'github' && prRefreshState?.status === 'error' ? (
+      {refreshError ? (
         <div
           role="alert"
           className="border-b border-border/50 bg-destructive/10 px-3 py-2 text-xs text-destructive"
         >
-          {getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType)}
+          {refreshError}
         </div>
       ) : null}
       <div className="px-3 py-3 border-b border-border space-y-2.5">
@@ -224,7 +227,7 @@ export function ChecksPanelActiveContent({
       {!(activeConflictReview && checks.length === 0 && !checksLoading) && (
         <ChecksList
           checks={checks}
-          checksError={checksError}
+          checksError={manualRefreshError ? null : checksError}
           checksLoading={checksLoading}
           checkDetailsContextKey={stateRequestKey}
           onLoadCheckDetails={handleLoadCheckDetails}
@@ -234,7 +237,7 @@ export function ChecksPanelActiveContent({
       )}
       <PRCommentsList
         comments={comments}
-        commentsError={commentsError}
+        commentsError={manualRefreshError ? null : commentsError}
         commentsLoading={commentsLoading}
         reviewKind={reviewShortLabel}
         commentsDisabled={!canTargetPRComments}
@@ -291,35 +294,6 @@ export function ChecksPanelActiveContent({
         promptDelivery="submit-after-ready"
         launchPlatform={activeSourceControlLaunchPlatform}
         launchSource={agentComposerState?.launchSource ?? 'task_page'}
-        savedAgentId={
-          agentComposerState
-            ? readSourceControlLaunchRecipeAgentId(
-                resolveSourceControlActionRecipe({
-                  settings,
-                  repo,
-                  actionId: agentComposerState.actionId
-                })
-              )
-            : null
-        }
-        savedCommandInputTemplate={
-          agentComposerState
-            ? (resolveSourceControlActionRecipe({
-                settings,
-                repo,
-                actionId: agentComposerState.actionId
-              }).commandInputTemplate ?? null)
-            : null
-        }
-        savedAgentArgs={
-          agentComposerState
-            ? (resolveSourceControlActionRecipe({
-                settings,
-                repo,
-                actionId: agentComposerState.actionId
-              }).agentArgs ?? null)
-            : null
-        }
         onSaveAgentDefault={saveLaunchActionDefault}
         {...agentComposerState?.launchContext}
       />

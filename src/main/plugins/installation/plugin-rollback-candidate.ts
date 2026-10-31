@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { parsePluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
+import { parseHostPluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
 import { readPluginCurrentPointer } from './plugin-current-pointer'
 import { readPluginManifestText } from '../plugin-manifest-file'
 import { PLUGIN_CONTENT_HASH_PATTERN } from '../../../shared/plugins/installation/plugin-install-lockfile'
@@ -43,7 +43,7 @@ export async function readPluginRollbackVersion(pluginDir: string): Promise<stri
     return null
   }
   try {
-    const parsed = parsePluginManifest(
+    const parsed = parseHostPluginManifest(
       JSON.parse(await readPluginManifestText(join(pluginDir, candidate.contentHash)))
     )
     return parsed.ok ? parsed.manifest.version : null

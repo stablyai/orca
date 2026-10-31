@@ -1,6 +1,6 @@
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { dedupeInFlightRun } from '../in-flight-run-dedupe'
-import { resolveCodexCommand } from '../codex-cli/command'
+import { resolveCodexCommand, resolveCodexCommandForSpawn } from '../codex-cli/command'
 import { getManagedCommand, getManagedScriptPath } from './codex-hook-definition'
 import {
   deriveCodexHookHashes,
@@ -107,16 +107,26 @@ function remember(codexPath: string, known: KnownAnswer): CodexHookAnswer {
   return known.answer
 }
 
-/** Query the Codex on PATH only in app main. */
-export async function resolveCodexHookAnswer(): Promise<CodexHookAnswer> {
+/** The Codex on the same hydrated PATH that panes use; off the event loop on Windows. */
+export async function resolveAppCodexPath(): Promise<string> {
+  await appPathReady
+  return resolveCodexCommandForSpawn()
+}
+
+/** Query the Codex on PATH only in app main; pass a path from resolveAppCodexPath to skip re-resolving it. */
+export async function resolveCodexHookAnswer(codexPath?: string): Promise<CodexHookAnswer> {
   // Resolve the same hydrated PATH that panes use.
   await appPathReady
-  return lookupCodexHookAnswer(resolveCodexCommand(), getManagedCommand(getManagedScriptPath()))
+  return lookupCodexHookAnswer(
+    codexPath ?? resolveCodexCommand(),
+    getManagedCommand(getManagedScriptPath())
+  )
 }
 
 /** Read status from memory or disk without spawning Codex. */
-export function readKnownCodexHookAnswer(): CodexHookAnswer | null {
-  const codexPath = resolveCodexCommand()
+export function readKnownCodexHookAnswer(
+  codexPath: string = resolveCodexCommand()
+): CodexHookAnswer | null {
   const fingerprint = fingerprintCodex(codexPath)
   if (fingerprint === null) {
     return codexNotFound(codexPath)

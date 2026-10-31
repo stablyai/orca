@@ -1,3 +1,4 @@
+import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import {
   mobileQueuedMessageCards,
   type MobileQueuedMessageCard
@@ -104,10 +105,11 @@ function card(
 describe('MobileNativeChatQueuedMessages', () => {
   let renderer: ReactTestRenderer | null = null
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks()
     act(() => renderer?.unmount())
     renderer = null
+    await activateMobileUiLocale('en')
   })
 
   async function mount(
@@ -183,19 +185,13 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(texts(mounted)).toContain('See this')
   })
 
-  it('draws a plain waiting card as one compact row with no caption', async () => {
+  it('draws a translated idle card as one compact row with Send and no caption', async () => {
+    await activateMobileUiLocale('de')
     const mounted = await mount({ cards: [card({ messageId: 'w', text: 'next' })] })
     const rows = mounted.root.findAllByProps({ testID: 'queued-card-row' })
     expect(rows).toHaveLength(1)
-    expect(texts(mounted)).toEqual(['Queued', 1, 'next', 'Steer'])
-    expect(
-      mounted.root.find(
-        (node) =>
-          String(node.type) === 'Text' &&
-          node.props.children === 'next' &&
-          !node.props.accessibilityElementsHidden
-      ).props.numberOfLines
-    ).toBe(2)
+    expect(texts(mounted)).toEqual(['In der Warteschlange', 1, 'next', 'Senden'])
+    expect(mounted.root.findByProps({ children: 'next', numberOfLines: 2 })).toBeTruthy()
     expect(nodeTypes(rows[0]!)).toContain('ListEnd')
     expect(nodeTypes(rows[0]!)).not.toContain('AlertCircle')
   })
@@ -318,7 +314,7 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(texts(mounted).filter((text) => text === reason)).toHaveLength(1)
   })
 
-  it('reads Steer on a waiting card and plain Send on a returned one or one whose own send failed', async () => {
+  it('reads Steer during work and plain Send on a returned one or one whose own send failed', async () => {
     const mounted = await mount({
       cards: [
         card({
@@ -330,6 +326,7 @@ describe('MobileNativeChatQueuedMessages', () => {
         card({ messageId: 'waiting' }),
         card({ messageId: 'returned', state: 'returned', needsAttention: true })
       ],
+      agentWorking: true,
       onSend: vi.fn(async () => true)
     })
     expect(control(mounted, 'Send this message')).toBeTruthy()
@@ -392,7 +389,8 @@ describe('MobileNativeChatQueuedMessages', () => {
       cards: [card({ messageId: 'w' })],
       onSend,
       onDelete,
-      steerHeld: true
+      steerHeld: true,
+      agentWorking: true
     })
     const steer = control(mounted, 'Submit without interrupting the model')
     expect(steer.props.disabled).toBe(true)
@@ -478,15 +476,15 @@ describe('MobileNativeChatQueuedMessages', () => {
     const mounted = await mount({ cards: [card({ messageId: 'w' })], onSend, onDelete })
     // Tap all actions before disabled state renders to expose same-frame duplication.
     await act(async () => {
-      control(mounted, 'Submit without interrupting the model').props.onPress()
-      control(mounted, 'Submit without interrupting the model').props.onPress()
+      control(mounted, 'Send this message').props.onPress()
+      control(mounted, 'Send this message').props.onPress()
       control(mounted, 'Delete this queued message').props.onPress()
     })
     expect(onSend).toHaveBeenCalledTimes(1)
     expect(onDelete).not.toHaveBeenCalled()
     expect(control(mounted, 'More actions').props.disabled).toBe(true)
     await act(async () => answer(true))
-    expect(control(mounted, 'Submit without interrupting the model').props.disabled).toBe(false)
+    expect(control(mounted, 'Send this message').props.disabled).toBe(false)
   })
 
   describe('a paused queue', () => {
@@ -557,7 +555,7 @@ describe('MobileNativeChatQueuedMessages', () => {
         onSend
       })
       const labels = ['Delete every queued message', 'Resume sending the queued messages']
-      const steer = 'Submit without interrupting the model'
+      const steer = 'Send this message'
       const trigger = async (action: () => void) => {
         counting = true
         await act(async () => action())
@@ -665,7 +663,11 @@ describe('MobileNativeChatQueuedMessages', () => {
 
     it('keeps Steer on its cards: one card can still go beside the paused rest', async () => {
       const onSend = vi.fn(async () => true)
-      const mounted = await mountPaused({ pause: { reason: 'stopped' }, onSend })
+      const mounted = await mountPaused({
+        pause: { reason: 'stopped' },
+        onSend,
+        agentWorking: true
+      })
       const steer = control(mounted, 'Submit without interrupting the model')
       expect(texts(mounted)).toContain('Steer')
       expect(texts(mounted)).not.toContain('Send')
@@ -695,7 +697,7 @@ describe('MobileNativeChatQueuedMessages', () => {
       'Queued messages',
       'Delete every queued message',
       'Resume sending the queued messages',
-      'Submit without interrupting the model',
+      'Send this message',
       'Delete this queued message',
       'More actions'
     ])

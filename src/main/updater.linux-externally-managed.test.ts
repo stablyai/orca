@@ -99,6 +99,7 @@ describe('updater externally managed Linux installs', () => {
     expect(lastStatus(send)).toEqual({
       state: 'error',
       message: EXTERNALLY_MANAGED_MESSAGE,
+      messageCode: 'linuxPackageExternallyManaged',
       version: '1.0.61',
       retryable: false
     })

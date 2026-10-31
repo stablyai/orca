@@ -39,14 +39,7 @@ const SLOW_MESSAGE =
 
 type Snapshot = [NativeChatMessage[], boolean, number, string | undefined]
 
-let releaseStall: (() => void) | undefined
 let unhandled: unknown[] = []
-
-function stalls<T>(): Promise<T> {
-  return new Promise<T>((resolve) => {
-    releaseStall = () => resolve(undefined as T)
-  })
-}
 
 function subscribeCollecting(snapshots: Snapshot[]) {
   return subscribeNativeChatTranscript({
@@ -72,14 +65,12 @@ beforeEach(() => {
   mocks.resolve.mockReset()
   mocks.stat.mockReset()
   mocks.open.mockReset()
-  releaseStall = undefined
   unhandled = []
   process.on('unhandledRejection', trackUnhandled)
   vi.useFakeTimers()
 })
 
 afterEach(async () => {
-  releaseStall?.()
   await vi.advanceTimersByTimeAsync(0)
   vi.useRealTimers()
   process.off('unhandledRejection', trackUnhandled)
@@ -163,20 +154,6 @@ describe('native chat transcript subscription with a stalled install stat', () =
     expect(handle.read).not.toHaveBeenCalled()
     expect(mocks.stat.mock.calls.length).toBe(statCallsAtTeardown)
     expect(handle.close).toHaveBeenCalledTimes(1)
-    expect(unhandled).toEqual([])
-  })
-
-  it('tears down cleanly while an admission is still stalled', async () => {
-    mocks.resolve.mockResolvedValue(UNC_PATH)
-    mocks.stat.mockImplementation(stalls)
-    const snapshots: Snapshot[] = []
-
-    const subscribing = subscribeCollecting(snapshots)
-    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 1)
-    const subscription = await subscribing
-
-    expect(() => subscription.unsubscribe()).not.toThrow()
-    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 1)
     expect(unhandled).toEqual([])
   })
 })

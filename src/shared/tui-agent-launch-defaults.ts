@@ -1,10 +1,10 @@
+import { normalizeAgentLaunchChoices } from './agent-launch-choices'
 import { agentPermissionHostPlatform, permissionEnvNameMatches } from './agent-permission-env'
 import type { SleepingAgentLaunchConfig } from './agent-session-resume'
 import type { GlobalSettings } from './global-settings-types'
 import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
 import {
-  agentPermissionArgs,
   readLaunchPermissionChoice,
   type AgentPermissionChoice,
   agentPermissionEnv,
@@ -13,7 +13,7 @@ import {
   resolveAgentPermission,
   sanitizeAgentPermissionUpdates
 } from './tui-agent-permission-choice'
-import { agentArgsSetPermission } from './tui-agent-permission-lift'
+import { projectAgentLaunchProfile } from './agent-launch-profile'
 import {
   resolveStartupShell,
   tokenizeStartupCommand,
@@ -31,7 +31,12 @@ const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> =
 export type AgentLaunchProfileSettings = Partial<
   Pick<
     GlobalSettings,
-    'agentDefaultArgs' | 'agentDefaultEnv' | 'agentPermissionDefault' | 'agentPermissionOverrides'
+    | 'agentDefaultArgs'
+    | 'agentDefaultEnv'
+    | 'agentLaunchChoices'
+    | 'agentPermissionDefault'
+    | 'agentPermissionOverrides'
+    | 'terminalWindowsShell'
   >
 >
 
@@ -152,6 +157,9 @@ export function sanitizeAgentLaunchProfileUpdates(
     target.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
     target.agentYoloDefaultsMigrated = true
   }
+  if ('agentLaunchChoices' in updates) {
+    target.agentLaunchChoices = normalizeAgentLaunchChoices(updates.agentLaunchChoices)
+  }
   sanitizeAgentPermissionUpdates(target, updates)
 }
 
@@ -169,42 +177,37 @@ function ownArgs(agent: string, settings: AgentLaunchProfileSettings | null | un
   return typeof value === 'string' ? value : undefined
 }
 
-/** Shared injection rule: CLI-owned permission text wins over an Orca choice. */
-export function agentPermissionArgsForLaunch(
-  agent: TuiAgent,
-  choice: AgentPermissionChoice,
-  text: string
-): string | null {
-  return choice === 'own'
-    ? ''
-    : agentArgsSetPermission(agent, text)
-      ? null
-      : agentPermissionArgs(agent, choice)
-}
-
+export { agentPermissionArgsForLaunch } from './agent-permission-args'
 /** Compose stored permission flags with user arguments, letting explicit user permission text win. Older host text already includes its flags. */
 export function resolveTuiAgentLaunchArgs(
   agent: string,
   settings: AgentLaunchProfileSettings | null | undefined,
-  permissionChoice?: AgentPermissionChoice
+  permissionChoice?: AgentPermissionChoice,
+  shell?: AgentStartupShell
 ): string {
-  const own = ownArgs(agent, settings)
-  if (
-    (!hasTypedAgentPermission(settings) && permissionChoice === undefined) ||
-    !isTuiAgent(agent)
-  ) {
-    return own ?? getTuiAgentDefaultArgs(agent)
+  if (!isTuiAgent(agent)) {
+    return ownArgs(agent, settings) ?? getTuiAgentDefaultArgs(agent)
   }
-  const user = own?.trim() ?? ''
-  const flag = agentPermissionArgsForLaunch(
+  return projectAgentLaunchProfile(agent, settings, {
+    target: 'terminal',
+    shell,
+    ...(permissionChoice ? { choices: { permissionMode: permissionChoice } } : {})
+  }).args
+}
+
+/** Original configured Arguments and permission, without fresh model defaults. */
+export function resolveTuiAgentLaunchRawArgs(
+  agent: string,
+  settings: AgentLaunchProfileSettings | null | undefined,
+  permissionChoice?: AgentPermissionChoice,
+  shell?: AgentStartupShell
+): string {
+  return resolveTuiAgentLaunchArgs(
     agent,
-    permissionChoice ?? resolveAgentPermission(agent, settings).choice,
-    user
+    { ...settings, agentLaunchChoices: undefined },
+    permissionChoice,
+    shell
   )
-  if (!flag) {
-    return user
-  }
-  return user ? `${flag} ${user}` : flag
 }
 
 /** Legacy missing Arguments use Orca’s bypass default; Manual stores an explicit empty value that overrides it. */
@@ -261,7 +264,7 @@ export function composeAgentLaunchProfile(
   settings: AgentLaunchProfileSettings,
   platform: NodeJS.Platform | null | undefined = agentPermissionHostPlatform()
 ): Required<Pick<AgentLaunchProfileSettings, 'agentDefaultArgs' | 'agentDefaultEnv'>> {
-  if (!hasTypedAgentPermission(settings)) {
+  if (!hasTypedAgentPermission(settings) && settings.agentLaunchChoices === undefined) {
     return {
       agentDefaultArgs: { ...settings.agentDefaultArgs },
       agentDefaultEnv: { ...settings.agentDefaultEnv }
@@ -269,6 +272,7 @@ export function composeAgentLaunchProfile(
   }
   const argAgents = new Set([
     ...Object.keys(settings.agentDefaultArgs ?? {}),
+    ...Object.keys(settings.agentLaunchChoices ?? {}),
     ...PERMISSION_CHOICE_AGENTS
   ])
   const envAgents = new Set([
@@ -279,7 +283,22 @@ export function composeAgentLaunchProfile(
   ])
   return {
     agentDefaultArgs: Object.fromEntries(
-      [...argAgents].map((agent) => [agent, resolveTuiAgentLaunchArgs(agent, settings)])
+      [...argAgents].map((agent) => [
+        agent,
+        resolveTuiAgentLaunchArgs(
+          agent,
+          settings,
+          undefined,
+          resolveStartupShell(
+            platform ?? agentPermissionHostPlatform(),
+            resolveLocalWindowsAgentStartupShell({
+              platform: platform ?? agentPermissionHostPlatform(),
+              isRemote: false,
+              terminalWindowsShell: settings.terminalWindowsShell
+            })
+          )
+        )
+      ])
     ),
     agentDefaultEnv: Object.fromEntries(
       [...envAgents].map((agent) => [agent, resolveTuiAgentLaunchEnv(agent, settings, platform)])

@@ -35,6 +35,7 @@ describe('Claude structured processless acquisition', () => {
         },
         getSettings: async () => ({}),
         getContextUsage: async () => ({}),
+        renameSession: async () => {},
         supportedModels: async () => [],
         interrupt: async () => undefined,
         cancelAsyncMessage: async () => false,
@@ -56,6 +57,7 @@ describe('Claude structured processless acquisition', () => {
         providerSessionId: PROVIDER_SESSION_ID,
         resumeLeafUuid: null,
         resumesTranscript: false,
+        cliFlag: async () => 'supported' as const,
         continuesChain: false
       }),
       openConnection

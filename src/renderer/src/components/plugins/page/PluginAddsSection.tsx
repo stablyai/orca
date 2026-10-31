@@ -23,8 +23,11 @@ import { useAppStore } from '@/store'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
+import { usePluginIconThemes } from '@/store/plugin-icon-themes'
 import { usePluginSyntaxes } from '@/store/plugin-syntax-packs'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
+import { Button } from '../../ui/button'
+import { revealPluginIconTheme } from '../state/plugin-try-action'
 import { DetailRow, DetailSection } from './PluginDetailSections'
 import { PluginContributionActionCommand } from './PluginContributionActionCommand'
 import { PluginContributionEventRow, usePluginWorkerEvents } from './PluginContributionActionEvents'
@@ -192,6 +195,7 @@ function useContributionRowActions(
 ): (row: PluginContribution) => React.ReactNode {
   const syntaxes = usePluginSyntaxes()
   const languagePacks = usePluginLanguagePackStore((state) => state.entries)
+  const iconThemes = usePluginIconThemes()
   if (!isPluginContributionLive(plugin)) {
     return () => null
   }
@@ -223,9 +227,26 @@ function useContributionRowActions(
         const newFile = collectActivePluginNewFiles([plugin])[Number(id)]
         return newFile ? <PluginContributionActionNewFile newFile={newFile} /> : null
       }
+      case 'iconThemes': {
+        const theme = iconThemes.find(
+          (entry) => entry.id === id && entry.pluginKey === plugin.pluginKey
+        )
+        return theme ? (
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() =>
+              revealPluginIconTheme(() =>
+                useAppStore.getState().updateSettings({ pluginIconTheme: theme.id })
+              )
+            }
+          >
+            {translate('auto.components.settings.pluginInstallAction.tryIt', 'Try it')}
+          </Button>
+        ) : null
+      }
       case 'themes':
       case 'terminalThemes':
-      case 'iconThemes':
       case 'customEditors':
       case 'vmRecipes':
         // Themes have "Use now" above the list; editors open from their new files; recipes have nothing to try here.

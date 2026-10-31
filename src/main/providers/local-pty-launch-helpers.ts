@@ -6,6 +6,7 @@ import { expandWindowsEnvironmentVariables } from '../../shared/windows-environm
 import { resolveSafePtyDefaultCwd } from './pty-default-cwd'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../shared/remote-viewer-clipboard-env'
+import { ORCAD_IDLE_TIMEOUT_ENV } from '../../shared/orcad-idle-exit'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -16,7 +17,9 @@ const PANE_IDENTITY_ENV_KEYS = [
   // Per-viewer: an Orca started from a remote viewer's pane must not mark its own local panes.
   REMOTE_VIEWER_CLIPBOARD_ENV,
   // A server's own launch marker; a user's `orcad` in this shell is not client-managed.
-  ORCAD_MANAGED_ACTIVATION_ROOT_ENV
+  ORCAD_MANAGED_ACTIVATION_ROOT_ENV,
+  // A WSL server's idle window; an `orcad` started from its shell must keep the default.
+  ORCAD_IDLE_TIMEOUT_ENV
 ] as const
 
 export function getDefaultCwd(): string {

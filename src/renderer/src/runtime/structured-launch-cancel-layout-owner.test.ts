@@ -125,7 +125,7 @@ function pendingLaunch(executionHostId: ExecutionHostId, target: RuntimeClientTa
     promise: new Promise(() => undefined),
     visibilityUnknown: false,
     cancelled: false,
-    selection: { held: {} }
+    selection: {}
   } satisfies StructuredLaunchState)
 }
 

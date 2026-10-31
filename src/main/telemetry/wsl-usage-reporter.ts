@@ -16,6 +16,7 @@ import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../windows-native-reg
 import { readWslDistroRegistrations } from '../wsl/wsl-distro-registry-id'
 import { listWslHostDistros } from '../wsl/wsl-host-distro-list'
 import {
+  wslHostsAppliedMovedProjects,
   wslHostsAppliedPolicyState,
   wslHostsGateOpen,
   wslHostsGateState
@@ -167,7 +168,8 @@ export async function gatherWslUsageSnapshotInput(
     windowsDriveReposWithWslWorktrees: await countWindowsDriveReposWithWslWorktrees(store),
     wslHostsGateOpen: gateOpen,
     wslHostsGateState: wslHostsGateState(),
-    wslHostsPolicy: wslHostsAppliedPolicyState()
+    wslHostsPolicy: wslHostsAppliedPolicyState(),
+    wslHostsMovedProjects: wslHostsAppliedMovedProjects()
   }
 }
 

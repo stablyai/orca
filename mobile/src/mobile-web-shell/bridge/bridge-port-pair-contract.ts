@@ -7,6 +7,8 @@ import type { FakeRpcClient } from '../bridge-host-test-fakes'
 import type { BridgeClientMessage, BridgeHostMessage, BridgeInitRoute } from './bridge-envelope'
 import type { BridgeErrorCapture } from './bridge-error-capture'
 import type { BridgeSafeAreaInsets } from './bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge-fold-division'
+import type { BridgeTerminalKeyRail } from './bridge-terminal-key'
 import type { BridgeRpcClient, BridgeRpcClientDiagnostic } from './bridge-rpc-client'
 
 export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
@@ -27,6 +29,7 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   readonly pageReadyCount: () => number
   readonly pagePaintCount: () => number
   readonly backClaims: boolean[]
+  readonly terminalKeyRailClaims: boolean[]
   readonly routeParamClears: () => readonly { param: string; value: string }[]
   readonly routeRefusals: string[]
   flush: () => Promise<void>
@@ -53,6 +56,8 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   safeAreaInsets?: BridgeSafeAreaInsets
   keyboardInset?: number
+  foldDivision?: BridgeFoldDivision | null
+  terminalKeyRail?: BridgeTerminalKeyRail
   ownsHostArea?: boolean
   onStorageWrite?: (key: string, value: string | null) => void
   observation?: BridgePortObservation

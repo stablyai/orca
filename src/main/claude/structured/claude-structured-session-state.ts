@@ -1,4 +1,5 @@
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { ClaudeCliFlagCheck, ClaudeCliFlagFact } from '../claude-cli-flag-support'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
@@ -23,6 +24,9 @@ import type { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from '../claude-at-rest-commands'
 import type { ClaudeInitProof } from './claude-structured-init-proof'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { ClaudeNamingInputs } from '../claude-naming-invocation'
+import type { ClaudeInitializeFacts } from './claude-structured-session-startup'
 
 export type ClaudeAuthDiagnostic = {
   apiKeySourceConfigured: boolean
@@ -66,6 +70,7 @@ export type ClaudeStructuredSessionEvent =
       sessionId: string
       reason: string
       failure?: SubmissionRejectionFact
+      deathEvidenceKind?: 'kill-delivered'
       /** Present for first-hand child exits so the host can fence recovery. */
       cause?: 'unexpected-exit' | 'requested-close'
       fence?: number
@@ -87,6 +92,8 @@ export type ClaudeLateDispatchOutcome =
   | { clientMessageId: string; state: 'unknown'; reason: string }
 
 export type ClaudeStructuredSessionAdapterDeps = {
+  namingInputs?: (record: AgentSessionRecord) => Promise<ClaudeNamingInputs>
+  namingRecord?: (sessionId: string) => AgentSessionRecord | null | undefined
   atRestCommands?: ClaudeAtRestCommandCatalog
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<ClaudeStructuredLaunch>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
@@ -181,15 +188,15 @@ export type ClaudeSession = {
   confirmedOptions: Set<string>
   /** Inputs carried by launch or accepted controls, independent of provider reports. */
   appliedInputOptions: Map<string, string>
-  /** The model the child was launched with, as `--model`; null when it runs the CLI's own. */
-  launchedModel: string | null
   /** What Orca put on this process's command line, and the first root init's answer; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
   firstRootInit?: { permissionMode: string | null }
-  /** A launched model the CLI answered `model_not_found` for; reported until a new pick. */
-  retiredModel?: string
   /** Fast was omitted from launch settings and must be applied before message input. */
   fastModeAtStart: boolean
+  /** Rechecks this child's CLI support; absent where the launch had no flag support to ask. */
+  cliFlag?: ClaudeCliFlagCheck
+  /** Whether the CLI answers live effort and Fast changes; `unknown` ones are rechecked, then tried. */
+  flagSettingsControl?: ClaudeCliFlagFact
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker
@@ -217,6 +224,7 @@ export type ClaudeSession = {
   /** Provider identity and initialize proof retained for the host-awaited open. */
   link: AgentSessionProviderHandleLink
   initialization: {
+    facts?: Promise<ClaudeInitializeFacts>
     proof: ClaudeInitProof
     account: ClaudeStructuredLaunch['account']
     resumesTranscript: boolean
@@ -228,9 +236,8 @@ export type ClaudeSession = {
   }
 }
 
-export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAdapterDeps): string {
-  return deps.mintAcquisitionGeneration?.() ?? randomUUID()
-}
+export const mintClaudeAcquisitionGeneration = (deps: ClaudeStructuredSessionAdapterDeps) =>
+  deps.mintAcquisitionGeneration?.() ?? randomUUID()
 
 /** Retain observed exits until settlement so delayed acquisition cleanup can find their proof. */
 export type ClaudeSessionExit = {

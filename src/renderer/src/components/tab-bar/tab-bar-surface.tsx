@@ -76,6 +76,8 @@ export function renderTabBarSurface({
   const {
     agentMenu,
     agentLaunchOptions,
+    agentPickerEntries,
+    selectPickerAgent,
     launchAgentRow,
     newTabMenuOpen,
     setNewTabMenuOpen,
@@ -238,6 +240,7 @@ export function renderTabBarSurface({
                 menuOpen={newTabMenuOpen}
                 menuOptions={createMenuOptions}
                 agentOptions={agentLaunchOptions}
+                agentPickerEntries={agentPickerEntries}
                 onLaunchAgentOption={launchAgentFromNewTabEntry}
                 onOpenDefaultTerminal={() => {
                   queueNewActiveTerminalFocusAfterNewTabMenuClose()
@@ -278,7 +281,13 @@ export function renderTabBarSurface({
           {showStaticCreateMenuItems && showAgentLaunchItems ? (
             <>
               <DropdownMenuSeparator />
-              <ProjectedAgentMenuItems model={agentMenu} runLaunch={launchAgentRow} />
+              <ProjectedAgentMenuItems
+                model={agentMenu}
+                pickerEntries={agentPickerEntries}
+                onSelectPickerAgent={selectPickerAgent}
+                hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
+                runLaunch={launchAgentRow}
+              />
             </>
           ) : null}
         </DropdownMenuContent>

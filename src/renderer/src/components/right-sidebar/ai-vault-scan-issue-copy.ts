@@ -87,6 +87,8 @@ const COPY: Record<AiVaultScanIssueCode, (values: Values) => string | null> = {
       : translate('aiVault.scanIssues.wslDistroUnverifiable', EN.wslDistroUnverifiable, {
           distro
         }),
+  wslSessionsFromLastScan: () =>
+    translate('aiVault.scanIssues.wslSessionsFromLastScan', EN.wslSessionsFromLastScan),
   scopePathsTruncated: ({ limit }) =>
     limit === null
       ? null

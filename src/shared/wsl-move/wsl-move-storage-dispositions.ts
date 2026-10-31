@@ -34,6 +34,10 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     62,
     "The mover's own record of which renderer rewrites landed; keyed by move id."
   ),
+  'src/renderer/src/lib/wsl-drive-unc-renderer-store-rewrites.ts': notApplicableDisposition(
+    62,
+    "A Windows-drive conversion's own record of which renderer rewrites landed; keyed by its id."
+  ),
   'src/renderer/src/lib/desktop-created-server-tabs.ts': notApplicableDisposition(
     60,
     'Tabs this desktop created in a paired server workspace, keyed by that server; a local or WSL project has none.'
@@ -113,6 +117,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
     'agent-session-journal',
   'src/main/native-chat/agent-session-journal/command-receipt-schema.ts': 'agent-session-journal',
   'src/main/native-chat/agent-session-journal/journal-database-schema.ts': 'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/journal-outcome-format.ts': 'agent-session-journal',
   'src/main/native-chat/agent-session-journal/journal-pi-active-branch.ts': 'pi-branch-import',
   'src/main/native-chat/agent-session-journal/queued-message-schema.ts': 'agent-session-journal',
   'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
@@ -156,6 +161,9 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'agent_session_attachment_claims',
         'agent_session_attachment_sweeps',
         'journal_imports',
+        'journal_outcomes',
+        'journal_outcome_epochs',
+        'journal_outcome_generations',
         'journal_repairs',
         'journal_rows',
         'journal_sessions',

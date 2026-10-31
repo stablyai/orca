@@ -62,6 +62,9 @@ export const EphemeralVmRuntimeRecordSchema = z.object({
   cleanupDisabled: z.boolean().optional(),
   cleanupLastAttemptAt: z.number().finite().optional(),
   cleanupLastError: z.string().min(1).optional(),
+  /** Optional open code + params so the renderer can localize `cleanupLastError`; English stays authoritative. */
+  cleanupLastErrorCode: z.string().min(1).optional(),
+  cleanupLastErrorParams: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
   createdAt: z.number().finite(),
   updatedAt: z.number().finite(),
   recipeResult: EphemeralVmRecipeResultSchema

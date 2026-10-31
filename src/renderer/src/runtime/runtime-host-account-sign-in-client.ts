@@ -2,8 +2,11 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../shared/managed-account-types'
+import { translate } from '@/i18n/i18n'
 import {
+  HOST_ACCOUNT_SIGN_IN_FAILURE_COPY as FAILURE_EN,
   HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES,
+  type HostAccountSignInFailureCode,
   type HostAccountSignInProvider,
   type HostAccountSignInStatus
 } from '../../../shared/host-account-sign-in-types'
@@ -153,6 +156,25 @@ async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
   }
 }
 
+const FAILURE_COPY: Record<HostAccountSignInFailureCode, () => string> = {
+  ownerSilent: () => translate('accounts.hostSignIn.errors.ownerSilent', FAILURE_EN.ownerSilent),
+  superseded: () => translate('accounts.hostSignIn.errors.superseded', FAILURE_EN.superseded)
+}
+
+function isHostAccountSignInFailureCode(code: unknown): code is HostAccountSignInFailureCode {
+  return typeof code === 'string' && Object.hasOwn(FAILURE_COPY, code)
+}
+
+/** The host's failure in the UI language; the login's own (uncoded) errors stay verbatim. */
+export function hostAccountSignInFailureText(status: HostAccountSignInStatus): string {
+  if (isHostAccountSignInFailureCode(status.errorCode)) {
+    return FAILURE_COPY[status.errorCode]()
+  }
+  return (
+    status.error ?? translate('accounts.hostSignIn.errors.failed', 'Sign-in failed. Try again.')
+  )
+}
+
 function settle(attempt: Attempt): HostAccountSignInStatus {
   const status = attempt.status
   // Why signedIn wins over a cancel: the host already saved the account, so say so.
@@ -162,7 +184,7 @@ function settle(attempt: Attempt): HostAccountSignInStatus {
   if (attempt.cancelRequested || status?.phase === 'cancelled' || !status) {
     throw new Error(CANCELLED_MESSAGE[attempt.provider])
   }
-  throw new Error(status.error ?? 'Sign-in failed. Try again.')
+  throw new Error(hostAccountSignInFailureText(status))
 }
 
 /** Starts a sign-in on `owner`, or joins the one this client already runs there. */

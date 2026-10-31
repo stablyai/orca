@@ -5,7 +5,9 @@ import {
   isGatedOffWslHost,
   resetWslHostsGateForTests,
   wslHostsGateOpen,
+  wslHostsAppliedMovedProjects,
   wslHostsAppliedPolicyState,
+  wslHostsBringBackMovedProjects,
   wslHostsGateState,
   wslHostsPolicyBlocked,
   wslHostsServing,
@@ -201,12 +203,80 @@ describe('WSL hosts gate', () => {
       }
     )
 
+    // A blocked run's child inherits ORCA_INTERNAL_WSL_HOSTS=1; only the published state says closed.
+    it('lets a child that never configured the gate trust what main published', () => {
+      const gate = { ORCA_INTERNAL_WSL_HOSTS: '1' }
+      expect(isWslHostsServing({ ...gate, [WSL_HOSTS_GATE_STATE_ENV]: 'closed' })).toBe(false)
+      // Children of a serve-only run see no gate env at all, yet must still serve saved WSL work.
+      expect(isWslHostsServing({ [WSL_HOSTS_GATE_STATE_ENV]: 'serve-only' })).toBe(true)
+    })
+
+    // A child of an older Orca, or a garbled value, must keep today's env-only reading.
+    it('falls back to the internal gate env in a child when nothing valid was published', () => {
+      expect(isWslHostsServing({ ORCA_INTERNAL_WSL_HOSTS: '1' })).toBe(true)
+      // With the gate env on, a garbled value must not read as 'closed'.
+      expect(
+        isWslHostsServing({ ORCA_INTERNAL_WSL_HOSTS: '1', [WSL_HOSTS_GATE_STATE_ENV]: 'bogus' })
+      ).toBe(true)
+    })
+
     it('withdraws it on reset', () => {
       vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
       configureWslHostsGate(facts(false, false))
       resetWslHostsGateForTests()
 
       expect(process.env[WSL_HOSTS_GATE_STATE_ENV]).toBeUndefined()
+    })
+  })
+
+  describe('moved projects under a block', () => {
+    it('asks for moved projects back only when the block says so', () => {
+      vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
+      configureWslHostsGate({
+        ...facts(true, true),
+        policy: () => 'block',
+        movedProjects: () => 'bring-back'
+      })
+
+      expect(wslHostsBringBackMovedProjects()).toBe(true)
+      expect(wslHostsAppliedMovedProjects()).toBe('bring-back')
+      expect(wslHostsGateState()).toBe('serve-only')
+    })
+
+    it('never reads it without a block', () => {
+      vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
+      const movedProjects = vi.fn(() => 'bring-back' as const)
+      configureWslHostsGate({ ...facts(true, true), policy: () => 'allow', movedProjects })
+
+      expect(movedProjects).not.toHaveBeenCalled()
+      expect(wslHostsBringBackMovedProjects()).toBe(false)
+      expect(wslHostsAppliedMovedProjects()).toBeNull()
+    })
+
+    it('keeps moved projects served when the choice cannot be read', () => {
+      vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
+      configureWslHostsGate({
+        ...facts(true, true),
+        policy: () => 'block',
+        movedProjects: () => {
+          throw new Error('unreadable')
+        }
+      })
+
+      expect(wslHostsBringBackMovedProjects()).toBe(false)
+      expect(wslHostsAppliedMovedProjects()).toBe('keep')
+    })
+
+    it('clears on reset', () => {
+      vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
+      configureWslHostsGate({
+        ...facts(true, true),
+        policy: () => 'block',
+        movedProjects: () => 'bring-back'
+      })
+      resetWslHostsGateForTests()
+
+      expect(wslHostsBringBackMovedProjects()).toBe(false)
     })
   })
 })

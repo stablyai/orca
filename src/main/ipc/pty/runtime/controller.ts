@@ -3,6 +3,7 @@ import { createRuntimePtySpawnState } from './spawn-state'
 import { localProvider } from '../provider/registry'
 import {
   getLocalAutomaticWorkStatus,
+  localTerminalLimit,
   resumeLocalAutomaticWork
 } from '../../../daemon/daemon-automatic-work-resume'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -26,6 +27,7 @@ import {
   getSizeFromRuntimeController,
   hasChildProcessesFromRuntimeController,
   hasPtyFromRuntimeController,
+  getPtyAvailabilityFromRuntimeController,
   hasRendererSerializerFromRuntimeController,
   inspectProcessFromRuntimeController,
   probePtyLivenessFromRuntimeController,
@@ -59,7 +61,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       return adopted
     },
     spawn: async (args) => spawnPtyFromRuntimeController(deps, args),
-    // Automatic-work gates belong to the local provider; SSH runtimes own theirs.
+    // Local owner only: an SSH host's gate belongs to that host's own runtime.
+    terminalLimit: (update) => localTerminalLimit(localProvider, update),
     getAutomaticWorkStatus: () => getLocalAutomaticWorkStatus(localProvider),
     resumeAutomaticWork: () => resumeLocalAutomaticWork(localProvider),
     write: (ptyId, data, inputKind) => writePtyFromRuntimeController(deps, ptyId, data, inputKind),
@@ -81,6 +84,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     clearBuffer: (ptyId) => clearBufferFromRuntimeController(deps, ptyId),
     resetInputModes: (ptyId) => resetInputModesFromRuntimeController(deps, ptyId),
     hasPty: (ptyId) => hasPtyFromRuntimeController(deps, ptyId),
+    getPtyAvailability: (ptyId) => getPtyAvailabilityFromRuntimeController(deps, ptyId),
     listProcesses: (hostId, opts) => listProcessesFromRuntimeController(deps, hostId, opts),
     listProcessesWithHostScope: (opts) =>
       listProcessesWithHostScopeFromRuntimeController(deps, opts),

@@ -36,6 +36,7 @@ export function useAddRepoHostSelection({
   /** The host the picker shows: the chosen one, even while it is still coming up. */
   displayedHostId: ExecutionHostId | null
   selectedParsedHost: ReturnType<typeof parseExecutionHostId>
+  selectedHostLabel: string | null
   hostSelectorOpen: boolean
   setHostSelectorOpen: (open: boolean) => void
   /** False when the host cannot be selected, so the selection did not change. */
@@ -228,6 +229,8 @@ export function useAddRepoHostSelection({
     selectedHostId,
     displayedHostId,
     selectedParsedHost,
+    selectedHostLabel:
+      selectableHostOptions.find((host) => host.id === selectedHostId)?.label ?? null,
     hostSelectorOpen,
     setHostSelectorOpen,
     handleSelectAddProjectHost,

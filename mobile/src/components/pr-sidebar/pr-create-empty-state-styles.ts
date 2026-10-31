@@ -44,7 +44,7 @@ export const prCreateEmptyStateStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary
   },
   createButtonDisabled: {
@@ -60,7 +60,7 @@ export const prCreateEmptyStateStyles = themedStyleSheet(() => ({
     minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   iconButtonPressed: {
     backgroundColor: colors.bgRaised

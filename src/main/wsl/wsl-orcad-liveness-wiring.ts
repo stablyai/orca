@@ -47,11 +47,14 @@ export function createWslOrcadLivenessSupervisor(options: {
 }): WslOrcadLivenessSupervisor {
   return new WslOrcadLivenessSupervisor({
     manager: options.manager,
-    readRunning: ({ distro, exitedAt }) =>
-      readSettledConfirmedRunningWslDistros(
-        distro,
+    readRunning: ({ distro, exitedAt, probedAfter }) => {
+      const settled =
         exitedAt === null || exitedAt === undefined ? undefined : exitedAt + EXIT_SETTLE_MS
-      ),
+      return readSettledConfirmedRunningWslDistros(
+        distro,
+        probedAfter === undefined ? settled : Math.max(settled ?? -Infinity, probedAfter)
+      )
+    },
     readIdentity: (distro, orcadPid) => readWslGuestIdentity(transportFor(distro), orcadPid),
     openWatch: (connection) =>
       probeThenWatchWslOrcadBridges(

@@ -5,10 +5,12 @@ import {
   Text,
   Pressable,
   type ReactNode,
-  TextInput,
+  MessageBox,
   colors,
+  X,
   MobileMarkdown
 } from './mobile-tasks-dependencies'
+import { composerInputStyles } from '../components/composer-input/composer-input-styles'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
   discussionSummary,
@@ -141,66 +143,41 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                   {commentDate(comment.createdAt) ? ` · ${commentDate(comment.createdAt)}` : ''}
                 </Text>
                 {isEditingComment ? (
-                  <>
-                    <TextInput
-                      style={[styles.input, styles.commentInput]}
-                      value={projectEditingCommentDraft}
-                      onChangeText={setProjectEditingCommentDraft}
-                      placeholder={translate('tasks.projectComments.editComment', 'Edit comment')}
-                      placeholderTextColor={colors.textMuted}
-                      multiline
-                      textAlignVertical="top"
-                    />
-                    <View style={styles.inlineActionRow}>
+                  <MessageBox
+                    style={styles.stackedInput}
+                    value={projectEditingCommentDraft}
+                    onChangeText={setProjectEditingCommentDraft}
+                    placeholder={translate('tasks.projectComments.editComment', 'Edit comment')}
+                    onSend={() => void updateProjectRowComment(projectRowItem, comment)}
+                    canSend={!projectMutating && projectEditingCommentDraft.trim().length > 0}
+                    sendAccessibilityLabel={translate('common.save', 'Save')}
+                    trailing={
                       <Pressable
-                        style={styles.inlineSaveButtonCompact}
-                        disabled={projectMutating || projectEditingCommentDraft.trim().length === 0}
-                        onPress={() => void updateProjectRowComment(projectRowItem, comment)}
-                      >
-                        <Text style={styles.inlineSaveText}>
-                          {translate('common.save', 'Save')}
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        style={styles.inlineSaveButtonCompact}
+                        accessibilityRole="button"
+                        accessibilityLabel={translate('common.cancel', 'Cancel')}
                         disabled={projectMutating}
+                        style={({ pressed }) => [
+                          composerInputStyles.ghostButton,
+                          projectMutating && composerInputStyles.disabled,
+                          pressed && composerInputStyles.pressed
+                        ]}
                         onPress={() => {
                           setProjectEditingCommentId(null)
                           setProjectEditingCommentDraft('')
                         }}
                       >
-                        <Text style={styles.inlineSaveText}>
-                          {translate('common.cancel', 'Cancel')}
-                        </Text>
+                        <X size={18} color={colors.textSecondary} strokeWidth={2} />
                       </Pressable>
-                    </View>
-                  </>
+                    }
+                  />
                 ) : (
                   <>
                     <MobileMarkdown content={comment.body} />
                     {renderCommentReactions(comment)}
                     {SHOW_MOBILE_COMMENT_THREAD_TOOLS ? (
-                      <View style={styles.inlineActionRow}>
-                        {projectRowType(projectRowItem) === 'pr' && comment.threadId ? (
-                          <Pressable
-                            style={styles.inlineSaveButtonCompact}
-                            disabled={projectMutating}
-                            onPress={() =>
-                              void toggleProjectGitHubReviewThread(projectRowItem, comment)
-                            }
-                          >
-                            <Text style={styles.inlineSaveText}>
-                              {comment.isResolved
-                                ? translate('tasks.projectComments.reopenThread', 'Reopen thread')
-                                : translate(
-                                    'tasks.projectComments.resolveThread',
-                                    'Resolve thread'
-                                  )}
-                            </Text>
-                          </Pressable>
-                        ) : null}
-                        <TextInput
-                          style={[styles.input, styles.replyInput]}
+                      <>
+                        <MessageBox
+                          style={styles.stackedInput}
                           value={itemReplyDrafts[commentId] ?? ''}
                           onChangeText={(next) =>
                             setItemReplyDrafts((current) => ({
@@ -209,41 +186,52 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                             }))
                           }
                           placeholder={translate('tasks.projectComments.reply', 'Reply')}
-                          placeholderTextColor={colors.textMuted}
-                          multiline
-                          textAlignVertical="top"
+                          onSend={() => void replyToProjectGitHubComment(projectRowItem, comment)}
+                          canSend={!projectMutating && !!(itemReplyDrafts[commentId] ?? '').trim()}
+                          sendAccessibilityLabel={translate('tasks.projectComments.reply', 'Reply')}
                         />
-                        <Pressable
-                          style={styles.inlineSaveButtonCompact}
-                          disabled={projectMutating || !(itemReplyDrafts[commentId] ?? '').trim()}
-                          onPress={() => void replyToProjectGitHubComment(projectRowItem, comment)}
-                        >
-                          <Text style={styles.inlineSaveText}>
-                            {translate('tasks.projectComments.reply', 'Reply')}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.inlineSaveButtonCompact}
-                          disabled={projectMutating}
-                          onPress={() => {
-                            setProjectEditingCommentId(commentId)
-                            setProjectEditingCommentDraft(comment.body)
-                          }}
-                        >
-                          <Text style={styles.inlineSaveText}>
-                            {translate('common.edit', 'Edit')}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.inlineSaveButtonCompact}
-                          disabled={projectMutating}
-                          onPress={() => void deleteProjectRowComment(projectRowItem, comment)}
-                        >
-                          <Text style={styles.inlineDeleteText}>
-                            {translate('common.delete', 'Delete')}
-                          </Text>
-                        </Pressable>
-                      </View>
+                        <View style={[styles.inlineActionRow, styles.stackedInput]}>
+                          {projectRowType(projectRowItem) === 'pr' && comment.threadId ? (
+                            <Pressable
+                              style={styles.inlineSaveButtonCompact}
+                              disabled={projectMutating}
+                              onPress={() =>
+                                void toggleProjectGitHubReviewThread(projectRowItem, comment)
+                              }
+                            >
+                              <Text style={styles.inlineSaveText}>
+                                {comment.isResolved
+                                  ? translate('tasks.projectComments.reopenThread', 'Reopen thread')
+                                  : translate(
+                                      'tasks.projectComments.resolveThread',
+                                      'Resolve thread'
+                                    )}
+                              </Text>
+                            </Pressable>
+                          ) : null}
+                          <Pressable
+                            style={styles.inlineSaveButtonCompact}
+                            disabled={projectMutating}
+                            onPress={() => {
+                              setProjectEditingCommentId(commentId)
+                              setProjectEditingCommentDraft(comment.body)
+                            }}
+                          >
+                            <Text style={styles.inlineSaveText}>
+                              {translate('common.edit', 'Edit')}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            style={styles.inlineSaveButtonCompact}
+                            disabled={projectMutating}
+                            onPress={() => void deleteProjectRowComment(projectRowItem, comment)}
+                          >
+                            <Text style={styles.inlineDeleteText}>
+                              {translate('common.delete', 'Delete')}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </>
                     ) : null}
                   </>
                 )}

@@ -74,6 +74,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
         providerSessionId: PROVIDER_SESSION_ID,
         resumeLeafUuid: null,
         resumesTranscript: false,
+        cliFlag: async () => 'supported' as const,
         continuesChain: false
       }),
       onEvent: (event) => {
@@ -336,6 +337,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
           providerSessionId: PROVIDER_SESSION_ID,
           resumeLeafUuid: null,
           resumesTranscript: false,
+          cliFlag: async () => 'supported' as const,
           continuesChain: false
         }
       }
@@ -347,6 +349,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
         providerSessionId: PROVIDER_SESSION_ID,
         resumeLeafUuid: durableLeafUuid,
         resumesTranscript: true,
+        cliFlag: async () => 'supported' as const,
         continuesChain: true
       }
     })

@@ -8,6 +8,7 @@ import { type GitRemoteIdentityProbe, probeGitRemoteIdentity } from './repo-git-
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../shared/wsl-host-internal-gate'
 import type * as DistroGate from './wsl-background-distro-gate'
 import type { WslDistroRunningState } from './wsl-background-distro-gate'
+import { setLocalGitRuntimeRouter } from './git/command-runner/local-git-runtime-route'
 import {
   enrichMissingRepoGitRemoteIdentities,
   flushRepoGitRemoteIdentityEnrichmentForTests,
@@ -184,6 +185,22 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     await sweepOnWindows(store, '1')
 
     expect(probeGitRemoteIdentity).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['keeps its tier without the Git router', null, undefined],
+    ['waits as background work with the Git router on', () => undefined, 'background']
+  ])('sweeps a local repo: %s', async (_case, router, tier) => {
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+    setLocalGitRuntimeRouter(router)
+    try {
+      enrichMissingRepoGitRemoteIdentities(makeStore(makeRepo()))
+    } finally {
+      setLocalGitRuntimeRouter(null)
+    }
+
+    expect(vi.mocked(probeGitRemoteIdentity).mock.calls[0]?.[2]?.admissionTier).toBe(tier)
+    await flushRepoGitRemoteIdentityEnrichmentForTests()
   })
 
   it('probes an SSH row that carries only executionHostId on its own host', async () => {

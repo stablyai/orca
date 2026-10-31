@@ -47,7 +47,7 @@ function PullRequestPageItem({
   repoId,
   sourceContext,
   initialTab,
-  backLabel = 'Pull requests',
+  backLabel = translate('auto.components.TaskPage.backToPullRequests', 'Pull requests'),
   projectOrigin,
   onUse,
   onReviewRequestsChange,

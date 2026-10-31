@@ -1,3 +1,8 @@
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
+import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab-args'
+import { sourceControlActionRecipeEntry } from '../../../../shared/source-control-action-selection'
+import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import type * as RuntimeGitStatusClientModule from '@/runtime/runtime-git-status-client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -41,12 +46,13 @@ import {
 import type { Repo } from '../../../../shared/repo-types'
 
 function buildArgs(
-  overrides: Partial<Parameters<typeof runSourceControlAgentActionStart>[0]> = {}
+  overrides: Partial<Omit<Parameters<typeof runSourceControlAgentActionStart>[0], 'recipe'>> & {
+    recipe?: SourceControlActionRecipe
+  } = {}
 ): Parameters<typeof runSourceControlAgentActionStart>[0] {
   return {
     selectedAgent: 'codex',
     trimmedCommandInput: 'Fix the bug',
-    recipe: { agentId: 'codex', commandInputTemplate: '{basePrompt}', agentArgs: '--model gpt-5' },
     saveTargetValue: 'none',
     actionId: 'resolveComments',
     repoId: null,
@@ -61,7 +67,14 @@ function buildArgs(
     onSaveAgentDefault: mocks.onSaveAgentDefault,
     onLaunched: mocks.onLaunched,
     onClose: mocks.onClose,
-    ...overrides
+    ...overrides,
+    recipe: sourceControlActionRecipeEntry(
+      overrides.recipe ?? {
+        agentId: 'codex',
+        commandInputTemplate: '{basePrompt}',
+        agentArgs: '--model gpt-5'
+      }
+    )
   }
 }
 
@@ -69,6 +82,62 @@ describe('runSourceControlAgentActionStart', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.mutationInFlight.mockResolvedValue({ inFlight: false })
+  })
+
+  it('keeps dialog Start literal ownership and drops old-model effort for a typed action', async () => {
+    const settings = {
+      ...getDefaultSettings('/test'),
+      agentPermissionDefault: 'own' as const,
+      agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'high' } } }
+    }
+    const plans: ReturnType<typeof buildAgentStartupPlan>[] = []
+    mocks.launchAgentInNewTab.mockImplementation((args: LaunchAgentInNewTabArgs) => {
+      plans.push(
+        buildAgentStartupPlan({
+          ...resolveAgentStartupPlanInputs({
+            agent: args.agent,
+            settings,
+            agentArgs: args.agentArgs,
+            sessionOptions: args.sessionOptions,
+            sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+            platform: 'linux',
+            shell: 'posix',
+            isRemote: false
+          }),
+          prompt: '',
+          allowEmptyPromptLaunch: true
+        })
+      )
+      return {
+        surface: { kind: 'local-terminal', tabId: 'proof' },
+        promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+      }
+    })
+    for (const recipe of [
+      { agentId: null, agentArgs: '--model literal' },
+      {
+        agentId: 'claude',
+        agentArgs: '--verbose',
+        launchPreferences: {
+          agentId: 'claude',
+          modelSelection: { base: 'default', model: { agentId: 'claude', value: 'sonnet' } }
+        }
+      }
+    ] as const) {
+      await expect(
+        runSourceControlAgentActionStart(buildArgs({ settings, selectedAgent: 'claude', recipe }))
+      ).resolves.toBe(true)
+    }
+    expect(plans.map((plan) => plan?.launchCommand)).toEqual([
+      "claude '--model' 'literal'",
+      "claude '--verbose' '--model' 'sonnet'"
+    ])
+    expect(plans.map((plan) => plan?.launchConfig.agentArgs)).toEqual([
+      '--model literal',
+      '--verbose'
+    ])
+    expect(mocks.onLaunched).toHaveBeenCalledTimes(2)
+    expect(mocks.onClose).toHaveBeenCalledTimes(2)
   })
 
   it('rejects conflict recovery before creating a tab when Git is still running', async () => {
@@ -197,11 +266,11 @@ describe('runSourceControlAgentActionStart', () => {
     })
     const launchPromise = runSourceControlAgentActionStart(args)
 
-    expect(onSaveAgentDefault).toHaveBeenCalledWith(
-      { type: 'global' },
-      'resolveComments',
-      args.recipe
-    )
+    expect(onSaveAgentDefault).toHaveBeenCalledWith({ type: 'global' }, 'resolveComments', {
+      agentId: 'codex',
+      commandInputTemplate: '{basePrompt}',
+      agentArgs: '--model gpt-5'
+    })
     expect(onSaveAgentDefault.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.launchAgentInNewTab.mock.invocationCallOrder[0]
     )
@@ -492,11 +561,13 @@ it('executes the actual bound namespace while saving the literal default recipe'
   expect(onStart).toHaveBeenCalledWith(
     expect.objectContaining({ sessionOptions: { model: 'chosen' } })
   )
-  expect(mocks.onSaveAgentDefault).toHaveBeenLastCalledWith(
-    { type: 'global' },
-    'resolveComments',
-    recipe
-  )
+  expect(mocks.onSaveAgentDefault).toHaveBeenLastCalledWith({ type: 'global' }, 'resolveComments', {
+    ...recipe,
+    launchPreferences: {
+      agentId: 'codex',
+      modelSelection: { base: 'default', model: { agentId: 'codex', value: 'chosen' } }
+    }
+  })
 })
 
 it('confirms delivery and closes even while saving remains pending', async () => {
@@ -530,13 +601,12 @@ it.each([undefined, '', '--add-dir /extra'])(
     expect(onStart).toHaveBeenCalledWith(
       expect.objectContaining({
         agentArgs,
-        sessionOptions: { model: 'saved' },
-        sessionOptionsYieldToAgentArgs: true
+        sessionOptions: { model: 'saved' }
       })
     )
   }
 )
-// Saved to the repository, the copied choice owns the action there, as on every later launch.
+// Save keeps the repository's selected Args group on every later launch.
 it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
   'persists the complete target for changed or unchanged Customize arguments %s',
   async (agentArgs) => {
@@ -570,10 +640,9 @@ it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
 
     await runSourceControlAgentActionStart(buildArgs({ ...args, actionId: 'fixCommitFailure' }))
 
-    expect(shown.launchPreferencesYieldToAgentArgs).toBe(true)
+    expect(shown.launchPreferencesYieldToAgentArgs).toBeUndefined()
     expect(mocks.launchAgentInNewTab.mock.lastCall?.[0]).toMatchObject({
-      agentArgs: `--dangerously-bypass-approvals-and-sandbox ${agentArgs}`,
-      sessionOptions: { model: 'gpt-5.6-terra' }
+      agentArgs: `--dangerously-bypass-approvals-and-sandbox ${agentArgs}`
     })
     expect(mocks.launchAgentInNewTab.mock.lastCall?.[0]).not.toHaveProperty(
       'sessionOptionsYieldToAgentArgs'
@@ -581,12 +650,11 @@ it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
     expect(repo.sourceControlAi?.actionOverrides?.fixCommitFailure).toEqual({
       agentId: null,
       commandInputTemplate: '{basePrompt}',
-      agentArgs,
-      launchPreferences: terra
+      agentArgs
     })
     const next = resolveSourceControlActionRecipe({ settings, repo, actionId: 'fixCommitFailure' })
     const nextOptions = sourceControlActionLaunchOptions(next, 'codex')
-    expect(nextOptions).toEqual({ sessionOptions: { model: terra.model } })
+    expect(nextOptions).toEqual({})
     const command = resolveAgentLaunchCommand({
       agent: 'codex',
       cmdOverrides: {},
@@ -601,10 +669,11 @@ it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
         yieldToAgentArgs: nextOptions.sessionOptionsYieldToAgentArgs
       })
     })
-    expect(command).toMatchObject({ ok: true, appliedSessionOptions: { model: terra.model } })
-    if (command.ok) {
-      expect(command.command).not.toContain(agentArgs.split(' ')[1])
-    }
+    expect(command).toMatchObject({
+      ok: true,
+      appliedSessionOptions: {},
+      command: `codex '-c' 'disable_paste_burst=true' '--model' '${agentArgs.split(' ')[1]}'`
+    })
     expect(mocks.onSaveAgentDefault).toHaveBeenCalledTimes(1)
     await runSourceControlAgentActionStart(
       buildArgs({ ...args, recipe: next, actionId: 'fixCommitFailure' })
@@ -612,3 +681,57 @@ it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
     expect(mocks.onSaveAgentDefault).toHaveBeenCalledTimes(1)
   }
 )
+
+it('saves a foreign resolved literal as current raw and starts from the canonical saved result', async () => {
+  vi.clearAllMocks()
+  const base = getDefaultSettings('/tmp')
+  const settings = {
+    ...base,
+    agentPermissionDefault: 'own' as const,
+    sourceControlAi: {
+      ...base.sourceControlAi!,
+      actions: {
+        fixChecks: {
+          agentId: 'codex' as const,
+          agentArgs: '',
+          argumentChoices: {
+            syntaxAgent: 'codex' as const,
+            nodes: [{ at: 0, text: '-c model=o3' }]
+          }
+        }
+      }
+    }
+  }
+  const repo = {
+    id: 'repo-1',
+    sourceControlAi: { actionOverrides: { fixChecks: { agentId: 'claude' as const } } }
+  }
+  const recipe = resolveSourceControlActionRecipe({ settings, repo, actionId: 'fixChecks' })
+  const onStart = vi.fn().mockResolvedValue(true)
+  await expect(
+    runSourceControlAgentActionStart(
+      buildArgs({
+        actionId: 'fixChecks',
+        recipe,
+        settings,
+        repo,
+        repoId: 'repo-1',
+        selectedAgent: 'claude',
+        saveTargetValue: 'repo',
+        onStart
+      })
+    )
+  ).resolves.toBe(true)
+  expect(mocks.onSaveAgentDefault).toHaveBeenCalledExactlyOnceWith(
+    { type: 'repo', repoId: 'repo-1' },
+    'fixChecks',
+    {
+      agentId: 'claude',
+      commandInputTemplate: '{basePrompt}',
+      agentArgs: '-c model=o3'
+    }
+  )
+  expect(onStart).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ agent: 'claude', agentArgs: '-c model=o3' })
+  )
+})

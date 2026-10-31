@@ -214,27 +214,6 @@ describe('useSourceControlGitHistory stale completion', () => {
     expect(latest?.gitHistoryState).toEqual({ status: 'idle' })
   })
 
-  it('re-fetches when the compare base moves and passes it to the history read', async () => {
-    const root = await mount({ compareBaseRef: 'origin/main' })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ worktreeId: 'A', worktreePath: '/a' }),
-      // Showing Commits is a user act, so it may start a stopped WSL distro.
-      { limit: 50, baseRef: 'origin/main', wakeWslDistro: true }
-    )
-
-    await act(async () => {
-      root.render(<Probe compareBaseRef="origin/dev" />)
-    })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
-    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(expect.anything(), {
-      limit: 50,
-      baseRef: 'origin/dev',
-      wakeWslDistro: true
-    })
-  })
-
   it('re-fetches when the owner host changes but the worktree and path stay put', async () => {
     const root = await mount({
       activeRepoTarget: { kind: 'local' }

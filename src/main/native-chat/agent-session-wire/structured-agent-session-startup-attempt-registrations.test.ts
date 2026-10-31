@@ -8,7 +8,10 @@ import type { AgentSessionProviderHandle } from '../../../shared/agent-session-p
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../../runtime/structured-agent-runtime-registrations'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentDefinition } from './structured-agent-definition'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 import type {
@@ -32,6 +35,7 @@ let root: string | null = null
 
 afterEach(async () => {
   if (root) {
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
     root = null
   }

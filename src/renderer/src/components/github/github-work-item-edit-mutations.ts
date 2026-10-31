@@ -53,7 +53,7 @@ export async function runIssueUpdate(args: {
               timeoutMs: 30_000
             }
           )
-        : await window.api.gh.updateIssueBySlug(updateArgs)
+        : await window.api.gh.updateIssueBySlug({ ...updateArgs, wakeWslDistro: true })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -148,7 +148,7 @@ export async function runWorkItemBodyUpdate(args: {
               timeoutMs: 30_000
             }
           )
-        : await window.api.gh.updatePullRequestBySlug(updateArgs)
+        : await window.api.gh.updatePullRequestBySlug({ ...updateArgs, wakeWslDistro: true })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -209,7 +209,7 @@ export async function runPullRequestStateUpdate(args: {
               timeoutMs: 30_000
             }
           )
-        : await window.api.gh.updatePullRequestBySlug(updateArgs)
+        : await window.api.gh.updatePullRequestBySlug({ ...updateArgs, wakeWslDistro: true })
     if (!res.ok) {
       throw new Error(res.error.message)
     }

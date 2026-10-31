@@ -14,9 +14,13 @@ import { assertJournalFence, assertJournalWritable } from './journal-write-guard
 import type { JournalWriteBody } from './journal-write-queue'
 import type { JournalOperationReceipt } from './journal-row-writer'
 
+import type { JournalAttachmentClaim } from './journal-submission-hook'
+
 export class JournalEpochController {
   constructor(
     private readonly deps: {
+      isLiveGoal?: (id: string) => boolean
+      claimAttachments?: JournalAttachmentClaim
       identity: AgentSessionJournalIdentity
       now: () => number
       mintEpoch: () => string
@@ -32,8 +36,9 @@ export class JournalEpochController {
     }
   ) {}
 
-  start(reason: AgentJournalEpochReason, fence: number): void {
+  start(reason: AgentJournalEpochReason, fence: number, expectedEpoch: string | null): void {
     publishNewEpoch({
+      expectedEpoch,
       database: this.deps.database(),
       identity: this.deps.identity,
       epoch: this.deps.mintEpoch(),
@@ -49,7 +54,7 @@ export class JournalEpochController {
   roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
-      this.start(reason, fence)
+      this.start(reason, fence, this.deps.state().epoch)
       return this.deps.cursor()
     })
   }
@@ -71,6 +76,8 @@ export class JournalEpochController {
         items,
         receipt,
         previous: this.deps.state(),
+        claimAttachments: this.deps.claimAttachments,
+        isLiveGoal: this.deps.isLiveGoal,
         queuePause: this.deps.queuePauseRestatement(),
         queue: this.deps.queueRestatement(),
         now: this.deps.now,

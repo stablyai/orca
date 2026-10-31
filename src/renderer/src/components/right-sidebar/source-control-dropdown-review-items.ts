@@ -7,7 +7,7 @@ import {
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
 import { canClickBlockedCreateReviewReason } from './source-control-create-review-blocked-action'
-import { hostedReviewSignInHint } from './hosted-review-create-failure-copy'
+import { hostedReviewSignInHint } from './hosted-review-sign-in-copy'
 import type { DropdownItem } from '../../../../shared/source-control-dropdown-item-types'
 import type { DropdownActionContext } from '../../../../shared/source-control-dropdown-action-context'
 
