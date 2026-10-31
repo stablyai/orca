@@ -52,25 +52,36 @@ export function structuredAgentSessionShownSnapshot(
   const snapshot = structuredAgentSessionOptionSnapshot(view)
   const model = structuredAgentSessionModelId(view.record, 'any')
   if (
-    view.record.agent !== 'codex' ||
     !model ||
     !snapshot.some(
       (descriptor) =>
         descriptor.id === 'effort' &&
         descriptor.kind.type === 'select' &&
         descriptor.kind.currentValue === undefined
-    ) ||
-    !view.verifiedModelIds?.includes(model)
+    )
   ) {
     return snapshot
   }
-  const effort = structuredAgentSessionDescribedModel(view, model)?.options.find(
-    (option) => option.id === 'effort'
-  )?.kind
-  if (effort?.type !== 'select' || !effort.defaultIsCliDefault) {
+  const described = structuredAgentSessionDescribedModel(view, model)
+  const effort = described?.options.find((option) => option.id === 'effort')?.kind
+  const declaration = described?.declaredDefaultEffort
+  const fallback =
+    declaration !== undefined
+      ? declaration
+      : view.record.agent === 'codex' &&
+          view.verifiedModelIds?.includes(model) &&
+          effort?.type === 'select' &&
+          effort.defaultIsCliDefault
+        ? effort.defaultValue
+        : undefined
+  if (
+    !fallback ||
+    effort?.type !== 'select' ||
+    (declaration !== undefined && !effort.choices.some((choice) => choice.value === fallback))
+  ) {
     return snapshot
   }
-  // A listed default supplies context only; both Send paths still read the canonical snapshot.
+  // A declared default supplies context only; both Send paths still read the canonical snapshot.
   return snapshot.map((descriptor) =>
     descriptor.id === 'effort' &&
     descriptor.kind.type === 'select' &&
@@ -78,7 +89,7 @@ export function structuredAgentSessionShownSnapshot(
       ? {
           ...descriptor,
           valueSource: 'default',
-          kind: { ...descriptor.kind, currentValue: effort.defaultValue }
+          kind: { ...descriptor.kind, currentValue: fallback }
         }
       : descriptor
   )
@@ -102,7 +113,7 @@ function modelOptionView(
   if (unconfirmedSeed) {
     view = commitStructuredAgentSessionOptionValues(view, seed, 'seeded')
   }
-  return { ...commitStructuredAgentSessionOptionValues(view, held), pendingId: state.pendingId }
+  return commitStructuredAgentSessionOptionValues(view, held)
 }
 
 /** Claude sends its own values plus held picks. New chats/older hosts pin shown defaults on first send; resumed chats display defaults without sending them. */

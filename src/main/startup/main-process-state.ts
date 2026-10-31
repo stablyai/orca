@@ -22,6 +22,7 @@ import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { AutomationService } from '../automations/service'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
+import type { PluginInstallStatsService } from '../plugins/catalog/plugin-install-stats-service'
 import type { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
 import type { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
 import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
@@ -115,6 +116,8 @@ export const mainProcessState = {
   automations: null as AutomationService | null,
   pluginService: null as PluginService | null,
   pluginKillListService: null as PluginKillListService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
+  pluginInstallStatsService: null as PluginInstallStatsService | null,
   pluginMarketplaceService: null as PluginMarketplaceService | null,
   pluginMarketplaceInstaller: null as PluginMarketplaceInstaller | null,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.

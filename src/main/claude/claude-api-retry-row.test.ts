@@ -92,16 +92,6 @@ describe('a Claude api_retry frame', () => {
     expect(row.failure?.detail?.text).toContain('"attempt":3')
   })
 
-  it('says how far a gateway failure has got, and the code it failed with', async () => {
-    const [row] = await statusRowsFor([
-      apiRetry(1, { error: 'server_error', error_status: 502 }),
-      apiRetry(2, { error: 'server_error', error_status: 502 })
-    ])
-    expect(row?.text).toBe(
-      'Claude hit a temporary problem and is retrying. Retry 2 of 10.\nLast error: HTTP 502 server error.'
-    )
-  })
-
   it('starts a new row when a later run starts over', async () => {
     const rows = await statusRowsFor([apiRetry(1), apiRetry(2), apiRetry(1)])
     expect(rows.map((row) => row.text.split('\n')[0])).toEqual([

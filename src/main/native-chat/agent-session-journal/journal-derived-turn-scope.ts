@@ -12,6 +12,16 @@ import { isAgentSessionContextClear } from '../../../shared/agent-session-contex
 export class JournalDerivedTurnScope {
   private openTurnItemId: string | null = null
 
+  snapshot(): string | null {
+    return this.openTurnItemId
+  }
+
+  static restore(openTurnItemId: string | null): JournalDerivedTurnScope {
+    const scope = new JournalDerivedTurnScope()
+    scope.openTurnItemId = openTurnItemId
+    return scope
+  }
+
   scopeFor(body: AgentJournalItemBody): AgentJournalTurnScope {
     return this.openTurnItemId === null || readAgentJournalTurn(body)
       ? AGENT_JOURNAL_THREAD_SCOPE

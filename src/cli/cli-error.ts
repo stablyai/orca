@@ -17,6 +17,8 @@ export type CliErrorContext = {
   repoSelector?: string
   /** True when --environment, --pairing-code, --host runtime:, or their env vars chose a server. */
   remoteServerSelected?: boolean
+  /** Concise orchestration failures: compact JSON plus one `error: <code>: <message>` stderr line. */
+  conciseOrchestration?: boolean
 }
 
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
@@ -129,48 +131,73 @@ function formatRuntimeUnavailableError(message: string, data: unknown): string {
 
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
   const selector = contextRecovery(cliErrorCode(error), context)
+  const concise = context.conciseOrchestration
   if (json) {
-    if (error instanceof RuntimeRpcFailureError) {
-      const sidecarExit = computerSidecarExitRecovery(error, context)
-      const response = sidecarExit
-        ? { ...error.response, error: { ...error.response.error, data: sidecarExit } }
-        : withAutomationOwnerConflictRecovery(error.response)
-      console.log(
-        JSON.stringify(
-          selector
-            ? {
-                ...response,
-                error: {
-                  ...response.error,
-                  data: mergeContextRecovery(response.error.data, selector)
-                }
-              }
-            : response,
-          null,
-          2
-        )
-      )
-    } else {
-      const response: RuntimeRpcFailure = {
-        id: 'local',
-        ok: false,
-        error: {
-          code:
-            matchAutomationOwnerConflict(error) ??
-            (error instanceof RuntimeClientError ? error.code : 'runtime_error'),
-          message: stripAutomationOwnerConflictCode(
-            error instanceof Error ? error.message : String(error)
-          ),
-          data: localCliErrorData(error, context)
-        },
-        _meta: {
-          runtimeId: null
-        }
-      }
-      console.log(JSON.stringify(response, null, 2))
+    const response = cliErrorJsonResponse(error, context, selector)
+    console.log(
+      concise
+        ? JSON.stringify({ ok: false, error: response.error })
+        : JSON.stringify(response, null, 2)
+    )
+    if (concise) {
+      console.error(formatOrchestrationErrorLine(response.error.code, response.error.message))
     }
+  } else if (concise) {
+    // Recovery detail goes to stdout so stderr stays the one-line failure.
+    const [first = '', ...detail] = formatCliError(error, context).split('\n')
+    if (detail.length > 0) {
+      console.log(detail.join('\n'))
+    }
+    console.error(formatOrchestrationErrorLine(cliErrorCode(error) ?? 'runtime_error', first))
   } else {
     console.error(formatCliError(error, context))
+  }
+}
+
+// Agents that read only stderr, or pipe stdout through tail, must still see the failure.
+export function formatOrchestrationErrorLine(
+  code: string,
+  message: string,
+  level: 'error' | 'warning' = 'error'
+): string {
+  return `${level}: ${code}: ${message.split('\n')[0]}`
+}
+
+function cliErrorJsonResponse(
+  error: unknown,
+  context: CliErrorContext,
+  selector: ContextRecovery | undefined
+): RuntimeRpcFailure {
+  if (error instanceof RuntimeRpcFailureError) {
+    const sidecarExit = computerSidecarExitRecovery(error, context)
+    const response = sidecarExit
+      ? { ...error.response, error: { ...error.response.error, data: sidecarExit } }
+      : withAutomationOwnerConflictRecovery(error.response)
+    return selector
+      ? {
+          ...response,
+          error: {
+            ...response.error,
+            data: mergeContextRecovery(response.error.data, selector)
+          }
+        }
+      : response
+  }
+  return {
+    id: 'local',
+    ok: false,
+    error: {
+      code:
+        matchAutomationOwnerConflict(error) ??
+        (error instanceof RuntimeClientError ? error.code : 'runtime_error'),
+      message: stripAutomationOwnerConflictCode(
+        error instanceof Error ? error.message : String(error)
+      ),
+      data: localCliErrorData(error, context)
+    },
+    _meta: {
+      runtimeId: null
+    }
   }
 }
 

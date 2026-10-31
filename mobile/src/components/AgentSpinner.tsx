@@ -9,7 +9,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useWorkingRingRotation } from './use-working-ring-rotation'
 
 // Match desktop sidebar StatusIndicator colors/sizes for the worktree rollup; palette distinguishes moving/alive/completed states.
-const statusColors = (): Record<WorktreeStatus, string> => ({
+export const agentStatusColors = (): Record<WorktreeStatus, string> => ({
   working: '#eab308',
   monitoring: '#eab308',
   active: '#10b981',
@@ -34,7 +34,7 @@ export function AgentSpinner({
     status === 'monitoring' || (status === 'working' && workingMode === 'monitoring')
   const rotate = useWorkingRingRotation(status === 'working' && !monitoring)
 
-  const palette = statusColors()
+  const palette = agentStatusColors()
   const color = palette[status] ?? palette.inactive
 
   if (monitoring) {
@@ -93,7 +93,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.pill,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: statusColors().unconfirmed
+    borderColor: agentStatusColors().unconfirmed
   },
   spinner: {
     width: 8,

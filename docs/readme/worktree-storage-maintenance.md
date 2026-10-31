@@ -9,8 +9,10 @@ pnpm reclaim-space
 In an interactive terminal, the preview offers `Apply this cleanup? [y/N]`; enter `Y` to apply it.
 Redirected input or output remains preview-only. To apply without a prompt, use `pnpm reclaim-space --apply`.
 
-Historical test caches are retained by default. After stopping cross-version tests in all this
-repository's worktrees, preview the same selection with:
+Historical test checkouts inside a worktree are removed only when the worktree is idle for 7 days:
+no running process references its path, HEAD has not moved, and no changed or untracked Git path
+was modified. To include active worktrees too, stop cross-version tests in all this
+repository's worktrees, then preview with:
 
 ```sh
 pnpm reclaim-space --tests-stopped
@@ -21,17 +23,20 @@ Answer `Y` to apply that preview, or use `pnpm reclaim-space --apply --tests-sto
 The command reuses the historical test cache, Electron distribution, dev bundle, and Vite cache cleanup scripts.
 It shares complete Electron distributions through the repository cache and removes idle
 `out/electron-dev` bundles, which development rebuilds on demand. It also removes tracked
-`.cache/vite` dependency caches unused for 30 days. With `--tests-stopped`, it also
-removes stamped historical test checkouts and shared seeds older than 30 days; tests regenerate them when needed. It leaves source files,
+`.cache/vite` dependency caches unused for 30 days. It also removes stamped historical test
+checkouts and shared seeds older than 30 days; tests regenerate them when needed. It leaves source files,
 worktree registrations and branches intact. Manual and automatic cleanup also include old dependency
 installs and build output as described below. Reported sizes are
 logical file data; APFS clones and hardlinks mean actual disk savings can be smaller.
 
 Use `--release-cache-min-age-days 7` to shorten historical-cache retention, or `0` to select all
 recognised completed historical checkouts. This age option applies only to test caches. Local
-checkout age uses directory modification time, which ordinary reuse does not refresh. The
-`--tests-stopped` flag acknowledges stopped tests; older harnesses cannot prove a completed
-checkout is unused. Without that flag, historical caches are excluded from both preview and apply.
+checkout age uses directory modification time, which ordinary reuse does not refresh. Shared seeds
+are protected by the copy lease, so they need no flag. Older harnesses hold no lease while reading
+a local checkout, so local checkouts are selected only from idle worktrees (as defined above;
+ignored files such as agent tooling directories do not count, and an unreadable process table or
+Git failure counts as active). `--tests-stopped` acknowledges stopped
+tests and includes active worktrees; it does not detect running tests.
 Cache cleanup skips symlinks, malformed stamps, future formats, and publication/copy locks.
 See [release source sharing](./release-source-sharing.md) for the cache and locking details.
 
@@ -87,14 +92,15 @@ Electron, Vite caches, old dependency installs and generated output, and per-wor
 profiles whose worktree was removed (a profile is kept while its app, runtime, or terminal daemon
 is still running),
 in the background after the dev process starts. It never prompts or waits before launching the app.
-The worktree being launched is excluded from every cleanup pass. Existing bundle checks protect
+The worktree being launched is excluded from every pass except historical test caches, which use
+the idle-worktree rule. Existing bundle checks protect
 active sibling Electron bundles and recent unfinished bundles from the bundle-specific pass;
 the generated-directory pass uses its 30-day age cutoff and filesystem/Git protections.
 Background sweep output is suppressed; worker start or exit failures are reported without stopping dev. Set `ORCA_SKIP_DEV_STORAGE_RECLAIM=1` to opt out.
 The worker finishes independently if the dev app exits, and each cleanup operation has a ten-minute limit.
 
-Historical test cache cleanup runs only in the explicit manual command with `--tests-stopped`.
-Automatic invocations exclude it because tests may still be importing source.
+Automatic invocations also run historical test cache cleanup with the idle-worktree rule; they
+never pass `--tests-stopped`, so active worktrees keep their local checkouts.
 The repository lock prevents competing cleanup commands. Dev bundle removal checks active
 processes and recent unfinished builds, then rechecks eligibility immediately before deletion.
 An unreadable process table prevents removal.

@@ -1,0 +1,19 @@
+{
+  "files": [],
+  "include": [],
+  "compilerOptions": { "useDefineForClassFields": true },
+  "references": [
+    { "path": "../src/packages/process-host/tsconfig.json" },
+    { "path": "../cloud/apps/connector/tsconfig.json" },
+    { "path": "../cloud/apps/push/tsconfig.json" },
+    { "path": "../cloud/apps/relay-fence-broker/tsconfig.json" },
+    { "path": "../cloud/apps/relay/tsconfig.json" },
+    { "path": "../cloud/packages/cloud-database/tsconfig.json" },
+    { "path": "../cloud/packages/connector-contract/tsconfig.json" },
+    { "path": "../cloud/packages/postgres-schema/tsconfig.json" },
+    { "path": "../cloud/packages/push-contract/tsconfig.json" },
+    { "path": "../cloud/packages/relay-contract/tsconfig.json" },
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.web.json" }
+  ]
+}

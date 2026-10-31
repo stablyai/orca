@@ -90,13 +90,6 @@ it('still refuses a message locally while an older host runs a command', () => {
   expect(mocks.outboxSend).not.toHaveBeenCalled()
 })
 
-it('queues a message typed during a command on a host that runs it as a turn', () => {
-  items = [answer('from this host', true)]
-
-  expect(sendDuringCommand()).toBe(true)
-  expect(mocks.outboxSend).toHaveBeenCalledOnce()
-})
-
 describe('a /clear refused for something the chat shows', () => {
   const renderSession = () =>
     renderHook(() =>

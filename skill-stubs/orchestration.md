@@ -32,4 +32,11 @@ recovery, or expanded DAG work, load only the reference that gate names with
 (`--references` lists the names). If that binary rejects `--reference`, run
 `ORCA skills get orchestration --full` and read the named bundled reference before acting.
 
-<!-- shared: no-guessing -->
+<!-- shared-omit: no-guessing -->
+
+Use the selected executable's `--help` for commands or flags the guide does not cover. If a
+command reports that Orca is not running, start it with `ORCA open --json` and retry. If it
+fails with `runtime_access_denied`, your sandbox blocked the connection: re-run it with
+escalated permissions, and do not run `ORCA open` or restart Orca. If `skills get` is unknown,
+explain that updating Orca restores the guide; use `--help` for read-only discovery and do not
+guess unsupported commands.

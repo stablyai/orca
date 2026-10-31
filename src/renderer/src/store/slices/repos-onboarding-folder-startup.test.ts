@@ -123,7 +123,6 @@ it.each(['paired-linux', 'local-bash', 'withheld', 'structured-withheld'] as con
       settings: {
         ...getDefaultSettings('/tmp/orca-workspaces'),
         defaultTuiAgent: 'claude',
-        experimentalNativeChat: true,
         nativeChatProviders: { claude: target === 'structured-withheld' },
         terminalWindowsShell: 'C:\\Program Files\\Git\\bin\\bash.exe',
         agentDefaultArgs: { claude: '--append-system-prompt "don\'t edit"' },

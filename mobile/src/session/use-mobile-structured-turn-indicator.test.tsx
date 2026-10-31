@@ -44,7 +44,9 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
     _meta: { runtimeId: 'r1' }
   }))
   const subscribe = vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
-    listener = onData
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+    }
     return vi.fn()
   })
   const client: RpcClient = {

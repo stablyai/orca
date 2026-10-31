@@ -13,6 +13,10 @@ vi.mock('@/lib/client-environment-info', () => ({
 }))
 
 import { i18n } from '@/i18n/i18n'
+import {
+  formatTerminalStartFailure,
+  terminalStartError
+} from '../../../../shared/terminal-start-failure'
 import { appendPaneTerminalError, terminalErrorForPane } from './terminal-error-accumulation'
 
 import {
@@ -436,6 +440,43 @@ describe('shouldOfferDaemonRestart', () => {
 })
 
 describe('TerminalErrorToast environment footer', () => {
+  it('renders a formatted capacity failure once with ordinary reporting and dismissal', async () => {
+    const error = formatTerminalStartFailure(
+      terminalStartError(
+        'agent_session_exited_during_start',
+        {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        },
+        'test-incarnation'
+      )
+    )
+    if (error === undefined) {
+      throw new Error('Capacity start failure must have a human explanation')
+    }
+    const onDismiss = vi.fn()
+    const view = render(
+      React.createElement(TerminalErrorToast, { error, paneOnClient: true, onDismiss })
+    )
+    const footer = '---\nOrca: 1.4.178-rc.2\nOS: darwin 25.0.0 (arm64)\nShell: /bin/zsh'
+    await waitFor(() => expect(view.container.textContent).toContain(footer))
+
+    const text = view.container.querySelector('span')?.textContent ?? ''
+    expect(text).toBe(`${error}\nIf this persists, please file an issue.\n\n${footer}`)
+    expect(text.match(/128 open terminals on this PC/g)).toHaveLength(1)
+    expect(text.match(/Close some Git Bash terminals and try again\./g)).toHaveLength(1)
+    expect(text).not.toContain('agent_session_exited_during_start')
+    expect(view.getAllByRole('link')).toHaveLength(1)
+    expect(view.getByRole('link', { name: 'file an issue' }).getAttribute('href')).toBe(
+      'https://github.com/stablyai/orca/issues'
+    )
+    expect(environmentMocks.resolveFooter).toHaveBeenCalledOnce()
+    expect(onDismiss).not.toHaveBeenCalled()
+    fireEvent.click(view.getByRole('button', { name: '×' }))
+    expect(onDismiss).toHaveBeenCalledOnce()
+  })
+
   it('appends client environment details to local errors', async () => {
     const view = render(
       React.createElement(TerminalErrorToast, {

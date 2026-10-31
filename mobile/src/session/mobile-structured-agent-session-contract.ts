@@ -1,7 +1,11 @@
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
-import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import type {
+  MobileNativeChatSendIntent,
+  MobileNativeChatSendOutcome
+} from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatVisualSource } from './native-chat/visual/mobile-native-chat-visual-read'
 import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
 import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
@@ -26,6 +30,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
     isWorking: boolean
     /** Desktop's Stop rule: a running turn, or conversation Stop while working or sending. */
     canStop: boolean
+    /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
+    sendFollowUp: NativeChatSendFollowUp | null
     turnId: string | null
     turnIndicator: NativeChatLiveTurnIndicator
     sendWithOutcome: (
@@ -33,7 +39,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
       images?: string[],
       deadline?: number,
       attachments?: readonly StructuredMobileSendAttachment[],
-      skills?: readonly AgentJournalSkillRef[]
+      skills?: readonly AgentJournalSkillRef[],
+      intent?: MobileNativeChatSendIntent
     ) => Promise<MobileNativeChatSendOutcome>
     cancel: () => void
     receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
