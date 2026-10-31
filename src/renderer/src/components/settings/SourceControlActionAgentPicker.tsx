@@ -1,3 +1,4 @@
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
 import { memo, useCallback, useLayoutEffect, useRef, type ComponentProps } from 'react'
 import { pickSourceControlLaunchAgent } from '../../../../shared/source-control-launch-agent-selection'
@@ -144,6 +145,7 @@ const SelectedSourceControlActionAgentPicker = memo(
     onSelection: ComponentProps<typeof AgentLaunchPicker>['onPick']
     onDefault: () => void
   }) {
+    useUiLanguageRevision()
     const selection =
       props.selection ??
       canonicalSourceControlActionSelection({ agentId: props.agent, surface: props.surface })

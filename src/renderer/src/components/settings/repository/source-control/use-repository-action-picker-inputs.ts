@@ -1,18 +1,16 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { sourceControlRepoAgentRows } from '@/lib/source-control-agent-picker'
 import { canSaveSourceControlActionSurface } from '../../SourceControlActionAgentPicker'
 import { SOURCE_CONTROL_ACTION_IDS } from '../../../../../../shared/source-control-ai-actions'
 import { invalidateAgentPickerDrafts } from '../../../agent/AgentLaunchSetupButton'
-import {
-  useSourceControlActionAgent,
-  useSourceControlActionAgentInventory
-} from '../../use-source-control-action-agent'
+import { useSourceControlActionAgentInventory } from '../../use-source-control-action-agent'
+import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
 import type { RepositorySourceControlAiActionRowsProps } from './repository-source-control-ai-action-rows-props'
 
 export function useRepositoryActionPickerInputs(props: RepositorySourceControlAiActionRowsProps) {
-  const { repoId, defaultTuiAgent } = props
+  const { repoId } = props
   const draftScopes = useMemo(
     () => new Map(SOURCE_CONTROL_ACTION_IDS.map((id) => [id, { repoId }])),
     [repoId]
@@ -23,15 +21,12 @@ export function useRepositoryActionPickerInputs(props: RepositorySourceControlAi
   const rows = sourceControlRepoAgentRows(repo)
   const observation = useAgentMenuObservation(rows.target, true, rows.detectionTarget)
   const canSaveSurface = canSaveSourceControlActionSurface(rows.target)
-  const resolveAgent = useSourceControlActionAgent(null, defaultTuiAgent ?? null).resolve
-  const current = useRef({ props, resolveAgent })
+  const nativeDetectedAgents = useAppStore(readNativeDetectedAgents)
+  const disabledAgents = useAppStore((state) => state.settings?.disabledTuiAgents)
+  const current = useRef({ props })
   useLayoutEffect(() => {
-    current.current = { props, resolveAgent }
+    current.current = { props }
   })
-  const resolve = useCallback(
-    (agent: Parameters<typeof resolveAgent>[0]) => current.current.resolveAgent(agent),
-    []
-  )
   const actions = useMemo(
     () => ({
       onActionModeChange: (
@@ -63,5 +58,12 @@ export function useRepositoryActionPickerInputs(props: RepositorySourceControlAi
     }),
     []
   )
-  return { ...actions, draftScopes, observation, canSaveSurface, resolveAgent: resolve }
+  return {
+    ...actions,
+    draftScopes,
+    observation,
+    canSaveSurface,
+    nativeDetectedAgents,
+    disabledAgents
+  }
 }

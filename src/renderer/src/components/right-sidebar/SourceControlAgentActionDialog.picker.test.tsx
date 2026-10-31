@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
 import {
   agentPickerChoiceSeeds,
   type AgentPickerEntry
@@ -21,7 +22,7 @@ vi.mock('../agent/use-agent-launch-picker-inventory', () => ({
       ? []
       : [...new Set(model.rows.map((row) => row.agent))].map((agent): AgentPickerEntry => ({
           agent,
-          label: agent === 'claude' ? 'Claude' : 'Codex',
+          label: formatAgentTypeLabel(agent),
           ownerKey: `action-${agent}`,
           rows: model.rows.filter((row) => row.agent === agent),
           surfaces: ['chat', 'terminal'],
@@ -230,47 +231,134 @@ it.each(['global', 'repo'] as const)(
 it.each(['global', 'repo'] as const)(
   'keeps pending Customize setup over template-only edits and saves current %s metadata',
   async (scope) => {
-    const mounted = mountSourceDialog(
-      { agentId: 'claude', commandInputTemplate: 'Old global', agentArgs: '--saved' },
-      { agentId: 'claude', commandInputTemplate: 'Old repo', agentArgs: '--saved' },
-      undefined,
-      undefined,
-      scope
-    )
-    const open = async () => {
-      const trigger = screen.getByRole('button', { name: 'Select agent' })
-      await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
-      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
-      fireEvent.click(await screen.findByRole('button', { name: 'Configure Claude' }))
-      const toggle = screen.getByRole('button', { name: 'Toggle Arguments' })
-      if (!screen.queryByRole('textbox', { name: 'Arguments' })) {
-        fireEvent.click(toggle)
+    const { i18n } = await import('@/i18n/i18n')
+    const { default: spanish } = await import('@/i18n/locales/es.json')
+    const previous = structuredClone(i18n.getResourceBundle('es', 'translation') ?? {})
+    i18n.addResourceBundle('es', 'translation', spanish, true, true)
+    await i18n.changeLanguage('en')
+    try {
+      const mounted = mountSourceDialog(
+        {
+          agentId: 'claude',
+          commandInputTemplate: 'Old global',
+          agentArgs: '--saved',
+          launchPreferences: {
+            agentId: 'claude',
+            model: 'sonnet',
+            options: { effort: 'high' },
+            permissionMode: 'ask'
+          }
+        },
+        {
+          agentId: 'claude',
+          commandInputTemplate: 'Old repo',
+          agentArgs: '--saved',
+          launchPreferences: {
+            agentId: 'claude',
+            model: 'sonnet',
+            options: { effort: 'high' },
+            permissionMode: 'ask'
+          }
+        },
+        undefined,
+        undefined,
+        scope
+      )
+      const open = async () => {
+        const trigger = screen.getByRole('button', { name: 'Select agent' })
+        await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+        fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+        fireEvent.click(await screen.findByRole('button', { name: 'Configure Claude' }))
+        const toggle = screen.getByRole('button', { name: 'Toggle Arguments' })
+        if (!screen.queryByRole('textbox', { name: 'Arguments' })) {
+          fireEvent.click(toggle)
+        }
       }
+      await open()
+      fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+        target: { value: '--model claude-sonnet-5-5 --accepted' }
+      })
+      fireEvent.blur(screen.getByRole('textbox', { name: 'Arguments' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'High' }))
+      fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+        target: { value: '--latest-pending' }
+      })
+      const search = screen.getByLabelText('Search models')
+      fireEvent.change(search, { target: { value: 'son' } })
+      expect(screen.getByRole('radio', { name: 'High' }).getAttribute('aria-checked')).toBe('true')
+      const permission = screen.getByRole('button', { name: 'Claude permissions' })
+      const accepted = mounted.controller.recipe
+      const pendingInput = screen.getByRole('textbox', { name: 'Arguments' })
+      await act(() => i18n.changeLanguage('es'))
+      expect(document.querySelector('button[aria-label="Seleccionar agente"]')).toBeTruthy()
+      expect(screen.getByRole('textbox', { name: 'Argumentos' })).toBe(pendingInput)
+      expect(pendingInput).toHaveProperty('value', '--latest-pending')
+      expect(screen.getByRole('button', { name: 'Usar' })).toBeTruthy()
+      expect(screen.getByRole('radio', { name: 'Alto' }).getAttribute('aria-checked')).toBe('true')
+      expect(screen.getByRole('button', { name: 'Permisos de Claude' })).toBe(permission)
+      expect(mounted.controller.recipe).toBe(accepted)
+      expect(mounted.persist).not.toHaveBeenCalled()
+      expect(mounted.onStart).not.toHaveBeenCalled()
+      act(() =>
+        i18n.addResourceBundle(
+          'es',
+          'translation',
+          {
+            agentPicker: {
+              select: 'Agente actualizado',
+              use: 'Aplicar actualizado',
+              arguments: 'Argumentos actualizados',
+              openIn: 'Abrir actualizado',
+              chat: 'Conversación actualizada',
+              terminal: 'Terminal actualizada'
+            },
+            auto: {
+              components: { settings: { AgentsPane: { cfb3f35775: 'Argumentos actualizados' } } }
+            }
+          },
+          true,
+          true
+        )
+      )
+      expect(document.querySelector('button[aria-label="Agente actualizado"]')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Aplicar actualizado' })).toBeTruthy()
+      expect(document.querySelector('[aria-label="Abrir actualizado"]')?.textContent).toContain(
+        'Conversación actualizada'
+      )
+      expect(document.querySelector('[aria-label="Abrir actualizado"]')?.textContent).toContain(
+        'Terminal actualizada'
+      )
+      expect(screen.getByRole('textbox', { name: 'Argumentos actualizados' })).toBe(pendingInput)
+      expect(pendingInput).toHaveProperty('value', '--latest-pending')
+      expect(search).toHaveProperty('value', 'son')
+      expect(screen.getByRole('button', { name: /claude-sonnet-5-5/ })).toBeTruthy()
+      expect(mounted.controller.recipe).toBe(accepted)
+      await act(() => i18n.changeLanguage('en'))
+      fireEvent.keyDown(screen.getByRole('textbox', { name: 'Arguments' }), { key: 'Escape' })
+      fireEvent.keyDown(document, { key: 'Escape' })
+      act(() => mounted.controller.onCommandTemplateChange('CURRENT {basePrompt}'))
+      await open()
+      expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty(
+        'value',
+        '--latest-pending'
+      )
+      expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
+      fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+      expect(mounted.controller.recipe.commandInputTemplate).toBe('CURRENT {basePrompt}')
+      expect(mounted.controller.recipe.agentArgs).toBe('--latest-pending')
+      await act(() => mounted.controller.handleStart())
+      expect(mounted.persist).toHaveBeenCalledOnce()
+      expect(mounted.persist.mock.calls[0][2].commandInputTemplate).toBe('CURRENT {basePrompt}')
+      expect(mounted.onStart).toHaveBeenCalledOnce()
+      expect(mounted.onStart.mock.calls[0][0].commandInput).toBe('CURRENT fix')
+      expect(submittedActionStartupPlan(mounted.onStart.mock.calls[0][0])).toMatchObject({
+        launchCommand: expect.stringContaining('--latest-pending')
+      })
+    } finally {
+      cleanup()
+      i18n.removeResourceBundle('es', 'translation')
+      i18n.addResourceBundle('es', 'translation', previous)
+      await i18n.changeLanguage('en')
     }
-    await open()
-    fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
-      target: { value: '--model claude-sonnet-5-5 --accepted' }
-    })
-    fireEvent.blur(screen.getByRole('textbox', { name: 'Arguments' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
-      target: { value: '--latest-pending' }
-    })
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Arguments' }), { key: 'Escape' })
-    fireEvent.keyDown(document, { key: 'Escape' })
-    act(() => mounted.controller.onCommandTemplateChange('CURRENT {basePrompt}'))
-    await open()
-    expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty(
-      'value',
-      '--latest-pending'
-    )
-    expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
-    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
-    expect(mounted.controller.recipe.commandInputTemplate).toBe('CURRENT {basePrompt}')
-    expect(mounted.controller.recipe.agentArgs).toBe('--latest-pending')
-    await act(() => mounted.controller.handleStart())
-    expect(mounted.persist).toHaveBeenCalledOnce()
-    expect(mounted.persist.mock.calls[0][2].commandInputTemplate).toBe('CURRENT {basePrompt}')
-    expect(mounted.onStart).toHaveBeenCalledOnce()
-    expect(mounted.onStart.mock.calls[0][0].commandInput).toBe('CURRENT fix')
   }
 )

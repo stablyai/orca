@@ -1,3 +1,4 @@
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { SourceControlActionId } from '../../../../../../shared/source-control-ai-actions'
 import { useRepositoryActionPickerInputs } from './use-repository-action-picker-inputs'
 import { shallow } from 'zustand/shallow'
@@ -53,7 +54,8 @@ import { hasOwnActionOverride } from './repository-source-control-ai-draft'
 import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository-settings-targets'
 import { translate } from '@/i18n/i18n'
 import { SourceControlActionOptionField } from '../../SourceControlActionOptionField'
-import type { useSourceControlActionAgent } from '../../use-source-control-action-agent'
+import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control-launch-agent-selection'
+import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { captureSourceControlActionSelection } from '../../../../../../shared/source-control-ai-operation-policy'
 
 export function RepositorySourceControlAiActionRows(
@@ -82,13 +84,16 @@ const SelectedRepositoryActionRows = memo(
     draftScopes,
     observation,
     canSaveSurface,
-    resolveAgent
+    nativeDetectedAgents,
+    disabledAgents
   }: RepositorySourceControlAiActionRowsProps & {
     draftScopes: Map<SourceControlActionId, object>
     observation: ReturnType<typeof useAgentMenuObservation>
     canSaveSurface: boolean
-    resolveAgent: ReturnType<typeof useSourceControlActionAgent>['resolve']
+    nativeDetectedAgents: TuiAgent[] | null
+    disabledAgents: TuiAgent[] | undefined
   }): JSX.Element {
+    useUiLanguageRevision()
     const selections = useMemo(
       () =>
         new Map(
@@ -136,7 +141,17 @@ const SelectedRepositoryActionRows = memo(
           const isLaunchAction = !SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)
           const actual = isLaunchAction
             ? sourceControlActionAgentPreview(observation, selectedAgent)
-            : resolveAgent(effectiveAgent)
+            : nativeDetectedAgents === null
+              ? { status: 'pending' as const }
+              : {
+                  status: 'ready' as const,
+                  agent: pickSourceControlLaunchAgent({
+                    savedAgent: selectedAgent,
+                    defaultAgent: defaultTuiAgent,
+                    detectedAgents: nativeDetectedAgents,
+                    disabledAgents
+                  })
+                }
           const pickerAgent =
             effectiveAgent || actual.status === 'pending'
               ? resolveAgentArgsPlaceholderAgent(

@@ -7,6 +7,7 @@ import { CommitMessageAiPane } from './CommitMessageAiPane'
 import { useSettingsInteractionController } from './use-settings-interaction-controller'
 import {
   persist,
+  pickerLocaleFixture,
   settingsModel,
   type SettingsPersistenceModel
 } from './__fixtures__/settings-persistence-test-fixture'
@@ -339,4 +340,171 @@ it('isolates equal recipe drafts, invalidates Discard and saves permission-only 
   )
   input = await open(first)
   expect(input).toHaveProperty('value', '--debug')
+})
+
+it.each(['global', 'repo'] as const)(
+  'updates the mounted %s default picker and cached row text on language and resource events',
+  async (scope) => {
+    const locale = await pickerLocaleFixture()
+    const { i18n } = locale
+    const { SourceControlAiActionRecipeDefaults } =
+      await import('./SourceControlAiActionRecipeDefaults')
+    const { RepositorySourceControlAiSection } =
+      await import('./repository/source-control/RepositorySourceControlAiSection')
+    const { TEST_REPO } = await import('@/store/slices/worktrees-slice-test-fixtures')
+    const config = normalizeSourceControlAiSettings({
+      ...getDefaultSourceControlAiSettings(),
+      enabled: true,
+      actions: { fixChecks: { agentId: null } }
+    })
+    useAppStore.setState(({ settings }) => ({
+      settings: settings && { ...settings, sourceControlAi: config },
+      localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
+      repos: [TEST_REPO]
+    }))
+    const write = vi.fn()
+    const revisions = await import('@/i18n/translation-resource-version')
+    const subscribe = revisions.subscribeTranslationResourceVersion
+    const disposals: ReturnType<typeof vi.fn>[] = []
+    vi.spyOn(revisions, 'subscribeTranslationResourceVersion').mockImplementation((listener) => {
+      const stop = vi.fn(subscribe(listener))
+      disposals.push(stop)
+      return stop
+    })
+    const view = render(
+      <TooltipProvider>
+        {scope === 'global' ? (
+          <SourceControlAiActionRecipeDefaults
+            config={config}
+            searchQuery=""
+            defaultTuiAgent="claude"
+            writeConfig={write}
+          />
+        ) : (
+          <RepositorySourceControlAiSection repo={TEST_REPO} updateRepo={write} />
+        )}
+      </TooltipProvider>
+    )
+    try {
+      await act(async () => {})
+      expect(screen.getAllByText('Use default agent').length).toBeGreaterThan(0)
+      if (scope === 'repo') {
+        expect(screen.getByText('Action recipes')).toBeTruthy()
+      }
+      await act(() => i18n.changeLanguage('es'))
+      expect(
+        screen
+          .getAllByRole('button', { name: 'Seleccionar agente' })
+          .some((button) => button.textContent?.includes('Use default agent'))
+      ).toBe(false)
+      expect(screen.getAllByText('Usar agente predeterminado').length).toBeGreaterThan(0)
+      if (scope === 'repo') {
+        expect(screen.getByText('Recetas de acción')).toBeTruthy()
+      }
+      act(() =>
+        i18n.addResource(
+          'es',
+          'translation',
+          'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
+          'Predeterminado actualizado'
+        )
+      )
+      expect(screen.getAllByText('Predeterminado actualizado').length).toBeGreaterThan(0)
+      act(() =>
+        i18n.addResource(
+          'es',
+          'translation',
+          'auto.components.settings.source.control.action.recipe.options.fixChecks',
+          'Descripción actualizada'
+        )
+      )
+      if (scope === 'repo') {
+        expect(screen.getByText('Descripción actualizada')).toBeTruthy()
+      }
+      expect(write).not.toHaveBeenCalled()
+    } finally {
+      view.unmount()
+      expect(disposals.length).toBeGreaterThan(0)
+      for (const stop of disposals) {
+        expect(stop).toHaveBeenCalledOnce()
+      }
+      await locale.restore()
+    }
+  }
+)
+
+it('renders current native text-agent facts for a normalized legacy model recipe', async () => {
+  const { RepositorySourceControlAiSection } =
+    await import('./repository/source-control/RepositorySourceControlAiSection')
+  const { TEST_REPO } = await import('@/store/slices/worktrees-slice-test-fixtures')
+  const menu = await import('../tab-bar/use-new-tab-agent-menu-rows')
+  const observation = vi.spyOn(menu, 'useAgentMenuObservation')
+  const unused = vi.fn()
+  const configure = (
+    patch: Partial<NonNullable<ReturnType<typeof useAppStore.getState>['settings']>>
+  ) => useAppStore.setState(({ settings }) => ({ settings: settings && { ...settings, ...patch } }))
+  const { agentLaunchSettingsMutationUpdates } =
+    await import('../../../../shared/agent-launch-settings')
+  const config = normalizeSourceControlAiSettings({
+    ...getDefaultSourceControlAiSettings(),
+    actions: {
+      commitMessage: { agentId: null, launchPreferences: { agentId: 'claude', model: 'opus' } }
+    }
+  })
+  configure({ sourceControlAi: config, defaultTuiAgent: 'claude', disabledTuiAgents: [] })
+  useAppStore.setState({
+    repos: [TEST_REPO],
+    detectedAgentIds: ['claude', 'codex'],
+    localDetectedAgentIdsByContext: { host: ['claude', 'codex'] }
+  })
+  render(
+    <TooltipProvider>
+      <RepositorySourceControlAiSection repo={TEST_REPO} updateRepo={unused} />
+    </TooltipProvider>
+  )
+  await act(async () => {})
+  const section =
+    document.querySelector<HTMLElement>('[data-settings-section$="commitMessage"]') ??
+    screen.getByText('Commit message').closest<HTMLElement>('.rounded-md')
+  if (!section) {
+    throw new Error('Missing Commit message row')
+  }
+  const row = within(section)
+  expect(row.getByText('Global custom args')).toBeTruthy()
+  const input = row.getByPlaceholderText('--model sonnet')
+  expect(input).toHaveProperty('value', '')
+  const { sameAgentLaunchPickerModel } = await import('../tab-bar/new-tab-agent-menu-model')
+  const model = observation.mock.results.at(-1)!.value.model
+  for (const [host, label] of [
+    [null, 'Global custom args'],
+    [['codex'], 'No args'],
+    [['claude', 'codex'], 'Global custom args']
+  ] as const) {
+    act(() => useAppStore.setState({ localDetectedAgentIdsByContext: { host: host && [...host] } }))
+    expect(sameAgentLaunchPickerModel(model, observation.mock.results.at(-1)!.value.model)).toBe(
+      true
+    )
+    expect(row.getByText(label)).toBeTruthy()
+    expect(input).toHaveProperty('value', '')
+  }
+  const settings = useAppStore.getState().settings
+  if (!settings) {
+    throw new Error('Missing settings')
+  }
+  act(() =>
+    configure(
+      agentLaunchSettingsMutationUpdates(
+        settings,
+        { type: 'availability', agent: 'claude', enabled: false },
+        'darwin'
+      )
+    )
+  )
+  expect(row.getByText('No args')).toBeTruthy()
+  expect(input).toHaveProperty('value', '')
+  expect(input).toHaveProperty('placeholder', '--model sonnet')
+  expect(useAppStore.getState().settings?.sourceControlAi?.actions?.commitMessage).toEqual(
+    config.actions?.commitMessage
+  )
+  expect(unused).not.toHaveBeenCalled()
 })

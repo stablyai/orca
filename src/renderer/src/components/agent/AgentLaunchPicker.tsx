@@ -1,3 +1,4 @@
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { shallow } from 'zustand/shallow'
 import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
 import { memo, useState, type ReactNode } from 'react'
@@ -57,6 +58,7 @@ export const AgentLaunchPicker = memo(
       surface?: AgentPickerDraft['surface']
     ) => void
   }) {
+    useUiLanguageRevision()
     const ownDraftScope = useAgentPickerDraftScope()
     const [open, setOpen] = useState(false)
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()

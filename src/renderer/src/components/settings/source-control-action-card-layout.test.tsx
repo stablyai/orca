@@ -16,7 +16,7 @@ import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker
 import { canonicalSourceControlActionSelection } from '../../../../shared/source-control-action-selection'
 import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import './__fixtures__/settings-persistence-test-fixture'
+import { pickerLocaleFixture } from './__fixtures__/settings-persistence-test-fixture'
 import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -46,14 +46,18 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
       : { agents: [{ agent: 'grok', capabilities: {} }] }
   )
 }))
-const renderWork = vi.hoisted(() => ({ observers: vi.fn(), consumers: vi.fn() }))
+const renderWork = vi.hoisted(() => ({
+  observers: vi.fn<(model: MenuObservation.NewTabAgentMenuModel) => void>(),
+  consumers: vi.fn()
+}))
 vi.mock('../tab-bar/use-new-tab-agent-menu-rows', async (importOriginal) => {
   const actual = await importOriginal<typeof MenuObservation>()
   return {
     ...actual,
     useAgentMenuObservation: (...args: Parameters<typeof actual.useAgentMenuObservation>) => {
-      renderWork.observers()
-      return actual.useAgentMenuObservation(...args)
+      const result = actual.useAgentMenuObservation(...args)
+      renderWork.observers(result.model)
+      return result
     }
   }
 })
@@ -67,6 +71,11 @@ vi.mock('@/components/agent/AgentLaunchPicker', async (importOriginal) => {
     }
   }
 })
+const localeWork = {
+  producers: new Map<number, number[]>(),
+  customize: new Map<number, number[]>(),
+  native: new Map<number, number[]>()
+}
 const unused = vi.fn()
 function configure(patch: Partial<GlobalSettings>) {
   useAppStore.setState(({ settings }) => ({ settings: settings && { ...settings, ...patch } }))
@@ -360,6 +369,9 @@ it('labels an own raw Sonnet recipe from the same source as its setup chips', as
     await import('../../../../shared/agent-startup-plan-inputs')
   const { buildAgentStartupPlan } = await import('../../../../shared/tui-agent-startup')
   const settings = useAppStore.getState().settings
+  if (!settings) {
+    throw new Error('Missing configured settings')
+  }
   const projection = projectSourceControlActionLaunch(recipe, 'claude', {
     basePrompt: 'Do the work',
     settings
@@ -593,6 +605,63 @@ it.each([5, 50])(
       expect(lower()).toEqual(before)
       act(() => useAppStore.setState({ settingsSearchQuery: 'unrelated' }))
       expect(lower()).toEqual(before)
+      const locale = await act(() => pickerLocaleFixture())
+      const workKeys = [
+        'sources',
+        'analyses',
+        'catalogs',
+        'reconciliations',
+        'profiles',
+        'renders'
+      ] as const
+      const presentationStart = lower()
+      const catalogRequests = vi.mocked(callRuntimeRpc).mock.calls.length
+      try {
+        await act(() => locale.i18n.changeLanguage('es'))
+        expect(screen.getAllByText('Recetas de acción')).toHaveLength(count)
+        expect(
+          screen.getAllByRole('button', { name: 'Seleccionar agente' }).length
+        ).toBeGreaterThan(count)
+        const localized = lower()
+        for (const key of workKeys) {
+          expect(localized[key] - presentationStart[key]).toBeLessThanOrEqual(1000 * count)
+        }
+        expect(vi.mocked(callRuntimeRpc).mock.calls).toHaveLength(catalogRequests)
+        act(() =>
+          locale.i18n.addResource(
+            'es',
+            'translation',
+            'auto.components.settings.RepositorySourceControlAiActionRows.f0aa2cfaea',
+            'Filas actualizadas'
+          )
+        )
+        expect(screen.getAllByText('Filas actualizadas')).toHaveLength(count)
+        for (const key of workKeys) {
+          expect(lower()[key] - localized[key]).toBeLessThanOrEqual(1000 * count)
+        }
+        expect(vi.mocked(callRuntimeRpc).mock.calls).toHaveLength(catalogRequests)
+        const delta = workKeys.map((key) => lower()[key] - presentationStart[key])
+        process.stdout.write(`${JSON.stringify({ metric: 'locale-producers', count, delta })}\n`)
+        localeWork.producers.set(count, delta)
+        if (count === 50) {
+          delta.forEach((value, index) =>
+            expect(value).toBeLessThanOrEqual(10 * localeWork.producers.get(5)![index])
+          )
+        }
+      } finally {
+        await act(() => locale.restore())
+      }
+      const nativeStart = lower()
+      const requests = vi.mocked(callRuntimeRpc).mock.calls.length
+      act(() => useAppStore.setState({ localDetectedAgentIdsByContext: { host: ['codex'] } }))
+      const nativeDelta = workKeys.map((key) => lower()[key] - nativeStart[key])
+      localeWork.native.set(count, nativeDelta)
+      if (count === 50) {
+        nativeDelta.forEach((value, index) =>
+          expect(value).toBeLessThanOrEqual(10 * localeWork.native.get(5)![index])
+        )
+      }
+      expect(vi.mocked(callRuntimeRpc).mock.calls).toHaveLength(requests)
       act(() => configure({ agentDefaultArgs: { claude: '--model claude-opus-5-5' } }))
       expect(lower().sources).toBeGreaterThan(before.sources)
       expect(lower().catalogs).toBeGreaterThan(before.catalogs)
@@ -675,6 +744,55 @@ it.each([5, 50])(
     expect(work()).toEqual(baseline)
     act(() => useAppStore.setState({ settingsSearchQuery: 'unrelated customize search' }))
     expect(work()).toEqual(baseline)
+    const locale = await act(() => pickerLocaleFixture())
+    const presentationStart = work()
+    try {
+      await act(() => locale.i18n.changeLanguage('es'))
+      expect(document.querySelectorAll('button[aria-label="Seleccionar agente"]')).toHaveLength(
+        rows
+      )
+      const localized = work()
+      for (const key of [
+        'sources',
+        'analyses',
+        'catalogs',
+        'reconciliations',
+        'profiles',
+        'inner'
+      ] as const) {
+        expect(localized[key] - presentationStart[key]).toBeLessThanOrEqual(100 * rows)
+      }
+      act(() =>
+        locale.i18n.addResource('es', 'translation', 'agentPicker.select', 'Agente actualizado')
+      )
+      expect(document.querySelectorAll('button[aria-label="Agente actualizado"]')).toHaveLength(
+        rows
+      )
+      for (const key of [
+        'sources',
+        'analyses',
+        'catalogs',
+        'reconciliations',
+        'profiles',
+        'inner'
+      ] as const) {
+        expect(work()[key] - localized[key]).toBeLessThanOrEqual(100 * rows)
+      }
+      const delta = (
+        ['sources', 'analyses', 'catalogs', 'reconciliations', 'profiles', 'inner'] as const
+      ).map((key) => work()[key] - presentationStart[key])
+      process.stdout.write(`${JSON.stringify({ metric: 'locale-customize', rows, delta })}\n`)
+      localeWork.customize.set(rows, delta)
+      if (rows === 50) {
+        delta.forEach((value, index) =>
+          expect(value).toBeLessThanOrEqual(10 * localeWork.customize.get(5)![index])
+        )
+      }
+      expect(mounted.persist).not.toHaveBeenCalled()
+      expect(mounted.onStart).not.toHaveBeenCalled()
+    } finally {
+      await act(() => locale.restore())
+    }
     act(() => configure({ agentLaunchChoices: { claude: { model: 'claude-opus-5-5' } } }))
     expect(work().inner).toBeGreaterThan(baseline.inner)
     expect(work().sources).toBeGreaterThan(baseline.sources)
