@@ -13543,6 +13543,7 @@
             "f9d7ca753d": "Copy Paths",
             "e887fa4b2e": "Open in Terminal",
             "1d8e182c32": "View File",
+            "attachAsContext": "Attach as context",
             "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable",
             "revealInFinder": "Reveal in Finder",
             "openContainingFolder": "Open Containing Folder",
