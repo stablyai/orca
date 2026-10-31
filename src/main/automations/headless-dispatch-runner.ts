@@ -12,7 +12,7 @@ import type {
   HeadlessAutomationDispatcher,
   HeadlessAutomationDispatchLaunch
 } from './headless-dispatch'
-import { AutomationRunLaunchError } from './headless-dispatch'
+import { AutomationRunLaunchError, automationLaunchRunTarget } from './headless-dispatch'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
 import {
@@ -25,6 +25,8 @@ export type HeadlessAutomationDispatchContext = {
   automation: Automation
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
+  agentPrompt: string
+  resultReporting?: 'offered'
   dispatcher: HeadlessAutomationDispatcher
   runs: AutomationRunWriter
   runPrecheck: () => Promise<AutomationPrecheckResult | null>
@@ -68,7 +70,7 @@ export async function runHeadlessAutomationDispatch(
   // The agent can finish before launch returns.
   const dispatchedAt = Date.now()
   try {
-    launch = await ctx.dispatcher({ automation, run, target })
+    launch = await ctx.dispatcher({ automation, run, target, agentPrompt: ctx.agentPrompt })
   } catch (error) {
     const refusal =
       error instanceof AutomationDispatchRefusedError
@@ -83,20 +85,13 @@ export async function runHeadlessAutomationDispatch(
       ...(refusal ?? { error: describeDispatchError(error) })
     })
   }
-  const launchRunTarget = {
-    sessionKind: launch.sessionKind ?? 'terminal',
-    chatSessionId: launch.chatSessionId ?? null,
-    workspaceId: launch.workspaceId,
-    workspaceDisplayName: launch.workspaceDisplayName ?? null,
-    terminalSessionId: launch.terminalSessionId,
-    terminalPaneKey: launch.terminalPaneKey ?? null,
-    terminalPtyId: launch.terminalPtyId ?? null
-  }
+  const launchRunTarget = automationLaunchRunTarget(launch)
   const updated = runs.updateRun({
     runId: run.id,
     status: 'dispatched',
     dispatchedAt,
     ...launchRunTarget,
+    ...(ctx.resultReporting ? { resultReporting: ctx.resultReporting } : {}),
     // Watched completions omit the precheck result.
     ...(precheckResult ? { precheckResult } : {}),
     error: null

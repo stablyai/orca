@@ -36,7 +36,9 @@ vi.mock('@/store', async () =>
   (await import('@/lib/launch-parity-renderer.test-fixture')).launchStoreModuleMock(holder)
 )
 // The stdin-after-start paste is pinned by launch-agent-background-session.test.ts.
-vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn() }))
+vi.mock('@/lib/agent-paste-draft', () => ({
+  pasteDraftWhenAgentReady: vi.fn().mockResolvedValue(true)
+}))
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
   subscribeToPtyExit: vi.fn(() => () => {})
