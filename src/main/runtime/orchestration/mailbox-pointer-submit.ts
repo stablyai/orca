@@ -15,7 +15,7 @@ import type {
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
 
 type PointerSubmitDependencies = {
-  mailboxOwner: Pick<OrchestrationMailboxOwner, 'resolve'>
+  mailboxOwner: OrchestrationMailboxOwner
   state: OrchestrationMailboxPointerState
   getDb: () => OrchestrationDb | null
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
@@ -76,7 +76,7 @@ export function submitOrchestrationMailboxPointer(
       const sameMailbox =
         terminal && deps.mailboxOwner.resolve(terminal, input.mailboxHandle) === input.mailboxHandle
       const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
-      if (!terminal) {
+      if (!terminal || !sameMailbox) {
         clearAndRedrive = true
       } else if (
         (terminal.lastAgentStatusObservedLive && terminal.lastAgentStatus === null) ||
@@ -92,12 +92,7 @@ export function submitOrchestrationMailboxPointer(
         // The user may have submitted or replaced the typed line; an Enter could send their draft.
         deps.readDrivingInputRevision(input.ptyId) !== input.flight.userInputRevisionAtStage
       ) {
-        // Without an Enter here, rebound mail still goes on to its new owner.
-        if (sameMailbox) {
-          releaseWithoutRedrive = true
-        } else {
-          clearAndRedrive = true
-        }
+        releaseWithoutRedrive = true
       } else {
         preserveAmbiguousDelivery = true
         const db = deps.getDb()
@@ -114,14 +109,7 @@ export function submitOrchestrationMailboxPointer(
           return
         }
         // Unverifiable Enter stays attempted: neither delivery nor safe resend is proven.
-        if (
-          enterSettlement.outcome !== 'unverifiable' &&
-          // Re-resolved: a queued Enter can settle after the Run rebinds.
-          deps.mailboxOwner.resolve(terminal, input.mailboxHandle) !== input.mailboxHandle
-        ) {
-          // Sent or refused, rebound mail goes on to its new owner.
-          clearAndRedrive = true
-        } else if (enterSettlement.outcome === 'refused') {
+        if (enterSettlement.outcome === 'refused') {
           releaseWithoutRedrive = true
         }
       }

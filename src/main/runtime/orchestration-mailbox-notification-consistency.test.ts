@@ -287,7 +287,7 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  it('submits a typed pointer without replaying it after ownership changes during Enter delay', async () => {
+  it('does not submit or replay a pointer after ownership changes during Enter delay', async () => {
     vi.useFakeTimers()
     const directory = mkdtempSync(join(tmpdir(), 'orca-mailbox-restart-'))
     temporaryDirectories.push(directory)
@@ -301,8 +301,7 @@ describe('orchestration notification mailbox consistency', () => {
 
     const runB = createBoundRun(firstDb, 'Run B', { rebind: true })
     await vi.advanceTimersByTimeAsync(500)
-    // A typed line left unsubmitted would hold every later pointer as a draft.
-    expect(first.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(1)
+    expect(first.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
     expect(firstDb.getMessageById(message.id)?.delivered_at).toBeNull()
     firstDb.close()
 
@@ -434,7 +433,7 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  it('submits the typed pointer and repoints its mail when its Run moves to another live pane', async () => {
+  it('releases a staged pointer when its Run moves to another live pane', async () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
     const harness = createRuntime(db)
@@ -461,7 +460,7 @@ describe('orchestration notification mailbox consistency', () => {
     ).toHaveLength(1)
     expect(
       harness.write.mock.calls.filter(([ptyId, payload]) => ptyId === PTY_ID && payload === '\r')
-    ).toHaveLength(1)
+    ).toHaveLength(0)
 
     await vi.advanceTimersByTimeAsync(500)
     const checked = await checkBoundMailbox(harness.runtime, {
