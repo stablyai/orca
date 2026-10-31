@@ -123,7 +123,6 @@ it("refuses a newer build's record with an undeclared nested key before adopting
       (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
       VALUES (?, ?, ?, ?, 1, ?, ?, 0)`)
     insert.run(generation, next, 'items', JSON.stringify(itemId), ordinal(0), revised)
-    insert.run(generation, next, '$', '"lastSequence"', ordinal(1), String(next))
     write.prepare('UPDATE journal_outcome_epochs SET through_seq = ?').run(next)
   })
   const before = savedBytes()

@@ -49,7 +49,8 @@ export function encodeJournalOutcomes(
     deleted: entry.deleted
   }))
   for (const [key, value] of Object.entries(next)) {
-    if (JSON.stringify(value) !== JSON.stringify(before[key])) {
+    // The sequence is the record's own, and the epoch's coverage on read; it is never stored.
+    if (key !== 'lastSequence' && JSON.stringify(value) !== JSON.stringify(before[key])) {
       values.push({
         seq: state.lastSequence,
         field: '$',
@@ -143,9 +144,13 @@ export class JournalOutcomeFold {
     through: number,
     baseline?: JournalReducerState
   ): JournalReducerState {
-    const scalarJson = [...(this.values.get('$')?.values() ?? [])].map(
-      (value): [string, string] => [String(JSON.parse(value.key)), value.json]
-    )
+    const scalarJson: [string, string][] = [
+      ...[...(this.values.get('$')?.values() ?? [])].map((value): [string, string] => [
+        String(JSON.parse(value.key)),
+        value.json
+      ]),
+      ['lastSequence', JSON.stringify(through)]
+    ]
     const decode = decodingOutcome(() => decodeOutcomeFormat1Onto(scalarJson, baseline))
     for (const [field, entries] of this.values) {
       if (field === '$') {
@@ -168,7 +173,7 @@ export class JournalOutcomeFold {
       }
     }
     const state = decode.finish()
-    if (state.sessionId !== sessionId || state.epoch !== epoch || state.lastSequence !== through) {
+    if (state.sessionId !== sessionId || state.epoch !== epoch) {
       throw new JournalOutcomeDecodeError('invalid journal outcome coverage')
     }
     return state

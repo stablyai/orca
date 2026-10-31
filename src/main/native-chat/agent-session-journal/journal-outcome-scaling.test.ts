@@ -269,8 +269,8 @@ it('appends a streamed revision, a Codex plan update and an acceptance with the 
   for (const key of ['streamed', 'planned', 'accepted'] as const) {
     expectSameWork(small[key], large[key])
   }
-  // The item's record and the sequence scalar.
-  expect(small.streamed.writes).toStrictEqual([['journal_outcomes INSERT', 2]])
+  // The item's record alone: the sequence is the epoch's coverage, never a record.
+  expect(small.streamed.writes).toStrictEqual([['journal_outcomes INSERT', 1]])
 })
 
 /** Distinct keys the chat's records hold, live, deleted and scalar alike. */
@@ -298,9 +298,8 @@ it("opens a new chat reading each key's newest record once, the same with N and 
   }
   const small = await measure(N)
   const large = await measure(10 * N)
-  // Anti-vacuous: the larger chat holds 9N more superseded revisions of one item and of the
-  // sequence scalar.
-  expect(large.records - small.records).toBe(2 * 9 * N)
+  // Anti-vacuous: the larger chat holds 9N more superseded revisions of one key.
+  expect(large.records - small.records).toBe(9 * N)
   expect(large.keys).toBe(small.keys)
   expectSameWork(small.work, large.work)
   // One record per key; of the chat's rows only the marker, which its outcome summary must agree with.
@@ -342,12 +341,12 @@ it('writes to an existing chat without reading its prefix, the same at N and 10N
   for (const key of ['first', 'streamed', 'accepted'] as const) {
     expectSameWork(small[key], large[key])
   }
-  // The first write appends the marker, then the item's record and the three scalars it changed.
+  // The first write appends the marker, then the item's record and the two scalars it changed.
   expect(small.first.writes).toStrictEqual([
-    ['journal_outcomes INSERT', 4],
+    ['journal_outcomes INSERT', 3],
     ['journal_rows INSERT', 1]
   ])
-  expect(small.streamed.writes).toStrictEqual([['journal_outcomes INSERT', 2]])
+  expect(small.streamed.writes).toStrictEqual([['journal_outcomes INSERT', 1]])
   expect(large.rig.state().submissions.get('send')?.dispatchState).toBe('accepted')
 })
 

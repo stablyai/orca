@@ -133,9 +133,10 @@ it('reads the checked-in format-1 outcomes into the same chat, every field and s
   expect(new Set(stored.map(([, field]) => field))).toEqual(
     new Set(['$', ...OUTCOME_FORMAT_1_COLLECTIONS])
   )
+  // The sequence is never stored: it is the epoch's coverage.
   expect(
     new Set(stored.filter(([, field]) => field === '$').map(([, , key]) => JSON.parse(key)))
-  ).toEqual(new Set(scalars))
+  ).toEqual(new Set(scalars.filter((scalar) => scalar !== 'lastSequence')))
   expect(stored.some(([, , , , , , deleted]) => deleted === 1)).toBe(true)
 
   const state = restored()
