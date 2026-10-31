@@ -208,6 +208,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
               }),
             prepareCodexResume:
               purpose === 'launch' ? (this.prepareAiVaultSessionResumeFn ?? undefined) : undefined,
+            pinnedAdoption: input.pinnedAdoption,
             selectedAccountHome,
             launchEnv: await resolveHostStructuredAgentLaunchEnvironment(input.agent, settings),
             workspaceCwd: workspaceCwd

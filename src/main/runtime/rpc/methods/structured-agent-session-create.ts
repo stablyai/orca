@@ -26,6 +26,7 @@ import {
   type StructuredAgentCliSourceEvidence
 } from '../../../native-chat/structured-agent-cli-source'
 import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
+import type { StructuredAgentSessionAdoption } from '../../../native-chat/structured-agent-session-history-adoption'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
@@ -56,6 +57,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   caller: StructuredAgentSessionCaller
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
+  pinnedAdoption?: StructuredAgentSessionAdoption
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
@@ -81,7 +83,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     agent: args.agent,
     callerKey: args.caller.callerKey,
     structuredAgentCliSourceEvidence,
-    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...(args.pinnedAdoption ? { pinnedAdoption: args.pinnedAdoption } : {})
   })
   const attachFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',

@@ -206,7 +206,12 @@ async function switchToChat(
         caller: structuredCallerFor(ctx),
         atRest: true,
         ensureHost: async () => host,
-        structuredAgentCliSourceEvidence: sourceEvidence
+        structuredAgentCliSourceEvidence: sourceEvidence,
+        // After a stop, the transcript read before it: the stop's record founds even if it moved.
+        pinnedAdoption:
+          adopt?.transcriptPath && stopped
+            ? { accountHome: createIdentity!.accountHome, transcriptPath: adopt.transcriptPath }
+            : undefined
       })
       deadline.check()
       const created = await commitStructuredAgentSessionCreate({

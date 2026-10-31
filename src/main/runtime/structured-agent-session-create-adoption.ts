@@ -24,7 +24,8 @@ import {
   findCommittedStructuredAgentSessionAdoptionReplay,
   findConflictingStructuredAdoption,
   resolveStructuredAgentSessionAdoption,
-  structuredAdoptionConflictError
+  structuredAdoptionConflictError,
+  type StructuredAgentSessionAdoption
 } from '../native-chat/structured-agent-session-history-adoption'
 import { structuredAgentRuntimeMetadata } from './structured-agent-runtime-metadata'
 import type {
@@ -39,6 +40,12 @@ export type StructuredAgentSessionCreateIntentInput = {
   callerKey?: string
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
+  /**
+   * The transcript a switch read before it stopped the CLI. The create after the stop adopts it
+   * as read then: a file renamed during the stop fails the founding read, where the stop's own
+   * record still founds the chat, instead of refusing before any chat exists.
+   */
+  pinnedAdoption?: StructuredAgentSessionAdoption
 }
 
 export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
@@ -112,93 +119,11 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   workspaceCwd: string
   resolveTranscriptSource?: () => StructuredAgentCliSourceLocator
   prepareCodexResume?: NativeCodexResumePreparation
+  pinnedAdoption?: StructuredAgentSessionAdoption
 }) {
   try {
-    const source = input.resolveTranscriptSource?.()
-    const transcriptPath = source?.kind === 'matched' ? source.transcriptPath : undefined
     const candidates = input.transcriptImport.accountHomeCandidates(input)
-    // Resolve each account store once so lookup, hook path and re-admission agree despite environment changes.
-    const stores = new Map<AgentSessionAccountHome, string | null>()
-    const storeOf = (accountHome: AgentSessionAccountHome): string | null => {
-      if (!stores.has(accountHome)) {
-        stores.set(
-          accountHome,
-          input.transcriptImport.conversationStore({
-            accountHome,
-            launchEnv: input.launchEnv
-          })
-        )
-      }
-      return stores.get(accountHome) ?? null
-    }
-    let admitted: { accountHome: AgentSessionAccountHome; path: string } | null = null
-    if (transcriptPath) {
-      for (const accountHome of candidates) {
-        const store = storeOf(accountHome)
-        const path = store
-          ? await input.transcriptImport.admitTranscriptPath({ store, transcriptPath })
-          : null
-        if (path) {
-          admitted = { accountHome, path }
-          break
-        }
-      }
-    }
-    if (transcriptPath && !admitted) {
-      throw new Error('The conversation account is not available on this host.')
-    }
-    const adoption = await resolveStructuredAgentSessionAdoption({
-      providerSessionId: input.providerSessionId,
-      // A source that proves the CLI saved this conversation never reads as "not saved yet".
-      ...(source?.kind === 'absent' || (source?.kind === 'matched' && source.conversed)
-        ? { exhaustionReason: 'transcriptUnreadable' as const }
-        : {}),
-      candidateAccountHomes: admitted ? [admitted.accountHome] : candidates,
-      resolveTranscript: async (args) => {
-        const exact = admitted?.path
-        if (exact) {
-          try {
-            if ((await stat(exact)).isFile()) {
-              return exact
-            }
-          } catch (error) {
-            if (
-              !(
-                error instanceof Error &&
-                'code' in error &&
-                (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-              )
-            ) {
-              throw error
-            }
-          }
-        }
-        const store = storeOf(args.accountHome)
-        if (!store) {
-          return null
-        }
-        const found = await input.transcriptImport.findTranscript({
-          providerSessionId: args.providerSessionId,
-          store,
-          launchEnv: args.launchEnv,
-          workspaceCwd: args.workspaceCwd,
-          strictErrors: true
-        })
-        if (!found) {
-          return null
-        }
-        const path = await input.transcriptImport.admitTranscriptPath({
-          store,
-          transcriptPath: found
-        })
-        if (!path) {
-          throw new Error('The conversation path is outside its account storage.')
-        }
-        return path
-      },
-      launchEnv: input.launchEnv,
-      workspaceCwd: input.workspaceCwd
-    })
+    const adoption = input.pinnedAdoption ?? (await findAdoptionForCreate(input, candidates))
     return input.agent === 'codex'
       ? await prepareCodexAdoption(
           adoption,
@@ -217,6 +142,96 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
       error instanceof Error ? error.message : String(error)
     )
   }
+}
+
+async function findAdoptionForCreate(
+  input: Parameters<typeof resolveStructuredAgentSessionAdoptionForCreate>[0],
+  candidates: readonly AgentSessionAccountHome[]
+): Promise<StructuredAgentSessionAdoption> {
+  const source = input.resolveTranscriptSource?.()
+  const transcriptPath = source?.kind === 'matched' ? source.transcriptPath : undefined
+  // Resolve each account store once so lookup, hook path and re-admission agree despite environment changes.
+  const stores = new Map<AgentSessionAccountHome, string | null>()
+  const storeOf = (accountHome: AgentSessionAccountHome): string | null => {
+    if (!stores.has(accountHome)) {
+      stores.set(
+        accountHome,
+        input.transcriptImport.conversationStore({
+          accountHome,
+          launchEnv: input.launchEnv
+        })
+      )
+    }
+    return stores.get(accountHome) ?? null
+  }
+  let admitted: { accountHome: AgentSessionAccountHome; path: string } | null = null
+  if (transcriptPath) {
+    for (const accountHome of candidates) {
+      const store = storeOf(accountHome)
+      const path = store
+        ? await input.transcriptImport.admitTranscriptPath({ store, transcriptPath })
+        : null
+      if (path) {
+        admitted = { accountHome, path }
+        break
+      }
+    }
+  }
+  if (transcriptPath && !admitted) {
+    throw new Error('The conversation account is not available on this host.')
+  }
+  return await resolveStructuredAgentSessionAdoption({
+    providerSessionId: input.providerSessionId,
+    // A source that proves the CLI saved this conversation never reads as "not saved yet".
+    ...(source?.kind === 'absent' || (source?.kind === 'matched' && source.conversed)
+      ? { exhaustionReason: 'transcriptUnreadable' as const }
+      : {}),
+    candidateAccountHomes: admitted ? [admitted.accountHome] : candidates,
+    resolveTranscript: async (args) => {
+      const exact = admitted?.path
+      if (exact) {
+        try {
+          if ((await stat(exact)).isFile()) {
+            return exact
+          }
+        } catch (error) {
+          if (
+            !(
+              error instanceof Error &&
+              'code' in error &&
+              (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+            )
+          ) {
+            throw error
+          }
+        }
+      }
+      const store = storeOf(args.accountHome)
+      if (!store) {
+        return null
+      }
+      const found = await input.transcriptImport.findTranscript({
+        providerSessionId: args.providerSessionId,
+        store,
+        launchEnv: args.launchEnv,
+        workspaceCwd: args.workspaceCwd,
+        strictErrors: true
+      })
+      if (!found) {
+        return null
+      }
+      const path = await input.transcriptImport.admitTranscriptPath({
+        store,
+        transcriptPath: found
+      })
+      if (!path) {
+        throw new Error('The conversation path is outside its account storage.')
+      }
+      return path
+    },
+    launchEnv: input.launchEnv,
+    workspaceCwd: input.workspaceCwd
+  })
 }
 
 /** Only adopt seeds the handle chain; ensure already passes providerHandle without adopting. */
