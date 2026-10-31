@@ -34,6 +34,7 @@ export type KeybindingActionId =
   | 'app.settings'
   | 'app.forceReload'
   | 'workspace.create'
+  | 'chat.quickStart'
   | 'workspace.rename'
   | 'workspace.delete'
   | 'workspace.openBoard'

@@ -13,6 +13,17 @@ import type { KeybindingActionId } from './keybindings'
 import { ALL_TUI_AGENTS } from './tui-agent-display-names'
 
 describe('keybindings', () => {
+  it('offers quick chat by default only on macOS and allows rebinding elsewhere', () => {
+    expect(getEffectiveKeybindingsForAction('chat.quickStart', 'darwin')).toEqual(['Mod+Alt+N'])
+    expect(getEffectiveKeybindingsForAction('chat.quickStart', 'win32')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('chat.quickStart', 'linux')).toEqual([])
+    expect(
+      getEffectiveKeybindingsForAction('chat.quickStart', 'linux', {
+        'chat.quickStart': ['Mod+Shift+N']
+      })
+    ).toEqual(['Mod+Shift+N'])
+  })
+
   it.each([
     ['darwin', 'Mod+Alt+X'],
     ['linux', 'Mod+Shift+Y'],

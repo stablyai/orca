@@ -62,7 +62,7 @@ const toastMessage = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({
   toast: { error: toastError, message: toastMessage, success: vi.fn() }
 }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchMock }))
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTabWithOutcome: launchMock }))
 vi.mock('@/components/sidebar/useWorktreeAgentRows', () => ({ useWorktreeAgentRows: () => [] }))
 vi.mock('@/runtime/structured-chat-name-observation', () => ({
   useStructuredChatTabNames: () => new Map(),
@@ -481,6 +481,34 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     resetStructuredAgentLaunchRegistryForTests()
     // A host without chats lists every agent as a terminal.
     setLocalRuntimeCapabilitiesForTests([])
+  })
+
+  it('does not repeat a failure already reported by the launch path', () => {
+    launchMock.mockReturnValue({ refused: { delivered: false, failureNotified: true } })
+    toastError.mockClear()
+    const { result } = renderHook(() =>
+      useTabAgentMenuLaunch({
+        worktreeId: WORKTREE_ID,
+        groupId: 'group-1',
+        onFocusTerminal: vi.fn()
+      })
+    )
+    act(() => result.current({ kind: 'chat', agent: 'codex', executionHostId: 'local' }))
+    expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('reports a launch that returns no surface exactly once', () => {
+    launchMock.mockReturnValue(null)
+    toastError.mockClear()
+    const { result } = renderHook(() =>
+      useTabAgentMenuLaunch({
+        worktreeId: WORKTREE_ID,
+        groupId: 'group-1',
+        onFocusTerminal: vi.fn()
+      })
+    )
+    act(() => result.current({ kind: 'chat', agent: 'codex', executionHostId: 'local' }))
+    expect(toastError).toHaveBeenCalledTimes(1)
   })
 
   it('keeps every agent launchable while chats start, fail or retry', () => {

@@ -22778,5 +22778,12 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 发行版 {{distro}} 已停止，因此 Orca 没有启动此终端。请启动该发行版后重试。",
     "terminalUnverifiable": "Orca 无法确认 WSL 发行版 {{distro}} 是否正在运行，因此没有启动此终端。请启动该发行版后重试。"
+  },
+  "quickChat": {
+    "newChat": "新建聊天",
+    "startChatting": "开始聊天",
+    "projectName": "聊天",
+    "shortcutTitle": "不使用项目新建聊天",
+    "failed": "无法开始聊天。请检查聊天文件夹，然后重试。"
   }
 }

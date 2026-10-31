@@ -52,6 +52,19 @@ describe('addLocalRepoFromPath through a symlink alias', () => {
     expect(repos).toHaveLength(1)
   })
 
+  it('registers one folder when two quick chat requests add it concurrently', async () => {
+    const path = join(root, 'chats')
+    await mkdir(path)
+    const repos: Repo[] = []
+    const store = createStore(repos)
+    const [first, second] = await Promise.all([
+      addLocalRepoFromPath(store, path, 'folder', 'Chats'),
+      addLocalRepoFromPath(store, path, 'folder', 'Chats')
+    ])
+    expect(repos).toHaveLength(1)
+    expect('repo' in first && 'repo' in second && first.repo.id === second.repo.id).toBe(true)
+  })
+
   it('keeps two different folders as two workspaces', async () => {
     await mkdir(join(root, 'a'))
     await mkdir(join(root, 'b'))

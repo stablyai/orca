@@ -210,6 +210,9 @@ export function useGlobalKeybindings(args: {
       }
 
       const handlers = createAppCommandHandlers(state, input, context)
+      if (matchShortcut('chat.quickStart') && handlers.get('chat.quickStart')?.()) {
+        return
+      }
       if (matchShortcut('workspace.delete') && handlers.get('workspace.delete')?.()) {
         return
       }

@@ -23467,5 +23467,12 @@
   "wslDistroHold": {
     "terminalStopped": "La distribution WSL {{distro}} est arrêtée, donc Orca n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez.",
     "terminalUnverifiable": "Orca n'a pas pu vérifier si la distribution WSL {{distro}} est en cours d'exécution, donc il n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez."
+  },
+  "quickChat": {
+    "newChat": "Nouveau chat",
+    "startChatting": "Commencer à discuter",
+    "projectName": "Discussions",
+    "shortcutTitle": "Nouveau chat sans projet",
+    "failed": "Impossible de démarrer un chat. Vérifiez le dossier Discussions et réessayez."
   }
 }
