@@ -137,7 +137,7 @@ describe('a structured worker-start that fails after the session exists', () => 
     const { runtime, db, retireStructuredAgentSessionTabFromSnapshot } = fakes()
 
     const receipt = await startLocalWorker({
-      params: { from: 'term_c', timeoutMs: 1_000, agent: 'claude' } as never,
+      params: { from: 'term_c', timeoutMs: 1_000, agent: 'claude' },
       mode: {
         mode: 'structured',
         preferred: 'structured',
@@ -149,14 +149,30 @@ describe('a structured worker-start that fails after the session exists', () => 
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start reads only the bound Run's id.
       bindRun: () => ({ id: 'run_1' }) as never,
       taskDeps: undefined,
-      existingTask: { id: 't1', spec: 'do the thing' } as never,
+      existingTask: {
+        id: 't1',
+        run_id: 'run_1',
+        parent_id: null,
+        created_by_terminal_handle: null,
+        created_by_pane_key: null,
+        created_by_process_incarnation: null,
+        created_by_run_generation: null,
+        task_title: null,
+        display_name: null,
+        spec: 'do the thing',
+        status: 'pending',
+        deps: '[]',
+        result: null,
+        created_at: '2026-01-01T00:00:00.000Z',
+        completed_at: null
+      },
       coordinator: null,
       orchestrationMutation: undefined
     })
 
     expect(receipt).toMatchObject({ state: 'failed', stage: 'dispatch_input' })
     expect(host.closed).toHaveLength(1)
-    const sessionId = host.closed[0] as string
+    const sessionId = host.closed[0]
     // Hide durable restore before retiring live state, or the dead tab returns next launch.
     expect(host.visibility).toContainEqual([sessionId, false])
     expect(retireStructuredAgentSessionTabFromSnapshot).toHaveBeenCalledWith(
