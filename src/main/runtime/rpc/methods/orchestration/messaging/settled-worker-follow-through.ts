@@ -51,7 +51,7 @@ export function continueUnreadWorkerMail(
 // The Task only points at the mail, which the follow-up's mailbox holds however much there is.
 const FOLLOW_UP_TASK = {
   subject: 'New messages',
-  body: 'You have new orchestration messages. Run `orchestration check` until it returns none, then continue.'
+  body: 'You have new orchestration messages. Run the orchestration `check` command shown above until it returns none, then continue.'
 }
 
 async function continueUnreadMail(
@@ -63,6 +63,29 @@ async function continueUnreadMail(
   if (!first) {
     clearFollowUpMail(db, dispatchId)
     return
+  }
+  const worker = db.getWorkerDispatch(dispatchId)
+  if (worker?.state === 'stopped') {
+    // Orca does not restart a stopped worker on its own; the next send carries its mail.
+    return
+  }
+  if (
+    worker?.state === 'starting' &&
+    worker.runtime_epoch &&
+    worker.runtime_epoch !== runtime.getRuntimeId()
+  ) {
+    if (worker.agent_terminal_handle) {
+      // Its agent may still run, so only the coordinator can tell whether to retry.
+      noticeUnreadMailNotContinued(
+        runtime,
+        db,
+        dispatchId,
+        'Orca restarted while its follow-up was starting'
+      )
+      return
+    }
+    // Interrupted before it placed an agent, so nothing runs and the start can be retried.
+    db.failWorkerStart(dispatchId, worker.stage, 'Orca restarted before this follow-up started.')
   }
   if (custodyOf(db, dispatchId) === 'reported' && !hasNewUnreadFollowUpMail(db, dispatchId)) {
     // Kept marked, so the coordinator's next send carries it; another short Task would only repeat this one.
