@@ -54,7 +54,7 @@ function senderIndex(state: AppState) {
     cache.inputs = inputs
     return cache
   }
-  const { visible, chatTabs } = assembleAgentSenderAliases(parts)
+  const { windowPane, chatTabs } = assembleAgentSenderAliases(parts)
   const unique = <T>(map: Map<string, T | null>, id: string, value: T) => {
     if (!map.has(id)) {
       map.set(id, value)
@@ -76,7 +76,7 @@ function senderIndex(state: AppState) {
     }
   }
   const locate = (host: string, row: AgentSenderAssociation): LocatedAgentSender | null => {
-    const actual = visible.get(key(host, row.paneKey))
+    const actual = windowPane(host, row.paneKey)
     if (actual === null) {
       return null
     }

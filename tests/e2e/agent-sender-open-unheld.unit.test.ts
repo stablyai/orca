@@ -286,3 +286,68 @@ it('asks a paired host for the pane by its own coordinates, not this window’s 
   ])
   expect(mocks.focusRuntime).toHaveBeenCalledWith(reopened, 'paired')
 })
+
+it('shows and opens a paired host’s pane under the window’s whole-tab mirror of it', async () => {
+  const reopened = host.open('tab-2', 'workspace')
+  // This window mirrors the host's whole tab-2, keeping its leaf ids, as its status rows name it.
+  const mirrored = toWebTerminalSurfaceTabId('tab-2')
+  const mirroredPane = `${mirrored}:${LEAF}`
+  useAppStore.setState({
+    agentStatusByPaneKey: {
+      [mirroredPane]: {
+        ...status(2),
+        paneKey: mirroredPane,
+        terminalHandle: reopened,
+        connectionId: 'paired'
+      }
+    },
+    tabsByWorktree: {
+      workspace: [
+        makeTab({
+          id: mirrored,
+          worktreeId: 'workspace',
+          ptyId: toRemoteRuntimePtyId(reopened, 'paired')
+        })
+      ]
+    }
+  })
+  publish('runtime:paired', [
+    { identity: 'dispatch:first', paneKey: pane('tab-2'), worktreeId: 'workspace' }
+  ])
+  const sender = worker('term_before')
+  const resolved = resolveAgentMessageSenderTarget(
+    useAppStore.getState(),
+    sender,
+    'workspace',
+    PAIRED,
+    'first'
+  )
+  expect(resolved.kind === 'located' && resolved.location).toMatchObject({
+    paneKey: mirroredPane,
+    hostPaneKey: pane('tab-2')
+  })
+  expect(agentMessageSenderOpens(resolved, sender)).toBe(true)
+  const avatar = renderHook(() => useAgentMessageSenderView(sender, 'workspace', PAIRED, 'first'))
+  expect(avatar.result.current.dot).toBe('working')
+  await open(sender, PAIRED)
+  expect(calls).toEqual([])
+  expect(useAppStore.getState().activeTabId).toBe(mirrored)
+
+  // Another bucket mirrors that pane on its own: this window names it two ways, so the card
+  // locates neither, as with two per-pane mirrors.
+  useAppStore.setState({
+    tabsByWorktree: {
+      ...useAppStore.getState().tabsByWorktree,
+      other: [
+        makeTab({
+          id: toWebTerminalSurfaceTabId(`tab-2::${LEAF}`),
+          worktreeId: 'other',
+          ptyId: toRemoteRuntimePtyId(reopened, 'paired')
+        })
+      ]
+    }
+  })
+  expect(
+    resolveAgentMessageSenderTarget(useAppStore.getState(), sender, 'workspace', PAIRED, 'first')
+  ).toEqual({ kind: 'gone', sender: 'terminal' })
+})

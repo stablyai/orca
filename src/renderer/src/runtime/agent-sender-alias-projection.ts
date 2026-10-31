@@ -8,9 +8,10 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../shared/structured-agent-session-projection'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 
 const key = (host: string, address: string) => JSON.stringify([host, address])
 
@@ -107,6 +108,10 @@ export function agentSenderAliasParts(state: AppState): readonly AliasPart[] {
           const [hostTab, leafId] = toHostSessionTabId(tab.id).split('::')
           if (host && hostTab && leafId) {
             visible.push([key(host, `${hostTab}:${leafId}`), `${tab.id}:${leafId}`])
+          } else if (host && hostTab && isWebTerminalSurfaceTabId(tab.id)) {
+            // A whole-tab mirror keeps the host's leaf ids, so it aliases the host tab itself; a
+            // tab id has no ':', so this never collides with a pane's alias.
+            visible.push([key(host, hostTab), tab.id])
           }
         }
         return { visible, chats: [] }
@@ -128,5 +133,17 @@ export function assembleAgentSenderAliases(parts: readonly AliasPart[]) {
       chatTabs.set(id, tab)
     }
   }
-  return { visible, chatTabs }
+  /** This window's name for a host's pane: a per-pane alias or its whole-tab mirror's; null when
+   *  this window names it two ways, undefined when it names it none. */
+  const windowPane = (host: string, hostPane: string): string | null | undefined => {
+    const pane = visible.get(key(host, hostPane))
+    const parsed = parsePaneKey(hostPane)
+    const tab = parsed ? visible.get(key(host, parsed.tabId)) : undefined
+    const mirrored = tab && parsed ? `${tab}:${parsed.leafId}` : tab
+    if (mirrored === undefined) {
+      return pane
+    }
+    return pane === undefined || pane === mirrored ? mirrored : null
+  }
+  return { windowPane, chatTabs }
 }
