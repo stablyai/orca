@@ -78,6 +78,8 @@ export type TerminalDocumentState = {
   afterDrainCallbacks: (() => void)[]
   ready: boolean
   smoothScrollOffsetY: number
+  /** Whether the renderer draws fractional scroll travel as a pixel offset. */
+  pixelScrollActive: boolean
   pendingNormalScrollDeltaY: number
   normalScrollFrameId: number | null
   selMenu: HTMLElement | null
@@ -203,6 +205,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     afterDrainCallbacks: [],
     ready: false,
     smoothScrollOffsetY: 0,
+    pixelScrollActive: false,
     pendingNormalScrollDeltaY: 0,
     normalScrollFrameId: null,
     selMenu: null,
@@ -263,6 +266,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
       accumDelta: 0,
       momentumId: null,
       isPinching: false,
+      scrollDragActive: false,
       pinchDist: 0,
       pinchScale: 0,
       pinchSurfX: 0,

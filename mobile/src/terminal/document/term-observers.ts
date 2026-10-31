@@ -1,3 +1,5 @@
+import { stopSurfaceTouchGestures } from './surface-touch-gestures'
+import { resetSmoothScrollOffset } from './normal-buffer-smooth-scroll'
 import { afterWritesDrained, disposeTermObservers } from './write-queue'
 import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import { updateScrollIndicator } from './viewport-transform'
@@ -22,10 +24,30 @@ export function attachTermObservers(scope: TerminalDocumentScope) {
   try {
     scope.termObserverDisposables.push(
       scope.term.onScroll!(function () {
+        // Why: output that follows the live bottom lands on whole rows; no row below it to show.
+        if (
+          scope.pixelScrollActive &&
+          scope.term &&
+          scope.term.buffer.active.viewportY >= scope.term.buffer.active.baseY
+        ) {
+          scope.smoothScrollOffsetY = 0
+          scope.term.setViewportPixelOffset?.(0)
+        }
         updateScrollIndicator(scope, false)
         paintBottomRowBackdrop(scope)
       })
     )
+  } catch {}
+  // An alternate-screen app owns whole rows; the normal buffer's fraction and coast end here.
+  try {
+    if (scope.term.buffer.onBufferChange) {
+      scope.termObserverDisposables.push(
+        scope.term.buffer.onBufferChange(function () {
+          stopSurfaceTouchGestures(scope)
+          resetSmoothScrollOffset(scope)
+        })
+      )
+    }
   } catch {}
   // Mirror modes after every parsed write so native paste/alternate-screen state needs no round trip.
   try {
