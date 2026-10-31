@@ -13,7 +13,6 @@ type WorkspaceEmojiPickerButtonProps = {
   inputRef: RefObject<HTMLInputElement | null>
   onOpenChange?: (open: boolean) => void
   onValueChange: (value: string) => void
-  /** Defaults to the field's enclosing dialog so the picker's search box can take focus. */
   portalContainer?: HTMLElement | null
   value: string
 }
@@ -28,7 +27,6 @@ export function WorkspaceEmojiPickerButton({
   value
 }: WorkspaceEmojiPickerButtonProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const [dialogContainer, setDialogContainer] = useState<HTMLElement | null>(null)
   // Why: the input loses focus while the picker is open, so remember where to insert.
   const selectionRef = useRef<{ start: number; end: number } | null>(null)
   const pendingCursorRef = useRef<number | null>(null)
@@ -43,10 +41,6 @@ export function WorkspaceEmojiPickerButton({
           }
         : null
       pendingCursorRef.current = null
-      if (portalContainer === undefined) {
-        // Why: a body-portaled picker sits outside a modal dialog's focus trap and can't be typed in.
-        setDialogContainer(input?.closest<HTMLElement>('[role="dialog"]') ?? null)
-      }
     }
     setOpen(nextOpen)
     onOpenChange?.(nextOpen)
@@ -93,7 +87,7 @@ export function WorkspaceEmojiPickerButton({
       <PopoverContent
         align="end"
         side="bottom"
-        portalContainer={portalContainer === undefined ? dialogContainer : portalContainer}
+        portalContainer={portalContainer}
         onCloseAutoFocus={(event) => {
           const cursor = pendingCursorRef.current
           if (cursor === null) {
