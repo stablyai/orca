@@ -24,7 +24,12 @@ export type TerminalComposerDraft = {
 
 type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
 
-const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}\s*$/
+// The delimiter for every row BELOW the prompt: a bottom rule is never labelled, and a draft
+// row that happens to open with rule characters must stay draft text rather than end the draft.
+const COMPOSER_RULE_LINE = /^[\u2500\u2501-]{8,}\s*$/
+// Why: Claude Code writes a mode label into the composer's TOP rule (`──── ultracode ─`), so a
+// top frame is a rule that may carry text, as long as it ends in rule characters. Top frame only.
+const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}(?:\s*\S.*?\s*[\u2500\u2501-]+)?\s*$/
 const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[\u00B7\u2022]\s+\S.*$/i
 
 function composerContinuationRows(
@@ -40,7 +45,7 @@ function composerContinuationRows(
   let hasFollowingTyped = false
   for (let index = context.rowsBelow.length - 1; index >= 0; index -= 1) {
     const raw = context.rowsBelow[index] ?? ''
-    if (COMPOSER_FRAME_LINE.test(raw) || index === codexFooterIndex) {
+    if (COMPOSER_RULE_LINE.test(raw) || index === codexFooterIndex) {
       hasFollowingTyped = false
       continue
     }
@@ -51,7 +56,7 @@ function composerContinuationRows(
   }
   for (let index = 0; index < context.rowsBelow.length; index += 1) {
     const raw = context.rowsBelow[index] ?? ''
-    if (COMPOSER_FRAME_LINE.test(raw) || index === codexFooterIndex) {
+    if (COMPOSER_RULE_LINE.test(raw) || index === codexFooterIndex) {
       break
     }
     if (!raw.trim() && !hasTypedContinuationAfter[index]) {
@@ -90,7 +95,7 @@ function findCodexFooterIndex(context: TerminalCursorContext): number {
   // Why: Codex's separate status line keeps its hint row (`? for shortcuts`) directly below it.
   const status = last - 1
   if (
-    COMPOSER_FRAME_LINE.test(context.rowsBelow[last] ?? '') ||
+    COMPOSER_RULE_LINE.test(context.rowsBelow[last] ?? '') ||
     !(context.rowsBelow[status] ?? '').trim() ||
     !hasFooterGap(context, status)
   ) {
@@ -127,6 +132,20 @@ function isStockPlaceholder(
   return /^Try\s+["\u201C]/.test(text) || STOCK_PLACEHOLDERS.has(text)
 }
 
+// Why: the row above the prompt is the only evidence the `❯` branch has, and ordinary tool output
+// prints labelled rules too (`──────── build ─` over a shell prompt). A labelled rule therefore
+// only counts as the composer's top border when the closing border is below the prompt — the box
+// an agent draws, which a one-off section divider in a shell transcript does not have.
+function isComposerTopFrame(context: TerminalCursorContext, promptIndex: number): boolean {
+  const above = context.rows[promptIndex - 1] ?? ''
+  if (COMPOSER_RULE_LINE.test(above)) {
+    return true
+  }
+  return (
+    COMPOSER_FRAME_LINE.test(above) && context.rowsBelow.some((row) => COMPOSER_RULE_LINE.test(row))
+  )
+}
+
 function detectTerminalComposer(
   context: TerminalCursorContext | null | undefined
 ): TerminalComposerMatch | null {
@@ -148,7 +167,7 @@ function detectTerminalComposer(
     const matched = row.match(/^\s*([\u276F\u203A\u00BB])/)?.[1]
     const glyph = (['❯', '›', '»'] as const).find((candidate) => candidate === matched)
     if (glyph) {
-      if (glyph === '❯' && !COMPOSER_FRAME_LINE.test(context.rows[index - 1] ?? '')) {
+      if (glyph === '❯' && !isComposerTopFrame(context, index)) {
         return null
       }
       if (
