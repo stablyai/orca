@@ -22,7 +22,6 @@ import {
   hostedReviewCallerSettlement,
   hostedReviewBranchLookupArgs,
   isFreshHostedReview,
-  providerReadGenerationField,
   requestHostedReviewForBranch,
   isStaleMergedGitHubReviewForHead,
   hostedReviewRepoOwnerTarget,
@@ -243,10 +242,11 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   data: review,
                   fetchedAt: Date.now(),
                   linkedReviewHintKey: hintKey,
-                  ...providerReadGenerationField(
-                    readOutcome === 'provider' ? generation : undefined,
-                    state.hostedReviewCache[cacheKey]
-                  ),
+                  // Cache hits, fallbacks and older hosts' bare replies keep the newest one already seen.
+                  providerReadGeneration:
+                    readOutcome === 'provider'
+                      ? generation
+                      : state.hostedReviewCache[cacheKey]?.providerReadGeneration,
                   // Why: fallback PR hints come from this branch's PR cache; preserve that provenance separately from request identity.
                   ...(review?.provider === 'github' &&
                   options?.linkedGitHubPR == null &&

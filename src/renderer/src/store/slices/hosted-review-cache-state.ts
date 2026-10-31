@@ -271,15 +271,6 @@ export async function requestHostedReviewForBranch(
   )
 }
 
-/** Cache hits, fallbacks and older hosts' bare replies keep the newest provider-read generation already seen. */
-export function providerReadGenerationField(
-  providerReadGeneration: number | undefined,
-  previous: HostedReviewCacheEntry<HostedReviewInfo> | undefined
-): { providerReadGeneration?: number } {
-  const generation = providerReadGeneration ?? previous?.providerReadGeneration
-  return generation === undefined ? {} : { providerReadGeneration: generation }
-}
-
 export function hostedReviewCallerSettlement(
   readPreserved: () => HostedReviewCacheEntry<HostedReviewInfo> | undefined,
   options?: HostedReviewFetchOptions

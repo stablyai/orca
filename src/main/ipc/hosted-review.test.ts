@@ -55,7 +55,7 @@ vi.mock('../source-control/hosted-review', () => ({
   // Handlers read through this; keep asserting on the one mock.
   readHostedReviewForBranch: async (input: unknown) => ({
     review: await getHostedReviewForBranchMock(input),
-    fresh: false
+    readOutcome: 'cached'
   })
 }))
 

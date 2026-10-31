@@ -51,6 +51,8 @@ let provider: () => Promise<HostedReviewInfo | null>
 const lookup = vi.fn(() => provider())
 // An older paired server drops reportReadOutcome and answers with the bare review.
 let olderHost = false
+// The paired runtime's request timeout: the click gives up while its host lookup runs on.
+let clickTimesOut = false
 
 function cacheKey(): string {
   return getHostedReviewCacheKey(
@@ -151,12 +153,13 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-10-30T12:00:00Z'))
   olderHost = false
+  clickTimesOut = false
   lookup.mockClear()
   ;(window as unknown as { api: unknown }).api = {
     // The real host branch cache behind the IPC reply shape.
     hostedReview: {
       forBranch: async (args: HostedReviewForBranchArgs) => {
-        const read = await readHostedReviewBranchCache(
+        const pending = readHostedReviewBranchCache(
           {
             repoPath: repo.path,
             executionHostId: 'local',
@@ -166,6 +169,11 @@ beforeEach(() => {
           { headOid: null, force: args.force, userRefresh: args.userRefresh, active: true },
           lookup
         )
+        if (clickTimesOut && args.userRefresh) {
+          void pending.catch(() => {})
+          throw new Error('Request timed out')
+        }
+        const read = await pending
         return olderHost ? read.review : hostedReviewForBranchReply(read, args.reportReadOutcome)
       }
     }
@@ -235,6 +243,31 @@ describe('a failed Checks refresh clears only on a real provider read', () => {
     expect(lookup).toHaveBeenCalledTimes(3)
     const afterFirstFailure = panel.shown.slice(panel.shown.indexOf(FAILURE))
     expect(afterFirstFailure.every((message) => message === FAILURE)).toBe(true)
+  })
+
+  it('keeps the failure when a later poll joins the timed-out click’s still-running lookup', async () => {
+    provider = async () => openMR
+    await poll()
+    let finishClickLookup: (review: HostedReviewInfo) => void = () => {}
+    provider = () =>
+      new Promise((resolve) => {
+        finishClickLookup = resolve
+      })
+    clickTimesOut = true
+    const panel = renderPanel()
+    await act(async () => panel.result.current.handleRefresh())
+    expect(panel.result.current.manualRefreshError).toBe(FAILURE)
+    await act(async () => {
+      const polled = poll()
+      finishClickLookup(openMR)
+      await polled
+    })
+    expect(lookup).toHaveBeenCalledTimes(2)
+    expect(panel.result.current.manualRefreshError).toBe(FAILURE)
+    provider = async () => openMR
+    await act(async () => void (await poll()))
+    expect(lookup).toHaveBeenCalledTimes(3)
+    expect(panel.result.current.manualRefreshError).toBeNull()
   })
 
   it('keeps the failure on an older host’s bare answer until a click succeeds', async () => {

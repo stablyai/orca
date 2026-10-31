@@ -1,12 +1,15 @@
 import { githubRepoContext, withGitHubRepoExecution } from '../github/github-repository-identity'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import {
+  cachedHostedReviewOutcome,
+  type HostedReviewForBranchOutcome,
+  type HostedReviewInfo
+} from '../../shared/hosted-review'
 import { assertRemoteUrlReadable } from '../git/remote-url-probe'
 import { forgetGiteaPullRequestReads } from '../gitea/pull-request-read-forgetting'
 import { getForgeProviderForRepository, type ForgeProviderId } from './forge-provider'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import { readHostedReviewBranchCache } from './hosted-review-branch-cache'
-import type { HostedReviewBranchRead } from './hosted-review-inflight-lookups'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
@@ -56,7 +59,7 @@ export async function readHostedReviewForBranch(
     force?: boolean
     userRefresh?: boolean
   } & HostedReviewExecutionOptions
-): Promise<HostedReviewBranchRead> {
+): Promise<HostedReviewForBranchOutcome> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
   // Detached HEAD skips branch lookup but still permits exact provider ids.
   if (
@@ -68,7 +71,7 @@ export async function readHostedReviewForBranch(
     input.linkedAzureDevOpsPR == null &&
     input.linkedGiteaPR == null
   ) {
-    return { review: null, fresh: false }
+    return cachedHostedReviewOutcome(null)
   }
 
   const connectionId = hostedReviewSshConnectionId(input.executionHostId)

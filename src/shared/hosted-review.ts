@@ -77,7 +77,7 @@ export type HostedReviewForBranchArgs = {
   reportReadOutcome?: boolean
 }
 
-/** 'provider' only when this answer came from a provider read the host stored as current; cache hits and last-good fallbacks are 'cached'. */
+/** 'provider' only when this caller's own request started the provider read the host stored as current; cache hits, joined lookups and last-good fallbacks are 'cached'. */
 export type HostedReviewForBranchOutcome = {
   review: HostedReviewInfo | null
   readOutcome: 'provider' | 'cached'
@@ -85,21 +85,25 @@ export type HostedReviewForBranchOutcome = {
 
 export type HostedReviewForBranchReply = HostedReviewInfo | null | HostedReviewForBranchOutcome
 
+export function cachedHostedReviewOutcome(
+  review: HostedReviewInfo | null
+): HostedReviewForBranchOutcome {
+  return { review, readOutcome: 'cached' }
+}
+
 /** Callers that asked for it learn whether a provider read the host stored as current answered them. */
 export function hostedReviewForBranchReply(
-  read: { review: HostedReviewInfo | null; fresh: boolean },
+  read: HostedReviewForBranchOutcome,
   reportReadOutcome: boolean | undefined
 ): HostedReviewForBranchReply {
-  return reportReadOutcome === true
-    ? { review: read.review, readOutcome: read.fresh ? 'provider' : 'cached' }
-    : read.review
+  return reportReadOutcome === true ? read : read.review
 }
 
 /** An older host drops reportReadOutcome and answers bare; that answer proves nothing about the provider. */
 export function hostedReviewForBranchOutcome(
   reply: HostedReviewForBranchReply
 ): HostedReviewForBranchOutcome {
-  return reply !== null && 'readOutcome' in reply ? reply : { review: reply, readOutcome: 'cached' }
+  return reply !== null && 'readOutcome' in reply ? reply : cachedHostedReviewOutcome(reply)
 }
 
 export type HostedReviewSummary = {

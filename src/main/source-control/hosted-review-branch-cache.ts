@@ -1,5 +1,6 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type { HostedReviewForBranchOutcome, HostedReviewInfo } from '../../shared/hosted-review'
+import { cachedHostedReviewOutcome } from '../../shared/hosted-review'
 import {
   __resetHostedReviewActiveClaimsForTests,
   isActiveBranch,
@@ -21,7 +22,6 @@ import {
   retireInflightWithPrefix,
   retireInflightLookup,
   trackInflight,
-  type HostedReviewBranchRead,
   type InflightToken
 } from './hosted-review-inflight-lookups'
 import {
@@ -186,16 +186,16 @@ function startLookup(
   headOid: string | null,
   revisionScope: string,
   lookup: () => Promise<HostedReviewInfo | null>
-): Promise<HostedReviewBranchRead> {
+): Promise<HostedReviewForBranchOutcome> {
   const startedAt = Date.now()
   const generation = scopeGeneration(scope)
   const revision = scopeGeneration(revisionScope)
   const token: InflightToken = {}
   let timedOut = false
   let completed = false
-  let release: (read: HostedReviewBranchRead) => void = () => {}
+  let release: (read: HostedReviewForBranchOutcome) => void = () => {}
   let fail: (error: unknown) => void = () => {}
-  const promise = new Promise<HostedReviewBranchRead>((resolve, reject) => {
+  const promise = new Promise<HostedReviewForBranchOutcome>((resolve, reject) => {
     release = resolve
     fail = reject
   })
@@ -248,7 +248,7 @@ function startLookup(
       if (stored && !timedOut) {
         clearFailures(key)
       }
-      release({ review, fresh: stored && !answeredFromProviderCache })
+      release({ review, readOutcome: stored && !answeredFromProviderCache ? 'provider' : 'cached' })
     } catch (error) {
       // Deadline already counted failure; never count late rejection twice.
       if (timedOut) {
@@ -276,11 +276,9 @@ function startLookup(
 }
 
 export async function withHostedReviewBranchCache(
-  identity: HostedReviewBranchCacheIdentity,
-  options: HostedReviewBranchCacheOptions,
-  lookup: () => Promise<HostedReviewInfo | null>
+  ...args: Parameters<typeof readHostedReviewBranchCache>
 ): Promise<HostedReviewInfo | null> {
-  return (await readHostedReviewBranchCache(identity, options, lookup)).review
+  return (await readHostedReviewBranchCache(...args)).review
 }
 
 /** Share fresh answers/in-flight lookups across clients and back off failed branches. */
@@ -288,7 +286,7 @@ export async function readHostedReviewBranchCache(
   identity: HostedReviewBranchCacheIdentity,
   options: HostedReviewBranchCacheOptions,
   lookup: () => Promise<HostedReviewInfo | null>
-): Promise<HostedReviewBranchRead> {
+): Promise<HostedReviewForBranchOutcome> {
   const key = hostedReviewBranchCacheKey(identity)
   const headOid = options.headOid
   // Sweep wall-clock deadlines before joining so suspended timers cannot pin a branch after sleep.
@@ -301,7 +299,7 @@ export async function readHostedReviewBranchCache(
 
   const cached = entries.get(key)
   if (!options.userRefresh && !options.force && cached && isFresh(cached, headOid, active)) {
-    return { review: cached.review, fresh: false }
+    return cachedHostedReviewOutcome(cached.review)
   }
 
   // Admission is keyed independently of revision; a refused click cannot retire an admitted owner.
@@ -315,26 +313,27 @@ export async function readHostedReviewBranchCache(
     retireInflightLookup(key)
   }
 
-  const settleForCaller = async (promise: Promise<HostedReviewBranchRead>) => {
+  const settleForCaller = async (promise: Promise<HostedReviewForBranchOutcome>) => {
     try {
       return await promise
     } catch (error) {
       const stale = entries.get(key)
       if (!options.userRefresh && stale) {
-        return { review: stale.review, fresh: false }
+        return cachedHostedReviewOutcome(stale.review)
       }
       throw error
     }
   }
   const pending = getInflightLookup(key)
   if (pending) {
-    return settleForCaller(pending.promise)
+    // The owner began before this caller asked, so its answer can't prove a read after this caller's failure.
+    return settleForCaller(pending.promise.then(({ review }) => cachedHostedReviewOutcome(review)))
   }
 
   const refusal = options.userRefresh ? null : lookupUnavailableReason(key)
   if (refusal !== null) {
     if (cached) {
-      return { review: cached.review, fresh: false }
+      return cachedHostedReviewOutcome(cached.review)
     }
     throw new Error(refusal)
   }

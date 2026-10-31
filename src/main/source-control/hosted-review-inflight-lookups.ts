@@ -1,4 +1,4 @@
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type { HostedReviewForBranchOutcome } from '../../shared/hosted-review'
 import {
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
   MAX_INFLIGHT_LOOKUPS
@@ -9,14 +9,11 @@ declare const inflightTokenBrand: unique symbol
 /** Identity token for one lookup; only ever compared by reference. */
 export type InflightToken = { readonly [inflightTokenBrand]?: never }
 
-/** What one caller got; `fresh` only when it waited on a provider read the host stored as current. */
-export type HostedReviewBranchRead = { review: HostedReviewInfo | null; fresh: boolean }
-
 export type InflightRecord = {
   /** Identity, so a detached lookup can only ever clear its own entry. */
   token: InflightToken
   startedAt: number
-  promise: Promise<HostedReviewBranchRead>
+  promise: Promise<HostedReviewForBranchOutcome>
   /** Releases the callers and unpins the branch; idempotent. */
   expire: () => void
 }
@@ -49,10 +46,9 @@ export function retireInflightLookup(key: string): void {
 
 /** Retire matching owners without failing their callers. */
 export function retireInflightWithPrefix(prefix: string): void {
-  for (const [key, record] of inflight) {
+  for (const key of inflight.keys()) {
     if (key.startsWith(prefix)) {
-      retired.set(record.token, record)
-      inflight.delete(key)
+      retireInflightLookup(key)
     }
   }
 }
