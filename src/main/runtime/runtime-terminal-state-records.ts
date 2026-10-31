@@ -122,8 +122,14 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   titleUpdatedAt: number | null
   /** Wall clock for the recorded title; absent on older or unobserved records. */
   titleObservedAtEpochMs?: number | null
-  /** The name a rename gave this terminal: display only, never title evidence (#20626). */
+  /** Pending rename. Display only, never title evidence (#20626).
+   *  A string outranks OSC until the snapshot echoes it or a later desktop title replaces manualTitleBaseline.
+   *  null is an explicit clear. Absent means no pending rename. */
   manualTitle?: string | null
+  /** Snapshot custom title at the moment `manualTitle` was set. Empty means the
+   *  snapshot had none, which is what a split leaf publishes. Absent means the
+   *  tab was not in a snapshot yet. */
+  manualTitleBaseline?: string
   lastOutputAt: number | null
   /** When main began receiving a stream that had printed nothing yet; silence since then is measured quiet. */
   outputObservedSince?: number | null
