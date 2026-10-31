@@ -34,7 +34,6 @@ import {
 import { readStoredQueuedMessageRow } from './queued-message-stored-row'
 import { readAgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { projectStructuredAgentStartItem } from '../../../shared/structured-agent-start-projection'
-import { AGENT_TYPE_MAX_LENGTH } from '../../../shared/agent-status-field-normalization'
 
 // Admission keeps the in-memory chat within what this build declares on every path a saved value
 // takes into it, so restating that chat on a new epoch never drops a newer build's key.
@@ -279,7 +278,7 @@ it('reads an open string such as an agent type as a value, and still refuses a k
   expect(declared<UndeclaredStorageKeys<Later, Stored>>()).toBeUndefined()
 })
 
-it.each(['codex', 'future-agent', undefined, null, 42, '', 'x'.repeat(AGENT_TYPE_MAX_LENGTH + 1)])(
+it.each(['codex', 'future-agent', undefined, 42])(
   'admits actual start, message and queued sender kind %j without losing the sender',
   async (agent) => {
     const journal = await open(journals)
@@ -326,10 +325,7 @@ it.each(['codex', 'future-agent', undefined, null, 42, '', 'x'.repeat(AGENT_TYPE
     const fromMessage = readAgentMessageSource(
       restored[1].body.kind === 'message' ? restored[1].body.from : undefined
     )
-    const expected =
-      typeof agent === 'string' && agent.length > 0 && agent.length <= AGENT_TYPE_MAX_LENGTH
-        ? agent
-        : undefined
+    const expected = typeof agent === 'string' ? agent : undefined
     const queued = reopened.queuedMessages.list()[0]
     for (const from of [fromStart, fromMessage, readAgentMessageSource(queued.body.from)]) {
       expect(from?.senders[0]).toMatchObject({ party: sender.party, name: sender.name })

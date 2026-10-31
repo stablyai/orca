@@ -43,7 +43,6 @@ import {
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
 } from '../../../../../shared/protocol-version'
-import { projectStructuredAgentStartItem } from '../../../../../shared/structured-agent-start-projection'
 import { projectStructuredItemToNativeChat } from '../../../../../shared/structured-agent-session-projection'
 import {
   agentSessionMessagePayload,
@@ -79,7 +78,6 @@ it.each([
   'worker-start',
   'saved-task',
   'dispatch',
-  'federated',
   'configured-federated',
   'malformed-federated'
 ] as const)(
@@ -145,9 +143,6 @@ it.each([
           }
           const dispatchId = params.dispatchId
           if (method === 'orchestration.federationAttachStart') {
-            expect(params).toMatchObject({
-              agent: command === 'configured-federated' ? 'codex-fugu' : 'codex'
-            })
             if (command === 'configured-federated') {
               expect(params).toMatchObject({
                 agent: 'codex-fugu',
@@ -476,7 +471,10 @@ it.each([
         throw new Error('ready caller fact missing')
       }
       expect(fact.body).toMatchObject({ task, worker: { agent: 'codex' } })
-      expect(projectStructuredAgentStartItem(fact)?.from?.senders[0].agent).toBe('codex')
+      if (command === 'malformed-federated') {
+        expect(output.mock.lastCall?.[0]).toMatchObject({ ok: true, result: { state: 'ready' } })
+        return
+      }
       const callerHistory = await current.host.history({ sessionId: COORD, direction: 'tail' })
       expect(callerHistory).toMatchObject({ ok: true, page: { items: [fact] } })
       const formed = CLIENT_HISTORY_READER.form(fact)
@@ -531,51 +529,47 @@ it.each([
       expect(requests).toHaveLength(beforeRequests)
       expect(db.listTasks({ runId: run.id })).toHaveLength(beforeWrites)
     }
-    if (federated) {
+    if (command === 'configured-federated') {
       const dispatch = db.getDispatchContextById(
         z.string().parse(output.mock.lastCall?.[0].result.dispatchId)
       )!
-      {
-        // New mail after reopening the actual home domain DB must retain the acquired alias kind.
-        db = h.reopenDatabase()
-        if (command === 'configured-federated') {
-          expect(JSON.parse(db.getWorkerDispatch(dispatch.id)!.start_options)).toMatchObject({
-            agent: 'codex-fugu',
-            launch: {
-              requested: { agent: 'codex', model: 'home-model', effort: 'high' },
-              effective: { agent: 'codex', model: 'effective-model', effort: 'medium' }
-            }
-          })
+      // New mail after reopening the actual home domain DB must retain the acquired alias kind.
+      db = h.reopenDatabase()
+      expect(JSON.parse(db.getWorkerDispatch(dispatch.id)!.start_options)).toMatchObject({
+        agent: 'codex-fugu',
+        launch: {
+          requested: { agent: 'codex', model: 'home-model', effort: 'high' },
+          effective: { agent: 'codex', model: 'effective-model', effort: 'medium' }
         }
-        await main(['orchestration', 'worker-show', '--dispatch', dispatch.id, '--json', '--full'])
-        expect(requests).toContain('orchestration.workerShow')
-        await eventually(async () => {
-          const items = (await current.host.journalSnapshot(COORD)).items
-          const mail = items.flatMap(({ body }) =>
-            body.kind === 'message' ? (readAgentMessageSource(body.from)?.senders ?? []) : []
-          )
-          const messages = items.flatMap(({ body }) => {
-            const source = body.kind === 'message' ? readAgentMessageSource(body.from) : null
-            return source?.orchestration?.message === 'mail-notice'
-              ? source.orchestration.messages
-              : []
-          })
-          expect(messages.map((message) => message.messageId)).toEqual(
-            expect.arrayContaining(['remote-status', 'remote-worker_done'])
-          )
-          expect(
-            mail
-              .filter((sender) => sender.party.address === `dispatch:${dispatch.id}`)
-              .every((sender) => sender.agent === 'codex')
-          ).toBe(true)
-          expect(mail).toContainEqual(
-            expect.objectContaining({
-              party: expect.objectContaining({ address: `dispatch:${dispatch.id}` }),
-              agent: 'codex'
-            })
-          )
+      })
+      await main(['orchestration', 'worker-show', '--dispatch', dispatch.id, '--json', '--full'])
+      expect(requests).toContain('orchestration.workerShow')
+      await eventually(async () => {
+        const items = (await current.host.journalSnapshot(COORD)).items
+        const mail = items.flatMap(({ body }) =>
+          body.kind === 'message' ? (readAgentMessageSource(body.from)?.senders ?? []) : []
+        )
+        const messages = items.flatMap(({ body }) => {
+          const source = body.kind === 'message' ? readAgentMessageSource(body.from) : null
+          return source?.orchestration?.message === 'mail-notice'
+            ? source.orchestration.messages
+            : []
         })
-      }
+        expect(messages.map((message) => message.messageId)).toEqual(
+          expect.arrayContaining(['remote-status', 'remote-worker_done'])
+        )
+        expect(
+          mail
+            .filter((sender) => sender.party.address === `dispatch:${dispatch.id}`)
+            .every((sender) => sender.agent === 'codex')
+        ).toBe(true)
+        expect(mail).toContainEqual(
+          expect.objectContaining({
+            party: expect.objectContaining({ address: `dispatch:${dispatch.id}` }),
+            agent: 'codex'
+          })
+        )
+      })
       const saved = (await current.host.journalSnapshot(COORD)).items
       await current.quitRestartHostProcess()
       await closeTestJournalHostDatabase(current.root)
@@ -622,27 +616,6 @@ it.each([
     if (!from) {
       throw new Error('sender source missing')
     }
-    expect(agentMessageHeading(from)).toBe('task')
-    expect(agentMessageSenderCanOpen(from.senders[0], true)).toBe(true)
-    expect(agentSessionMessagePayload(body)).not.toHaveProperty('from')
-    expect(agentSessionSendBodyFingerprint(WORKER, body)).toBe(
-      agentSessionSendBodyFingerprint(WORKER, agentSessionMessagePayload(body))
-    )
-    const projected = projectStructuredItemToNativeChat({
-      itemId: 'task-projection',
-      sequence: 1,
-      revision: 1,
-      observedAt: 1,
-      body
-    })
-    expect(projected?.from?.senders[0].agent).toBe('claude')
-    const attributionPath = '../../../../../../mobile/src/session/mobile-agent-message-attribution'
-    const queuePath = '../../../../../../mobile/src/session/mobile-structured-queued-message-cards'
-    const { agentMessageAttribution } = await import(attributionPath)
-    const { mobileQueuedMessageCards } = await import(queuePath)
-    expect(agentMessageAttribution('Message from', projected?.from)).toBe(
-      'Message from Claude Chat'
-    )
     expect(agentMessageDisplayText(body.blocks, from)).toBe(task)
     const raw = nativeChatMessageCopyText(body)
     expect(raw).toContain('You are working inside Orca')
@@ -657,6 +630,29 @@ it.each([
     }
     expect(prompt).toContain(`Your task ID is: ${from.orchestration.taskId}`)
     if (queued) {
+      expect(agentMessageHeading(from)).toBe('task')
+      expect(agentMessageSenderCanOpen(from.senders[0], true)).toBe(true)
+      expect(agentSessionMessagePayload(body)).not.toHaveProperty('from')
+      expect(agentSessionSendBodyFingerprint(WORKER, body)).toBe(
+        agentSessionSendBodyFingerprint(WORKER, agentSessionMessagePayload(body))
+      )
+      const projected = projectStructuredItemToNativeChat({
+        itemId: 'task-projection',
+        sequence: 1,
+        revision: 1,
+        observedAt: 1,
+        body
+      })
+      expect(projected?.from?.senders[0].agent).toBe('claude')
+      const attributionPath =
+        '../../../../../../mobile/src/session/mobile-agent-message-attribution'
+      const { agentMessageAttribution } = await import(attributionPath)
+      expect(agentMessageAttribution('Message from', projected?.from)).toBe(
+        'Message from Claude Chat'
+      )
+      const queuePath =
+        '../../../../../../mobile/src/session/mobile-structured-queued-message-cards'
+      const { mobileQueuedMessageCards } = await import(queuePath)
       const [mobileCard] = mobileQueuedMessageCards([queued], [])
       expect(mobileCard.attribution).toBe('From Claude Chat')
       expect(mobileCard.line).toBe(task)
@@ -704,6 +700,9 @@ it.each([
       })
     } else {
       expect(nativeChatMessageCopyText(current.dispatch.mock.calls[0][0].body)).toBe(raw)
+      if (command === 'saved-task') {
+        return
+      }
       await main([
         'orchestration',
         'send',

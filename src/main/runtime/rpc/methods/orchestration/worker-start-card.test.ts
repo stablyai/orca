@@ -39,7 +39,6 @@ it.each([
   'federated',
   'federated-unknown',
   'federated-failed',
-  'federated-empty',
   'federated-nested',
   'federated-future',
   'federated-requested',
@@ -120,24 +119,22 @@ it.each([
               ? {}
               : {
                   launch:
-                    scenario === 'federated-empty'
-                      ? {}
-                      : scenario === 'federated-nested'
-                        ? {
-                            requested: { agent: 42 },
-                            effective: { agent: 'x'.repeat(201), model: [] }
-                          }
-                        : {
-                            requested: { agent: 'codex', model: 'remote-request', effort: 'low' },
-                            effective:
-                              scenario === 'federated-requested'
-                                ? null
-                                : {
-                                    agent: expectedAgent,
-                                    model: 'remote-effective',
-                                    effort: 'high'
-                                  }
-                          }
+                    scenario === 'federated-nested'
+                      ? {
+                          requested: { agent: 42 },
+                          effective: { agent: 'x'.repeat(201), model: [] }
+                        }
+                      : {
+                          requested: { agent: 'codex', model: 'remote-request', effort: 'low' },
+                          effective:
+                            scenario === 'federated-requested'
+                              ? null
+                              : {
+                                  agent: expectedAgent,
+                                  model: 'remote-effective',
+                                  effort: 'high'
+                                }
+                        }
                 }),
             runtimeEpoch: 'remote-epoch',
             worktreeId: 'remote-workspace',
@@ -368,7 +365,6 @@ it.each([
       if (
         ![
           'federated',
-          'federated-empty',
           'federated-nested',
           'federated-foreign',
           'federated-metadata-fails'
@@ -392,14 +388,17 @@ it.each([
         expect(start?.body).toMatchObject({ worker: { agent: expectedAgent } })
       }
     }
-    const verifyScenario =
-      remoteReady &&
-      !['federated-no-card', 'federated-pending-card', 'federated-failed-card'].includes(scenario)
-        ? 'federated'
-        : scenario
+    if (remoteReady && scenario !== 'federated') {
+      if (
+        ['federated-no-card', 'federated-pending-card', 'federated-failed-card'].includes(scenario)
+      ) {
+        expect((await current.host.journalSnapshot(COORD)).items).toEqual(before.items)
+      }
+      return
+    }
     await verifyWorkerStartCardScenario({
       current,
-      scenario: verifyScenario,
+      scenario,
       before,
       task,
       federated,

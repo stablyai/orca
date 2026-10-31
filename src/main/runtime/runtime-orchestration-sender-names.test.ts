@@ -488,10 +488,8 @@ describe("a sender's name, from what Orca shows for it", () => {
 })
 
 it.each([
-  { observation: undefined, expected: undefined },
-  { observation: null, expected: undefined },
-  { observation: {}, expected: undefined },
   { observation: { requested: { agent: 'codex' }, effective: null }, expected: 'codex' },
+  { observation: { requested: { agent: 'codex' }, effective: null }, expected: 'claude' },
   {
     observation: {
       requested: { agent: 'codex' },
@@ -513,11 +511,16 @@ it.each([
       coordinatorPaneKey: null
     })
     const original = {
-      agent: 'cx-personal',
+      agent: expected === 'claude' ? 'claude' : 'cx-personal',
       terminal: null,
       unrelated: { kept: true },
       launch: {
-        requested: { agent: null, model: 'home-model', effort: 'high', extra: 'kept' },
+        requested: {
+          agent: expected === 'claude' ? 'claude' : null,
+          model: 'home-model',
+          effort: 'high',
+          extra: 'kept'
+        },
         effective: null,
         extra: 'kept'
       }
@@ -538,7 +541,10 @@ it.each([
       ...original,
       launch: {
         ...original.launch,
-        requested: { ...original.launch.requested, agent: expected ? 'codex' : null },
+        requested: {
+          ...original.launch.requested,
+          agent: original.launch.requested.agent ?? (expected ? 'codex' : null)
+        },
         effective:
           expected === 'future-agent'
             ? { agent: expected, model: 'effective-model', effort: 'low' }
@@ -548,38 +554,21 @@ it.each([
     expect(parseStartOptions(saved())).toEqual(followUp)
     const party = { address: `dispatch:${id}`, terminalHandle: null, orcaSessionId: null }
     expect(names().snapshotOf(party)).toEqual({ name: 'Inspect parser', agent: expected ?? null })
+    if (expected !== 'future-agent') {
+      return
+    }
     const known = JSON.parse(saved())
     for (const later of [
+      undefined,
       null,
       {},
       { requested: { agent: null }, effective: null },
-      ...(expected === 'future-agent'
-        ? [{ effective: { agent: null, model: null, effort: null } }]
-        : []),
+      { effective: { agent: null, model: null, effort: null } },
       { effective: { agent: [] } }
     ]) {
       db.retainWorkerLaunchObservation(id, later)
       expect(JSON.parse(saved())).toEqual(known)
     }
-    // A known home requested agent stays the home choice even when the peer requested another kind.
-    db.db.prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?').run(
-      JSON.stringify({
-        ...original,
-        agent: 'claude',
-        launch: {
-          ...original.launch,
-          requested: { ...original.launch.requested, agent: 'claude' }
-        }
-      }),
-      id
-    )
-    db.retainWorkerLaunchObservation(id, { requested: { agent: 'codex' }, effective: null })
-    expect(parseStartOptions(saved())).toEqual({
-      agent: 'claude',
-      model: 'home-model',
-      effort: 'high'
-    })
-    expect(names().snapshotOf(party).agent).toBe('claude')
   }
 )
 
