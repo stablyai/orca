@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { pendingCreationOpensNativeChat } from '@/lib/pending-worktree-creation'
 import Sidebar from '../components/Sidebar'
 import RightSidebar from '../components/right-sidebar'
+import { useMeasuredWidth } from '../components/right-sidebar/right-sidebar-measured-width'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
@@ -120,6 +121,16 @@ export function AppWorkspaceShell(props: {
   const scrollOffsetRef = useRef(0)
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const sidebarScrollRefs = { scrollOffsetRef, scrollAnchorRef }
+  const workspaceBoardAreaRef = useMeasuredWidth(
+    useCallback((width) => {
+      const style = document.documentElement.style
+      if (width === null) {
+        style.removeProperty('--workspace-board-available-width')
+      } else {
+        style.setProperty('--workspace-board-available-width', `${width}px`)
+      }
+    }, [])
+  )
   const { setOpenWithFocus } = floatingWorkspace
   const toggleFloatingWorkspace = useCallback(
     () => setOpenWithFocus((open) => !open),
@@ -140,7 +151,7 @@ export function AppWorkspaceShell(props: {
     >
       <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
         {/* Keep the non-workspace titlebar from spanning the right sidebar. */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+        <div ref={workspaceBoardAreaRef} className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Workspace tab groups reach the top; other pages retain the titlebar. */}
           {!layout.leftTitlebarChromeLayout.shouldMount ? (
             <div className="titlebar">
@@ -150,11 +161,11 @@ export function AppWorkspaceShell(props: {
           ) : null}
           <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
             {layout.showSidebar ? (
-              layout.leftTitlebarChromeLayout.shouldMount ? (
-                /* Remove the collapsed header from flex layout so panes reclaim the left edge. */
-                <div
-                  className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
-                >
+              /* Remove the collapsed header from flex layout so panes reclaim the left edge. */
+              <div
+                className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
+              >
+                {layout.leftTitlebarChromeLayout.shouldMount ? (
                   <div
                     // The floating header covers the center border; restore the seam and size to its own controls.
                     className={`titlebar-left${
@@ -171,14 +182,12 @@ export function AppWorkspaceShell(props: {
                   >
                     {titlebarLeftControls}
                   </div>
-                  {/* Keep a shrinkable flex viewport below the fixed header so the sidebar can scroll. */}
-                  <div className="flex min-h-0 flex-1">
-                    <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-                  </div>
+                ) : null}
+                {/* Keep a shrinkable flex viewport below the fixed header so the sidebar can scroll. */}
+                <div className="flex min-h-0 flex-1">
+                  <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
                 </div>
-              ) : (
-                <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-              )
+              </div>
             ) : null}
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
               {/* Automations/artifacts own their headers; another titlebar would leave an empty stripe. */}

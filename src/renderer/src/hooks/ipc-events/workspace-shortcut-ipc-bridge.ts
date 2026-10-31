@@ -52,7 +52,6 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         if (store.activeView === 'settings') {
           return
         }
-        store.setSidebarOpen(true)
         window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
       })
     )

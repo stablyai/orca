@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useCallback } from 'react'
 import WorkspaceKanbanAreaSelectionOverlay from './WorkspaceKanbanAreaSelectionOverlay'
 import WorkspaceKanbanDrawerHeader from './WorkspaceKanbanDrawerHeader'
 import WorkspaceKanbanLaneGrid from './WorkspaceKanbanLaneGrid'
@@ -15,6 +15,7 @@ type WorkspaceKanbanDrawerViewProps = {
   onAreaSelectionPointerDown: React.PointerEventHandler<HTMLDivElement>
   onCardPointerDownCapture: React.PointerEventHandler<HTMLDivElement>
   onOpenChange: (open: boolean) => void
+  onLaneScrollerMount?: (node: HTMLDivElement | null) => void
   onPinDragLeave: (event: React.DragEvent) => void
   onPinDragOver: (event: React.DragEvent) => void
   open: boolean
@@ -28,6 +29,15 @@ type WorkspaceKanbanDrawerViewProps = {
 export default function WorkspaceKanbanDrawerView(
   props: WorkspaceKanbanDrawerViewProps
 ): React.JSX.Element {
+  const { laneScrollerRef } = props.laneGridProps
+  const { onLaneScrollerMount } = props
+  const setLaneScroller = useCallback(
+    (node: HTMLDivElement | null) => {
+      laneScrollerRef.current = node
+      onLaneScrollerMount?.(node)
+    },
+    [laneScrollerRef, onLaneScrollerMount]
+  )
   return (
     <WorkspaceKanbanSheet
       boardRef={props.boardRef}
@@ -59,7 +69,7 @@ export default function WorkspaceKanbanDrawerView(
           onDragLeave={props.onPinDragLeave}
         />
         <div
-          ref={props.laneGridProps.laneScrollerRef}
+          ref={setLaneScroller}
           className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden scrollbar-sleek"
         >
           <WorkspaceKanbanLaneGrid {...props.laneGridProps} />
