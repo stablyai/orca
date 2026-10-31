@@ -109,13 +109,12 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
           current.record === context.record
         )
       }
-      const presents = context.capturePresentation?.()
-      const settled = (outcome: SelectionOutcome, held: boolean) => {
+      // Notices follow the platform's presentation scope; a record reset on the same chat still reports.
+      const settled = (outcome: SelectionOutcome, presents: boolean) => {
         if (
-          (outcome.kind === 'refused' || (!held && outcome.kind === 'unknown')) &&
+          (outcome.kind === 'refused' || outcome.kind === 'unknown') &&
           outcome.failure &&
-          isCurrent() &&
-          (presents?.() ?? true)
+          presents
         ) {
           context.presentFailure?.(outcome.failure)
         }
@@ -125,9 +124,11 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
       }
       if (context.hold) {
         const held = context.hold(id, encoded, view)
-        void held?.then((outcome) => settled(outcome, true))
+        // Held picks precede any presentation scope, so every refusal reports.
+        void held?.then((outcome) => settled(outcome, outcome.kind === 'refused'))
         return held !== null
       }
+      const presents = context.capturePresentation?.()
       const model = structuredAgentSessionOptionPicks(view, { [id]: encoded })[0]?.modelId ?? null
       const operation = controller.issue(id, encoded, model, undefined, (operation) => {
         receipt = {
@@ -139,7 +140,7 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
       })
       context.flush(isCurrent)
       const outcome = await operation.result
-      settled(outcome, false)
+      settled(outcome, presents?.() ?? true)
       return outcome.kind !== 'refused'
     }
   }

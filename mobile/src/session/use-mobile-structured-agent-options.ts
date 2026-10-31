@@ -15,7 +15,7 @@ import { agentChatPermissionModes } from '../../../src/shared/agent-chat-permiss
 import { legacyHostPermissionDescriptor } from '../../../src/shared/structured-agent-session-permission-option'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
-import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
+import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
 import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalog-upgrade'
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import {
@@ -33,7 +33,7 @@ export function useMobileStructuredAgentOptions(args: {
   enabled: boolean
   fence: number | null
   turnId: string | null
-  mutate: MobileStructuredAgentMutate
+  mutate: StructuredAgentSessionMutate
   optionStamp?: string
   hostSupport: Pick<
     StructuredAgentSessionHostSupport,
@@ -157,8 +157,7 @@ export function useMobileStructuredAgentOptions(args: {
           const result = await mutate<AgentSessionOptionResult>(
             'agentSession.setOption',
             'agentSession.setOption',
-            { key: pick.key, value: pick.value },
-            isCurrent
+            { key: pick.key, value: pick.value }
           )
           return result.status === 'accepted'
             ? acceptedStructuredSessionSelectionOutcome(pick, result.value.options)

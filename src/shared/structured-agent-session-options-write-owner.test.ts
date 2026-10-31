@@ -27,6 +27,7 @@ function harness(agent = 'codex') {
   }
   let controller = createStructuredSessionSelectionController(vi.fn())
   let starting = false
+  let visit = {}
   const replies: ReturnType<typeof Promise.withResolvers<SelectionOutcome>>[] = []
   const sends = vi.fn(() => {
     const reply = Promise.withResolvers<SelectionOutcome>()
@@ -46,6 +47,10 @@ function harness(agent = 'codex') {
       providerStarting: starting,
       isCurrentContext: () => true,
       flush: () => controller.flush(sends),
+      capturePresentation: () => {
+        const captured = visit
+        return () => captured === visit
+      },
       revalidate,
       presentFailure,
       revalidateOn: 'refused-current'
@@ -63,6 +68,9 @@ function harness(agent = 'codex') {
     },
     reset: () => {
       state = { ...state, record: cloneStructuredAgentSessionOptionRecord(state.record) }
+    },
+    endPresentation: () => {
+      visit = {}
     },
     replaceController: () => {
       controller = createStructuredSessionSelectionController(vi.fn())
@@ -177,8 +185,15 @@ describe('shared option write transaction', () => {
     expect(h.pending()).toBeNull()
   })
 
-  it.each(['same-record read', 'record reset', 'controller replacement', 'detach', 'abandon'])(
-    'scopes pending and late presentation to %s',
+  it.each([
+    'same-record read',
+    'record reset',
+    'controller replacement',
+    'detach',
+    'abandon',
+    'presentation ends'
+  ])(
+    'scopes pending to the record and late presentation to its scope across %s',
     async (change) => {
       const h = harness()
       const picking = h.writer.setOption('model', 'literal')
@@ -194,12 +209,21 @@ describe('shared option write transaction', () => {
       if (change === 'abandon') {
         h.controller().abandon()
       }
-      expect(h.pending()).toBe(change === 'same-record read' ? 'model' : null)
+      if (change === 'presentation ends') {
+        h.endPresentation()
+      }
+      expect(h.pending()).toBe(
+        change === 'same-record read' || change === 'presentation ends' ? 'model' : null
+      )
       h.settle(0, { kind: 'refused', failure: { kind: 'unconfirmed' } })
       await picking
       expect(h.pending()).toBeNull()
-      expect(h.presentFailure).toHaveBeenCalledTimes(change === 'same-record read' ? 1 : 0)
-      expect(h.revalidate).toHaveBeenCalledTimes(change === 'same-record read' ? 1 : 0)
+      expect(h.presentFailure).toHaveBeenCalledTimes(
+        change === 'abandon' || change === 'presentation ends' ? 0 : 1
+      )
+      expect(h.revalidate).toHaveBeenCalledTimes(
+        change === 'same-record read' || change === 'presentation ends' ? 1 : 0
+      )
     }
   )
 })
