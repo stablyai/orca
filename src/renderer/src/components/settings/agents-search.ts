@@ -159,7 +159,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       'Choose whether each agent opens as a chat or in its CLI.'
     ),
     keywords: [
-      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat'),
+      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat UI'),
       ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI'),
       ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal'),
       ...translateSearchKeyword('settings.chat.providers.title', 'Providers', {
