@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 
 const storage = vi.hoisted(() => new Map<string, string>())
@@ -11,11 +11,16 @@ const asyncStorageMock = vi.hoisted(() => ({
     storage.delete(key)
   })
 }))
+const secrets = vi.hoisted(() => new Map<string, string>())
 const secureStoreMock = vi.hoisted(() => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
-  getItemAsync: vi.fn(async () => 'device-token'),
-  setItemAsync: vi.fn(async () => {}),
-  deleteItemAsync: vi.fn(async () => {})
+  getItemAsync: vi.fn(async (key: string) => secrets.get(key) ?? null),
+  setItemAsync: vi.fn(async (key: string, value: string) => {
+    secrets.set(key, value)
+  }),
+  deleteItemAsync: vi.fn(async (key: string) => {
+    secrets.delete(key)
+  })
 }))
 const connectMock = vi.hoisted(() => vi.fn())
 const openRelayMock = vi.hoisted(() => vi.fn())
@@ -82,7 +87,8 @@ async function startWithPendingResolution(): Promise<{
     .mockReturnValue(new FakeRelaySession('connected'))
   const logical = new FakeLogicalClient('disconnected', 'lan')
   const lifecycle = startMobileEndpointLifecycle(logical, host, () => {})
-  await vi.waitFor(() => expect(resolveRelayMock).toHaveBeenCalledOnce())
+  await vi.advanceTimersByTimeAsync(0)
+  expect(resolveRelayMock).toHaveBeenCalledOnce()
   return { logical, lifecycle, settle: (value) => settle(value) }
 }
 
@@ -103,8 +109,11 @@ async function expectEditKept(expectedRelay: MobileRelayEndpoint): Promise<void>
 
 describe('mobile endpoint lifecycle host edits', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     vi.clearAllMocks()
     storage.clear()
+    secrets.clear()
+    secrets.set('orca.host-token.host-1', 'device-token')
     resetHostStoreForTests()
     resetMobileRelayHostOverlayStoreForTests()
     const { id, name, endpoint, publicKeyB64, lastConnected } = host
@@ -128,12 +137,15 @@ describe('mobile endpoint lifecycle host edits', () => {
     readBundleMock.mockResolvedValue(bundle)
   })
 
+  afterEach(() => vi.useRealTimers())
+
   it('keeps an edit made while relay resolution was pending', async () => {
     const { lifecycle, settle } = await startWithPendingResolution()
 
     await updateHostNameAndEndpoint(host.id, { personalName: 'Renamed', endpoint: EDITED_ENDPOINT })
     settle(resolved)
-    await vi.waitFor(() => expect(openRelayMock).toHaveBeenCalledTimes(2))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openRelayMock).toHaveBeenCalledTimes(2)
 
     await expectEditKept(resolved)
     lifecycle.stop()
@@ -148,9 +160,8 @@ describe('mobile endpoint lifecycle host edits', () => {
     const recoveryPathCalls = logical.setRecoveryPath.mock.calls.length
     settle(resolved)
     // The withdrawn dial clears the recovery path only after any persistence has run.
-    await vi.waitFor(() =>
-      expect(logical.setRecoveryPath).toHaveBeenCalledTimes(recoveryPathCalls + 1)
-    )
+    await vi.advanceTimersByTimeAsync(0)
+    expect(logical.setRecoveryPath).toHaveBeenCalledTimes(recoveryPathCalls + 1)
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledTimes(writesBeforeSettle)
     await expectEditKept(relay)
@@ -168,7 +179,8 @@ describe('mobile endpoint lifecycle host edits', () => {
     await updateHostNameAndEndpoint(host.id, { personalName: 'Renamed', endpoint: EDITED_ENDPOINT })
 
     logical.publishState('connected')
-    await vi.waitFor(() => expect(overlayWrites()).toBe(1))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(overlayWrites()).toBe(1)
 
     await expectEditKept(relay)
     lifecycle.stop()
@@ -191,10 +203,11 @@ describe('mobile endpoint lifecycle host edits', () => {
     await updateHostNameAndEndpoint(host.id, { personalName: 'Renamed', endpoint: EDITED_ENDPOINT })
 
     logical.publishState('connected')
-    await vi.waitFor(() => expect(writeBundleMock).toHaveBeenCalledTimes(2))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(writeBundleMock).toHaveBeenCalledTimes(2)
     lifecycle.stop()
     finishCredentialWrite()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.advanceTimersByTimeAsync(0)
 
     // The rotated bundle itself stays durable; only the stale relay routing write is skipped.
     expect(writeBundleMock).toHaveBeenCalledTimes(2)
@@ -213,7 +226,7 @@ describe('mobile endpoint lifecycle host edits', () => {
       reqId: journal.reqId,
       authorizationMode: 'authenticated-direct',
       currentVersion: 1,
-      resumeExpiresAt: 9_999_999
+      resumeExpiresAt: Date.now() + 30 * 24 * 3_600_000
     }
     const client = new FakeSession('connected')
     client.sendRequest.mockResolvedValue({

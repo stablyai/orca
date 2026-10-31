@@ -1,6 +1,4 @@
-// A layout-owner build's check that the window's session saves no longer carry layout: every tab
-// change should reach main as a command, so a save that changes main's layout model is a change
-// main learned only from the save. Dark: reports only, never alters or fails the write.
+// Optional report-only drift logging excludes runtime-owned fields that legitimately outrun renderer snapshots.
 
 import { appendFileSync } from 'node:fs'
 import {
@@ -17,20 +15,19 @@ import type {
   WorkspaceLayoutModel
 } from '../../shared/workspace-layout/workspace-layout-model'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
+import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { droppedTabBarEntries, terminalTabBarEntries } from './window-save-raw-session-divergence'
+import { compactFieldChanges, type FieldChange } from './window-save-divergence-values'
 
-/** Set by evidence runs: each divergence is appended there as one JSON line. */
 const LOG_PATH_ENV = 'ORCA_LAYOUT_SAVE_DIVERGENCE_LOG'
 const MAX_PATHS = 12
-const RECORDS = ['defaultTabsAppliedByWorkspace', 'clientHostedBrowserPagesByWorkspace'] as const
-/** A pane's terminal binding: it still reaches main only through saves, on every spawn. */
-const BINDING_FIELDS = new Set(['ptyId', 'incarnationId'])
+const BINDING_FIELDS = new Set(['ptyId', 'incarnationId', 'sleeping', 'resume'])
 
-export type WindowSaveDivergence = { workspace: string; paths: string[] }
+export type WindowSaveDivergence = { workspace: string; paths: string[]; values?: FieldChange[] }
 
-type WorkspaceDiff = { paths: string[]; rebound: number }
+type Difference = { path: string; changes?: (FieldChange & { kind: string })[] }
 
-/** Main's layout model of one partition, as the session holds it. */
 export function layoutModelOf(
   session: WorkspaceSessionState | null | undefined,
   hostId: ExecutionHostId
@@ -40,7 +37,6 @@ export function layoutModelOf(
     : null
 }
 
-/** The fields two copies of one record differ in. */
 function changedFields(before: unknown, after: unknown): string[] {
   if (typeof before !== 'object' || typeof after !== 'object' || !before || !after) {
     return stableJson(before ?? null) === stableJson(after ?? null) ? [] : ['value']
@@ -52,25 +48,46 @@ function changedFields(before: unknown, after: unknown): string[] {
   )
 }
 
+function fieldOf(item: unknown, field: string): unknown {
+  return field === 'value' || typeof item !== 'object' || !item
+    ? item
+    : Object.entries(item).find(([key]) => key === field)?.[1]
+}
+
+type Alongside = (id: string, fields: string[]) => Omit<FieldChange, 'record'>[]
+
 function diffKeyed(
   prefix: string,
   before: Map<string, unknown>,
-  after: Map<string, unknown>
-): string[] {
-  const paths: string[] = []
+  after: Map<string, unknown>,
+  alongside?: Alongside
+): Difference[] {
+  const paths: Difference[] = []
   for (const [id, item] of after) {
     if (!before.has(id)) {
-      paths.push(`${prefix} ${id} added`)
+      paths.push({ path: `${prefix} ${id} added` })
       continue
     }
-    const fields = changedFields(before.get(id), item)
+    const was = before.get(id)
+    const fields = changedFields(was, item)
     if (fields.length > 0) {
-      paths.push(`${prefix} ${id} changed: ${fields.join(', ')}`)
+      const record = `${prefix} ${id}`
+      paths.push({
+        path: `${record} changed: ${fields.join(', ')}`,
+        changes: [
+          ...fields.map((field) => ({
+            field,
+            before: fieldOf(was, field),
+            after: fieldOf(item, field)
+          })),
+          ...(alongside?.(id, fields) ?? [])
+        ].map((change) => ({ kind: prefix, record, ...change }))
+      })
     }
   }
   for (const id of before.keys()) {
     if (!after.has(id)) {
-      paths.push(`${prefix} ${id} removed`)
+      paths.push({ path: `${prefix} ${id} removed` })
     }
   }
   return paths
@@ -78,6 +95,21 @@ function diffKeyed(
 
 function listById<T>(items: readonly T[] | undefined, id: (item: T) => string) {
   return new Map<string, unknown>((items ?? []).map((item) => [id(item), item]))
+}
+
+function paneBindings(workspace: WorkspaceLayout, tabId: string) {
+  const tab = workspace.tabs.find((candidate) => candidate.id === tabId)
+  const leafIds: string[] = []
+  const visit = (node: TerminalPaneLayoutNode | null): void => {
+    if (node?.type === 'leaf') {
+      leafIds.push(node.leafId)
+    } else if (node) {
+      visit(node.first)
+      visit(node.second)
+    }
+  }
+  visit(tab?.kind === 'terminal' ? tab.panes.root : null)
+  return leafIds.map((leafId) => ({ leafId, ptyId: workspace.leaves?.[leafId]?.ptyId ?? null }))
 }
 
 function recordById(items: Readonly<Record<string, unknown>> | undefined) {
@@ -92,14 +124,13 @@ function bindingOnly(leaf: unknown): boolean {
   )
 }
 
-/** Panes whose only change is their terminal binding, first bind and unbind included. */
-function reboundLeaves(
+/** Exclude binding-only changes from both pane sets. */
+function unboundLeaves(
   before: Readonly<Record<string, unknown>> | undefined,
   after: Readonly<Record<string, unknown>> | undefined
-): { rebound: Set<string>; was: Map<string, unknown>; now: Map<string, unknown> } {
+): { was: Map<string, unknown>; now: Map<string, unknown> } {
   const was = recordById(before)
   const now = recordById(after)
-  const rebound = new Set<string>()
   for (const id of new Set([...was.keys(), ...now.keys()])) {
     const old = was.get(id)
     const next = now.get(id)
@@ -109,15 +140,27 @@ function reboundLeaves(
         ? changed.length > 0 && changed.every((field) => BINDING_FIELDS.has(field))
         : bindingOnly(old ?? next)
     ) {
-      rebound.add(id)
       was.delete(id)
       now.delete(id)
     }
   }
-  return { rebound, was, now }
+  return { was, now }
 }
 
-/** A lone group with no stored tree is that group's leaf, as main's own save writes it. */
+/** Loader-created placeholders and closed-tab evidence alone do not establish workspace content. */
+function hasContent(workspace: WorkspaceLayout | undefined): workspace is WorkspaceLayout {
+  return Boolean(
+    workspace &&
+    (workspace.tabs.length > 0 ||
+      workspace.groups.length > 0 ||
+      workspace.groupLayout ||
+      [workspace.editorFiles, workspace.browserTabs, workspace.editorViews, workspace.leaves].some(
+        (items) => items && Object.keys(items).length > 0
+      ))
+  )
+}
+
+/** Reconstruct a missing lone-group tree like persistence does. */
 function groupTreeOf(workspace: WorkspaceLayout): TabGroupLayoutNode | null {
   const [only, ...rest] = workspace.groups
   return (
@@ -125,19 +168,17 @@ function groupTreeOf(workspace: WorkspaceLayout): TabGroupLayoutNode | null {
   )
 }
 
-/** What a save changed in one workspace of main's model; empty paths and no rebound when nothing. */
-export function diffWorkspaceLayouts(
+function diffWorkspaceLayouts(
   before: WorkspaceLayout | undefined,
   after: WorkspaceLayout | undefined
-): WorkspaceDiff {
-  if (!before || !after) {
-    return {
-      paths: before === after ? [] : [after ? 'workspace added' : 'workspace removed'],
-      rebound: 0
-    }
+): Difference[] {
+  if (!hasContent(before) || !hasContent(after)) {
+    return hasContent(before) || hasContent(after)
+      ? [{ path: hasContent(after) ? 'workspace added' : 'workspace removed' }]
+      : []
   }
-  const leaves = reboundLeaves(before.leaves, after.leaves)
-  const paths = [
+  const leaves = unboundLeaves(before.leaves, after.leaves)
+  const paths: Difference[] = [
     ...diffKeyed(
       'group',
       listById(before.groups, (g) => g.id),
@@ -146,7 +187,12 @@ export function diffWorkspaceLayouts(
     ...diffKeyed(
       'tab',
       listById(before.tabs, (t) => t.id),
-      listById(after.tabs, (t) => t.id)
+      listById(after.tabs, (t) => t.id),
+      // Bindings identify changed panes but must not create drift paths themselves.
+      (id, fields) =>
+        fields.includes('panes')
+          ? [{ field: 'ptys', before: paneBindings(before, id), after: paneBindings(after, id) }]
+          : []
     ),
     ...diffKeyed(
       'file',
@@ -159,63 +205,50 @@ export function diffWorkspaceLayouts(
       listById(before.browserTabs, (b) => b.id),
       listById(after.browserTabs, (b) => b.id)
     ),
-    ...diffKeyed(
-      'closed tab',
-      recordById(before.closedTerminalTabs),
-      recordById(after.closedTerminalTabs)
-    ),
     ...diffKeyed('leaf', leaves.was, leaves.now)
   ]
-  if (stableJson(groupTreeOf(before)) !== stableJson(groupTreeOf(after))) {
-    paths.push('group layout changed')
+  const wasTree = groupTreeOf(before)
+  const nowTree = groupTreeOf(after)
+  if (stableJson(wasTree) !== stableJson(nowTree)) {
+    paths.push({
+      path: 'group layout changed',
+      changes: [
+        {
+          kind: 'group layout',
+          record: 'group layout',
+          field: 'tree',
+          before: wasTree,
+          after: nowTree
+        }
+      ]
+    })
   }
-  return { paths, rebound: leaves.rebound.size }
+  return paths
 }
 
-/** Each workspace whose part of main's model differs between two copies of one partition. */
+/** Include raw-session differences hidden by layout normalization. */
 export function windowSaveDivergences(
   was: WorkspaceLayoutModel | null,
-  now: WorkspaceLayoutModel | null
+  now: WorkspaceLayoutModel | null,
+  rawPaths: ReadonlyMap<string, string[]> = new Map()
 ): WindowSaveDivergence[] {
-  // Records count for a workspace with no tabs too.
-  const workspaces = new Set(
-    [was, now].flatMap((model) =>
-      model
-        ? [
-            ...Object.keys(model.workspaces),
-            ...RECORDS.flatMap((record) => Object.keys(model.records[record] ?? {})),
-            ...Object.keys(model.legacy.terminalRowOwners)
-          ]
-        : []
-    )
-  )
+  const workspaces = new Set([
+    ...[was, now].flatMap((model) => (model ? Object.keys(model.workspaces) : [])),
+    ...rawPaths.keys()
+  ])
   const result: WindowSaveDivergence[] = []
   for (const workspace of workspaces) {
-    const { paths, rebound } = diffWorkspaceLayouts(
-      was?.workspaces[workspace],
-      now?.workspaces[workspace]
-    )
-    for (const record of RECORDS) {
-      if (
-        stableJson(was?.records[record]?.[workspace] ?? null) !==
-        stableJson(now?.records[record]?.[workspace] ?? null)
-      ) {
-        paths.push(`${record} changed`)
-      }
-    }
-    if (
-      Boolean(was?.legacy.terminalRowOwners[workspace]) !==
-      Boolean(now?.legacy.terminalRowOwners[workspace])
-    ) {
-      paths.push('terminal row owner changed')
-    }
-    // The binding count goes last and is never cut, so it crowds out no structural change.
-    const shown =
-      rebound > 0
-        ? [...paths.slice(0, MAX_PATHS - 1), `${rebound} pane(s) rebound`]
-        : paths.slice(0, MAX_PATHS)
-    if (shown.length > 0) {
-      result.push({ workspace, paths: shown })
+    const differences: Difference[] = [
+      ...diffWorkspaceLayouts(was?.workspaces[workspace], now?.workspaces[workspace]),
+      ...(rawPaths.get(workspace) ?? []).map((path) => ({ path }))
+    ].slice(0, MAX_PATHS)
+    if (differences.length > 0) {
+      const changes = differences.flatMap((difference) => difference.changes ?? [])
+      result.push({
+        workspace,
+        paths: differences.map((difference) => difference.path),
+        ...(changes.length > 0 ? { values: compactFieldChanges(changes) } : {})
+      })
     }
   }
   return result
@@ -237,34 +270,26 @@ function report(source: string, partition: ExecutionHostId, divergence: WindowSa
   }
 }
 
-/**
- * Runs the window's save `write` and reports what it changed in main's layout model. A paired
- * server's partition is skipped: its layout is the server's, mirrored by the window. Nothing here
- * can fail the save: the write's own errors propagate, the check's are only logged.
- */
-export function writeWindowSaveWatchingLayout(
-  read: () => WorkspaceSessionState | null | undefined,
+/** Compare without affecting saves; paired-server partitions retain server-owned layout authority. */
+export function reportWindowSaveDrift(
+  stored: WorkspaceSessionState,
+  save: WorkspaceSessionState,
   hostId: string | null | undefined,
-  write: () => void,
   source: string
 ): void {
+  if (!process.env[LOG_PATH_ENV]) {
+    return
+  }
   const partition = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
   if (parseExecutionHostId(partition)?.kind === 'runtime') {
-    write()
-    return
-  }
-  let was: WorkspaceLayoutModel | null | undefined
-  try {
-    was = layoutModelOf(read(), partition)
-  } catch (error) {
-    console.warn('[layout-owner] save divergence check failed:', error)
-  }
-  write()
-  if (was === undefined) {
     return
   }
   try {
-    for (const divergence of windowSaveDivergences(was, layoutModelOf(read(), partition))) {
+    const was = layoutModelOf(stored, partition)
+    const now = layoutModelOf(save, partition)
+    const rawPaths = new Map<string, string[]>()
+    droppedTabBarEntries(terminalTabBarEntries(stored), save, rawPaths)
+    for (const divergence of windowSaveDivergences(was, now, rawPaths)) {
       report(source, partition, divergence)
     }
   } catch (error) {

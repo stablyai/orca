@@ -1,13 +1,4 @@
-/**
- * The accounts shim for a WSL distro's orcad (D10): orcad has no account services, so the desktop
- * prepares the selected Claude/Codex account's in-distro home with the same WSL account code a
- * local WSL pane uses, and sends the result as env on the calls that start a process there.
- *
- * Only calls whose env cannot change their meaning are patched: a create that already brings its
- * own launch (env, launch config or launch agent), a plain shell, `agent.launch`'s optional
- * `accountEnv`, and the agent-session creates' `accountEnv` on a host advertising it. A bare
- * `command` keeps the host's Settings-default launch untouched.
- */
+/** D10: desktop prepares distro-local account homes for orcad. Patch caller-built launches/plain shells, agent.launch accountEnv, and capability-advertised agent-session creates; leave bare-command Settings defaults untouched. */
 import { errorMessage } from '../../shared/error-message'
 import { posix } from 'node:path'
 import {
@@ -96,7 +87,7 @@ export async function prepareWslOrcadAccountEnv(
   const env: Record<string, string> = {}
   if (agent === 'claude') {
     const preparation = await dependencies.prepareClaudeLaunch(target)
-    // Why: off Windows the service routes a WSL target to the host, whose paths mean nothing here.
+    // Off-Windows account services route WSL targets to the host; accept patches only from the matching distro.
     if (preparation.runtime === 'wsl' && sameDistro(preparation.wslDistro, distro)) {
       Object.assign(env, accountKeysOf(preparation.envPatch))
     }
@@ -106,7 +97,7 @@ export async function prepareWslOrcadAccountEnv(
   const codexHome = await dependencies.prepareCodexHome(target)
   const guestHome = codexHome ? guestCodexHomePath(codexHome, distro) : null
   if (guestHome) {
-    // Why not ORCA_CODEX_HOME too: orcad strips CODEX_HOME when it equals that marker.
+    // Do not mark ORCA_CODEX_HOME: orcad strips CODEX_HOME when they match.
     env.CODEX_HOME = guestHome
   }
   const checked = AgentLaunchAccountEnv.safeParse(env)
@@ -196,7 +187,7 @@ export async function withWslOrcadAccountEnv(
   if (plan.capability) {
     const verdict = await call.hostSupports(plan.capability)
     if (verdict !== 'supported') {
-      // Why not refuse: this host has always started these with its default account.
+      // Older hosts historically use their default account; warn rather than refuse.
       if (verdict === 'unsupported' && dependencies.managedAccountSelected(distroTarget(distro))) {
         dependencies.accountNotApplied(distro)
       }
@@ -207,7 +198,7 @@ export async function withWslOrcadAccountEnv(
   try {
     env = await prepareWslOrcadAccountEnv(distro, plan.agent, dependencies)
   } catch (error) {
-    // Why refuse: starting without the prepared home would run another account.
+    // Preparation failure must refuse launch or it would silently use another account.
     return { ok: false, message: errorMessage(error) }
   }
   if (Object.keys(env).length === 0) {

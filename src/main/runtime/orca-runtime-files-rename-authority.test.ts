@@ -10,7 +10,7 @@ import {
   useRuntimeFileCommandsLifecycle
 } from './orca-runtime-files-test-harness'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
-import { setSshConnectionGeneration } from '../ssh/ssh-connection-generation'
+import { setSshConnectionGeneration } from '../ssh/connection/ssh-connection-generation'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -20,7 +20,7 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>

@@ -1,5 +1,8 @@
-// What a gone child generation left unfinished in the journal, and whether its exit interrupted it.
-
+import {
+  continuingStructuredAgentSessionInput,
+  finalizingStructuredAgentSessionInput
+} from './structured-agent-session-handing-over'
+import { providerTimelineExecutionItems } from '../agent-session-timeline/provider-timeline-history'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
@@ -9,6 +12,7 @@ import {
   type StructuredAgentSessionWatchedExit
 } from './structured-agent-session-stale-turn-verdict'
 import type { UnopenedSendJournal } from './structured-agent-session-unopened-send-withdrawal'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 
 export type DeadGenerationJournal = UnopenedSendJournal & {
   appendPlannedLifecycleBatch: AgentSessionJournal['appendPlannedLifecycleBatch']
@@ -25,12 +29,11 @@ export function captureUnfinishedStructuredAgentSessionWork(
   journal: DeadGenerationJournal
 ): StructuredAgentSessionUnfinishedWork {
   return {
-    items: journal.snapshot().items.filter(isUnfinishedItem),
+    items: providerTimelineExecutionItems(journal.snapshot().items).filter(isUnfinishedItem),
     hadUnsettledSubmissions: hasUnsettledSubmission(journal)
   }
 }
 
-/** `exit`: see `unfinishedStructuredAgentSessionWorkWasInterrupted`. */
 export function hasUnfinishedStructuredAgentSessionWork(
   journal: DeadGenerationJournal,
   exit?: StructuredAgentSessionWatchedExit
@@ -39,7 +42,8 @@ export function hasUnfinishedStructuredAgentSessionWork(
   return (
     work.hadUnsettledSubmissions ||
     work.items.length > 0 ||
-    watchedExitRevisions(journal.snapshot().items, exit, journal).length > 0
+    watchedExitRevisions(providerTimelineExecutionItems(journal.snapshot().items), exit, journal)
+      .length > 0
   )
 }
 
@@ -47,21 +51,31 @@ export function unfinishedStructuredAgentSessionWorkWasInterrupted(
   before: StructuredAgentSessionUnfinishedWork,
   journal: DeadGenerationJournal,
   observedExitAt: number,
-  exit?: StructuredAgentSessionWatchedExit
+  exit?: StructuredAgentSessionWatchedExit,
+  heldSends?: ReadonlySet<string>
 ): boolean {
-  const currentSnapshot = journal.snapshot()
+  const currentItemsSnapshot = providerTimelineExecutionItems(journal.snapshot().items)
   if (
-    hasUnsettledSubmission(journal) ||
-    currentSnapshot.items.some(isInProgressStructuredAgentSessionItem)
+    journal
+      .submissions?.()
+      .some(
+        (send) =>
+          heldSends?.has(send.clientMessageId) &&
+          !finalizingStructuredAgentSessionInput(journal, send.clientMessageId) &&
+          send.fence === exit?.ownerFence &&
+          !isQueuedAgentJournalSubmission(send) &&
+          (send.dispatchState === 'pending' || send.dispatchState === 'unknown')
+      ) ||
+    currentItemsSnapshot.some(isInProgressStructuredAgentSessionItem)
   ) {
     return true
   }
-  // A turn the exited child left `unverifiable` (its stream closed first) was running when it went.
-  if (watchedExitRevisions(currentSnapshot.items, exit, journal).length > 0) {
+  // Stream closure may mark a turn unverifiable before the child’s exit arrives.
+  if (watchedExitRevisions(currentItemsSnapshot, exit, journal).length > 0) {
     return true
   }
   if (
-    currentSnapshot.items.some((item) => {
+    currentItemsSnapshot.some((item) => {
       const turn = readAgentJournalTurn(item.body)
       return turn?.state === 'interrupted' && turn.completedAt === observedExitAt
     })
@@ -72,7 +86,7 @@ export function unfinishedStructuredAgentSessionWorkWasInterrupted(
   if (inProgressBefore.length === 0) {
     return false
   }
-  const currentItems = new Map(currentSnapshot.items.map((item) => [item.itemId, item]))
+  const currentItems = new Map(currentItemsSnapshot.map((item) => [item.itemId, item]))
   const runningTurns = inProgressBefore.filter(
     (item) => readAgentJournalTurn(item.body)?.state === 'running'
   )
@@ -84,9 +98,7 @@ function isUnfinishedItem(item: AgentJournalRenderItem): boolean {
   return requiresTerminalSettlement(item.body)
 }
 
-/** Work that means the provider was MID-RESPONSE. A pending approval or question is the provider
- *  waiting on the user, so dying while one sits there interrupted nothing — it still needs
- *  cancelling, but it must not claim a response was in progress. */
+/** Pending prompts wait on the user; cancel them without claiming the provider was mid-response. */
 export function isInProgressStructuredAgentSessionItem(item: AgentJournalRenderItem): boolean {
   return (
     readAgentJournalTurn(item.body)?.state === 'running' ||
@@ -113,10 +125,12 @@ function hasUnsettledSubmission(journal: DeadGenerationJournal): boolean {
   return submissions
     ? submissions.some(
         (submission) =>
-          // A queued message is not work in progress: nothing has it yet.
-          (submission.dispatchState === 'pending' &&
+          // Unhanded queued messages are not work in progress.
+          !continuingStructuredAgentSessionInput(journal, submission.clientMessageId) &&
+          !finalizingStructuredAgentSessionInput(journal, submission.clientMessageId) &&
+          ((submission.dispatchState === 'pending' &&
             !(submission.handoverRecorded && submission.handedOverAt === undefined)) ||
-          (submission.dispatchState === 'unknown' && submission.recovered !== true)
+            (submission.dispatchState === 'unknown' && submission.recovered !== true))
       )
     : (journal.pendingSubmissions?.().length ?? 0) > 0
 }

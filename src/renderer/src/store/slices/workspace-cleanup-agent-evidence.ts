@@ -1,3 +1,4 @@
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
 import type { AppState } from '../types'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -21,6 +22,7 @@ import {
 } from '@/lib/worktree-runtime-owner-index'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceCleanupAgentStartedFailure } from './workspace-cleanup-preflight-failures'
+import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function assertWorkspaceCleanupAgentStopApproved(
   state: AppState,
@@ -67,6 +69,9 @@ export function getWorkspaceCleanupAgentEvidence(
   for (const [worktreeId, worktreeCandidates] of candidatesByWorktreeId) {
     const rows = buildWorktreeAgentRows({
       tabs: state.tabsByWorktree[worktreeId] ?? [],
+      representedTabs: state.unifiedTabsByWorktree
+        ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree)
+        : undefined,
       entries: selectLiveAgentStatusEntriesForWorktree(state, worktreeId),
       retained: selectRetainedAgentEntriesForWorktree(state, worktreeId),
       runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
@@ -110,8 +115,12 @@ export function getWorkspaceCleanupAgentEvidence(
           evidence.set(identity, 'unknown')
         } else {
           const owner =
-            findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, candidateHost) ??
-            findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId).find(
+            findIndexedWorktreeOwnerForHost(
+              selectWorktreesByRepo(state),
+              worktreeId,
+              candidateHost
+            ) ??
+            findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), worktreeId).find(
               (worktree) => isExecutionHostAliasForWorktree(candidateHost, worktree)
             )
           if (isExecutionHostAliasForWorktree(hostId, owner ?? { hostId: candidateHost })) {

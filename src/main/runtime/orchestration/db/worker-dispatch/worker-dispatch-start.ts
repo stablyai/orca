@@ -8,6 +8,7 @@ import { insertStartingDispatchContextRow } from '../dispatch-row-writer'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
+import { getFollowUpDispatch } from '../dispatch-context/worker-follow-up-lineage'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -41,6 +42,14 @@ export function createStartingWorkerDispatch(
     /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
     creator: DispatchCreator
     maxDepth: number
+    /** A worker's own Dispatch that authorized this helper; it must still be the creator here. */
+    requiredCreatorDispatchId?: string
+    /** The settled Dispatch whose worker this follow-up continues; only one follow-up claims it. */
+    followUpOf?: string
+    /** Another mutation's pending receipt (a send's follow-up), told what this start accepted. */
+    acceptedBy?: { callerFingerprint: string; requestId: string }
+    /** Mail this start delivers as its Task, read in the same claim. */
+    consumesMessageIds?: readonly string[]
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -69,6 +78,14 @@ export function createStartingWorkerDispatch(
         )
         .run(receipt.callerFingerprint, receipt.requestId, receipt.method, receipt.payloadHash)
     }
+    const claimedFollowUp = params.followUpOf ? getFollowUpDispatch(this, params.followUpOf) : null
+    if (claimedFollowUp) {
+      throw new OrchestrationError(
+        'follow_up_claimed',
+        `Dispatch ${params.followUpOf} already continues as Dispatch ${claimedFollowUp.id}.`,
+        { followUpDispatchId: claimedFollowUp.id }
+      )
+    }
     const task = params.taskId
       ? this.getTask(params.taskId)
       : params.taskSpec
@@ -85,7 +102,7 @@ export function createStartingWorkerDispatch(
           })
         : undefined
     if (!task) {
-      // Why: `--spec` creates the Task inline, so a missing row here always names an explicit id.
+      // An inline spec already creates its Task; missing rows here imply an explicit id.
       const taskId = params.taskId ?? ''
       throw taskNotFoundError(`Task ${taskId} was not found.`, { taskId })
     }
@@ -103,7 +120,7 @@ export function createStartingWorkerDispatch(
           prior.failure_count
         )
       }
-      // Why: a context-only Dispatch has no worker row, so its settled state lives on the Dispatch row.
+      // Context-only Dispatches have no worker row; read settlement from the Dispatch itself.
       const priorSettled = priorWorker
         ? ['failed', 'stopped', 'abandoned'].includes(priorWorker.state)
         : prior?.status === 'failed'
@@ -133,7 +150,18 @@ export function createStartingWorkerDispatch(
 
     const id = generateId('ctx')
     const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)
-    if (params.mutationReceipt) {
+    if (
+      params.requiredCreatorDispatchId !== undefined &&
+      creatorDispatchId !== params.requiredCreatorDispatchId
+    ) {
+      throw new OrchestrationError(
+        'consumer_fenced',
+        `Dispatch ${params.requiredCreatorDispatchId} is no longer this caller's active work, so it cannot start a helper.`,
+        { effectsApplied: false }
+      )
+    }
+    const accepting = params.mutationReceipt ?? params.acceptedBy
+    if (accepting) {
       this.db
         .prepare(
           `UPDATE mutation_receipts
@@ -142,9 +170,12 @@ export function createStartingWorkerDispatch(
         )
         .run(
           JSON.stringify({ accepted: { taskId: task.id, dispatchId: id } }),
-          params.mutationReceipt.callerFingerprint,
-          params.mutationReceipt.requestId
+          accepting.callerFingerprint,
+          accepting.requestId
         )
+    }
+    if (params.consumesMessageIds?.length) {
+      this.markAsReadAndDelivered([...params.consumesMessageIds])
     }
     insertStartingDispatchContextRow(this.db, {
       id,
@@ -156,6 +187,7 @@ export function createStartingWorkerDispatch(
       retryOfDispatchId: params.retryOf ?? null,
       priorFailures,
       creatorDispatchId,
+      followUpOfDispatchId: params.followUpOf ?? null,
       ...recordedCreatorIdentity(params.creator)
     })
     this.db

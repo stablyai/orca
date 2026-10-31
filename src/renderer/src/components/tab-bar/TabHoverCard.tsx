@@ -1,97 +1,29 @@
-import { useCallback, useContext, useId, useRef, type ReactNode } from 'react'
+import { useState, type ReactNode, type SyntheticEvent } from 'react'
+import { flushSync } from 'react-dom'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  TabCardOpenContext,
-  TabCardPlacementContext,
-  TAB_TOOLTIP_SKIP_DELAY_MS
-} from './TabStripTooltipProvider'
 
 export function TabHoverCard({
   children,
   title,
   icon,
   programName,
-  description
+  description,
+  alert
 }: {
   children: ReactNode
   title: string
   icon: ReactNode
   programName: string
   description?: string
+  /** Controls below the program row; the card then stays open under the pointer. */
+  alert?: ReactNode | ((dismiss: () => void) => ReactNode)
 }): React.JSX.Element {
-  const placement = useContext(TabCardPlacementContext)
-  const content = useRef<HTMLDivElement>(null)
-  const cardId = useId()
-  const openContext = useContext(TabCardOpenContext)
-  const notifyOpenChange = openContext?.onOpenChange
-
-  const captureClosedPlacement = useCallback(
-    (element: HTMLDivElement | null) => {
-      const previous = placement?.current
-      if (!element || previous?.element !== element) {
-        return
-      }
-      const { left, top } = element.getBoundingClientRect()
-      previous.left = left
-      previous.top = top
-      previous.closedAt = performance.now()
-    },
-    [placement]
-  )
-
-  const setContentElement = useCallback(
-    (element: HTMLDivElement | null) => {
-      const previous = content.current
-      if (element) {
-        // StrictMode reattaches refs without closing the tooltip.
-        notifyOpenChange?.(cardId, true)
-      } else if (previous) {
-        notifyOpenChange?.(cardId, false)
-        captureClosedPlacement(previous)
-      }
-      content.current = element
-    },
-    [captureClosedPlacement, cardId, notifyOpenChange]
-  )
-
-  const handlePlaced = (): void => {
-    const element = content.current
-    if (!element || !placement) {
-      return
-    }
-    const rect = element.getBoundingClientRect()
-    const previous = placement.current
-    if (
-      previous &&
-      previous.closedAt !== null &&
-      performance.now() - previous.closedAt < TAB_TOOLTIP_SKIP_DELAY_MS &&
-      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ) {
-      // Continue from the painted position when reversing direction during a slide.
-      const origin = previous.element.isConnected
-        ? previous.element.getBoundingClientRect()
-        : previous
-      element.animate(
-        [
-          { translate: `${origin.left - rect.left}px ${origin.top - rect.top}px`, opacity: 1 },
-          { translate: '0 0', opacity: 1 }
-        ],
-        { duration: 150, easing: 'ease-out' }
-      )
-    }
-    placement.current = { element, left: rect.left, top: rect.top, closedAt: null }
-  }
-
+  const [open, setOpen] = useState(false)
+  // Remove the portal before navigation can start rendering a slower destination.
+  const dismiss = () => flushSync(() => setOpen(false))
+  const interactive = alert !== undefined && alert !== null
   return (
-    <Tooltip
-      delayDuration={openContext?.isWarm ? 0 : undefined}
-      onOpenChange={(open) => {
-        openContext?.onOpenChange(cardId, open)
-        if (!open && content.current?.isConnected) {
-          captureClosedPlacement(content.current)
-        }
-      }}
-    >
+    <Tooltip open={open} onOpenChange={setOpen} disableHoverableContent={!interactive}>
       <TooltipTrigger
         asChild
         onFocus={(event) => {
@@ -104,14 +36,18 @@ export function TabHoverCard({
         {children}
       </TooltipTrigger>
       <TooltipContent
-        ref={setContentElement}
-        variant="tab-preview"
+        variant={interactive ? 'tab-preview-interactive' : 'tab-preview'}
         showArrow={false}
         side="bottom"
         align="start"
         sideOffset={0}
-        onPlaced={handlePlaced}
         data-tab-hover-card="true"
+        // Why: React bubbles portal events to the tab strip, whose handlers would act on the tab.
+        onContextMenu={stopTabStripEvent}
+        onPointerDown={stopTabStripEvent}
+        onMouseDown={stopTabStripEvent}
+        onClick={stopTabStripEvent}
+        onDoubleClick={stopTabStripEvent}
       >
         <div className="space-y-2 text-left">
           <div className="space-y-1">
@@ -129,8 +65,13 @@ export function TabHoverCard({
             </span>
             <span className="min-w-0 break-all">{programName}</span>
           </div>
+          {typeof alert === 'function' ? alert(dismiss) : alert}
         </div>
       </TooltipContent>
     </Tooltip>
   )
+}
+
+function stopTabStripEvent(event: SyntheticEvent): void {
+  event.stopPropagation()
 }

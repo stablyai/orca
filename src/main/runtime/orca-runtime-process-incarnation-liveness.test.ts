@@ -1,3 +1,10 @@
+import { hostTestState } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import type { AgentSessionLease } from '../../shared/agent-session-record'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PtyProcessInfo } from '../providers/pty-process-info'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -95,15 +102,15 @@ describe('structured worker incarnation liveness', () => {
   const INCARNATION = `structured:${SESSION}`
   const LOCAL_SCOPE = JSON.stringify({ kind: 'local', hostId: 'local' })
 
-  function installHost(lease: Record<string, unknown>): void {
-    setStructuredAgentSessionHost({
-      hasSession: () => false,
-      deps: {
-        store: {
-          getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null }, lease })
-        }
-      }
-    } as never)
+  function installHost(lease: Partial<AgentSessionLease>): void {
+    const { host, store } = hostTestState()
+    vi.spyOn(host, 'hasSession').mockReturnValue(false)
+    vi.spyOn(store, 'getConversation').mockImplementation(() =>
+      agentSessionConversationView(
+        agentSessionRecordFixture(agentSessionLeaseFixture({ ...lease, sessionId: SESSION }))
+      )
+    )
+    setStructuredAgentSessionHost(host)
   }
 
   afterEach(() => {
@@ -112,9 +119,7 @@ describe('structured worker incarnation liveness', () => {
   })
 
   it('settles a stopped worker as exited after its identity was forgotten', async () => {
-    // Settlement forgets the in-memory identity. Gating on one left the durable resource answering
-    // `unverifiable` forever, so its row never reconciled out of `worker-list --terminalState
-    // retained` for the life of the DB. The durable agent-session record is what actually knows.
+    // Settlement forgets in-memory identity; durable session records must still reconcile retained workers.
     installHost({
       runtimeKind: 'native',
       claimStatus: 'released',

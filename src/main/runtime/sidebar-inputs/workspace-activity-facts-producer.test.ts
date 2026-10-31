@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SidebarClock } from './sidebar-clock'
 import { AgentHookServer } from '../../agent-hooks/server'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import {
@@ -18,7 +19,8 @@ function createProducer(tabs: Record<string, string> = {}) {
   const readSurfaces = vi.fn((worktreeId: string) => surfaces.get(worktreeId) ?? NONE)
   const producer = new WorkspaceActivityFactsProducer({
     readSurfaces,
-    resolveTabWorktreeId: (tabId) => tabs[tabId]
+    resolveTabWorktreeId: (tabId) => tabs[tabId],
+    clock: new SidebarClock()
   })
   return { producer, surfaces, readSurfaces }
 }

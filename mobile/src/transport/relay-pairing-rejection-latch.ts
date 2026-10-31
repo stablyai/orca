@@ -1,13 +1,9 @@
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 
-// Why: one E2EE rejection is not proof the pairing is dead — the desktop fires it
-// transiently while it commits credentials right after pairing. Mirrors rpc-client's
-// AUTH_RETRY_BUDGET so both transports latch "re-pair" on the same weight of evidence.
+// Allow transient post-pairing E2EE refusals; match direct AUTH_RETRY_BUDGET before suggesting re-pair.
 const RELAY_PAIRING_REJECTION_BUDGET = 3
 
-// Consecutive desktop rejections of this device's relay credential. Only an
-// authenticated connection clears it — a gate lift or app resume must not, or a
-// revoked phone re-enters the reassuring "Connecting via Relay…" label forever.
+// Clear only on authentication; resume/gate lifts must not erase revocation evidence.
 export class RelayPairingRejectionLatch {
   private count = 0
   private reporter: ((rejected: boolean) => void) | null = null

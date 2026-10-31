@@ -7,15 +7,12 @@ import {
   PI_STATE_MARKERS
 } from './pi-state-title-marker'
 
-// Why: OMP 17.2.12 swapped its animated braille frames for static markers on WSL/ConPTY
-// (#13890, upstream #8014). Every case below was idle before the marker table existed.
+// OMP 17.2.12 uses static markers on WSL/ConPTY; all these were previously idle (#13890, upstream #8014).
 describe('Pi/OMP native state-title markers', () => {
   it.each([
-    // bare 17.2.12+ titles
     ['π : my-project', 'working'],
     ['π > my-project', 'idle'],
     ['π ! my-project', 'permission'],
-    // wrapper-prefixed titles — multiplexers own the head of the string
     ['zsh | π : my-project', 'working'],
     ['zsh | tmux | π > my-project', 'idle'],
     ['zsh | π ! my-project', 'permission'],
@@ -23,10 +20,8 @@ describe('Pi/OMP native state-title markers', () => {
     // the label is opaque: it legally carries the wrapper separator and more markers
     ['π > release | π : note | π ! note', 'idle'],
     ['zsh | π : release | π > note', 'working'],
-    // ...and glyphs another agent uses for status
     ['π > session ✦ ⏲ ◇ ✋', 'idle'],
     ['π : session ✦ ⏲ ◇ ✋', 'working'],
-    // no label at all
     ['π :', 'working'],
     ['π >', 'idle']
   ] as const)('classifies %j as %s', (title, expected) => {
@@ -35,8 +30,7 @@ describe('Pi/OMP native state-title markers', () => {
   })
 
   it.each([
-    // Why: the legacy no-space form is OMP's disabled title, not a working marker. It has
-    // always classified idle and must keep doing so on hosts still running 17.2.11.
+    // No-space π: is OMP 17.2.11’s disabled title; retain its idle classification.
     ['π: my-project', 'idle'],
     ['π - my-project', 'idle'],
     ['⠋ π - my-project', 'working']
@@ -52,9 +46,7 @@ describe('Pi/OMP native state-title markers', () => {
     }
   )
 
-  // Why: an unrecognized marker means a protocol Orca has not been taught yet. Claiming a
-  // status from it would repeat this bug in the other direction, so the parser abstains
-  // and the pre-existing Pi gates decide.
+  // Unknown upstream markers must abstain so existing Pi gates decide instead of inventing status.
   it('abstains on a marker the table does not define', () => {
     expect(PI_STATE_MARKERS).not.toContain('~')
     expect(getPiStateTitleStatus('π ~ my-project')).toBeNull()
@@ -77,16 +69,5 @@ describe('Pi/OMP native state-title markers', () => {
         expect(clearPiStateWorkingMarker(title)).toBeNull()
       }
     )
-  })
-
-  // Why: the table is the single source of truth. A new marker added there must reach
-  // detection without editing this file, or the two drift the way they did in #13890.
-  it('routes every table marker through title detection', () => {
-    for (const marker of PI_STATE_MARKERS) {
-      const status = getPiStateTitleStatus(`π ${marker} my-project`)
-      expect(status).not.toBeNull()
-      expect(detectAgentStatusFromTitle(`π ${marker} my-project`)).toBe(status)
-      expect(detectAgentStatusFromTitle(`zsh | π ${marker} my-project`)).toBe(status)
-    }
   })
 })

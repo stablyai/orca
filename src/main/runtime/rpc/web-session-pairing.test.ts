@@ -7,9 +7,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { encodeDeviceProofMessage } from '../../../shared/device-key-proof'
 import { DeviceRegistry } from '../device-registry'
 import { EPHEMERAL_DEVICE_IDLE_MS } from '../ephemeral-device-rows'
-import { SimulatedMobileE2EEV2Peer } from '../relay/simulated-mobile-e2ee-v2-peer'
+import { SimulatedMobileE2EEV2Peer } from '../mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
 import { registerSocketDeviceKey } from '../runtime-rpc/runtime-rpc-device-key-registration'
-import { generateKeyPair } from './e2ee-crypto'
+import { generateKeyPair } from '../../../shared/e2ee-crypto'
 import {
   MobileSocketWiring,
   type AuthenticatedMobileSocket,
@@ -96,8 +96,7 @@ function sign(key: nacl.SignKeyPair, purpose: 'auth' | 'register', transcriptHas
   return Buffer.from(nacl.sign.detached(message, key.secretKey)).toString('base64')
 }
 
-// Why no page origin here: the host no longer gates a first pairing on the page that opened the
-// socket (#27540's refusal broke LAN and Tailscale web pairing), so every direct client pairs alike.
+// First pairing accepts direct clients regardless of page origin; origin gating broke LAN/Tailscale web pairing (#27540).
 describe('first pairing over a direct socket', () => {
   it('pairs a never-used code and keeps an already-paired browser working', () => {
     const { registry, connect } = harness()

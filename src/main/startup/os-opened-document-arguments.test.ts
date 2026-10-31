@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isMarkdownDocumentName } from '../ipc/markdown-documents'
+import { isMarkdownDocumentName } from '../../shared/markdown-document-paths'
 import { documentPathsFromArguments } from './os-opened-documents'
 
 describe('documentPathsFromArguments', () => {
@@ -77,7 +77,6 @@ describe('documentPathsFromArguments', () => {
       '/Users/dev/orca/out/main/index.js',
       '/Applications/Orca.app/Contents/Resources/app.asar'
     ]
-    // The module documents that the extension check alone excludes these; hold it to that.
     for (const entry of nonDocumentEntries) {
       expect(isMarkdownDocumentName(entry), entry).toBe(false)
     }
@@ -124,10 +123,7 @@ describe('documentPathsFromArguments', () => {
   })
 
   it('accepts a file:// URI, which the desktop entry %U field code permits', () => {
-    // Why defensive rather than load-bearing: GLib decodes a local file:// URI to a plain
-    // path before spawning (measured on Ubuntu 24.04), so Linux hits the plain-path branch
-    // today. The %U spec still allows a URI, and a launcher that passes one literally would
-    // otherwise be dropped without a trace.
+    // GLib currently decodes file URLs before spawning; %U permits literal URLs, so retain defensive coverage.
     expect(
       documentPathsFromArguments(
         ['file:///home/me/notes/a.md', 'file:///home/me/notes/b.txt'],
@@ -168,8 +164,7 @@ describe('documentPathsFromArguments', () => {
 
   it('honours the platform argument rather than the host OS', () => {
     const argv = ['C:\\notes\\a.md', '/notes/b.md']
-    // Same argv, two platforms: a win32 path is not absolute to posix, and posix input is
-    // renormalized to backslashes on win32. Neither result may depend on where the suite runs.
+    // Resolve against the requested platform, independent of the test host's path rules.
     expect(documentPathsFromArguments(argv, 'darwin')).toEqual(['/notes/b.md'])
     expect(documentPathsFromArguments(argv, 'win32')).toEqual(['C:\\notes\\a.md', '\\notes\\b.md'])
   })

@@ -119,6 +119,7 @@ const ids = [
   'repo-twin-only::wt',
   'stale-hub-repo::wt',
   'rival-repo::wt',
+  'conflict-repo::wt',
   'projected-twin::wt',
   'detected-repo::wt',
   'unknown-repo::wt',

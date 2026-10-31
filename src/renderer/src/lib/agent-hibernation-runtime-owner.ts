@@ -1,5 +1,5 @@
 import { resolveTerminalTeardownOwner } from '@/store/terminals/terminal-teardown-owner'
-import type { WorktreeRuntimeOwner } from './worktree-runtime-owner'
+import type { TerminalPtyOwner } from '@/lib/terminal-worktree-route'
 
 export type AgentHibernationRuntimeOwner =
   | { kind: 'runtime'; environmentId: string }
@@ -9,7 +9,7 @@ export type AgentHibernationRuntimeOwner =
 
 /** `ptyIds` are the worktree's bound PTYs; they only decide the owner when two hosts publish it. */
 export function toAgentHibernationRuntimeOwner(
-  worktreeOwner: WorktreeRuntimeOwner,
+  worktreeOwner: TerminalPtyOwner,
   ptyIds: readonly string[]
 ): AgentHibernationRuntimeOwner {
   if (worktreeOwner.kind !== 'ambiguous') {

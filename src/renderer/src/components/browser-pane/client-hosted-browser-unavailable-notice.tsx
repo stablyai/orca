@@ -13,12 +13,9 @@ import {
   ReopenBrowserPageOnServerButton,
   reopenOnServerCaveat
 } from './ReopenBrowserPageOnServerButton'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
-/**
- * What a client-hosted page shows when its guest is not here: the page belongs to another desktop,
- * or the host that owned it is gone. There is nothing to retry locally, so the only way forward
- * offered is reopening the page on the server.
- */
+/** No guest exists here to retry; offer reopening on a capable server when hosting is unavailable or belongs to another desktop. */
 export function ClientHostedBrowserUnavailableNotice({
   runtimeEnvironmentId,
   worktreeId,
@@ -33,8 +30,7 @@ export function ClientHostedBrowserUnavailableNotice({
   const offlineHostName = useAppStore((s) => {
     const entry = s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)
     const state = runtimeHostConnectionStateForEntry(entry)
-    // Why the revoked check: a retired or refused pairing also reads 'disconnected', but never
-    // reconnects.
+    // Revoked/refused pairings also read disconnected but cannot reconnect.
     const offline =
       (state === 'reconnecting' || state === 'disconnected') &&
       !isRuntimeHostContactRevokedVerdict(runtimeHostContactForEntry(entry))
@@ -43,12 +39,17 @@ export function ClientHostedBrowserUnavailableNotice({
           ?.name ?? null)
       : null
   })
+  // Why: a runtime known to have no browser of its own (orcad) cannot take the page back.
+  const runtimeCanHostPage = useAppStore((s) => {
+    const capabilities =
+      s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)?.status?.capabilities
+    return !capabilities || capabilities.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
+  })
   const ownHostClientId = readBrowserClientHostId()
   const onOtherDesktop = Boolean(
     placementHostClientId && ownHostClientId && placementHostClientId !== ownHostClientId
   )
-  // Why on mount: a lease reconnect that fails after the control link already came back leaves
-  // this desktop unhosted with no later contact edge to re-claim it.
+  // Reclaim hosting on mount too; a failed lease reconnect after contact returns has no later contact edge.
   useEffect(() => {
     const state = useAppStore.getState()
     if (!onOtherDesktop && state.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)?.status) {
@@ -78,12 +79,16 @@ export function ClientHostedBrowserUnavailableNotice({
           {translate('browser.clientHosted.unavailableTitle', 'Client-hosted browser unavailable')}
         </div>
         <div className="text-xs leading-5 text-muted-foreground">{description}</div>
-        <div className="text-xs leading-5 text-muted-foreground">{reopenOnServerCaveat()}</div>
-        <ReopenBrowserPageOnServerButton
-          environmentId={runtimeEnvironmentId}
-          worktreeId={worktreeId}
-          lastCommittedUrl={lastCommittedUrl}
-        />
+        {runtimeCanHostPage ? (
+          <>
+            <div className="text-xs leading-5 text-muted-foreground">{reopenOnServerCaveat()}</div>
+            <ReopenBrowserPageOnServerButton
+              environmentId={runtimeEnvironmentId}
+              worktreeId={worktreeId}
+              lastCommittedUrl={lastCommittedUrl}
+            />
+          </>
+        ) : null}
       </div>
     </div>
   )

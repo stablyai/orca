@@ -21,7 +21,7 @@ export const headingSlashCommands: SlashCommand[] = [
       )
     },
     run: (editor) => {
-      // Use setHeading (not toggleHeading) so "/h1" is idempotent.
+      // setHeading keeps repeated slash commands idempotent.
       editor.chain().focus().setHeading({ level: 1 }).run()
     }
   },
@@ -43,7 +43,6 @@ export const headingSlashCommands: SlashCommand[] = [
       )
     },
     run: (editor) => {
-      // Use setHeading (not toggleHeading) so "/h2" is idempotent.
       editor.chain().focus().setHeading({ level: 2 }).run()
     }
   },
@@ -65,7 +64,6 @@ export const headingSlashCommands: SlashCommand[] = [
       )
     },
     run: (editor) => {
-      // Use setHeading (not toggleHeading) so "/h3" is idempotent.
       editor.chain().focus().setHeading({ level: 3 }).run()
     }
   },
@@ -87,7 +85,6 @@ export const headingSlashCommands: SlashCommand[] = [
       )
     },
     run: (editor) => {
-      // Use setHeading (not toggleHeading) so "/h4" is idempotent.
       editor.chain().focus().setHeading({ level: 4 }).run()
     }
   },
@@ -109,12 +106,10 @@ export const headingSlashCommands: SlashCommand[] = [
       )
     },
     run: (editor) => {
-      // Use setHeading (not toggleHeading) so "/h5" is idempotent.
       editor.chain().focus().setHeading({ level: 5 }).run()
     }
   },
-  // Grouped separately (Notion-style) so plain headings and collapsible
-  // toggle headings are easy to scan as distinct families in the slash menu.
+  // Group plain and toggle headings separately for easier scanning.
   {
     id: 'toggle-h1',
     get label() {

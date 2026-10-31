@@ -14,6 +14,7 @@ import {
 import {
   hasExactTerminalRetirementProof,
   hasStrongOrphanIdentity,
+  withoutHostAttestation,
   type RecoveryDisposition,
   type RecoverySurface
 } from './web-session-terminal-orphan-recovery-surface'
@@ -41,7 +42,7 @@ function fallback(
   removed: ReadonlySet<string>
 ): TerminalOrphanInventoryResolution {
   return {
-    retained: [...retainedBeforeListing, ...inventorySurfaces],
+    retained: [...retainedBeforeListing, ...inventorySurfaces.map(withoutHostAttestation)],
     removed: new Set(removed),
     claims: [],
     topologyRevision: 0
@@ -104,7 +105,7 @@ export async function resolveTerminalOrphanInventory(args: {
   const retainedBeforeListing = [...duplicateSurfaces, ...stableRetained]
   if (inventorySurfaces.length > 64) {
     return {
-      retained: [...retainedBeforeListing, ...inventorySurfaces],
+      retained: [...retainedBeforeListing, ...inventorySurfaces.map(withoutHostAttestation)],
       removed: provenRemoved,
       claims: [],
       topologyRevision: 0
@@ -164,8 +165,7 @@ export async function resolveTerminalOrphanInventory(args: {
       listedByHandle.set(terminal.handle, terminal)
     }
   }
-  // Older hosts omit hostScope entirely; an unscoped absence cannot prove a PTY exited. A peer
-  // runtime named in `omittedHostIds` is disclosure rather than a gap this host owed (#18595).
+  // Old hosts omit hostScope, so absence proves no exit. omittedHostIds peers disclose scope without making this host incomplete (#18595).
   const hostScopeUnverifiable = !hostScopeCensusIsComplete(listed.hostScope)
   const dispositions = new Map<string, RecoveryDisposition>()
   const claims: RuntimeTerminalOrphanAdoptionClaim[] = []
@@ -203,14 +203,7 @@ export async function resolveTerminalOrphanInventory(args: {
     ) {
       disposition = 'retain'
     } else if (surface.pending && terminal.ptyId !== surface.expectedPtyId) {
-      // Rebind, never retire. `expectedPtyId` is the ptyId of the *snapshot frame's* pending row;
-      // `terminal.ptyId` is the answer to a `terminal.list` with `requireFreshPtyLiveness: true`, so
-      // the host has just attested this handle is live under a different PTY. A PTY id changing
-      // across a host relaunch is the normal case, not evidence of death (#11495). Retaining emits a
-      // ready row bound to the host's handle, which is the rebind — the handle is the identity, the
-      // ptyId behind it is the host's business. Removal here needs what the two branches around it
-      // already require: an explicit `retiredTerminalSurfaces` entry, or two authoritative
-      // inventories omitting the identity. See docs/reference/ssh-execution-boundary.md.
+      // Fresh liveness attests this handle under a replacement PTY: rebind, never retire on ID rotation (#11495). Handle is identity; removal still requires explicit retiredTerminalSurfaces or two authoritative absences (docs/reference/ssh-execution-boundary.md).
       disposition = 'retain'
     } else if (!hasStrongOrphanIdentity(terminal, surface, snapshot.worktree)) {
       disposition = 'retain'
@@ -238,9 +231,11 @@ export async function resolveTerminalOrphanInventory(args: {
     }
     dispositions.set(surface.surfaceKey, disposition)
   }
-  const retainedAfterListing = inventorySurfaces.filter(
-    (surface) => dispositions.get(surface.surfaceKey) === 'retain'
-  )
+  const retainedAfterListing = inventorySurfaces
+    .filter((surface) => dispositions.get(surface.surfaceKey) === 'retain')
+    .map((surface) =>
+      listedByHandle.has(surface.handle) ? surface : withoutHostAttestation(surface)
+    )
   const removed = new Set(
     [
       ...retiredSurfaces,

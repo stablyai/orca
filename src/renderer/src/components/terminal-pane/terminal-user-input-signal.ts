@@ -1,10 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 
-// Why: xterm's public onData stream mixes real user input (keyboard, IME,
-// paste, mouse reports) with parser-generated auto-replies (focus in/out
-// reports, DA/DSR/CPR query responses). The core service already classifies
-// the two — its onUserInput event fires only for real input — but that
-// classification is not exposed on the public API.
+// Public onData mixes typing/paste/mouse with synthetic query replies; only the private core user-input signal preserves provenance.
 type TerminalWithCoreUserInput = {
   _core?: {
     coreService?: {
@@ -13,15 +9,7 @@ type TerminalWithCoreUserInput = {
   }
 }
 
-/**
- * Subscribe to xterm's core user-input signal. Fires only for real user
- * input, never for the emulator's synthetic query replies that also flow
- * through onData.
- *
- * Returns null when the internal API is unavailable (e.g. after an xterm
- * upgrade) so callers can fall back to onData-based recording — degrading to
- * the historical behavior instead of losing input tracking.
- */
+/** Subscribe only to real input; return null if core API is unavailable so callers retain historical onData tracking. */
 export function subscribeToTerminalUserInput(
   terminal: Terminal,
   listener: () => void
@@ -32,9 +20,7 @@ export function subscribeToTerminalUserInput(
   }
   try {
     const subscription = coreService.onUserInput(listener)
-    // Why: a reshaped internal that subscribes but returns no disposable must
-    // not be treated as live — callers disable their onData fallback on a
-    // non-null return, and activity tracking would silently disappear.
+    // Without usable disposal callers must keep fallback, or API drift silently disables input activity.
     if (subscription && typeof subscription.dispose === 'function') {
       return subscription as { dispose: () => void }
     }

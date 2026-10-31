@@ -1,4 +1,9 @@
-import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { join, posix as pathPosix, resolve, win32 as pathWin32 } from 'node:path'
+import {
+  CODEX_BUNDLED_MARKETPLACE_NAMES,
+  CODEX_BUNDLED_MARKETPLACES_ENTRY
+} from './codex-home-paths'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
@@ -7,10 +12,7 @@ import {
   updateTomlLineScanState
 } from './config-toml-line-scan'
 
-// Why: codex-rs types these settings AbsolutePathBuf and resolves relative
-// values against the defining config.toml's directory (= CODEX_HOME for the
-// user config). experimental_instructions_file only exists in older Codex
-// releases; keeping it is harmless since Codex ignores unknown keys.
+// Codex resolves these path settings against config.toml, including legacy instruction-file keys.
 const EXACT_PATH_CONFIG_KEYS = new Set([
   'debug.config_lockfile.export_dir',
   'debug.config_lockfile.load_path',
@@ -23,12 +25,59 @@ const EXACT_PATH_CONFIG_KEYS = new Set([
   'sqlite_home'
 ])
 
-// Why: Orca mirrors config.toml into a managed CODEX_HOME, but Codex resolves
-// path-valued config settings from the file it read. Keep user-owned assets in
-// ~/.codex reachable after the mirror moves the TOML. Best-effort by design:
-// values spelled as inline tables, quoted keys, or triple-quoted strings pass
-// through unchanged rather than risk corrupting them.
+// Preserve original path targets when moving config.toml to a managed home.
+// Inline tables, quoted keys and multiline strings pass through unchanged.
 export function rewriteRelativePathConfigValues(config: string, sourceConfigDir: string): string {
+  // WSL reads config over UNC but consumes it in Linux; join using the source home's path style.
+  const path = sourceConfigDir.startsWith('/') ? pathPosix : pathWin32
+  return rewriteTomlStringSettings(config, (keyPath, value) =>
+    isPathConfigKey(keyPath) && shouldRewriteRelativePath(value)
+      ? path.join(sourceConfigDir, value)
+      : null
+  )
+}
+
+// Codex only trusts openai-bundled marketplaces whose source sits under the canonical CODEX_HOME.
+export function rebaseBundledMarketplaceSources(
+  config: string,
+  systemHomeDir: string,
+  runtimeHomeDir: string
+): string {
+  const systemHomeDirs = [systemHomeDir, resolveRealPath(systemHomeDir)]
+  const canonicalRuntimeHomeDir = resolveRealPath(runtimeHomeDir)
+  return rewriteTomlStringSettings(config, (keyPath, value) => {
+    const name = CODEX_BUNDLED_MARKETPLACE_NAMES.find(
+      (candidate) => keyPath === `marketplaces.${candidate}.source`
+    )
+    const pointsAtSystemHome =
+      name !== undefined &&
+      systemHomeDirs.some((dir) =>
+        isSamePath(value, join(dir, CODEX_BUNDLED_MARKETPLACES_ENTRY, name))
+      )
+    return pointsAtSystemHome
+      ? join(canonicalRuntimeHomeDir, CODEX_BUNDLED_MARKETPLACES_ENTRY, name)
+      : null
+  })
+}
+
+function resolveRealPath(path: string): string {
+  try {
+    return realpathSync.native(path)
+  } catch {
+    return path
+  }
+}
+
+function isSamePath(left: string, right: string): boolean {
+  return process.platform === 'win32'
+    ? resolve(left).toLowerCase() === resolve(right).toLowerCase()
+    : resolve(left) === resolve(right)
+}
+
+function rewriteTomlStringSettings(
+  config: string,
+  rewrite: (keyPath: string, value: string) => string | null
+): string {
   const lines = config.split('\n')
   let tablePath = ''
   let scanState = createTomlLineScanState()
@@ -38,9 +87,9 @@ export function rewriteRelativePathConfigValues(config: string, sourceConfigDir:
     if (isTomlStructuralLine(scanState)) {
       const header = getTomlTableHeader(line)
       if (header) {
-        tablePath = getTomlHeaderPath(header)
+        tablePath = normalizeTomlPathExpression(getTomlHeaderPath(header))
       } else {
-        lines[index] = rewriteRelativePathConfigLine(line, tablePath, sourceConfigDir)
+        lines[index] = rewriteTomlStringSettingLine(line, tablePath, rewrite)
       }
     }
     scanState = updateTomlLineScanState(scanState, line)
@@ -49,46 +98,32 @@ export function rewriteRelativePathConfigValues(config: string, sourceConfigDir:
   return lines.join('\n')
 }
 
-function rewriteRelativePathConfigLine(
+function rewriteTomlStringSettingLine(
   line: string,
   tablePath: string,
-  sourceConfigDir: string
+  rewrite: (keyPath: string, value: string) => string | null
 ): string {
   const equalsIndex = line.indexOf('=')
   if (equalsIndex === -1) {
     return line
   }
-
-  const key = line.slice(0, equalsIndex).trim()
-  if (!isPathConfigKey(tablePath, key)) {
-    return line
-  }
-
+  const key = normalizeTomlPathExpression(line.slice(0, equalsIndex).trim())
   const parsed = parseTomlSingleLineStringValue(line, equalsIndex + 1)
-  if (!parsed || !shouldRewriteRelativePath(parsed.value)) {
+  const rewritten = parsed && rewrite(tablePath ? `${tablePath}.${key}` : key, parsed.value)
+  if (!parsed || rewritten === null) {
     return line
   }
-
-  // Why: WSL configs are read over UNC paths but consumed inside Linux, so
-  // join semantics must follow the source home's path style, not the host's.
-  const path = sourceConfigDir.startsWith('/') ? pathPosix : pathWin32
-  const absolutePath = path.join(sourceConfigDir, parsed.value)
-  return `${line.slice(0, parsed.start)}${quoteTomlPath(absolutePath)}${line.slice(parsed.end)}`
+  return `${line.slice(0, parsed.start)}${quoteTomlPath(rewritten)}${line.slice(parsed.end)}`
 }
 
-function isPathConfigKey(tablePath: string, key: string): boolean {
-  const normalizedKey = normalizeTomlPathExpression(key)
-  const fullPath = tablePath
-    ? `${normalizeTomlPathExpression(tablePath)}.${normalizedKey}`
-    : normalizedKey
+function isPathConfigKey(fullPath: string): boolean {
   if (EXACT_PATH_CONFIG_KEYS.has(fullPath)) {
     return true
   }
   return (
     /^agents\..+\.config_file$/.test(fullPath) ||
     /^model_providers\..+\.auth\.cwd$/.test(fullPath) ||
-    // Why: profiles mirror the top-level file settings that Codex reads (and
-    // can abort on) during config load.
+    // Profile file settings also load during Codex startup.
     /^profiles\..+\.(?:experimental_compact_prompt_file|model_catalog_json|model_instructions_file)$/.test(
       fullPath
     )
@@ -114,8 +149,7 @@ function quoteTomlPath(value: string): string {
   return canUseTomlLiteralString(value) ? `'${value}'` : quoteTomlBasicString(value)
 }
 
-// Why: TOML literal strings allow tab but no other control chars and no
-// single quote; anything else must go through an escaped basic string.
+// TOML literal strings forbid single quotes and control characters except tab.
 function canUseTomlLiteralString(value: string): boolean {
   for (const char of value) {
     if (char === "'") {

@@ -1,5 +1,4 @@
-// A structured worker's setup gate and its preamble's wait for the agent share one deadline: the
-// caller's timeout. Waiting the full timeout again after a slow setup outlasts the client's limit.
+// Setup and preamble readiness share the caller's deadline; a slow setup must not buy another full timeout.
 
 import { afterEach, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -88,8 +87,7 @@ it('leaves the preamble only what the setup gate did not use of the caller’s t
   }
 
   const receipt = await startLocalWorker({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fields this start reads; the rest are optional.
-    params: { from: 'term_c', timeoutMs: 300_000, agent: 'claude' } as never,
+    params: { from: 'term_c', timeoutMs: 300_000, agent: 'claude' },
     mode: {
       mode: 'structured',
       preferred: 'structured',
@@ -101,7 +99,8 @@ it('leaves the preamble only what the setup gate did not use of the caller’s t
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start path reaches only these db members.
     db: db as unknown as OrchestrationDb,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the run id is read.
-    run: { id: 'run_1' } as never,
+    bindRun: () => ({ id: 'run_1' }) as never,
+    taskDeps: undefined,
     coordinator: null
   })
 

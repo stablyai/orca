@@ -12,20 +12,26 @@ import {
   takeTabRowFields
 } from '@/runtime/layout-owner-pane-intents'
 import { createTestStore, makeTab } from '../slices/store-test-helpers'
-import { createInitialTerminalThroughLayoutOwner } from './terminal-tab-create-through-layout-owner'
+import {
+  createInitialTerminalThroughLayoutOwner,
+  recordCreatedTerminalTabInLayoutOwner
+} from './terminal-tab-create-through-layout-owner'
 
 const mocks = vi.hoisted(() => {
   const held: {
     pairedServer: string | null
+    twin: boolean
     reply: ((value: LayoutApplyReply) => void) | null
     fail: ((error: Error) => void) | null
-  } = { pairedServer: null, reply: null, fail: null }
+  } = { pairedServer: null, twin: false, reply: null, fail: null }
   return Object.assign(held, { callRuntimeRpc: vi.fn() })
 })
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExplicitRuntimeEnvironmentIdForWorktree: () => mocks.pairedServer
+vi.mock('@/lib/resolve-owner', () => ({
+  runtimeEnvironmentIdUnlessTwin: () => mocks.pairedServer,
+  runtimeEnvironmentIdForWorkspaceOwner: () =>
+    mocks.twin ? { kind: 'ambiguous' } : { kind: 'resolved', environmentId: null }
 }))
 
 const WORKTREE = 'repo1::/path/wt'
@@ -52,6 +58,7 @@ beforeEach(() => {
   _resetLayoutOwnerPaneIntentsForTests()
   endLayoutFramePositions()
   mocks.pairedServer = null
+  mocks.twin = false
   mocks.callRuntimeRpc.mockReset()
   mocks.callRuntimeRpc.mockImplementation(
     () =>
@@ -81,17 +88,17 @@ describe('createInitialTerminalThroughLayoutOwner', () => {
     expect(takeTabRowFields(command.tabId)).toEqual({ pendingActivationSpawn: true })
   })
 
-  it('draws main’s tab itself, under main’s ids, when no frame is coming', async () => {
+  it('draws nothing itself when no frame is coming: the reopened stream’s snapshot brings it', async () => {
     const { create, command } = start()
 
     mocks.reply?.({ ok: true, result: { tabId: command.tabId, leafId: command.leafId } })
     await settle()
 
-    expect(create).toHaveBeenCalledWith({ tabId: command.tabId, leafId: command.leafId })
-    expect(takeTabRowFields(command.tabId)).toBeNull()
+    expect(create).not.toHaveBeenCalled()
+    expect(takeTabRowFields(command.tabId)).toEqual({ pendingActivationSpawn: true })
   })
 
-  it('waits for a stream not yet in, and draws main’s tab itself if it ends first', async () => {
+  it('draws nothing itself when the stream ends before main’s frame', async () => {
     _resetLayoutFramePositionForTests()
     beginLayoutFramePositions()
     const { create, command } = start()
@@ -102,10 +109,10 @@ describe('createInitialTerminalThroughLayoutOwner', () => {
       frameSeq: 1
     })
     await settle()
-    expect(create).not.toHaveBeenCalled()
-
     endLayoutFramePositions()
-    expect(create).toHaveBeenCalledWith({ tabId: command.tabId, leafId: command.leafId })
+
+    expect(create).not.toHaveBeenCalled()
+    expect(takeTabRowFields(command.tabId)).toEqual({ pendingActivationSpawn: true })
   })
 
   it('draws nothing itself when a frame showed the tab before the stream ended', async () => {
@@ -173,4 +180,30 @@ describe('createInitialTerminalThroughLayoutOwner', () => {
     expect(routed).toBe(false)
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
+})
+
+describe('recordCreatedTerminalTabInLayoutOwner', () => {
+  const command = {
+    type: 'createTerminalTab' as const,
+    workspace: WORKTREE,
+    tabId: 'tab-drawn',
+    leafId: 'leaf-drawn'
+  }
+
+  it.each([
+    [false, 1],
+    [true, 0]
+  ])(
+    'on host_not_owned (twin: %s), closes the drawn tab unless a paired server may hold it',
+    async (twin, closes) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mocks.twin = twin
+      const state = stateWith(['tab-drawn'])
+      const closeTab = vi.fn()
+      recordCreatedTerminalTabInLayoutOwner({ ...state, closeTab }, command)
+      mocks.reply?.({ ok: false, code: 'host_not_owned' })
+      await settle()
+      expect(closeTab).toHaveBeenCalledTimes(closes)
+    }
+  )
 })

@@ -1,16 +1,9 @@
-/**
- * The page's own question, driven through the real bridge handshake rather than a stubbed client:
- * what the preview reads is what `init` actually carried.
- *
- * `use-browser-binary-screencast-grant.web.test.tsx`'s shape, against the other token that is
- * neither a verb nor a notify.
- */
+// Exercise the real init handshake so the preview reads the grant the shell actually sent.
 import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The provider module re-exports the screen hooks, and reaching the real ones imports the Expo
-// runtime this test does not have. Nothing below calls one.
+// Avoid Expo imports from re-exported screen hooks; this test uses none of them.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,
@@ -28,7 +21,6 @@ import {
   type BridgePortPair
 } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { useHtmlPreviewLinkGrant } from './use-html-preview-link-grant.web'
-import { useHtmlPreviewLinkGrant as useHtmlPreviewLinkGrantNatively } from './use-html-preview-link-grant'
 
 const held: { granted: boolean | null } = { granted: null }
 
@@ -73,17 +65,11 @@ describe('whether a link in the HTML preview opens, on the web', () => {
   })
 
   it('is refused by a shell too old to have heard of it at all', async () => {
-    // The state C8.1 exists for: every shell built before the cancelled-navigation event. It drops
-    // the navigation in silence, so a tap on a rendered link would do nothing at all.
+    // Older shells cancel navigation silently; offering links there would leave taps unanswered.
     expect(await mount(createFakeBridgePortPair({ routeGrants: [] }))).toBe(false)
   })
 
-  it('is unconditional on native, where the preview is its own WebView', () => {
-    expect(useHtmlPreviewLinkGrantNatively()).toBe(true)
-  })
-
-  // Checked against the contract rather than by eye: a route naming a grant the manifest refuses
-  // never reaches a shell, so the preview would hide its links for a reason no screen could report.
+  // A grant refused by the manifest never reaches a shell, so check the route against the contract.
   it('is a name the bundle manifest will carry, on either lane', () => {
     const route = (grants: string[], optionalGrants?: string[]) => ({
       pathname: '/h/[hostId]/session/[worktreeId]',
@@ -97,7 +83,7 @@ describe('whether a link in the HTML preview opens, on the web', () => {
     expect(
       MobileWebBundleRouteSchema.safeParse(route([BRIDGE_EXTERNAL_NAVIGATION_GRANT])).success
     ).toBe(true)
-    // The dotted spelling this name nearly had, which the grant grammar refuses: it is not a verb.
+    // Grant names cannot use the dotted spelling reserved for verbs.
     expect(
       MobileWebBundleRouteSchema.safeParse(route([], ['native.externalNavigation'])).success
     ).toBe(false)

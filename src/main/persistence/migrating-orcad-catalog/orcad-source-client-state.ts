@@ -1,13 +1,11 @@
-import { hostStableKey } from '../../../shared/automation-owner-key'
-import { parsePersistedAutomationHostFilter } from '../../../shared/automation-host-filter'
 import type {
   OrcadMigrationClientStatePayload,
   OrcadMigrationUiRoutingState
-} from '../../../shared/orcad-migration-client-state'
+} from '../../../shared/orcad-migration/orcad-migration-client-state'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type {
   PersistedMobileClientTabSelection,
   PersistedState
@@ -16,7 +14,8 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { sessionPartitions } from './orcad-source-workspace-session-fragments'
 import { collectCloseIntents } from './orcad-source-client-browser-intents'
 import {
-  createOrcadMigrationSourceScope,
+  createOrcadMigrationExportScope,
+  orcadMigrationScopeOwnsWholeHost,
   orcadMigrationOwnerMatchesScope,
   orcadMigrationOwnsRepoId,
   unqualifyOrcadMigrationOwnerKey
@@ -27,7 +26,7 @@ export type OrcadMigrationSourceClientStateInspection = {
   payload: OrcadMigrationClientStatePayload | undefined
   /** Duplicate closes are folded into the existing workspace-session blocker. */
   blockedCount: number
-  /** Mobile selections and sidebar routing are presentation: what can't move stays behind. */
+  /** Presentation state that cannot move stays behind. */
   blockedCounts: { 'saved-port-forward': number }
 }
 
@@ -38,11 +37,11 @@ export function collectOrcadMigrationSourceClientState(
   destinationEnvironmentId: string | undefined,
   eligibleSession: WorkspaceSessionState | undefined
 ): OrcadMigrationSourceClientStateInspection {
-  const scope = createOrcadMigrationSourceScope({ source, catalog, repos: state.repos })
+  const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const blockedCounts = { 'saved-port-forward': 0 }
   let blockedCount = 0
   const mobile = collectMobileSelections(state, scope, eligibleSession)
-  const uiRouting = collectUiRouting(state, scope, destinationEnvironmentId, eligibleSession)
+  const uiRouting = collectUiRouting(state, scope, eligibleSession)
   const target = state.sshTargets.find((entry) => entry.id === scope.targetId)
   const savedPortForwards = target?.portForwards ? structuredClone(target.portForwards) : undefined
   if (savedPortForwards) {
@@ -82,7 +81,7 @@ export function collectOrcadMigrationSourceClientState(
 
 function collectMobileSelections(
   state: PersistedState,
-  scope: ReturnType<typeof createOrcadMigrationSourceScope>,
+  scope: ReturnType<typeof createOrcadMigrationExportScope>,
   session: WorkspaceSessionState | undefined
 ):
   | NonNullable<OrcadMigrationClientStatePayload['mobileClientTabSelectionsByDeviceId']>
@@ -102,7 +101,6 @@ function collectMobileSelections(
       }
       const destinationKey = unqualifyOrcadMigrationOwnerKey(ownerKey)
       const representable = representableMobileSelection(selection, eligible)
-      // A selection naming a tab that did not move, or a second copy for one worktree, stays behind.
       if (!representable || destinationKeys.has(`${deviceId}\0${destinationKey}`)) {
         continue
       }
@@ -118,8 +116,7 @@ function collectMobileSelections(
 
 function collectUiRouting(
   state: PersistedState,
-  scope: ReturnType<typeof createOrcadMigrationSourceScope>,
-  destinationEnvironmentId: string | undefined,
+  scope: ReturnType<typeof createOrcadMigrationExportScope>,
   session: WorkspaceSessionState | undefined
 ): OrcadMigrationUiRoutingState | undefined {
   const ui = state.ui
@@ -129,10 +126,6 @@ function collectUiRouting(
   }
   if (ui.lastActiveWorktreeId && orcadMigrationOwnerMatchesScope(ui.lastActiveWorktreeId, scope)) {
     result.lastActiveWorktreeId = unqualifyOrcadMigrationOwnerKey(ui.lastActiveWorktreeId)
-  }
-  const filterRepoIds = ui.filterRepoIds.filter((repoId) => orcadMigrationOwnsRepoId(scope, repoId))
-  if (filterRepoIds.length > 0) {
-    result.filterRepoIds = filterRepoIds
   }
   const dotfiles = Object.entries(ui.showDotfilesByWorktree ?? {})
     .filter(([ownerKey]) => orcadMigrationOwnerMatchesScope(ownerKey, scope))
@@ -152,39 +145,11 @@ function collectUiRouting(
   if (manualOrder.length > 0) {
     result.manualRepoOrder = manualOrder
   }
-  if (ui.workspaceHostScope === scope.hostId) {
-    result.workspaceHostScope = 'local'
-  }
-  const visibleHosts = (ui.visibleWorkspaceHostIds ?? []).filter(
-    (hostId) => hostId === scope.hostId
-  )
-  if (visibleHosts.length > 0) {
-    result.visibleWorkspaceHostIds = ['local']
-  }
-  const hostOrder = (ui.workspaceHostOrder ?? []).filter((hostId) => hostId === scope.hostId)
-  if (hostOrder.length > 0) {
-    result.workspaceHostOrder = ['local']
-  }
-  const filter = parsePersistedAutomationHostFilter(ui.automationHostFilter)
-  if (
-    filter.kind === 'host' &&
-    hostStableKey(filter.host) === `host:desktop:ssh:${encodeURIComponent(scope.targetId)}`
-  ) {
-    result.automationHostFilter = destinationEnvironmentId
-      ? {
-          kind: 'host',
-          hostKey: hostStableKey({
-            authority: { kind: 'runtime', environmentId: destinationEnvironmentId },
-            selector: { kind: 'self' }
-          })
-        }
-      : { kind: 'host', hostKey: 'host:desktop:self' }
-  }
+  // Sidebar filters belong to this desktop's window.
   const eligible = session ? collectEligibleSessionIdentity(session, scope) : null
   const sourceTabIds = collectSourceOwnedTabIds(state, scope)
   const acknowledgements = Object.entries(ui.acknowledgedAgentsByPaneKey ?? {}).filter(
     ([paneKey]) => {
-      // An acknowledgement for a pane that did not move stays behind with that pane.
       return (
         paneBelongsToTabs(paneKey, sourceTabIds) &&
         eligible !== null &&
@@ -198,15 +163,18 @@ function collectUiRouting(
   return Object.keys(result).length > 0 ? result : undefined
 }
 
-/** Every tab the source owns: its own partition's, and those keyed to its projects anywhere. */
+/** Include source-owned tabs from every partition. */
 function collectSourceOwnedTabIds(
   state: PersistedState,
-  scope: ReturnType<typeof createOrcadMigrationSourceScope>
+  scope: ReturnType<typeof createOrcadMigrationExportScope>
 ): Set<string> {
   const tabIds = new Set<string>()
   for (const [hostId, session] of sessionPartitions(state, 'local')) {
     for (const [ownerKey, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-      if (hostId === scope.hostId || orcadMigrationOwnerMatchesScope(ownerKey, scope)) {
+      if (
+        (orcadMigrationScopeOwnsWholeHost(scope) && hostId === scope.hostId) ||
+        orcadMigrationOwnerMatchesScope(ownerKey, scope)
+      ) {
         tabs.forEach((tab) => tabIds.add(tab.id))
       }
     }
@@ -218,7 +186,7 @@ type EligibleSessionIdentity = { tabIds: ReadonlySet<string>; groupIds: Readonly
 
 function collectEligibleSessionIdentity(
   session: WorkspaceSessionState,
-  scope: ReturnType<typeof createOrcadMigrationSourceScope>
+  scope: ReturnType<typeof createOrcadMigrationExportScope>
 ): EligibleSessionIdentity {
   const tabIds = new Set<string>()
   const groupIds = new Set<string>()
@@ -242,19 +210,20 @@ function collectEligibleSessionIdentity(
   return { tabIds, groupIds }
 }
 
-/** A phone names a terminal by its pane, `${tabId}::${leafId}`; the pane moves with its tab. */
+/** Mobile terminal selections name panes: tabId::leafId. */
 function movedMobileTab(id: string, tabIds: ReadonlySet<string>): boolean {
   const separator = id.indexOf('::')
   return tabIds.has(id) || (separator !== -1 && tabIds.has(id.slice(0, separator)))
 }
 
-/** The selection without references to tabs or groups that did not move; null when none is left. */
+/** Drop references to tabs/groups that did not move; null when none remain. */
 function representableMobileSelection(
   selection: PersistedMobileClientTabSelection,
   eligible: EligibleSessionIdentity | null
 ): PersistedMobileClientTabSelection | null {
   const tabIds = eligible?.tabIds ?? new Set<string>()
   const groupIds = eligible?.groupIds ?? new Set<string>()
+  const recentTabIds = selection.recentTabIds?.filter((tabId) => tabIds.has(tabId)) ?? []
   const next: PersistedMobileClientTabSelection = {
     activeTabId:
       selection.activeTabId !== null && movedMobileTab(selection.activeTabId, tabIds)
@@ -268,7 +237,8 @@ function representableMobileSelection(
       Object.entries(selection.activeTabIdByGroupId).filter(
         ([groupId, tabId]) => groupIds.has(groupId) && tabIds.has(tabId)
       )
-    )
+    ),
+    ...(recentTabIds.length > 0 ? { recentTabIds } : {})
   }
   return next.activeTabId === null &&
     next.activeGroupId === null &&

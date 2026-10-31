@@ -11,10 +11,11 @@ import { hostname, tmpdir, uptime } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProcess, spawnProcess } from '@orca/process-host'
-import type * as ExecCommandModule from './ssh-relay-exec-command'
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
+import { unusedOrcadHostTransport } from './unused-host-transport.test-fixture'
 
-// The proof's remote commands run in a real local shell.
-vi.mock('./ssh-relay-exec-command', async (importOriginal) => {
+// Run generated host-side proof commands in a real local shell.
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => {
   const { runProcess: run } = await import('@orca/process-host')
   return {
     ...(await importOriginal<typeof ExecCommandModule>()),
@@ -26,10 +27,12 @@ vi.mock('./ssh-relay-exec-command', async (importOriginal) => {
 const { exitedOwnLockProof } = await import('./orcad-exited-own-lock')
 const { initOrcadHeldFenceTokenFile, ORCAD_HELD_FENCE_TOKENS_FILE_NAME } =
   await import('./orcad-held-fence-tokens')
-const { tryStealInstallLockCommand } = await import('./ssh-relay-install-lock-commands')
-const { serializedStateMutationCommand } = await import('./orcad-state-snapshot')
+const { tryStealInstallLockCommand } =
+  await import('../managed-server/install/remote-install-lock-commands')
+const { serializedStateMutationCommand } =
+  await import('../managed-server/host-state/orcad-state-snapshot')
 const { ORCAD_FENCE_LOST_EXIT, ORCAD_FENCE_LOST_MARKER } =
-  await import('./orcad-activation-fence-scope')
+  await import('../managed-server/activation/orcad-activation-fence-scope')
 const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
 
 const OWNER = '.orca-fence-owner'
@@ -44,7 +47,6 @@ afterEach(() => {
   }
 })
 
-/** A quiet fence an exited desktop process left, and the steal a relaunch would run on it. */
 async function fenceOfExitedHolder() {
   const dir = mkdtempSync(join(tmpdir(), 'orcad-fence-mutation-race-'))
   dirs.push(dir)
@@ -69,8 +71,7 @@ async function fenceOfExitedHolder() {
   )
   const host = getRemoteHostPlatform('linux-x64')
   const proof = exitedOwnLockProof(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked to a local shell, so the connection is never used.
-    { conn: {} as never, host },
+    { conn: unusedOrcadHostTransport(), host },
     { baseDir: dir, guardsStateMutation: true }
   )
   const token = await proof.find(lock)
@@ -105,8 +106,7 @@ async function waitFor(file: string): Promise<void> {
   await expect.poll(() => existsSync(file), { timeout: 10_000 }).toBe(true)
 }
 
-// Astra 26087 round 2: a mutation of the exited run must never keep running under a fence a
-// relaunch replaced, whether it is admitted before, during or after the steal.
+// Late mutations must never execute under a successor fence, regardless of admission/steal ordering.
 describe.skipIf(process.platform === 'win32')(
   'an exited holder’s fence and a late mutation',
   () => {
@@ -162,13 +162,12 @@ describe.skipIf(process.platform === 'win32')(
       expect(readFileSync(join(lock, OWNER), 'utf8')).toBe('new-token')
     })
 
-    // Astra 26087 r3: a steal stalled past the ownerless-lock age still holds the mutation lock,
-    // because it records its pid as a mutation holder does. Backdating stands in for the stall.
+    // Backdate a paused steal to prove its recorded PID prevents age-based mutation-lock theft.
     it('keeps a suspended steal’s mutation lock against a mutation however long it stalls', async () => {
       const { dir, lock, steal, ownerSeen, bin } = await fenceOfExitedHolder()
       const mutationLock = join(dir, 'orcad-state-mutation.lock')
       const paused = join(dir, 'paused')
-      // Stalls the steal right before it moves the fence, after every check it makes.
+      // Pause immediately before moving the fence, after all steal checks.
       writeFileSync(
         join(bin, 'mv'),
         `#!/bin/sh\nif [ ! -e ${quote(paused)} ]; then : > ${quote(paused)}; while [ ! -e ${quote(join(dir, 'resume'))} ]; do sleep 0.01; done; fi\nPATH=${quote(process.env.PATH ?? '')} exec mv "$@"\n`,

@@ -9,7 +9,7 @@ import {
   type WebGitLabRuntimeMethod
 } from '@/web/preload-api/web-gitlab-routes'
 import { mapRepoPathArg } from './runtime-repo-selector-params'
-import { hasRuntimeRpcErrorCode } from './runtime-rpc-result'
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 
 export type GitLabApi = NonNullable<PreloadApi['gl']>
 
@@ -60,7 +60,8 @@ export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLa
       }),
     todos: (args) => route<GitLabApiResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
     // Why: the owner guard names a host as this client sees it; the server resolves the repo itself.
-    workItemDetails: ({ repoOwnerExecutionHostId: _owner, ...args }) =>
+    // A remote host gates its own polls; `background` is a local IPC hint only.
+    workItemDetails: ({ repoOwnerExecutionHostId: _owner, background: _background, ...args }) =>
       route<GitLabApiResult<'workItemDetails'>>(GITLAB_WEB_RPC_METHODS.workItemDetails, args),
     closeMR: (args) =>
       route<GitLabApiResult<'closeMR'>>(GITLAB_WEB_RPC_METHODS.closeMR, {

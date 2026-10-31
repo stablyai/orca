@@ -23,6 +23,7 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('./BrowserAnnotationSendMenuContent', () => ({
+  browserAnnotationCopyTooltip: () => 'Copy feedback',
   BrowserAnnotationSendMenuContent: ({ onPromptDelivered }: { onPromptDelivered?: () => void }) => (
     <button onClick={onPromptDelivered}>Complete delivery</button>
   )
@@ -194,6 +195,37 @@ describe('website annotation delivery', () => {
     act(() => view.result.current.handleCopyBrowserAnnotations())
     expect(writeClipboardText).toHaveBeenCalledWith(view.result.current.browserAnnotationsPrompt)
     expect(notes()).toHaveLength(1)
+  })
+
+  it('switches Send, the open sidebar picker and Copy to page details together', () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ui: { writeClipboardText } }
+    })
+    store.setState({
+      openAgentSendPopoverTargetMode: (next) => {
+        mode = next
+        store.setState({
+          agentSendPopoverTargetMode: {
+            ...next,
+            instanceId: 'instance-1',
+            eligiblePaneKeys: [],
+            disabledPaneKeys: {},
+            status: 'open'
+          }
+        })
+      }
+    })
+    const view = mount()
+    act(() => view.result.current.handleAnnotationTraySendOpenChange(true))
+    expect(mode?.prompt).not.toContain('**Computed styles:**')
+
+    act(() => view.result.current.handleIncludePageDetailsChange(true))
+    expect(mode?.prompt).toContain('**Computed styles:**')
+    expect(view.result.current.browserAnnotationsPrompt).toBe(mode?.prompt)
+    act(() => view.result.current.handleCopyBrowserAnnotations())
+    expect(writeClipboardText).toHaveBeenCalledWith(expect.stringContaining('**Computed styles:**'))
   })
 
   it('does not erase replacement notes after a navigation clears the original page', () => {

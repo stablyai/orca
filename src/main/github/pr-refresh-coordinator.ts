@@ -7,6 +7,7 @@ import { getPRForBranchOutcome } from './client'
 import {
   aliasFromCandidate,
   hostedReviewOptionArgs,
+  isBackground,
   MANUAL_MERGEABILITY_PENDING_REFRESH_MS,
   refreshKey,
   shouldBroadcastQueued,
@@ -18,10 +19,11 @@ import {
 } from './pr-refresh-event-publisher'
 import { PRRefreshPacing } from './pr-refresh-pacing'
 import { PRRefreshQueue } from './pr-refresh-queue'
-import { PRRefreshQueueDrainer } from './pr-refresh-queue-drainer'
+import { PRRefreshQueueDrainer, type PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
+import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
 const retry = new PRRefreshRetryState()
 const queue = new PRRefreshQueue((key) => retry.reset(key))
@@ -32,6 +34,10 @@ const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, even
 
 export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
   events.setOutcomeObserver(observer)
+}
+
+export function setPRRefreshRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
+  drainer.setRegistrationCheck(check)
 }
 
 function removeInvisibleVisibleRefreshes(): void {
@@ -154,6 +160,21 @@ export async function refreshPRNow(
     }
     events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason })
     return outcome
+  }
+  // E9: renderer fallbacks reach here with automatic reasons; only a manual refresh may start a stopped distro.
+  if (
+    isBackground(reason) &&
+    wslDistroForPath(candidate.repoPath, candidate.localGitOptions?.wslDistro) &&
+    (await blockedWslDistroForPath(candidate.repoPath, candidate.localGitOptions?.wslDistro))
+  ) {
+    events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason: 'fresh' })
+    // Local callers keep their cached PR on an upstream error; nothing is recorded or retried here.
+    return {
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'WSL distro is not running',
+      fetchedAt: Date.now()
+    }
   }
 
   const primaryGateUntil = await prRefreshRateLimitPausedUntil(candidate, false)

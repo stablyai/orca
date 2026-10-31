@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   connectionId: null as string | null | undefined,
   environmentId: null as string | null,
+  ambiguous: false,
   mintGrant: vi.fn(),
   revokeGrant: vi.fn()
 }))
@@ -11,7 +12,7 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionId
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => mocks.environmentId
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => (mocks.ambiguous ? null : mocks.environmentId)
 }))
 
 import {
@@ -26,6 +27,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.connectionId = null
   mocks.environmentId = null
+  mocks.ambiguous = false
   mocks.mintGrant.mockResolvedValue({ grantId: 'grant-1', url: 'orca-preview://grant-1/a.html' })
   vi.stubGlobal('window', {
     api: { docPreview: { mintGrant: mocks.mintGrant, revokeGrant: mocks.revokeGrant } }
@@ -33,6 +35,11 @@ beforeEach(() => {
 })
 
 describe('buildDocPreviewGrantRequest', () => {
+  it('mints no grant for a twin, which names no server to mint against', () => {
+    mocks.ambiguous = true
+    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/srv/repo/docs/a.html')).toBeNull()
+  })
+
   // A document outside every workspace resolves and authorizes from its own directory.
   it('roots an SSH grant outside the workspace at the document directory', () => {
     mocks.connectionId = 'ssh-1'
@@ -98,8 +105,7 @@ describe('doc preview grant lifetime', () => {
       ensureDocPreviewGrant('preview-1', request)
     ])
 
-    // Why: React StrictMode double-invokes mount effects in dev; a second mint would
-    // strand the first grant and a mount-scoped revoke would kill the live webview.
+    // StrictMode effect replay must neither mint twice nor revoke the surviving webview’s grant.
     expect(mocks.mintGrant).toHaveBeenCalledOnce()
     expect(first).toBe(second)
     expect(mocks.revokeGrant).not.toHaveBeenCalled()
@@ -159,8 +165,7 @@ describe('doc preview grant lifetime', () => {
     expect(mocks.revokeGrant).not.toHaveBeenCalled()
   })
 
-  // Why: a mint that rejects after the tab was released and reopened must not evict the entry the
-  // reopen created, or that grant can never be revoked from the tab that owns it.
+  // Late rejection from a released tab must not evict its reopened tab’s new, otherwise unrevokable grant.
   it('leaves the entry of a later mint alone when an earlier one rejects', async () => {
     const request = {
       owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },

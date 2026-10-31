@@ -6,7 +6,11 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 const PTY = 'ssh:ssh-box@@pty-1'
 
 const mocks = vi.hoisted(() => ({
-  attach: vi.fn(async () => ({ status: 'attached' as const, replay: 'old screen' })),
+  attach: vi.fn(async () => ({
+    status: 'attached' as const,
+    replay: 'old screen',
+    acquisitionId: 1
+  })),
   panes: new Set<(panes: LegacyRelayBridgedPane[]) => void>(),
   states: new Map<string, Partial<SshConnectionState>>()
 }))

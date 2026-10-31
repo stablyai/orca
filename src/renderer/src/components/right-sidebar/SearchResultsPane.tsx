@@ -23,6 +23,26 @@ type SearchResultsPaneProps = {
   onMatchClick: (fileResult: SearchFileResult, match: SearchMatch) => void
 }
 
+function formatSearchResultSummary(matchCount: number, fileCount: number): string {
+  const results = translate(
+    'auto.components.right.sidebar.Search.resultCount',
+    '{{count}} results',
+    { count: matchCount, defaultValue_one: '{{count}} result' }
+  )
+  const files = translate('auto.components.right.sidebar.Search.fileCount', '{{count}} files', {
+    count: fileCount,
+    defaultValue_one: '{{count}} file'
+  })
+  return translate(
+    'auto.components.right.sidebar.Search.resultsInFiles',
+    '{{results}} in {{files}}',
+    {
+      results,
+      files
+    }
+  )
+}
+
 export function SearchResultsPane({
   results,
   hasCommittedResults,
@@ -42,16 +62,13 @@ export function SearchResultsPane({
       if (!row) {
         return 20
       }
-      // Why: file rows include pt-1.5 (6 px) for inter-group spacing, so
-      // their estimate is taller than match rows.
+      // File rows include 6px inter-group spacing and need a taller estimate.
       if (row.type === 'file') {
         return 28
       }
       return 20
     },
-    // Why: paddingEnd adds visible breathing room after the last result row.
-    // paddingStart is unnecessary because each file row already includes
-    // pt-1.5 for inter-group spacing (which also covers the first row).
+    // File rows already supply top spacing; pad only the end of the list.
     paddingEnd: 8,
     overscan: SEARCH_VIRTUAL_OVERSCAN,
     getItemKey: (index) => {
@@ -68,17 +85,9 @@ export function SearchResultsPane({
 
   return (
     <>
-      {/* Why: the summary is rendered outside the virtualizer so it stays
-         pinned at the top while the user scrolls through results. */}
       {!error && results && (rows.length > 0 || results.truncated) && (
-        <div className="px-2 py-1 text-[10px] text-muted-foreground border-b border-border">
-          {results.totalMatches}{' '}
-          {translate('auto.components.right.sidebar.Search.6aeda362ed', 'result')}
-          {results.totalMatches !== 1 ? 's' : ''}{' '}
-          {translate('auto.components.right.sidebar.Search.4107975b3a', 'in')}{' '}
-          {results.files.length}{' '}
-          {translate('auto.components.right.sidebar.Search.0b8104eaf2', 'file')}
-          {results.files.length !== 1 ? 's' : ''}
+        <div className="px-2 py-1 text-2xs text-muted-foreground border-b border-border">
+          {formatSearchResultSummary(results.totalMatches, results.files.length)}{' '}
           {results.truncated &&
             translate('auto.components.right.sidebar.Search.dcc294f28d', '(results truncated)')}
         </div>
@@ -133,7 +142,16 @@ export function SearchResultsPane({
           </div>
         )}
 
-        {!query && (
+        {!error && hasCommittedResults && results?.totalMatches === 0 && !loading && (
+          <div className="px-3 py-6 text-xs text-muted-foreground">
+            {translate(
+              'fileSearch.noResults',
+              'No results. Try another search or adjust your filters.'
+            )}
+          </div>
+        )}
+
+        {!error && !query && (
           <div className="flex items-center justify-center h-32 text-muted-foreground text-xs">
             {translate(
               'auto.components.right.sidebar.Search.1abfb25a66',

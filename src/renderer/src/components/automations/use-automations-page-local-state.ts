@@ -36,10 +36,14 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
       automationId: null,
       rowKey: null,
       ownerKey: null,
+      authority: null,
+      navigation: null,
+      reloadToken: -1,
       runs: [],
       notice: null
     })
   const [runHistoryReloadToken, setRunHistoryReloadToken] = useState(0)
+  const [runHistoryAcquisitionToken, setRunHistoryAcquisitionToken] = useState(0)
   const [failedAuthorityKeys, setFailedAuthorityKeys] = useState<ReadonlySet<string>>(
     () => new Set()
   )
@@ -84,6 +88,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
 
   const selectAutomationId = useCallback(
     (automationId: string | null): void => {
+      setRunHistoryAcquisitionToken((token) => token + 1)
       setSelectedAutomationRunPageId(null)
       setSelectedRowKey(null)
       setSelectedId(automationId)
@@ -93,6 +98,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const selectExternalKey = useCallback((externalKey: string | null): void => {
     setSelectedExternalKey(externalKey)
   }, [])
+  const [targetEdited, setTargetEdited] = useState(false)
   const [draftAtOpen, setDraftAtOpen] = useState<AutomationDraft | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AutomationListRow | null>(null)
   const [externalDeleteTarget, setExternalDeleteTarget] = useState<{
@@ -152,6 +158,8 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     automationHostTargetKey,
     setAutomationHostTargetKey,
     selectedAutomationRuns,
+    runHistoryAcquisitionToken,
+    setRunHistoryAcquisitionToken,
     setSelectedAutomationRuns,
     runHistoryReloadToken,
     setRunHistoryReloadToken,
@@ -207,6 +215,8 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     selectedExternalKeyRef,
     selectAutomationId,
     selectExternalKey,
+    targetEdited,
+    setTargetEdited,
     draftAtOpen,
     setDraftAtOpen,
     deleteTarget,

@@ -10,7 +10,8 @@ import {
   SSH_HOST_NOT_SERVED_MESSAGE,
   SshHostNotServedError
 } from '../providers/ssh-host-not-served-error'
-import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runtime-git'
+import { RuntimeGitCommands } from './orca-runtime-git'
+import type { ResolvedRuntimeGitWorktree } from './runtime-git-command-target'
 
 const mocks = vi.hoisted(() => ({
   checkoutBranch: vi.fn(),
@@ -65,10 +66,7 @@ vi.mock('../source-control/pull-request-linked-issue', () => ({
 const tempDirs: string[] = []
 
 function makeWorktree(path: string, linkedIssue: number | null = null): ResolvedRuntimeGitWorktree {
-  // Why: `satisfies Partial<…>` keeps every field name and type checked against the
-  // real worktree shape (the widening cast alone would let these tests keep passing
-  // against a `linkedIssue` key production no longer has) while still allowing the
-  // fixture to omit the fields these tests never read.
+  // satisfies checks real worktree keys/types while permitting fixture omissions.
   const worktree = {
     id: 'wt-1',
     repoId: 'repo-1',
@@ -119,10 +117,7 @@ describe('RuntimeGitCommands', () => {
     }
   })
 
-  // Why: a directory-only ignore rule (`node_modules/`) never matches the shared
-  // symlink, so Git reports it untracked forever. Runtime/CLI status has to tell
-  // getStatus which untracked entries are Orca's own (issue #10451); nothing else
-  // asserts this call site supplies them.
+  // #10451: node_modules/ ignores directories, not Orca symlinks; runtime status must pass their paths explicitly.
   it('passes the repo shared link paths through local runtime status', async () => {
     mocks.getStatus.mockResolvedValue({ entries: [], conflictOperation: 'none' })
     const commands = new RuntimeGitCommands({
@@ -632,7 +627,6 @@ describe('RuntimeGitCommands', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
-      // Why: what the host reports when its store is not initialized yet.
       getWorktreeLinkedIssue: () => undefined
     })
 

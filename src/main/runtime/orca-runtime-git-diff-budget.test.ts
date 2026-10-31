@@ -1,10 +1,10 @@
-// Why: the cap lives in orca-runtime-git.ts so all three diff readers are covered.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-budget'
 import type { GitDiffResult } from '../../shared/git-diff-compare-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as GitStatusModule from '../git/status'
-import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runtime-git'
+import { RuntimeGitCommands } from './orca-runtime-git'
+import type { ResolvedRuntimeGitWorktree } from './runtime-git-command-target'
 
 const mocks = vi.hoisted(() => ({
   getDiff: vi.fn(),

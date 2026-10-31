@@ -1,6 +1,3 @@
-// Stop and `/compact` on the shipping Claude adapter, driven by the frames a stream-json child
-// writes: which result ends the command, and what the next message is handed to.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,7 +14,11 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
-import { structuredAgentSessionCommandTurn } from './structured-agent-session-command-turn'
+import {
+  structuredAgentSessionCommandTurn,
+  structuredAgentSessionCommandWasStopped
+} from './structured-agent-session-command-turn'
+import type * as CommandTurnModule from './structured-agent-session-command-turn'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -27,9 +28,20 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+
+vi.mock('./structured-agent-session-command-turn', async (importOriginal) => {
+  const actual = await importOriginal<typeof CommandTurnModule>()
+  return {
+    ...actual,
+    structuredAgentSessionCommandWasStopped: vi.fn(actual.structuredAgentSessionCommandWasStopped)
+  }
+})
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -38,14 +50,13 @@ let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let adapter: ClaudeStructuredSessionAdapter
 let claude: ReturnType<typeof fakeClaude>
-/** The adapter's clock, which a real child's exit reads at a different instant than the host's. */
+/** Separate adapter/host clocks expose which observer supplies exit time. */
 let adapterNow = NOW
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-compact-stop-'))
   resetHostTestOperationIds()
   adapterNow = NOW + 7
-  // No echo of its own: each test writes the frames Claude would.
   claude = fakeClaude({ replayUuid: null })
   adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -56,6 +67,7 @@ beforeEach(async () => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      cliFlag: async () => 'supported' as const,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
@@ -64,7 +76,6 @@ beforeEach(async () => {
         void host.handleAdapterEvent(mapped)
       }
     },
-    // The runtime's own wiring: the provider's answer is what settles a send it took.
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     openConnection: claude.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
@@ -75,7 +86,7 @@ beforeEach(async () => {
     agents: claudeAndCodexDeclared(),
     logger: createStructuredAgentSessionLogger(),
     store,
-    // The production router is what declares create support; the bare adapter only knows locations.
+    // Production routing declares create support; the bare adapter only knows locations.
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
@@ -98,6 +109,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -128,7 +140,6 @@ function stop(cmid: string) {
   return host.cancel(CALLER, { envelope: envelope('agentSession.cancel', { turnId }), turnId })
 }
 
-/** The uuid of the frame that carried `text` to Claude, and the child it went to. */
 async function sent(text: string): Promise<{ connection: FakeConnection; uuid: string }> {
   return vi.waitFor(() => {
     for (const connection of claude.connections) {
@@ -169,14 +180,49 @@ async function commandState(cmid: string) {
   return readAgentJournalTurn(snapshot.items.find((item) => item.itemId === itemId)?.body)
 }
 
+it('stops an ordinary reply without reading command Stop history', async () => {
+  claude.routes.interrupt = () => {
+    throw new ClaudeControlRequestError('interrupt', 'Claude did not answer the interrupt.')
+  }
+  const body = hostTestMessage('ordinary reply')
+  await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+  const { connection, uuid } = await sent('ordinary reply')
+  frame(connection, {
+    type: 'user',
+    uuid,
+    parent_tool_use_id: null,
+    message: { role: 'user', content: [{ type: 'text', text: 'ordinary reply' }] }
+  })
+  frame(connection, {
+    type: 'assistant',
+    uuid: 'ordinary-answer',
+    parent_tool_use_id: null,
+    message: { id: 'msg-ordinary', role: 'assistant', content: [{ type: 'text', text: 'Working' }] }
+  })
+  await host.flushStreamedEvents(SESSION)
+  const priorStop = vi.mocked(structuredAgentSessionCommandWasStopped).mockClear()
+
+  await expect(
+    host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
+  ).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(priorStop).not.toHaveBeenCalled()
+  expect(connection.closed).toBe(true)
+})
+
 it('ends a hung /compact Claude will not interrupt by stopping it, and answers the next send in its own turn', async () => {
   claude.routes.interrupt = () => {
     throw new ClaudeControlRequestError('interrupt', 'Claude did not answer the interrupt.')
   }
   const cmid = await compact()
   const { connection: compacting } = await sent('/compact')
+  const priorStop = vi.mocked(structuredAgentSessionCommandWasStopped).mockClear()
 
   await expect(stop(cmid)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(priorStop).toHaveBeenCalledExactlyOnceWith(
+    expect.anything(),
+    structuredAgentSessionCommandTurn(cmid).turnId
+  )
+  expect(priorStop).toHaveReturnedWith(false)
   await vi.waitFor(async () => expect((await commandState(cmid))?.state).toBe('interrupted'))
 
   const body = hostTestMessage('what next?')
@@ -218,7 +264,6 @@ it('ends a stopped /compact on its own interrupted result, then ends its child; 
   const { connection, uuid: firstUuid } = await sent('/compact')
 
   await expect(stop(first)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
-  // The interrupt was taken: the child waits for Claude to end the command itself.
   expect(connection.closed).toBe(false)
   frame(connection, result(firstUuid, INTERRUPTED))
   await vi.waitFor(() => expect(connection.closed).toBe(true))
@@ -251,7 +296,6 @@ it('settles a /compact whose Claude child exits mid-command through that child, 
   const body = hostTestMessage('after the exit')
   await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
 
-  // Claude sends no end frame at all: its child is gone.
   compacting.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
 
   await vi.waitFor(async () => expect((await commandState(cmid))?.state).toBe('interrupted'))
@@ -262,7 +306,7 @@ it('settles a /compact whose Claude child exits mid-command through that child, 
 it('tells why a /compact ended when its Claude child exits after taking it', async () => {
   const cmid = await compact()
   const { connection, uuid } = await sent('/compact')
-  // Claude echoes the command, so the send is answered; then the child dies with no end frame.
+  // Echo answers the command before child exit without a result frame.
   frame(connection, {
     type: 'user',
     uuid,
@@ -277,7 +321,6 @@ it('tells why a /compact ended when its Claude child exits after taking it', asy
   await vi.waitFor(async () => {
     await host.flushStreamedEvents(SESSION)
     const snapshot = await host.journalSnapshot(SESSION)
-    // The exit's words are the host's sentence, never Claude's log text.
     const exitRow = snapshot.items.find(
       (item) => item.body.kind === 'status' && item.body.failure?.kind === 'providerExited'
     )

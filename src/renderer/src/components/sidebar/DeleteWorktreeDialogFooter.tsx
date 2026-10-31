@@ -1,9 +1,11 @@
+// @protected-copy: delete-workspace confirmation buttons.
 import type { JSX, Ref } from 'react'
 import { LoaderCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
+import { deleteWorkspacesCountLabel } from './workspace-batch-action-labels'
 
 export function DeleteWorktreeDialogFooter({
   isMainWorktree,
@@ -34,15 +36,24 @@ export function DeleteWorktreeDialogFooter({
 }): JSX.Element {
   const label = isDeleting
     ? canForceDelete
-      ? 'Force Deleting...'
-      : 'Deleting...'
+      ? translate(
+          'auto.components.sidebar.DeleteWorktreeDialogFooter.forceDeleting',
+          'Force Deleting...'
+        )
+      : translate('auto.components.sidebar.DeleteWorktreeDialogFooter.deleting', 'Deleting...')
     : isBatchDelete
-      ? `Delete ${worktreeCount} Workspaces`
+      ? deleteWorkspacesCountLabel(worktreeCount)
       : canDeleteAllLineage
-        ? `Delete ${lineageDeleteTargetCount} Workspaces`
+        ? deleteWorkspacesCountLabel(lineageDeleteTargetCount)
         : canForceDelete
-          ? 'Force Delete'
-          : 'Delete Workspace'
+          ? translate(
+              'auto.components.sidebar.DeleteWorktreeDialogFooter.forceDelete',
+              'Force Delete'
+            )
+          : translate(
+              'auto.components.sidebar.DeleteWorktreeDialogFooter.deleteWorkspace',
+              'Delete Workspace'
+            )
 
   return (
     <>

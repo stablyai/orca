@@ -1,92 +1,12 @@
-import { randomUUID } from 'node:crypto'
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
 import type { Page } from '@stablyai/playwright-test'
-import { test as base, expect } from './helpers/orca-app'
+import { expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
+import { SUPPORTED, createChatOnHost, test } from './helpers/structured-claude-stub'
 import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution'
-import { createStructuredAgentSessionId } from '../../src/shared/structured-agent-session-create'
-import {
-  createStructuredAgentSessionOperationId,
-  structuredAgentSessionCreateFingerprint
-} from '../../src/shared/structured-agent-session-mutation'
-import { claudeSessionIdForOrcaSession } from '../../src/main/claude/claude-structured-session-id'
-
-// Why skip Windows: the stub runs through a POSIX sh wrapper, a .cmd variant is unverified, and
-// the full e2e suite runs on Linux CI only.
-const SUPPORTED = process.platform !== 'win32'
-const STUB_SCRIPT = path.join(
-  process.cwd(),
-  'tests',
-  'e2e',
-  'fixtures',
-  'structured-claude-stub.cjs'
-)
-
-const SYSTEM_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
-
-type ClaudeStub = { command: string; launchLog: string }
-
-/** Dirs a login shell puts ahead of the launch PATH on macOS (path_helper). */
-function macLoginShellPathDirs(): string[] {
-  if (process.platform !== 'darwin') {
-    return []
-  }
-  const files = [
-    '/etc/paths',
-    ...(existsSync('/etc/paths.d') ? readdirSync('/etc/paths.d') : []).map((name) =>
-      path.join('/etc/paths.d', name)
-    )
-  ]
-  return files.flatMap((file) => readFileSync(file, 'utf8').split('\n').filter(Boolean))
-}
-
-const test = base.extend<{ claudeStub: ClaudeStub }>({
-  // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
-  claudeStub: async ({}, provideFixture, testInfo) => {
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-structured-claude-'))
-    const command = path.join(dir, 'claude')
-    const launchLog = path.join(dir, 'launches.jsonl')
-    const emptyHome = path.join(dir, 'empty-home')
-    mkdirSync(emptyHome)
-    // Why: a login shell's PATH lands ahead of the launch PATH, and a PATH miss falls back to
-    // install dirs; a real claude in any of those could be probed before the stub, so never launch.
-    const shadowing = resolveCliCommand('claude', {
-      pathEnv: [...SYSTEM_DIRS, ...macLoginShellPathDirs()].join(path.delimiter),
-      homePath: emptyHome
-    })
-    if (path.isAbsolute(shadowing)) {
-      rmSync(dir, { recursive: true, force: true })
-      testInfo.skip(true, 'a system-wide claude would shadow the stub')
-    }
-    const quote = (value: string): string => `'${value.replaceAll("'", `'\\''`)}'`
-    // Absolute node and stub paths, so the wrapper needs nothing from PATH to run.
-    writeFileSync(
-      command,
-      `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(STUB_SCRIPT)} ${quote(launchLog)} "$@"\n`
-    )
-    chmodSync(command, 0o755)
-    await provideFixture({ command, launchLog })
-    rmSync(dir, { recursive: true, force: true })
-  },
-  launchEnv: async ({ claudeStub }, provideFixture) => {
-    // Only the stub's directory and the system tool dirs: no user bin, Homebrew or npm prefix.
-    await provideFixture({
-      PATH: [path.dirname(claudeStub.command), ...SYSTEM_DIRS].join(path.delimiter)
-    })
-  }
-})
+import { claudeSessionIdForOrcaSession } from '../../src/main/claude/structured/claude-structured-session-id'
+import { buildClaudeModelListArgs } from '../../src/shared/claude-model-list-probe'
 
 type ChatTab = { id: string; entityId: string }
 
@@ -118,34 +38,8 @@ function tabInStrip(page: Page, tabId: string) {
   return page.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`)
 }
 
-/** Creates a chat the way the CLI or a paired phone does: on the host, not in the window. */
-async function createChatOnHost(page: Page, worktreeId: string): Promise<string> {
-  const sessionId = createStructuredAgentSessionId('claude', randomUUID)
-  const worktree = `id:${worktreeId}`
-  const params = {
-    envelope: {
-      sessionId,
-      clientOperationId: createStructuredAgentSessionOperationId(randomUUID),
-      expectedRuntimeFence: null,
-      payloadFingerprint: structuredAgentSessionCreateFingerprint({
-        sessionId,
-        worktree,
-        agent: 'claude'
-      })
-    },
-    worktree,
-    agent: 'claude'
-  }
-  const reply = await page.evaluate(
-    (p) => window.api.runtime.call({ method: 'agentSession.create', params: p }),
-    params
-  )
-  expect(reply, JSON.stringify(reply)).toMatchObject({ ok: true })
-  return sessionId
-}
-
 /** Every Claude process Orca started, as the stub recorded it. */
-function readStubLaunches(launchLog: string): string[][] {
+function readStubLaunches(launchLog: string): { pid: number; args: string[] }[] {
   if (!existsSync(launchLog)) {
     return []
   }
@@ -154,10 +48,40 @@ function readStubLaunches(launchLog: string): string[][] {
     .filter(Boolean)
     .map((line) => {
       const entry: unknown = JSON.parse(line)
-      if (typeof entry !== 'object' || entry === null || !('args' in entry)) {
+      if (
+        typeof entry !== 'object' ||
+        entry === null ||
+        !('pid' in entry) ||
+        typeof entry.pid !== 'number' ||
+        !('args' in entry) ||
+        !Array.isArray(entry.args)
+      ) {
         throw new Error(`unreadable stub launch: ${line}`)
       }
-      return Array.isArray(entry.args) ? entry.args.map(String) : []
+      return { pid: entry.pid, args: entry.args.map(String) }
+    })
+}
+
+function readStubRequests(launchLog: string, pid: number) {
+  const file = `${launchLog}.requests.jsonl`
+  if (!existsSync(file)) {
+    return []
+  }
+  return readFileSync(file, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .flatMap((line) => {
+      const entry: unknown = JSON.parse(line)
+      if (
+        typeof entry !== 'object' ||
+        entry === null ||
+        !('pid' in entry) ||
+        !('type' in entry) ||
+        !('subtype' in entry)
+      ) {
+        throw new Error(`unreadable stub request: ${line}`)
+      }
+      return entry.pid === pid ? [{ type: entry.type, subtype: entry.subtype }] : []
     })
 }
 
@@ -175,7 +99,7 @@ test.describe('structured chat tabs', () => {
     // An absolute Command setting is used as-is or refuses the start; it never falls back.
     await page.evaluate(async (command) => {
       await window.__store?.getState().updateSettings({
-        experimentalNativeChat: true,
+        nativeChatProviders: { claude: true, codex: true },
         defaultTuiAgent: 'claude',
         agentCmdOverrides: { claude: command }
       })
@@ -206,7 +130,10 @@ test.describe('structured chat tabs', () => {
 
     // A chat the window opens from the New tab menu.
     await page.getByRole('button', { name: 'New tab' }).click({ force: true })
-    const claudeOption = page.getByRole('menuitem', { name: /^Claude(?:\s|$)/i }).first()
+    const claudeOption = page.getByRole('menuitem', {
+      name: 'Claude Configure Claude',
+      exact: true
+    })
     await expect(claudeOption).toBeVisible({ timeout: 15_000 })
     await claudeOption.click({ force: true })
     let opened: ChatTab | undefined
@@ -227,17 +154,30 @@ test.describe('structured chat tabs', () => {
       homePath: process.env.HOME
     }))
     expect(resolveCliCommand('claude', mainEnv)).toBe(claudeStub.command)
-    // Every Claude process Orca started was the stub: a version probe, or a launch for one of
-    // these chats' conversations.
+    // Only this stub's version/catalog probes or one of these exact conversations may start.
     const providerIds = [first, second, opened!.entityId].map((id) =>
       claudeSessionIdForOrcaSession(id)
     )
     await expect.poll(() => readStubLaunches(claudeStub.launchLog).length).toBeGreaterThan(0)
-    for (const args of readStubLaunches(claudeStub.launchLog)) {
-      expect(
-        args[0] === '--version' || providerIds.some((id) => args.includes(id)),
-        JSON.stringify(args)
-      ).toBe(true)
+    for (const { pid, args } of readStubLaunches(claudeStub.launchLog)) {
+      if (providerIds.some((id) => args.includes(id))) {
+        continue
+      }
+      if (args[0] === '--version') {
+        expect(args).toEqual(['--version'])
+        continue
+      }
+      expect(args).toEqual([
+        ...buildClaudeModelListArgs(),
+        '--setting-sources',
+        'user,project,local'
+      ])
+      await expect
+        .poll(() => readStubRequests(claudeStub.launchLog, pid))
+        .toEqual([
+          { type: 'control_request', subtype: 'list_models' },
+          { type: 'control_request', subtype: 'get_settings' }
+        ])
     }
 
     await tabInStrip(page, opened!.id).locator('[data-tab-close-button="true"]').click()

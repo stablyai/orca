@@ -109,16 +109,13 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     nextSequence = 0
   }
 
-  // Why: one cancel per in-flight write rather than `.then()` on a queue-lifetime
-  // promise — those reactions are retained until that promise settles, so a
-  // long-lived pane accumulated one record per acknowledged write (Esc, Ctrl+C).
+  // Use per-write cancellation; queue-lifetime promise reactions retain every acknowledged write until teardown.
   async function writeAcceptedChunk(item: PendingPtyInputWrite, data: string): Promise<boolean> {
     let cancel = (): void => undefined
     const cancelled = new Promise<boolean>((resolve) => {
       cancel = () => resolve(false)
     })
-    // Registered before the write starts so a clear() inside a synchronous
-    // writeAccepted callback still unblocks this race.
+    // Install cancellation before writes because synchronous accepted callbacks may clear the queue reentrantly.
     pendingAcceptedCancels.add(cancel)
     try {
       return await Promise.race([
@@ -159,13 +156,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
             continue
           }
         }
-        // Why: dense input streams (SGR wheel reports during trackpad momentum,
-        // key auto-repeat) enqueue one tiny item per event. Writing one item per
-        // macrotask turn lets Chromium's nested-timer clamp pace the drain at
-        // ≥4ms per item, so a fast gesture's reports reach the PTY seconds after
-        // the gesture ended and the TUI visibly replays them one by one.
-        // Coalescing consecutive validated small items into a single write keeps
-        // the PTY byte stream identical while draining the backlog in one turn.
+        // Coalesce validated small entries without changing bytes; per-item nested timers throttle dense wheel/repeat input to ≥4ms and replay gestures seconds late.
         if (next.chunks === undefined && isCoalesciblePtyInput(next)) {
           let payload = next.text
           removePending(next)

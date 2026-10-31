@@ -4,6 +4,8 @@ import { statSync } from 'node:fs'
 import { win32 } from 'node:path'
 
 const JS_CLI_EXTENSION = /\.[cm]?js$/i
+// Why: `npx` and `npm run` export npm's own CLI as npm_execpath, which would run npm, not pnpm.
+const NPM_OWN_CLI_PATH = /(?:^|[/\\])np[mx]-cli\.js$/i
 
 function isFile(path) {
   try {
@@ -20,7 +22,11 @@ export function resolvePnpmCliInvocation({
   pnpmHome = process.env.PNPM_HOME,
   fileExists = isFile
 } = {}) {
-  if (typeof npmExecPath === 'string' && npmExecPath.length > 0) {
+  if (
+    typeof npmExecPath === 'string' &&
+    npmExecPath.length > 0 &&
+    !NPM_OWN_CLI_PATH.test(npmExecPath)
+  ) {
     if (JS_CLI_EXTENSION.test(npmExecPath)) {
       return { command: nodeExecPath, prefixArgs: [npmExecPath], shell: false }
     }

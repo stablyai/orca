@@ -75,15 +75,13 @@ describe('structured send idempotency', () => {
       input
     )
 
-    // The recorded outcome comes back verbatim: no dispatch, no new row, and the
-    // doubt is neither cleared nor sharpened into a rejection.
+    // Replay uncertainty without dispatch or reclassifying the recorded outcome.
     expect(dispatch).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'unknown', reason } }
     })
     expect(journal.snapshot()).toEqual(before)
-    // And the refusal does not resurrect a recovered submission as still working.
     expect(hasUnansweredStructuredAgentSessionDispatch(journal.submissions(), 2)).toBe(false)
   })
 
@@ -128,8 +126,6 @@ describe('structured send idempotency', () => {
     await performSend(context, input)
     const replay = await performSend(context, input)
 
-    // Acceptance records the one submission; the reused id answers with it and writes nothing.
-    // Handing it over is the delivery loop's, never a second accept's.
     expect(replay).toMatchObject({
       ok: true,
       value: {

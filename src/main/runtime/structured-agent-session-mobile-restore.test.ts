@@ -1,3 +1,4 @@
+import { openTestChats } from '../native-chat/agent-session-wire/structured-agent-session-open-test-chats.test-support'
 import { describe, expect, it } from 'vitest'
 import {
   hostTestState,
@@ -37,7 +38,7 @@ function wire(host: StructuredAgentSessionHost, controller: RuntimeMobileNotific
       notifyHiddenWorkspaces: true
     }),
     readWorkspaceLabels: () => ({}),
-    isWorkspaceHidden: () => false,
+    isWorkspaceMuted: () => false,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => NOW
@@ -102,7 +103,7 @@ describe('prompt delivery after host recovery', () => {
     const stop = wire(host, restarted)
     try {
       await host.reconcileRestartLeases()
-      await host.restoreReadableSessions()
+      await openTestChats(host)
       const history = await host.history({ sessionId: SESSION, direction: 'tail' })
       expect(history.ok).toBe(true)
       expect(
@@ -117,7 +118,7 @@ describe('prompt delivery after host recovery', () => {
         new MobileNotificationDismissalStore(h.root).liveDeliveries(identity.notificationId)
       ).toEqual([])
       expect(restarted.reconcileDismissedPushes([identity])).toEqual([identity])
-      await host.restoreReadableSessions()
+      await openTestChats(host)
       expect(events.filter((event) => event.type === 'dismiss')).toHaveLength(1)
     } finally {
       stop()

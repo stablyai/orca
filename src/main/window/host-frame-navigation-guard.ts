@@ -1,13 +1,10 @@
 import type { WebContents, WebFrameMain } from 'electron'
-import { NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX } from '../../shared/native-chat-visual-shell'
-import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../shared/plugins/plugin-panel-bridge'
+import { NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX } from '../../shared/native-chat/native-chat-visual-shell'
+import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../shared/plugins/frames/plugin-frame-bridge'
 
 type NavigationFrame = Pick<WebFrameMain, 'frameTreeNodeId' | 'isDestroyed' | 'name'>
 
-/**
- * Host-built srcdoc frames that hold content Orca did not write. Each kind is only a navigation
- * containment class: registering a frame grants it nothing (no plugin identity, no actions).
- */
+/** Host-marked srcdoc classes contain navigation only; registration grants no plugin identity or action authority. */
 const HOST_FRAME_KINDS = [
   { kind: 'plugin-panel', namePrefix: PLUGIN_PANEL_FRAME_NAME_PREFIX },
   { kind: 'chat-visual', namePrefix: NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX }
@@ -16,7 +13,6 @@ const HOST_FRAME_KINDS = [
 export type HostFrameKind = (typeof HOST_FRAME_KINDS)[number]['kind']
 
 type RegisteredFrame = {
-  frame: NavigationFrame
   kind: HostFrameKind
   initialSrcdocPending: boolean
 }
@@ -28,13 +24,12 @@ export function hostFrameKindForName(name: string): HostFrameKind | null {
 /** Records host-marked frame identities at browsing-context creation, before their content can
  * mutate window.name. */
 export class HostFrameNavigationRegistry {
-  private readonly frames = new Map<number, RegisteredFrame>()
+  private frames = new WeakMap<NavigationFrame, RegisteredFrame>()
 
   register(frame: NavigationFrame): void {
-    this.prune()
     const kind = hostFrameKindForName(frame.name)
     if (kind) {
-      this.frames.set(frame.frameTreeNodeId, { frame, kind, initialSrcdocPending: true })
+      this.frames.set(frame, { kind, initialSrcdocPending: true })
     }
   }
 
@@ -43,30 +38,20 @@ export class HostFrameNavigationRegistry {
     initiator: NavigationFrame | null,
     destinationUrl: string
   ): boolean {
-    this.prune()
-    const registeredTarget = frame ? this.frames.get(frame.frameTreeNodeId) : undefined
-    if (registeredTarget) {
-      // Why: registration happens before the host-provided srcdoc commits;
-      // allow exactly that initial document, then contain every navigation.
+    const registeredTarget = frame ? this.frames.get(frame) : undefined
+    if (registeredTarget && frame && !frame.isDestroyed()) {
+      // Registration precedes srcdoc commit; allow its initial document only, then contain all navigation.
       if (registeredTarget.initialSrcdocPending && destinationUrl === 'about:srcdoc') {
         registeredTarget.initialSrcdocPending = false
         return false
       }
       return true
     }
-    return Boolean(initiator && this.frames.has(initiator.frameTreeNodeId))
+    return Boolean(initiator && this.frames.has(initiator) && !initiator.isDestroyed())
   }
 
   clear(): void {
-    this.frames.clear()
-  }
-
-  private prune(): void {
-    for (const [id, registered] of this.frames) {
-      if (registered.frame.isDestroyed()) {
-        this.frames.delete(id)
-      }
-    }
+    this.frames = new WeakMap()
   }
 }
 
@@ -79,8 +64,7 @@ export function registerHostFrameNavigationGuard(webContents: WebContents): void
   })
   webContents.on('did-start-navigation', (event) => {
     if (!event.isMainFrame && event.url === 'about:srcdoc' && event.frame) {
-      // Some Chromium builds populate the frame name only when navigation
-      // starts; this event still precedes document parsing and frame content.
+      // Some Chromium builds expose frame names only at navigation start, still before content parsing.
       registry.register(event.frame)
     }
   })

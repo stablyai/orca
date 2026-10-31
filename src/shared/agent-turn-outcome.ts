@@ -1,14 +1,6 @@
 import type { AgentJournalTurnLifecycleState } from './agent-session-journal-types'
 
-/** The verdict on what became of a turn, kept separate from any lifecycle state
- *  so those stay a report on what the HOST observed. `cancellation` is a stop
- *  somebody asked for, `failure` is the provider's own error, and the two are
- *  never interchangeable: only `failure` is a fault. `superseded` is a turn a newer
- *  request replaced before it ended, which the host records at the replacement; it
- *  names no sender. The journal's turn record stores only these recorded verdicts
- *  (the provider's, a stop, or the host's supersede); `interruption` and `unconfirmed`
- *  are derived from lifecycle state on read and never stored. Absent always means
- *  UNKNOWN, never success. Older builds read an arm they do not know as absent. */
+/** Keep recorded provider/Stop/supersede verdicts separate from host lifecycle state. cancellation is requested, failure is a provider fault, superseded names no sender. Derive interruption/unconfirmed on read, never journal them. Absent/newer arms mean unknown, never success. */
 export const AGENT_JOURNAL_TURN_OUTCOMES = [
   'success',
   'failure',
@@ -17,11 +9,7 @@ export const AGENT_JOURNAL_TURN_OUTCOMES = [
 ] as const
 export type AgentJournalTurnOutcome = (typeof AGENT_JOURNAL_TURN_OUTCOMES)[number]
 
-/** The verdict an agent-status row's `mainAgent.outcome` reports: the provider's, a `cancellation`
- *  Orca inferred from the user's own interrupt keystroke, or what the host observed of a turn's end
- *  when the provider gave no verdict. `interruption` is a death mid-turn the host proved and nobody
- *  asked for; `unconfirmed` is an end the host cannot prove, and is never success. Both are derived
- *  from the turn's lifecycle state, so the journal never stores them. */
+/** Status outcomes may include inferred user cancellation or derived interruption (proven unsolicited death)/unconfirmed (unproven end, never success). Derive these from lifecycle, never journal them. */
 export const AGENT_TURN_OUTCOMES = [
   ...AGENT_JOURNAL_TURN_OUTCOMES,
   'interruption',
@@ -33,9 +21,7 @@ export function isAgentTurnOutcome(value: unknown): value is AgentTurnOutcome {
   return AGENT_TURN_OUTCOMES.some((known) => known === value)
 }
 
-/** The verdict a settled turn reports: the provider's own, else what the host observed of its end.
- *  Derived, never journaled: the lifecycle state is the durable fact. A null state is a send that
- *  never became a turn. */
+/** Derive settled verdict from provider outcome or host lifecycle; never journal derived verdicts. null state means a send that never became a turn. */
 export function agentTurnVerdict(turn: {
   state: AgentJournalTurnLifecycleState | null
   outcome: AgentJournalTurnOutcome | null

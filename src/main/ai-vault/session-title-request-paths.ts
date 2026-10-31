@@ -15,9 +15,8 @@ export function resolveHostReadableAiVaultTitleRequests(
       try {
         transcriptPath = await toHostReadableTranscriptPath(request.transcriptPath)
       } catch (error) {
-        // Why: one stalled distro's path must not fail the whole titles batch;
-        // degrade to the id-only shape like any unreadable path.
-        void wslTranscriptFsRefusal(error) // rethrows anything that is not a gate refusal
+        // A stalled distro falls back to an id-only request without failing other titles.
+        void wslTranscriptFsRefusal(error)
         transcriptPath = null
       }
       return transcriptPath && !signal?.aborted

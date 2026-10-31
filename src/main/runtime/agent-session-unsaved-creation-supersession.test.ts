@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +7,7 @@ import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-
 import { codexProviderHandleLink } from '../codex/codex-structured-owner-identity'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
-import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
@@ -43,7 +44,6 @@ function reserveRequest(
   }
 }
 
-/** Reserve, observe the spawn and prove the link the adapter reported, as the host does. */
 async function prove(
   store: AgentSessionRecordStore,
   request: AgentSessionReserveRequest,
@@ -65,7 +65,6 @@ async function prove(
   return store.proveOwner({ sessionId: SESSION, fence, link: link(fence), now: NOW })
 }
 
-/** A restart: the previous owner is gone and the reopened store adjudicates it. */
 async function restart(store: AgentSessionRecordStore) {
   const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
   await store.evictProvenDeadOwner({
@@ -87,6 +86,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

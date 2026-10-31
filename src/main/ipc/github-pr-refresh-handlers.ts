@@ -13,17 +13,22 @@ import {
   enqueuePRRefresh,
   refreshPRNow,
   reportVisiblePRRefreshCandidates,
-  setPRRefreshOutcomeObserver
+  setPRRefreshOutcomeObserver,
+  setPRRefreshRegistrationCheck
 } from '../github/pr-refresh-coordinator'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
   applyRegisteredRepoToPRRefreshCandidate,
   assertRegisteredGitHubRepo,
+  assertRegisteredPRRefreshCandidateRepo,
   getGitHubLocalGitOptionArgs,
   getGitHubRepoConnectionId,
+  isPRRefreshCandidateRegistered,
+  readGitHubRepoUnlessWslStopped,
   validateAutomaticPRRefreshCandidate
 } from './github-repo-routing'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
 const visibilityCleanupRegistered = new Set<number>()
 
@@ -47,6 +52,9 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
       recordPRIfNeeded(repo, outcome)
     }
   })
+  setPRRefreshRegistrationCheck((candidate) =>
+    isPRRefreshCandidateRegistered(candidate, store.getRepos())
+  )
 
   ipcMain.handle(
     'gh:prForBranch',
@@ -59,6 +67,8 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
         fallbackPRNumber?: number | null
         acceptMergedFallbackPR?: boolean
         currentHeadOid?: string | null
+        /** A manual refresh: a user act that may start a stopped WSL distro. */
+        wakeWslDistro?: boolean
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
@@ -84,13 +94,20 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
       const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] = lookupOptions
         ? [lookupOptions]
         : []
-      const pr = await getPRForBranch(
-        repo.path,
-        args.branch,
-        args.linkedPRNumber ?? null,
-        getGitHubRepoConnectionId(repo),
-        args.linkedPRNumber == null ? (args.fallbackPRNumber ?? null) : null,
-        ...lookupOptionArgs
+      // The sidebar card fallback polls this; only a manual refresh may start the distro (E9).
+      const pr = await readGitHubRepoUnlessWslStopped(
+        store,
+        repo,
+        () =>
+          getPRForBranch(
+            repo.path,
+            args.branch,
+            args.linkedPRNumber ?? null,
+            getGitHubRepoConnectionId(repo),
+            args.linkedPRNumber == null ? (args.fallbackPRNumber ?? null) : null,
+            ...lookupOptionArgs
+          ),
+        { wake: args.wakeWslDistro === true }
       )
       if (pr && !stats.hasCountedPR(pr.url)) {
         stats.record({
@@ -110,7 +127,7 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
       _event,
       args: { candidate: GitHubPRRefreshCandidate; reason?: GitHubPRRefreshReason }
     ) => {
-      const repo = assertRegisteredGitHubRepo(args.candidate, store)
+      const repo = assertRegisteredPRRefreshCandidateRepo(args.candidate, store)
       const outcome = await refreshPRNow(
         applyRegisteredRepoToPRRefreshCandidate(store, repo, args.candidate),
         args.reason
@@ -145,10 +162,15 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
       const senderId = event.sender.id
       if (!visibilityCleanupRegistered.has(senderId)) {
         visibilityCleanupRegistered.add(senderId)
-        event.sender.once('destroyed', () => {
-          visibilityCleanupRegistered.delete(senderId)
-          clearVisiblePRRefreshWindow(senderId)
-        })
+        const lifetime = abortWhenRendererGone(event.sender)
+        lifetime.signal.addEventListener(
+          'abort',
+          () => {
+            visibilityCleanupRegistered.delete(senderId)
+            clearVisiblePRRefreshWindow(senderId)
+          },
+          { once: true }
+        )
       }
       const candidates: GitHubPRRefreshCandidate[] = []
       const repos = store.getRepos()

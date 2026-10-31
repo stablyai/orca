@@ -1,6 +1,4 @@
-// Chromium on POSIX surfaces the raw waitpid() status as the process-gone exit
-// code, so crash reports show 61696 where "exit status 241" is meant. Decode for
-// display only — the raw value stays the stored source of truth.
+// Decode Chromium’s raw POSIX waitpid status for display (61696 → exit 241); preserve the stored raw value.
 
 export type PosixWaitStatusDecode =
   | { kind: 'exited'; exitStatus: number }

@@ -1,15 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-/**
- * Ownership markers for system Codex resources a managed home had to copy.
- *
- * Why: symlinking is the normal path, but Windows rejects file symlinks outside
- * developer mode and WSL cannot follow a host-side link. The marker records
- * which source a copy came from, so a later sync can refresh or remove Orca's
- * own copy without ever touching a resource the user created in that home.
- */
-
+// Mark fallback copies so sync can refresh/remove them without touching user-created resources.
 function getResourceCopyMarkerPath(managedHomePath: string, entryName: string): string {
   return join(managedHomePath, '.orca-resource-copies', `${entryName}.json`)
 }
@@ -43,8 +35,7 @@ function readCopiedResourceSourcePath(managedHomePath: string, entryName: string
 }
 
 export function clearCopiedResourceMarker(managedHomePath: string, entryName: string): void {
-  // Why: a malformed marker directory must not block Codex launch or prevent
-  // an owned resource from being repaired.
+  // Malformed marker directories must not block resource repair or Codex launch.
   rmSync(getResourceCopyMarkerPath(managedHomePath, entryName), {
     recursive: true,
     force: true

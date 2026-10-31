@@ -1,14 +1,7 @@
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
-/**
- * A launch's record across a host restart, against the real durable ledger.
- *
- * The record is written twice: once when the surface exists and once when the prompt's fate is
- * known. A host that dies at any point leaves the replay a truthful answer — the running agent once
- * its surface is recorded, an honest "unknown" before — and never a second agent. A "restart" here
- * is what a new process sees: the store reopened from disk and a runtime with no in-flight launches.
- * Its runtime issues a surviving pane a new handle — the case where the daemon's or relay's handle
- * was not re-adopted, the only one in which re-deriving the handle from the pane key changes it.
- */
+/** Reopen the real ledger with no in-flight launches to test both surface and prompt writes across restart.
+ * A recorded surface replays the surviving agent under its current pane handle; an unrecorded outcome remains unknown, never relaunched. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -76,15 +69,13 @@ const DESKTOP_IPC = {
   clientKind: 'runtime' as const,
   clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
 }
-/** The handle a restarted host issues a pane that outlived the old one, when it could not
- *  re-adopt that pane's recorded handle. */
+/** A restarted host's new handle for the same surviving pane, when the recorded handle was not re-adopted. */
 const ADOPTED_HANDLE = 'term_adopted'
 
 let directory: string
 let store: AgentSessionRecordStore
 
 function hostRuntime(adoptedPanes?: Record<string, string>) {
-  // A phone's launch into an existing workspace also moves the phone's own view to the new tab.
   return Object.assign(
     // The paste path: the carry rule leaves this prompt for after the agent is ready.
     runtimeStub({
@@ -208,6 +199,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   setAgentLaunchRecordStore(null)
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -252,7 +244,6 @@ describe('a host restart mid-launch', () => {
       pasted()
       return true
     })
-    // The final write never lands: the process is gone by then.
     replaceLaunchWrite(store, 2, () => new Promise<void>(() => {}))
     void launch(hostRuntime())
     await pasteReturned
@@ -362,7 +353,6 @@ describe('the two writes', () => {
 
     await launch(hostRuntime())
 
-    // Both were queued before either committed; the second is the one left standing.
     const launchWrites = recorded.mock.calls.filter(([input]) => input.callerKey === 'device-1')
     expect(launchWrites.map(([input]) => promptOutcome(input.outcome))).toEqual([
       'unconfirmed',
@@ -385,7 +375,6 @@ describe('a reply lost three times', () => {
   it('starts one agent, and every retry gets its answer', async () => {
     const host = hostRuntime()
     const first = await launch(host)
-    // Lost once and twice on the same host, then a third time across a restart.
     const second = await launch(host)
     const third = await launch(host)
     await restartHost()
@@ -538,7 +527,7 @@ describe('one row per launch, with no limit on how many a caller holds', () => {
   })
 
   it('starts the desktop launch however many unexpired operations the caller already holds', async () => {
-    // Why: a full ledger used to refuse the user's launch for traffic unrelated to it.
+    // Unrelated ledger traffic must not block the user's launch.
     const now = Date.now()
     for (let index = 0; index < 600; index += 1) {
       await store.admitOperation({

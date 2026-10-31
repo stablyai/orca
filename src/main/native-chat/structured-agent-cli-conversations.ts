@@ -1,6 +1,3 @@
-// How a structured agent's chats meet the conversations its own CLI records: adopting one into a new
-// chat, and owning the Session History rows a chat's conversation shows as.
-
 import { isAbsolute } from 'node:path'
 import { admitTranscriptPath } from './transcript-path-admission'
 import {
@@ -12,28 +9,22 @@ import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
 
-/** What the runtime hands an importer: the settings that name extra account homes. */
 export type StructuredAgentTranscriptImportSettings = {
   codexManagedAccounts?: readonly { managedHomePath: string }[]
 }
 
-/** Finds a conversation the agent's CLI recorded, so a new chat can adopt it. */
 export type StructuredAgentTranscriptImport = {
-  /** Recognised account homes, most-preferred first; the first that holds the transcript wins. */
+  /** First transcript hit wins; order preferred account homes first. */
   accountHomeCandidates: (input: {
     settings: StructuredAgentTranscriptImportSettings
     selectedAccountHome: AgentSessionAccountHome
   }) => AgentSessionAccountHome[]
-  /** Where this account keeps its conversations (a directory, or OpenCode's database); null when
-   *  it has none. Admission and lookup both take this one answer, so they cannot disagree. */
+  /** Admission and lookup share one store path; null means this account has none. */
   conversationStore: (input: {
     accountHome: AgentSessionAccountHome
-    /** The execution host's effective agent environment before account binding. */
     launchEnv: NodeJS.ProcessEnv
   }) => string | null
-  /** Admit hook and fallback paths against the account's store. */
   admitTranscriptPath: (input: { store: string; transcriptPath: string }) => Promise<string | null>
-  /** Where the transcript is (its file, or OpenCode's database); null when the store lacks it. */
   findTranscript: (input: {
     providerSessionId: string
     store: string
@@ -41,24 +32,26 @@ export type StructuredAgentTranscriptImport = {
     workspaceCwd: string
     strictErrors?: boolean
   }) => Promise<string | null>
-  /** The adopted chat's handle names the transcript's path, not the conversation id (Pi). */
+  /** Pi handles name the transcript path rather than conversation ID. */
   handleNamesTranscript?: true
 }
 
-/** The import of an agent whose account is one directory, named by the chat's own variable. */
-/** A store is an absolute path; anything else is none, so lookup and admission agree on it. */
+/** Relative stores are invalid for both lookup and admission. */
 export function absoluteConversationStore(path: string | null | undefined): string | null {
   const trimmed = path?.trim()
   return trimmed && isAbsolute(trimmed) ? trimmed : null
 }
 
 export function directoryTranscriptImport(directories: {
-  conversationStore: (input: { accountHomePath: string; launchEnv: NodeJS.ProcessEnv }) => string | null
+  conversationStore: (input: {
+    accountHomePath: string
+    launchEnv: NodeJS.ProcessEnv
+  }) => string | null
   accountHomeCandidates: (input: {
     settings: StructuredAgentTranscriptImportSettings
     selectedAccountHomePath: string
   }) => string[]
-  /** Searches only `store`; it never derives a root of its own. */
+  /** Never derive fallback roots outside this store. */
   findTranscript: (input: {
     providerSessionId: string
     store: string
@@ -90,33 +83,24 @@ export function directoryTranscriptImport(directories: {
   }
 }
 
-/** A terminal resume's target: null when it may pick any conversation (`--continue`, a bare flag). */
+/** null permits any conversation, e.g. bare --continue. */
 export type StructuredAgentResumeInvocation = { target: string | null }
 
-/** How a chat owns its conversation's Session History rows, and refuses a terminal second writer. */
 export type StructuredAgentSessionHistory = {
-  /** The Session History row agents a chat's conversation lists under (one CLI may list as more);
-   *  their CLIs' binaries are what a terminal resume of it runs. */
+  /** One CLI may own rows under several names; these also identify terminal-resume binaries. */
   rowAgents: readonly AiVaultAgent[]
-  /** The history row id a link of the chat's handle chain shows as. */
   rowSessionId: (link: AgentSessionProviderHandleLink) => string
-  /** The resume the arguments after the binary ask for; null when they resume nothing. */
   parseResumeArgs: (args: readonly string[]) => StructuredAgentResumeInvocation | null
-  /** Whether a resume target names the conversation listed under `rowSessionId`; absent, only
-   *  that id does, in any case. */
+  /** Defaults to case-insensitive rowSessionId equality. */
   resumeTargetMatches?: (target: string, rowSessionId: string) => boolean
 }
 
-/** Required on every registration, as `modelCatalog` is. */
 export type StructuredAgentCliConversations = {
-  /** How a chat adopts a conversation this agent's CLI recorded; null when it cannot. */
   transcriptImport: StructuredAgentTranscriptImport | null
-  /** How this agent's chats own their conversations' Session History rows. */
   sessionHistory: StructuredAgentSessionHistory
 }
 
-/** The command names that run the agent's CLI binaries, lower-case, with and without `.exe`: a
- *  token names one when its path's last name does, in any case. */
+/** Match binary basenames case-insensitively, with or without .exe. */
 export function sessionHistoryBinaryNames(history: StructuredAgentSessionHistory): string[] {
   return history.rowAgents.flatMap((agent) => {
     const binary = TUI_AGENT_CONFIG[agent].expectedProcess.toLowerCase()
@@ -124,8 +108,7 @@ export function sessionHistoryBinaryNames(history: StructuredAgentSessionHistory
   })
 }
 
-/** The resume a marker flag asks for: the token after it, unless that is another option. Flags
- *  match in any case. */
+/** Marker flags match case-insensitively; another option is never a target. */
 export function resumeInvocationAfterMarker(
   args: readonly string[],
   markers: readonly string[]
@@ -147,8 +130,7 @@ function invocationAfter(
   return { target: candidate && !candidate.startsWith('-') ? candidate : null }
 }
 
-/** Whether the command's options include one of `flags`, matched exactly as a case-sensitive
- *  CLI reads them; after `--` a flag is prompt text. */
+/** CLI flags are case-sensitive; tokens after -- are prompt text. */
 export function ownOptionsInclude(args: readonly string[], flags: readonly string[]): boolean {
   const terminator = args.indexOf('--')
   return (terminator === -1 ? args : args.slice(0, terminator)).some((token) =>
@@ -156,9 +138,7 @@ export function ownOptionsInclude(args: readonly string[], flags: readonly strin
   )
 }
 
-/** The resume a command's options ask for, matched exactly as a case-sensitive CLI reads them
- *  (`rg x src/pi -C 3` is no `pi -c`): a target-less flag may pick any conversation, a marker
- *  resumes its value (`--marker=value` too). */
+/** Parse target-less flags or marker values, including --marker=value, with exact CLI option matching. */
 export function resumeInvocationFromOptions(
   args: readonly string[],
   options: { targetless: readonly string[]; markers: readonly string[] }
@@ -179,8 +159,7 @@ export function resumeInvocationFromOptions(
   )
 }
 
-/** For a CLI that resumes a session file by its id, any prefix of it, or the file's path: the
- *  same file-name id Session History lists the file under. */
+/** Match session IDs, ID prefixes or transcript paths against History’s filename ID. */
 export function sessionFileResumeTargetMatches(target: string, rowSessionId: string): boolean {
   const id = rowSessionId.toLowerCase()
   return id.startsWith(target.toLowerCase()) || sessionIdFromFileName(target).toLowerCase() === id

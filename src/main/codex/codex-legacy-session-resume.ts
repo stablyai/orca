@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { link, lstat, mkdir } from 'node:fs/promises'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
@@ -19,6 +19,7 @@ import {
   isAtomicNoReplaceUnsupportedError
 } from './codex-session-backfill-copy'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
+import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
@@ -53,8 +54,9 @@ export async function prepareLegacySharedCodexSessionResume(
   }
 
   const sourcePath = resolve(args.filePath)
-  const relativePath = relative(resolve(managedSessionsRoot), sourcePath)
-  if (!isDatedRolloutRelativePath(relativePath)) {
+  // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
+  const relativePath = codexDatedRolloutRelativePath(managedSessionsRoot, sourcePath)
+  if (!relativePath) {
     throw new Error(RETRYABLE_RESUME_ERROR)
   }
   const targetPath = join(paths.systemSessionsRoot, relativePath)
@@ -96,11 +98,11 @@ export async function prepareCodexAccountRestartResume(args: {
   if (sameRuntimePath(args.sourceHome, args.targetHome)) {
     return args.targetHome
   }
-  const relativePath = relative(
-    resolve(join(args.sourceHome, 'sessions')),
+  const relativePath = codexDatedRolloutRelativePath(
+    join(args.sourceHome, 'sessions'),
     resolve(args.transcriptPath)
   )
-  if (!isDatedRolloutRelativePath(relativePath)) {
+  if (!relativePath) {
     throw new Error(RETRYABLE_RESUME_ERROR)
   }
   const paths = resolveCodexSessionBackfillPaths(args.systemCodexHomePath)
@@ -113,15 +115,8 @@ export async function prepareCodexAccountRestartResume(args: {
 }
 
 /**
- * Repins a per-account resume to the selected account's home, or null to keep
- * the session's own home.
- *
- * Why: the session bridge hardlinks each rollout into every per-account home,
- * and vault dedup keeps the lexicographically-smallest alias — which names an
- * arbitrary account. When the selected account's home holds the same rollout
- * at the same sessions-relative path, resume must run under that account's
- * credentials. Every uncertain branch (no selection, unbridged rollout, odd
- * layout) declines, so resume degrades to today's behavior instead of failing.
+ * Vault dedup may choose any account's bridge alias; prefer selected credentials when its rollout exists.
+ * Return null for unbridged/unsupported layouts; transient read failures must not switch credentials.
  */
 async function resolveSelectedAccountCodexHomeForResume(
   args: AiVaultPrepareSessionResumeArgs,
@@ -140,24 +135,24 @@ async function resolveSelectedAccountCodexHomeForResume(
   if (!selectedCodexHome || sameRuntimePath(selectedCodexHome, args.codexHome)) {
     return null
   }
-  const relativePath = relative(resolve(join(args.codexHome, 'sessions')), resolve(args.filePath))
-  if (!isDatedRolloutRelativePath(relativePath)) {
+  const relativePath = codexDatedRolloutRelativePath(
+    join(args.codexHome, 'sessions'),
+    resolve(args.filePath)
+  )
+  if (!relativePath) {
     return null
   }
   const candidatePath = join(selectedCodexHome, 'sessions', relativePath)
   try {
     const candidateStat = await lstat(candidatePath)
-    // Why: the bridge is async, so an unbridged rollout is a real state — decline rather than pin a home codex cannot resume from.
+    // The async bridge may not have populated this account yet.
     return candidateStat.isFile() && !candidateStat.isSymbolicLink() ? selectedCodexHome : null
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code
     if (code === 'ENOENT' || code === 'ENOTDIR') {
       return null
     }
-    // Why: a blanket catch here declined the SELECTED account on a briefly
-    // locked file and kept the source per-account home, resuming under another
-    // account's credentials while the UI still showed the selected one. Only a
-    // definitive absence means "not bridged here" (STA-4607).
+    // STA-4607: only definitive absence permits fallback; transient errors must not switch accounts.
     throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
   }
 }
@@ -234,20 +229,6 @@ async function fileDigest(filePath: string): Promise<string> {
     hash.update(chunk as Buffer)
   }
   return hash.digest('hex')
-}
-
-function isDatedRolloutRelativePath(relativePath: string): boolean {
-  if (!relativePath || relativePath.startsWith('..') || resolve(relativePath) === relativePath) {
-    return false
-  }
-  const parts = relativePath.split(sep)
-  return (
-    parts.length === 4 &&
-    /^\d{4}$/.test(parts[0] ?? '') &&
-    /^\d{2}$/.test(parts[1] ?? '') &&
-    /^\d{2}$/.test(parts[2] ?? '') &&
-    /^rollout-.+\.jsonl(?:\.zst)?$/.test(parts[3] ?? '')
-  )
 }
 
 function sameRuntimePath(left: string, right: string): boolean {

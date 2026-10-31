@@ -8,7 +8,7 @@ import { discoverE2eFiles, planE2e, verifyE2eSelection } from './ci-e2e-shard-pl
 import { parseTimingLog } from './ci-shard-timing-import.mjs'
 import TimingSequencer from './ci-unit-sequencer.mjs'
 import { UNIT_INCLUDE, UNIT_EXCLUDE } from './ci-unit-files.mjs'
-import { NODE_RUNTIME_INCLUDE } from './vitest-node-runtime-files.mjs'
+import { getNodeRuntimeInclude } from './vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './vitest-node-runtime-pool'
 
 const directories = []
@@ -107,12 +107,12 @@ describe('timing-weighted shard selection', () => {
     }
     const ordinaryNode = ordinary.find((project) => project.test.name !== 'bun')
     expect(ordinaryNode.test.include).toEqual(
-      process.versions.bun ? NODE_RUNTIME_INCLUDE : UNIT_INCLUDE
+      process.versions.bun ? getNodeRuntimeInclude() : UNIT_INCLUDE
     )
     const ordinaryBun = ordinary.find((project) => project.test.name === 'bun')
     if (process.versions.bun) {
       expect(ordinaryBun.test.exclude).toEqual(
-        expect.arrayContaining([...NODE_RUNTIME_INCLUDE, measurementFile])
+        expect.arrayContaining([...getNodeRuntimeInclude(), measurementFile])
       )
     }
   })

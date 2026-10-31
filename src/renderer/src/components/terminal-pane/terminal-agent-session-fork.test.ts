@@ -13,21 +13,33 @@ const mockToast = {
 const mockWriteClipboardText = vi.fn(async () => undefined)
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
+const projects: {
+  id: string
+  sourceRepoIds: string[]
+  localWindowsRuntimePreference?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
+}[] = []
+
+const repos: { id: string; kind?: 'git' | 'folder'; connectionId?: string | null }[] = []
+
 const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
-  projects: [] as {
-    id: string
-    sourceRepoIds: string[]
-    localWindowsRuntimePreference?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
-  }[],
-  repos: [] as { id: string; kind?: 'git' | 'folder'; connectionId?: string | null }[],
+  projects,
+  repos,
   settings: {} as {
     localWindowsRuntimeDefault?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
   },
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an empty test catalog; rows are typed below.
   worktreesByRepo: {} as Record<
     string,
-    { id: string; repoId: string; path?: string; projectId?: string }[]
+    {
+      id: string
+      repoId: string
+      path?: string
+      projectId?: string
+      hostId?: 'local' | 'ssh:box'
+      runtimeOwnerEnvironmentId?: string
+    }[]
   >,
   agentStatusByPaneKey: {} as Record<string, { agentType?: string }>,
   tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string | null }[]>,
@@ -79,7 +91,9 @@ describe('forkAgentSessionFromPane', () => {
     store.repos = [{ id: 'repo-1', kind: 'git' }]
     store.settings = { localWindowsRuntimeDefault: { kind: 'windows-host' } }
     store.worktreesByRepo = {
-      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo', projectId: 'repo-1' }]
+      'repo-1': [
+        { id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo', projectId: 'repo-1', hostId: 'local' }
+      ]
     }
     store.agentStatusByPaneKey = {}
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
@@ -139,7 +153,9 @@ describe('forkAgentSessionFromPane', () => {
       undefined,
       undefined,
       undefined,
-      'codex'
+      'codex',
+      ...Array(14).fill(undefined),
+      { executionHostId: 'local' }
     )
 
     expect(mockLaunchAgentInNewTab).toHaveBeenCalledWith(
@@ -160,8 +176,7 @@ describe('forkAgentSessionFromPane', () => {
     )
   })
 
-  // A paired server's surface is published by the launcher; a seeding reveal would add a blank
-  // host terminal beside the chat or agent terminal.
+  // The launcher publishes the paired-host surface; seeding reveal would add an unwanted sibling shell.
   it('reveals a paired fork without seeding a surface of its own', async () => {
     store.agentStatusByPaneKey = {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
@@ -192,15 +207,22 @@ describe('forkAgentSessionFromPane', () => {
     })
   })
 
-  it('announces the provisional chat without waiting for structured settlement', async () => {
+  it('waits for the destination and draft ownership before announcing the fork', async () => {
     store.agentStatusByPaneKey = {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
     }
+    const destination = Promise.withResolvers<{ kind: 'structured'; sessionId: string }>()
+    const draft = Promise.withResolvers<{
+      delivered: boolean
+      inComposer: boolean
+      failureNotified: boolean
+    }>()
     const result = {
       surface: { kind: 'host-published' },
       startupPlan: {},
       pasteDraftAfterLaunch: false,
-      structuredSettlement: new Promise(() => {})
+      structuredSettlement: destination.promise,
+      promptDeliveryResult: draft.promise
     }
     mockLaunchAgentInNewTab.mockImplementationOnce(
       (args: { beforeSurfaceOpen?: (surface: { kind: 'host-published' }) => void }) => {
@@ -210,12 +232,19 @@ describe('forkAgentSessionFromPane', () => {
     )
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
-    await forkAgentSessionFromPane({
+    const forking = forkAgentSessionFromPane({
       pane: makePane('User: compare OAuth options'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: 'group-1'
     })
+    await vi.waitFor(() => expect(mockLaunchAgentInNewTab).toHaveBeenCalledOnce())
+    expect(mockToast.success).not.toHaveBeenCalled()
+    destination.resolve({ kind: 'structured', sessionId: 'fork-session' })
+    await Promise.resolve()
+    expect(mockToast.success).not.toHaveBeenCalled()
+    draft.resolve({ delivered: false, inComposer: true, failureNotified: false })
+    await forking
     expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
       sidebarRevealBehavior: 'auto',
       providesInitialSurface: true
@@ -230,7 +259,7 @@ describe('forkAgentSessionFromPane', () => {
     ['cancelled', { kind: 'cancelled', sessionId: 'session-1' }, true],
     ['visibility-unknown', { kind: 'visibility-unknown', sessionId: 'session-1' }, false]
   ])(
-    'keeps the provisional chat open on a later %s structured settlement',
+    'retains the committed workspace and copies context after a %s destination',
     async (_kind, settlement, _keepsOpen) => {
       store.agentStatusByPaneKey = {
         [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
@@ -258,13 +287,12 @@ describe('forkAgentSessionFromPane', () => {
       })
       // Why: the worktree already exists; a false return would keep the dialog open for a second fork.
       await expect(startAgentSessionFork(prepared!)).resolves.toBe(true)
-      expect(mockToast.success).toHaveBeenCalledWith(
+      expect(mockToast.success).not.toHaveBeenCalledWith(
         'Top-level session fork opened in a new workspace'
       )
-      expect(mockWriteClipboardText).not.toHaveBeenCalled()
+      expect(mockWriteClipboardText).toHaveBeenCalledOnce()
       expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
-        sidebarRevealBehavior: 'auto',
-        providesInitialSurface: true
+        sidebarRevealBehavior: 'auto'
       })
     }
   )
@@ -383,7 +411,9 @@ describe('forkAgentSessionFromPane', () => {
       undefined,
       undefined,
       undefined,
-      undefined
+      undefined,
+      ...Array(14).fill(undefined),
+      { executionHostId: 'local' }
     )
     expect(mockLaunchAgentInNewTab).not.toHaveBeenCalled()
     expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
@@ -396,6 +426,24 @@ describe('forkAgentSessionFromPane', () => {
       'Fork context copied. Launch an agent and paste it to start the fork.'
     )
     expect(pane.terminal.focus).toHaveBeenCalled()
+  })
+
+  it("creates the fork through the source's server, not its SSH place", async () => {
+    store.worktreesByRepo = {
+      'repo-1': [
+        { id: 'wt-1', repoId: 'repo-1', hostId: 'ssh:box', runtimeOwnerEnvironmentId: 'env-1' }
+      ]
+    }
+    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
+
+    await forkAgentSessionFromPane({
+      pane: makePane('Assistant: plan'),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: null
+    })
+
+    expect(mockCreateWorktree.mock.calls[0]?.at(-1)).toEqual({ executionHostId: 'runtime:env-1' })
   })
 
   it('keeps the fork dialog path open when the source workspace has no git branch', async () => {

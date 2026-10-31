@@ -8,7 +8,6 @@ export type WindowsAppDataPathHost = {
   commandLine: { hasSwitch(name: string): boolean }
 }
 
-/** Derives the roaming AppData folder from the environment when the known-folder lookup fails. */
 export function deriveWindowsAppDataPath(env: NodeJS.ProcessEnv): string {
   const appData = env.APPDATA?.trim()
   if (appData && win32.isAbsolute(appData)) {
@@ -31,12 +30,7 @@ function readNativeAppDataPath(host: WindowsAppDataPathHost): string | null {
   }
 }
 
-/**
- * Pins appData and userData before anything resolves userData on Windows.
- *
- * Why: when Electron cannot resolve or create userData itself (no loaded profile, e.g. over SSH), it falls
- * through to Chromium's provider, which dereferences null and crashes natively before crashpad connects.
- */
+/** Pin Windows profile paths before resolution: absent SSH/user profiles can make Chromium dereference null before Crashpad connects. */
 export function ensureWindowsAppDataPath(
   host: WindowsAppDataPathHost,
   env: NodeJS.ProcessEnv = process.env,
@@ -51,10 +45,10 @@ export function ensureWindowsAppDataPath(
     mkdirSync(appData, { recursive: true })
     host.setPath('appData', appData)
   }
-  // Electron already resolved userData from an explicit switch; pinning it would override that.
+  // Preserve userData already resolved from an explicit switch.
   if (host.commandLine.hasSwitch('user-data-dir')) {
     return
   }
-  // Same value Electron's own provider computes; setting it skips that provider entirely.
+  // Use Electron's own value while bypassing its unsafe provider.
   host.setPath('userData', win32.join(appData, host.getName()))
 }

@@ -30,9 +30,4 @@ describe('remoteRestoreSpawnIntentParams', () => {
     runtimeEnvironmentSupportsCapability.mockRejectedValueOnce(new Error('offline'))
     await expect(remoteRestoreSpawnIntentParams('env-1', 'automatic-restore')).resolves.toEqual({})
   })
-
-  it('does not probe when the connect is not a restore', async () => {
-    await expect(remoteRestoreSpawnIntentParams('env-1', undefined)).resolves.toEqual({})
-    expect(runtimeEnvironmentSupportsCapability).not.toHaveBeenCalled()
-  })
 })

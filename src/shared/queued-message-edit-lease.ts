@@ -11,11 +11,18 @@ export type QueuedEditLease = {
   end: () => void
 }
 
+export type QueuedEditLeaseLoss = {
+  lease: QueuedEditLease
+  expected: string
+  status: 'changed' | 'gone' | 'not-editable'
+}
+
 export function startQueuedEditLease(args: {
   sessionId: string
   messageId: string
   editId: string
   expectedBodyFingerprint: string
+  onLost: (loss: QueuedEditLeaseLoss) => void
   request: (
     params: AgentSessionQueuedMessageEditHoldParams
   ) => Promise<AgentSessionQueuedMessageEditHoldResult>
@@ -37,7 +44,13 @@ export function startQueuedEditLease(args: {
     if (ended) {
       return
     }
-    if (answer?.status === 'expired') {
+    if (
+      answer?.status === 'changed' ||
+      answer?.status === 'gone' ||
+      answer?.status === 'not-editable'
+    ) {
+      args.onLost({ lease, expected: expectedBodyFingerprint, status: answer.status })
+    } else if (answer?.status === 'expired') {
       held = false
       send('acquire')
     } else if (answer === undefined || answer.status === 'held') {
@@ -53,7 +66,7 @@ export function startQueuedEditLease(args: {
     chain = chain.then(() => (ended ? undefined : call(action))).then(keepAlive, failed)
   }
   void acquired.then(keepAlive, failed)
-  return {
+  const lease: QueuedEditLease = {
     acquired,
     end: () => {
       if (ended) {
@@ -68,4 +81,5 @@ export function startQueuedEditLease(args: {
         })
     }
   }
+  return lease
 }

@@ -1,8 +1,4 @@
-/**
- * Owner-catalog half of worktree operation routing: resolve a route from the
- * worktree/detected-worktree rows and their repos, with any disagreement
- * between owners reported as `ambiguous` rather than silently picked.
- */
+// Resolve operation routes from worktree/detected rows and repos; owner disagreements remain ambiguous.
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -12,6 +8,7 @@ import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
+  resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 // Type-only, so routing's shared vocabulary stays in one place without a runtime cycle.
@@ -99,16 +96,17 @@ function resolveRowRoute(
     : resolution
 }
 
-/**
- * Listings stamp every paired-server row with its host (withRepoHostOwnership), so an unstamped row
- * of a project set up both here and on a paired server was listed here. Without this the project's
- * repo rows disagree and an editor tab falls through to the focused server (#25467).
- */
+// Paired listings stamp ownership, so an unstamped project row was listed here. Otherwise a same-id server repo steals editor routing (#25467).
 function isUnstampedRowOfSharedLocalProject(
   state: WorktreeOperationRouteState,
   owner: WorktreeOperationOwnerRecord
 ): boolean {
-  if (owner.hostId || owner.runtimeOwnerEnvironmentId?.trim()) {
+  // Indexed first: one row cannot be both, and retained selectors call this.
+  if (
+    owner.hostId ||
+    owner.runtimeOwnerEnvironmentId?.trim() ||
+    resolveIndexedRepoOwner(state.repos, owner.repoId).kind !== 'ambiguous'
+  ) {
     return false
   }
   let hasLocalRepoRow = false

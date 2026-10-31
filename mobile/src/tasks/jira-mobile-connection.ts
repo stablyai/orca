@@ -1,4 +1,4 @@
-import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira-types'
+import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { RpcResponse } from '../transport/types'
 import { jiraConnectionStatusSchema } from './jira-reply-schema'

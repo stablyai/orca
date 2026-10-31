@@ -15,6 +15,7 @@ import {
   adoptRuntimeProvisionedRoot,
   type RuntimeProvisionedRootPorts
 } from './runtime-provisioned-root-adoption'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const root = '/workspace/repo'
 const repo: Repo = {
@@ -67,7 +68,7 @@ describe('adoptRuntimeProvisionedRoot', () => {
     )
     expect(result.worktree.id).toBe(`repo-vm::${root}`)
     expect(setWorktreeMeta).toHaveBeenCalledWith(
-      `repo-vm::${root}`,
+      hostWorktreeTarget({ id: `repo-vm::${root}`, hostId: 'local' }),
       expect.objectContaining({
         ephemeralVmCheckoutMode: 'provisioned-root',
         displayName: 'fix-login',

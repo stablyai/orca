@@ -1,4 +1,11 @@
 import { randomUUID } from 'node:crypto'
+import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import {
+  WINDOWS_RM_MAX_RETRIES,
+  WINDOWS_RM_RETRY_DELAY_MS
+} from '../../shared/windows-transient-lock-removal'
 import type {
   CodexManagedAccount,
   CodexRateLimitAccountsState
@@ -39,16 +46,30 @@ type CodexAccountRegistrationDependencies = {
   login: (managedHomePath: string) => Promise<void>
 }
 
+const REAUTH_STAGING_DIR_NAME = '.orca-reauth-login'
+
+function removeStagingHome(stagingHomePath: string): void {
+  rmSync(stagingHomePath, {
+    recursive: true,
+    force: true,
+    maxRetries: WINDOWS_RM_MAX_RETRIES,
+    retryDelay: WINDOWS_RM_RETRY_DELAY_MS
+  })
+}
+
 export class CodexAccountRegistration {
   constructor(private readonly dependencies: CodexAccountRegistrationDependencies) {}
 
-  async add(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
+  async add(
+    target?: CodexAccountAddTarget,
+    login: (managedHomePath: string) => Promise<void> = this.dependencies.login
+  ): Promise<CodexRateLimitAccountsState> {
     const accountId = randomUUID()
     const managedHome = await this.dependencies.managedHomes.create(accountId, target)
     const { managedHomePath } = managedHome
     try {
       this.prepareManagedHomeForLogin(managedHomePath, accountId)
-      await this.dependencies.login(managedHomePath)
+      await login(managedHomePath)
       return await this.persistCapturedAccount(accountId, managedHome)
     } catch (error) {
       this.dependencies.managedHomes.removeUnlessUnproven(error, managedHomePath, accountId)
@@ -85,14 +106,12 @@ export class CodexAccountRegistration {
       this.dependencies.store.getSettings(),
       accountTarget
     )
-    // Why: decided from the pre-login capture, never a post-login read — the
-    // runtime-home poll runs outside the mutation queue and can clear this lane
-    // while OAuth is open, which would look like an empty selection to activate.
+    // Capture activation intent before login; background polling can clear selection while OAuth is open.
     const activateAfterLogin =
       options?.activateIfSelectionWasEmpty === true && selectedAccountId === null
 
     this.dependencies.configMirror.safeSyncIntoManagedHome(managedHomePath, undefined, account.id)
-    await this.dependencies.login(managedHomePath)
+    await this.loginThroughStagingHome(managedHomePath, account.id)
     const identity = this.dependencies.readIdentityFromHome(managedHomePath, account.id)
     if (!identity.email) {
       throw new Error('Codex login completed, but Orca could not resolve the account email.')
@@ -119,7 +138,7 @@ export class CodexAccountRegistration {
       accountTarget
     )
 
-    // Why: login can transiently clear this runtime's selection; unrelated runtime validation must remain authoritative.
+    // Restore this runtime's selection while retaining current validation of other runtimes.
     this.dependencies.store.updateSettings({
       codexManagedAccounts: updatedAccounts,
       activeCodexManagedAccountId: activeSelection.host,
@@ -128,9 +147,34 @@ export class CodexAccountRegistration {
     this.dependencies.configMirror.safeSyncToManagedHomes()
     this.dependencies.runtimeHome.clearLastWrittenAuthJson(accountId)
     this.dependencies.runtimeHome.syncForCurrentSelection(accountTarget)
-    // Why: re-auth can change the underlying Codex identity, so force a fresh read to avoid showing stale quota.
+    // Reauthentication can change identity, so refresh quota without reusing the old account cache.
     this.startQuotaRefresh(undefined, accountTarget)
     return this.dependencies.selection.snapshot()
+  }
+
+  // `codex login` revokes and deletes the home's current auth first, so only a finished login may replace it (#10795).
+  private async loginThroughStagingHome(managedHomePath: string, accountId: string): Promise<void> {
+    const stagingHomePath = join(managedHomePath, REAUTH_STAGING_DIR_NAME)
+    removeStagingHome(stagingHomePath)
+    mkdirSync(stagingHomePath, { recursive: true })
+    try {
+      // Carry forced-workspace and credential-store settings into the login.
+      copyFileSync(join(managedHomePath, 'config.toml'), join(stagingHomePath, 'config.toml'))
+    } catch (error) {
+      if (!isDefinitiveAbsence(error)) {
+        throw error
+      }
+    }
+    try {
+      await this.dependencies.login(stagingHomePath)
+      this.dependencies.managedHomes.importAuthFromHome(stagingHomePath, managedHomePath, accountId)
+    } finally {
+      try {
+        removeStagingHome(stagingHomePath)
+      } catch (error) {
+        console.warn('[codex-accounts] Failed to remove reauthentication staging home:', error)
+      }
+    }
   }
 
   private prepareManagedHomeForLogin(managedHomePath: string, accountId: string): void {
@@ -182,20 +226,15 @@ export class CodexAccountRegistration {
     try {
       this.dependencies.configMirror.safeSyncToManagedHomes()
       this.dependencies.runtimeHome.clearLastWrittenAuthJson(account.id)
-      // Why: pass the account's selection target so a WSL account syncs the WSL
-      // runtime home instead of the default host target.
       this.dependencies.runtimeHome.syncForCurrentSelection(targetSelection)
     } catch (error) {
-      // Why: settings were already written; if a post-write step fails, restore the
-      // previous account/selection so the caller's managed-home cleanup cannot leave
-      // a dangling, broken managed account behind in settings.
+      // Restore settings before caller cleanup removes the failed account's home.
       this.dependencies.store.updateSettings({
         codexManagedAccounts: settings.codexManagedAccounts,
         activeCodexManagedAccountId: settings.activeCodexManagedAccountId,
         activeCodexManagedAccountIdsByRuntime: settings.activeCodexManagedAccountIdsByRuntime
       })
-      // Why: a failed post-write step must restore both persisted selection and
-      // the runtime home it drives before the new managed home is removed.
+      // Restore runtime auth to match the reverted persisted selection.
       try {
         this.dependencies.runtimeHome.syncForCurrentSelection(targetSelection)
       } catch (rollbackError) {
@@ -208,8 +247,7 @@ export class CodexAccountRegistration {
     }
 
     const outgoingAccountId = getSelectedCodexAccountIdForTarget(settings, targetSelection)
-    // Why: switching activates the new account, so cache the outgoing account's usage for the
-    // switcher — in the background, since the probe must never block or fail a durable add.
+    // Cache outgoing usage without delaying the already-persisted account addition.
     this.startQuotaRefresh(outgoingAccountId, targetSelection)
     return this.dependencies.selection.snapshot()
   }
@@ -218,11 +256,7 @@ export class CodexAccountRegistration {
     outgoingAccountId: string | null | undefined,
     target: CodexAccountSelectionTarget | undefined
   ): void {
-    // Why: quota probes against a cold per-account CODEX_HOME can take 10–25s
-    // (RPC + HTTP fallback) and queue behind an in-flight global usage refresh.
-    // The refresh synchronously flips usage to "fetching" before its first await,
-    // so the switcher updates immediately; the probe itself must never block or
-    // fail the already-durable account mutation.
+    // Slow quota probes must not delay or fail an already-persisted account change.
     void this.dependencies.rateLimits
       .refreshForCodexAccountChange(outgoingAccountId, target)
       .catch((error) => {

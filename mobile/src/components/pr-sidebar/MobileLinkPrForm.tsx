@@ -1,11 +1,17 @@
 import { useCallback, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
-import { parseGitHubPrReference } from '../../source-control/github-pr-link-parse'
+import {
+  parseGitHubIssueOrPRLink,
+  parseGitHubIssueOrPRNumber
+} from '../../../../src/shared/github/links'
 import { linkMobilePr } from '../../source-control/mobile-pr-link'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+import { TextField } from '../composer-input/TextField'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
   client: RpcClient | null
@@ -14,15 +20,24 @@ type Props = {
   onLinked: () => void
 }
 
-// Link-an-existing-PR form body (number or GitHub URL). Renders a plain View so
-// it can sit inline inside the PR sidebar's ScrollView, mirroring the compose
-// form fix — a BottomDrawer overlay nested in a ScrollView gets clipped.
+// Desktop's parser accepts any GitHub host (GHES included); an issue URL is not a PR link.
+function parsePrReference(input: string): number | null {
+  const link = parseGitHubIssueOrPRLink(input)
+  if (link) {
+    return link.type === 'pr' ? link.number : null
+  }
+  return parseGitHubIssueOrPRNumber(input)
+}
+
+// Use inline View inside sidebar ScrollView; nested BottomDrawer overlay clips, matching compose-form constraint.
 export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const parsed = parseGitHubPrReference(input)
+  const parsed = parsePrReference(input)
 
   const submit = useCallback(async () => {
     if (!client || submitting || parsed === null) {
@@ -47,24 +62,29 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
   return (
     <View>
       <View style={styles.headingRow}>
-        <Text style={styles.heading}>Link existing pull request</Text>
+        <Text style={styles.heading}>
+          {t('pullRequest.linkPrForm.title', 'Link existing pull request')}
+        </Text>
         <Pressable
           onPress={onCancel}
           disabled={submitting}
           accessibilityRole="button"
-          accessibilityLabel="Cancel"
+          accessibilityLabel={t('common.cancel', 'Cancel')}
           hitSlop={8}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
         </Pressable>
       </View>
-      <Text style={styles.label}>PR number or GitHub URL</Text>
-      <TextInput
-        style={styles.input}
+      <Text style={styles.label}>
+        {t('pullRequest.linkPrForm.referenceLabel', 'PR number or GitHub URL')}
+      </Text>
+      <TextField
         value={input}
         onChangeText={setInput}
-        placeholder="#123 or https://github.com/owner/repo/pull/123"
-        placeholderTextColor={colors.textMuted}
+        placeholder={t(
+          'pullRequest.linkPrForm.referencePlaceholder',
+          '#123 or https://github.com/owner/repo/pull/123'
+        )}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!submitting}
@@ -82,14 +102,18 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
         {submitting ? (
           <ActivityIndicator size="small" color={colors.bgBase} />
         ) : (
-          <Text style={styles.submitText}>{parsed ? `Link #${parsed}` : 'Link pull request'}</Text>
+          <Text style={styles.submitText}>
+            {parsed
+              ? t('pullRequest.linkPrForm.linkNumber', 'Link #{{number}}', { number: parsed })
+              : t('pullRequest.linkPrForm.linkButton', 'Link pull request')}
+          </Text>
         )}
       </Pressable>
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   headingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -112,19 +136,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.xs
   },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE
-  },
   error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md },
   submit: {
     marginTop: spacing.lg,
     minHeight: 46,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary,
     alignItems: 'center',
     justifyContent: 'center'
@@ -132,4 +148,4 @@ const styles = StyleSheet.create({
   submitDisabled: { opacity: 0.45 },
   submitPressed: { opacity: 0.8 },
   submitText: { color: colors.bgBase, fontSize: typography.bodySize, fontWeight: '600' }
-})
+}))

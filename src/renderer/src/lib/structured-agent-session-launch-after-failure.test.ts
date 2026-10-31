@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
@@ -18,15 +19,29 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: mocks.retryIntent,
     restoreStructuredAgentSessionLaunchIntent: mocks.restoreIntent,
     abandonStructuredAgentSessionLaunchIntent: mocks.abandonIntent,
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
 
@@ -87,8 +102,8 @@ import {
   readNativeChatDraftCache
 } from '@/components/native-chat/native-chat-draft-cache'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
-import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
 
 type Receipt = { sessionId: string; fence: number }
 
@@ -205,7 +220,6 @@ describe('a new launch after a failed one', () => {
         body: expect.objectContaining({ blocks: [{ type: 'text', text: 'review notes' }] })
       })
     )
-    // The failed chat keeps its own prompt, in its own composer.
     expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, failed.sessionId)).toBe('failed')
     expect(readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(failed.sessionId))).toBe(
       'first task'
@@ -231,7 +245,6 @@ describe('a new launch after a failed one', () => {
     ).toBe(fresh.sessionId)
     expect(mocks.createIntent).toHaveBeenCalledTimes(2)
 
-    // Closing the retried chat leaves the new launch registered and starting.
     rejectRetry(new StructuredAgentSessionCreateRefusalError('unsupported'))
     await flushLaunchSettlement()
     expect(cancelStructuredAgentLaunch(WORKTREE_ID, failed.sessionId)).toBe(true)
@@ -245,7 +258,6 @@ describe('a new launch after a failed one', () => {
 
   it('restores a failed chat after reload without unregistering a newer launch', async () => {
     await refuseFirstLaunch()
-    // Reload: the registry is memory; the failed record is what survives.
     resetStructuredAgentLaunchRegistryForTests()
     let resolveFresh!: (receipt: Receipt) => void
     mocks.launch
@@ -301,7 +313,6 @@ describe('a message sent to a chat whose start failed', () => {
 
   async function failThenTakeComposerText(): Promise<void> {
     await refuseFirstLaunch()
-    // The failed start's own prompt waits in the composer; the person sends from there.
     clearNativeChatDraftCacheForTests()
   }
 

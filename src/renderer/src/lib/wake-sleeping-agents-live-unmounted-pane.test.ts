@@ -9,6 +9,13 @@ import type { AppState } from '@/store/types'
 import { wakeSleepingAgentsForWorktreeInBackground } from './wake-sleeping-agents-in-background'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const initialAppStoreState = useAppStore.getState()
 const WT = 'repo-1::/repo'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -37,8 +44,7 @@ function liveRecord(): SleepingAgentSessionRecord {
   }
 }
 
-// The host renderer restarted while its daemon PTY survived: the tab and its persisted layout are
-// there, but nothing reattached the pane, and the user is looking at another worktree.
+// After renderer restart, daemon PTYs can survive behind persisted layouts while another workspace is active and no pane reattached.
 function unmountedLivePaneState(): Partial<AppState> {
   return {
     workspaceSessionReady: true,
@@ -143,6 +149,51 @@ describe('background wake of a pane whose PTY the host still holds', () => {
 
   it('still resumes once the host inventory shows the PTY exited', async () => {
     useAppStore.setState(unmountedLivePaneState())
+
+    expect(await wakeAndSettle()).toBe('resumed')
+
+    expect(queuedResumes()).toEqual([SESSION])
+  })
+
+  // #21235: the host re-keyed the live PTY onto a new tab, so the record's pane has no layout.
+  it('does not resume an agent whose PTY the host moved to another tab', async () => {
+    const state = unmountedLivePaneState()
+    useAppStore.setState({
+      ...state,
+      tabsByWorktree: {
+        [WT]: [{ ...state.tabsByWorktree![WT]![0]!, id: 'tab-rekeyed', ptyId: LIVE_PTY_ID }]
+      },
+      ptyIdsByTabId: { 'tab-rekeyed': [LIVE_PTY_ID] },
+      terminalLayoutsByTabId: {}
+    })
+    // A fresh `claude` launch registers no owner claim; only its spawn pane key ties it to the record.
+    listedSessions = [
+      {
+        id: LIVE_PTY_ID,
+        cwd: '/repo',
+        title: 'claude',
+        agentOwnership: 'absent',
+        paneKey: PANE_KEY
+      }
+    ]
+
+    await wakeAndSettle()
+
+    expect(queuedResumes()).toEqual([])
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeDefined()
+  })
+
+  it('still resumes a dead agent next to a shell spawned for another pane', async () => {
+    useAppStore.setState({ ...unmountedLivePaneState(), terminalLayoutsByTabId: {} })
+    listedSessions = [
+      {
+        id: `${WT}@@sibling-shell`,
+        cwd: '/repo',
+        title: 'zsh',
+        agentOwnership: 'absent',
+        paneKey: makePaneKey('tab-live', '22222222-2222-4222-8222-222222222222')
+      }
+    ]
 
     expect(await wakeAndSettle()).toBe('resumed')
 

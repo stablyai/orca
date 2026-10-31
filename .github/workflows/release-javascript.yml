@@ -6,6 +6,13 @@ on:
       ref:
         required: true
         type: string
+      dev_build:
+        description: Build without official-channel telemetry constants
+        type: boolean
+        default: false
+      runner:
+        type: string
+        default: blacksmith-8vcpu-ubuntu-2404
     outputs:
       supported:
         value: ${{ jobs.bundle.outputs.supported }}
@@ -13,7 +20,7 @@ on:
         value: ${{ jobs.bundle.outputs.source_sha }}
     secrets:
       ORCA_POSTHOG_WRITE_KEY:
-        required: true
+        required: false
 
 permissions:
   contents: read
@@ -23,7 +30,7 @@ env:
 
 jobs:
   bundle:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     outputs:
       supported: ${{ steps.source.outputs.supported }}
@@ -40,7 +47,19 @@ jobs:
         shell: bash
         run: |
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          node -e 'const p = require("./package.json"); console.log("supported=" + Boolean(p.scripts["build:release:javascript"] && p.scripts["build:release:host"]))' >> "$GITHUB_OUTPUT"
+          node <<'NODE' >> "$GITHUB_OUTPUT"
+          const fs = require('node:fs')
+          const { scripts, devDependencies } = require('./package.json')
+          const supported = Boolean(scripts['build:release:javascript'] && scripts['build:release:host'])
+          const devSupported = supported && Boolean(
+            scripts['build:release:javascript:parallel'] && devDependencies?.tsrs &&
+            fs.readFileSync('config/scripts/release-javascript-artifact.mjs', 'utf8')
+              .includes('ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY')
+          )
+          console.log('supported=' + (process.env.DEV_BUILD === 'true' ? devSupported : supported))
+          NODE
+        env:
+          DEV_BUILD: ${{ inputs.dev_build }}
 
       - uses: ./.github/actions/install-node-dependencies
         if: steps.source.outputs.supported == 'true'
@@ -52,7 +71,7 @@ jobs:
 
       - name: Resolve release build identity
         id: identity
-        if: steps.source.outputs.supported == 'true'
+        if: steps.source.outputs.supported == 'true' && !inputs.dev_build
         run: |
           RELEASE_TAG="v$(node -p 'require("./package.json").version')"
           export RELEASE_TAG
@@ -62,11 +81,14 @@ jobs:
         if: steps.source.outputs.supported == 'true'
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+          JAVASCRIPT_BUILD_SCRIPT: ${{ inputs.dev_build && 'build:release:javascript:parallel' || 'build:release:javascript' }}
+          ORCA_CLI_BUILD_COMPILER: ${{ inputs.dev_build && 'tsrs' || 'bun' }}
           ORCA_BUILD_IDENTITY: ${{ steps.identity.outputs.value }}
+          ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: ${{ inputs.dev_build && 'dev' || '' }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
-          ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+          ORCA_POSTHOG_WRITE_KEY: ${{ !inputs.dev_build && secrets.ORCA_POSTHOG_WRITE_KEY || '' }}
         run: |
-          pnpm run build:release:javascript
+          pnpm run "$JAVASCRIPT_BUILD_SCRIPT"
           node config/scripts/release-javascript-artifact.mjs pack
 
       - uses: actions/upload-artifact@v7

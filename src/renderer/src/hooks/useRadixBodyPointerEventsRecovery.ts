@@ -35,8 +35,7 @@ export function useRadixBodyPointerEventsRecovery(): void {
     scheduleRecovery()
 
     const observer = new MutationObserver(scheduleRecovery)
-    // Why: Radix can leave body pointer-events locked after a modal unmounts.
-    // Watch both body style and portal removal so the app recovers immediately.
+    // Observe body styles and portal removal to release pointer-events locks Radix leaves after modal unmount.
     observer.observe(document.body, {
       attributes: true,
       attributeFilter: ['style'],

@@ -207,9 +207,7 @@ describe('project-host workspace target resolution', () => {
   })
 
   it('canonicalizes a stale same-host setup id to the setup the picker shows', () => {
-    // Why: the run-target picker renders one row per host. A draft persisted before that collapse
-    // can still name a duplicate local setup; creation must land in the displayed path, not a
-    // transient worktree path the user never sees.
+    // Legacy drafts can name hidden duplicate setups; creation must use the canonical picker row/path.
     const repos = [makeRepo('orca-main'), makeRepo('orca-worktree')]
     const projects = [makeProject('github:stablyai/orca', ['orca-main', 'orca-worktree'])]
     const projectHostSetups = [
@@ -394,11 +392,7 @@ describe('project-host workspace target resolution', () => {
     ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
   })
 
-  // Regression: selecting a project in the new-workspace dropdown must not be
-  // pinned to the host of the currently-active workspace. Each project below is
-  // set up on exactly one (different) host; picking the other project while the
-  // current host is given only as a preference must resolve to that project's
-  // own host instead of returning '' (the silent no-op the dropdown showed).
+  // Project selection treats the current host as preference; a project available only elsewhere must resolve there instead of silently returning empty.
   describe('cross-host project selection', () => {
     const repos = [makeRepo('local-repo'), makeRepo('remote-repo', { connectionId: 'remote-1' })]
     const projects = [
@@ -456,9 +450,7 @@ describe('project-host workspace target resolution', () => {
     })
 
     it('still reports unavailable for an explicit project+host with no ready setup', () => {
-      // The strict projectId+hostId path (used by the explicit "Run on" host
-      // picker) keeps its hard match — only the project-dropdown call site
-      // changed to pass the host as a preference.
+      // Explicit Run on host selection retains strict project+host matching; only project-dropdown calls use preference.
       expect(
         resolveWorkspaceCreationTarget({
           eligibleRepos: repos,

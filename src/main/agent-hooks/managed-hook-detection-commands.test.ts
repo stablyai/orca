@@ -28,6 +28,8 @@ describe('managed hook detection commands', () => {
     expect(commands.find((command) => command.id === 'claude')).toMatchObject({
       reportVersion: true
     })
-    expect(commands.find((command) => command.id === 'codex')?.reportVersion).toBeUndefined()
+    const codex = commands.find((command) => command.id === 'codex')
+    expect(codex).toBeDefined()
+    expect(codex).not.toHaveProperty('reportVersion')
   })
 })

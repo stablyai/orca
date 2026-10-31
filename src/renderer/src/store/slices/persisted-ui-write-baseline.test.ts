@@ -49,8 +49,7 @@ describe('capturePersistedUIWriteBaseline', () => {
 
 describe('PERSISTED_UI_WRITE_BASELINE_FIELDS', () => {
   it('covers every writer-owned field (runtime census, independent of the impl list)', () => {
-    // makeBaseline is a full literal maintained separately from the impl's field
-    // set; a field dropped from the impl list fails here even when tc is skipped.
+    // Maintain independent full literal so omitted writer fields fail even when typechecking is skipped.
     expect([...PERSISTED_UI_WRITE_BASELINE_FIELDS].sort()).toEqual(
       Object.keys(makeBaseline()).sort()
     )

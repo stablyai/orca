@@ -2,11 +2,7 @@ import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { splitOpenCodeSqliteCandidate } from '../ai-vault/session-scanner-opencode-sqlite-paths'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 
-/**
- * A row whose path names a container and an entry inside it rather than a file
- * of its own. OpenCode and ZCode SQLite sessions share the same encoding,
- * with distinct database names validated by the source splitter.
- */
+/** A session inside a shared container rather than a standalone transcript file. */
 export type SessionSearchSyntheticSource = { container: string; id: string }
 
 export function splitSyntheticSessionSource(path: string): SessionSearchSyntheticSource | null {
@@ -15,22 +11,8 @@ export function splitSyntheticSessionSource(path: string): SessionSearchSyntheti
 }
 
 /**
- * Which containers a pass enumerated in full, and every id each of them held.
- *
- * This is the synthetic equivalent of a directory listing, and it has to meet
- * the same bar before the retirement walk may prove anything from it:
- *
- * - **Exhaustive.** Only a sweep enumerates without a per-agent limit. A cycle
- *   asks for the newest N, so an id it did not return may simply be the N+1th.
- *   Callers that are not a census do not build this at all.
- * - **Successful.** A container a scan issue names could not be read, and a
- *   read that failed returns no ids rather than an error the walk can see. A
- *   named container is left out, so its rows stay unverifiable.
- * - **Non-empty.** A container that returned nothing is not evidence that it
- *   holds nothing: a database whose schema this scanner no longer recognises
- *   returns an empty list with no error at all, and believing it would retire
- *   every session in one pass. The cost is one stale row per container whose
- *   last entry the user deletes, until the container gains an entry or goes.
+ * Call only with an exhaustive sweep: limited discovery cannot prove deletions.
+ * Exclude failed containers; empty results may mean an unrecognized schema.
  */
 export function sessionSearchEnumeratedContainers(
   candidates: readonly SessionFileCandidate[],

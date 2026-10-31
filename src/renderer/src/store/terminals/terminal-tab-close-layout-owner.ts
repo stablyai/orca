@@ -3,11 +3,7 @@ import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-sta
 import { sendLayoutApply } from '@/runtime/layout-apply-send'
 import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 
-/**
- * A layout-owner build's record of a terminal tab this window closed: main records it through
- * `layout.apply`, or today's close intent does when main cannot. False when a paired server owns
- * the workspace's layout; the caller records it as today.
- */
+/** Record terminal closes via main layout.apply, with legacy intent fallback for server-routed twins; return false for paired-server layouts. */
 export function recordTerminalTabCloseThroughLayoutOwner(
   state: WorktreeRuntimeOwnerState & Pick<AppState, 'unifiedTabsByWorktree'>,
   worktreeId: string,
@@ -26,7 +22,8 @@ export function recordTerminalTabCloseThroughLayoutOwner(
     { type: 'closeTabs', tabIds: [entryId], recordClose: reason },
     {
       apply: keep,
-      asToday: () => commitTerminalSurfaceClose(worktreeId, { kind: 'tab', tabId }, reason)
+      asToday: () => commitTerminalSurfaceClose(worktreeId, { kind: 'tab', tabId }, reason),
+      drawn: true
     }
   )
 }

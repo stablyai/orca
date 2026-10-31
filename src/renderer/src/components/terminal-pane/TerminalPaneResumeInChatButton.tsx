@@ -1,34 +1,12 @@
-import { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { MessagesSquare } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { useAppStore } from '@/store'
-import { isAiVaultSessionResumableContent } from '../../../../shared/ai-vault-types'
-import { agentLabel } from '../../../../shared/ai-vault-session-filters'
-import { adoptsCliConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { resumeAiVaultSessionInNewChat } from '../right-sidebar/ai-vault-session-resume-in-chat-launch'
-import {
-  lookupTabSessionHistoryRow,
-  resolveTabSessionHistorySubject,
-  resolveTabSessionSwitch
-} from '../tab-bar/tab-session-history-switch'
+import { resolveCliChatResumeSource } from '../tab-bar/cli-chat-resume-source'
+import { runCliChatResume, useCliChatResumePending } from '../tab-bar/cli-chat-resume-run'
 
-function notifyResumeFailed(): void {
-  toast.error(
-    translate(
-      'auto.components.right.sidebar.AiVaultPanel.resumeInChatFailed',
-      'Could not resume this session in a new chat.'
-    )
-  )
-}
-
-/** The tab menu's "Resume in New Native Chat" for this pane's own conversation. The history lookup
- *  runs on click, not per render, so a header that stays on screen never scans in the background. */
 export function TerminalPaneResumeInChatButton({
   tabId,
   worktreeId,
@@ -38,95 +16,53 @@ export function TerminalPaneResumeInChatButton({
   worktreeId: string
   paneKey: string
 }): React.JSX.Element {
-  const [pending, setPending] = useState(false)
-  const label = translate(
-    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-    'Resume in New Native Chat'
+  const source = useAppStore(
+    useShallow((state) =>
+      resolveCliChatResumeSource(state, {
+        tab: { id: tabId, worktreeId },
+        paneKey
+      })
+    )
   )
-
-  const resume = async (): Promise<void> => {
-    const tabIsOpen = (): boolean =>
-      useAppStore.getState().tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) ?? false
-    const subject = resolveTabSessionHistorySubject(useAppStore.getState(), {
-      tab: { id: tabId, worktreeId },
-      paneKey
-    })
-    if (subject?.kind !== 'cli') {
-      notifyResumeFailed()
-      return
-    }
-    const row = await lookupTabSessionHistoryRow(
-      subject,
-      (args) => window.api.aiVault.listSessions(args),
-      { requestToken: createBrowserUuid(), isCancelled: () => !tabIsOpen(), userRequested: true }
-    )
-    // Closing the tab mid-lookup abandons the click rather than opening a chat for it.
-    if (!tabIsOpen()) {
-      return
-    }
-    if (row === undefined) {
-      notifyResumeFailed()
-      return
-    }
-    // Already resumed in a chat: open that chat, as the Session History row's Resume does.
-    if (row?.structuredSession) {
-      await activateAiVaultStructuredSession(row)
-      return
-    }
-    const agent = agentLabel(subject.agent)
-    if (!row || !isAiVaultSessionResumableContent(row)) {
-      toast.error(
-        translate(
-          'components.native-chat.resumeInNewChat.notSavedYet',
-          "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
-          { agent }
-        )
+  const pending = useCliChatResumePending(source)
+  const updateRequired = source?.hostUpdateRequired === true
+  const label = translate(
+    'components.tab.bar.SortableTabContextMenu.switchToChatView',
+    'Continue in Chat UI'
+  )
+  const tooltip = updateRequired
+    ? translate(
+        'components.native-chat.resumeInNewChat.hostUpdateRequired',
+        'Update Orca on this host to continue in Chat UI.'
       )
-      return
-    }
-    const move = resolveTabSessionSwitch(useAppStore.getState(), row, subject)
-    if (move?.action === 'resume-in-new-chat' && adoptsCliConversations(row.agent)) {
-      await resumeAiVaultSessionInNewChat(
-        row,
-        row.agent,
-        move.worktreeId,
-        newAgentLaunchRequestId()
-      )
-      return
-    }
-    toast.error(
-      translate(
-        'components.native-chat.resumeInNewChat.cannotResume',
-        "This {{agent}} conversation can't be resumed in a native chat.",
-        { agent }
-      )
-    )
-  }
+    : label
 
   return (
     <Tooltip>
+      {/* A disabled button gets no pointer events, so the span carries the update tooltip. */}
       <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          // Same class as split so it shares the hover/active reveal.
-          className="pane-title-split-trigger"
-          aria-label={label}
-          disabled={pending}
-          onClick={(event) => {
-            event.stopPropagation()
-            setPending(true)
-            void resume()
-              .catch(notifyResumeFailed)
-              .finally(() => setPending(false))
-          }}
-        >
-          <MessagesSquare className="size-3" />
-        </Button>
+        <span className="inline-flex" tabIndex={updateRequired ? 0 : undefined}>
+          <Button
+            type="button"
+            variant="pane-title"
+            size="icon-xs"
+            // A disabled button's tooltip is unreachable by screen readers, so the label carries the reason.
+            aria-label={updateRequired ? `${label}. ${tooltip}` : label}
+            disabled={!source || pending || updateRequired}
+            aria-busy={pending || undefined}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (source) {
+                void runCliChatResume(source, true)
+              }
+            }}
+          >
+            <MessagesSquare className="size-3" />
+          </Button>
+        </span>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={4}>
-        {label}
+        {tooltip}
       </TooltipContent>
     </Tooltip>
   )

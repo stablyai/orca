@@ -5,7 +5,7 @@ import {
   isSettledBackgroundTaskState,
   normalizeBackgroundTaskKind,
   normalizeBackgroundTaskState
-} from '../../../../shared/native-chat-background-task-row'
+} from '../../../../shared/native-chat/input/native-chat-background-task-row'
 import type { NativeChatBackgroundTaskBlock } from '../../../../shared/native-chat-types'
 import { formatBackgroundTaskTokens } from '../../../../shared/background-task-roster'
 import {
@@ -16,15 +16,7 @@ import {
 import { KIND_ICONS } from './NativeChatBackgroundTasksStatus'
 import { formatNativeChatDuration } from './NativeChatWorkingStatus'
 
-/**
- * One background task's durable row: what it was, how it ended, and the
- * provider's own sentence about it.
- *
- * The state is drawn exactly as the journal recorded it. Turn state is NOT
- * consulted — a backgrounded task is explicitly told to outlive the turn that
- * started it, so a turn boundary is no evidence about the task. Only the host
- * that watched it can say it stopped reporting, and one does.
- */
+/** Render the host’s durable task state, never infer it from turn state: background work can outlive the turn that launched it. */
 export function NativeChatBackgroundTaskRun({
   block
 }: {
@@ -34,18 +26,13 @@ export function NativeChatBackgroundTaskRun({
   const Icon = KIND_ICONS[kind]
   const state = normalizeBackgroundTaskState(block.state)
   const settled = isSettledBackgroundTaskState(state)
-  // Same name resolution the strip above the composer uses, so one task does
-  // not read as two different things on the two surfaces.
+  // Share naming with the live strip so one task cannot appear as two different tasks.
   const label = resolveBackgroundTaskName({ id: block.taskId, kind, description: block.label })
-  // Every attention state states its reason on the row, the same word the strip
-  // uses; `unverifiable` has none beyond its state word, which must never be dropped.
+  // Keep every attention reason, including unverifiable, consistent with the live strip.
   const reason = backgroundTaskStateReason(state)
-  // The sentence the provider itself wrote. It is the row's whole reason for
-  // existing when a task fails, and it is dropped from the prose above as the
-  // block's twin, so it has to be drawn here.
+  // Keep the provider’s outcome sentence here because its duplicate is removed from the surrounding prose.
   const sentence = block.summary?.trim() || block.error?.trim() || null
-  // A settled row keeps a fixed duration; a live one shows none rather than a
-  // frozen clock, which the strip above the composer counts for real.
+  // Show fixed duration only after settlement; live time belongs to the ticking strip.
   const duration =
     settled && block.startedAt !== undefined && block.settledAt !== undefined
       ? formatNativeChatDuration(Math.max(0, (block.settledAt - block.startedAt) / 1000))

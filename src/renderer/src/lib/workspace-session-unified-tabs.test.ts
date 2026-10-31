@@ -17,8 +17,7 @@ const entry: Tab = {
   createdAt: 1
 }
 
-// Main closes a group with its last tab; the window may keep it shown empty. Its save must not
-// bring that group back.
+// Main removes empty groups; saving renderer-only empty groups must not resurrect them.
 describe('buildPersistedUnifiedTabSessionData', () => {
   it('saves no group the window holds empty, nor its place in the group tree', () => {
     const saved = buildPersistedUnifiedTabSessionData({

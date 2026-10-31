@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import type { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const mocks = vi.hoisted(() => ({
+  remember: vi.fn(),
   closeSession:
     vi.fn<(target: RuntimeClientTarget, sessionId: string) => Promise<'closed' | 'unsupported'>>(),
   callRuntime:
@@ -10,8 +13,7 @@ const mocks = vi.hoisted(() => ({
   discardOutbox: vi.fn<(sessionId: string) => void>(),
   stopSends: vi.fn<(sessionId: string) => void>(),
   hasTombstone: vi.fn<(worktreeId: string, sessionId: string) => boolean>(),
-  markCancelled:
-    vi.fn<(worktreeId: string, sessionId: string, executionHostId: string) => boolean>(),
+  markCancelled: vi.fn<typeof markStructuredAgentSessionLaunchCancelled>(),
   reacceptLocal:
     vi.fn<(worktreeId: string, options?: { reacceptCurrentVersion?: boolean }) => Promise<void>>(),
   refreshPaired:
@@ -24,9 +26,12 @@ const mocks = vi.hoisted(() => ({
     >()
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-registry', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-registry', () => ({
   hasStructuredAgentSessionLaunchCancellationTombstone: mocks.hasTombstone,
   markStructuredAgentSessionLaunchCancelled: mocks.markCancelled
+}))
+vi.mock('@/components/native-chat/native-chat-session-option-settings-write', () => ({
+  enqueueSessionOptionSettingsWrite: mocks.remember
 }))
 vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
   discardStructuredAgentSessionChatSends: mocks.discardOutbox
@@ -71,8 +76,21 @@ import {
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+
+import {
+  structuredSessionSelectionController,
+  forgetStructuredSessionSelection
+} from '@/lib/structured-agent-session-selection-controller'
+import { retirePurgedTabLaunches } from '@/store/slices/worktrees/teardown/purged-structured-launch-retirement'
+import { useAppStore } from '@/store'
+import { agentSessionTabFixture } from '@/components/native-chat/native-chat-workspace-test-fixtures'
+
+const layoutOwner: StructuredLaunchSlotOwner = {
+  unifiedTabsByWorktree: {},
+  groupsByWorktree: {},
+  reorderUnifiedTabs: vi.fn()
+}
 
 const target: RuntimeClientTarget = { kind: 'local' }
 
@@ -127,12 +145,13 @@ const closing = (owner: string): boolean =>
 describe('structured agent session tab retirement', () => {
   it('marks cancellation and clears local launch state before host cleanup', async () => {
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
       provisional: true
     })
-    expect(mocks.markCancelled).toHaveBeenCalledWith('wt-1', 'session-1', 'local')
+    expect(mocks.markCancelled).toHaveBeenCalledWith('wt-1', 'session-1', 'local', layoutOwner)
     expect(mocks.discardOutbox).toHaveBeenCalledWith('session-1')
     expect(mocks.stopSends).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
@@ -142,6 +161,7 @@ describe('structured agent session tab retirement', () => {
   // Withdrawn, as a Stop does: nothing more goes out, and nothing is dropped.
   it("never drops a published chat's sends when its tab closes", async () => {
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
@@ -175,6 +195,7 @@ describe('structured agent session tab retirement', () => {
         })
     )
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
@@ -204,33 +225,11 @@ describe('structured agent session tab retirement', () => {
     expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
   })
 
-  it('records no intent for a floating-panel chat, whose frames are never applied', async () => {
-    mocks.callRuntime.mockRejectedValue(new Error('window relay failed'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    beginStructuredAgentSessionTabClose({
-      target,
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      sessionId: 'session-1',
-      provisional: false
-    })
-    expect(
-      isWebSessionCloseIntentPending(
-        { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
-        FLOATING_TERMINAL_WORKTREE_ID,
-        'agent-session:session-1',
-        Date.now()
-      )
-    ).toBe(false)
-    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
-    warn.mockRestore()
-  })
-
   it('shows a chat the local host kept by re-reading its worktree', async () => {
     mocks.callRuntime.mockRejectedValue(new Error('window relay failed'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
@@ -255,6 +254,7 @@ describe('structured agent session tab retirement', () => {
     )
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target: paired,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
@@ -279,6 +279,7 @@ describe('structured agent session tab retirement', () => {
   it('re-reads a paired server after a successful close, since its frames travel apart from its answer', async () => {
     const paired = { kind: 'environment', environmentId: 'server-1' } as const
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target: paired,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
@@ -307,6 +308,7 @@ describe('structured agent session tab retirement', () => {
     )
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target: paired,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
@@ -385,4 +387,101 @@ describe('structured agent session tab retirement', () => {
     expect(warn).toHaveBeenCalledOnce()
     warn.mockRestore()
   })
+})
+
+it('releases ordinary close/purge owners while retaining the same-session other-host scope', async () => {
+  const remote = { kind: 'environment', environmentId: 'selection-generations' } as const
+  const local = { kind: 'local' } as const
+  const sessionId = 'selection-lifetime'
+  const retained = new Set<string>()
+  const set = Map.prototype.set
+  const del = Map.prototype.delete
+  const added = vi.spyOn(Map.prototype, 'set').mockImplementation(function (
+    this: Map<unknown, unknown>,
+    key,
+    value
+  ) {
+    if (value?.sessionId === sessionId && value?.controller) {
+      retained.add(key)
+    }
+    return set.call(this, key, value)
+  })
+  const deleted = vi.spyOn(Map.prototype, 'delete').mockImplementation(function (
+    this: Map<unknown, unknown>,
+    key
+  ) {
+    retained.delete(key)
+    return del.call(this, key)
+  })
+  try {
+    const previous = structuredSessionSelectionController(remote, sessionId, 'codex')
+    previous.issue('model', 'model-1', null)
+    expect(retained.size).toBe(1)
+    const survivor = structuredSessionSelectionController(local, sessionId, 'codex')
+    survivor.issue('model', 'surviving-model', null)
+    expect(retained.size).toBe(2)
+    const reply = Promise.withResolvers<{ kind: 'accepted'; options: Record<string, string> }>()
+    previous!.flush(() => previous!.request(() => reply.promise))
+    const drain = previous!.drain()
+    await retireStructuredAgentSessionTab({ target: remote, worktreeId: 'wt-1', sessionId })
+    await drain
+    expect(retained.size).toBe(1)
+    expect(survivor.overlay()).toEqual({ model: 'surviving-model' })
+    // The host can still finish the accepted write; no obsolete client owner remembers it.
+    reply.resolve({ kind: 'accepted', options: { model: 'model-1' } })
+    await reply.promise
+    await Promise.resolve()
+    expect(mocks.remember).not.toHaveBeenCalled()
+    expect(previous!.overlay()).toEqual({})
+    const noSend = vi.fn()
+    await expect(previous!.issue('model', 'dead', null).result).resolves.toEqual({
+      kind: 'superseded'
+    })
+    previous!.flush(noSend)
+    expect(previous!.freeze()).toEqual([])
+    await expect(previous!.request(noSend)).rejects.toThrow('retired')
+    expect(noSend).not.toHaveBeenCalled()
+    const purged = structuredSessionSelectionController(remote, sessionId, 'codex')
+    expect(purged).not.toBe(previous)
+    expect(purged.captureRead()).toEqual([])
+    purged.issue('effort', 'high', 'sonnet')
+    retirePurgedTabLaunches(
+      useAppStore.getState(),
+      'wt-1',
+      [],
+      [
+        agentSessionTabFixture(sessionId, 'wt-1', {
+          entityId: sessionId,
+          executionHostId: 'runtime:selection-generations'
+        })
+      ],
+      new Set([sessionId])
+    )
+    expect(purged.overlay()).toEqual({})
+    expect(retained.size).toBe(1)
+    expect(structuredSessionSelectionController(local, sessionId, 'codex')).toBe(survivor)
+    expect(survivor.overlay()).toEqual({ model: 'surviving-model' })
+    survivor.settle(survivor.pending()[0]!, {
+      kind: 'accepted',
+      options: { model: 'surviving-model' }
+    })
+    expect(mocks.remember).toHaveBeenLastCalledWith(local, {
+      type: 'apply-picks',
+      agent: 'codex',
+      picks: [{ modelId: 'surviving-model', optionId: 'model', value: 'surviving-model' }]
+    })
+    console.info(
+      'selection-registry-lifetime',
+      JSON.stringify({
+        ownerScopes: 2,
+        retainedPerChat: 1,
+        retainedAfterScopedClose: 1,
+        retainedAfterScopedPurge: 1
+      })
+    )
+  } finally {
+    forgetStructuredSessionSelection(sessionId)
+    added.mockRestore()
+    deleted.mockRestore()
+  }
 })

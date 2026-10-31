@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act } from 'react'
 import { toast } from 'sonner'
 import { createRoot, type Root } from 'react-dom/client'
@@ -28,7 +29,6 @@ export const offered: ResumeCandidate[] = ['a', 'b'].map((sessionId) => ({
   workspaceKind: 'git-worktree'
 }))
 
-/** A chat the host acted on and could not carry on, as it reports it. */
 export function failure(
   sessionId: string,
   reason = 'agent_session_restart_work_superseded'
@@ -83,7 +83,6 @@ export function createResumeModalFixture(rpc: Mock<RestartRpc>, statusStream: Re
     return getNativeChatRestartOffer().candidates.map((candidate) => candidate.sessionId)
   }
 
-  /** What each toast said: its title, and its description when it has one. */
   function toasts(): unknown[][] {
     return vi
       .mocked(toast)
@@ -188,7 +187,6 @@ export function createResumeModalFixture(rpc: Mock<RestartRpc>, statusStream: Re
     }
   }
 
-  /** The status icon a run shows in a chat's checkbox slot, found by its chat and what it says. */
   function runStatus(prompt: string): string | null {
     return (
       document
@@ -211,7 +209,7 @@ export function createResumeModalFixture(rpc: Mock<RestartRpc>, statusStream: Re
     vi.mocked(toast).mockClear()
     useAppStore.setState(useAppStore.getInitialState(), true)
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalNativeChat: true },
+      settings: { ...getDefaultSettings(''), nativeChatProviders: EVERY_AGENT_CHAT },
       updateSettings: async (changes) => {
         useAppStore.setState((state) => ({
           settings: { ...getDefaultSettings(''), ...state.settings, ...changes }

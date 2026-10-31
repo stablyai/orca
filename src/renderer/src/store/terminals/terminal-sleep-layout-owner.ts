@@ -1,5 +1,6 @@
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { recordLayoutApply } from '@/runtime/layout-apply-send'
 import type { AppState } from '../types'
@@ -18,11 +19,7 @@ function byTab<T>(entries: readonly T[], paneKeyOf: (entry: T) => string): Map<s
   return byTabId
 }
 
-/**
- * A layout-owner build's record of panes this window put to sleep and already stopped: main
- * records how each pane's agent resumes, one command per tab. The window decides (planner, user
- * sleep) and stops the terminals. `recordOnly`: the panes still run; main only keeps the records.
- */
+/** Record stopped panes’ resume plans in main, one command per tab; recordOnly retains plans for still-running panes. */
 export function recordPaneSleepThroughLayoutOwner(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string,
@@ -40,35 +37,43 @@ export function recordPaneSleepThroughLayoutOwner(
   }
 }
 
-/**
- * Every change of the window's resume records, as record-only commands: live and quit captures of
- * running agents, records a resume or close dropped, and the rest no sleep or wake command sends.
- * Without these main learned the records only from the window's session save.
- */
+type HeldRecordsState = Pick<AppState, 'tabsByWorktree'>
+
+/** Diff records only for held tabs; stale captures cannot recreate closed tabs/workspaces. Host-run sleep records are already main-owned. */
+export function changedSleepingRecords(
+  state: HeldRecordsState,
+  previous: SleepingRecords,
+  next: SleepingRecords
+): { recorded: SleepingAgentSessionRecord[]; dropped: [string, SleepingAgentSessionRecord][] } {
+  const held = ([paneKey, record]: [string, SleepingAgentSessionRecord]): boolean =>
+    !isWorkspaceSleepRecord(record) &&
+    (state.tabsByWorktree[record.worktreeId]?.some(
+      (tab) => tab.id === parsePaneKey(paneKey)?.tabId
+    ) ??
+      false)
+  return {
+    recorded: Object.entries(next)
+      .filter((entry) => previous[entry[0]] !== entry[1] && held(entry))
+      .map(([, record]) => record),
+    dropped: Object.entries(previous).filter((entry) => !(entry[0] in next) && held(entry))
+  }
+}
+
+/** Mirror running/quit capture and dropped resume records as commands; main must not learn them only through session saves. */
 export function recordSleepingRecordChangesThroughLayoutOwner(
-  state: WorktreeRuntimeOwnerState & Pick<AppState, 'tabsByWorktree'>,
+  state: WorktreeRuntimeOwnerState & HeldRecordsState,
   previous: SleepingRecords,
   next: SleepingRecords
 ): void {
-  // Only panes of tabs the window holds: a closed tab's or removed workspace's records went with it
-  // in main, and a capture from a stale agent status names a tab main no longer has.
-  const held = ([paneKey, record]: [string, SleepingAgentSessionRecord]): boolean =>
-    state.tabsByWorktree[record.worktreeId]?.some(
-      (tab) => tab.id === parsePaneKey(paneKey)?.tabId
-    ) ?? false
-  const changedByWorktree = new Map<string, Record<string, SleepingAgentSessionRecord>>()
-  for (const [paneKey, record] of Object.entries(next)) {
-    if (previous[paneKey] !== record && held([paneKey, record])) {
-      changedByWorktree.set(record.worktreeId, {
-        ...changedByWorktree.get(record.worktreeId),
-        [paneKey]: record
-      })
-    }
+  const { recorded, dropped } = changedSleepingRecords(state, previous, next)
+  for (const [worktreeId, records] of Map.groupBy(recorded, (record) => record.worktreeId)) {
+    recordPaneSleepThroughLayoutOwner(
+      state,
+      worktreeId,
+      Object.fromEntries(records.map((record) => [record.paneKey, record])),
+      true
+    )
   }
-  for (const [worktreeId, records] of changedByWorktree) {
-    recordPaneSleepThroughLayoutOwner(state, worktreeId, records, true)
-  }
-  const dropped = Object.entries(previous).filter((entry) => !(entry[0] in next) && held(entry))
   for (const [tabId, entries] of byTab(dropped, ([paneKey]) => paneKey)) {
     recordLayoutApply(state, entries[0]![1].worktreeId, {
       type: 'wake',
@@ -79,7 +84,7 @@ export function recordSleepingRecordChangesThroughLayoutOwner(
   }
 }
 
-/** A layout-owner build's record of the one pane this window showed and resumed. */
+/** Record window-resumed pane without starting it again; ordinary main-owned wake also starts the terminal. */
 export function recordPaneWakeThroughLayoutOwner(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string,
@@ -87,6 +92,11 @@ export function recordPaneWakeThroughLayoutOwner(
 ): void {
   const tabId = parsePaneKey(paneKey)?.tabId
   if (tabId) {
-    recordLayoutApply(state, worktreeId, { type: 'wake', tabId, paneKeys: [paneKey] })
+    recordLayoutApply(state, worktreeId, {
+      type: 'wake',
+      tabId,
+      paneKeys: [paneKey],
+      recordOnly: true
+    })
   }
 }

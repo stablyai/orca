@@ -7,6 +7,10 @@ import {
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import type { NotificationSettings } from '../../shared/notification-settings-types'
 import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
+import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels,
   type StructuredAttentionMobileDeliveryDeps
@@ -73,7 +77,7 @@ function harness(overrides: Partial<StructuredAttentionMobileDeliveryDeps> = {})
   const delivery = createStructuredAttentionMobileDelivery({
     readNotificationSettings: () => settings(),
     readWorkspaceLabels: () => ({ repoLabel: 'orca', worktreeLabel: 'feature' }),
-    isWorkspaceHidden: () => false,
+    isWorkspaceMuted: () => false,
     dispatch: (event) => sent.push(event),
     reconcile: (state) => reconciled.push(state),
     now: () => 42,
@@ -95,6 +99,10 @@ describe('structured attention mobile delivery', () => {
         title: 'orca / feature - Claude needs input',
         body: 'May I run the migration?',
         worktreeId: SCOPE.workspaceId,
+        paneKey: structuredAgentSessionPaneKey(
+          structuredAgentSessionTabId('session-1'),
+          'session-1'
+        ),
         notificationId: key,
         attentionKey: key,
         agentState: 'blocked'
@@ -114,20 +122,13 @@ describe('structured attention mobile delivery', () => {
     ])
   })
 
-  it('sends nothing for a workspace the desktop Filters hide, unless hidden workspaces notify', () => {
-    const isWorkspaceHidden = vi.fn(() => true)
-    const quiet = harness({
-      isWorkspaceHidden,
-      readNotificationSettings: () => settings({ notifyHiddenWorkspaces: false })
-    })
+  it('sends nothing for a workspace whose notifications are muted', () => {
+    const isWorkspaceMuted = vi.fn(() => true)
+    const quiet = harness({ isWorkspaceMuted })
     quiet.delivery.deliver(PROMPT, SUMMARY)
     quiet.delivery.deliver(completion('success'), SUMMARY)
     expect(quiet.sent).toEqual([])
-    expect(isWorkspaceHidden).toHaveBeenCalledWith(SCOPE)
-
-    const optedIn = harness({ isWorkspaceHidden })
-    optedIn.delivery.deliver(PROMPT, SUMMARY)
-    expect(optedIn.sent).toHaveLength(1)
+    expect(isWorkspaceMuted).toHaveBeenCalledWith(SCOPE)
   })
 
   it('still sends when labels cannot be read, worded generically', () => {
@@ -183,11 +184,11 @@ describe('readStructuredAttentionWorkspaceLabels', () => {
     expect(labels).toEqual({ repoLabel: 'orca', worktreeLabel: 'feature' })
   })
 
-  it('reads a folder workspace by its own id', () => {
+  it('reads a folder workspace from the folder key a chat scope carries', () => {
     const labels = readStructuredAttentionWorkspaceLabels(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the read fields are stubbed.
       store as never,
-      { ...SCOPE, workspaceId: 'folder-1', workspaceKind: 'folder' }
+      { ...SCOPE, workspaceId: 'folder:folder-1', workspaceKind: 'folder' }
     )
     expect(labels).toEqual({ worktreeLabel: 'Notes' })
   })

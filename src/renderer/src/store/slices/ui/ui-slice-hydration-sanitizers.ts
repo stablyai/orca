@@ -11,13 +11,13 @@ import type {
 import type { WorkspaceCleanupDismissal } from '../../../../../shared/workspace-cleanup'
 import { WORKSPACE_CLEANUP_CLASSIFIER_VERSION } from '../../../../../shared/workspace-cleanup'
 import { isTopLevelView } from '../../../../../shared/top-level-view'
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status-freshness'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
 import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
 import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
-const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export function preserveStringArrayIdentity<T extends string>(
   current: readonly T[] | null,
@@ -104,7 +104,7 @@ export function sanitizePersistedSidebarWidth(
 
 export function sanitizePaneKeyTimestampRecord(
   value: unknown,
-  maxAgeMs: number = HYDRATE_MAX_AGE_MS
+  maxAgeMs: number = AGENT_STATUS_HYDRATE_MAX_AGE_MS
 ): Record<string, number> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
@@ -125,12 +125,9 @@ export function sanitizePaneKeyTimestampRecord(
 
 export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecord
 
-/** Cleared-at cutoffs must outlive any persisted status entry they guard: main prunes entries
- *  at HYDRATE_MAX_AGE_MS from receivedAt, and cutoff values trail receipt time, so pruning them
- *  on the same clock can resurrect a cleared entry. Double the TTL keeps the guard alive past
- *  every entry it can still shadow. */
+/** Cutoffs trail status receipt times; double the status TTL so pruning cannot resurrect a cleared entry still retained by main. */
 export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {
-  return sanitizePaneKeyTimestampRecord(value, 2 * HYDRATE_MAX_AGE_MS)
+  return sanitizePaneKeyTimestampRecord(value, 2 * AGENT_STATUS_HYDRATE_MAX_AGE_MS)
 }
 
 export function sanitizeWorkspaceCleanupDismissals(

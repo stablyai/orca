@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { projectStructuredAgentStartItem } from '../../../shared/structured-agent-start-projection'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
@@ -158,7 +159,7 @@ describe('journal row validation', () => {
 
   it('rejects JSON-valid nested body corruption that would throw during render', () => {
     const item = (body: unknown) => ({ ...BASE, kind: 'item', itemId: 'i-1', revision: 1, body })
-    // A resolved question's options are mapped by the projection; null throws there.
+    // Null options would crash resolved-question projection.
     expect(
       parse(
         item({
@@ -169,7 +170,6 @@ describe('journal row validation', () => {
         })
       )
     ).toBe(false)
-    // Prompt surfaces read `resolution.state` before anything else.
     expect(
       parse(item({ kind: 'question', question: 'Deploy?', options: [], resolution: null }))
     ).toBe(false)
@@ -180,7 +180,6 @@ describe('journal row validation', () => {
         item({ kind: 'approval', title: 't', detail: null, options: [{ id: 1 }], resolution: null })
       )
     ).toBe(false)
-    // `turnLifecycle.turnId` is read whenever the value is truthy.
     expect(parse(item({ kind: 'status', text: 'x', turnLifecycle: true }))).toBe(false)
   })
 
@@ -197,13 +196,16 @@ describe('journal row validation', () => {
     ).toBe(false)
   })
 
-  it('keeps forward compatibility for open string fields and unknown block types', () => {
+  it('keeps open string fields readable and refuses an unknown block type as newer', () => {
     const item = (body: unknown) => ({ ...BASE, kind: 'item', itemId: 'i-1', revision: 1, body })
-    // Renderers select known block types by equality and skip the rest.
+    // A saved row's block types are closed: a newer one refuses as a newer Orca's.
     expect(
-      parse(item({ kind: 'message', role: 'user', blocks: [{ type: 'future-block', data: 1 }] }))
-    ).toBe(true)
-    // Role and tool-call state are type-checked, never enum-checked.
+      parseJournalRow(
+        JSON.stringify(
+          item({ kind: 'message', role: 'user', blocks: [{ type: 'future-block', data: 1 }] })
+        )
+      )
+    ).toEqual({ ok: false, unreadable: true })
     expect(
       parse(item({ kind: 'message', role: 'narrator', blocks: [{ type: 'text', text: 'hi' }] }))
     ).toBe(true)
@@ -219,8 +221,7 @@ describe('journal row validation', () => {
             selectedOptionId: null,
             resolvedBy: null,
             resolvedAt: null
-          },
-          futureField: 'ignored'
+          }
         })
       )
     ).toBe(true)
@@ -269,8 +270,6 @@ describe('producer linkage on the persisted row', () => {
     resolvedAt: null
   }
 
-  /** The full durable path: build the row the appender would write, serialize it
-   *  the way the journal file does, and read it back. */
   function roundTrip(withLinkage: boolean): JournalRow | null {
     const state = createJournalReducerState('session-1', 'epoch-1')
     const row = buildJournalItemRow({
@@ -290,14 +289,10 @@ describe('producer linkage on the persisted row', () => {
   it('writes and reads the bundle back without bumping the schema version', () => {
     const row = roundTrip(true)
     expect(row).toMatchObject(linkage)
-    // Deliberately NOT a version bump: an unknown `v` is unreadable and costs an older
-    // host the chat, while an unknown KEY is simply ignored by an older host.
+    // Unknown keys remain compatible; unknown versions would refuse the entire chat.
     expect(row?.v).toBe(AGENT_SESSION_JOURNAL_SCHEMA_VERSION)
   })
 
-  /** A row this host did not write: a remote peer's, or a corrupted line.
-   *  Narrowed to the item arm it always builds, so a caller can read `body`
-   *  without re-discriminating a union of six. */
   function parseForeign(
     overrides: Record<string, unknown>
   ): Extract<JournalRow, { kind: 'item' }> | null {
@@ -319,8 +314,7 @@ describe('producer linkage on the persisted row', () => {
   }
 
   it('keeps the row but drops an empty agentId, which would read as a subagent', () => {
-    // Presence, not truthiness: `''` left in place hides the row from its own
-    // author on every parent-scoped surface, permanently and with no backfill.
+    // Empty producer IDs still count as child linkage and would hide rows from their author.
     const row = parseForeign({ agentId: '' })
     expect(row).not.toBeNull()
     expect(row && 'agentId' in row).toBe(false)
@@ -335,15 +329,12 @@ describe('producer linkage on the persisted row', () => {
   })
 
   it('never lets a bad linkage field reject the row itself', () => {
-    // A row validator that REJECTS is a whole-store kill switch: the row leaves
-    // the timeline entirely. The content must survive its own bad metadata.
     const row = parseForeign({ agentId: '', parentAgentId: null, providerParentRef: 7 })
     expect(row?.body).toEqual(body)
     expect(row?.seq).toBe(7)
   })
 
   it('leaves a well-formed foreign linkage bundle untouched', () => {
-    // The positive control: the sanitizer must not be dropping everything.
     expect(parseForeign({ agentId: 'task-9', attempt: 3 })).toMatchObject({
       agentId: 'task-9',
       attempt: 3
@@ -365,23 +356,21 @@ describe('producer linkage on the persisted row', () => {
       identity,
       body,
       linkage,
+      observedAt: 123,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
 
     const parsed = parseJournalRow(JSON.stringify(row))
     const mutations = parsed.ok && parsed.row.kind === 'lifecycle-batch' ? parsed.row.mutations : []
-    expect(mutations[0]).toMatchObject(linkage)
+    expect(mutations[0]).toMatchObject({ ...linkage, observedAt: 123 })
+    expect(mutations[1] && 'observedAt' in mutations[1]).toBe(false)
     expect(mutations[1] && 'agentId' in mutations[1]).toBe(false)
-    // The same batch without the stamp writes the same version: an older host
-    // ignores the unknown keys rather than losing the chat to an unknown `v`.
     expect(row.v).toBe(
       build({ kind: 'item', identity, body, turnScope: AGENT_JOURNAL_THREAD_SCOPE }).v
     )
   })
 
-  it('keeps a batch mutation but drops its unusable producer id', () => {
-    // Same policy as the row base: sanitize, never reject — a rejected batch
-    // would take every mutation in it out of the timeline.
+  it('keeps a batch mutation but drops unusable producer and source time annotations', () => {
     const parsed = parseJournalRow(
       JSON.stringify({
         v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
@@ -392,15 +381,16 @@ describe('producer linkage on the persisted row', () => {
         kind: 'lifecycle-batch',
         settlementId: 'settle-2',
         mutations: [
-          { kind: 'item', itemId: 'i-1', revision: 1, body, agentId: '' },
-          { kind: 'item', itemId: 'i-2', revision: 1, body, agentId: 'thread-child' }
+          { kind: 'item', itemId: 'i-1', revision: 1, body, agentId: '', observedAt: 'invalid' },
+          { kind: 'item', itemId: 'i-2', revision: 1, body, agentId: 'thread-child', observedAt: 0 }
         ]
       })
     )
     const mutations = parsed.ok && parsed.row.kind === 'lifecycle-batch' ? parsed.row.mutations : []
     expect(mutations).toHaveLength(2)
     expect(mutations[0] && 'agentId' in mutations[0]).toBe(false)
-    expect(mutations[1]).toMatchObject({ agentId: 'thread-child' })
+    expect(mutations[0] && 'observedAt' in mutations[0]).toBe(false)
+    expect(mutations[1]).toMatchObject({ agentId: 'thread-child', observedAt: 0 })
   })
 
   it("omits every key on a row the session's own agent produced", () => {
@@ -410,8 +400,6 @@ describe('producer linkage on the persisted row', () => {
   })
 
   it('accepts a real pre-linkage journal line, which carries no bundle at all', () => {
-    // A literal line rather than a constructed row, so this also pins that no
-    // unknown-key rejection crept in.
     const legacy =
       '{"v":3,"epoch":"epoch-1","seq":7,"fence":1,"ts":1700000000000,"kind":"item",' +
       '"itemId":"i-1","revision":1,"body":{"kind":"message","role":"assistant",' +
@@ -440,9 +428,8 @@ describe('producer linkage on the persisted row', () => {
     expect(parsed.ok).toBe(true)
   })
 
-  it('reads the same row with linkage put INSIDE a prompt option, ignoring the key there', () => {
-    // Older builds read prompt options strictly and dropped the journal from such a row, which is
-    // why the bundle rides the row base and never a body. This build ignores and keeps the key.
+  it("refuses the same row with linkage put INSIDE a prompt option as a newer Orca's", () => {
+    // A key a prompt option does not declare is a newer build's; linkage stays on the row base.
     const smuggled = {
       ...BASE,
       v: 3,
@@ -456,9 +443,7 @@ describe('producer linkage on the persisted row', () => {
         resolution
       }
     }
-    const parsed = parseJournalRow(JSON.stringify(smuggled))
-    expect(parsed.ok && parsed.row.kind === 'item' && parsed.row.body).toEqual(smuggled.body)
-    expect(parsed.ok && 'agentId' in parsed.row).toBe(false)
+    expect(parseJournalRow(JSON.stringify(smuggled))).toEqual({ ok: false, unreadable: true })
   })
 })
 
@@ -522,3 +507,55 @@ it('preserves stored keys and reducer aliases across an item revision and a tomb
   expect(state.items.size).toBe(0)
   expect(state.tombstones.get('canonical')).toBe(9)
 })
+
+const startWorker = {
+  party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+  name: 'Worker',
+  relation: 'worker'
+}
+it.each([
+  { worker: startWorker, senders: [startWorker] },
+  {
+    worker: { ...startWorker, relation: 'future-relation' },
+    senders: [{ ...startWorker, relation: undefined }]
+  },
+  { worker: { ...startWorker, name: 17 }, senders: [{ ...startWorker, name: null }] },
+  {
+    worker: { ...startWorker, party: { ...startWorker.party, orcaSessionId: 'invalid' } },
+    senders: []
+  },
+  { worker: null, senders: [] }
+])('replays open worker metadata without damaging task/core: $worker', ({ worker, senders }) => {
+  const body = { kind: 'agent-start', dispatchId: 'dispatch', task: '  Full task\r\nEND  ', worker }
+  const parsed = parseJournalRow(
+    JSON.stringify({ ...BASE, kind: 'item', itemId: 'start', revision: 1, body })
+  )
+  if (!parsed.ok) {
+    throw new Error('creation fact was refused')
+  }
+  expect(parsed.row).toMatchObject({ body })
+  const state = createJournalReducerState('session-1', BASE.epoch)
+  applyJournalRow(state, parsed.row)
+  const item = state.items.get('start')
+  if (!item) {
+    throw new Error('creation fact was lost during replay')
+  }
+  const message = projectStructuredAgentStartItem(item)
+  expect(message?.blocks).toEqual([{ type: 'text', text: body.task }])
+  expect(message?.from?.senders).toEqual(senders)
+})
+
+it.each([{ dispatchId: '' }, { dispatchId: null }, { task: null }, { task: 17 }])(
+  'rejects damaged creation core while worker metadata stays open: %j',
+  (damage) => {
+    expect(
+      parse({
+        ...BASE,
+        kind: 'item',
+        itemId: 'start',
+        revision: 1,
+        body: { kind: 'agent-start', dispatchId: 'dispatch', task: 'Task', worker: null, ...damage }
+      })
+    ).toBe(false)
+  }
+)

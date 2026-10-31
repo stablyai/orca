@@ -90,7 +90,7 @@ describe('worktree.ps catalog snapshots', () => {
         id: 'current',
         authToken: 'token',
         method: 'worktree.ps',
-        params: { limit: 10_000 }
+        params: { limit: 10_000, includeAgentWait: true }
       },
       () => {},
       { clientCapabilities: [WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY] }
@@ -106,9 +106,9 @@ describe('worktree.ps catalog snapshots', () => {
       { clientCapabilities: [] }
     )
 
-    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(1, 10_000, false)
-    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(2, 10_000, true)
-    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(3, 10_000, true)
+    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(1, 10_000, false, false)
+    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(2, 10_000, true, true)
+    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(3, 10_000, true, false)
   })
 })
 

@@ -1,9 +1,10 @@
-import { createElement, useEffect } from 'react'
+import { createElement, useEffect, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { HostProtocolGate } from './HostProtocolGate'
 import { useHostProtocolGates } from './host-protocol-gates-context'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const nativeTestState = vi.hoisted(() => ({
   openUrl: vi.fn(),
@@ -25,17 +26,15 @@ vi.mock('react-native', () => ({
 
 vi.mock('expo-router', () => ({
   router: { replace: vi.fn() },
-  // `ProtocolBlockScreen` reaches the router through the navigation handoff now, and the handoff's
-  // native form is this hook. Its web form is what posts the target to the shell.
+  // Mock native handoff’s router hook; web sibling posts target to shell.
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() })
 }))
 
-// Why: mock only client acquisition; the gate must exercise the real
-// useHostStatusGates → evaluateCompat → ProtocolBlockScreen wiring.
+// Mock client acquisition only; keep real status-gates→compatibility→block-screen wiring.
 const hostClient = vi.hoisted(() => ({
   current: { client: null as RpcClient | null, state: 'disconnected' as string }
 }))
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => hostClient.current
 }))
 // The wall's release offer: the native hook imports the update checker module.
@@ -64,11 +63,16 @@ function MountProbe() {
 }
 
 function gateElement() {
-  return createElement(
-    HostProtocolGate,
-    { hostId: 'host-1' },
-    createElement('HostContent', null, createElement(GateConsumer), createElement(MountProbe))
-  )
+  const props: ComponentProps<typeof HostProtocolGate> = {
+    hostId: 'host-1',
+    children: createElement(
+      'HostContent',
+      null,
+      createElement(GateConsumer),
+      createElement(MountProbe)
+    )
+  }
+  return createElement(HostProtocolGate, props)
 }
 
 async function renderGate(): Promise<ReactTestRenderer> {
@@ -127,7 +131,8 @@ describe('HostProtocolGate', () => {
     expect(output).toContain('Open GitHub Releases')
     expect(output).not.toContain('mobile app store')
     expect(output).not.toContain('HostContent')
-    act(() => renderer?.root.findAllByType('Pressable')[0]?.props.onPress())
+    const [openReleases] = findAllByHostType(renderer.root, 'Pressable')
+    act(() => openReleases?.props.onPress())
     expect(nativeTestState.openUrl).toHaveBeenCalledWith(
       'https://github.com/stablyai/orca/releases'
     )
@@ -203,9 +208,9 @@ describe('HostProtocolGate', () => {
     expect(output).toContain('Checking host compatibility')
     // Why: the cold-start remount this replaces is exactly what destroys in-flight deep navigation.
     expect(probeMounts.count).toBe(1)
-    const overlay = renderer.root
-      .findAllByType('View')
-      .find((node) => node.props.accessibilityViewIsModal === true)
+    const overlay = findAllByHostType(renderer.root, 'View').find(
+      (node) => node.props.accessibilityViewIsModal === true
+    )
     expect(overlay?.props.pointerEvents).toBe('auto')
   })
 

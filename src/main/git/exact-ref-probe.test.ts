@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { isShowRefNoMatchError, probeAnyExactRef, probeExactRefs } from './exact-ref-probe'
+import {
+  isShowRefNoMatchError,
+  probeAnyExactRef,
+  probeExactRefs,
+  probeExactRefsViaForEachRef
+} from './exact-ref-probe'
 
 describe('isShowRefNoMatchError', () => {
   it('accepts only the numeric Git no-match exit status', () => {
@@ -68,8 +73,7 @@ describe('probeExactRefs', () => {
     await probeExactRefs(runGit, refs)
 
     expect(runGit).toHaveBeenCalledTimes(20)
-    // Equality, not a ceiling: 20 refs saturate the pool, so a regression to
-    // serial probing has to fail here.
+    // Require saturation so a regression to serial probing fails.
     expect(maxActive).toBe(8)
   })
 })
@@ -92,8 +96,7 @@ describe('probeAnyExactRef', () => {
     expect(runGit.mock.calls.length).toBeLessThanOrEqual(8)
   })
   it('treats exit 1 with stderr as an inconclusive probe, not an absent ref', async () => {
-    // Why: `wsl.exe` exits 1 for its own launch failures. Reading that as
-    // absence would collapse `unverifiable` into `exited`.
+    // WSL launch failure is unknown ref state, never proof of absence.
     const runGit = vi.fn(async () => {
       throw Object.assign(new Error('wsl fail'), {
         code: 1,
@@ -127,5 +130,49 @@ describe('probeAnyExactRef', () => {
     const result = await probeExactRefs(runGit, ['refs/remotes/origin/main'])
 
     expect(result.absentRefs).toEqual(['refs/remotes/origin/main'])
+  })
+})
+
+describe('probeExactRefsViaForEachRef', () => {
+  const present = 'refs/remotes/origin/main'
+  const descendantOnly = 'refs/remotes/fork/main'
+  const invalid = 'refs/remotes/origin/bad*'
+
+  it('answers all candidates from one child and ignores descendant matches', async () => {
+    const runGit = vi.fn(async () => ({
+      stdout: `${present}\r\n${descendantOnly}/sub\n`
+    }))
+
+    await expect(
+      probeExactRefsViaForEachRef(runGit, [present, descendantOnly, invalid, present])
+    ).resolves.toEqual({
+      presentRefs: [present],
+      absentRefs: [descendantOnly],
+      unknownRefs: [invalid]
+    })
+    expect(runGit).toHaveBeenCalledTimes(1)
+    expect(runGit).toHaveBeenCalledWith([
+      'for-each-ref',
+      '--format=%(refname)',
+      '--',
+      present,
+      descendantOnly
+    ])
+  })
+
+  it('falls back to per-ref probes when the batch fails', async () => {
+    const runGit = vi.fn(async (argv: string[]) => {
+      if (argv[0] === 'for-each-ref' || argv.at(-1) === descendantOnly) {
+        throw Object.assign(new Error('failed'), { code: 1 })
+      }
+      return { stdout: '' }
+    })
+
+    await expect(probeExactRefsViaForEachRef(runGit, [present, descendantOnly])).resolves.toEqual({
+      presentRefs: [present],
+      absentRefs: [descendantOnly],
+      unknownRefs: []
+    })
+    expect(runGit).toHaveBeenCalledTimes(3)
   })
 })

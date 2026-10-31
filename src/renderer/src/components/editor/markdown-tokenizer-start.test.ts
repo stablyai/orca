@@ -1,7 +1,9 @@
 import { expect, it, vi } from 'vitest'
 import { createTiptapMarkedFacade } from './tiptap-marked-facade'
+import { createOrcaDetailsExtensions } from './rich-markdown-details-extension'
 import {
   createMarkdownTokenizerStart,
+  createMarkdownTokenizerStartCursor,
   registerMarkdownTokenizerStart
 } from './markdown-tokenizer-start'
 
@@ -93,4 +95,41 @@ it('skips custom searches when their required marker is absent', () => {
   expect(search).not.toHaveBeenCalled()
   marked.lexer('Prose\n<DETAILS>')
   expect(search).toHaveReturnedWith(5)
+})
+
+it('recognizes a suffix-start directive skipped by an earlier line-start search', () => {
+  const marked = createTiptapMarkedFacade()
+  marked.use({
+    extensions: [
+      {
+        name: 'directive',
+        level: 'block',
+        start: createMarkdownTokenizerStart(':::x', true),
+        tokenizer: (source) =>
+          source.startsWith(':::x') ? { type: 'directive', raw: ':::x', text: 'found' } : undefined
+      }
+    ]
+  })
+  expect(marked.lexer('Prose\n\nx:::x\n\n:::x').map(({ type, raw }) => ({ type, raw }))).toEqual([
+    { type: 'paragraph', raw: 'Prose' },
+    { type: 'space', raw: '\n\n' },
+    { type: 'paragraph', raw: 'x' },
+    { type: 'directive', raw: ':::x' },
+    { type: 'space', raw: '\n\n' },
+    { type: 'directive', raw: ':::x' }
+  ])
+})
+
+function getDetailsTokenizerStart() {
+  const tokenizer = createOrcaDetailsExtensions()[0].config.markdownTokenizer
+  if (!tokenizer || typeof tokenizer === 'function' || typeof tokenizer.start !== 'function') {
+    throw new Error('Details tokenizer must expose its start hint')
+  }
+  return tokenizer.start
+}
+
+it('rechecks details start hints when a suffix discards their lookbehind', () => {
+  const start = createMarkdownTokenizerStartCursor(getDetailsTokenizerStart())
+  const source = 'before\n   <details>\n\nnext\n<details>'
+  expect([0, 7, 10, 26].map((offset) => start(source.slice(offset)))).toEqual([10, 19, 16, -1])
 })

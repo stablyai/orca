@@ -5,6 +5,7 @@ import type { PublishedPane } from '../../shared/workspace-layout/workspace-layo
 import type { WorkspaceLayoutEvent } from '../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
+import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
 
 const WORKTREE_ID = 'repo::/worktree'
 const REPO = { id: 'repo', path: '/worktree', displayName: 'repo', badgeColor: 'blue', addedAt: 1 }
@@ -68,8 +69,10 @@ function paneOf(event: WorkspaceLayoutEvent): PublishedPane | undefined {
 describe('live pane titles on the layout stream', () => {
   it('publishes the title a pane terminal sets, once per change', async () => {
     const runtime = runtimeWithPane()
-    const events: WorkspaceLayoutEvent[] = []
-    const { snapshot } = runtime.subscribeWorkspaceLayouts((event) => events.push(event))
+    const collector = collectLayoutEvents()
+    const { events } = collector
+    const { snapshot } = runtime.subscribeWorkspaceLayouts(collector.listener)
+    collector.seed(snapshot)
     expect(snapshot.map((entry) => entry.key)).toEqual([WORKTREE_ID])
     expect(snapshot[0].layout.tabs[0]?.terminal?.panes[0]).toEqual({ leafId: LEAF, ptyId: PTY_ID })
 
@@ -78,7 +81,6 @@ describe('live pane titles on the layout stream', () => {
     expect(events).toHaveLength(1)
     expect(paneOf(events[0])).toEqual({ leafId: LEAF, ptyId: PTY_ID, liveTitle: 'npm run build' })
 
-    // The same title again is no change.
     runtime.onPtyData(PTY_ID, '\x1b]0;npm run build\x07', Date.now())
     await flush()
     expect(events).toHaveLength(1)
@@ -86,8 +88,9 @@ describe('live pane titles on the layout stream', () => {
 
   it('sends no frame per spinner glyph while an agent works', async () => {
     const runtime = runtimeWithPane()
-    const events: WorkspaceLayoutEvent[] = []
-    runtime.subscribeWorkspaceLayouts((event) => events.push(event))
+    const collector = collectLayoutEvents()
+    const { events } = collector
+    collector.seed(runtime.subscribeWorkspaceLayouts(collector.listener).snapshot)
     const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
     for (let frame = 0; frame < 100; frame++) {
       runtime.onPtyData(

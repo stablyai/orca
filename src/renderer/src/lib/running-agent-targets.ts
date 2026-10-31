@@ -3,12 +3,11 @@ import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-t
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
-import { resolveUnifiedTabLabel } from '../../../shared/tab-title-resolution'
 import { isStructuredTab } from '../../../shared/structured-agent-session-tab'
 import { resolvePaneAgentActivity } from '@/lib/pane-agent-evidence'
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
-import { resolveRuntimePaneTitleLeafResolution } from './runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafResolution } from '../../../shared/runtime-pane-title-leaf-id'
 
 export type RunningAgentTargetState = Pick<
   AppState,
@@ -113,19 +112,14 @@ function deriveTerminalAgentSendTargets(
         : null
     let disabledReason: string | undefined
 
-    // Why: the shared resolver gates hook freshness; a null hookState means the
-    // entry is stale (entries here always exist), and otherwise carries the
-    // fresh entry.state. The live-title layer stays local because it needs the
-    // send-gated detector (label + strict idle-send gate), which the resolver's
-    // raw titleStatus does not reproduce.
+    // Shared hookState applies freshness; keep live-title detection local because its strict idle-send gate differs from raw resolver titleStatus.
     const decision = resolvePaneAgentActivity({
       explicitEntry: entry,
       liveTitle: null,
       hasLivePty: ptyId !== null,
       now
     })
-    // Why: hook-backed rows can go stale while the same PTY is still a live
-    // agent; live titles are the runtime proof that the row remains targetable.
+    // Stale hooks can outlive live agents; current PTY titles still prove targetability.
     const liveTitleStatus = ptyId
       ? detectLiveAgentPaneStatus(state, parsed.tabId, parsed.leafId, tab.title)
       : null
@@ -161,9 +155,7 @@ function deriveTerminalAgentSendTargets(
   return targets
 }
 
-// Why: a structured chat is a workspace tab with no PTY, so it is listed from the tab itself.
-// Chats without status stay out of the shared list, like status-less terminals: every sidebar
-// consumer of it (reveal, force-visible, row pills) needs a row to point at.
+// Chats have workspace tabs without PTYs; list only those with status because sidebar reveal/visibility/pills require a row. Notes separately exposes first-turn chats.
 function deriveStructuredAgentSendTargets(
   state: RunningAgentTargetState,
   worktreeId: string,
@@ -189,8 +181,7 @@ function deriveStructuredAgentSendTargets(
       tabId: tab.id,
       sessionId: tab.entityId,
       agentType: tab.agentSessionAgent,
-      // Why: false matches the tab strip, which labels a chat tab customLabel ?? label.
-      title: resolveUnifiedTabLabel(tab, false),
+      title: tab.customLabel?.trim() || tab.label,
       entry,
       status: disabledReason ? 'disabled' : 'eligible',
       ...(disabledReason ? { disabledReason } : {})
@@ -208,8 +199,7 @@ function detectLiveAgentPaneStatus(
   const layout = state.terminalLayoutsByTabId[tabId]
   const paneTitles = state.runtimePaneTitlesByTabId?.[tabId]
   const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
-  // Why: runtime pane titles are the freshest title signal for split panes; use
-  // the tab title only before the runtime has reported a pane title for the leaf.
+  // Prefer each split leaf’s runtime title; use tab title only before that leaf reports one.
   const title = paneTitleResolution.title ?? (paneTitleResolution.hasAnyPaneTitle ? null : tabTitle)
   if (title === null) {
     return null

@@ -1,12 +1,4 @@
-/**
- * What goes into one orcad node-pty prebuild slot (plus a compat slot's own addons), and the
- * manifest that records it.
- *
- * The manifest is the loader's contract (src/main/orcad/node-pty-prebuilt-slot.ts): per-slot
- * N-API level, libc, the highest glibc symbol version the binaries need, and a sha256 per
- * shipped file. N-API rather than NODE_MODULE_VERSION is what lets one build serve the pinned
- * Node and a host Node (design D2/D6 rung C).
- */
+// Slot manifests bind N-API/libc/glibc floor and file hashes to node-pty-prebuilt-slot.ts; N-API lets pinned and host Node share binaries (D2/D6).
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -16,37 +8,23 @@ const require = createRequire(import.meta.url)
 
 export const MANIFEST_SCHEMA_VERSION = 2
 
-/**
- * Keep N-API 8 stable across bundled and host runtimes rather than using the headers'
- * default, so a header bump cannot silently change the shipped addon ABI.
- */
+// Pin N-API 8 so a Node header bump cannot silently raise the shipped addon ABI.
 export const SLOT_NAPI_VERSION = 8
 
 /** The one export every Node-API addon may carry; any other `node_api_*` name is a post-8 import. */
 const NODE_API_EXPORTS = new Set(['node_api_module_get_api_version_v1'])
 
-/**
- * Opt-in slots outside the default matrix, each beside its own pinned Node (design D6 rung B).
- * A glibc 2.17 host has no libstdc++ new enough for anything but GCC 4.8, so the compat slot
- * links it statically.
- */
+// Opt-in compat slots use pinned Node and static libstdc++ because glibc 2.17 hosts only have GCC 4.8-era runtime.
 export const COMPAT_SLOTS = Object.freeze({
   'linux-x64-glibc217': Object.freeze({ platform: 'linux', arch: 'x64', libc: 'glibc' })
 })
 
-/**
- * Native addons a compat slot builds beside node-pty, by slot-relative path, mapped to where an
- * orcad slot ships them. A compat target ships no native file without a compat build.
- */
+// Map compat-built addons into orcad paths; a compat target must ship no native file from the base build.
 export const COMPAT_SLOT_ADDONS = Object.freeze({
   'parcel-watcher/watcher.node': 'node_modules/@parcel/watcher/watcher.node'
 })
 
-/**
- * The native files of a compat target with no compat build behind them: each would be the base
- * target's binary, built for a newer glibc and libstdc++ than the compat host has.
- * `compatSources` maps orcad slot paths to the compat slot files that fill them.
- */
+// Find native files missing compat replacements: base-target binaries require newer glibc/libstdc++ than the compat host.
 export function findCompatAddonGaps(targetFilenames, compatSources) {
   return targetFilenames.filter((file) => file.endsWith('.node') && !compatSources.has(file))
 }
@@ -82,11 +60,7 @@ export function findSharedCxxRuntimeNeeds(neededLibraries) {
   return [...neededLibraries].filter((name) => SHARED_CXX_RUNTIME.test(name)).sort()
 }
 
-/**
- * gyp include for every target node-gyp compiles: pins NAPI_VERSION, and on macOS the C++
- * standard, because the official headers' config.gypi says `clang: 0`, which skips
- * common.gypi's gnu++20 and leaves older Apple clang at its C++98 default.
- */
+// Pin NAPI_VERSION and macOS gnu++20: official headers set clang:0, bypassing common.gypi and leaving old Apple clang on C++98.
 export function prebuildCompileGypi({ napi = SLOT_NAPI_VERSION, staticCxxRuntime = false } = {}) {
   const conditions = [
     [
@@ -106,43 +80,29 @@ export function prebuildCompileGypi({ napi = SLOT_NAPI_VERSION, staticCxxRuntime
   return `${JSON.stringify(gypi, null, 2)}\n`
 }
 
-/**
- * `node_api_*` symbol names in a binary other than the module export. Every function added
- * after N-API 8 uses that prefix (node_api_symbol_for, node_api_create_property_key_*, ...),
- * and import tables store names as plain ASCII in ELF, Mach-O and PE alike.
- */
+// Post-N-API-8 functions use node_api_*; import names remain ASCII in ELF/Mach-O/PE. Exclude the standard module export.
 export function findPostBaselineNodeApiNames(binary) {
   const names = new Set(binary.toString('latin1').match(/node_api_[A-Za-z0-9_]+/g) ?? [])
   return [...names].filter((name) => !NODE_API_EXPORTS.has(name)).sort()
 }
 
-/**
- * Files a slot ships, as `[slot-relative path, source path]`.
- *
- * Windows: the patched build is conpty.node only (the patch deletes the winpty `pty` and
- * `conpty_console_list` gyp targets). conpty.node loads `conpty/conpty.dll` beside itself,
- * which starts `OpenConsole.exe` from the same directory; both come from node-pty's
- * third_party payload, as rebuild-native-deps.mjs restores them for the desktop.
- * `conpty_console_list.node` is upstream's N-API prebuild, the same file the desktop keeps:
- * lib/conpty_console_list_agent.js loads it, but only on the non-DLL kill path, which Orca
- * never takes (it always passes useConptyDll on win32). Shipped so that path fails soft
- * rather than on a missing module.
- */
+const WINDOWS_WINPTY_FILES = ['pty.node', 'winpty.dll', 'winpty-agent.exe']
+
+// Windows source build emits only conpty.node; vendor DLL/OpenConsole payload must sit beside it as on desktop.
+// Keep upstream conpty_console_list for the non-DLL kill path and winpty binaries for Windows <18309 (10 1809/Server 2019); patch removes their build targets.
 export function slotSourceFiles({ platform, arch, buildDir, nodePtyDir }) {
   if (platform === 'win32') {
     const conptyRuntime = windowsConptyRuntimeDir(nodePtyDir, arch)
+    const upstream = join(nodePtyDir, 'prebuilds', `win32-${arch}`)
     return [
       ['conpty.node', join(buildDir, 'conpty.node')],
-      [
-        'conpty_console_list.node',
-        join(nodePtyDir, 'prebuilds', `win32-${arch}`, 'conpty_console_list.node')
-      ],
+      ['conpty_console_list.node', join(upstream, 'conpty_console_list.node')],
       ['conpty/conpty.dll', join(conptyRuntime, 'conpty.dll')],
-      ['conpty/OpenConsole.exe', join(conptyRuntime, 'OpenConsole.exe')]
+      ['conpty/OpenConsole.exe', join(conptyRuntime, 'OpenConsole.exe')],
+      ...WINDOWS_WINPTY_FILES.map((file) => [file, join(upstream, file)])
     ]
   }
-  // Why spawn-helper on macOS only: node-pty posix_spawns it there, and binding.gyp builds it
-  // only under OS=="mac"; Linux forks directly.
+  // macOS posix_spawns spawn-helper and builds it only there; Linux forks directly.
   return [
     ['pty.node', join(buildDir, 'pty.node')],
     ...(platform === 'darwin' ? [['spawn-helper', join(buildDir, 'spawn-helper')]] : [])
@@ -199,11 +159,7 @@ export function highestGlibcNeed(binaryPaths, readVersionNeeds) {
   return highest
 }
 
-/**
- * Why merge rather than overwrite: CI builds one slot per runner and merges the trees. A
- * manifest holding only the last slot would erase the others, and `--require-slots` would
- * reject a complete matrix. Mixing builds of different node-pty or N-API levels is refused.
- */
+// Merge per-runner slot records or the last runner erases the matrix; reject mixed node-pty/N-API versions.
 export function mergeManifest(existing, next) {
   const current = existing?.schemaVersion === MANIFEST_SCHEMA_VERSION ? existing : null
   if (current && (current.version !== next.version || current.napi !== next.napi)) {

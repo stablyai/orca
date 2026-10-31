@@ -6,7 +6,6 @@ import type { AppState } from '@/store/types'
 
 export type WslHostUnavailableReason = 'turned-off' | 'server-files-missing'
 
-/** Why the WSL host owning this workspace cannot run, or null when it can (or is no WSL host). */
 export function selectWslHostUnavailableReason(
   state: AppState,
   worktreeId: string | null | undefined

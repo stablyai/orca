@@ -1,9 +1,11 @@
-// Stored partitions older writers leave disagreeing with themselves, one Loader rule each, so a
-// test can compare what the window shows for each before and after the Loader rewrites it.
+// Legacy inconsistencies for comparing window restore against the Loader’s repairs.
 
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
-import type { WorkspaceLayoutProfile } from './workspace-layout-profile.test-fixture'
+import {
+  sleepingRecord,
+  type WorkspaceLayoutProfile
+} from './workspace-layout-profile.test-fixture'
 import { addWorkspace, emptySession, GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
 
 function twoTabs(): WorkspaceSessionState {
@@ -18,7 +20,6 @@ function twoTabs(): WorkspaceSessionState {
   ])
 }
 
-/** Drops a terminal's tab-bar entry, leaving its row and pane layout. */
 function withoutTabBarEntry(session: WorkspaceSessionState, tabId: string): WorkspaceSessionState {
   session.unifiedTabs![GIT_KEY] = session.unifiedTabs![GIT_KEY]!.filter((tab) => tab.id !== tabId)
   const group = session.tabGroups![GIT_KEY]![0]!
@@ -39,10 +40,44 @@ export const LEGACY_WORKSPACE_LAYOUT_PROFILES: readonly WorkspaceLayoutProfile[]
     session.terminalLayoutsByTabId['tab-b']!.ptyIdsByLeafId = {}
     return session
   }),
-  // Control for the case above: the window adopts a row it can reattach, as the Loader does.
+  local('row without a tab-bar entry or a terminal, selected', () => {
+    const session = withoutTabBarEntry(twoTabs(), 'tab-b')
+    session.tabsByWorktree[GIT_KEY]![1]!.ptyId = null
+    session.terminalLayoutsByTabId['tab-b']!.ptyIdsByLeafId = {}
+    session.activeTabId = 'tab-b'
+    session.activeTabIdByWorktree = { [GIT_KEY]: 'tab-b' }
+    return session
+  }),
+  local('row without a tab-bar entry, its terminal in a workspace slept at shutdown', () => {
+    const session = withoutTabBarEntry(twoTabs(), 'tab-b')
+    session.activeWorktreeIdsOnShutdown = []
+    return session
+  }),
+  // Controls for the cases above: the window adopts a row it can reattach, as the Loader does.
   local('row without a tab-bar entry, still bound to a terminal', () =>
     withoutTabBarEntry(twoTabs(), 'tab-b')
   ),
+  local('row without a tab-bar entry, its terminal only on a relay', () => {
+    const session = withoutTabBarEntry(twoTabs(), 'tab-b')
+    session.tabsByWorktree[GIT_KEY]![1]!.ptyId = null
+    session.terminalLayoutsByTabId['tab-b']!.ptyIdsByLeafId = {}
+    session.remoteSessionIdsByTabId = { 'tab-b': 'relay-b' }
+    return session
+  }),
+  local('row without a tab-bar entry, with a sleeping agent', () => {
+    const session = withoutTabBarEntry(twoTabs(), 'tab-b')
+    session.tabsByWorktree[GIT_KEY]![1]!.ptyId = null
+    session.terminalLayoutsByTabId['tab-b']!.ptyIdsByLeafId = {}
+    session.sleepingAgentSessionsByPaneKey = {
+      [`tab-b:${leaf(2)}`]: sleepingRecord(GIT_KEY, 'tab-b', leaf(2))
+    }
+    return session
+  }),
+  local('row bound only through its pane, without a tab-bar entry', () => {
+    const session = withoutTabBarEntry(twoTabs(), 'tab-b')
+    session.tabsByWorktree[GIT_KEY]![1]!.ptyId = null
+    return session
+  }),
   local('legacy row repeating a tab-bar tab’s terminal', () => {
     const session = twoTabs()
     session.tabsByWorktree[GIT_KEY]!.push({
@@ -138,6 +173,16 @@ export const LEGACY_WORKSPACE_LAYOUT_PROFILES: readonly WorkspaceLayoutProfile[]
     }
     session.activeFileIdByWorktree = { [GIT_KEY]: '/Users/dev/orca/src/app.ts' }
     session.activeTabTypeByWorktree = { [GIT_KEY]: 'editor' }
+    return session
+  }),
+  local('session from before the tab bar, a row with no terminal', () => {
+    const session = twoTabs()
+    delete session.unifiedTabs
+    delete session.tabGroups
+    delete session.tabGroupLayouts
+    delete session.activeGroupIdByWorktree
+    session.tabsByWorktree[GIT_KEY]![1]!.ptyId = null
+    session.terminalLayoutsByTabId['tab-b']!.ptyIdsByLeafId = {}
     return session
   }),
   local('legacy surface tombstone on a pane still showing its terminal', () => {

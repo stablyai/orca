@@ -1,10 +1,72 @@
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
-import { parsePairingCode } from '../../shared/pairing'
+import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import type { ServeReadiness } from '../server/serve-readiness'
 import {
+  orcadIdentityRefusal,
   verifyOrcadPairingIdentity,
   type OrcadTunnelIdentity
-} from '../ssh/orcad-managed-tunnel-identity'
+} from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
+import { tunneledOrcadPairingCode } from '../ssh/orcad-tunneled-pairing'
+import { getPreferredPairingOffer } from '../../shared/runtime-environments'
+import {
+  buildWithPairingRepair,
+  type ManagedOrcadPairingRecovery
+} from '../managed-server/lifecycle/orcad-managed-tunnel-pairing-recovery'
+import type { WslOrcadLaunch } from './wsl-orcad-deploy'
+
+/** The managed repair gate a refused enrolled token goes through, for one WSL host. */
+export type WslOrcadPairingRecovery = Omit<ManagedOrcadPairingRecovery, 'ensure'> & {
+  environmentId: string
+}
+
+/** Reconnect with enrolled token/pinned host key. Repair refusal once through the gate and verify the replacement; startup offers are for enrollment only. */
+export async function resolveWslOrcadPairing(
+  launch: Extract<WslOrcadLaunch, { outcome: 'ready' }>,
+  localPort: number,
+  paired: PairingOffer | null,
+  verifyIdentity = verifyWslOrcadIdentity,
+  recovery?: WslOrcadPairingRecovery
+): Promise<string> {
+  const verified = (offer: PairingOffer | null) =>
+    verifyWslOrcadPairing(launch, localPort, offer, verifyIdentity)
+  // First-time pairing has no enrolled token to repair.
+  if (!recovery || !paired) {
+    return verified(paired)
+  }
+  let pairingOffer = ''
+  await buildWithPairingRepair(
+    {
+      ...recovery,
+      ensure: async (environment) => {
+        pairingOffer = await verified(getPreferredPairingOffer(environment))
+      }
+    },
+    recovery.environmentId,
+    async () => {
+      pairingOffer = await verified(paired)
+    }
+  )
+  return pairingOffer
+}
+
+async function verifyWslOrcadPairing(
+  launch: Extract<WslOrcadLaunch, { outcome: 'ready' }>,
+  localPort: number,
+  paired: PairingOffer | null,
+  verifyIdentity: typeof verifyWslOrcadIdentity
+): Promise<string> {
+  const pairingOffer = tunneledOrcadPairingCode(launch.readiness, localPort, paired)
+  const identity = await verifyIdentity(pairingOffer, launch.readiness)
+  if (identity.verdict === 'foreign' || identity.verdict === 'unpaired') {
+    throw orcadIdentityRefusal(launch.port, identity)
+  }
+  if (identity.verdict === 'unreachable') {
+    console.warn(
+      `[wsl] Orca server in ${launch.distro} did not answer its bridge: ${identity.detail}`
+    )
+  }
+  return pairingOffer
+}
 
 /** Whether the server behind a WSL bridge is the orcad that published `readiness`. */
 export async function verifyWslOrcadIdentity(

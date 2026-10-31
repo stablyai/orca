@@ -1,19 +1,4 @@
-/*
- * Issue #9171 — "Wrong PR diffs displayed when checking out the default branch".
- *
- * A repo's default branch is `master`. In the past someone opened a PR whose
- * HEAD was `master` (accidentally opening a PR *from* the default branch); it
- * was closed long ago. getPRForBranch looks a PR up purely by head branch name
- * with `state=all`, so without a guard that stale closed PR gets attached to
- * the default-branch checkout, surfacing its wrong diffs and checks.
- *
- * These tests assert the CORRECT behavior: an implicit (non-linked) branch or
- * fallback-number match on the repo default branch never surfaces a non-open
- * PR, while open PRs on the trunk and closed/merged PRs on feature branches
- * keep today's behavior. The default branch is resolved by the REAL
- * resolveDefaultBaseRefViaExec over the mocked git exec layer, so the
- * symbolic-ref / rev-parse plumbing and the `origin/` strip are exercised.
- */
+// Implicit non-open PRs must not attach to the default branch; exercise real default-ref resolution over mocked Git.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RateLimitGuardResult =
@@ -127,9 +112,6 @@ import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-de
 
 const DEFAULT_BRANCH_REF = 'refs/remotes/origin/master'
 
-/**
- * Answer the default-base and tracked-upstream snapshots and merged-at-head probe.
- */
 function primeGitExecForDefaultBranch({
   defaultRef = DEFAULT_BRANCH_REF,
   headOid = 'checkout-head-oid'
@@ -177,12 +159,11 @@ function restPR({
   }
 }
 
-/** Route the REST head-branch lookup; every other gh call fails so branch data
- *  is kept as-is (hydration falls back to the branch payload). */
+// Fixture REST branch lookup only; hydration failures retain its payload.
 function primeGhExecWithBranchList(list: Record<string, unknown>[]): void {
   ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
-      return { stdout: JSON.stringify(list) }
+      return { stdout: `HTTP/2.0 200 OK\n\n${JSON.stringify(list)}` }
     }
     throw new Error(`gh unavailable: ${args.join(' ')}`)
   })
@@ -196,7 +177,6 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
-    // Why: getPRForBranch resolves origin through getOwnerRepoForRemote.
     getOwnerRepoForRemoteMock.mockImplementation(
       async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
         remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
@@ -234,12 +214,10 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
 
     const pr = await getPRForBranch('/repo-root', 'master')
 
-    // The head-branch lookup still runs (state=all) and sees the closed PR…
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=1'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=1', '--include'],
       { cwd: '/repo-root', host: 'github.com' }
     )
-    // …but the default-branch guard discards it: no PR on the trunk (#9171).
     expect(pr).toBeNull()
   })
 
@@ -260,9 +238,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
 
     expect(pr?.number).toBe(8)
     expect(pr?.state).toBe('open')
-    // Open results never consult git for the default branch (lazy resolution).
-    // Remote-name listing is a separate concern from default-branch resolution,
-    // so allow it and keep every other git command forbidden here.
+    // Default-ref resolution stays lazy for open PRs; unrelated remote-name enumeration remains allowed.
     expect(
       gitExecFileAsyncMock.mock.calls
         .map(([args]) => args[0])
@@ -283,7 +259,6 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
   })
 
   it('preserves the merged-at-head carve-out on a feature branch', async () => {
-    // Worktree HEAD is exactly the merged PR's final head commit.
     primeGitExecForDefaultBranch({ headOid: 'merged-head-oid' })
     primeGhExecWithBranchList([
       restPR({
@@ -305,23 +280,38 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     primeGitExecForDefaultBranch()
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
-        return { stdout: '[]' }
+        return { stdout: 'HTTP/2.0 200 OK\n\n[]' }
       }
-      if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
+      if (args[0] === 'api' && args[1] === 'graphql' && args.includes('number=7')) {
         return {
           stdout: JSON.stringify({
-            number: 7,
-            title: 'Historical PR',
-            state: 'CLOSED',
-            url: 'https://github.com/acme/widgets/pull/7',
-            statusCheckRollup: [],
-            updatedAt: '2024-01-01T00:00:00Z',
-            isDraft: false,
-            mergeable: 'UNKNOWN',
-            baseRefName: 'old-release',
-            headRefName: 'master',
-            baseRefOid: 'base-oid',
-            headRefOid: 'stale-master-oid'
+            data: {
+              repository: {
+                pullRequest: {
+                  number: 7,
+                  title: 'Historical PR',
+                  state: 'CLOSED',
+                  url: 'https://github.com/acme/widgets/pull/7',
+                  reviewDecision: null,
+                  mergeStateStatus: 'UNKNOWN',
+                  autoMergeRequest: null,
+                  headRepositoryOwner: { login: 'acme' },
+                  headRepository: { name: 'widgets' },
+                  commits: {
+                    nodes: [{ commit: { oid: 'stale-master-oid', statusCheckRollup: null } }]
+                  },
+                  stack: null,
+                  stackEntry: null,
+                  updatedAt: '2024-01-01T00:00:00Z',
+                  isDraft: false,
+                  mergeable: 'UNKNOWN',
+                  baseRefName: 'old-release',
+                  headRefName: 'master',
+                  baseRefOid: 'base-oid',
+                  headRefOid: 'stale-master-oid'
+                }
+              }
+            }
           })
         }
       }
@@ -337,23 +327,38 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     primeGitExecForDefaultBranch()
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
-        return { stdout: '[]' }
+        return { stdout: 'HTTP/2.0 200 OK\n\n[]' }
       }
-      if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
+      if (args[0] === 'api' && args[1] === 'graphql' && args.includes('number=7')) {
         return {
           stdout: JSON.stringify({
-            number: 7,
-            title: 'Historical PR',
-            state: 'MERGED',
-            url: 'https://github.com/acme/widgets/pull/7',
-            statusCheckRollup: [],
-            updatedAt: '2024-01-01T00:00:00Z',
-            isDraft: false,
-            mergeable: 'UNKNOWN',
-            baseRefName: 'old-release',
-            headRefName: 'master',
-            baseRefOid: 'base-oid',
-            headRefOid: 'stale-master-oid'
+            data: {
+              repository: {
+                pullRequest: {
+                  number: 7,
+                  title: 'Historical PR',
+                  state: 'MERGED',
+                  url: 'https://github.com/acme/widgets/pull/7',
+                  reviewDecision: null,
+                  mergeStateStatus: 'UNKNOWN',
+                  autoMergeRequest: null,
+                  headRepositoryOwner: { login: 'acme' },
+                  headRepository: { name: 'widgets' },
+                  commits: {
+                    nodes: [{ commit: { oid: 'stale-master-oid', statusCheckRollup: null } }]
+                  },
+                  stack: null,
+                  stackEntry: null,
+                  updatedAt: '2024-01-01T00:00:00Z',
+                  isDraft: false,
+                  mergeable: 'UNKNOWN',
+                  baseRefName: 'old-release',
+                  headRefName: 'master',
+                  baseRefOid: 'base-oid',
+                  headRefOid: 'stale-master-oid'
+                }
+              }
+            }
           })
         }
       }
@@ -368,7 +373,6 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
   })
 
   it('fails open when the default branch cannot be resolved (stale PR still returned)', async () => {
-    // Every git probe fails: no origin/HEAD, no main/master refs.
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'for-each-ref') {
         return { stdout: '', stderr: '' }

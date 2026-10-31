@@ -1,8 +1,4 @@
-// Turn-status derivation and copy for the native-chat turn rows — the "Working for N /
-// Worked for N" bar under the user's message and the live line at the turn's tail —
-// shared by the desktop renderer (as its i18n fallback strings) and the mobile app
-// (used directly — mobile ships English only) so the two surfaces never drift.
-// Everything here is pure; each platform owns its own clock.
+// Shared turn status/copy for desktop translations and direct mobile rendering; platforms own their clocks.
 
 import type { AgentTurnOutcome } from './agent-turn-outcome'
 
@@ -21,6 +17,9 @@ export const NATIVE_CHAT_TURN_STATUS_COPY = {
   toggleDetails: 'Toggle turn details',
   responding: 'Agent is responding'
 } as const
+
+/** The composer's placeholder while the chat takes a message as usual. */
+export const NATIVE_CHAT_COMPOSER_PLACEHOLDER = 'Ask anything, @ to mention files, / for commands'
 
 /** Format turn time without exposing an ever-growing raw seconds count. */
 export function formatNativeChatDuration(seconds: number): string {
@@ -46,9 +45,7 @@ export function describeNativeChatTurnStatus({
 }: {
   workedSeconds?: number | null
   elapsedSeconds: number
-  /** How the settled turn ended: a user's Stop or a newer request's replacement reads interrupted,
-   *  and a failure reads failed. A turn cut short when the agent stopped without anyone asking (a
-   *  crash, a quit, an eviction) reads like a finished one: the chat's notice row says it stopped. */
+  /** User Stop/replacement means interrupted; failures mean failed. Crash/quit/eviction cuts use finished wording because a separate notice explains the stop. */
   verdict?: AgentTurnOutcome
 }): {
   key: 'workingFor' | 'workedFor' | 'interruptedAfter' | 'failedAfter'
@@ -94,10 +91,7 @@ export type NativeChatActiveTurnLabel =
   | { source: 'activity'; text: string }
   | { source: 'status'; key: 'thinking' | 'working' | 'stopping' }
 
-/** The live tail line's label. The person's own Stop wins: whatever the turn was doing, it is
- *  now ending. Provider activity is next because it is the only text that says what the turn is
- *  actually doing; reasoning is next. It never carries the clock — the turn bar owns that.
- *  Shared so desktop and mobile cannot disagree. */
+/** Label priority: Stop, live provider activity, reasoning. The turn bar owns the clock; share labels across desktop/mobile. */
 export function describeNativeChatActiveTurnLabel({
   activityText,
   thinking,
@@ -155,9 +149,7 @@ export type NativeChatTurnTimingByTurn = Readonly<Record<string, NativeChatTurnT
 /** The live turn's key when the transcript has no user message to hang it on. */
 export const NATIVE_CHAT_UNANCHORED_TURN_KEY = '__unanchored__'
 
-/** The turn-timing state machine, lifted out of the React hook so desktop and
- *  mobile stamp start/stop identically. Returns the same reference when nothing
- *  changed so callers can bail out of a state update. */
+/** Share start/stop reduction across platforms; unchanged timing retains reference for update bailouts. */
 export function reduceNativeChatTurnTiming(
   current: NativeChatTurnTimingByTurn,
   {
@@ -169,10 +161,7 @@ export function reduceNativeChatTurnTiming(
     now
   }: {
     activeTurnKey: string
-    /** The key this turn had on the previous pass. When it names a turn that has
-     *  since left the transcript, the two are the same turn under two ids — an
-     *  optimistic echo that the transcript replaced — so the clock carries over
-     *  instead of restarting. Omit it to keep the plain restart behavior. */
+    /** Prior key of a replaced optimistic echo; carry timing only if that old key left the transcript. Omit for ordinary restart. */
     previousActiveTurnKey?: string
     validTurnKeys: ReadonlySet<string>
     isWorking: boolean
@@ -180,9 +169,7 @@ export function reduceNativeChatTurnTiming(
     now: number
   }
 ): NativeChatTurnTimingByTurn {
-  // The same turn under two ids: an optimistic echo the transcript has since
-  // replaced. Re-key its timing so neither the running clock nor an already
-  // settled duration is lost when the swap lands.
+  // Re-key replaced optimistic echoes so both running starts and settled durations survive the id swap.
   const replacedTiming =
     previousActiveTurnKey !== undefined &&
     previousActiveTurnKey !== activeTurnKey &&
@@ -202,8 +189,7 @@ export function reduceNativeChatTurnTiming(
 
   const timing = retained[activeTurnKey]
   if (isWorking) {
-    // A lifecycle row can arrive before its exact request-origin revision. Keep
-    // the earlier anchor so publication order can never run the live clock backward.
+    // Lifecycle may precede request-origin revision; retain the earlier anchor so publication order cannot reverse the clock.
     const startedAt =
       timing && timing.workedSeconds == null
         ? workingStartedAt === null || workingStartedAt === undefined
@@ -240,14 +226,10 @@ export type NativeChatSettledTurn = {
   verdict?: AgentTurnOutcome
 }
 
-/** Per turn: the host's duration, or null when the host recorded the turn but
- *  has no duration to show (still running, or its end was never observed).
- *  Either way the host's word replaces whatever this platform clocked locally. */
+/** Host duration or explicit null (running/unobserved end) overrides local timing; absent entries permit local fallback. */
 export type NativeChatSettledTurns = ReadonlyMap<string, NativeChatSettledTurn | null>
 
-/** Split the timing map into the active turn's status and the settled ones.
- *  Host-recorded durations override the locally observed ones per turn; local
- *  observation remains the floor for hosts that record nothing. */
+/** Split active/settled statuses; host-recorded duration overrides local observation per turn, including explicit unknowns. */
 export function selectNativeChatTurnStatuses(
   timingByTurn: NativeChatTurnTimingByTurn,
   {
@@ -294,8 +276,7 @@ export function selectNativeChatTurnStatuses(
           workedSeconds: null
         }
       : (completedByTurn[activeTurnKey] ??
-        // Ended, but the local duration is stamped a pass later: stay live until then so
-        // the bar settles in place instead of blinking out. The host's null still hides it.
+        // Keep the bar live until next-pass local settlement to avoid flicker; explicit host null still hides it.
         (activeTiming?.workedSeconds === null && !settledByTurn?.has(activeTurnKey)
           ? { startedAt: activeTiming.startedAt, thinking: false, workedSeconds: null }
           : null)),

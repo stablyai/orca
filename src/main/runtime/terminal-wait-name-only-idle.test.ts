@@ -2,30 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeTerminalIdlePolls } from './terminal/wait/terminal-idle-polls'
 import { RuntimeTerminalWait } from './terminal/wait/terminal-wait'
 import { RuntimeTerminalWaiterRegistry } from './terminal/wait/terminal-waiter-registry'
-import {
-  errorMessage,
-  makeTuiIdleLeaf,
-  makeTuiIdlePty,
-  makeTuiIdleRuntime
-} from './tui-idle-wait-test-harness'
+import { errorMessage, makeTuiIdlePty, makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { FirstPartyAgentStatus } from './tui-idle-evidence'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
 
-// #6011: `terminal wait --for tui-idle` returned satisfied in ~0s against a working agent,
-// because a Codex/Devin OSC title that carries only the agent NAME is stored as `idle` and
-// the wait accepted the stored value. These tests pin which evidence settles the wait,
-// which only corroborates, and which vetoes.
+// #6011: name-only Codex/Devin titles were stored as idle and prematurely satisfied tui-idle; distinguish settling, corroborating and veto evidence.
 
 const POLL_INTERVAL_MS = 2000
 const QUIESCENCE_MS = 3000
 const NAME_ONLY_TITLE = 'Codex'
 const EXPLICIT_IDLE_TITLE = 'Codex ready'
 const HANDLE = 'terminal-1'
-// Real bytes: node-pty capture of `muse --provider echo --trust-workspace` at its ready
-// prompt. Muse's OSC title is the bare cwd (`tmp`) and never changes.
+// Muse 1.3.0 node-pty capture with echo provider and --trust-workspace; its OSC title stays the bare cwd.
 const MUSE_READY_TAIL = [
   '  Muse Code 1.3.0',
   '  Skills: 77 loaded · 1 warning · 28 details hidden (ctrl+o to expand)',
@@ -35,19 +27,15 @@ const MUSE_READY_TAIL = [
 ]
 
 function createWait(options: {
-  pty?: RuntimePtyWorktreeRecord
-  leaf?: RuntimeLeafRecord
+  pty: RuntimePtyWorktreeRecord
   adoptedIdleStatus?: AgentStatus | null
-  tabTitle?: string | null
   foreground?: string | null
   agent?: TuiAgent | null
   firstPartyStatus?: FirstPartyAgentStatus
-  liveLeaf?: () => RuntimeLeafRecord
 }) {
   const waiters = new RuntimeTerminalWaiterRegistry()
   const startVisibleReadProbe = vi.fn()
   const shared = {
-    getTabTitle: () => options.tabTitle ?? null,
     getAdoptedPtyIdleStatus: () => options.adoptedIdleStatus ?? null,
     getPaneAgent: () => options.agent ?? null,
     getFirstPartyAgentStatus: () => options.firstPartyStatus ?? null,
@@ -60,15 +48,14 @@ function createWait(options: {
     intervalMs: POLL_INTERVAL_MS,
     getForegroundProcess: () => Promise.resolve(options.foreground ?? null),
     hasCommandPainted: () => true,
-    getLiveLeaf: (leaf) => options.liveLeaf?.() ?? leaf,
     resolve: (waiter, result) => waiters.resolve(waiter, result)
   })
   const wait = new RuntimeTerminalWait(
     {
       ...shared,
       defaultTimeoutMs: 60_000,
-      getLivePty: () => (options.pty ? { pty: options.pty } : null),
-      getLiveLeaf: () => ({ leaf: options.leaf ?? makeTuiIdleLeaf() }),
+      getTerminalPty: () => ({ pty: options.pty }),
+      exitUnsettled: () => false,
       startVisibleReadProbe
     },
     waiters,
@@ -86,7 +73,7 @@ function watch(promise: Promise<unknown>) {
   return settled
 }
 
-/** Keeps the record "streaming": output stays younger than the quiescence window. */
+/** Keep output younger than the quiescence window. */
 async function advanceWhileStreaming(
   record: { lastOutputAt: number | null },
   ticks: number
@@ -104,6 +91,40 @@ describe('tui-idle evidence ranking', () => {
   afterEach(() => {
     vi.useRealTimers()
   })
+
+  it.each([
+    ['claude ~/p/repo', false],
+    ['Fix the codex launcher', false],
+    ['Fix the codex launcher', true]
+  ] as const)(
+    'keeps a null-agent terminal titled %s pending through streaming (clockless=%s)',
+    async (title, clockless) => {
+      const pty = makeTuiIdlePty({
+        lastAgentStatus: 'idle',
+        lastOscTitle: title,
+        lastOutputAt: clockless ? null : Date.now()
+      })
+      const { wait, waiters, polls } = createWait({ pty, agent: null })
+      const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).not.toHaveBeenCalled()
+      expect(waiters.forPty(pty.ptyId)).toHaveLength(1)
+      expect(polls.activeTimerCount).toBe(1)
+      if (clockless) {
+        await vi.advanceTimersByTimeAsync(QUIESCENCE_MS + POLL_INTERVAL_MS)
+        expect(settled).not.toHaveBeenCalled()
+      }
+      await advanceWhileStreaming(pty, 3)
+      expect(settled).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(QUIESCENCE_MS + POLL_INTERVAL_MS)
+      expect(settled).toHaveBeenCalledExactlyOnceWith({
+        ok: expect.objectContaining({ satisfied: true })
+      })
+      expect(waiters.forPty(pty.ptyId)).toHaveLength(0)
+      expect(polls.activeTimerCount).toBe(0)
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
 
   it('refuses a stored name-only idle while the pane is still streaming', async () => {
     const pty = makeTuiIdlePty({ lastAgentStatus: 'idle', lastOscTitle: NAME_ONLY_TITLE })
@@ -133,21 +154,6 @@ describe('tui-idle evidence ranking', () => {
     ).resolves.toMatchObject({ satisfied: true })
   })
 
-  // Why this case exists: tier 1 used to read only the renderer-synced pane title, so a
-  // daemon-hosted pane with no renderer dropped its explicit `Codex ready` to the
-  // quiescence lane and waited the whole window for a result it already had.
-  it('reads an explicit idle title off the record when no renderer published one', async () => {
-    const leaf = makeTuiIdleLeaf({
-      lastAgentStatus: 'idle',
-      lastOscTitle: EXPLICIT_IDLE_TITLE,
-      paneTitle: null
-    })
-    const { wait } = createWait({ leaf, agent: 'codex', tabTitle: null })
-    await expect(
-      wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 })
-    ).resolves.toMatchObject({ satisfied: true })
-  })
-
   it('lets the agent own status stream veto an otherwise-quiet name-only idle', async () => {
     const pty = makeTuiIdlePty({
       lastAgentStatus: 'idle',
@@ -164,10 +170,7 @@ describe('tui-idle evidence ranking', () => {
     expect(settled).not.toHaveBeenCalled()
   })
 
-  // Why the scoping: demoting every name-only title left agents that emit their NAME and
-  // nothing else at rest with no settle signal at all. A real idle Grok pane repaints its
-  // banner about four times a second forever, so output never quiesces and the wait ran to
-  // timeout — a total loss of tui-idle for that provider.
+  // Grok emits only its name at rest and repaints about four times/second; demoting every name-only title made it time out.
   it('settles immediately for an agent that never emits anything but its name', async () => {
     const pty = makeTuiIdlePty({ lastAgentStatus: 'idle', lastOscTitle: 'grok' })
     const { wait } = createWait({ pty, agent: 'grok' })
@@ -184,22 +187,6 @@ describe('tui-idle evidence ranking', () => {
     expect(settled).not.toHaveBeenCalled()
   })
 
-  // Why: `syncWindowGraph` rebuilds leaf records, so a poll that keeps reading the record it
-  // captured sees a frozen `lastOutputAt`, and its quiescence gate passes while the real pane
-  // is still streaming.
-  it('tracks the live leaf record across a graph sync instead of a frozen capture', async () => {
-    const registered = makeTuiIdleLeaf({ lastAgentStatus: 'idle', lastOscTitle: NAME_ONLY_TITLE })
-    let live = registered
-    const { wait } = createWait({ leaf: registered, agent: 'codex', liveLeaf: () => live })
-    const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
-
-    // The renderer republishes: a brand-new object replaces the captured one.
-    live = makeTuiIdleLeaf({ lastAgentStatus: 'idle', lastOscTitle: NAME_ONLY_TITLE })
-    registered.lastOutputAt = Date.now() - QUIESCENCE_MS * 10
-    await advanceWhileStreaming(live, 4)
-    expect(settled).not.toHaveBeenCalled()
-  })
-
   it('never settles tui-idle on a permission status', async () => {
     const pty = makeTuiIdlePty({
       lastAgentStatus: 'permission',
@@ -211,9 +198,7 @@ describe('tui-idle evidence ranking', () => {
     expect(settled).not.toHaveBeenCalled()
   })
 
-  // Why: Muse sets its OSC title to the bare cwd and never updates it, so the title
-  // lanes stay null and only the ready-screen body can settle the wait — but only once
-  // the stream goes quiet, so a mid-turn streaming pane never satisfies.
+  // Muse never updates its cwd title; its ready body settles only after quiet to exclude mid-turn repaints.
   it('settles a Muse ready screen only once the stream goes quiet', async () => {
     const pty = makeTuiIdlePty({
       lastAgentStatus: null,
@@ -274,7 +259,6 @@ const E2E_GRAPH = {
 } satisfies RuntimeSyncWindowGraph
 
 async function makeRuntime(launchAgent?: TuiAgent) {
-  // The agent process stays in the foreground; only its output and title move.
   const runtime = makeTuiIdleRuntime({
     repoPath: '/tmp/name-only-idle',
     getForegroundProcess: async () => 'codex'
@@ -282,7 +266,7 @@ async function makeRuntime(launchAgent?: TuiAgent) {
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, E2E_GRAPH)
   if (launchAgent) {
-    runtime.registerPty(E2E_PTY_ID, E2E_WORKTREE_ID, null, {
+    registerBoundPty(runtime, E2E_PTY_ID, E2E_WORKTREE_ID, null, {
       tabId: 'tab-1',
       leafId: E2E_LEAF_ID,
       incarnationId: 'name-only-incarnation',

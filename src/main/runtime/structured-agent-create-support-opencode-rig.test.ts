@@ -6,9 +6,7 @@ import { restoreManagedDataAccountEnvironment } from '../../shared/managed-data-
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { resolveHostStructuredAgentCreateSupport } from './structured-agent-launch-support'
 
-// Live QA run 5 on #25845: the app launched with HOME and every XDG directory pointed into the rig,
-// and OpenCode's Command and per-agent PATH both naming a private 1.18.31. The host's whole create
-// check, with a real `--version` against stand-in scripts, must admit that OpenCode.
+// Reproduce #25845 rig routing: private HOME/XDG and Command/PATH must admit stand-in OpenCode 1.18.31 through the real version check.
 
 const { loginShell } = vi.hoisted(() => {
   const loginShell: { env: Record<string, string> } = { env: {} }
@@ -49,7 +47,10 @@ const managedAccounts = {
 
 /** OpenCode's account binding, as create resolves it: the account a new chat would pin. */
 function pinnedAccount(launchEnv: Record<string, string>) {
-  return openCodeAcpAccountBinding(() => managedAccounts).resolve({ launchEnv })
+  return openCodeAcpAccountBinding(() => managedAccounts).resolve({
+    launchEnv,
+    stateDirectory: '/orca-data'
+  })
 }
 
 /** `agentSession.createSupport` on this host for a local git worktree under the rig's settings. */

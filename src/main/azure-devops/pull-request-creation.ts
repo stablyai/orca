@@ -12,9 +12,9 @@ import {
 } from '../source-control/hosted-review-api-request'
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
 import {
+  AZURE_DEVOPS_MAX_REQUEST_ATTEMPTS,
   azureDevOpsApiVersionForOrigin,
-  isAzureDevOpsPreviewVersionRejection,
-  markAzureDevOpsPreviewApiVersionOrigin,
+  recordAzureDevOpsApiVersionRejection,
   resolveAzureDevOpsGitApiBaseUrl
 } from './azure-devops-api-request'
 import { getAzureDevOpsPullRequestForBranch } from './client'
@@ -65,34 +65,29 @@ function apiUrl(repo: AzureDevOpsRepoRef, path: string): URL {
   return url
 }
 
-// Why (STA-3494): Azure DevOps Server 400s versioned requests without -preview;
-// the rejection happens before the PR is created, so one retry is safe.
+// Version rejections precede PR creation, so retrying them is safe.
 async function requestCreatePullRequest(
   repo: AzureDevOpsRepoRef,
   path: string,
   init: Omit<RequestInit, 'signal'>
 ): Promise<RawAzureDevOpsPullRequest> {
-  const url = apiUrl(repo, path)
-  try {
-    return await requestHostedReviewJson<RawAzureDevOpsPullRequest>(
-      url,
-      init,
-      CREATE_REQUEST_TIMEOUT_MS
-    )
-  } catch (error) {
-    if (
-      url.searchParams.get('api-version')?.endsWith('-preview') ||
-      !(error instanceof HostedReviewApiRequestError) ||
-      !isAzureDevOpsPreviewVersionRejection(error.status, error.message)
-    ) {
-      throw error
+  for (let attempt = 1; ; attempt++) {
+    const url = apiUrl(repo, path)
+    try {
+      return await requestHostedReviewJson<RawAzureDevOpsPullRequest>(
+        url,
+        init,
+        CREATE_REQUEST_TIMEOUT_MS
+      )
+    } catch (error) {
+      if (
+        attempt >= AZURE_DEVOPS_MAX_REQUEST_ATTEMPTS ||
+        !(error instanceof HostedReviewApiRequestError) ||
+        !recordAzureDevOpsApiVersionRejection(url, error.status, error.message)
+      ) {
+        throw error
+      }
     }
-    markAzureDevOpsPreviewApiVersionOrigin(url.origin)
-    return requestHostedReviewJson<RawAzureDevOpsPullRequest>(
-      apiUrl(repo, path),
-      init,
-      CREATE_REQUEST_TIMEOUT_MS
-    )
   }
 }
 
@@ -126,21 +121,24 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'auth_required',
       error:
-        'Create PR failed: Azure DevOps is not authenticated. Next step: set ORCA_AZURE_DEVOPS_TOKEN in this environment.'
+        'Create PR failed: Azure DevOps is not authenticated. Next step: set ORCA_AZURE_DEVOPS_TOKEN in this environment.',
+      reason: 'auth_required'
     }
   }
   if (status === 409 || lower.includes('already exists') || lower.includes('active pull request')) {
     return {
       ok: false,
       code: 'already_exists',
-      error: 'A pull request already exists for this branch.'
+      error: 'A pull request already exists for this branch.',
+      reason: 'existing_review'
     }
   }
   if (error instanceof HostedReviewApiRequestError && error.timedOut) {
     return {
       ok: false,
       code: 'unknown_completion',
-      error: 'PR creation may have completed. Refreshing branch review state...'
+      error: 'PR creation may have completed. Refreshing branch review state...',
+      reason: 'creation_unconfirmed'
     }
   }
   if (status === 400 || status === 422 || lower.includes('validation')) {
@@ -148,14 +146,16 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'validation',
       error:
-        'Create PR failed: Azure DevOps rejected the pull request. Check the base branch and branch state, then try again.'
+        'Create PR failed: Azure DevOps rejected the pull request. Check the base branch and branch state, then try again.',
+      reason: 'rejected'
     }
   }
   return {
     ok: false,
     code: 'unknown',
     error:
-      'Create PR failed: Azure DevOps could not create the pull request. Try again in a moment.'
+      'Create PR failed: Azure DevOps could not create the pull request. Try again in a moment.',
+    reason: 'create_failed'
   }
 }
 
@@ -177,7 +177,8 @@ export async function createAzureDevOpsPullRequest(
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating reviews for this provider is not supported yet.'
+      error: 'Creating reviews for this provider is not supported yet.',
+      reason: 'provider_not_supported'
     }
   }
 
@@ -189,7 +190,8 @@ export async function createAzureDevOpsPullRequest(
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating pull requests requires an Azure DevOps remote.'
+      error: 'Creating pull requests requires an Azure DevOps remote.',
+      reason: 'unsupported_provider'
     }
   }
 
@@ -200,14 +202,16 @@ export async function createAzureDevOpsPullRequest(
     return {
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: base branch, head branch, and title are required.'
+      error: 'Create PR failed: base branch, head branch, and title are required.',
+      reason: 'base_head_title_required'
     }
   }
   if (head.toLowerCase() === base.toLowerCase()) {
     return {
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: choose a different base branch before creating a pull request.'
+      error: 'Create PR failed: choose a different base branch before creating a pull request.',
+      reason: 'same_base_branch'
     }
   }
 
@@ -247,7 +251,8 @@ export async function createAzureDevOpsPullRequest(
       : {
           ok: false,
           code: 'unknown_completion',
-          error: 'PR creation may have completed. Refreshing branch review state...'
+          error: 'PR creation may have completed. Refreshing branch review state...',
+          reason: 'creation_unconfirmed'
         }
   } catch (error) {
     const classified = classifyCreateError(error)
@@ -261,6 +266,7 @@ export async function createAzureDevOpsPullRequest(
           ok: false,
           code: 'already_exists',
           error: 'A pull request already exists for this branch.',
+          reason: 'existing_review',
           existingReview: existing
         }
       }

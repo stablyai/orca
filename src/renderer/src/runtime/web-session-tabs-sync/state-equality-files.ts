@@ -30,8 +30,7 @@ export function sameOpenFiles(a: readonly OpenFile[], b: readonly OpenFile[]): b
   return a.every((file, index) => openFileEqual(file, b[index]!))
 }
 
-/** This worktree's open files — the only scope a snapshot reconciles, so a batch can
- *  answer from here instead of walking every open file in the app. */
+/** Index worktree-local files so each snapshot avoids scanning the global array. */
 export function webSessionOpenFilesForWorktree(
   state: WebSessionTabsSyncState,
   worktreeId: string,
@@ -54,9 +53,7 @@ export function webSessionOpenFilesForWorktree(
   return index.byWorktree.get(worktreeId) ?? []
 }
 
-/** Retargets the index at the array a snapshot just produced, re-bucketing only the
- *  worktree that changed. Rebuilding it wholesale would cost the entire array again on
- *  every snapshot, which is the cost this index exists to avoid. */
+/** Rebucket only the changed worktree when retargeting; full rebuild per snapshot defeats the index’s cost bound. */
 export function advanceWebSessionOpenFilesIndex(
   batchContext: WebSessionTabsBatchContext | undefined,
   nextOpenFiles: readonly OpenFile[],
@@ -86,8 +83,7 @@ export function tabEqual(a: Tab, b: Tab): boolean {
     a.contentType === b.contentType &&
     a.agentSessionAgent === b.agentSessionAgent &&
     a.label === b.label &&
-    // Why: the generated label is the visible tab title; ignoring it let the
-    // equality bail keep a unified tab that disagreed with its terminal tab.
+    // Include generated label in equality or unified titles diverge from terminal tabs.
     a.generatedLabel === b.generatedLabel &&
     a.aiVaultTitle?.agent === b.aiVaultTitle?.agent &&
     a.aiVaultTitle?.sessionId === b.aiVaultTitle?.sessionId &&

@@ -37,7 +37,6 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -61,7 +60,6 @@ vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
 vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
     return () => {}
   }
 }))
@@ -70,9 +68,6 @@ vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
 }))
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
@@ -117,10 +112,7 @@ function statusMap(options: {
   ])
 }
 
-/**
- * Runs a create to completion against a client-hosting-capable runtime, letting each case bend one
- * input, and hands back the handle staging wrote — the frame the pane picks its component from.
- */
+/** Run a capable-host create with one input varied; inspect staging’s handle, which chooses the pane component. */
 async function stageHandleFor(
   options: {
     capabilities?: string[]
@@ -172,13 +164,11 @@ describe('staged client-hosting intent', () => {
   afterEach(() => resetBrowserTabCreateEnvironment())
 
   it('marks the staged handle client-hosted when the create will be', async () => {
-    // Without this flag the staged frame mounts the streamed pane and adoption swaps components —
-    // the remount this whole design exists to remove.
+    // Missing client-host flag mounts streamed content until adoption swaps components.
     expect(await stageHandleFor()).toMatchObject({ staged: true, stagedClientHosted: true })
   })
 
-  // Why: without browser.tab-create-known-id.v1 the create rehomes onto the host's page id, which
-  // rewrites the handle. A rewrite that forgets the mark drops the pane back to streamed mid-create.
+  // Without known-id capability, rehoming rewrites the handle and must preserve its client-host mark.
   it('keeps the client-hosted mark when the create rehomes onto a host-minted id', async () => {
     await stageHandleFor({
       capabilities: CLIENT_HOSTING_CAPABILITIES.filter(
@@ -242,8 +232,7 @@ describe('materialization wait group', () => {
       }
     })
 
-    // Waiting in CREATE_GROUP_ID would stall the create for the whole materialization window and
-    // then log a "landed outside the requested group" that describes a group the user abandoned.
+    // Waiting in the abandoned group times out and falsely reports wrong-group landing.
     expect(waitedGroupIds()).toContain(SPLIT_GROUP_ID)
     expect(waitedGroupIds()).not.toContain(CREATE_GROUP_ID)
   })

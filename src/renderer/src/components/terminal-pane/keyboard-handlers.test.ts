@@ -1,4 +1,3 @@
-// src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts
 import { describe, it, expect, vi } from 'vitest'
 import { FIND_QUERY_MAX_BYTES } from '@/lib/find-query-bounds'
 import {
@@ -152,6 +151,12 @@ describe('resolveTerminalKeyboardShortcutAction', () => {
 
 describe('runTerminalSearchNavigation', () => {
   const searchState = { query: 'hello', caseSensitive: true, regex: false }
+  const decoratedOptions = expect.objectContaining({
+    caseSensitive: true,
+    regex: false,
+    wholeWord: false,
+    decorations: expect.objectContaining({ activeMatchBackground: expect.any(String) })
+  })
 
   it('runs the next search through the guarded xterm path', () => {
     const findNext = vi.fn(() => true)
@@ -161,11 +166,7 @@ describe('runTerminalSearchNavigation', () => {
     >[0]
 
     expect(runTerminalSearchNavigation(pane, 'next', searchState)).toBe(true)
-    expect(findNext).toHaveBeenCalledWith('hello', {
-      caseSensitive: true,
-      regex: false,
-      wholeWord: false
-    })
+    expect(findNext).toHaveBeenCalledWith('hello', decoratedOptions)
     expect(findPrevious).not.toHaveBeenCalled()
   })
 
@@ -177,11 +178,7 @@ describe('runTerminalSearchNavigation', () => {
     >[0]
 
     expect(runTerminalSearchNavigation(pane, 'previous', searchState)).toBe(true)
-    expect(findPrevious).toHaveBeenCalledWith('hello', {
-      caseSensitive: true,
-      regex: false,
-      wholeWord: false
-    })
+    expect(findPrevious).toHaveBeenCalledWith('hello', decoratedOptions)
     expect(findNext).not.toHaveBeenCalled()
   })
 
@@ -194,11 +191,10 @@ describe('runTerminalSearchNavigation', () => {
     expect(runTerminalSearchNavigation(pane, 'next', { ...searchState, wholeWord: true })).toBe(
       true
     )
-    expect(findNext).toHaveBeenCalledWith('hello', {
-      caseSensitive: true,
-      regex: false,
-      wholeWord: true
-    })
+    expect(findNext).toHaveBeenCalledWith(
+      'hello',
+      expect.objectContaining({ caseSensitive: true, regex: false, wholeWord: true })
+    )
   })
 
   it('contains the xterm decoration positive-integer crash from shortcut navigation', () => {

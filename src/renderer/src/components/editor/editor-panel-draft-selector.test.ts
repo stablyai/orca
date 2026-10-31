@@ -23,7 +23,9 @@ describe('createEditorPanelDraftSelector', () => {
     let scopedInvalidations = 0
     let unrelatedPanelInvalidations = 0
     const selectors = files.map(createEditorPanelDraftSelector)
-    const previousSelections = selectors.map((selector) => selector({ editorDrafts }))
+    const previousSelections = selectors.map((selector) =>
+      selector({ editorDrafts, openFiles: [] })
+    )
 
     for (let edit = 0; edit < 200; edit += 1) {
       const previousDrafts = editorDrafts
@@ -32,7 +34,7 @@ describe('createEditorPanelDraftSelector', () => {
         if (previousDrafts !== editorDrafts) {
           wholeMapInvalidations += 1
         }
-        const nextSelection = selectors[panelIndex]({ editorDrafts })
+        const nextSelection = selectors[panelIndex]({ editorDrafts, openFiles: [] })
         if (previousSelections[panelIndex] !== nextSelection) {
           scopedInvalidations += 1
           if (panelIndex !== 0) {
@@ -65,15 +67,15 @@ describe('createEditorPanelDraftSelector', () => {
     const selectConflictDrafts = createEditorPanelDraftSelector(conflictReview)
     const selectNoDrafts = createEditorPanelDraftSelector(null)
 
-    expect(selectPreviewDrafts({ editorDrafts })).toEqual({
+    expect(selectPreviewDrafts({ editorDrafts, openFiles: [] })).toEqual({
       preview: 'preview draft',
       source: ''
     })
-    expect(selectConflictDrafts({ editorDrafts })).toEqual({
+    expect(selectConflictDrafts({ editorDrafts, openFiles: [] })).toEqual({
       review: 'review draft',
       selected: 'selected draft'
     })
-    expect(selectNoDrafts({ editorDrafts })).toEqual({})
+    expect(selectNoDrafts({ editorDrafts, openFiles: [] })).toEqual({})
   })
 
   it('includes overview conflict drafts and ignores unrelated draft replacements', () => {
@@ -96,14 +98,58 @@ describe('createEditorPanelDraftSelector', () => {
       unrelated: 'other draft'
     }
 
-    const selection = selectDrafts({ editorDrafts })
+    const selection = selectDrafts({ editorDrafts, openFiles: [] })
     expect(selection).toEqual({
       'C:\\repo\\src\\a.ts': 'draft a',
       'C:\\repo\\src\\b.ts': ''
     })
 
     expect(
-      selectDrafts({ editorDrafts: { ...editorDrafts, unrelated: 'changed elsewhere' } })
+      selectDrafts({
+        editorDrafts: { ...editorDrafts, unrelated: 'changed elsewhere' },
+        openFiles: []
+      })
     ).toBe(selection)
+  })
+
+  it("shows an overview file open in a server tab under that tab's id, with its unsaved edits", () => {
+    const conflictReview = makeFile('review', {
+      filePath: '/repo',
+      mode: 'conflict-review',
+      conflictReview: {
+        source: 'live-summary',
+        snapshotTimestamp: 1,
+        entries: [{ path: 'src/a.ts', conflictKind: 'both_modified' }]
+      }
+    })
+    const serverFile = makeFile('editor:worktree-1:env-1:%2Frepo%2Fsrc%2Fa.ts', {
+      filePath: '/repo/src/a.ts',
+      relativePath: 'src/a.ts',
+      runtimeEnvironmentId: 'env-1'
+    })
+    const selectDrafts = createEditorPanelDraftSelector(conflictReview)
+
+    expect(
+      selectDrafts({ editorDrafts: { [serverFile.id]: 'unsaved' }, openFiles: [serverFile] })
+    ).toEqual({ [serverFile.id]: 'unsaved' })
+  })
+
+  it('follows an overview file to a tab that opens without a draft write', () => {
+    const conflictReview = makeFile('review', {
+      filePath: '/repo',
+      mode: 'conflict-review',
+      conflictReview: {
+        source: 'live-summary',
+        snapshotTimestamp: 1,
+        entries: [{ path: 'src/a.ts', conflictKind: 'both_modified' }]
+      }
+    })
+    const tab = makeFile('tab-a', { filePath: '/repo/src/a.ts', relativePath: 'src/a.ts' })
+    const editorDrafts = { [tab.id]: 'unsaved' }
+    const selectDrafts = createEditorPanelDraftSelector(conflictReview)
+
+    expect(selectDrafts({ editorDrafts, openFiles: [] })).toEqual({})
+    expect(selectDrafts({ editorDrafts, openFiles: [tab] })).toEqual({ [tab.id]: 'unsaved' })
+    expect(selectDrafts({ editorDrafts, openFiles: [] })).toEqual({})
   })
 })

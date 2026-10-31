@@ -3,14 +3,43 @@ import { existsSync } from 'node:fs'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
-import { isDaemonGoneError } from './daemon-endpoint-errors'
+import { isDaemonGoneError, isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import { DaemonPtyCheckpointPersistence } from './daemon-pty-checkpoint-persistence'
 import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import type { ListSessionsResult } from './types'
 import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
+import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
+import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 
 export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersistence {
-  // Why: the token read no longer throws, so audit its absence directly after an authenticated drop.
+  abstract getDaemonIdentity(): DaemonEndpointIdentity | null
+
+  async terminalLimit(update?: TerminalLimitUpdate): Promise<TerminalLimitStatus | null> {
+    await this.ensureConnected()
+    const identity = this.getDaemonIdentity()
+    if (update && identity?.launchNonce !== update.daemonNonce) {
+      throw new Error('Terminal host changed. Refresh the setting and try again.')
+    }
+    try {
+      const type = update ? 'setTerminalLimit' : 'terminalLimitStatus'
+      const status = await this.client.request<TerminalLimitStatus>(type, update)
+      if (
+        !identity ||
+        this.getDaemonIdentity()?.launchNonce !== identity.launchNonce ||
+        status.daemonNonce !== identity.launchNonce
+      ) {
+        throw new Error('Terminal host changed. Refresh the setting and try again.')
+      }
+      return status
+    } catch (error) {
+      if (isUnknownRequestTypeError(error)) {
+        return null
+      }
+      throw error
+    }
+  }
+
+  // Token reads no longer throw; check absence explicitly after an authenticated disconnect.
   protected isRetiredEndpointTokenMissing(): boolean {
     return this.client.hasObservedAuthenticatedDisconnect() && !existsSync(this.tokenPath)
   }
@@ -39,7 +68,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       try {
         return await fn()
       } finally {
-        // Why: the retried op may reject before any connection attempt (e.g. a tombstone racing respawn).
+        // A tombstone can reject retry before connect; release its temporary adoption lease anyway.
         this.releasePendingRespawnAdoptionLease()
       }
     }
@@ -55,11 +84,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       return
     }
     this.writeRecoveryAttempted = true
-    // Why: the dead endpoint took down every session on this daemon. Signal all
-    // active panes now — while they are still in activeSessionIds, so the
-    // renderer's liveness gate still reads them live — so background panes
-    // remount + re-attach alongside the one that was written, instead of being
-    // left frozen with silently dropped input until each is typed into.
+    // Notify every pane before clearing active IDs so sibling recovery passes the renderer's liveness gate.
     this.notifyActiveSessionsWriteUnavailable()
     const recovery = this.withDaemonRetry(() => this.ensureConnected())
       .catch((error) => console.warn('[daemon] Failed to recover after rejected PTY input:', error))
@@ -72,9 +97,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     this.writeRecoveryPromise = recovery
   }
 
-  // Why: a dropped daemon socket is the earliest signal, and waiting for a keystroke to find it left
-  // every pane frozen on stale output until then. Reconnecting first means a live daemon keeps its
-  // sessions; only a refused connect (isDaemonGoneError) respawns.
+  // Reconnect on endpoint loss without waiting for input; only daemon-gone errors permit respawn.
   protected recoverAfterEndpointLoss(): void {
     if (this.activeSessionIds.size > 0) {
       this.reconnectAfterWriteFailure()
@@ -82,8 +105,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
   }
 
   protected notifyActiveSessionsWriteUnavailable(): void {
-    // Snapshot first: a listener that kills a pane would mutate activeSessionIds
-    // mid-iteration and silently skip the sibling this fan-out exists to reach.
+    // Snapshot IDs before callbacks mutate the set so no sibling misses recovery.
     const ids = [...this.activeSessionIds]
     for (const id of ids) {
       this.sessionsAwaitingDaemonRecovery.add(id)
@@ -151,7 +173,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       return
     }
 
-    // Why: replacing the daemon kills its sessions without exit fanout; emit exits first so panes don't write to dead PTYs.
+    // Replacement has no exit fanout; notify panes before their PTYs disappear.
     this.fanoutSyntheticExits(-1)
     if (!this.respawnPromise) {
       this.respawnPromise = this.doRespawn(
@@ -220,7 +242,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
 
   /** Replace a TCC-severed daemon only after its live sessions drain. */
   protected async replaceSeveredMacTccDaemonBeforeNewPty(): Promise<void> {
-    // Why no platform gate: getMacDaemonTccAttributionHealth returns 'unknown' off macOS.
+    // Attribution health returns unknown off macOS.
     if (!this.respawnFn || !this.runtimeDir) {
       return
     }
@@ -282,7 +304,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     this.client.disconnect()
     const releaseAdoptionLease = await this.respawnFn!(reason)
     if (this.respawnAdoptionClosed) {
-      // Why: app teardown may win mid-respawn; a late result must not reinstall a lease nobody owns.
+      // Teardown can win during respawn; release a late lease instead of leaving it unowned.
       releaseAdoptionLease?.()
       throw new Error('Daemon adapter closed during respawn')
     }

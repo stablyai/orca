@@ -1,8 +1,4 @@
-/**
- * Renderer memory sampling for crash reports: the periodic `renderer_memory`
- * crumb, and the one-shot `renderer_memory_highwater` crumbs that carry the
- * subsystem census naming whatever grew.
- */
+/** Emit periodic renderer_memory samples and one-shot renderer_memory_highwater subsystem censuses. */
 import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
 import type { RendererProcessMemory } from '../../../shared/renderer-process-memory'
 import {
@@ -16,14 +12,7 @@ import { collectRendererMemoryProfileCounts } from './renderer-memory-profile'
 const BYTES_PER_KILOBYTE = 1024
 // Why: one detailed breadcrumb per threshold names what grew before an OOM.
 const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
-/**
- * Private-footprint marks that arm the same profile when the growth is NOT in
- * the JS heap. Windows crash 36048e26 reported a 618MB private renderer whose
- * V8 heap sat at 150MB of a 4192MB limit — 3.6% of the ratio the marks above
- * need, so the census that would have named the leak never fired. xterm
- * scrollback (`Uint32Array` backing stores) and WebGL glyph atlases both live
- * outside every heap counter, so footprint is the only mark that sees them.
- */
+/** Footprint thresholds catch growth outside V8, including scrollback backing stores/GL atlases. A reported 618MB renderer held only 150MB of a 4192MB heap limit, too low for heap-ratio census to fire. */
 const RENDERER_PRIVATE_HIGHWATER_MB = [600, 1000] as const
 
 export type RendererSurface = 'main' | 'dashboard-popout'
@@ -47,12 +36,39 @@ let lastProcessFootprint: RendererProcessMemory | null = null
 let processFootprintReadGeneration = 0
 let processFootprintReadInFlight = false
 let rendererSurface: RendererSurface = 'main'
+let longTaskObserver: PerformanceObserver | null = null
+let longTasks = { longTaskMs: 0, longTaskCount: 0, longestTaskMs: 0 }
+let longTaskSampleStartedAt = 0
+
+function accumulateLongTasks(entries: PerformanceEntry[]): void {
+  for (const entry of entries) {
+    longTasks.longTaskMs += entry.duration
+    longTasks.longTaskCount += 1
+    longTasks.longestTaskMs = Math.max(longTasks.longestTaskMs, entry.duration)
+  }
+}
+
+export function startRendererLongTaskSampling(): void {
+  if (
+    longTaskObserver ||
+    typeof PerformanceObserver === 'undefined' ||
+    !PerformanceObserver.supportedEntryTypes?.includes('longtask')
+  ) {
+    return
+  }
+  longTaskSampleStartedAt = performance.now()
+  longTaskObserver = new PerformanceObserver((list) => accumulateLongTasks(list.getEntries()))
+  longTaskObserver.observe({ type: 'longtask' })
+}
 
 export function setRendererMemorySamplingSurface(surface: RendererSurface): void {
   rendererSurface = surface
 }
 
 export function resetRendererMemorySampling(): void {
+  longTaskObserver?.disconnect()
+  longTaskObserver = null
+  longTasks = { longTaskMs: 0, longTaskCount: 0, longestTaskMs: 0 }
   emittedHighwaterRatios.clear()
   emittedPrivateHighwaterMarks.clear()
   lastProcessFootprint = null
@@ -67,19 +83,26 @@ export function recordRendererMemorySample(reason: string): void {
     return
   }
   const browserWebviews = getBrowserWebviewMemoryProfile()
-  // Why the previous read: the footprint bridge is async, and awaiting it here
-  // would make every sample (and its highwater arming) reentrant. Refresh in the
-  // background and annotate with the last answer instead — one sample interval
-  // of staleness is irrelevant to a footprint trend, and the first sample of a
-  // session simply carries no footprint.
+  // Refresh async footprint in background and use the last answer to keep samples nonreentrant. One interval’s staleness is harmless for trends; first sample omits it.
   const footprint = lastProcessFootprint
   refreshProcessFootprint()
+
+  let longTaskSample: (typeof longTasks & { sampleWindowMs: number }) | undefined
+  if (longTaskObserver) {
+    // Charge whole tasks to the sample that collects them, including queued deliveries.
+    accumulateLongTasks(longTaskObserver.takeRecords())
+    const now = performance.now()
+    longTaskSample = { ...longTasks, sampleWindowMs: now - longTaskSampleStartedAt }
+    longTasks = { longTaskMs: 0, longTaskCount: 0, longestTaskMs: 0 }
+    longTaskSampleStartedAt = now
+  }
 
   recordRendererCrashBreadcrumb(
     'renderer_memory',
     compactBreadcrumbData({
       reason,
       rendererSurface,
+      ...longTaskSample,
       usedHeapMB: toMegabytes(memory.usedJSHeapSize),
       totalHeapMB: toMegabytes(memory.totalJSHeapSize),
       heapLimitMB: toMegabytes(memory.jsHeapSizeLimit),
@@ -119,11 +142,7 @@ function refreshProcessFootprint(): void {
   }
 }
 
-/**
- * Names the memory the heap counters cannot see. `outsideHeapMB` is the field
- * that distinguishes a JS leak from scrollback/atlas growth: it is what the OS
- * charges this renderer minus everything V8 and Blink admit to holding.
- */
+/** outsideHeapMB subtracts V8/Blink holdings from OS footprint to distinguish JS leaks from scrollback/atlas growth. */
 function describeProcessFootprint(
   memory: HeapMetrics,
   footprint: RendererProcessMemory | null
@@ -154,8 +173,7 @@ function recordRendererMemoryHighwater(
 ): void {
   const used = memory.usedJSHeapSize
   const limit = memory.jsHeapSizeLimit
-  // Why: NaN would satisfy `ratio < threshold` for nothing, emitting both
-  // levels spuriously and disarming the one-shot for the session.
+  // Reject NaN before comparisons or it spuriously crosses both one-shot thresholds.
   const ratio =
     isFiniteHeapBytes(used) && isFiniteHeapBytes(limit) && limit > 0 ? used / limit : null
   const privateMB =
@@ -180,7 +198,7 @@ function recordRendererMemoryHighwater(
   if (!crossedThreshold) {
     return
   }
-  // Why: a single sample can cross both thresholds; profile the large heap once.
+  // One sample can cross both thresholds; collect the census only once.
   const profile = compactBreadcrumbData({
     rendererSurface,
     usedHeapMB: toMegabytes(used),
@@ -233,13 +251,7 @@ function getPerformanceMemory(): BrowserPerformanceMemory | undefined {
   return (window.performance as Performance & { memory?: BrowserPerformanceMemory }).memory
 }
 
-/**
- * Prefers V8's exact numbers; falls back to `performance.memory` only when the
- * preload bridge is unavailable (older shell, or a surface without it).
- *
- * Both are normalized to bytes so callers and the emitted MB fields stay
- * comparable with breadcrumbs recorded before this bridge existed.
- */
+/** Prefer exact V8 bytes, falling back to performance.memory on older/unsupported shells; keep units compatible with earlier breadcrumbs. */
 export function readHeapMetrics(): HeapMetrics | undefined {
   if (typeof window === 'undefined') {
     return undefined

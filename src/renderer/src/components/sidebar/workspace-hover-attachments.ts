@@ -9,6 +9,10 @@ import type {
   WorktreeCardJiraIssueDisplay
 } from './worktree-card-meta-types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import type {
+  WorkspaceReferenceDetails,
+  WorkspaceReferenceDetailsMap
+} from './workspace-reference-details'
 
 type LiveDetails = {
   issue?: WorktreeCardIssueDisplay | null
@@ -24,8 +28,11 @@ export function getWorkspaceHoverAttachments(
   items: WorkspaceAttachment[]
   activeKey: string | null
   referenceKeys: string[]
+  /** Per item: whether it is the card's own review, issue or task, enriched from live details. */
+  liveMatched: boolean[]
 } {
   const items = getWorkspaceAttachments(workspace)
+  const liveMatched: boolean[] = []
   const matches = (item: WorkspaceAttachment): boolean => {
     if (item.provider === 'github' && item.type === 'issue') {
       return item.number === details.issue?.number
@@ -62,6 +69,7 @@ export function getWorkspaceHoverAttachments(
           matches(candidate) &&
           (!candidate.url || candidate.url === live.url)
       ).length === 1
+    liveMatched.push(Boolean(sameReference))
     return sameReference
       ? {
           ...item,
@@ -88,9 +96,56 @@ export function getWorkspaceHoverAttachments(
   return {
     items: enriched,
     referenceKeys: items.map(getWorkspaceAttachmentKey),
+    liveMatched,
     activeKey:
       parseWorkspaceKey(workspace.id)?.type === 'folder' || !activeItem
         ? null
         : getWorkspaceAttachmentKey(activeItem)
   }
+}
+
+export type WorkspaceLinkedItemRow = {
+  item: WorkspaceAttachment
+  key: string
+  url: string | undefined
+  detail: WorkspaceReferenceDetails | undefined
+  /** The review whose live state and checks this row shows, when one applies to it. */
+  live: WorktreeCardPrDisplay | null
+  /** The card's own issue or task this row is, with the state the card already loaded. */
+  liveTask: WorktreeCardIssueDisplay | WorktreeCardLinearIssueDisplay | null
+}
+
+export function getWorkspaceLinkedItemRows(
+  workspace: Worktree,
+  details: LiveDetails,
+  referenceDetails: WorkspaceReferenceDetailsMap | undefined
+): WorkspaceLinkedItemRow[] {
+  const { items, activeKey, referenceKeys, liveMatched } = getWorkspaceHoverAttachments(
+    workspace,
+    details
+  )
+  const review = details.review
+  // Why: references are stored in link order; surfaces list the newest first.
+  return items
+    .map((item, index) => {
+      const key = getWorkspaceAttachmentKey(item)
+      const detail = referenceDetails?.[referenceKeys[index]]
+      const live =
+        detail?.review ??
+        (key === activeKey &&
+        review?.provider === item.provider &&
+        review.number === item.number &&
+        (!item.url || review.url === item.url)
+          ? review
+          : null)
+      const liveTask = !liveMatched[index]
+        ? null
+        : item.provider === 'github' && item.type === 'issue'
+          ? (details.issue ?? null)
+          : item.provider === 'linear'
+            ? (details.linearIssue ?? null)
+            : null
+      return { item, key, url: item.url || detail?.url, detail, live, liveTask }
+    })
+    .toReversed()
 }

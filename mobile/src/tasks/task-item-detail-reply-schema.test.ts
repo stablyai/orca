@@ -39,7 +39,7 @@ const LINEAR_ISSUE = {
 }
 
 describe('the GitHub detail pane', () => {
-  it('reads the recorded reply and keeps every member the sheet reads behind a guard', () => {
+  it('reads the representative reply and keeps every member the sheet reads behind a guard', () => {
     const details = reads(githubWorkItemDetailSchema, {
       body: 'body',
       comments: [],
@@ -72,7 +72,7 @@ describe('the GitHub detail pane', () => {
 })
 
 describe('the GitLab detail pane', () => {
-  it('reads the recorded reply, approval state and pipeline jobs included', () => {
+  it('reads the representative reply, approval state and pipeline jobs included', () => {
     const details = reads(gitlabWorkItemDetailSchema, {
       body: 'body',
       comments: [],
@@ -117,7 +117,7 @@ describe('the GitLab detail pane', () => {
 })
 
 describe('one Linear issue', () => {
-  it('reads the recorded reply whole', () => {
+  it('reads the representative reply whole', () => {
     expect(reads(linearIssueSchema, LINEAR_ISSUE)).toMatchObject({ id: 'issue-2', priority: 0 })
   })
 
@@ -181,7 +181,7 @@ describe('the lists beside the sheet', () => {
     expect(refuses(githubRepoLabelsSchema, { labels: [] })).toBe(true)
   })
 
-  it('reads the recorded assignable users with their null avatar intact', () => {
+  it('reads the representative assignable users with their null avatar intact', () => {
     expect(
       reads(githubAssignableUsersSchema, [{ login: 'octocat', name: 'Octo', avatarUrl: null }])
     ).toEqual([{ login: 'octocat', name: 'Octo', avatarUrl: null }])

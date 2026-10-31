@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { basename, dirname, extname, join, relative } from 'node:path'
-import ts from 'typescript'
+import ts from 'typescript-api'
 import { describe, expect, it } from 'vitest'
 
 const appDirectory = fileURLToPath(new URL('../app', import.meta.url))

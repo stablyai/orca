@@ -10,6 +10,7 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -33,9 +34,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -157,13 +155,12 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).toHaveBeenCalled()
     expect(result.worktree.id).toBe('repo-1::/workspace/improve-dashboard')
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/improve-dashboard', hostId: 'local' }),
       expect.objectContaining({ baseRef: 'refs/remotes/origin/main' })
     )
   })
 
   it('creates from the detected default base when the persisted base is stale', async () => {
-    // Regression: a stale persisted repo base must fall back to the detected primary default instead of blocking creation.
     const remoteBase = {
       remote: 'origin',
       branch: 'main',
@@ -517,7 +514,7 @@ describe('registerWorktreeHandlers', () => {
       }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/improve-dashboard', hostId: 'local' }),
       expect.objectContaining({ baseRef: 'refs/remotes/origin/main' })
     )
     expect(result.localBaseRefUpdateSuggestion).toEqual({
@@ -528,7 +525,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('throws a clear error when no default base ref can be resolved', async () => {
-    // Why: guard against regressing to a silent 'origin/main' fallback; an unresolved default base must fail loudly, not hand a non-existent ref to `git worktree add`.
     resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue(null)
     store.getRepo.mockReturnValue({
       id: 'repo-1',

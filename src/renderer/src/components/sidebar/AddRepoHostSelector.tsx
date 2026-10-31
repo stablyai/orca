@@ -1,13 +1,17 @@
 import { useState } from 'react'
 import { Check, ChevronRight, ChevronsUpDown, Loader2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Command, CommandItem, CommandList } from '@/components/ui/command'
+import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { useBoundedHostRows } from '../host-picker/use-bounded-host-rows'
+import { HostListOverflowNote } from '../host-picker/HostListOverflowNote'
+import { searchHostsLabel } from '../host-picker/host-picker-copy'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import type { SidebarHostOption } from './sidebar-host-options'
 import { getSidebarHostHealthLabel, shouldShowHostScopeControls } from './sidebar-host-options'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { describeRuntimeCompatBlock } from '../../../../shared/protocol-compat'
+
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import { translate } from '@/i18n/i18n'
 import { canConnectAddRepoHost, canSelectAddRepoHost } from './add-repo-host-availability'
 
@@ -22,19 +26,22 @@ type AddRepoHostSelectorProps = {
   onAddRemoteServer?: () => void
   /** Present only where WSL hosts are available and turned on. */
   onAddWslHost?: () => void
+  /** Serve-only: why "Add WSL distro" is missing from the add-host menu. */
+  wslHostsPausedNote?: string
   /** Opens Experimental → WSL distros as hosts, for a WSL host listed while that is off. */
   onOpenWslHostsSetting?: () => void
 }
 
 function getHostStatusDetail(host: SidebarHostOption): string {
-  // Why only the detail: "Disconnected" would read as a failure, not a switched-off feature.
+  // A disabled WSL feature is not a disconnected-host failure.
   if (host.wslUnavailable) {
     return host.detail
   }
   if (host.compatibility?.kind === 'blocked') {
     return describeRuntimeCompatBlock(host.compatibility)
   }
-  return `${getSidebarHostHealthLabel(host.health)}${host.detail ? ` - ${host.detail}` : ''}`
+  const detail = host.failureReason ?? host.detail
+  return `${getSidebarHostHealthLabel(host.health, host.blockedReason)}${detail ? ` - ${detail}` : ''}`
 }
 
 export function AddRepoHostSelector({
@@ -47,9 +54,11 @@ export function AddRepoHostSelector({
   onAddSshHost,
   onAddRemoteServer,
   onAddWslHost,
+  wslHostsPausedNote,
   onOpenWslHostsSetting
 }: AddRepoHostSelectorProps): React.JSX.Element | null {
   const [addHostOpen, setAddHostOpen] = useState(false)
+  const rows = useBoundedHostRows(hosts, new Set(selectedHostId ? [selectedHostId] : []))
   const showHostSetupActions = Boolean(onAddSshHost || onAddRemoteServer || onAddWslHost)
   if (!shouldShowHostScopeControls(hosts) && !showHostSetupActions) {
     return null
@@ -79,7 +88,7 @@ export function AddRepoHostSelector({
                 title={getHostStatusDetail(selectedHost)}
                 className="shrink-0 text-[11px] font-normal text-muted-foreground"
               >
-                {getSidebarHostHealthLabel(selectedHost.health)}
+                {getSidebarHostHealthLabel(selectedHost.health, selectedHost.blockedReason)}
               </span>
             ) : null}
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
@@ -89,9 +98,18 @@ export function AddRepoHostSelector({
           align="start"
           className="w-[min(340px,calc(100vw-1rem))] min-w-[var(--radix-popover-trigger-width)] p-0"
         >
-          <Command>
+          <Command shouldFilter={false} label={searchHostsLabel()}>
+            {rows.searchable ? (
+              <CommandInput
+                value={rows.query}
+                onValueChange={rows.setQuery}
+                placeholder={searchHostsLabel()}
+                aria-label={searchHostsLabel()}
+              />
+            ) : null}
             <CommandList>
-              {showHostSetupActions ? (
+              {/* Why hidden while searching: Enter must pick the matching host, not open setup. */}
+              {showHostSetupActions && rows.query === '' ? (
                 <Popover open={addHostOpen} onOpenChange={setAddHostOpen}>
                   <PopoverTrigger asChild>
                     <CommandItem
@@ -173,6 +191,11 @@ export function AddRepoHostSelector({
                         </span>
                       </button>
                     ) : null}
+                    {!onAddWslHost && wslHostsPausedNote ? (
+                      <p className="px-2.5 py-2 text-2xs text-muted-foreground">
+                        {wslHostsPausedNote}
+                      </p>
+                    ) : null}
                     {onAddWslHost ? (
                       <button
                         type="button"
@@ -200,13 +223,12 @@ export function AddRepoHostSelector({
                   </PopoverContent>
                 </Popover>
               ) : null}
-              {hosts.map((host) => {
+              {rows.shown.map((host) => {
                 const selected = host.id === selectedHostId
                 const disabled = !canSelectAddRepoHost(host)
                 const canConnectHost = canConnectAddRepoHost(host)
                 const canTurnOn =
                   host.wslUnavailable === 'turned-off' && onOpenWslHostsSetting !== undefined
-                // Why one flag: either action keeps the otherwise unselectable row interactive.
                 const canConnect = canConnectHost || canTurnOn
                 const isConnecting = host.health === 'connecting'
                 return (
@@ -238,7 +260,9 @@ export function AddRepoHostSelector({
                         <span className="truncate font-medium">{host.label}</span>
                       </span>
                       <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                        <span className="min-w-0 flex-1 truncate">{getHostStatusDetail(host)}</span>
+                        <span className="min-w-0 flex-1 truncate" title={host.failureReason}>
+                          {getHostStatusDetail(host)}
+                        </span>
                       </span>
                     </span>
                     {canConnectHost ? (
@@ -288,6 +312,7 @@ export function AddRepoHostSelector({
                 )
               })}
             </CommandList>
+            <HostListOverflowNote hiddenCount={rows.hiddenCount} />
           </Command>
         </PopoverContent>
       </Popover>

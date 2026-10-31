@@ -4,9 +4,10 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '@/store/slices/browser-slice-test-harness'
 import { makeAnnotation } from '@/store/slices/browser-annotation-test-fixture'
-import type {
-  BrowserGrabResult,
-  BrowserCaptureSelectionScreenshotResult
+import {
+  GRAB_BUDGET,
+  type BrowserGrabResult,
+  type BrowserCaptureSelectionScreenshotResult
 } from '../../../../../shared/browser-grab-types'
 import { useGrabMode } from './useGrabMode'
 import { useBrowserPageGrabAnnotations } from './use-browser-page-grab-annotations'
@@ -40,7 +41,7 @@ afterEach(() => {
   Reflect.deleteProperty(window, 'api')
 })
 
-function mount(invalidateBeforePendingEffect = false) {
+function mount(invalidateBeforePendingEffect = false, browserAnnotationsLength = 0) {
   const selection = deferred<BrowserGrabResult>()
   const screenshot = deferred<BrowserCaptureSelectionScreenshotResult>()
   const awaitGrabSelection = vi
@@ -72,7 +73,7 @@ function mount(invalidateBeforePendingEffect = false) {
       containerRef,
       webviewRef,
       setBrowserOverlayViewport,
-      browserAnnotationsLength: 0
+      browserAnnotationsLength
     })
     const { cancelPendingBrowserCapture } = annotations
     useLayoutEffect(() => {
@@ -185,5 +186,33 @@ describe('capture cancellation on a document boundary', () => {
     expect(state.store?.getState().browserAnnotationMarkerIdsByPageId['page-1']).toEqual([
       saved?.[0].id
     ])
+  })
+})
+
+describe('per-page annotation limit', () => {
+  it('tells the user the page is full instead of opening a draft that cannot be saved', async () => {
+    const h = mount(false, GRAB_BUDGET.annotationsMaxPerPage)
+    act(() => h.result.current.annotations.startGrabIntent('annotate'))
+    await waitFor(() => expect(h.awaitGrabSelection).toHaveBeenCalledOnce())
+    await act(async () => {
+      h.selection.resolve(selected())
+      h.screenshot.resolve({ ok: false, reason: 'fixture' })
+      await h.screenshot.promise
+    })
+    await waitFor(() => expect(h.result.current.annotations.grabToast?.type).toBe('error'))
+    expect(h.result.current.annotations.pendingAnnotationPayload).toBeNull()
+  })
+
+  it('shows no limit toast for a selection that loading cancelled first', async () => {
+    const h = mount(true, GRAB_BUDGET.annotationsMaxPerPage)
+    act(() => h.result.current.annotations.startGrabIntent('annotate'))
+    await waitFor(() => expect(h.awaitGrabSelection).toHaveBeenCalledOnce())
+    await act(async () => {
+      h.selection.resolve(selected())
+      h.screenshot.resolve({ ok: false, reason: 'fixture' })
+      await h.screenshot.promise
+    })
+    expect(h.result.current.grab.state).toBe('idle')
+    expect(h.result.current.annotations.grabToast).toBeNull()
   })
 })

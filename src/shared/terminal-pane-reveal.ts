@@ -1,9 +1,6 @@
 import type { ExecutionHostId } from './execution-host'
 
-/**
- * A terminal pane named by worktree, tab and leaf rather than by handle. A pane on a paired server
- * has the same ids in this window, but its handle exists only on that server.
- */
+/** Use stable pane IDs: paired-server handles exist only on that server. */
 export type TerminalPaneRevealTarget = {
   worktreeId: string
   tabId: string

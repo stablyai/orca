@@ -1,9 +1,11 @@
 import type {
   OrcadMigrationCatalogAbortResult,
+  OrcadMigrationCatalogReference,
+  OrcadMigrationCatalogReferenceAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import type { OrcadMigrationBlobDescriptor } from '../../shared/orcad-migration-blob-transfer'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationBlobDescriptor } from '../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { Store } from '../persistence'
 
 /** A moved history waits while a shell runs in its worktree: that shell would overwrite it. */
@@ -16,6 +18,8 @@ type OrcadMigrationCatalogCommitStore = OrcadMigrationCatalogFlushStore &
   Partial<Pick<Store, 'commitStagedOrcadMigrationCatalog' | 'installOrcadMigrationReceivedBlobs'>>
 type OrcadMigrationCatalogAbortStore = OrcadMigrationCatalogFlushStore &
   Partial<Pick<Store, 'abortStagedOrcadMigrationCatalog'>>
+type OrcadMigrationCatalogAbortByReferenceStore = OrcadMigrationCatalogFlushStore &
+  Partial<Pick<Store, 'abortStagedOrcadMigrationCatalogByReference'>>
 
 export async function stageOrcadMigrationCatalogDurably(args: {
   store: OrcadMigrationCatalogStageStore
@@ -74,6 +78,20 @@ export async function abortStagedOrcadMigrationCatalogDurably(args: {
     return { ...result, durableAbsent: true }
   }
   return result
+}
+
+export async function abortStagedOrcadMigrationCatalogByReferenceDurably(args: {
+  store: OrcadMigrationCatalogAbortByReferenceStore
+  reference: OrcadMigrationCatalogReference
+  signal?: AbortSignal
+}): Promise<OrcadMigrationCatalogReferenceAbortResult> {
+  // SAFETY: Returned or mutable Store slots retain their original native missing-method failure.
+  const result = args.store.abortStagedOrcadMigrationCatalogByReference!(args.reference)
+  await flushMigrationState(args.store, args.signal)
+  // Either answer is flushed first, so a source that cannot re-send the manifest may act on it.
+  return result.state === 'absent'
+    ? { ...result, durableAbsent: true }
+    : { ...result, durableCommitted: true }
 }
 
 export function getOrcadMigrationCatalogState(args: {

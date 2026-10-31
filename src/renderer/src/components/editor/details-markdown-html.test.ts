@@ -142,8 +142,7 @@ describe('details markdown html', () => {
       `<details class="orca-details">\n<summary>Outer</summary>\n\n${body}\n\n</details>`
 
     expect(isEditableHtml(wrap(siblings(40)))).toBe(true)
-    // A single non-editable sibling must still reject, so sharing fence ranges
-    // cannot make later siblings inherit an earlier sibling's boundaries.
+    // Shared fence ranges must not let later siblings inherit an earlier sibling’s editability boundaries.
     expect(isEditableHtml(wrap(`${siblings(20)}\n\n${siblings(1, ' id="x"')}`))).toBe(false)
   })
 

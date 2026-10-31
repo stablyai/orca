@@ -1,16 +1,22 @@
+import { githubRepoContext, withGitHubRepoExecution } from '../github/github-repository-identity'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import {
+  cachedHostedReviewOutcome,
+  type HostedReviewForBranchOutcome,
+  type HostedReviewInfo
+} from '../../shared/hosted-review'
 import { assertRemoteUrlReadable } from '../git/remote-url-probe'
+import { forgetGiteaPullRequestReads } from '../gitea/pull-request-read-forgetting'
 import { getForgeProviderForRepository, type ForgeProviderId } from './forge-provider'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
-import { withHostedReviewBranchCache } from './hosted-review-branch-cache'
+import { readHostedReviewBranchCache } from './hosted-review-branch-cache'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from './hosted-review-git-options'
 
 function reviewLinkForProvider(
-  input: Parameters<typeof getHostedReviewForBranch>[0],
+  input: Parameters<typeof readHostedReviewForBranch>[0],
   provider: ForgeProviderId
 ): { linkedReviewNumber?: number | null; fallbackReviewNumber?: number | null } {
   switch (provider) {
@@ -31,6 +37,12 @@ function reviewLinkForProvider(
 }
 
 export async function getHostedReviewForBranch(
+  input: Parameters<typeof readHostedReviewForBranch>[0]
+): Promise<HostedReviewInfo | null> {
+  return (await readHostedReviewForBranch(input)).review
+}
+
+export async function readHostedReviewForBranch(
   input: {
     repoPath: string
     executionHostId: ExecutionHostId
@@ -42,17 +54,14 @@ export async function getHostedReviewForBranch(
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
     currentHeadOid?: string | null
-    /**
-     * Set by surfaces that only ever render the selected worktree, which is the
-     * one branch cheap enough to re-check per minute (#11532).
-     */
+    /** Selected-worktree surfaces earn per-minute pacing (#11532). */
     active?: boolean
     force?: boolean
+    userRefresh?: boolean
   } & HostedReviewExecutionOptions
-): Promise<HostedReviewInfo | null> {
+): Promise<HostedReviewForBranchOutcome> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
-  // Why: detached HEAD cannot use branch lookup, but provider-specific exact
-  // ids can still resolve the review without probing an empty branch name.
+  // Detached HEAD skips branch lookup but still permits exact provider ids.
   if (
     !branchName &&
     input.linkedGitHubPR == null &&
@@ -62,46 +71,76 @@ export async function getHostedReviewForBranch(
     input.linkedAzureDevOpsPR == null &&
     input.linkedGiteaPR == null
   ) {
-    return null
+    return cachedHostedReviewOutcome(null)
   }
 
-  const headOid = input.currentHeadOid?.trim() || null
-  // Why (#11532): every client polls this one entry point, and they share the
-  // host's per-user API quota, so the cache has to sit above the provider call.
-  return withHostedReviewBranchCache(
-    { ...input, branch: branchName },
-    {
-      headOid,
-      ...(input.active === true ? { active: true } : {}),
-      ...(input.force === true ? { force: true } : {})
-    },
+  const connectionId = hostedReviewSshConnectionId(input.executionHostId)
+  return withGitHubRepoExecution(
+    input.repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(input),
     async () => {
-      const provider = await getForgeProviderForRepository({
-        repoPath: input.repoPath,
-        executionHostId: input.executionHostId,
-        ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
-      })
-      if (!provider) {
-        // Why: forge detection swallows probe failures, so a remote read that
-        // was killed on its deadline (or lost its relay) would otherwise be
-        // cached as a definitive "no review" for the whole no-review interval.
-        // Throwing keeps it on the cache's failure path instead (P1-D).
-        await assertRemoteUrlReadable({
-          repoPath: input.repoPath,
-          // The probe is the leaf that still dials: it takes the SSH target, not the host id.
-          connectionId: hostedReviewSshConnectionId(input.executionHostId),
-          ...getHostedReviewLocalGitOptions(input)
-        })
-        return null
-      }
-      return provider.getReviewForBranch({
-        repoPath: input.repoPath,
-        executionHostId: input.executionHostId,
-        branch: branchName,
-        ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {}),
-        githubCurrentHeadOid: headOid,
-        ...reviewLinkForProvider(input, provider.id)
+      const context = githubRepoContext(
+        input.repoPath,
+        connectionId,
+        getHostedReviewLocalGitOptions(input)
+      )
+      return lookup({
+        ...input,
+        localGitExecOptions: {
+          ...getHostedReviewLocalGitOptions(input),
+          ghAccount: context.ghAccount
+        }
       })
     }
   )
+
+  function lookup(resolvedInput: Parameters<typeof readHostedReviewForBranch>[0]) {
+    const headOid = input.currentHeadOid?.trim() || null
+    // Cache review API results by the resolved account and execution identity (#11532).
+    return readHostedReviewBranchCache(
+      { ...resolvedInput, branch: branchName },
+      {
+        headOid,
+        ...(input.active === true ? { active: true } : {}),
+        ...(input.force === true ? { force: true } : {}),
+        ...(input.userRefresh === true ? { userRefresh: true } : {})
+      },
+      async () => {
+        const provider = await getForgeProviderForRepository({
+          repoPath: input.repoPath,
+          executionHostId: input.executionHostId,
+          ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
+        })
+        if (!provider) {
+          // Detection swallows errors; probe reachability first so timeouts/relay loss cannot cache definitive no-review (P1-D).
+          await assertRemoteUrlReadable({
+            repoPath: input.repoPath,
+            // The probe is the leaf that still dials: it takes the SSH target, not the host id.
+            connectionId: hostedReviewSshConnectionId(input.executionHostId),
+            ...getHostedReviewLocalGitOptions(input)
+          })
+          return null
+        }
+        const providerOptions = provider.id === 'github' ? resolvedInput : input
+        if (input.userRefresh === true && provider.id === 'gitea') {
+          await forgetGiteaPullRequestReads({
+            repoPath: input.repoPath,
+            executionHostId: input.executionHostId,
+            localGitExecOptions: getHostedReviewLocalGitOptions(input)
+          })
+        }
+        return provider.getReviewForBranch({
+          repoPath: input.repoPath,
+          executionHostId: input.executionHostId,
+          branch: branchName,
+          ...(providerOptions.localGitExecOptions
+            ? { localGitExecOptions: providerOptions.localGitExecOptions }
+            : {}),
+          githubCurrentHeadOid: headOid,
+          ...reviewLinkForProvider(input, provider.id)
+        })
+      }
+    )
+  }
 }

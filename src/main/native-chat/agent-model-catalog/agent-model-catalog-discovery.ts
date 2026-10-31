@@ -1,17 +1,46 @@
-import type { AgentModelCatalogProbe } from './agent-model-catalog-store'
+import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 
-/**
- * What every agent registration must say about its models: a probe that lists them without
- * starting a session, or that it has none. Refresh, keying, persistence and publication are the
- * catalog service's, never the agent's. An agent with no probe shows the provider-default
- * placeholder until a live session reports.
- */
+export type AgentModelCatalogResolvedProbe = {
+  identity: unknown
+  run: (signal?: AbortSignal) => Promise<AgentModelCatalogSuccess>
+}
+
+/** Recover reruns shell lookup after a miss; snapshot and saved never do. */
+export type AgentModelCatalogLookup = 'saved' | 'snapshot' | 'recover'
+
+export type AgentModelCatalogProbe = ((
+  accountHome: AgentSessionAccountHome,
+  options?: {
+    signal?: AbortSignal
+    workspacePath?: string
+    cwd?: string
+    operation?: StructuredAgentResolutionOperation
+  }
+) => Promise<AgentModelCatalogSuccess>) & {
+  resolveLegacy?: (
+    home: AgentSessionAccountHome,
+    operation?: StructuredAgentResolutionOperation
+  ) => Promise<AgentModelCatalogResolvedProbe>
+  resolve?: (
+    home: AgentSessionAccountHome,
+    cwd: string,
+    lookup?: AgentModelCatalogLookup,
+    operation?: StructuredAgentResolutionOperation
+  ) => Promise<AgentModelCatalogResolvedProbe>
+}
+
+export { independentAgentModelCatalog } from '../../../shared/agent-model-catalog-ownership'
+
+/** Agents supply probes or opt out; the service owns caching, refresh and publication. */
 export type AgentModelCatalogDiscovery =
   | {
       kind: 'probe'
       probe: AgentModelCatalogProbe
-      /** The listing marks the model the account is configured to run as its default, so a new
-       *  chat launches the listed default. False where the agent's own settings may pick another. */
+      /** True only when listing defaults match the account's actual configured model. */
       listingNamesConfiguredModel: boolean
+      /** Project-dependent catalogs require a chat folder and cannot be prewarmed. */
+      listsInChatFolder?: true
     }
   | { kind: 'unavailable'; reason: string }

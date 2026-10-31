@@ -1,0 +1,19 @@
+# Hand-built worktree ids (`${repoId}::${path}`) per file, outside src/shared/worktree/id.ts.
+# This is a RATCHET: counts may only go DOWN. Compose ids with composeWorktreeId or
+# getRepoMainWorktreeId instead. Prune after a fix: pnpm check:worktree-id-composer-ratchet --prune
+1 src/main/ipc/workspace-cleanup-scan.ts
+1 src/main/ipc/worktree-folder-rename-target.ts
+1 src/main/ipc/worktree-metadata-merge.ts
+1 src/main/ipc/worktree-push-target-reconciliation.ts
+2 src/main/ipc/worktree-remote.ts
+1 src/main/ipc/worktrees/listing/detected-provider-listing.ts
+1 src/main/ipc/worktrees/listing/ssh-worktree-fallback.ts
+2 src/main/ipc/worktrees/removal/nested-worktree-removal.ts
+1 src/main/memory/hydrate-local-pty-registry.ts
+1 src/main/runtime/repo-worktree-row-resolution.ts
+1 src/main/runtime/runtime-local-worktree-materialization.ts
+1 src/main/runtime/runtime-managed-worktree-queries.ts
+1 src/main/runtime/runtime-provisioned-root-adoption.ts
+1 src/main/workspace-space-repo-scan.ts
+1 src/main/worktree-lineage-pruning.ts
+1 src/renderer/src/components/sidebar/DeleteNestedWorktreesDialog.tsx

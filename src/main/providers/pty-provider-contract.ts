@@ -1,3 +1,7 @@
+import type {
+  PtyFencedTerminationRequest,
+  PtyFencedTerminationOutcome
+} from '../../shared/pty-fenced-termination'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-workspace-trust-spawn-request'
@@ -38,9 +42,7 @@ export type PtyProviderBufferSnapshot = {
   oscLinks?: TerminalOscLinkRange[]
   alternateScreen?: boolean
   pendingEscapeTailAnsi?: string
-  /** Effective kitty keyboard flags PROVEN at this snapshot's own `seq`
-   *  boundary. Absent means the source could not prove them; readers must not
-   *  rewrite that silence into a known `0`. */
+  /** Flags proven at this snapshot seq; absent is unknown, never zero. */
   kittyKeyboardFlags?: number
   /** Ordered ownership evidence proven at this snapshot's `seq`. */
   terminalOwner?: TerminalOwner
@@ -61,22 +63,15 @@ export type PtySpawnOptions = {
   startupCommandDelivery?: StartupCommandDelivery
   /** Minimal allowlisted launch ownership preserved by daemon reattach. */
   launchAgent?: TuiAgent
-  /** Orca worktree identity. When present, the local provider scopes shell
-   *  history to this worktree so ArrowUp only surfaces local commands. */
+  /** Workspace identity also scopes local shell history. */
   worktreeId?: string
-  /** Stable terminal pane identity. Remote providers use this as PTY metadata
-   *  even when it must not be exported into the spawned shell environment. */
+  /** Stable pane metadata for remote routing even when it cannot be exported into the shell env. */
   paneKey?: string
-  /** Stable terminal tab identity used as a coarser attach guard when a pane
-   *  identity is unavailable. */
+  /** Coarser attach guard when pane identity is unavailable. */
   tabId?: string
-  /** Daemon session ID. A caller-provided ID is treated as an attach request;
-   *  daemon hosts also pass minted IDs for fresh sessions that need stable
-   *  per-PTY state before provider.spawn returns. */
+  /** Caller IDs request attachment; hosts also mint fresh IDs for state needed before spawn returns. */
   sessionId?: string
-  /** True when the caller minted this daemon session for a fresh terminal.
-   *  Existing-session attach paths must stay false so recovery checks do not
-   *  replace the daemon out from under a still-live PTY. */
+  /** Freshly minted session only; attaching a live PTY must not authorize daemon replacement. */
   isNewSession?: boolean
   /** Host setting forwarded additively to the process owner; old owners ignore it. */
   historyIsolationEnabled?: boolean
@@ -88,26 +83,24 @@ export type PtySpawnOptions = {
   expectedIncarnationId?: PtyIncarnationId
   /** True when runtime state makes the expected incarnation a hard attach fence. */
   expectedIncarnationIsAuthoritative?: boolean
-  /** Why: allows the renderer to request a specific shell for a single new
-   *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
-   *  changing the user's persistent default shell setting. Only consulted on
-   *  Windows; ignored on macOS/Linux where shell selection is not exposed. */
+  /** Windows-only per-tab shell selection without changing the persistent default. */
   shellOverride?: string
   /** Optional Unix interactive profile args; ignored for command and agent launches. */
   terminalShellArgs?: string[]
-  /** Preferred WSL distro for generic `wsl.exe` launches. Worktree/session
-   *  distro still wins when the cwd already identifies a WSL distro. */
+  /** Default WSL distro for generic wsl.exe; workspace/session cwd identity takes precedence. */
   terminalWindowsWslDistro?: string | null
-  /** Why: PowerShell is the top-level shell family in product terms, but on
-   *  Windows we may need to choose between inbox Windows PowerShell 5.1 and
-   *  pwsh.exe at spawn time. Threading the persisted implementation choice
-   *  through spawn options keeps local PTY and daemon PTY semantics aligned
-   *  without promoting pwsh into a separate shell family. */
+  /** Persisted inbox/pwsh choice keeps local and daemon PowerShell-family launches aligned. */
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   /** Fresh-spawn-only source authority installed before any PTY output is released. */
   startupIngress?: PtyStartupIngressIntent
   /** Why the caller is starting this terminal; presence lets the host defer an automatic restore. */
   spawnIntent?: SpawnIntent
+  /** A restore no user act asked for: a WSL bridge pane whose distro is stopped is held, not started. */
+  wslPassiveRestore?: true
+  /** A main-side start no user act asked for (orchestration, automations, recovery): held like a passive restore. */
+  wslBackgroundStart?: true
+  /** performance.now() before this spawn's startup-target hold read: the provider hold reuses only that read. */
+  wslHoldReadAnchor?: number
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding
@@ -145,75 +138,43 @@ export type IPtyProvider = {
   supportsAgentSessionClaims?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   /** Whether missing claim metadata in this PTY's process listing proves absence. */
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
+  supportsFencedTermination?: (id: string) => boolean
+  killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
-  attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence' | 'lastTitle'> | void>
+  attach(id: string): Promise<PtySpawnResult | void>
   hasPty?: (id: string) => boolean
+  /** Read-only input availability, including retained unattached PTYs; null means unobserved. */
+  getPtyAvailability?: (id: string) => boolean | null
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
   write(id: string, data: string): boolean | void
-  /** Three-valued settlement for writes whose delivery a durable claim depends on.
-   *  Required: a provider that answers this from its own fire-and-forget `write` is
-   *  fabricating a handoff, so every provider must settle or say it cannot. */
+  /** Durable claims require real write settlement; fire-and-forget providers must report inability to settle. */
   writeWithSettlement: (id: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   resize(id: string, cols: number, rows: number): void
-  /**
-   * Producer-side flow control: stop/restart reading the underlying PTY so a
-   * flooding child blocks on write (kernel backpressure) instead of growing
-   * main-process buffers. Best-effort and optional — providers that cannot
-   * pause (SSH relay, legacy daemon protocols) omit these or no-op silently,
-   * and callers must keep functioning without them (the pending-output cap
-   * still bounds memory when pause is unavailable).
-   */
+  /** Best-effort kernel backpressure; unsupported/legacy providers omit or no-op, leaving output caps to bound memory. */
   pauseProducer?: (id: string) => void
   resumeProducer?: (id: string) => void
-  /**
-   * Hidden-delivery hint: the renderer has no visible view for this PTY, so
-   * the provider's transport may keep-tail thin this PTY's monitoring stream
-   * under backlog (bytes nobody is watching must not bury a visible pane's
-   * echo). Best-effort and optional, like pauseProducer.
-   */
+  /** Optional hidden-view hint allows keep-tail thinning so unwatched output cannot bury visible-pane echo. */
   setPtyBackgrounded?: (id: string, background: boolean) => void
-  /**
-   * Facts a thinning transport interleaves with onData, in byte order:
-   * scan-authority handoff markers, keep-tail gaps, and the transient facts
-   * (bell/command-finished/pr-link/2031) it detected in bytes it was allowed
-   * to drop. Only transports that thin implement it.
-   */
+  /** Thinning transports preserve byte order for scan-authority markers, gaps and notification facts from dropped bytes. */
   onBackgroundStreamEvent?: (callback: (payload: PtyBackgroundStreamEvent) => void) => () => void
-  /**
-   * The provider's write endpoint died wholesale (a daemon crash takes down
-   * every session at once), so all of its PTYs need a remount + re-attach —
-   * not just the one whose write happened to detect it (STA-2373). Optional:
-   * only respawnable endpoints like the daemon adapter can signal it.
-   */
+  /** Endpoint-wide failure requires every affected PTY to remount/reattach; only respawnable providers emit it (STA-2373). */
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
-  /** Authoritative provider-owned model snapshot. Daemon providers expose this
-   * after their monitoring stream gaps; other providers may omit it. */
+  /** Authoritative provider model snapshot after monitoring-stream gaps; optional for other providers. */
   getBufferSnapshot?: (
     id: string,
     opts?: { scrollbackRows?: number }
   ) => Promise<PtyProviderBufferSnapshot | null>
   /** Whether this exact PTY can return a sequence-safe provider snapshot. */
   canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
-  /**
-   * The size the PTY has ACTUALLY applied, not the last size requested.
-   * resize() is fire-and-forget for remote providers (daemon/SSH `notify`),
-   * so a resize can be silently dropped (session not yet alive, dead handle,
-   * cold-restore snapshot-cols coercion) while the caller still believes it
-   * landed. This is the readback the renderer's resume drift-check compares
-   * against to detect — and re-assert past — such drops. Returns null when the
-   * provider cannot confirm the applied size (unknown id, relay unreachable);
-   * callers treat null as "cannot confirm" and re-forward once. Optional so
-   * providers without an authoritative size source can omit it.
-   */
+  /** Applied size readback detects dropped/clamped remote resize requests.
+   * Null means unconfirmed: callers re-forward once; providers without an authoritative source may omit this. */
   getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
   /** Optional host capability used to suppress expensive legacy remote inventory polls. */
   supportsForegroundProcessEvidence?(options?: { signal?: AbortSignal }): Promise<boolean>
 
-  // Why: deadlineMs (absolute epoch ms) bounds the underlying RPCs so destructive
-  // teardown fails fast inside its sweep budget instead of tripping the outer sweep
-  // deadline; each RPC leaf converts to a relative timeout when it actually issues.
+  // Absolute deadlines bound leaf RPCs within the destructive sweep budget; each leaf converts to a relative timeout.
   shutdown(
     id: string,
     opts: {
@@ -221,11 +182,8 @@ export type IPtyProvider = {
       keepHistory?: boolean
       deadlineMs?: number
       expectedIncarnationId?: PtyIncarnationId
-      /** Ask the execution host to refuse this stop unless it recorded this exact client identity
-       *  as the PTY's creator AND this connection still authenticates as it. Optional because a
-       *  host that predates it ignores the field, and because most stops are ordinary teardown of a
-       *  pane whose owner the host may never have attested (a revived PTY carries none). Set it
-       *  wherever the caller's authority to destroy comes from that attestation. */
+      /** Require the host-attested creator and current authenticated client to match before destructive ownership-based stops.
+       * Optional/ignored on older hosts; ordinary teardown and unattested revived PTYs may omit it. */
       expectedOwnerClientInstanceId?: string
     }
   ): Promise<void>
@@ -248,10 +206,15 @@ export type IPtyProvider = {
   confirmShellForeground?: (id: string) => Promise<boolean>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
-  // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.
   listProcesses(opts?: {
     deadlineMs?: number
     includeForegroundProcessEvidence?: boolean
+    /** Scope route validation to this workspace; providers may return a broader inventory. */
+    worktreeId?: string
+    /** Scope route validation to these PTYs; absence still requires a complete inventory. */
+    ptyIds?: readonly string[]
+    /** Diagnostic display only: include generations whose routing owner is unverifiable. */
+    includeUnrouted?: boolean
   }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
@@ -266,6 +229,10 @@ export type IPtyProvider = {
       cause?: TerminalExitCause
       /** Main ended the session to restart the daemon; the pane stays for its next process. */
       replacedByRestart?: true
+      /** The session's host went away; its pane and history stay to cold-restore. */
+      hostLost?: true
+      /** The emitting provider already reported this exit to the runtime through configure().onExit. */
+      runtimeFed?: true
     }) => void
   ): () => void
 }

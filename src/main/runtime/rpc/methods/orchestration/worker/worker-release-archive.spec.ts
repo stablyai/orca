@@ -112,6 +112,24 @@ export function registerWorkerReleaseArchiveTests(): void {
       expect(h.runtime.readTerminal).not.toHaveBeenCalled()
     })
 
+    it('keeps the conversation the agent reports last, so a follow-up can reopen it after release', async () => {
+      h.setup()
+      const { dispatchId } = await h.startSettledWorker()
+      // A /clear after the report moved the agent to a new conversation.
+      vi.mocked(h.runtime.getExactWorkerProviderSession).mockReturnValue({
+        paneKey: 'tab_worker:leaf',
+        agent: 'claude',
+        processIncarnation: 'runtime_test:term_worker:1',
+        providerSession: { key: 'session_id', id: 'after-clear' },
+        observedAt: 1
+      })
+      await h.call('orchestration.workerRelease', { dispatch: dispatchId })
+
+      expect(
+        JSON.parse(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.resume_session ?? 'null')
+      ).toMatchObject({ agent: 'claude', providerSession: { id: 'after-clear' } })
+    })
+
     it('reads an immutable transcript snapshot after the provider file disappears', async () => {
       h.setup()
       const directory = await mkdtemp(join(tmpdir(), 'orca-worker-release-snapshot-'))

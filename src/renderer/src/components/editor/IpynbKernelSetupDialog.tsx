@@ -1,3 +1,4 @@
+// @protected-copy: notebook trust and kernel setup copy.
 import { Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -75,7 +76,6 @@ function setupCopy(mode: SetupMode, env: string, folder: string) {
   }
 }
 
-/** Gets ipykernel into the notebook's Python: pip install, or a new .venv when pip is locked out. */
 export function IpynbKernelSetupDialog({
   filePath,
   rootPath,

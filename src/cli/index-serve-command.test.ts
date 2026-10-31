@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -44,6 +44,13 @@ import { main } from './index'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
+  const priorExitCode = process.exitCode
+  beforeEach(() => {
+    process.exitCode = undefined
+  })
+  afterEach(() => {
+    process.exitCode = priorExitCode
+  })
   useWorktreeAwarenessEnvironment({
     callMock,
     serveOrcaAppMock,
@@ -54,7 +61,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('starts a foreground headless server through `serve`', async () => {
-    serveOrcaAppMock.mockResolvedValue(0)
+    serveOrcaAppMock.mockResolvedValue(17)
     process.env.ORCA_ENVIRONMENT = 'stale-env'
 
     await main(
@@ -62,7 +69,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(serveOrcaAppMock).toHaveBeenCalledWith({
+    expect(serveOrcaAppMock).toHaveBeenCalledExactlyOnceWith({
       json: true,
       port: '6768',
       pairingAddress: '100.64.1.20',
@@ -72,6 +79,8 @@ describe('orca cli worktree awareness', () => {
       recipeJson: false,
       projectRoot: null
     })
+    expect(process.exitCode).toBe(17)
+    expect(callMock).not.toHaveBeenCalled()
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -88,11 +97,16 @@ describe('orca cli worktree awareness', () => {
       expect(serveOrcaAppMock.mock.lastCall?.[0]).not.toHaveProperty('supervise')
 
       serveOrcaAppMock.mockClear()
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
       await main(
         ['serve', '--supervise', '--recipe-json', '--project-root', '/workspace/repo'],
         '/tmp/repo'
       )
       expect(serveOrcaAppMock).not.toHaveBeenCalled()
+      expect(error).toHaveBeenCalledExactlyOnceWith(
+        '--recipe-json starts a detached server and returns; it cannot be combined with --supervise.'
+      )
+      expect(process.exitCode).toBe(1)
     }
   )
 
@@ -114,7 +128,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(serveOrcaAppMock).toHaveBeenCalledWith({
+    expect(serveOrcaAppMock).toHaveBeenCalledExactlyOnceWith({
       json: true,
       port: null,
       pairingAddress: '100.64.1.20',
@@ -141,7 +155,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(serveOrcaAppMock).toHaveBeenCalledWith({
+    expect(serveOrcaAppMock).toHaveBeenCalledExactlyOnceWith({
       json: false,
       port: null,
       pairingAddress: 'wss://sandbox.example.com',
@@ -153,86 +167,46 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
-  it('rejects recipe JSON output without a project root', async () => {
+  it.each([
+    {
+      name: 'recipe JSON output without a project root',
+      args: ['serve', '--recipe-json'],
+      message: 'Recipe JSON output requires --project-root.'
+    },
+    {
+      name: 'recipe JSON output with mobile pairing',
+      args: ['serve', '--recipe-json', '--project-root', '/workspace/repo', '--mobile-pairing'],
+      message: 'Recipe JSON output requires runtime pairing; remove --mobile-pairing.'
+    },
+    {
+      name: 'contradictory pairing flags',
+      args: ['serve', '--mobile-pairing', '--no-pairing'],
+      message: 'Use either --mobile-pairing or --no-pairing, not both.'
+    },
+    {
+      name: 'an invalid port',
+      args: ['serve', '--port', 'not-a-port'],
+      message: 'Invalid --port value: not-a-port'
+    },
+    {
+      name: 'a valueless port',
+      args: ['serve', '--port'],
+      message: 'Missing value for --port.'
+    }
+  ])('rejects $name before launching the app', async ({ args, message }) => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
+    vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await main(['serve', '--recipe-json'], '/tmp/repo')
+    await main([...args, '--json'], '/tmp/repo')
 
     expect(serveOrcaAppMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'Recipe JSON output requires --project-root.'
-    )
+    expect(logSpy).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(logSpy.mock.calls[0][0])).toEqual({
+      id: 'local',
+      ok: false,
+      error: { code: 'invalid_argument', message },
+      _meta: { runtimeId: null }
+    })
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
-  })
-
-  it('rejects recipe JSON output with mobile pairing', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
-
-    await main(
-      ['serve', '--recipe-json', '--project-root', '/workspace/repo', '--mobile-pairing'],
-      '/tmp/repo'
-    )
-
-    expect(serveOrcaAppMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'Recipe JSON output requires runtime pairing; remove --mobile-pairing.'
-    )
-    expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
-  })
-
-  it('rejects contradictory serve pairing flags', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
-
-    await main(['serve', '--mobile-pairing', '--no-pairing', '--json'], '/tmp/repo')
-
-    expect(serveOrcaAppMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'Use either --mobile-pairing or --no-pairing, not both.'
-    )
-    expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
-  })
-
-  it('rejects invalid serve ports before launching the app', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
-
-    await main(['serve', '--port', 'not-a-port', '--json'], '/tmp/repo')
-
-    expect(serveOrcaAppMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'Invalid --port value: not-a-port'
-    )
-    expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
-  })
-
-  it('rejects value-less serve ports before launching the app', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
-
-    await main(['serve', '--port', '--json'], '/tmp/repo')
-
-    expect(serveOrcaAppMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'Missing value for --port.'
-    )
-    expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 })

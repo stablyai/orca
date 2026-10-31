@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { getStructuredChatWorktreeIds } from '@/components/sidebar/visible-worktree-activity-inputs'
 import { filterWorkspaceRows } from '../../../shared/workspace-view/workspace-row-filters'
 import { buildDesktopWorkspaceRowFactReader } from '@/components/sidebar/desktop-workspace-row-facts'
-import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
+import { sortWorktreesSmart } from '../../../shared/sidebar-list/smart-sort'
 import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
@@ -40,6 +40,7 @@ export function useWorktreeJumpPaletteWorktrees({
   ptyIdsByTabId,
   browserTabsByWorktree,
   unifiedTabsByWorktree,
+  structuredChatSleptAtByPaneKey,
   activeWorktreeId,
   activeWorkspaceExecutionHostId,
   runtimeEnvironments,
@@ -81,7 +82,8 @@ export function useWorktreeJumpPaletteWorktrees({
   )
   const worktreeIdsWithStructuredChat = getStructuredChatWorktreeIds(
     showSleepingWorkspaces,
-    unifiedTabsByWorktree
+    unifiedTabsByWorktree,
+    structuredChatSleptAtByPaneKey
   )
   const emptyQueryVisibleWorktrees = useMemo(() => {
     // Why no project or host scope: the palette ignores the sidebar's scope; filterPredicate scopes it.
@@ -245,10 +247,12 @@ export function useWorktreeJumpPaletteWorktrees({
         repoMap,
         repoMapByHostIdentity: repoByHostIdentity,
         checksReviewByWorktree,
-        context: paletteSearchContext
+        context: paletteSearchContext,
+        lastVisitedAtByWorktreeId
       }),
     [
       checksReviewByWorktree,
+      lastVisitedAtByWorktreeId,
       paletteSearchQuery,
       paletteSearchContext,
       repoByHostIdentity,

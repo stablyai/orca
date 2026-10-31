@@ -29,13 +29,12 @@ export async function getBranchCompare(
     status: 'loading'
   }
 
-  // The base-ref probe peels to a commit. Only branch refs are guaranteed to store
-  // commits; remote-tracking refs may store annotated tags whose raw oid must be preserved.
+  // Reuse peeled commit OIDs only for branch refs; remote-tracking refs may hold annotated tags.
   const reusableProbedOidByRef = new Map<string, string>()
   const { compareRef, headOidResult, baseOidResult } = await readBranchCompareHead({
     readCompareRef: () => resolveCompareRef(worktreePath, options),
     resolveBaseRef: () =>
-      // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
+      // Short remote names can collide with local branches; resolve the qualified ref.
       resolveWorktreeAddBaseRef(baseRef, async (qualifiedRef) => {
         const oid = await resolveWorktreeBaseCommitOid(worktreePath, qualifiedRef, options)
         if (oid !== null && qualifiedRef.startsWith('refs/heads/')) {
@@ -62,7 +61,7 @@ export async function getBranchCompare(
     if (baseOidResult.ok) {
       baseOid = baseOidResult.oid
       summary.baseOid = baseOid
-      // Why: an unborn branch (new remote worktree) has no changes yet; a compare error would look broken.
+      // An unborn branch has no changes to compare.
       summary.changedFiles = 0
       summary.commitsAhead = 0
       summary.commitsBehind = 0
@@ -96,7 +95,7 @@ export async function getBranchCompare(
 
   try {
     // Git must confirm equal raw tips are the same commit before skipping the reads.
-    if (baseOid === headOid && mergeBase === headOid) {
+    if (baseOid === headOid && summary.mergeBase === headOid) {
       options.signal?.throwIfAborted()
       summary.commitsAhead = 0
       summary.commitsBehind = 0

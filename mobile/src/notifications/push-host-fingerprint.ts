@@ -1,14 +1,7 @@
 import { sha256 } from '@noble/hashes/sha256'
 
-// Why: a push arrives from the gateway, so it can only name the host by something
-// both sides derive independently — base64url(sha256(hostPublicKey)) truncated to
-// 16 chars, identical to deriveRelayHostId in
-// src/main/runtime/relay/relay-http-client.ts. The phone maps it back to its own
-// hostId by re-deriving over each stored host's publicKeyB64.
-//
-// Base64 is inlined rather than imported (same call as mobile-relay-credential-hash.ts):
-// the only shared encoders live in modules that drag in tweetnacl, expo-crypto, or
-// the host store, none of which a pure derivation should need.
+// Match the gateway’s base64url SHA-256 public-key prefix (16 chars), as relay-http-client derives it, then map back through stored keys.
+// Keep this pure: existing encoder modules pull in native crypto, host storage or tweetnacl.
 
 const HOST_FINGERPRINT_LENGTH = 16
 
@@ -33,7 +26,7 @@ function encodeBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-/** Null when the stored key is unreadable, so a corrupt host entry can't shadow a real match. */
+// Unreadable stored keys cannot shadow a later valid match.
 export function deriveHostFingerprint(publicKeyB64: string): string | null {
   const publicKey = decodeBase64(publicKeyB64)
   if (!publicKey || publicKey.length !== 32) {

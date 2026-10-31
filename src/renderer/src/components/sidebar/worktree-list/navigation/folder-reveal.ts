@@ -111,12 +111,16 @@ export function getFolderWorkspaceRevealGroupKeys(
       )
       .map((group) => [group.id, group])
   )
+  // Resolve parents from the unfiltered last same-ID group copy, matching the hostless headers the sidebar renders.
+  const renderedGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
   const keys: string[] = []
   const seen = new Set<string>()
-  let groupId: string | null = folderWorkspace.projectGroupId
+  let groupId: string | null = groupsById.has(folderWorkspace.projectGroupId)
+    ? folderWorkspace.projectGroupId
+    : null
   while (groupId && !seen.has(groupId)) {
     seen.add(groupId)
-    const group = groupsById.get(groupId)
+    const group = renderedGroupsById.get(groupId)
     if (!group) {
       break
     }
@@ -124,9 +128,7 @@ export function getFolderWorkspaceRevealGroupKeys(
     groupId = group.parentGroupId
   }
 
-  // Under non-repo grouping the project-group headers above do not exist, so the
-  // lane and host headers are the ones actually hiding the row (#15362). Lane
-  // keys come from the same function grouping uses, so the two cannot disagree.
+  // Non-repo modes hide folders behind lane/host headers; derive their reveal keys from the grouping function.
   const owningGroup = groupsById.get(folderWorkspace.projectGroupId)
   if (options?.groupBy && options.groupBy !== 'repo' && owningGroup) {
     const laneKey = getFolderWorkspaceLaneKey(

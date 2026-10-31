@@ -6,7 +6,7 @@ import {
   installHttpLinkClickFallback,
   TERMINAL_HTTP_URL_MAX_LENGTH
 } from './terminal-url-link-hit-testing'
-import { TERMINAL_HTTP_URL_MAX_LENGTH as maximumHttpUrlLength } from './terminal-http-link-limits'
+import { TERMINAL_HTTP_URL_MAX_LENGTH as maximumHttpUrlLength } from '../../../../shared/terminal-http-link-limits'
 
 const COLS = 157
 const ROWS = 59

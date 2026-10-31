@@ -1,10 +1,8 @@
-// Files a client attaches to a structured chat on a paired Orca server: the client uploads the
-// bytes, the server keeps them in a store it owns, and the agent only ever sees the server path.
+// The execution host owns chat attachments; paired clients upload bytes, local pastes write in place, and agents receive only host paths.
 
 import type { ImportSkipReason } from './filesystem-import-result-types'
 
-/** Directory name of the server's store, under its userData. Also how a client recognizes a
- *  stored attachment's path without a round trip. */
+/** Host userData store name; clients recognize stored paths without a round trip. */
 export const AGENT_SESSION_ATTACHMENTS_DIR_NAME = 'agent-session-attachments'
 
 export const AGENT_SESSION_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024
@@ -17,6 +15,29 @@ export const AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS =
 
 export const AGENT_SESSION_ATTACHMENT_NAME_MAX_BYTES = 200
 
+/** Bytes a padded base64 string decodes to, without decoding it. */
+export function base64DecodedByteLength(base64: string): number {
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
+  return (base64.length / 4) * 3 - padding
+}
+
+/** Append whole base64 groups at byte offsets; even empty files require an empty append before commit. */
+export function* agentSessionAttachmentAppends(
+  contentBase64: string
+): Generator<{ offset: number; contentBase64: string }> {
+  let charOffset = 0
+  do {
+    yield {
+      offset: (charOffset / 4) * 3,
+      contentBase64: contentBase64.slice(
+        charOffset,
+        charOffset + AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS
+      )
+    }
+    charOffset += AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS
+  } while (charOffset < contentBase64.length)
+}
+
 export type AgentSessionAttachmentUploadStartResult = { uploadId: string }
 export type AgentSessionAttachmentUploadCommitResult = {
   path: string
@@ -24,8 +45,7 @@ export type AgentSessionAttachmentUploadCommitResult = {
   byteLength: number
 }
 
-/** Whether `filePath` names a file in some server's attachment store. Only routes a preview read;
- *  the server re-checks the real path before reading anything. */
+/** Preview routing only; the host still validates real-path access before reading. */
 export function isAgentSessionAttachmentStorePath(filePath: string): boolean {
   return filePath.split(/[\\/]/).includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)
 }
@@ -52,11 +72,7 @@ function truncateUtf8(text: string, maxBytes: number): string {
   return kept
 }
 
-/**
- * A stored file keeps the user's file name, since agents read meaning into names and extensions.
- * Only the last path segment survives, without control characters or separators, short enough in
- * bytes for every server's file system and never a name Windows reserves.
- */
+/** Preserve meaningful filenames/extensions while limiting the final path segment to portable UTF-8 byte length and Windows-safe names. */
 export function sanitizeAgentSessionAttachmentName(name: string): string {
   const leaf = name.split(/[\\/]/).findLast((part) => part.length > 0) ?? ''
   // eslint-disable-next-line no-control-regex -- stripping control characters is the point
@@ -85,8 +101,7 @@ export function sanitizeAgentSessionAttachmentName(name: string): string {
   return truncated.replace(/[. ]+$/, '') || 'attachment'
 }
 
-/** Pins an upload to the server the attachment was meant for: every call re-checks the pairing,
- *  and every chunk the server process, so a re-pair or a replaced server aborts the upload. */
+/** Recheck pairing per call and server identity per chunk; re-pairing or server replacement aborts uploads. */
 export type AgentSessionAttachmentUploadTarget = {
   environmentId: string
   sessionId: string
@@ -101,8 +116,7 @@ export type AgentSessionAttachmentPathUploadResult = {
   failed: { sourcePath: string; reason: string }[]
 }
 
-/** Asks a clipboard image save to land in the chat's attachment store on the paired server named
- *  by the save's `runtimeEnvironmentId`, instead of that server's temp directory. */
+/** Save clipboard images into the runtimeEnvironmentId server's chat store rather than its temp directory. */
 export type AgentSessionAttachmentClipboardTarget = Omit<
   AgentSessionAttachmentUploadTarget,
   'environmentId'
@@ -111,4 +125,9 @@ export type AgentSessionAttachmentClipboardTarget = Omit<
 /** `orca-paste-…png`, the name every pasted image gets, so it reads as "Pasted image". */
 export function agentSessionPastedImageName(now: number, unique: string): string {
   return `orca-paste-${now}-${unique}.png`
+}
+
+/** `orca-paste-…txt`, the name a long text paste saved as a file gets, so it reads as "Pasted text". */
+export function agentSessionPastedTextName(now: number, unique: string): string {
+  return `orca-paste-${now}-${unique}.txt`
 }

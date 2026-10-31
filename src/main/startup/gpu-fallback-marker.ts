@@ -1,14 +1,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-/**
- * Persisted "disable hardware acceleration for this build" marker.
- *
- * Why a standalone file (not the Store): app.disableHardwareAcceleration() must
- * be called before app.whenReady() resolves, but the settings Store is only
- * constructed inside whenReady. A tiny JSON marker in userData can be read
- * synchronously during early startup, mirroring windows-user-data-acl.ts.
- */
+/** Read a tiny build-scoped marker before ready, when hardware acceleration must be disabled and the settings Store is unavailable. */
 
 export const GPU_FALLBACK_MARKER_FILE = 'gpu-fallback.json'
 export const GPU_FALLBACK_SCHEME_VERSION = 3
@@ -64,9 +57,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
       electronVersion: parsed.electronVersion,
       platform: parsed.platform
     }
-  } catch {
-    // missing or corrupt means no fallback requested
-  }
+  } catch {}
   return null
 }
 
@@ -91,7 +82,7 @@ export function clearGpuFallbackMarker(userDataPath: string): void {
   try {
     rmSync(markerPath(userDataPath), { force: true })
   } catch {
-    // best effort; a stale marker is revalidated on the next launch
+    // Best effort; stale markers are revalidated next launch.
   }
 }
 
@@ -112,8 +103,7 @@ export function readActiveGpuFallbackMarker(
     marker.appVersion !== environment.appVersion ||
     marker.electronVersion !== environment.electronVersion
   ) {
-    // Why: the marker is sticky only for the build that observed the driver
-    // crash burst; updates get one fresh hardware attempt automatically.
+    // Only the crashing build stays sticky; updates get a fresh hardware attempt.
     clearGpuFallbackMarker(userDataPath)
     return null
   }

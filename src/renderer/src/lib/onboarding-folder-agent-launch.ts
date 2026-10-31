@@ -1,3 +1,7 @@
+import {
+  ensureAgentLaunchPreferences,
+  type AgentLaunchPreferences
+} from '@/components/settings/use-host-agent-launch-preferences'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -15,7 +19,7 @@ import {
   type OnboardingFolderAgentStartup
 } from '@/lib/onboarding-folder-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 
 export type OnboardingFolderAgentLaunch = {
   agent: TuiAgent | null
@@ -24,15 +28,14 @@ export type OnboardingFolderAgentLaunch = {
   startup?: OnboardingFolderAgentStartup
 }
 
-/** Why: lives beside the launch, not the startup builder, because the store root imports that
- *  builder eagerly and the planner's launch graph reaches back to the store root. */
-export function resolveDismissedOnboardingFolderAgentLaunch(args: {
+/** Keep planning beside launch: the eagerly imported startup builder cannot reach the launch graph without cycling through store root. */
+export async function resolveDismissedOnboardingFolderAgentLaunch(args: {
   store: ReturnType<typeof useAppStore.getState>
   onboarding: OnboardingState | null
   hasExistingProject: boolean
   executionHostId: string
   worktreeId: string
-}): OnboardingFolderAgentLaunch {
+}): Promise<OnboardingFolderAgentLaunch> {
   const agent = onboardingFolderDefaultAgent(args.store.settings)
   if (
     !agent ||
@@ -57,17 +60,36 @@ export function resolveDismissedOnboardingFolderAgentLaunch(args: {
   if (!context) {
     return { agent, plan }
   }
-  const startup = buildOnboardingFolderAgentStartup(args.store.settings, {
-    platform: context.resolvedLaunchPlatform,
-    shell: context.queuedShell,
-    isRemote: context.isRemote
-  })
+  let preferences: AgentLaunchPreferences
+  try {
+    preferences = await ensureAgentLaunchPreferences(args.store, {
+      kind: 'folder',
+      worktreeId: args.worktreeId
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return { agent, plan }
+    }
+    throw error
+  }
+  const startup = buildOnboardingFolderAgentStartup(
+    args.store.settings
+      ? {
+          ...args.store.settings,
+          agentLaunchChoices:
+            preferences.agentLaunchChoices ?? args.store.settings.agentLaunchChoices
+        }
+      : null,
+    {
+      platform: context.resolvedLaunchPlatform,
+      shell: context.queuedShell,
+      isRemote: context.isRemote
+    }
+  )
   return { agent, plan, startup }
 }
 
-/** Reveal a folder just added after dismissed onboarding and start its default agent on the
- *  planned route. Both add-folder paths (local store action, SSH dialog) share this; the store
- *  path must import it lazily because the launch graph reaches the store root. */
+/** Share post-onboarding folder reveal/default-agent launch across local and SSH adds; store callers import lazily to avoid the launch/store cycle. */
 export async function revealOnboardingFolderWithAgentLaunch(args: {
   worktreeId: string
   executionHostId: ExecutionHostId | undefined

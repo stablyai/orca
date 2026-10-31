@@ -1,5 +1,9 @@
 import type { EmulatorBackendKind, EmulatorSessionInfo } from './emulator-types'
 import type { EmulatorSessionState } from './emulator-bridge-types'
+import type { EmulatorBackend } from './backends/emulator-backend'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
+
+const DEVICE_LISTING_BUDGET_MS = 5_000
 
 export class EmulatorSessionRegistry {
   private readonly activeByWorktree = new Map<string, string>()
@@ -19,8 +23,7 @@ export class EmulatorSessionRegistry {
       pid: info.helperPid,
       managed: options.managed === true,
       initialized: true,
-      // Why: default to the iOS/serve-sim contract so existing callers that
-      // predate multi-backend keep their prior behavior.
+      // Preserve iOS defaults for callers predating multiple backends.
       backend: info.backend ?? options.backend ?? 'ios',
       streamCodec: info.streamCodec ?? 'mjpeg'
     })
@@ -70,6 +73,33 @@ export class EmulatorSessionRegistry {
         this.activeByWorktree.delete(worktreeId)
       }
     }
+  }
+
+  /** Drop managed records whose device stopped outside Orca; true while any managed device still runs. */
+  async pruneGoneManagedSessions(
+    backendForKind: (
+      kind: EmulatorBackendKind
+    ) => Pick<EmulatorBackend, 'listRunningDeviceIds' | 'stopHelperForDevice'> | null
+  ): Promise<boolean> {
+    const managed = this.listSessions().filter((session) => session.managed)
+    let live = false
+    for (const kind of new Set(managed.map((session) => session.backend))) {
+      const backend = backendForKind(kind)
+      const census = backend?.listRunningDeviceIds?.()
+      // A backend without a census, or one that failed or timed out, proves nothing; keep its records.
+      const running = census ? await withTimeout(census, DEVICE_LISTING_BUDGET_MS, null) : null
+      for (const session of managed.filter((candidate) => candidate.backend === kind)) {
+        // A reattach during the census replaced this record; the census predates it.
+        const replaced = this.sessions.get(session.deviceUdid) !== session
+        if (running === null || replaced || running.includes(session.deviceUdid)) {
+          live = live || this.sessions.has(session.deviceUdid)
+        } else {
+          this.clearSessionAndWorktrees(session.deviceUdid)
+          void backend?.stopHelperForDevice(session.deviceUdid).catch(() => {})
+        }
+      }
+    }
+    return live
   }
 
   clear(): void {

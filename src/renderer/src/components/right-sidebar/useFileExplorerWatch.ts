@@ -1,5 +1,6 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
-import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
+import type { FsChangedPayload, FsChangeEvent } from '../../../../shared/filesystem-entry-types'
+import { FileWatchEventBuffer } from '../../../../shared/filesystem-watch-event-buffer'
 import type {
   DirCache,
   FileExplorerOperationOwner,
@@ -7,7 +8,10 @@ import type {
 } from './file-explorer-types'
 import type { InlineInput } from './file-explorer-inline-input-row'
 import { useAppStore } from '@/store'
-import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
+import {
+  isWorktreeCatchUpPayload,
+  ORCA_WORKTREE_FILE_CHANGE_EVENT
+} from '@/hooks/worktree-file-change-event'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
   getFileExplorerOperationOwner,
@@ -17,6 +21,7 @@ import {
 import { fileExplorerRefreshConcurrency } from './file-explorer-refresh-concurrency'
 import { createFileExplorerWatchRefreshScheduler } from './file-explorer-watch-refresh-scheduler'
 import { processFileExplorerFsPayload } from './file-explorer-watch-reconcile'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export {
   canonicalizeFileExplorerWatchPath,
@@ -55,7 +60,7 @@ export function getFileExplorerWatchRuntimeEnvironmentId(
     activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
     settings: state.settings,
     repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
+    worktreesByRepo: selectWorktreesByRepo(state),
     detectedWorktreesByRepo: state.detectedWorktreesByRepo ?? {},
     folderWorkspaces: state.folderWorkspaces ?? [],
     projectGroups: state.projectGroups ?? [],
@@ -73,11 +78,7 @@ export function getFileExplorerWatchRuntimeEnvironmentId(
       : null
 }
 
-/**
- * Reconciles File Explorer state on filesystem events for the active worktree.
- *
- * Why: `useEditorExternalWatch` owns the watch IPC lifecycle; this hook only subscribes to fs:changed for tree-cache reconciliation.
- */
+/** Reconcile tree caches from fs:changed; useEditorExternalWatch owns the watch IPC lifecycle. */
 export function useFileExplorerWatch({
   worktreePath,
   activeWorktreeId,
@@ -92,12 +93,12 @@ export function useFileExplorerWatch({
   isNativeDragOver,
   operationOwner
 }: UseFileExplorerWatchParams): void {
-  // Why: subscriptions follow the selected worktree; host focus is only a legacy default, not an ownership signal.
+  // Subscribe by worktree ownership; focused host is only a legacy default.
   const activeRuntimeEnvironmentId = useAppStore((s) =>
     getFileExplorerWatchRuntimeEnvironmentId(s, activeWorktreeId, operationOwner)
   )
 
-  // Keep refs for handler-accessed values so the IPC listener isn't re-subscribed on every render.
+  // Keep handler values in refs to avoid listener resubscription on every render.
   const dirCacheRef = useRef(dirCache)
   dirCacheRef.current = dirCache
 
@@ -113,31 +114,30 @@ export function useFileExplorerWatch({
   const isNativeDragOverRef = useRef(isNativeDragOver)
   isNativeDragOverRef.current = isNativeDragOver
 
-  // Why: refs keep the effect from re-subscribing when refreshTree's identity changes on expand/collapse (review issue §1).
+  // Expansion changes callback identity; refs preserve the subscription.
   const refreshDirRef = useRef(refreshDir)
   refreshDirRef.current = refreshDir
 
   const refreshTreeRef = useRef(refreshTree)
   refreshTreeRef.current = refreshTree
 
-  // Deferred events queue: events that arrive during inline input or drag
-  const deferredRef = useRef<FsChangedPayload[]>([])
+  const deferredRef = useRef(new FileWatchEventBuffer())
   const resyncWatchKeysRef = useRef(new Set<string>())
   const activeResyncByWatchKeyRef = useRef(new Map<string, () => void>())
 
-  // Why: a ref bridges processPayload to the flush effect so it can replay deferred payloads without re-subscribing (design §6.2).
-  const processPayloadRef = useRef<((payload: FsChangedPayload) => void) | null>(null)
+  // Bridge payload replay to the flush effect without resubscribing.
+  const processPayloadRef = useRef<((events: FsChangeEvent[]) => void) | null>(null)
 
-  // Why: one atomic effect avoids a cleanup-ordering race that drops events on rapid worktree switches (review issue §3).
+  // Keep setup atomic to prevent cleanup-order races dropping events on rapid switches.
   useEffect(() => {
-    // Why require a worktree id: it is half of every watch key, and reconciliation already needs it —
-    // a null-keyed subscription would only park resync state no correctly-keyed one can consume.
+    // Null worktree keys strand resync state that correctly keyed subscriptions cannot consume.
     if (!worktreePath || !activeWorktreeId || activeRuntimeEnvironmentId === undefined) {
       return
     }
 
     const currentWorktreePath = worktreePath
     const currentWorktreeId = activeWorktreeId
+    const deferred = deferredRef.current
     const resyncWatchKeys = resyncWatchKeysRef.current
     const activeResyncByWatchKey = activeResyncByWatchKeyRef.current
     const currentWatchKey = JSON.stringify([
@@ -145,29 +145,17 @@ export function useFileExplorerWatch({
       normalizeRuntimePathForComparison(currentWorktreePath)
     ])
 
-    // Why: one scheduler per subscription covers BOTH remote transports (the
-    // Electron fs:changed bus and the runtime-RPC subscription below), and its
-    // lifetime is tied to the watched worktree so a switch can't refresh the
-    // previous root.
+    // Share one scheduler across transports and scope its lifetime to this worktree so navigation cannot refresh an old root.
     const owner = getFileExplorerOperationOwner(currentWorktreeId)
     const scheduler = createFileExplorerWatchRefreshScheduler({
       refreshTree: () => refreshTreeRef.current(),
       refreshDir: (dirPath) => refreshDirRef.current(dirPath),
-      // Why exact-match on `expanded`, not a normalized compare: dirPath already arrives as a
-      // resolved dirCache key (resolveCachedDirPath), and refreshTree re-reads dirCache under the
-      // verbatim expanded strings — a differently-spelled key it never wrote would be reported
-      // covered and left stale. Only the root is normalized: it is keyed by worktreePath.
+      // Expanded paths must exactly match resolved cache keys or full refresh may falsely claim coverage; normalize only the root.
       isCoveredByFullRefresh: (dirPath) =>
         normalizeRuntimePathForComparison(dirPath) ===
           normalizeRuntimePathForComparison(currentWorktreePath) ||
         expandedRef.current.has(dirPath),
-      dirConcurrency: fileExplorerRefreshConcurrency(owner),
-      // Why 0ms for every transport: each producer already flushes on the shared
-      // WATCH_BATCH_* window — local/SSH via filesystem-watcher, runtime files.watch via
-      // createFileWatchEventBatcher — so a second 150ms here only adds latency, not coalescing.
-      // A new transport must batch at the producer before joining this path.
-      trailingMs: 0,
-      maxWaitMs: 0
+      dirConcurrency: fileExplorerRefreshConcurrency(owner)
     })
     activeResyncByWatchKey.set(currentWatchKey, scheduler.requestFullRefresh)
 
@@ -190,10 +178,9 @@ export function useFileExplorerWatch({
       })
     }
 
-    // Why: expose processPayload to the flush effect so it can replay deferred payloads without re-subscribing.
-    processPayloadRef.current = processPayload
+    processPayloadRef.current = (events) =>
+      processPayload({ worktreePath: currentWorktreePath, events })
 
-    // Declared before handleFsChanged so its `disposed` read can never hit the temporal dead zone.
     let disposed = false
 
     const handleFsChanged = (payload: FsChangedPayload): void => {
@@ -217,13 +204,13 @@ export function useFileExplorerWatch({
       ) {
         return
       }
-      // Why: defer refreshes during inline input/drag so rows don't shift; native drags only set isNativeDragOver (design §6.2).
+      // Defer during inline input and both drag types so reconciliation cannot shift rows.
       if (
         inlineInputRef.current !== null ||
         dragSourceRef.current !== null ||
         isNativeDragOverRef.current
       ) {
-        deferredRef.current.push(payload)
+        deferred.push(payload.events)
         return
       }
 
@@ -237,46 +224,50 @@ export function useFileExplorerWatch({
         handleFsChanged(event.detail.payload)
       }
     }
+    // IPC trees also need synthesized catch-up after watch reacquisition.
+    const handleCatchUp = (event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]): void => {
+      if (
+        event.detail.runtimeEnvironmentId === null &&
+        isWorktreeCatchUpPayload(event.detail.payload)
+      ) {
+        handleFsChanged(event.detail.payload)
+      }
+    }
     let unsubscribeListener: (() => void) | null = null
     if (activeRuntimeEnvironmentId?.trim() && activeWorktreeId) {
       // The app watcher owns recovery; a separate stream would strand this consumer after reconnect.
       window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleRuntimeChange)
     } else {
       unsubscribeListener = window.api.fs.onFsChanged(handleFsChanged)
+      window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleCatchUp)
     }
 
     return () => {
       disposed = true
       window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleRuntimeChange)
+      window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleCatchUp)
       unsubscribeListener?.()
       if (activeResyncByWatchKey.get(currentWatchKey) === scheduler.requestFullRefresh) {
         activeResyncByWatchKey.delete(currentWatchKey)
       }
-      const hadDeferredEvents = deferredRef.current.length > 0
+      const hadDeferredEvents = deferred.size > 0
       if (scheduler.cancel() || hadDeferredEvents) {
         // The tree cache survives Files being hidden, so remember work canceled after receipt.
         resyncWatchKeys.add(currentWatchKey)
       }
-      deferredRef.current = []
+      deferred.clear()
       processPayloadRef.current = null
     }
   }, [worktreePath, activeWorktreeId, activeRuntimeEnvironmentId, setDirCache, setSelectedPath])
 
-  // ── Flush deferred events when interaction ends ────────────────────
   useEffect(() => {
     if (
       inlineInput === null &&
       dragSourcePath === null &&
       !isNativeDragOver &&
-      deferredRef.current.length > 0
+      deferredRef.current.size > 0
     ) {
-      const deferred = deferredRef.current.splice(0)
-      // Why: replay deferred payloads so the tree cache reconciles to disk after inline input or drag ends (design §6.2).
-      if (processPayloadRef.current) {
-        for (const payload of deferred) {
-          processPayloadRef.current(payload)
-        }
-      }
+      processPayloadRef.current?.(deferredRef.current.take())
     }
   }, [inlineInput, dragSourcePath, isNativeDragOver])
 }

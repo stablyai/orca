@@ -3,8 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-// Wraps the real `readdir` so the walk's concurrency is observable without
-// changing what it reads.
+// Wrap real reads to measure walk concurrency.
 const readdirCalls = vi.hoisted(() => ({ outstanding: 0, peak: 0, count: 0 }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -75,9 +74,7 @@ describe('countLooseRefs', () => {
   })
 
   it('never has more than one directory read outstanding', async () => {
-    // libuv's filesystem thread pool has four slots shared with the whole main
-    // process. A probe that fanned out would stall unrelated fs work, so this
-    // pins the walk as strictly sequential rather than merely bounded.
+    // Sequential reads occupy at most one shared libuv slot, leaving unrelated filesystem work unblocked.
     const refs = await makeRefsTree({
       'remotes/a': 3,
       'remotes/b': 3,
@@ -95,8 +92,7 @@ describe('countLooseRefs', () => {
   })
 
   it('reads each directory once rather than streaming it in batches', async () => {
-    // One thread-pool round trip per directory is what makes the probe ~8x
-    // cheaper than the streaming form on a real degraded repository.
+    // One round trip per directory measured ~8x faster than streaming on a degraded repository.
     const refs = await makeRefsTree({ 'remotes/origin': 400 })
     readdirCalls.count = 0
 

@@ -55,9 +55,7 @@ export function releaseTerminalFocusForWindowBlur(args: {
   activeElement: Element | null
   syncFocused: TerminalInputFocusSync
 }): HTMLElement | null {
-  // Why: return the exact helper that owned focus so window-focus reclaim can
-  // refocus *that* split, not whichever helper happens to be first in the DOM
-  // (a single TerminalPane hosts every split as siblings under one container).
+  // Return the exact owning helper; sibling splits share a container, so first-match lookup targets the wrong pane.
   const releasedHelper = getPaneOwnedActiveHelperTextarea(args.container, args.activeElement)
   if (!releasedHelper) {
     return null
@@ -71,11 +69,7 @@ export function resyncTerminalFocusForWindowFocus(args: {
   container: HTMLElement
   activeElement: Element | null
   syncFocused: TerminalInputFocusSync
-  /**
-   * The exact helper textarea this pane released on window blur. When focus
-   * settled on body/null during app reactivation, reclaim *this* split's
-   * helper rather than whichever helper is first in the DOM.
-   */
+  /** Reclaim the exact helper released on blur only if reactivation leaves body/null focused. */
   releasedHelper?: HTMLElement | null
   /** Override the macOS check (tests). Defaults to the navigator user agent. */
   isMac?: boolean
@@ -104,11 +98,7 @@ export function resyncTerminalFocusForWindowFocus(args: {
 
   const reclaimedHelper = helper
 
-  // Why: defer the reclaim refocus to the next frame and only take focus if
-  // nothing newer grabbed it — so a click into the sidebar/dialog/rename input
-  // during reactivation isn't yanked back into the terminal. Applies on every
-  // platform (the reporter's bug is Linux); macOS additionally needs the blur
-  // first to rebuild a stale NSTextInputContext (see below).
+  // Reclaim next frame only without a newer owner; macOS also blurs first to rebuild stale NSTextInputContext.
   if (needsProgrammaticFocus) {
     const schedule = args.scheduleRefocus ?? scheduleNextFrame
     schedule(() => {
@@ -140,8 +130,7 @@ export function resyncTerminalFocusForWindowFocus(args: {
   // still-focused helper (electron#32307/#34952); non-mac returns false inside.
   refreshTerminalImeInputContext(reclaimedHelper, {
     isMac: args.isMac,
-    // Why: if another control wins during the refresh frame, the terminal
-    // mirror must follow that owner instead of remaining latched true.
+    // If another control wins during refresh, update the terminal ownership mirror accordingly.
     onRefocusSkipped: (active) => syncFocusAfterFailedReclaim(active, args.syncFocused),
     scheduleRefocus: args.scheduleRefocus
   })
@@ -153,8 +142,7 @@ function syncFocusAfterFailedReclaim(
   activeElement: Element | null,
   syncFocused: TerminalInputFocusSync
 ): void {
-  // Why: a later xterm focusin already published terminal ownership; an older
-  // deferred reclaim must not overwrite that newer process-wide mirror.
+  // Older deferred reclaim cannot overwrite a newer xterm focusin ownership publication.
   if (!isXtermHelperTextarea(activeElement)) {
     syncFocused(false)
   }

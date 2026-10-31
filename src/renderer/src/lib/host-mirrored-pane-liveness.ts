@@ -1,11 +1,12 @@
 import type { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { hasHostSessionMirrorHydrated } from '@/runtime/host-session-mirror-hydration'
 import { hasHostMirrorHandleWaitExpired } from './host-mirror-handle-gap-wait'
-import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from './resolve-owner'
+import { warnAmbiguousOwnerOnce } from './ambiguous-owner-warning'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -39,17 +40,7 @@ function tabHoldsEnvironmentPtyBinding(
   )
 }
 
-/**
- * Reports the mirror a pane is still waiting on, or null when the pane's
- * mirror has no pending handle wait.
- *
- * Why: a `web-terminal-*` tab exists only because a host published it, and its
- * PTY handle arrives one relay round trip later. An empty local handle map is
- * therefore "unverifiable", never "exited" — the incident's replacement
- * `codex resume` forked a session the host still held. Mirror hydration only
- * says the rows landed, so a pane still bound to this environment's PTY with
- * no handle yet gets its own bounded wait (#19735).
- */
+/** Host rows may precede handles by a relay round trip; a layout-bound pane stays unverifiable and needs bounded waiting, never a replacement resume of an agent the host may still run (#19735). */
 export function findUnhydratedHostMirrorForPane(
   record: SleepingAgentSessionRecord,
   state: AppStoreState
@@ -67,7 +58,13 @@ export function findUnhydratedHostMirrorForPane(
   if ((state.ptyIdsByTabId[tabId]?.length ?? 0) > 0) {
     return null
   }
-  const environmentId = getRuntimeEnvironmentIdForWorktree(state, record.worktreeId)
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: record.worktreeId })
+  if (owner.kind === 'ambiguous') {
+    // Why: no single host can answer for a twin's pane, so park without arming a wait on either.
+    warnAmbiguousOwnerOnce(record.worktreeId, 'wait on an agent resume mirror')
+    return { kind: 'mirror', environmentId: null }
+  }
+  const environmentId = owner.environmentId
   if (!environmentId || !hasHostSessionMirrorHydrated(environmentId, record.worktreeId)) {
     return { kind: 'mirror', environmentId }
   }

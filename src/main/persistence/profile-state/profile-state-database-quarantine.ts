@@ -13,10 +13,7 @@ export type ProfileStateDatabaseQuarantine = {
   copiedFiles: readonly string[]
 }
 
-/**
- * Preserve a damaged profile database family before a caller attempts repair or fallback.
- * Originals remain in place so this operation cannot turn a recovery failure into data loss.
- */
+/** Preserve original database files so failed repair/fallback cannot destroy recovery evidence. */
 export function quarantineProfileStateDatabase(
   databasePath: string,
   profileId: string,
@@ -60,7 +57,7 @@ export function quarantineProfileStateDatabase(
     }
     copyProfileStateRecoveryFiles(copies)
     const manifestPath = join(directory, 'manifest.json')
-    // Let the destination filesystem detect case or Unicode aliases of the manifest name.
+    // Let the filesystem detect case/Unicode aliases rather than guessing its normalization.
     if (existsSync(manifestPath)) {
       throw new Error('Profile recovery artifact name conflicts with the quarantine manifest')
     }

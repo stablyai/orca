@@ -1,5 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 /** A failed load: the message with its Retry button centered under it as one group. */
 export function MobileLoadErrorState({
@@ -9,19 +12,27 @@ export function MobileLoadErrorState({
   message: string
   onRetry?: (() => void) | null
 }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <View style={styles.state}>
       <Text style={styles.errorText}>{message}</Text>
-      {onRetry ? (
-        <Pressable style={styles.retryButton} onPress={onRetry} accessibilityRole="button">
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      ) : null}
+      {onRetry ? <MobileStateButton label={t('common.retry', 'Retry')} onPress={onRetry} /> : null}
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+/** The bordered action a centered load state offers, such as Retry. */
+export function MobileStateButton({ label, onPress }: { label: string; onPress: () => void }) {
+  useMobileColorScheme()
+  return (
+    <Pressable style={styles.retryButton} onPress={onPress} accessibilityRole="button">
+      <Text style={styles.retryText}>{label}</Text>
+    </Pressable>
+  )
+}
+
+const styles = themedStyleSheet(() => ({
   state: {
     flex: 1,
     alignItems: 'center',
@@ -38,7 +49,7 @@ const styles = StyleSheet.create({
     minHeight: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.lg
@@ -48,4 +59,4 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

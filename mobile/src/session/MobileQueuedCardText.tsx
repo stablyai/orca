@@ -1,17 +1,27 @@
 import { useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { colors, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { queuedMessageStyles } from './native-chat/input/mobile-native-chat-queued-message-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
-/** Two lines, opening on tap when it clips: a card can hold another agent's message the person
- *  never read, and Steer or Delete must not be a blind choice. Opened, a long one scrolls in a
- *  capped box. */
-export function MobileQueuedCardText({ text }: { text: string }): React.JSX.Element {
-  const [expanded, setExpanded] = useState(false)
+// Expand clipped queued text before Steer/Delete; use the queue’s capped scroller rather than nesting another scroll box.
+export function MobileQueuedCardText({
+  text,
+  expanded,
+  onToggle
+}: {
+  text: string
+  expanded: boolean
+  onToggle: () => void
+}): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [clipped, setClipped] = useState(false)
-  // The whole text laid out unseen at the card's width: more than two lines is what clips.
   const measure = (
     <Text
-      style={[styles.body, styles.measure]}
+      style={[queuedMessageStyles.bodyText, styles.measure]}
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
@@ -24,7 +34,7 @@ export function MobileQueuedCardText({ text }: { text: string }): React.JSX.Elem
     return (
       <View>
         {measure}
-        <Text style={styles.body} numberOfLines={2}>
+        <Text style={queuedMessageStyles.bodyText} numberOfLines={2}>
           {text}
         </Text>
       </View>
@@ -35,36 +45,34 @@ export function MobileQueuedCardText({ text }: { text: string }): React.JSX.Elem
       testID="queued-card-text"
       accessibilityRole="button"
       accessibilityState={{ expanded }}
-      accessibilityHint={expanded ? 'Shows less of the message' : 'Shows the whole message'}
-      onPress={() => setExpanded(!expanded)}
+      accessibilityHint={
+        expanded
+          ? t('session.queuedCardText.showLessHint', 'Shows less of the message')
+          : t('session.queuedCardText.showMoreHint', 'Shows the whole message')
+      }
+      onPress={onToggle}
     >
-      <Text style={styles.body} numberOfLines={expanded ? undefined : 2}>
-        {text}
+      {expanded ? null : (
+        <Text style={queuedMessageStyles.bodyText} numberOfLines={2}>
+          {text}
+        </Text>
+      )}
+      <Text style={styles.caption}>
+        {expanded
+          ? t('session.queuedCardText.showLess', 'Show less')
+          : t('session.queuedCardText.showMore', 'Show more')}
       </Text>
-      <Text style={styles.caption}>{expanded ? 'Show less' : 'Show more'}</Text>
     </Pressable>
   )
-  // The press sits inside the scroll, so a drag scrolls and only a tap folds it.
-  return expanded ? (
-    <ScrollView style={styles.expandedBody} nestedScrollEnabled>
-      {toggle}
-    </ScrollView>
-  ) : (
+  return (
     <View>
-      {measure}
+      {expanded ? null : measure}
       {toggle}
     </View>
   )
 }
 
-const styles = StyleSheet.create({
-  body: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
-  },
-  expandedBody: {
-    maxHeight: 240
-  },
+const styles = themedStyleSheet(() => ({
   measure: {
     position: 'absolute',
     left: 0,
@@ -75,4 +83,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.metaSize
   }
-})
+}))

@@ -1,12 +1,4 @@
-/**
- * Decides which host entries to fetch, over which transport, and how often.
- *
- * Three rules shape everything here: at most four authority calls are in flight
- * at once, an old runtime is asked once per cycle and its answer partitioned
- * into every entry that wanted it, and a response commits only through the
- * cache's fence — so work that was obsolete before it returned is discarded
- * rather than rendered.
- */
+/** Fetch through four pooled calls, share each legacy authority answer across its entries, and publish only responses that pass the cache fence. */
 
 import type { Automation } from '../../../../shared/automations-types'
 import type { AutomationListScopeSelector } from '../../../../shared/automation-list-scope'
@@ -107,8 +99,7 @@ function scopeSelectorFor(target: AutomationHostFetchTarget): AutomationListScop
   if (selector.kind === 'self' || selector.kind === 'orphan') {
     return { kind: selector.kind }
   }
-  // Why: an SSH scope without a registration generation cannot be fenced, and a
-  // ghost target's records are returned by the authority's orphan scope anyway.
+  // Unregistered SSH scopes cannot be fenced; the authority’s orphan scope supplies those records.
   return target.owner?.selector.kind === 'ssh'
     ? {
         kind: 'ssh',
@@ -152,13 +143,7 @@ export function createAutomationHostScheduler(
     !disposed &&
     cache.getByKey(target.stableKey)?.requestGeneration === target.fence.requestGeneration
 
-  /**
-   * Settles one answer against every entry it was fetched for, counting the two
-   * things the release gate distinguishes: each entry the fence rejected, and —
-   * only when nothing at all landed — the request whose answer was thrown away.
-   * A legacy answer that lands for eleven of twelve hosts is not a stale
-   * response; it is one response and one stale entry.
-   */
+  /** Count rejected entries separately from discarded requests: a legacy response is discarded only if none of its entries committed. */
   const settleGroup = (
     live: readonly PlannedTarget[],
     stableKey: string | null,
@@ -188,8 +173,7 @@ export function createAutomationHostScheduler(
       cache.abandonRequest(target.fence)
       return
     }
-    // Counted here rather than at submission: a queued job the catalog dropped
-    // is never sent, and a request that was never sent must not be in the count.
+    // Count at send, not submission; cancelled queued jobs never consumed wire traffic.
     instrument.request(target.fence, 'scoped')
     const startedAt = instrument.startedAt()
     try {
@@ -225,14 +209,11 @@ export function createAutomationHostScheduler(
       )
       const rowsFor = (target: PlannedTarget): readonly AutomationHostRow[] =>
         partition.rowsByStableKey.get(target.stableKey) ?? []
-      // The call belongs to the authority, but the rows belong to the hosts —
-      // without this, per-host row counts are missing exactly where payload is worst.
+      // Attribute legacy response rows per host even though the wire call belongs only to the authority.
       for (const target of live) {
         instrument.entryRows(target.stableKey, rowsFor(target).length)
       }
-      // The count is the whole authority's, so every entry reports it — as the scoped
-      // path does. Recording it only under an orphan request would need the orphan
-      // entry that only a reported count creates.
+      // Report authority orphan counts on every entry; requiring an orphan request would prevent its entry from bootstrapping.
       settleGroup(live, null, 'commit', (target) =>
         cache.commit(target.fence, { rows: rowsFor(target), orphanCount: partition.orphanCount })
       )
@@ -260,8 +241,7 @@ export function createAutomationHostScheduler(
     const joined: Promise<void>[] = []
     const counted = new Set<string>()
     for (const target of force ? [] : targets) {
-      // plan() collapses a repeated ref into one entry, so counting the raw array
-      // would score two hits on the single promise they share.
+      // Deduplicate raw refs before counting joins; repeated entries share one promise.
       const stableKey = hostStableKey(target.ref)
       if (counted.has(stableKey)) {
         continue

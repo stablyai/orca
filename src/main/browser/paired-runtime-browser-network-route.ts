@@ -1,10 +1,8 @@
-import type {
-  BrowserHostLeaseAuthority,
-  BrowserNetworkExecutionHost
-} from '../../shared/browser-client-host-protocol'
+import type { BrowserHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
-import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { resolveBrowserHostReconnectDelay } from './browser-host-lease-reconnect-delay'
 import { retryBrowserNetworkRouteReconnect } from './browser-network-route-reconnect-retry'
 import {
@@ -233,11 +231,7 @@ export class PairedRuntimeBrowserNetworkRoute {
     this.beginRecovery(error)
   }
 
-  /**
-   * The tunnel attaches on its own subscription, so a tunnel-only death is invisible to the
-   * client-host channel that drives registry-level suspend/reconnect. Without a rebuild here the
-   * route stays dark and every page request fails until an unrelated retain happens to revive it.
-   */
+  // Tunnel subscriptions fail independently of the host channel, so they need their own recovery.
   private beginRecovery(error: Error): void {
     if (this.closed || !this.started || this.recovery) {
       return

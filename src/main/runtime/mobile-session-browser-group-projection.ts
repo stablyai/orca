@@ -1,22 +1,11 @@
 import type { RuntimeMobileSessionTabGroup } from '../../shared/runtime-types'
 
-// Why: browser session tabs have no parentTabId so the terminal-only group
-// builder drops them from tabOrder; this re-adds their ids to a group.
-// Browser tabs are live-only (no persisted session entry), but their GROUP
-// membership must still survive snapshot rebuilds like terminals'. The
-// passed-in groups already encode each browser's group (carried from the prior
-// snapshot / persisted tabGroups), so keep each existing browser id where it
-// is; only a genuinely-new browser id goes to its create-target group (when
-// that group exists) and otherwise to the first group. Previously every
-// browser was force-pushed into group[0], so opening a browser in the right
-// split group always snapped it back to the left on the next rebuild.
+// Terminal-only rebuilds drop browser ids; restore their prior group, assigning only new browsers to target/first group.
 export function appendBrowserTabOrder(
   groups: readonly RuntimeMobileSessionTabGroup[],
   browserTabIds: readonly string[],
   newTabAssignment?: { tabId: string; groupId: string },
-  // browserPageId -> groupId from the prior/persisted groups. The terminal
-  // distributor rebuilds tabOrder from terminal ids only and drops browser
-  // ids, so this carries each browser's group across rebuilds.
+  // Carry browser ownership across terminal-only tabOrder rebuilds.
   priorGroupByBrowserId?: ReadonlyMap<string, string>
 ): RuntimeMobileSessionTabGroup[] {
   if (browserTabIds.length === 0) {
@@ -47,8 +36,6 @@ export function appendBrowserTabOrder(
   return next
 }
 
-// browserPageId -> groupId from a set of groups (the persisted/prior layout),
-// so a browser stays in its group across rebuilds that drop browser ids.
 export function collectBrowserGroupAssignment(
   groups: readonly RuntimeMobileSessionTabGroup[] | undefined,
   browserTabIds: readonly string[]

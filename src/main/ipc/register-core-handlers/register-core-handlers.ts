@@ -1,20 +1,24 @@
 import { app } from 'electron'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
+import { registerWslMoveWiring } from '../wsl-move-driver-wiring'
+import { registerWslDriveProjectHandlers } from '../wsl-drive-project-handlers'
+import { installProjectRuntimeGitRouter } from '../../project-runtime-git-router'
 import { registerCliHandlers } from '../cli'
 import { registerPreflightHandlers } from '../preflight'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { StatsCollector } from '../../stats/collector'
-import { registerFilesystemHandlers } from '../filesystem'
+import { registerFilesystemHandlers } from '../filesystem/filesystem'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
-import { registerFilesystemWatcherHandlers } from '../filesystem-watcher'
+import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesystem-watcher-handlers'
 import { registerUsageProviderHandlers } from '../usage-provider-handlers'
 import { registerGitHubHandlers } from '../github'
 import { registerGitLabHandlers } from '../gitlab'
 import { registerHostedReviewHandlers } from '../hosted-review'
-import { registerLinearHandlers } from '../linear'
-import { registerJiraHandlers } from '../jira'
-import { registerJiraIssueSummaryGenerationHandlers } from '../jira-issue-summary-generation'
+import { registerLinearHandlers } from '../linear/register-handlers'
+import { registerJiraHandlers } from '../jira/register-handlers'
+import { registerJiraIssueSummaryGenerationHandlers } from '../jira/issue-summary-generation'
 import { registerBitbucketHandlers } from '../bitbucket'
 import { registerFeedbackHandlers } from '../feedback'
 import { registerCrashReportingHandlers } from '../crash-reporting'
@@ -26,9 +30,8 @@ import { registerRuntimeHandlers } from '../runtime'
 import {
   invalidateRuntimeEnvironmentTransport,
   registerRuntimeEnvironmentHandlers
-} from '../runtime-environments'
+} from '../runtime-environments/runtime-environments'
 import { registerWslHostHandlers } from '../wsl-host-handlers'
-import { registerWslMoveHandlers } from '../wsl-move-handlers'
 import { registerEphemeralVmHandlers } from '../ephemeral-vm'
 import { registerAiVaultHandlers } from '../ai-vault'
 import { registerAiVaultSearchHandlers } from '../ai-vault-search'
@@ -50,6 +53,7 @@ import { registerSkillsHandlers } from '../skills'
 import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
 import { registerWorkspaceSpaceHandlers } from '../workspace-space'
 import { registerWorkspacePortHandlers } from '../workspace-ports'
+import { registerLinkPreviewHandlers } from '../link-preview'
 import { registerLocalhostWorktreeLabelHandlers } from '../localhost-worktree-labels'
 import { registerAutomationHandlers } from '../automations'
 import { registerKeybindingHandlers } from '../keybindings'
@@ -96,15 +100,19 @@ import type {
 } from '../../../shared/ai-vault-resume-preparation'
 import {
   getSavedRuntimeAiVaultHostInfos,
+  deleteRuntimeAiVaultSession,
   prepareRuntimeAiVaultSessionResume,
   resolveRuntimeAiVaultSessionTitles,
   scanRuntimeAiVaultSessions
 } from '../../ai-vault/runtime-session-scanner'
 import { callRuntimeSessionSearch } from '../../ai-vault/runtime-session-search-call'
+import { configureRuntimeAiVaultSessionDelete } from '../ai-vault-delete'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/structured-agent-session-host-refusal'
+import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugin-marketplaces'
 import { settleWithinMs } from '../../quit-teardown-deadline'
+import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/runtime-environment-registry-root'
 
 let registered = false
 // Same cap as the restart path's auth preservation: bookkeeping must not hold Restart on a stalled disk.
@@ -126,6 +134,7 @@ type CoreHandlerLifecycleOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
+  onAfterOrcaProfileSignOut?: () => void
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
@@ -153,10 +162,7 @@ export function registerCoreHandlers(
   pluginService?: PluginService,
   marketplaceServices?: PluginMarketplaceHandlerServices
 ): void {
-  // Why: on macOS the app can stay alive after all windows close, then
-  // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
-  // if a channel is registered twice, so we guard to register only once and
-  // just update the per-window web-contents ID on subsequent calls.
+  // macOS activation can replace the window without ending the app; refresh trusted IDs but register IPC once.
   setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
   setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
   setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
@@ -167,12 +173,19 @@ export function registerCoreHandlers(
   registered = true
 
   registerAppHandlers(store, {
+    quitResumeRecordsFor: (session) => runtime.quitResumeRecordsFor(session),
+    ...(ORCA_LAYOUT_OWNER_IS_MAIN
+      ? {
+          reconnectFactsFor: (session, partition) =>
+            runtime.shutdownReconnectFactsFor(session, partition)
+        }
+      : {}),
     onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
-    // Why here, not onBeforeRelaunch: restart and profile switches quit through will-quit, which closes it.
+    // Restart/profile switching closes this through will-quit; this callback covers relaunch exit.
     onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
   })
   registerCliHandlers()
-  registerPreflightHandlers()
+  registerPreflightHandlers(store)
   registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage, museUsage })
   registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
@@ -205,10 +218,7 @@ export function registerCoreHandlers(
   registerWorkspaceSpaceWindowHandlers(store)
   registerTerminalPreviewHandlers(runtime)
   registerDeveloperPermissionHandlers()
-  // Why: diagnostics handlers are wired alongside telemetry but the two
-  // lanes never share a code path — `ipc/diagnostics.ts` imports only from
-  // `src/main/observability/`, never from `src/main/telemetry/`. Order is
-  // not load-bearing; both register independent ipcMain channels.
+  // Diagnostics and telemetry register independent channels and keep separate data paths.
   registerDiagnosticsHandlers()
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()
@@ -230,7 +240,8 @@ export function registerCoreHandlers(
   registerOrcaProfileHandlers(store, {
     onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
     onAuthMutation: lifecycleOptions.onOrcaProfileAuthMutation,
-    onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut
+    onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut,
+    onAfterSignOut: lifecycleOptions.onAfterOrcaProfileSignOut
   })
   registerBrowserHandlers()
   registerShellHandlers(store)
@@ -241,12 +252,9 @@ export function registerCoreHandlers(
   registerEmulatorVideoStreamHandlers()
   registerWorkspaceSpaceHandlers(store)
   registerWorkspacePortHandlers(store)
+  registerLinkPreviewHandlers()
   registerLocalhostWorktreeLabelHandlers(store)
-  if (commitMessageAgentEnv) {
-    registerFilesystemHandlers(store, commitMessageAgentEnv)
-  } else {
-    registerFilesystemHandlers(store)
-  }
+  registerFilesystemHandlers(store, commitMessageAgentEnv)
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers(store)
@@ -255,31 +263,44 @@ export function registerCoreHandlers(
     getUserDataPath: () => app.getPath('userData'),
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
-  registerWslMoveHandlers(() => app.getPath('userData'))
+  registerWslMoveWiring(store, runtime)
+  registerWslDriveProjectHandlers(store, runtime)
+  installProjectRuntimeGitRouter(store)
   registerEphemeralVmHandlers(store, pluginService)
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.
   const ensureStructuredSessionOwnership = () =>
     ensureStructuredAgentSessionHostUnlessRefused(() => runtime.ensureStructuredAgentSessionHost())
   registerAiVaultSearchHandlers({
     callRuntimeSearch: (environmentId, method, params) =>
-      callRuntimeSessionSearch(app.getPath('userData'), environmentId, method, params),
+      callRuntimeSessionSearch(getRuntimeEnvironmentRegistryRoot(), environmentId, method, params),
     ensureStructuredSessionOwnership
   })
   registerAiVaultHandlers({
+    getUserDataPath: () => app.getPath('userData'),
     ensureStructuredSessionOwnership,
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
     getActiveRuntimeAiVaultHostInfos: () =>
-      getSavedRuntimeAiVaultHostInfos(app.getPath('userData')),
+      getSavedRuntimeAiVaultHostInfos(getRuntimeEnvironmentRegistryRoot()),
     scanRuntimeAiVaultSessions: async (environmentId, args, options) =>
-      scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options),
+      scanRuntimeAiVaultSessions(getRuntimeEnvironmentRegistryRoot(), environmentId, args, options),
     resolveRuntimeAiVaultSessionTitles: async (environmentId, args) =>
-      resolveRuntimeAiVaultSessionTitles(app.getPath('userData'), environmentId, args),
+      resolveRuntimeAiVaultSessionTitles(getRuntimeEnvironmentRegistryRoot(), environmentId, args),
     prepareRuntimeSessionResume: async (environmentId, args) =>
-      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
+      prepareRuntimeAiVaultSessionResume(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
   })
+  configureRuntimeAiVaultSessionDelete((environmentId, args) =>
+    deleteRuntimeAiVaultSession(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
+  )
   registerNativeChatHandlers()
-  registerClipboardHandlers(store)
+  registerClipboardHandlers(store, {
+    localChatAttachmentStore: async () => {
+      await ensureStructuredAgentSessionHostUnlessRefused(() =>
+        runtime.ensureStructuredAgentSessionHost()
+      )
+      return getAgentSessionAttachmentStore()
+    }
+  })
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)
 }

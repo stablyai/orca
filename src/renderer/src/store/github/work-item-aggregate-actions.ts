@@ -1,20 +1,19 @@
+import { getWorkItemPageErrorTypes } from '../../../../shared/github/work-item-page-errors'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import {
+  getWorkItemCountedTotalPages,
   isGitHubWorkItemsSshRemoteRequiredError,
   sortWorkItemsByNumber,
   PER_REPO_FETCH_LIMIT
 } from '../../../../shared/work-items'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
-import {
-  GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN,
-  isGitHubWorkItemsQueryTooLarge
-} from '../slices/github-work-items-query-bounds'
+import { isGitHubWorkItemsQueryTooLarge } from '../slices/github-work-items-query-bounds'
 import { workItemsCacheKey, workItemsInflightRequestKey } from './cache-identity'
-import { GITHUB_SEARCH_RESULT_WINDOW, isFresh, WORK_ITEMS_CACHE_TTL } from './cache-policy'
+import { isFresh, WORK_ITEMS_CACHE_TTL } from './cache-policy'
 import {
   acquireProviderRequestSlot as acquireWorkItemSlot,
   inflightWorkItemsRequests,
@@ -27,7 +26,8 @@ import {
   getWorkItemsCacheKeyForOwner,
   isGitHubUnavailableWorkItemsError,
   listGitHubWorkItemsForRepo,
-  getGitHubSourceTarget
+  getGitHubSourceTarget,
+  getGitHubWorkItemRowHostId
 } from './work-item-routing'
 
 export const createWorkItemAggregateActions = (
@@ -127,29 +127,18 @@ export const createWorkItemAggregateActions = (
             limit: perRepoLimit,
             query: query || undefined,
             page,
-            ...(options?.noCache ? { noCache: true } : {})
+            ...(options?.noCache ? { noCache: true } : {}),
+            ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
           })
-          // Why: page-N failures aren't in the per-repo banner (keyed on the initial fetch); log them so pagination failures are observable instead of silently truncating (richer surface deferred, design doc §6).
+          errorTypes.push(...getWorkItemPageErrorTypes(envelope.errors))
+          // Page-N errors bypass initial-fetch banners; log them to expose silent truncation (design §6).
           if (envelope.errors?.issues) {
-            const { type, message } = envelope.errors.issues
-            // Why: only the 1000-result-window 422 may drive the unreachable
-            // clamp; demote other validation errors so they read as failures.
-            errorTypes.push(
-              type === 'validation_error' &&
-                !GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN.test(message)
-                ? 'unknown'
-                : type
-            )
             console.warn(
               `[workItems] next page ${r.repoId} issues-side partial failure:`,
               envelope.errors.issues
             )
           }
           if (envelope.errors?.prs) {
-            // Why: the window 422 is issue-side only — a PR-side validation
-            // error must never join the unreachable signal.
-            const { type } = envelope.errors.prs
-            errorTypes.push(type === 'validation_error' ? 'unknown' : type)
             console.warn(
               `[workItems] next page ${r.repoId} prs-side partial failure:`,
               envelope.errors.prs
@@ -159,7 +148,17 @@ export const createWorkItemAggregateActions = (
             failedCount += 1
             return [] as GitHubWorkItem[]
           }
-          return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
+          const repoHostId = getGitHubWorkItemRowHostId(
+            requestState,
+            r.repoId,
+            r.path,
+            r.sourceContext
+          )
+          return envelope.items.map((item): GitHubWorkItem => ({
+            ...item,
+            repoId: r.repoId,
+            ...(repoHostId ? { repoHostId } : {})
+          }))
         } catch (err) {
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
             if (options?.requireComplete) {
@@ -179,16 +178,13 @@ export const createWorkItemAggregateActions = (
     return { items: merged, failedCount, errorTypes }
   },
 
-  countWorkItemsAcrossRepos: async (repos, query, perRepoLimit) => {
+  countWorkItemsAcrossRepos: async (repos, query, perRepoLimit, options) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return { totalCount: 0, totalPages: 0 }
     }
-    const normalizedLimit = Math.max(1, Math.floor(perRepoLimit))
-    // Why: GitHub 422s pages that start past its 1000-result search window.
-    const maxReachablePages = Math.max(1, Math.ceil(GITHUB_SEARCH_RESULT_WINDOW / normalizedLimit))
     const counts = await Promise.all(
       repos.map(async (r) => {
-        // Why: same stampede cap as item-fetch — without a slot a 90-repo selection fires 90 concurrent count IPCs before the main-side rate-limit guard sees the first 403.
+        // Share fetch admission cap: a 90-repo count otherwise floods main before rate-limit guard observes the first 403.
         await acquireWorkItemSlot()
         try {
           const requestState = get()
@@ -200,7 +196,10 @@ export const createWorkItemAggregateActions = (
             r.path,
             r.sourceContext
           )
-          return await countGitHubWorkItemsForRepo(requestContext, { query: query || undefined })
+          return await countGitHubWorkItemsForRepo(requestContext, {
+            query: query || undefined,
+            ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
+          })
         } catch {
           return 0
         } finally {
@@ -210,12 +209,7 @@ export const createWorkItemAggregateActions = (
     )
     return {
       totalCount: counts.reduce((sum, count) => sum + count, 0),
-      // Why: repos advance independently by page, so take the max across repos — a sum/page-width undercounts when one repo owns most results.
-      totalPages: counts.reduce(
-        (maxPages, count) =>
-          Math.max(maxPages, Math.min(Math.ceil(count / normalizedLimit), maxReachablePages)),
-        0
-      )
+      totalPages: getWorkItemCountedTotalPages(counts, perRepoLimit)
     }
   },
 

@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import { foldToolMessages, pairToolBlocks } from '../../../shared/native-chat-tool-fold'
+import { foldToolMessages } from '../../../shared/native-chat/tools/native-chat-tool-fold'
+import { pairToolBlocks } from '../../../shared/native-chat/tools/native-chat-tool-pairs'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import { prepareLegacyTranscriptImport } from './journal-legacy-import'
@@ -285,6 +286,7 @@ describe('legacy import tool identity', () => {
   ])('pairs Codex singleton %s and %s import records', async (callType, outputType) => {
     const { pairs } = await importRows(
       [
+        { type: 'session_meta', payload: { history_mode: 'paginated' } },
         {
           type: 'response_item',
           payload: {

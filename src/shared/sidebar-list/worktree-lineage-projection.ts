@@ -1,4 +1,5 @@
 import {
+  getCyclicLineageChildKeys,
   getCyclicWorktreeLineageChildIds,
   isValidResolvedWorktreeLineageEdge
 } from '../resolved-worktree-lineage'
@@ -30,16 +31,10 @@ export function getProjectedWorktreeLineage(
 type LineageProjection = {
   cyclicLineageIds?: Set<string>
   childrenByParentId?: Map<string, Worktree[]>
+  sidebarParentByIdentity?: Map<string, Worktree>
 }
 
-/**
- * Why: both projections are O(worktrees) scans that the sidebar row builder and
- * the pinned/attached-children readers re-run several times per pass, and
- * zustand re-runs those on every store write. Both are pure in the two inputs,
- * and both inputs are immutable store-derived collections that are REPLACED
- * rather than mutated, so their identity pair is a sound cache key. Weak on both
- * levels so a superseded lineage record or worktree index is not pinned.
- */
+/** Repeated O(worktrees) projections cache by both immutable input identities. Weak keys avoid retaining replaced store collections. */
 const projectionByLineageAndWorktreeMap = new WeakMap<
   Readonly<Record<string, WorktreeLineage>>,
   WeakMap<ReadonlyMap<string, Worktree>, LineageProjection>
@@ -130,10 +125,7 @@ export function getProjectedWorktreeLineageChildrenByParentId(
   return childrenByParentId
 }
 
-/**
- * Lineage inputs for one execution host. Why: the id-keyed projection keeps one
- * row per id, so a two-host id collision must be narrowed to the target's host.
- */
+/** Narrow to the target host before the id-keyed projection can collapse cross-host collisions. */
 export function getHostScopedWorktreeLineageInputs(
   worktrees: readonly Worktree[],
   lineageById: Readonly<Record<string, WorktreeLineage>>,
@@ -178,10 +170,7 @@ export function getWorktreeLineageAncestors(
   return ancestors
 }
 
-/**
- * The row a worktree nests under in the sidebar: its lineage parent on the worktree's own host,
- * where a row with no host id (older metadata) nests only under a parent with none either.
- */
+/** Nest on the worktree’s own host; legacy rows without host IDs nest only under equally unqualified parents. */
 export function getSidebarLineageParent(
   worktree: Worktree,
   lineageById: Readonly<Record<string, WorktreeLineage>>,
@@ -200,6 +189,34 @@ export function getSidebarLineageParent(
   return parent && isValidResolvedWorktreeLineageEdge(worktree, parent, lineage)
     ? parent
     : undefined
+}
+
+/** Host-keyed nesting parents; cycles have none. Cache assumes callers replace both inputs rather than mutate them. */
+export function getSidebarLineageParentsByIdentity(
+  lineageById: Readonly<Record<string, WorktreeLineage>>,
+  rowsByHostIdentity: ReadonlyMap<string, Worktree>
+): ReadonlyMap<string, Worktree> {
+  const projection = getLineageProjection(lineageById, rowsByHostIdentity)
+  if (projection.sidebarParentByIdentity) {
+    return projection.sidebarParentByIdentity
+  }
+  const parentByIdentity = new Map<string, Worktree>()
+  for (const [identity, row] of rowsByHostIdentity) {
+    const parent = getSidebarLineageParent(row, lineageById, rowsByHostIdentity)
+    if (parent) {
+      parentByIdentity.set(identity, parent)
+    }
+  }
+  const cyclic = getCyclicLineageChildKeys(
+    new Map(
+      [...parentByIdentity].map(([identity, parent]) => [identity, getWorktreeHostIdentity(parent)])
+    )
+  )
+  for (const identity of cyclic) {
+    parentByIdentity.delete(identity)
+  }
+  projection.sidebarParentByIdentity = parentByIdentity
+  return parentByIdentity
 }
 
 /** The rows a worktree nests under in the sidebar, nearest first; a lineage cycle nests nothing. */

@@ -86,7 +86,7 @@ describe('a split pane main already closed', () => {
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 
-  it('collapses a parked tab stored layout once, whichever of notice or exit lands first', () => {
+  it('collapses a parked tab stored layout once for repeated notices', () => {
     parkedWatchersByTabId.set(TAB_ID, {
       worktreeId: 'repo::/worktree',
       tabPtyId: 'pty-closed',

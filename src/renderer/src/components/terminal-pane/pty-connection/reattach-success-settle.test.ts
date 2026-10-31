@@ -2,20 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { bindHandleReattachResult } from './reattach-result-handler'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/**
- * `handleReattachResult` holds the only `success` settle in the recovery state
- * machine. Without it every attempt stays `pending` until the 31s settlement
- * bound ages out, so the entire "observed success" half of the gate — the thing
- * that distinguishes this design from the counting budget it replaces — can be
- * deleted with no other test noticing.
- *
- * Placement is load-bearing too. Settling at the `authoritativeReattachGeneration`
- * bump instead would mark a failure path (`reattach returned no PTY id`) as a
- * success and reopen the loop, so the negative cases below are as important as
- * the positive one.
- */
+/** Success must settle after no-ID/expiry rejection; otherwise healed attempts stay pending for 31s or failed attaches falsely reopen recovery budgets. */
 const mocks = vi.hoisted(() => ({
-  state: { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  state: {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
 }))
 
 vi.mock('@/store', () => ({
@@ -73,40 +67,37 @@ function setPaneTransports(session: ConnectPanePtySession, transports: Map<strin
   }
 }
 
-/**
- * Only the settle is under assertion here; everything downstream of it has its
- * own tests and needs a far larger session bag than this. A throw BEFORE the
- * settle still fails the test, which is the regression this pins.
- */
-async function driveReattach(
-  session: ConnectPanePtySession,
-  result: unknown,
-  staleSessionId?: string | null
-): Promise<void> {
-  try {
-    await session.handleReattachResult(result, staleSessionId)
-  } catch {
-    // See above.
-  }
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.state = { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  mocks.state = {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
 })
 
 describe('handleReattachResult recovery settle', () => {
   it('reports success once the attach payload is authoritative', async () => {
     const { session, settlePaneAttachAttempt } = buildSession()
 
-    await driveReattach(session, { id: 'pty-1', isReattach: true })
+    const afterIdentityCommit = new Error('stop after the authoritative identity commit')
+    session.agentCompletionCoordinator = {
+      ...session.agentCompletionCoordinator,
+      startProcessTracking: vi.fn(() => {
+        throw afterIdentityCommit
+      })
+    }
+
+    await expect(session.handleReattachResult({ id: 'pty-1', isReattach: true })).rejects.toBe(
+      afterIdentityCommit
+    )
 
     expect(settlePaneAttachAttempt).toHaveBeenCalledWith('success')
   })
 
   it('does not report success for a reattach that returned no PTY id', async () => {
-    // Settling this as success would clear the ledger the cold restore is about
-    // to replace, and the chain would restart.
+    // No-ID fallback cannot settle success before cold restore replaces its recovery ledger.
     const { session, settlePaneAttachAttempt } = buildSession({
       transport: {
         getPtyId: () => null,
@@ -116,7 +107,7 @@ describe('handleReattachResult recovery settle', () => {
     })
     setPaneTransports(session, new Map([['pane-1', session.transport]]))
 
-    await driveReattach(session, undefined, null)
+    await expect(session.handleReattachResult(undefined, null)).resolves.toBe(false)
 
     expect(settlePaneAttachAttempt).not.toHaveBeenCalledWith('success')
     expect(session.startFreshColdRestoreAgentResume).toHaveBeenCalledOnce()
@@ -125,7 +116,12 @@ describe('handleReattachResult recovery settle', () => {
   it('does not report success for an expired session', async () => {
     const { session, settlePaneAttachAttempt } = buildSession()
 
-    await driveReattach(session, { id: 'pty-1', sessionExpired: true }, 'pty-old')
+    await expect(
+      session.handleReattachResult({ id: 'pty-1', sessionExpired: true }, 'pty-old')
+    ).resolves.toBe(false)
+
+    expect(session.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith('pty-old')
+    expect(session.startFreshColdRestoreAgentResume).toHaveBeenCalledOnce()
 
     expect(settlePaneAttachAttempt).not.toHaveBeenCalledWith('success')
   })
@@ -134,7 +130,11 @@ describe('handleReattachResult recovery settle', () => {
     const { session, settlePaneAttachAttempt } = buildSession()
     setPaneTransports(session, new Map())
 
-    await driveReattach(session, { id: 'pty-1', isReattach: true })
+    await expect(session.handleReattachResult({ id: 'pty-1', isReattach: true })).resolves.toBe(
+      false
+    )
+
+    expect(session.authoritativeReattachGeneration).toBe(0)
 
     expect(settlePaneAttachAttempt).not.toHaveBeenCalled()
   })

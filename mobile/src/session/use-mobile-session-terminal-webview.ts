@@ -1,5 +1,6 @@
-import { pendingSelectionHandle, pendingSelectionWantsHandle } from './pending-session-selection'
-import { useEffect, useCallback } from 'react'
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
+import { pendingSelectionWantsHandle } from './pending-session-selection'
+import { useEffect, useCallback, useRef } from 'react'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
@@ -17,6 +18,17 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     terminalDiagnosticsRef,
     webReadyHandlesRef,
     activeHandleRef,
+    activeHandle,
+    terminals,
+    setSplitTerminalHandles,
+    visibleTerminalHandles,
+    visibleTerminalHandlesRef,
+    getTerminalPaneViewport,
+    terminalPaneViewportsRef,
+    connState,
+    showNativeChat,
+    switchTab,
+    handleTerminalTap: focusTerminalTap,
     pendingSelectionRef,
     activeSessionTab,
     unsubscribeTerminal,
@@ -28,7 +40,14 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     notifyTerminalFrameHeight,
     notifyTerminalFrameWidth
   } = scope
-  // Why: only store the ref; subscribe on web-ready to avoid the blank-terminal race (init queued before xterm.js loaded).
+  const sendTerminalUserInput = useCallback<typeof terminalInputSend.request>(
+    (client, params, options) => {
+      terminalRefs.current.get(params.terminal)?.scrollToBottom()
+      return terminalInputSend.request(client, params, options)
+    },
+    [terminalRefs]
+  )
+  // Store the ref but subscribe only after web-ready so init cannot precede xterm loading.
   const setTerminalWebViewRef = useCallback((handle: string, ref: TerminalWebViewHandle | null) => {
     terminalDiagnosticsRef.current.webViewRef(handle, ref != null)
     if (ref) {
@@ -45,6 +64,16 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     }
   }, [])
 
+  useEffect(() => {
+    // Imperative handles change without layout events; inventory removal owns geometry cleanup.
+    const liveHandles = new Set(terminals.map((terminal) => terminal.handle))
+    for (const handle of terminalPaneViewportsRef.current.keys()) {
+      if (!liveHandles.has(handle)) {
+        terminalPaneViewportsRef.current.delete(handle)
+      }
+    }
+  }, [terminals, terminalPaneViewportsRef])
+
   const handleTerminalWebReady = useCallback(
     (handle: string) => {
       const wasAlreadyReady = webReadyHandlesRef.current.has(handle)
@@ -56,18 +85,17 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         handle === activeHandleRef.current
       )
       if (wasAlreadyReady && initializedHandlesRef.current.has(handle)) {
-        // Why: WebView reloaded (hot reload / Android churn); old xterm buffer is gone, so resubscribe for a fresh scrollback.
+        // Reload loses the xterm buffer; request fresh scrollback.
         unsubscribeTerminal(handle)
-        if (handle === activeHandleRef.current) {
+        if (visibleTerminalHandlesRef.current.includes(handle)) {
           subscribeToTerminal(handle)
         }
         return
       }
-      // Why: a just-created tab can lose activeHandleRef to a lagging snapshot; honor the pending marker so its web-ready subscribe still fires.
+      // Lagging snapshots can clear a new tab’s active handle; its pending marker still authorizes ready subscribe.
       const isIntendedActive =
-        handle === activeHandleRef.current ||
+        visibleTerminalHandlesRef.current.includes(handle) ||
         pendingSelectionWantsHandle(pendingSelectionRef.current, handle)
-      // Why: web-ready carried the cell box xterm laid out, so subscribeToTerminal sizes this subscribe.
       if (isIntendedActive && !terminalUnsubsRef.current.has(handle)) {
         subscribeToTerminal(handle)
       }
@@ -75,38 +103,112 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     [nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
   )
 
-  const subscribeIntendedActiveTerminal = useCallback(() => {
-    const handle = pendingSelectionHandle(pendingSelectionRef.current) ?? activeHandleRef.current
-    if (handle && !terminalUnsubsRef.current.has(handle)) {
-      subscribeToTerminal(handle)
-    }
-  }, [activeHandleRef, pendingSelectionRef, subscribeToTerminal, terminalUnsubsRef])
-
-  /** The terminal frame React Native laid out: kept in the one frame ref, then what it changed. */
   const notifyTerminalFrame = useCallback(
     (frame: TerminalFrame) => {
-      // Why: notify height imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
-      notifyTerminalFrameHeight(Math.round(frame.height))
-      // Why: the page reports a hidden frame as 0x0; it keeps the box it was laid out at.
-      if (frame.width <= 0) {
+      terminalFrameRef.current = frame
+    },
+    [terminalFrameRef]
+  )
+
+  const notifyTerminalPaneFrame = useCallback(
+    (handle: string, frame: TerminalFrame) => {
+      if (frame.width <= 0 || frame.height <= 0) {
         return
       }
-      const previous = terminalFrameRef.current
-      terminalFrameRef.current = frame
-      if (!previous) {
-        // Why: a ready document held back for its frame subscribes on the first layout.
-        subscribeIntendedActiveTerminal()
-      } else if (frame.width !== previous.width) {
-        notifyTerminalFrameWidth()
+      const state = getTerminalPaneViewport(handle)
+      const previous = state.terminalFrameRef.current
+      state.terminalFrameRef.current = frame
+      if (!previous || previous.width !== frame.width || previous.height !== frame.height) {
+        state.viewportMeasuredRef.current = false
+        if (visibleTerminalHandlesRef.current.includes(handle)) {
+          if (!terminalUnsubsRef.current.has(handle)) {
+            subscribeToTerminal(handle)
+          }
+          notifyTerminalFrameHeight(Math.round(frame.height))
+          if (previous && previous.width !== frame.width) {
+            notifyTerminalFrameWidth()
+          }
+        }
       }
     },
     [
+      getTerminalPaneViewport,
       notifyTerminalFrameHeight,
       notifyTerminalFrameWidth,
-      subscribeIntendedActiveTerminal,
-      terminalFrameRef
+      subscribeToTerminal
     ]
   )
+
+  const canSplitTerminals =
+    !!activeHandle &&
+    terminals.some((terminal) => terminal.handle !== activeHandle) &&
+    !showNativeChat
+  const terminalSplitActive = !showNativeChat && visibleTerminalHandles.length === 2
+  const toggleTerminalSplit = useCallback(() => {
+    if (terminalSplitActive) {
+      setSplitTerminalHandles(null)
+      return
+    }
+    const companion = terminals.find((terminal) => terminal.handle !== activeHandle)
+    if (activeHandle && companion) {
+      setSplitTerminalHandles([activeHandle, companion.handle])
+    }
+  }, [activeHandle, terminalSplitActive, setSplitTerminalHandles, terminals])
+
+  const focusFrameRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null)
+  const handleTerminalInteraction = useCallback(
+    (handle: string) => {
+      if (!visibleTerminalHandlesRef.current.includes(handle)) {
+        return
+      }
+      if (focusFrameRef.current !== null) {
+        cancelAnimationFrame(focusFrameRef.current)
+        focusFrameRef.current = null
+      }
+      if (activeHandleRef.current !== handle) {
+        switchTab(handle)
+      }
+    },
+    [switchTab]
+  )
+  const handleTerminalTap = useCallback(
+    (handle: string) => {
+      if (!visibleTerminalHandlesRef.current.includes(handle)) {
+        return
+      }
+      handleTerminalInteraction(handle)
+      focusFrameRef.current = requestAnimationFrame(() => {
+        focusFrameRef.current = null
+        if (activeHandleRef.current === handle) {
+          focusTerminalTap(handle)
+        }
+      })
+    },
+    [focusTerminalTap, handleTerminalInteraction]
+  )
+  useEffect(
+    () => () => {
+      if (focusFrameRef.current !== null) {
+        cancelAnimationFrame(focusFrameRef.current)
+      }
+    },
+    []
+  )
+
+  const visibleKey = visibleTerminalHandles.join('\0')
+  useEffect(() => {
+    const visible = visibleTerminalHandlesRef.current
+    for (const handle of terminalUnsubsRef.current.keys()) {
+      if (!visible.includes(handle)) {
+        unsubscribeTerminal(handle)
+      }
+    }
+    if (connState === 'connected') {
+      for (const handle of visible) {
+        subscribeToTerminal(handle)
+      }
+    }
+  }, [visibleKey, connState, subscribeToTerminal, unsubscribeTerminal])
 
   useEffect(() => {
     if (activeSessionTab?.type !== 'markdown') {
@@ -128,9 +230,16 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     }
   }, [activeSessionTab, fileDocs, readFileTab])
   return {
+    sendTerminalUserInput,
     setTerminalWebViewRef,
     handleTerminalWebReady,
-    notifyTerminalFrame
+    notifyTerminalFrame,
+    notifyTerminalPaneFrame,
+    canSplitTerminals,
+    terminalSplitActive,
+    toggleTerminalSplit,
+    handleTerminalInteraction,
+    handleTerminalTap
   }
 }
 
