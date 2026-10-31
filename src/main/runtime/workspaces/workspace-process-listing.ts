@@ -11,6 +11,7 @@ import { DEFAULT_WORKTREE_PS_LIMIT } from '../orca-runtime-postlude'
 import type { RuntimeWorktreePsResult } from '../../../shared/runtime-types'
 import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from '../runtime-worktree-ps-summaries'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import {
   buildRuntimeWorktreeSummaryPathIndex,
   createRuntimeWorktreePsSummaryLookup
@@ -83,7 +84,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     const summaries = buildRuntimeWorktreePsSummaries({
       store: this.store,
       resolvedWorktrees,
-      platformByRepoId
+      platformByRepoId,
+      windowless: this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
     })
 
     const getSummary = createRuntimeWorktreePsSummaryLookup(

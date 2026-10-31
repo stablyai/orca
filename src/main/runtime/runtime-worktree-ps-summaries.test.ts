@@ -266,4 +266,53 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     expect(summary?.automationCreated).toBe(true)
     expect(summary).not.toHaveProperty('automationName')
   })
+
+  it('drops a windowless host’s stale Smart order but keeps each row’s Manual rank', () => {
+    const row = (path: string) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only these fields for a git row.
+      ({
+        id: `repo-1::${path}`,
+        repoId: 'repo-1',
+        path,
+        branch: 'feature',
+        isArchived: false,
+        isMainWorktree: false,
+        parentWorktreeId: null,
+        childWorktreeIds: [],
+        lineage: null,
+        lastActivityAt: 0
+      }) as unknown as ResolvedWorktree
+    const ranked = row('/workspace/ranked')
+    const legacy = row('/workspace/legacy')
+    const meta: Record<string, { sortOrder: number; manualOrder?: number }> = {
+      [ranked.id]: { sortOrder: 9, manualOrder: 3 },
+      [legacy.id]: { sortOrder: 7 }
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the summary builder reads only these store methods.
+    const store = {
+      getRepos: () => [],
+      getWorktreeMeta: (id: string) => meta[id],
+      getAllWorktreeMeta: () => meta,
+      getFolderWorkspaces: () => [],
+      getProjectGroups: () => []
+    } as unknown as RuntimeStore
+    const orders = (windowless: boolean) =>
+      [
+        ...buildRuntimeWorktreePsSummaries({
+          store,
+          resolvedWorktrees: [ranked, legacy],
+          platformByRepoId: new Map(),
+          windowless
+        }).values()
+      ].map(({ sortOrder, manualOrder }) => ({ sortOrder, manualOrder }))
+
+    expect(orders(false)).toEqual([
+      { sortOrder: 9, manualOrder: 3 },
+      { sortOrder: 7, manualOrder: undefined }
+    ])
+    expect(orders(true)).toEqual([
+      { sortOrder: 0, manualOrder: 3 },
+      { sortOrder: 0, manualOrder: 7 }
+    ])
+  })
 })

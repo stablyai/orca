@@ -15,7 +15,11 @@ export function buildRuntimeWorktreePsSummaries(args: {
   store: RuntimeStore | null
   resolvedWorktrees: readonly ResolvedWorktree[]
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
+  /** No window keeps its saved Smart order current, so Smart must fall to live status and Recent. */
+  windowless?: boolean
 }): Map<string, RuntimeWorktreePsSummary> {
+  // Switch point: main's sort stamps rank Smart then, and readers ignore sortOrder.
+  const omitSavedSmartOrder = !ORCA_SIDEBAR_INPUTS_IS_MAIN && args.windowless === true
   const summaries = new Map<string, RuntimeWorktreePsSummary>()
   const ghCache = args.store?.getGitHubCache?.()
   for (const { worktree, repo } of withOwnerRepos(
@@ -66,8 +70,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       childWorktreeIds: worktree.childWorktreeIds,
       displayName: worktree.displayName,
       workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-      sortOrder: meta?.sortOrder ?? 0,
-      ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
+      ...orderSummaryFields(meta?.sortOrder, meta?.manualOrder, omitSavedSmartOrder),
       lastActivityAt: worktree.lastActivityAt,
       ...sortStampSummaryFields(worktree),
       ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
@@ -116,8 +119,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       childWorktreeIds: [],
       displayName: worktree.displayName,
       workspaceStatus: worktree.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-      sortOrder: worktree.sortOrder ?? 0,
-      ...(worktree.manualOrder !== undefined ? { manualOrder: worktree.manualOrder } : {}),
+      ...orderSummaryFields(worktree.sortOrder, worktree.manualOrder, omitSavedSmartOrder),
       lastActivityAt: worktree.lastActivityAt,
       ...sortStampSummaryFields(worktree),
       ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
@@ -142,6 +144,19 @@ export function buildRuntimeWorktreePsSummaries(args: {
     })
   }
   return summaries
+}
+
+// Readers rank Manual by manualOrder ?? sortOrder, so the saved order moves there to keep Manual stable.
+function orderSummaryFields(
+  sortOrder: number | undefined,
+  manualOrder: number | undefined,
+  omitSavedSmartOrder = false
+): Pick<RuntimeWorktreePsSummary, 'sortOrder' | 'manualOrder'> {
+  const manual = omitSavedSmartOrder ? (manualOrder ?? sortOrder) : manualOrder
+  return {
+    sortOrder: omitSavedSmartOrder ? 0 : (sortOrder ?? 0),
+    ...(manual !== undefined ? { manualOrder: manual } : {})
+  }
 }
 
 function sortStampSummaryFields(
