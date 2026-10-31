@@ -5,6 +5,10 @@ import { getNextSourceControlViewMode } from './header-toolbar'
 import { normalizeSourceControlViewMode } from '../commit/commit-drafts'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
+import {
+  getSessionSourceControlHistoryExpanded,
+  setSessionSourceControlHistoryExpanded
+} from '../../source-control-history-layout'
 
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
 
@@ -15,10 +19,21 @@ function createDefaultCollapsedSections(): Set<string> {
 // Preserve per-worktree disclosure across sidebar-tab unmounts for this renderer session.
 const collapsedSectionsByWorktree = new BoundedMap<string, Set<string>>({ maxEntries: 512 })
 
+function applySessionHistoryExpanded(sections: Set<string>): Set<string> {
+  const next = new Set(sections)
+  // Why: COMMITS expand is a session layout preference, not worktree-local draft state.
+  if (getSessionSourceControlHistoryExpanded()) {
+    next.delete('history')
+  } else {
+    next.add('history')
+  }
+  return next
+}
+
 function readCollapsedSections(worktreeId: string | null): Set<string> {
-  return (
+  return applySessionHistoryExpanded(
     (worktreeId ? collapsedSectionsByWorktree.get(worktreeId) : undefined) ??
-    createDefaultCollapsedSections()
+      createDefaultCollapsedSections()
   )
 }
 
@@ -78,6 +93,9 @@ export function useSourceControlPanelViewState({
         next.delete(section)
       } else {
         next.add(section)
+      }
+      if (section === 'history') {
+        setSessionSourceControlHistoryExpanded(!next.has('history'))
       }
       setCollapsedSections(next)
       if (activeWorktreeId) {
