@@ -190,7 +190,11 @@
       "cancelEditing": "Annuler la modification",
       "placeholder": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",
       "saveEditedMessage": "Enregistrer le message modifié",
-      "sendMessage": "Envoyer le message"
+      "sendMessage": "Envoyer le message",
+      "sendQueue": "Mettre en file d’attente",
+      "sendSteer": "Envoyer maintenant",
+      "sendQueueHint": "S’exécute après le tour en cours",
+      "sendSteerHint": "S’ajoute à ce que l’agent fait en ce moment"
     },
     "composerAttachments": {
       "attachedImage": "Image jointe",

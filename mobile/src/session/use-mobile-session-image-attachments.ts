@@ -1,7 +1,10 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
-import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import type {
+  MobileNativeChatSendIntent,
+  MobileNativeChatSendOutcome
+} from './native-chat/mobile-native-chat-send'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import {
@@ -35,7 +38,8 @@ type Args = {
     images?: string[],
     deadline?: number,
     attachments?: readonly StructuredMobileSendAttachment[],
-    sentAt?: number
+    sentAt?: number,
+    intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
   readonly structuredNativeChat: boolean
   readonly nativeChatSessionId: string | null
