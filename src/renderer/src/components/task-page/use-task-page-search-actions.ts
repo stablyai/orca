@@ -13,6 +13,7 @@ import type { GitHubTaskKind } from '@/components/task-page/task-page-localized-
 import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { useAppStore } from '@/store'
 export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel) {
   const {
     setTaskResumeState,
@@ -196,7 +197,13 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     const onKeyDown = (event: KeyboardEvent): void => {
       const isMac = navigator.userAgent.includes('Mac')
       const modifierPressed = isMac ? event.metaKey : event.ctrlKey
-      if (!modifierPressed || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') {
+      if (
+        useAppStore.getState().activeView !== 'tasks' ||
+        !modifierPressed ||
+        event.altKey ||
+        event.shiftKey ||
+        event.key.toLowerCase() !== 'f'
+      ) {
         return
       }
       const input = taskSearchInputRef.current
