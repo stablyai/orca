@@ -15,6 +15,8 @@ import { HideSidebarMenu } from './sidebar-nav-controls'
 import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { useLeftNavigationPluginPanels } from '@/store/plugin-panels'
+import { resolvePluginPanelIcon } from '@/components/right-sidebar/plugin-panel-activity-items'
 
 export function shouldShowMobileButton(
   settings: Partial<Pick<GlobalSettings, 'showMobileButton'>> | null | undefined
@@ -48,6 +50,7 @@ export function shouldShowAgentDashboardButton(
 
 const AgentDashboardSidebarEntry = lazyWithRetry(() => import('./AgentDashboardSidebarEntry'))
 
+/** Keep revocable plugin pages separate from built-ins and the workspace viewport. */
 const SidebarNav = React.memo(function SidebarNav() {
   // Subscribe across this memo boundary; translate still handles pseudo-localization.
   useTranslation()
@@ -59,6 +62,10 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const activeView = useAppStore((s) => s.activeView)
+  const setActiveView = useAppStore((s) => s.setActiveView)
+  const recordViewVisit = useAppStore((s) => s.recordViewVisit)
+  const pluginPanels = useLeftNavigationPluginPanels()
+  const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const showAgentDashboardButton = useAppStore((s) => shouldShowAgentDashboardButton(s.settings))
   const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
@@ -175,6 +182,44 @@ const SidebarNav = React.memo(function SidebarNav() {
           </ContextMenuTrigger>
           <HideSidebarMenu onHide={hideSkillsButton} />
         </ContextMenu>
+      ) : null}
+      {pluginSystemEnabled && pluginPanels.length > 0 ? (
+        <div
+          data-plugin-navigation
+          className="worktree-sidebar-scrollbar max-h-[min(20vh,8rem)] min-h-0 overflow-y-auto"
+        >
+          <div className="flex flex-col gap-0.5">
+            {pluginPanels.map((panel) => {
+              const Icon = resolvePluginPanelIcon(panel.icon)
+              const active = activeView === panel.tabKey
+              return (
+                <button
+                  key={panel.tabKey}
+                  type="button"
+                  onClick={() => {
+                    recordViewVisit(panel.tabKey)
+                    setActiveView(panel.tabKey)
+                  }}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+                    active
+                      ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                      : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      'size-4 shrink-0',
+                      !active && 'text-worktree-sidebar-foreground/30'
+                    )}
+                  />
+                  <span className="flex-1 truncate">{panel.title}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
       ) : null}
       {showAutomationsButton ? (
         <ContextMenu>

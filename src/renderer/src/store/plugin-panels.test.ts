@@ -5,6 +5,9 @@ import type { PluginHostListEntry } from '../../../preload/api-types'
 import {
   collectActivePluginCommands,
   collectEditablePluginCommands,
+  collectActivePluginPanels,
+  collectLeftNavigationPluginPanels,
+  collectRightSidebarPluginPanels,
   usePluginPanelsStore
 } from './plugin-panels'
 
@@ -36,6 +39,45 @@ afterEach(() => {
 })
 
 describe('plugin panel list loading', () => {
+  it('partitions active panels by placement and keeps older hosts in the right sidebar', () => {
+    const panels = [
+      {
+        id: 'main',
+        title: 'Dashboard',
+        tabKey: 'plugin:samples.a/main' as const,
+        placement: 'left-navigation' as const
+      },
+      {
+        id: 'side',
+        title: 'Dashboard',
+        tabKey: 'plugin:samples.a/side' as const,
+        placement: 'right-sidebar' as const
+      },
+      { id: 'legacy', title: 'Dashboard', tabKey: 'plugin:samples.a/legacy' as const }
+    ]
+    const enabled = { ...plugin('samples.a'), panels }
+    const disabled = {
+      ...plugin('samples.b'),
+      status: 'disabled' as const,
+      panels: [{ ...panels[0]!, tabKey: 'plugin:samples.b/main' as const }]
+    }
+    const entries = [enabled, disabled]
+
+    expect(collectActivePluginPanels(entries).map((panel) => panel.tabKey)).toEqual([
+      'plugin:samples.a/main',
+      'plugin:samples.a/side',
+      'plugin:samples.a/legacy'
+    ])
+    expect(collectLeftNavigationPluginPanels(entries).map((panel) => panel.tabKey)).toEqual([
+      'plugin:samples.a/main'
+    ])
+    expect(collectRightSidebarPluginPanels(entries).map((panel) => panel.tabKey)).toEqual([
+      'plugin:samples.a/side',
+      'plugin:samples.a/legacy'
+    ])
+    expect(collectLeftNavigationPluginPanels([{ ...enabled, needsReconsent: true }])).toEqual([])
+  })
+
   it('collects commands only from enabled plugin states', () => {
     const enabled = {
       ...plugin('samples.enabled'),

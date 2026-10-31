@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
+import { PLUGIN_MANIFEST_V2_SINCE, PLUGIN_PANEL_PLACEMENT_SINCE } from './plugin-schema-field-docs'
 import {
   PLUGIN_COMMAND_LIMIT,
   PLUGIN_ID_MAX_LENGTH,
+  parseHostPluginManifest,
   parsePluginManifest,
   pluginManifestSchema,
   satisfiesOrcaEngineRange
@@ -24,6 +25,24 @@ function manifest(overrides: Record<string, unknown> = {}): Record<string, unkno
 }
 
 describe('pluginManifestSchema boundaries', () => {
+  it('gates placement in legacy format without raising its other field floors', () => {
+    const panel = { id: 'p', title: 'P', entry: 'panel.html', placement: 'left-navigation' }
+    expect(parsePluginManifest(manifest({ contributes: { panels: [panel] } }))).toEqual({
+      ok: false,
+      error: `engines.orca: must be at least >=${PLUGIN_PANEL_PLACEMENT_SINCE}, because contributes.panels[0].placement needs Orca ${PLUGIN_PANEL_PLACEMENT_SINCE}`
+    })
+    expect(
+      parsePluginManifest(
+        manifest({
+          engines: { orca: `>=${PLUGIN_PANEL_PLACEMENT_SINCE}` },
+          contributes: { panels: [panel] }
+        })
+      )
+    ).toMatchObject({ ok: true })
+    expect(parseHostPluginManifest(manifest({ contributes: { panels: [panel] } }))).toMatchObject({
+      ok: true
+    })
+  })
   it('reads format 1 names as their renamed successors', () => {
     const result = parsePluginManifest(
       manifest({

@@ -4,6 +4,7 @@ import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-man
 import {
   pluginPathFieldDoc,
   pluginFieldDoc,
+  PLUGIN_PANEL_PLACEMENT_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
 
@@ -73,6 +74,16 @@ export const pluginPanelContributionSchema = z
           'Icon shown in the right-sidebar activity bar. Defaults to `plug`.',
           PLUGIN_SCHEMA_SINCE_V1,
           ['database']
+        )
+      ),
+    placement: z
+      .enum(['right-sidebar', 'left-navigation'])
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          'Where Orca shows the panel. Defaults to `right-sidebar`; `left-navigation` opens a full page from the left navigation.',
+          PLUGIN_PANEL_PLACEMENT_SINCE,
+          ['left-navigation']
         )
       ),
     entry: pluginRelativePathSchema.meta(

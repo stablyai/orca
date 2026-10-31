@@ -149,7 +149,10 @@ export function ensurePluginPanelsLoaded(): void {
 
 /** Enabled and consented, whether or not a worker runs: its contributions are offered. */
 export function isLivePlugin(plugin: PluginHostListEntry): boolean {
-  return plugin.status === 'running' || plugin.status === 'restarting' || plugin.status === 'idle'
+  return (
+    !plugin.needsReconsent &&
+    (plugin.status === 'running' || plugin.status === 'restarting' || plugin.status === 'idle')
+  )
 }
 
 /** A contribution tagged with the plugin it came from. */
@@ -192,6 +195,20 @@ export function collectActivePluginPanels(
     .flatMap((plugin) => plugin.panels.map((panel) => fromPlugin(plugin, panel)))
 }
 
+/** Missing placement is the legacy right-sidebar contract used by older paired hosts. */
+export function collectRightSidebarPluginPanels(
+  plugins: readonly PluginHostListEntry[]
+): ActivePluginPanel[] {
+  return collectActivePluginPanels(plugins).filter((panel) => panel.placement !== 'left-navigation')
+}
+
+/** Main-page navigation requires an explicit placement from a live, consented plugin. */
+export function collectLeftNavigationPluginPanels(
+  plugins: readonly PluginHostListEntry[]
+): ActivePluginPanel[] {
+  return collectActivePluginPanels(plugins).filter((panel) => panel.placement === 'left-navigation')
+}
+
 /** Installed keys normalize persisted routes: remove uninstalled panels, retain merely disabled ones. */
 export function collectInstalledPluginTabKeys(
   plugins: readonly PluginHostListEntry[]
@@ -218,6 +235,14 @@ export function collectEditablePluginCommands(
 /** Panel contributions of enabled plugins, loading the list on first use. */
 export function usePluginPanels(): ActivePluginPanel[] {
   return usePluginListDerived(collectActivePluginPanels)
+}
+
+export function useRightSidebarPluginPanels(): ActivePluginPanel[] {
+  return usePluginListDerived(collectRightSidebarPluginPanels)
+}
+
+export function useLeftNavigationPluginPanels(): ActivePluginPanel[] {
+  return usePluginListDerived(collectLeftNavigationPluginPanels)
 }
 
 /** Commands of enabled plugins, sharing the authoritative plugin-list refresh. */

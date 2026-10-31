@@ -10,6 +10,8 @@ export type PluginHostPanel = {
   title: string
   /** Lucide icon name declared in the plugin manifest. */
   icon?: string
+  /** Absent on older hosts, where panels always use the right sidebar. */
+  placement?: 'right-sidebar' | 'left-navigation'
   tabKey: `plugin:${string}`
 }
 

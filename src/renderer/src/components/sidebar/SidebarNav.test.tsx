@@ -11,26 +11,36 @@ import type { Repo } from '../../../../shared/repo-types'
 import { i18n } from '../../i18n/i18n'
 import { PSEUDO_LOCALIZATION_LOCALE } from '../../i18n/pseudo-localization'
 
-const mocks = vi.hoisted(() => ({
-  state: {} as Record<string, unknown>,
-  openTaskPage: vi.fn(),
-  openAutomationsPage: vi.fn(),
-  openActivityPage: vi.fn(),
-  openMobilePage: vi.fn(),
-  openArtifactsPage: vi.fn(),
-  openModal: vi.fn(),
-  updateSettings: vi.fn(),
-  refreshPreflightStatus: vi.fn(),
-  checkLinearConnection: vi.fn(),
-  hasPairedMobileDevice: false,
-  agentBucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
-  getAgentBucketCounts: vi.fn(),
-  dismissMobileOnboardingBadge: vi.fn(),
-  setSetupGuideSidebarDismissed: vi.fn()
-}))
+const mocks = vi.hoisted(() => {
+  const pluginPanels: { tabKey: `plugin:${string}`; title: string; icon?: string }[] = []
+  return {
+    state: {} as Record<string, unknown>,
+    openTaskPage: vi.fn(),
+    openAutomationsPage: vi.fn(),
+    openActivityPage: vi.fn(),
+    openMobilePage: vi.fn(),
+    openArtifactsPage: vi.fn(),
+    openModal: vi.fn(),
+    setActiveView: vi.fn(),
+    recordViewVisit: vi.fn(),
+    pluginPanels,
+    updateSettings: vi.fn(),
+    refreshPreflightStatus: vi.fn(),
+    checkLinearConnection: vi.fn(),
+    hasPairedMobileDevice: false,
+    agentBucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
+    getAgentBucketCounts: vi.fn(),
+    dismissMobileOnboardingBadge: vi.fn(),
+    setSetupGuideSidebarDismissed: vi.fn()
+  }
+})
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector(mocks.state)
+}))
+
+vi.mock('@/store/plugin-panels', () => ({
+  useLeftNavigationPluginPanels: () => mocks.pluginPanels
 }))
 
 vi.mock('@/store/selectors', () => ({
@@ -116,7 +126,7 @@ function folderRepo(): Repo {
 }
 
 function setSidebarState({
-  settings = getDefaultSettings('/tmp'),
+  settings = { ...getDefaultSettings('/tmp'), pluginSystemEnabled: true },
   repos = [gitRepo()]
 }: {
   settings?: GlobalSettings
@@ -132,6 +142,8 @@ function setSidebarState({
     openMobilePage: mocks.openMobilePage,
     openArtifactsPage: mocks.openArtifactsPage,
     openModal: mocks.openModal,
+    setActiveView: mocks.setActiveView,
+    recordViewVisit: mocks.recordViewVisit,
     updateSettings: mocks.updateSettings,
     preflightStatus: { glab: { installed: false } },
     preflightStatusChecked: true,
@@ -213,6 +225,7 @@ describe('SidebarNav', () => {
     await i18n.changeLanguage('en')
     mocks.hasPairedMobileDevice = false
     mocks.agentBucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
+    mocks.pluginPanels = []
     setSidebarState()
   })
 
@@ -221,6 +234,63 @@ describe('SidebarNav', () => {
 
     expect(queryButtonByText(container, 'Agent Dashboard')).toBeNull()
     expect(mocks.getAgentBucketCounts).not.toHaveBeenCalled()
+  })
+
+  it('routes duplicate panel titles by their distinct tab keys', async () => {
+    mocks.pluginPanels = [
+      { tabKey: 'plugin:samples.one/dashboard', title: 'Dashboard' },
+      { tabKey: 'plugin:samples.two/dashboard', title: 'Dashboard' }
+    ]
+    mocks.state.activeView = 'plugin:samples.two/dashboard'
+    const container = await renderSidebarNav()
+    const entries = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).filter(
+      (button) => button.textContent?.trim() === 'Dashboard'
+    )
+
+    expect(entries).toHaveLength(2)
+    expect(entries[0]?.getAttribute('aria-current')).toBeNull()
+    expect(entries[1]?.getAttribute('aria-current')).toBe('page')
+    await clickButton(entries[0]!)
+    expect(mocks.recordViewVisit).toHaveBeenCalledWith('plugin:samples.one/dashboard')
+    expect(mocks.setActiveView).toHaveBeenCalledWith('plugin:samples.one/dashboard')
+  })
+
+  it('hides cached plugin entries while the plugin system is disabled', async () => {
+    mocks.pluginPanels = [{ tabKey: 'plugin:samples.one/dashboard', title: 'Dashboard' }]
+    setSidebarState({
+      settings: { ...getDefaultSettings('/tmp'), pluginSystemEnabled: false }
+    })
+    const container = await renderSidebarNav()
+    expect(queryButtonByText(container, 'Dashboard')).toBeNull()
+    expect(queryButtonByText(container, 'Automations')).not.toBeNull()
+  })
+
+  it('keeps 64 plugin panels in a bounded scroll region without swallowing built-in navigation', async () => {
+    mocks.pluginPanels = Array.from({ length: 64 }, (_, index) => ({
+      tabKey: `plugin:samples.one/panel-${index}`,
+      title: `Panel ${index}`
+    }))
+    const container = await renderSidebarNav()
+    const pluginNavigation = container.querySelector('[data-plugin-navigation]')
+
+    expect(pluginNavigation).not.toBeNull()
+    expect(pluginNavigation?.className).toContain('max-h-[min(20vh,8rem)]')
+    expect(pluginNavigation?.className).toContain('overflow-y-auto')
+    expect(pluginNavigation?.className).toContain('worktree-sidebar-scrollbar')
+    expect(pluginNavigation?.querySelectorAll('button')).toHaveLength(64)
+    expect(
+      pluginNavigation?.contains(
+        container.querySelector('button[aria-label="Search worktrees and browser tabs"]')
+      )
+    ).toBe(false)
+    expect(pluginNavigation?.contains(getButtonByText(container, 'Automations'))).toBe(false)
+    expect(pluginNavigation?.contains(getButtonByText(container, 'Orca Mobile'))).toBe(false)
+
+    const lastPanel = getButtonByText(pluginNavigation!, 'Panel 63')
+    lastPanel.focus()
+    expect(document.activeElement).toBe(lastPanel)
+    await clickButton(lastPanel)
+    expect(mocks.setActiveView).toHaveBeenCalledWith('plugin:samples.one/panel-63')
   })
 
   it('mounts the Agent Dashboard row only when its experiment is enabled', async () => {

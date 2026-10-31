@@ -18992,6 +18992,10 @@
             "openWith": "Open with (when focus is not in an editable field)"
           }
         },
+        "PluginMainPage": {
+          "close": "Close plugin page",
+          "unavailableTitle": "Plugin page"
+        },
         "pluginInstallCount": {
           "installs": "{{value0}} installs"
         }

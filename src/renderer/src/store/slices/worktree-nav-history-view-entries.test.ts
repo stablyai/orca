@@ -6,6 +6,8 @@ import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { usePluginPanelsStore } from '../plugin-panels'
+import { getDefaultSettings } from '../../../../shared/constants'
 import {
   createWorktreeNavHistorySlice,
   findPrevLiveWorktreeHistoryIndex,
@@ -24,6 +26,7 @@ type MinimalState = Pick<
   | 'goBackWorktree'
   | 'goForwardWorktree'
   | 'worktreesByRepo'
+  | 'settings'
 >
 
 function makeWorktree(id: string): Worktree {
@@ -105,7 +108,57 @@ describe('worktree-nav-history slice: view entries', () => {
   afterEach(() => {
     setWorktreeNavActivator(null)
     setWorktreeNavViewActivator(null)
+    usePluginPanelsStore.getState().setPlugins([])
   })
+
+  it.each(['global setting', 'plugin list'])(
+    'replays a live plugin page and skips it after disabling through %s',
+    (disabledThrough) => {
+      const key = 'plugin:samples.one/dashboard'
+      usePluginPanelsStore.getState().setPlugins([
+        {
+          pluginKey: 'samples.one',
+          consentFingerprint: 'sha256-test',
+          name: 'Sample',
+          version: '1.0.0',
+          publisher: 'samples',
+          status: 'idle',
+          needsReconsent: false,
+          isDev: false,
+          official: false,
+          bundled: false,
+          capabilities: [],
+          panels: [
+            { id: 'dashboard', tabKey: key, title: 'Dashboard', placement: 'left-navigation' }
+          ],
+          commands: [],
+          hasWorker: false,
+          restarts: 0
+        }
+      ])
+      const store = createHistoryStore(['a', 'b'])
+      store.setState({ settings: { ...getDefaultSettings('/tmp'), pluginSystemEnabled: true } })
+      const viewed: string[] = []
+      setWorktreeNavViewActivator((entry) => viewed.push(String(entry)))
+      setWorktreeNavActivator(() => true)
+      store.getState().recordWorktreeVisit('a')
+      store.getState().recordViewVisit(key)
+      store.getState().recordWorktreeVisit('b')
+      store.getState().goBackWorktree()
+      expect(viewed).toEqual([key])
+      store.getState().goForwardWorktree()
+      if (disabledThrough === 'global setting') {
+        store.setState({
+          settings: { ...getDefaultSettings('/tmp'), pluginSystemEnabled: false }
+        })
+      } else {
+        usePluginPanelsStore.getState().setPlugins([])
+      }
+      store.getState().goBackWorktree()
+      expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+      expect(viewed).toEqual([key])
+    }
+  )
 
   for (const { entry, label } of viewCases) {
     it(`A -> ${label} -> B, back lands on ${label} then A`, () => {
