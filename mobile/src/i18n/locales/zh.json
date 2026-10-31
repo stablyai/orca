@@ -48,12 +48,10 @@
       "untitledSession": "无标题会话"
     },
     "sessionHistoryList": {
-      "assistantRole": "助手",
       "currentWorktree": "当前工作树",
       "messages_one": "{{count}} 条消息",
       "messages_other": "{{count}} 条消息",
-      "resumeSession": "恢复智能体会话",
-      "userRole": "用户"
+      "resumeSession": "恢复智能体会话"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "无法连接到主机",
@@ -359,7 +357,6 @@
     "sessionOptionPickers": {
       "agentWorking": "智能体正在工作",
       "backToModels": "返回模型列表",
-      "closePicker": "关闭选择器",
       "dispatchUnconfirmed": "已发送给智能体 — 尚未确认",
       "modelFullAccessLabel": "模型，{{value}}，完全访问权限",
       "modelLabel": "模型，{{value}}",
@@ -820,12 +817,10 @@
       "blankTerminal": "空白终端"
     },
     "newWorktreeFormSheet": {
-      "advanced": "高级",
       "agent": "智能体",
       "connectTarget": "连接目标主机",
       "connectTargetFirst": "请先连接目标主机",
       "createWorktree": "创建工作树",
-      "nameOrCreateFrom": "名称或“创建来源”",
       "noProjectsFound": "未找到项目",
       "note": "备注",
       "notePlaceholder": "写备注",
@@ -916,12 +911,10 @@
       "noResults": "未找到结果。",
       "searchPlaceholder": "输入名称或搜索来源",
       "switchRepo": "切换到 {{repoName}}",
-      "title": "名称或“创建来源”",
       "typeWorkspaceName": "请在下方输入框中输入工作区名称。"
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "打开所选来源",
-      "optional": "[可选]",
       "searchPlaceholder": "输入名称或搜索来源"
     },
     "smartWorkspaceSourceRow": {
@@ -3356,7 +3349,6 @@
       "changeStatus": "更改状态",
       "copyGitHubLink": "复制 GitHub 链接",
       "copyLinearLink": "复制 Linear 链接",
-      "createWorkspace": "创建工作区",
       "creating": "创建中…",
       "mergeConflicts": "GitHub 报告存在合并冲突。",
       "mergeMergeRequest": "合并合并请求",
@@ -3364,8 +3356,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "添加子议题",
-      "assignee": "负责人",
-      "assignees": "负责人",
       "checks": "检查项",
       "description": "描述",
       "discussion": "讨论",
@@ -3377,13 +3367,10 @@
       "pipeline": "管道",
       "pipelineJobs_one": "{{count}} 个作业",
       "pipelineJobs_other": "{{count}} 个作业",
-      "project": "项目",
       "rerunAll": "重新运行全部",
       "rerunFailed": "重新运行失败项",
-      "status": "状态",
       "subIssueTitle": "子议题标题",
-      "subIssues": "子议题",
-      "type": "类型"
+      "subIssues": "子议题"
     },
     "itemDetailDrawer": {
       "refreshDetails": "刷新详情"
@@ -3736,19 +3723,14 @@
       "addRepository": "创建 Linear 工作区前，请先添加 Git 仓库。",
       "advanced": "高级",
       "agent": "智能体",
-      "connect": "连接",
       "connectFirst": "请先连接仓库",
       "connectRepository": "连接仓库",
-      "connecting": "连接中…",
-      "createFrom": "基于 {{branch}} 创建",
       "defaultBranch": "默认分支",
       "detectingAgents": "正在检测智能体…",
-      "optional": "[可选]",
       "remoteRepository": "远程仓库",
       "repository": "仓库",
       "repositoryNotFound": "未找到仓库。",
       "selectRepository": "选择仓库",
-      "sshConnection": "SSH 连接",
       "startFrom": "创建起点",
       "title": "创建工作区",
       "workspaceName": "工作区名称"
@@ -3871,7 +3853,6 @@
       "existing": "现有分支",
       "existingHint": "新提交将添加到此分支。",
       "hostUpdateRequired": "请更新工作区主机上的 Orca，以复用分支或明确选择创建独立分支。",
-      "new": "新分支",
       "newHint": "创建新的本地分支",
       "newName": "新分支名称",
       "title": "此工作树使用的分支"

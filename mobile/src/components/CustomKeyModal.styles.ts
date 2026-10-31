@@ -12,7 +12,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     width: '100%',
     height: 56,
     borderRadius: radii.control,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     color: colors.textPrimary,
@@ -30,7 +30,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     justifyContent: 'center'
   },
   backButtonPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   backSpacer: {
     width: 30
@@ -43,7 +43,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     textAlign: 'center'
   },
   group: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
     overflow: 'hidden'
   },
@@ -57,7 +57,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md + 2
   },
   rowPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   rowLabel: {
     fontSize: typography.bodySize,
@@ -94,7 +94,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     height: 48,
     paddingHorizontal: spacing.md,
     borderRadius: radii.control,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     alignItems: 'center',
@@ -140,7 +140,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     flex: 1,
     height: 40,
     borderRadius: radii.pill,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -150,7 +150,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     backgroundColor: colors.textPrimary
   },
   chipPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   chipText: {
     color: colors.textSecondary,
@@ -208,12 +208,12 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   keyCell: {
     height: 40,
     borderRadius: radii.control,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     alignItems: 'center',
     justifyContent: 'center'
   },
   keyCellPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   keyCellSelected: {
     backgroundColor: colors.textPrimary
@@ -254,7 +254,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     alignItems: 'center'
   },
   saveButtonDisabled: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   saveButtonText: {
     color: colors.bgBase,

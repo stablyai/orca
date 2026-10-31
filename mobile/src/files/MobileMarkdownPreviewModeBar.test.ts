@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
+import {
+  MobileMarkdownPreviewModeBar,
+  useMarkdownPreviewMode
+} from './MobileMarkdownPreviewModeBar'
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
@@ -15,8 +18,6 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('lucide-react-native', () => ({
-  Code: 'Code',
-  Pencil: 'Pencil',
   Copy: 'Copy',
   Check: 'Check'
 }))
@@ -24,23 +25,11 @@ vi.mock('lucide-react-native', () => ({
 const { writeText, alert } = vi.hoisted(() => ({ writeText: vi.fn(), alert: vi.fn() }))
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
 
-vi.mock('./MobileMarkdownPreviewImage', () => ({
-  MobileMarkdownPreviewImage: 'MobileMarkdownPreviewImage'
-}))
-
-vi.mock('../components/MobileMarkdown', () => ({
-  MobileMarkdown: 'MobileMarkdown'
-}))
-
-vi.mock('./MobileFilePreviewSourceText', () => ({
-  MobileFilePreviewSourceText: 'MobileFilePreviewSourceText',
-  MobileFilePreviewTruncatedNote: 'MobileFilePreviewTruncatedNote'
-}))
-
 vi.mock('../theme/mobile-theme', () => ({
   colors: { textPrimary: '#fff', textSecondary: '#999' },
-  spacing: { xs: 4, sm: 8 },
-  radii: { button: 6 },
+  spacing: { xs: 4, sm: 8, md: 12 },
+  radii: { control: 12 },
+  concentricRadius: (outer: number, inset: number) => outer - inset,
   typography: { metaSize: 12 },
   getMobileColorScheme: () => 'dark',
   subscribeMobileColorScheme: () => () => {}
@@ -50,22 +39,33 @@ vi.mock('./mobile-file-preview-styles', () => ({
   filePreviewStyles: {}
 }))
 
-type PreviewProps = Parameters<typeof MobileFileMarkdownPreview>[0]
+type PreviewProps = {
+  relativePath: string
+  content: string
+  truncated: boolean
+  initialLine?: number
+}
+
+// The screen owns the mode and hands it to the bar; this mirrors that wiring.
+function ModeBarHarness({ initialLine, ...props }: PreviewProps) {
+  const [mode, setMode] = useMarkdownPreviewMode(props.relativePath, initialLine)
+  return createElement(MobileMarkdownPreviewModeBar, { ...props, mode, onModeChange: setMode })
+}
 
 async function renderPreview(props: PreviewProps): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | null = null
   await act(async () => {
-    renderer = create(createElement(MobileFileMarkdownPreview, props))
+    renderer = create(createElement(ModeBarHarness, props))
   })
   if (!renderer) {
-    throw new Error('MobileFileMarkdownPreview did not render')
+    throw new Error('MobileMarkdownPreviewModeBar did not render')
   }
   return renderer
 }
 
 async function updatePreview(renderer: ReactTestRenderer, props: PreviewProps): Promise<void> {
   await act(async () => {
-    renderer.update(createElement(MobileFileMarkdownPreview, props))
+    renderer.update(createElement(ModeBarHarness, props))
   })
 }
 
@@ -86,10 +86,10 @@ async function selectMode(renderer: ReactTestRenderer, label: string): Promise<v
 }
 
 function isSelected(renderer: ReactTestRenderer, label: string): boolean {
-  return modeToggle(renderer, label).props.accessibilityState.selected === true
+  return modeToggle(renderer, label).props['aria-checked'] === true
 }
 
-describe('MobileFileMarkdownPreview', () => {
+describe('MobileMarkdownPreviewModeBar', () => {
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
@@ -110,8 +110,7 @@ describe('MobileFileMarkdownPreview', () => {
       const baseProps: PreviewProps = {
         relativePath: 'notes/file.md',
         content: '# Initial',
-        truncated: false,
-        byteLength: 9
+        truncated: false
       }
       renderer = await renderPreview(baseProps)
       await selectMode(renderer, mode)
@@ -129,8 +128,7 @@ describe('MobileFileMarkdownPreview', () => {
     renderer = await renderPreview({
       relativePath: 'notes/large.md',
       content: source,
-      truncated: true,
-      byteLength: 500_000
+      truncated: true
     })
     const copy = modeToggle(renderer, 'Copy loaded Markdown source')
     expect(
@@ -147,8 +145,7 @@ describe('MobileFileMarkdownPreview', () => {
     renderer = await renderPreview({
       relativePath: 'notes/file.md',
       content: source,
-      truncated: false,
-      byteLength: source.length
+      truncated: false
     })
     writeText.mockRejectedValueOnce(new Error('Clipboard unavailable'))
     await selectMode(renderer, 'Copy Markdown source')
@@ -162,12 +159,11 @@ describe('MobileFileMarkdownPreview', () => {
     expect(writeText.mock.calls).toEqual([[source], [source]])
   })
 
-  it('resets the selected mode for a new file or line target without remounting the preview', async () => {
+  it('resets the selected mode for a new file or line target without remounting the bar', async () => {
     const baseProps: PreviewProps = {
       relativePath: 'notes/first.md',
       content: '# First',
-      truncated: false,
-      byteLength: 7
+      truncated: false
     }
     renderer = await renderPreview(baseProps)
 

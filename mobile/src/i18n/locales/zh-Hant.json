@@ -48,12 +48,10 @@
       "untitledSession": "未命名的工作階段"
     },
     "sessionHistoryList": {
-      "assistantRole": "助理",
       "currentWorktree": "目前工作樹",
       "messages_one": "{{count}} 則訊息",
       "messages_other": "{{count}} 則訊息",
-      "resumeSession": "恢復代理程式工作階段",
-      "userRole": "使用者"
+      "resumeSession": "恢復代理程式工作階段"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "無法連上主機",
@@ -359,7 +357,6 @@
     "sessionOptionPickers": {
       "agentWorking": "代理程式正在執行",
       "backToModels": "返回模型清單",
-      "closePicker": "關閉選擇器",
       "dispatchUnconfirmed": "已傳送給代理程式 — 尚未確認",
       "modelFullAccessLabel": "模型，{{value}}，完整存取權",
       "modelLabel": "模型，{{value}}",
@@ -820,12 +817,10 @@
       "blankTerminal": "空白終端機"
     },
     "newWorktreeFormSheet": {
-      "advanced": "進階",
       "agent": "代理程式",
       "connectTarget": "連線至目標",
       "connectTargetFirst": "請先連線至目標",
       "createWorktree": "建立工作樹",
-      "nameOrCreateFrom": "名稱或「建立來源」",
       "noProjectsFound": "找不到專案",
       "note": "備註",
       "notePlaceholder": "寫備註",
@@ -916,12 +911,10 @@
       "noResults": "找不到結果。",
       "searchPlaceholder": "輸入名稱或搜尋來源",
       "switchRepo": "切換至 {{repoName}}",
-      "title": "名稱或「建立來源」",
       "typeWorkspaceName": "請在下方欄位輸入工作區名稱。"
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "開啟所選來源",
-      "optional": "[可選]",
       "searchPlaceholder": "輸入名稱或搜尋來源"
     },
     "smartWorkspaceSourceRow": {
@@ -3356,7 +3349,6 @@
       "changeStatus": "更改狀態",
       "copyGitHubLink": "複製 GitHub 連結",
       "copyLinearLink": "複製 Linear 連結",
-      "createWorkspace": "建立工作區",
       "creating": "建立中…",
       "mergeConflicts": "GitHub 回報有合併衝突。",
       "mergeMergeRequest": "合併 MR",
@@ -3364,8 +3356,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "新增子議題",
-      "assignee": "負責人",
-      "assignees": "負責人",
       "checks": "檢查項目",
       "description": "描述",
       "discussion": "討論",
@@ -3377,13 +3367,10 @@
       "pipeline": "管線",
       "pipelineJobs_one": "{{count}} 項作業",
       "pipelineJobs_other": "{{count}} 項作業",
-      "project": "專案",
       "rerunAll": "全部重新執行",
       "rerunFailed": "重新執行失敗項目",
-      "status": "狀態",
       "subIssueTitle": "子議題標題",
-      "subIssues": "子議題",
-      "type": "類型"
+      "subIssues": "子議題"
     },
     "itemDetailDrawer": {
       "refreshDetails": "重新整理詳細資訊"
@@ -3736,19 +3723,14 @@
       "addRepository": "請先新增 Git 存放庫，再建立 Linear 工作區。",
       "advanced": "進階",
       "agent": "代理程式",
-      "connect": "連線",
       "connectFirst": "請先連線存放庫",
       "connectRepository": "連線存放庫",
-      "connecting": "正在連線…",
-      "createFrom": "從 {{branch}} 建立",
       "defaultBranch": "預設分支",
       "detectingAgents": "正在偵測代理程式…",
-      "optional": "[可選]",
       "remoteRepository": "遠端存放庫",
       "repository": "存放庫",
       "repositoryNotFound": "找不到存放庫。",
       "selectRepository": "選擇存放庫",
-      "sshConnection": "SSH 連線",
       "startFrom": "起始來源",
       "title": "建立工作區",
       "workspaceName": "工作區名稱"
@@ -3871,7 +3853,6 @@
       "existing": "現有分支",
       "existingHint": "新提交會加入此分支。",
       "hostUpdateRequired": "請更新工作區主機上的 Orca，才能重複使用分支或明確選擇建立獨立分支。",
-      "new": "新分支",
       "newHint": "建立新的本機分支",
       "newName": "新分支名稱",
       "title": "此工作樹的分支"

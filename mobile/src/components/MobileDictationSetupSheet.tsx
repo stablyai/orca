@@ -333,7 +333,7 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.sheetGroup
   },
   actionPressed: { opacity: 0.7 },
   actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },

@@ -49,13 +49,11 @@
       "untitledSession": "Session sans titre"
     },
     "sessionHistoryList": {
-      "assistantRole": "assistant",
       "currentWorktree": "worktree actuel",
       "messages_many": "{{count}} messages",
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
-      "resumeSession": "Reprendre la session d'agent",
-      "userRole": "utilisateur"
+      "resumeSession": "Reprendre la session d'agent"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Impossible de joindre l'hôte",
@@ -363,7 +361,6 @@
     "sessionOptionPickers": {
       "agentWorking": "L'agent travaille",
       "backToModels": "Retour aux modèles",
-      "closePicker": "Fermer le sélecteur",
       "dispatchUnconfirmed": "Envoyé à l'agent — non confirmé",
       "modelFullAccessLabel": "Modèle, {{value}}, accès complet",
       "modelLabel": "Modèle, {{value}}",
@@ -866,12 +863,10 @@
       "blankTerminal": "Terminal vierge"
     },
     "newWorktreeFormSheet": {
-      "advanced": "Avancé",
       "agent": "Agent",
       "connectTarget": "Se connecter à la cible",
       "connectTargetFirst": "Connectez-vous d'abord à la cible",
       "createWorktree": "Créer un worktree",
-      "nameOrCreateFrom": "Nom ou source",
       "noProjectsFound": "Aucun projet trouvé",
       "note": "Note",
       "notePlaceholder": "Écrire une note",
@@ -962,12 +957,10 @@
       "noResults": "Aucun résultat trouvé.",
       "searchPlaceholder": "Saisissez un nom ou recherchez une source",
       "switchRepo": "Passer à {{repoName}}",
-      "title": "Nom ou source",
       "typeWorkspaceName": "Saisissez un nom d'espace de travail dans le champ ci-dessous."
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "Ouvrir la source sélectionnée",
-      "optional": "[Optionnel]",
       "searchPlaceholder": "Saisissez un nom ou recherchez une source"
     },
     "smartWorkspaceSourceRow": {
@@ -3459,7 +3452,6 @@
       "changeStatus": "Changer le statut",
       "copyGitHubLink": "Copier le lien GitHub",
       "copyLinearLink": "Copier le lien Linear",
-      "createWorkspace": "Créer un espace de travail",
       "creating": "Création…",
       "mergeConflicts": "GitHub signale des conflits de fusion.",
       "mergeMergeRequest": "Fusionner la merge request",
@@ -3467,8 +3459,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "Ajouter un sous-ticket",
-      "assignee": "Assigné",
-      "assignees": "Assignés",
       "checks": "Vérifications",
       "description": "Description",
       "discussion": "Discussion",
@@ -3481,13 +3471,10 @@
       "pipelineJobs_many": "{{count}} jobs",
       "pipelineJobs_one": "{{count}} job",
       "pipelineJobs_other": "{{count}} jobs",
-      "project": "Projet",
       "rerunAll": "Tout relancer",
       "rerunFailed": "Relancer les vérifications échouées",
-      "status": "Statut",
       "subIssueTitle": "Titre du sous-ticket",
-      "subIssues": "Sous-tickets",
-      "type": "Type"
+      "subIssues": "Sous-tickets"
     },
     "itemDetailDrawer": {
       "refreshDetails": "Actualiser les détails"
@@ -3844,19 +3831,14 @@
       "addRepository": "Ajoutez un dépôt Git avant de créer un espace de travail Linear.",
       "advanced": "Avancé",
       "agent": "Agent",
-      "connect": "Se connecter",
       "connectFirst": "Connectez d'abord le dépôt",
       "connectRepository": "Connecter le dépôt",
-      "connecting": "Connexion…",
-      "createFrom": "Créer à partir de {{branch}}",
       "defaultBranch": "Branche par défaut",
       "detectingAgents": "Détection des agents…",
-      "optional": "[Optionnel]",
       "remoteRepository": "Dépôt distant",
       "repository": "Dépôt",
       "repositoryNotFound": "Dépôt introuvable.",
       "selectRepository": "Sélectionner un dépôt",
-      "sshConnection": "Connexion SSH",
       "startFrom": "À partir de",
       "title": "Créer un espace de travail",
       "workspaceName": "Nom de l'espace de travail"
@@ -3980,7 +3962,6 @@
       "existing": "Branche existante",
       "existingHint": "Les nouveaux commits sont ajoutés à cette branche.",
       "hostUpdateRequired": "Mettez à jour Orca sur l'hôte de l'espace de travail pour réutiliser une branche ou créer explicitement une branche distincte.",
-      "new": "Nouvelle branche",
       "newHint": "Créer une nouvelle branche locale",
       "newName": "Nom de la nouvelle branche",
       "title": "Branche pour cet arbre de travail"
