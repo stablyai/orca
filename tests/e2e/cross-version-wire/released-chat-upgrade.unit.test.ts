@@ -12,7 +12,6 @@ import {
 import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
 import { JOURNAL_PREFIX_ORDINAL } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-codec'
 import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
-import type { AgentJournalSnapshot } from '../../../src/shared/agent-session-journal-types'
 import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
 import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/journal-write-projection'
@@ -55,6 +54,11 @@ afterEach(() => {
   JournalWriteProjection.verifyEachCommit = false
 })
 
+const view = (journal: ContinuedJournal) => ({
+  snapshot: journal.snapshot(),
+  cards: [...journal.queuedMessages.list()]
+})
+
 /** Opens the chat, edits, sends and rewinds it, then reopens it; returns what the user sees. */
 async function carryOn(
   opener: TrackedJournalOpener,
@@ -69,38 +73,33 @@ async function carryOn(
     now: written.now,
     mintEpoch: () => 'epoch-rewound'
   }
-  let opened: { snapshot: AgentJournalSnapshot; cards: unknown[] }
-  let seen: { snapshot: unknown; cards: unknown }
-  try {
-    const journal = await opener.open(options)
-    opened = { snapshot: journal.snapshot(), cards: [...journal.queuedMessages.list()] }
-    await editReleasedCard(journal)
-    if (prefix) {
-      // The release's rows stay byte for byte; one marker follows them, where the records begin.
-      const database = openTestJournalHostDatabase(stateDirectory)
-      const rows = liveTestJournalRows(database.db, options.identity.sessionId)
-      expect(rows.slice(0, prefix.length)).toEqual(prefix)
-      expect(rows).toHaveLength(prefix.length + 1)
-      expect(
-        journalOutcomeSource(database.db, options.identity.sessionId, journal.epoch)?.prefix
-      ).toBe(prefix.length)
-    }
-    await sendAfterUpgrade(journal)
-    await rewindReleasedChat(journal, new Set(opened.snapshot.items.map((item) => item.itemId)))
-    expect(journal.epoch).toBe('epoch-rewound')
-    seen = { snapshot: journal.snapshot(), cards: [...journal.queuedMessages.list()] }
-  } finally {
-    await opener.closeAll()
-  }
-  try {
-    const reopened = await opener.open(options)
-    expect({ snapshot: reopened.snapshot(), cards: [...reopened.queuedMessages.list()] }).toEqual(
-      seen
-    )
-  } finally {
-    await opener.closeAll()
-  }
-  return { opened, seen }
+  const carried = await opener
+    .open(options)
+    .then(async (journal) => {
+      const opened = view(journal)
+      await editReleasedCard(journal)
+      if (prefix) {
+        // The release's rows stay byte for byte; one marker follows them, where records begin.
+        const database = openTestJournalHostDatabase(stateDirectory)
+        const rows = liveTestJournalRows(database.db, options.identity.sessionId)
+        expect(rows.slice(0, prefix.length)).toEqual(prefix)
+        expect(rows).toHaveLength(prefix.length + 1)
+        expect(
+          journalOutcomeSource(database.db, options.identity.sessionId, journal.epoch)?.prefix
+        ).toBe(prefix.length)
+      }
+      await sendAfterUpgrade(journal)
+      await rewindReleasedChat(journal, new Set(opened.snapshot.items.map((item) => item.itemId)))
+      expect(journal.epoch).toBe('epoch-rewound')
+      return { opened, seen: view(journal) }
+    })
+    .finally(() => opener.closeAll())
+  const reopened = await opener
+    .open(options)
+    .then(view)
+    .finally(() => opener.closeAll())
+  expect(reopened).toEqual(carried.seen)
+  return carried
 }
 
 describe('a chat a shipped release wrote, carried on by this build', () => {

@@ -236,7 +236,7 @@ async function stopAndRemove(
   if (release.stopEvents) {
     await journal.appendStopEvent({ reason: 'user-stop', turnId: 'stop-turn' }, FENCE)
   }
-  const settle = release.stopEvents ? journal.stopMarks.beginSettle(true) : null
+  const settle = release.stopEvents ? journal.stopMarks.beginSettle(true) : undefined
   await journal.appendLifecycleBatch({
     settlementId: 'stop-settlement',
     fence: FENCE,
@@ -254,7 +254,7 @@ async function stopAndRemove(
       }
     ]
   })
-  if (settle) {
+  if (settle !== undefined) {
     journal.stopMarks.settled(settle)
     await journal.appendQueueResume(FENCE)
   }
