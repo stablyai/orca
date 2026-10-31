@@ -81,6 +81,34 @@ later) in the same shape as a VS Code theme's, so most VS Code theme lists paste
 - A color under 3:1 contrast with the editor background is dropped, and anything a theme leaves
   out keeps the built-in light or dark code colors.
 
+### Background image
+
+An app theme may add one image painted behind the window's translucent surfaces:
+
+```json
+{
+  "base": "dark",
+  "tokens": { "--background": "#1b1430", "--foreground": "#e8e0ff" },
+  "background": {
+    "path": "images/dusk.webp",
+    "opacity": 0.35,
+    "size": "cover",
+    "position": "center"
+  }
+}
+```
+
+- `path` is a file inside the plugin: PNG, JPEG or WebP, static, 640×360 to 4096×4096, at most
+  2 MB. Orca serves it only through its own image scheme and checks the bytes each time; an image
+  that does not pass is not shown and the theme still applies. `validate:plugin` reports a
+  missing file.
+- `opacity` (0 to 1, default 1) is how strongly the image shows through the theme's
+  `--background`; `size` is `cover` (default), `contain` or `tile`; `position` is `center`
+  (default), `top`, `bottom`, `left` or `right`.
+- The image is one static layer, never blurred. Sidebars, editors and pages stay opaque; it
+  shows through terminals when the user's terminal Background Opacity is below 1.
+- Orca releases without background images ignore the field (`validate:plugin` on them reports it).
+
 ## Terminal themes
 
 ```json
