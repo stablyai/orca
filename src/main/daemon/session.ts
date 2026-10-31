@@ -1,8 +1,9 @@
+import { createSessionInitialOutput } from './session-initial-output'
 import { isValidPtySize } from './daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
-import { createSessionOutputPipeline } from './session-output-pipeline'
+import { createSessionOutputPipeline, createSessionShellReady } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
-import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
+import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
 import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
@@ -30,6 +31,8 @@ export class Session {
   readonly shellIsRootChild: boolean
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
+  exitCause: TerminalExitCause | undefined
+  private readonly initialOutput: ReturnType<typeof createSessionInitialOutput>
   private _disposed = false
   private subprocess: SubprocessHandle
   private readonly onSessionExit?: (code: number) => void
@@ -41,6 +44,7 @@ export class Session {
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
 
   constructor(opts: SessionOptions) {
+    this.initialOutput = createSessionInitialOutput(opts)
     this.sessionId = opts.sessionId
     this.terminalHandle = opts.terminalHandle ?? null
     this.launchAgent = opts.launchAgent ?? null
@@ -61,17 +65,9 @@ export class Session {
       releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
     })
 
-    this.shellReady = new SessionShellReadyBarrier({
-      sessionId: this.sessionId,
-      subprocess: this.subprocess,
-      responderParser: this.output.responderParser,
-      shellReadySupported: opts.shellReadySupported,
-      ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
-      shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
-      installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
-      releaseDeviceAttributesFilter: () => this.output.releaseDeviceAttributesFilter(),
-      acceptStartupIngress: (data) => this.startupIngress.accept(data)
-    })
+    this.shellReady = createSessionShellReady(opts, this.output, (data) =>
+      this.startupIngress.accept(data)
+    )
 
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
@@ -285,11 +281,7 @@ export class Session {
     }
 
     // Capture termination intent before flipping the state to exited.
-    this.shellReady.releaseDeviceAttributes()
-    this.shellReady.releaseHeldBytes()
-    this.startupIngress.drainAndClose()
-    // Deliver drained recovery bytes while clients are attached and the emulator still accepts writes.
-    this.recoveryBarrier.flushPending()
+    this.drainStartupOutput()
     const wasTerminating = this.termination.isTerminating && this._state !== 'exited'
     const clientsToNotify = wasTerminating ? this.output.snapshotClients() : []
     if (wasTerminating) {
@@ -336,6 +328,14 @@ export class Session {
     this.termination.disposeSubprocessHandle()
   }
 
+  private drainStartupOutput(): void {
+    this.shellReady.releaseDeviceAttributes()
+    this.shellReady.releaseHeldBytes()
+    this.startupIngress.drainAndClose()
+    // Drain before notifying exits or disposing the attached output plane.
+    this.recoveryBarrier.flushPending()
+  }
+
   private handleSubprocessExit(code: number, cause?: TerminalExitCause): void {
     // Preserve operator-close intent even when process exit beats the control reply.
     if (this.termination.isTerminating) {
@@ -346,11 +346,9 @@ export class Session {
       return
     }
 
-    this.shellReady.releaseDeviceAttributes()
-    this.shellReady.releaseHeldBytes()
-    this.startupIngress.drainAndClose()
-    // Flush after ingress drains so prompts held mid-proof reach clients and history before the exit event.
-    this.recoveryBarrier.flushPending()
+    this.drainStartupOutput()
+    cause = this.initialOutput.resolveExit(code, cause, this.incarnationId)
+    this.exitCause = cause
     this._exitCode = code
     this._state = 'exited'
     this.termination.clearTerminating()

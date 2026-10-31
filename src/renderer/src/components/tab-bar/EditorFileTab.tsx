@@ -1,7 +1,7 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
+import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, Smartphone } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
@@ -9,7 +9,7 @@ import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
@@ -81,7 +81,6 @@ export default function EditorFileTab({
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
-  const FileIcon = getFileTypeIcon(file.filePath)
   // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     // Split copies share a file entity; unified tab IDs keep each copy independently draggable.
@@ -94,7 +93,8 @@ export default function EditorFileTab({
   const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   const customEditor = useTabCustomEditor(file)
-  const HoverIcon = isConflictReview
+  // Why: simulator tabs reuse this chrome with a synthetic path an icon theme would map to its file icon.
+  const ModeIcon = isConflictReview
     ? ShieldAlert
     : isCheckDetails
       ? ListChecks
@@ -102,11 +102,13 @@ export default function EditorFileTab({
         ? GitCompareArrows
         : isMarkdownPreviewTab
           ? Eye
-          : FileIcon
+          : file.language === 'simulator'
+            ? Smartphone
+            : null
   const tabIcon = (className: string): React.ReactNode => (
     <PluginContributionIcon
       url={customEditor?.iconUrl}
-      fallback={HoverIcon}
+      fallback={ModeIcon ?? <FileTypeIcon filePath={file.filePath} className={className} />}
       className={className}
     />
   )

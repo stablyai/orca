@@ -4,7 +4,9 @@
       "updateRequired": "이 버전의 OpenCode는 선택한 모델로 안전하게 시작할 수 없습니다. OpenCode를 지원되는 버전으로 업데이트하거나 모델 선택을 생략하세요.",
       "invalidConfig": "OpenCode가 선택한 모델을 시작 구성에 적용하지 못했습니다. OpenCode 시작 구성을 확인하고 다시 시도하거나 모델 선택을 생략하세요.",
       "unsupportedLaunch": "OpenCode가 이번 시작에 선택한 모델을 적용할 수 없습니다. 지원되는 시작 인수를 사용하여 새 로컬 터미널을 열거나 모델 선택을 생략하세요."
-    }
+    },
+    "terminalPreparationFailed": "{{value0}}의 터미널을 열 수 없습니다. 워크스페이스 연결과 에이전트 설정을 확인한 후 다시 시도하세요.",
+    "terminalPromptFailed": "Orca가 {{value0}}의 터미널을 열었지만 프롬프트를 전달하지 못했습니다. 해당 터미널에서 프롬프트를 보내세요."
   },
   "app": {
     "saving": {
@@ -376,7 +378,8 @@
       "installCliForTerminal": "터미널에서 열려면 {{value0}} CLI를 설치하세요.",
       "chatRuntime": "채팅 런타임",
       "chatChoiceTitle": "채팅 또는 CLI로 열기",
-      "chatChoiceDescription": "각 에이전트를 채팅으로 열지 CLI로 열지 선택합니다."
+      "chatChoiceDescription": "각 에이전트를 채팅으로 열지 CLI로 열지 선택합니다.",
+      "sameAsChoice": "{{agent}}와 동일 · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "심볼릭 링크",
@@ -7148,7 +7151,8 @@
           "506f2acf7a": "액세스 재설정 중...",
           "statusGranted": "부여된",
           "statusUnsupported": "macOS만 해당",
-          "statusNotEnabled": "활성화되지 않음"
+          "statusNotEnabled": "활성화되지 않음",
+          "794807aa21": "macOS 개인정보 보호 및 보안을 대기열에 추가했습니다. 더 새로운 요청이나 재설정으로 대체될 수 있습니다"
         },
         "DeveloperPermissionsPane": {
           "4c17304beb": "새로고침",
@@ -7701,7 +7705,11 @@
           "191ac34567": "에이전트 오케스트레이션",
           "nestedWorkerDepthTitle": "하위 에이전트 최대 생성 단계",
           "nestedWorkerDepthDescription": "하위 에이전트를 몇 단계까지 생성할 수 있는지 설정합니다. 1이면 조율 에이전트만 하위 에이전트를 생성할 수 있고, 생성된 하위 에이전트는 자신의 하위 에이전트를 생성할 수 없습니다.",
-          "7bc082f4de": "설치 명령 복사"
+          "7bc082f4de": "설치 명령 복사",
+          "workerAutoReleaseTitle": "완료된 워커 자동 닫기",
+          "workerAutoReleaseDescription": "열어 두기를 선택하지 않으면 워커가 완료된 지 2분 후 터미널 또는 채팅을 닫습니다. 다시 작업을 시작하면 완료 시 2분이 다시 시작됩니다.",
+          "workerAutoReleaseKeywordClose": "닫기",
+          "workerAutoReleaseKeywordRelease": "해제"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "에이전트가 Orca를 통해 컨텍스트를 인계하고 작업을 조율할 수 있습니다.",
@@ -11406,7 +11414,10 @@
         "PluginThemeUseNow": {
           "label": "지금 사용:",
           "useForLight": "라이트에 사용:",
-          "useForDark": "다크에 사용:"
+          "useForDark": "다크에 사용:",
+          "assignedLight": "{{value0}}을(를) 라이트 테마로 설정했습니다",
+          "assignedDark": "{{value0}}을(를) 다크 테마로 설정했습니다",
+          "saveFailed": "테마를 저장할 수 없습니다. 다시 시도하세요."
         },
         "PluginContributionActionCommand": {
           "run": "실행",
@@ -13142,7 +13153,10 @@
             "abortRebaseFailed": "리베이스 중단 실패",
             "abortMergeFailed": "병합 중단 실패",
             "clearNotesFromWorkspace_other": "이 워크스페이스에서 메모 {{count}}개를 지울까요?",
-            "clearNotesFromFile_other": "{{path}}에서 메모 {{count}}개를 지울까요?"
+            "clearNotesFromFile_other": "{{path}}에서 메모 {{count}}개를 지울까요?",
+            "markResolved": "해결됨으로 표시",
+            "keepFile": "파일 유지",
+            "keepDeletion": "삭제 유지"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -13718,7 +13732,8 @@
                     "edc2d82a2b": "병합 진행 중",
                     "5c3707aa44": "리베이스 진행 중",
                     "ffe53a1da6": "체리픽 진행중",
-                    "35eb76d323": "작업 진행 중"
+                    "35eb76d323": "작업 진행 중",
+                    "completeMerge": "병합 완료"
                   }
                 }
               },
@@ -13747,7 +13762,8 @@
                   "e7876a2bde": "메시지를 생성하려면 하나 이상의 파일을 준비하세요.",
                   "0904be2505": "다시 생성하려면 메시지를 지웁니다.",
                   "1ea9ba37aa": "설정 -> Git -> 소스 제어 AI에서 에이전트를 선택합니다."
-                }
+                },
+                "completeMergeFailed": "병합을 완료하지 못했습니다"
               }
             }
           },
@@ -16084,6 +16100,12 @@
           "view": "플러그인 보기",
           "notNow": "나중에",
           "never": ".{{value0}}에 대해 제안하지 않기"
+        },
+        "RichMarkdownEmojiMenu": {
+          "chooseEmoji": "이모지 선택"
+        },
+        "richMarkdownBlobImagePaste": {
+          "saveFailed": "붙여 넣은 이미지를 문서 옆에 저장할 수 없습니다. Orca를 다시 시작한 후 불러오지 못할 수 있습니다."
         }
       },
       "diff": {
@@ -18126,6 +18148,13 @@
           "noMovableChat": "“{{action}}” 실행 불가 — 이동 가능한 활성 채팅이 없습니다.",
           "clientUnsupported": "“{{action}}” 실행 불가 — 이 클라이언트와 런타임에서 지원하지 않습니다."
         }
+      },
+      "plugins": {
+        "list": {
+          "PluginsSectionDescription": {
+            "openWith": "다음으로 열기 (편집 가능한 필드에 포커스가 없을 때)"
+          }
+        }
       }
     },
     "i18n": {
@@ -18173,6 +18202,12 @@
       "forgeCredentialTarget": {
         "unknownHost": "이 리포지토리를 소유한 컴퓨터를 아직 알 수 없습니다. 다시 연결한 후 시도하세요.",
         "thisComputer": "이 컴퓨터"
+      },
+      "runtimeGitSyncClient": {
+        "completeMergeNeedsNewerHost": "병합을 완료하려면 이 호스트에 더 최신 버전의 Orca가 필요합니다. 해당 호스트의 Orca를 업데이트하세요."
+      },
+      "runtimeGitWorkingTreeClient": {
+        "resolveConflictNeedsNewerHost": "충돌을 해결하려면 이 호스트에 더 최신 버전의 Orca가 필요합니다. 해당 호스트의 Orca를 업데이트하세요."
       }
     },
     "ssh": {
@@ -18894,7 +18929,11 @@
       },
       "agentMessage": {
         "messageFrom": "보낸 사람:",
-        "unnamedSender": "Agent"
+        "unnamedSender": "Agent",
+        "messageFromCoordinator": "코디네이터의 메시지",
+        "startedWorker": "워커 시작됨",
+        "taskFromCoordinator": "코디네이터의 작업",
+        "updateFromWorker": "워커의 업데이트"
       },
       "goal": {
         "placeholder": "목표를 설명하고, 최상의 결과를 위해 측정 가능한 결과를 정의하세요.",
@@ -19177,7 +19216,8 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "터미널 에이전트로 계속하기",
-          "switchToChatView": "채팅 UI에서 계속하기"
+          "switchToChatView": "채팅 UI에서 계속하기",
+          "allowAutoClose": "자동 닫기 허용"
         },
         "BrowserTab": {
           "closeOthers": "다른 탭 닫기",
@@ -19677,6 +19717,20 @@
       "stepDownload": "다운로드",
       "stepUnpack": "압축 해제",
       "stepCheck": "확인"
+    },
+    "linearWorkspacePicker": {
+      "search": "Linear 워크스페이스 검색",
+      "empty": "워크스페이스를 찾을 수 없습니다.",
+      "label": "Linear 워크스페이스",
+      "all": "모든 Linear 워크스페이스",
+      "unavailable": "사용할 수 없는 Linear 워크스페이스"
+    },
+    "orchestration": {
+      "workerAutoClose": {
+        "running": "임시 오케스트레이션 워커 · 완료 2분 후 닫힘",
+        "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
+        "keepOpen": "열어 두기"
+      }
     }
   },
   "dashboardPopout": {
@@ -20147,6 +20201,9 @@
         "unconfirmed_other": "에이전트 {{count}}개 모두 미확인",
         "needsAttention_other": "에이전트 {{count}}개 모두 확인 필요"
       }
+    },
+    "cardProperties": {
+      "agentModel": "에이전트 모델"
     }
   },
   "editor": {
@@ -20688,7 +20745,9 @@
       "scannerBusy": "동시에 진행 중인 세션 스캔이 너무 많습니다. 잠시 기다린 후 새로고침하세요.",
       "scannerMissing": "이 Orca 설치에는 세션 스캐너가 없습니다. Orca를 다시 설치하면 복원됩니다.",
       "scannerStopped": "세션 스캐너가 예기치 않게 중지되었습니다. 새로고침하여 다시 시도하세요."
-    }
+    },
+    "sessionAccount": "계정",
+    "sessionAccountUnknown": "알 수 없음"
   },
   "common": {
     "retry": "다시 시도",
@@ -21721,7 +21780,8 @@
       "terminalSplitRight": "터미널 오른쪽으로 분할",
       "terminalSplitDown": "터미널 아래로 분할",
       "terminalSwitchInputSource": "입력 소스/언어 전환(네이티브)",
-      "newAgentTab": "새 {{agent}} 탭"
+      "newAgentTab": "새 {{agent}} 탭",
+      "viewPlugins": "플러그인 열기"
     },
     "group": {
       "global": "글로벌",
@@ -22109,7 +22169,15 @@
     "arguments": "인수",
     "argumentsHint": "CLI 실행에만 적용됩니다.",
     "launchChat": "채팅 시작",
-    "launchTerminal": "터미널 시작"
+    "launchTerminal": "터미널 시작",
+    "setByArguments": "인수로 설정됨",
+    "searchModels": "모델 검색",
+    "noModels": "검색과 일치하는 모델이 없습니다.",
+    "legacyModels": "이전 모델",
+    "toggleArguments": "인수 표시 전환",
+    "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
+    "searchAgentModels": "{{agent}} 모델 검색…",
+    "legacyModelCount": "모델 {{total}}개"
   },
   "wslMove": {
     "entry": {
