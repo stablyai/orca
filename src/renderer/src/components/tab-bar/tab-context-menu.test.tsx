@@ -40,7 +40,7 @@ vi.mock('@/runtime/runtime-layout-client', async (original) =>
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
-vi.mock('@/runtime/workspace-layout-frame-sync', async (original) => ({
+vi.mock('@/runtime/workspace-layout-frame-startup', async (original) => ({
   ...(await original<object>()),
   showStartupLayoutFrames: () => {}
 }))

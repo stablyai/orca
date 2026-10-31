@@ -48,7 +48,7 @@ export function captureStructuredWorkerSwitchStop(
         }
       }
     } finally {
-      releaseStructuredWorkerSession(dispatchId, runtime, identity.sessionId)
+      releaseStructuredWorkerSession(identity.sessionId, runtime)
     }
   }
 }
