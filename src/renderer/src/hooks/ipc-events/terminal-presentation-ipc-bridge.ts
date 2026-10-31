@@ -54,6 +54,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         splitTelemetrySource,
         replaces
       }) => {
+        // Once a tab holds the terminal, a later failure says so: it may already be on screen.
+        let heldBy: string | undefined
         try {
           const store = useAppStore.getState()
           // A replace opens in the replaced tab's group and takes its slot once the tab exists.
@@ -149,6 +151,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                         ...(cwd ? { startupCwd: cwd } : {})
                       }
                 ))
+          heldBy = tab.id
           const closedReplaced =
             placeCreatedTerminalTab(worktreeId, tab.id, { afterTabId, replaced }) && replaces
           if (closedReplaced && selection === 'group') {
@@ -278,7 +281,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           }
           window.api.ui.replyTerminalCreate({
             requestId,
-            error: err instanceof Error ? err.message : 'Terminal reveal failed'
+            error: err instanceof Error ? err.message : 'Terminal reveal failed',
+            ...(heldBy ? { tabId: heldBy } : {})
           })
         }
       }

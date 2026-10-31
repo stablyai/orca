@@ -100,7 +100,12 @@ export function registerRuntimeWindowLifecycle(
           clearTimeout(timer)
           ipcMain.removeListener('terminal:tabCreateReply', handler)
           if (reply.error) {
-            reject(new TerminalNotPlacedError(reply.error))
+            // A tab already held the terminal when the window failed: it may be on screen.
+            reject(
+              reply.tabId
+                ? new TerminalRevealUnconfirmedError(reply.error)
+                : new TerminalNotPlacedError(reply.error)
+            )
             return
           }
           if (
