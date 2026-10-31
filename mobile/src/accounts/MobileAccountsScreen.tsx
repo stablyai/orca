@@ -372,6 +372,7 @@ export function MobileAccountsScreen() {
             error={error}
             onRetry={() => void refresh()}
             onReconnect={hostId && forceReconnect ? () => void forceReconnect(hostId) : null}
+            onRepair={() => router.push('/pair-scan')}
           />
         ) : (
           <>

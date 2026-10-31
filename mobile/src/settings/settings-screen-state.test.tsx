@@ -106,6 +106,15 @@ describe('shared settings screen state', () => {
     expect(JSON.stringify(renderer.toJSON())).not.toContain('Failed to load voice settings')
     expect(findAllByHostType(renderer.root, 'ActivityIndicator')).toHaveLength(1)
   })
+  it('asks to connect a desktop, not loading, when no paired desktop is dialing', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(VoiceSettingsScreen, { operations: null, focused: true, onBack: vi.fn() })
+      )
+    })
+    expect(JSON.stringify(renderer.toJSON())).toContain('Connect to a desktop')
+    expect(findAllByHostType(renderer.root, 'ActivityIndicator')).toHaveLength(0)
+  })
   it('drops a poll that resolves after a toggle instead of clobbering it', async () => {
     const loaded = {
       enabled: true,

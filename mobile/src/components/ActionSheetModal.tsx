@@ -92,17 +92,13 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
               selected={action.checked ? true : undefined}
               destructive={action.destructive}
               disabled={action.disabled}
-              // A loading row is busy, not unavailable: it stops taking taps without dimming.
-              onPress={
-                action.loading
-                  ? undefined
-                  : () => {
-                      action.onPress()
-                      if (!action.skipAutoClose && onClose) {
-                        onClose()
-                      }
-                    }
-              }
+              busy={action.loading}
+              onPress={() => {
+                action.onPress()
+                if (!action.skipAutoClose && onClose) {
+                  onClose()
+                }
+              }}
             />
           )
         })}

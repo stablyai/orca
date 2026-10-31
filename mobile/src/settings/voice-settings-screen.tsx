@@ -264,7 +264,7 @@ export default function VoiceSettingsScreen({
         <Text style={styles.heading}>{t('settings.voiceSettingsScreen.title', 'Voice')}</Text>
       </View>
 
-      {(!operations && connecting) || (loading && setup === null) ? (
+      {(operations ? loading && setup === null : connecting) ? (
         <MobileStateView
           loading
           title={t('settings.voiceSettingsScreen.loading', 'Loading voice settings…')}

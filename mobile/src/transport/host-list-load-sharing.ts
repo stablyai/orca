@@ -25,9 +25,12 @@ export function shareHostListLoad(
   if (inflight) {
     return inflight
   }
+  const startedRevision = revision
   const started = load()
     .then((snapshot) => {
-      settled = snapshot
+      if (startedRevision === revision) {
+        settled = snapshot
+      }
       return snapshot
     })
     .finally(() => {
@@ -44,4 +47,5 @@ export function shareHostListLoad(
 export function dropSharedHostListLoad(): void {
   revision += 1
   inflight = null
+  settled = null
 }
