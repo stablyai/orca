@@ -175,12 +175,12 @@ describe('a follow-up to a finished terminal worker', () => {
     expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
   })
 
-  it('gives back the mail a follow-up took when that follow-up fails to start, and says so', async () => {
+  it('keeps the mail a failed follow-up took, says so, and delivers it with the retry', async () => {
     h.setup()
     const { taskId, dispatchId } = await h.startWorker()
     await send(dispatchId, 'DO NOT PUSH')
     h.settle(taskId, dispatchId, 'succeeded')
-    vi.mocked(h.runtime.sendTerminalAgentPrompt).mockRejectedValue(new Error('prompt lost'))
+    vi.mocked(h.runtime.sendTerminalAgentPrompt).mockRejectedValueOnce(new Error('prompt lost'))
 
     continueAllUnreadWorkerMail(h.runtime, h.db)
 
@@ -189,11 +189,15 @@ describe('a follow-up to a finished terminal worker', () => {
         { type: 'escalation', subject: 'Mail did not reach the finished worker' }
       ])
     )
-    expect(getFollowUpDispatch(h.db, dispatchId)).toBeDefined()
-    expect(h.db.getUnreadMessages(`dispatch:${dispatchId}`)).toMatchObject([
-      { body: 'DO NOT PUSH' }
-    ])
-    expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).not.toBeNull()
+    const failed = getFollowUpDispatch(h.db, dispatchId)!.id
+    expect(h.db.getUnreadMessages(`dispatch:${failed}`)).toMatchObject([{ body: 'DO NOT PUSH' }])
+
+    // The coordinator retries at the address it knows; the retry follows the failed follow-up.
+    await send(dispatchId, 'and the docs')
+    const retry = getFollowUpDispatch(h.db, failed)!.id
+    await vi.waitFor(() =>
+      expect(h.db.getUnreadMessages(`dispatch:${retry}`)).toMatchObject([{ body: 'DO NOT PUSH' }])
+    )
   })
 
   it('from a follow-up that never got a worker, continues the worker before it', async () => {

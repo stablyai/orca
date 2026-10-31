@@ -3,6 +3,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import {
   clearFollowUpMail,
+  markUnreadFollowUpMail,
   restoreFollowUpMail,
   FOLLOW_UP_MESSAGE_TYPES,
   listDispatchesWithFollowUpMail
@@ -105,12 +106,7 @@ async function continueUnreadMail(
         db,
         unread.map((message) => message.id)
       )
-      noticeUnreadMailNotContinued(
-        runtime,
-        db,
-        dispatchId,
-        String(receipt.lastError ?? receipt.state)
-      )
+      holdUnreadMailOnFailedFollowUp(runtime, db, dispatchId, receipt)
     }
     // A follow-up another send is still starting takes this mail once it is ready, or tells of it.
     return
@@ -128,16 +124,36 @@ export function takeHeldWorkerMail(
 ): void {
   if (receipt.state === 'ready') {
     continueUnreadWorkerMail(runtime, db, dispatchId)
-  } else if (
-    db.getDispatchContextById(dispatchId)?.follow_up_mail_at &&
-    db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES]).length > 0
-  ) {
-    noticeUnreadMailNotContinued(
-      runtime,
-      db,
-      dispatchId,
-      String(receipt.lastError ?? receipt.state)
-    )
+  } else {
+    holdUnreadMailOnFailedFollowUp(runtime, db, dispatchId, receipt)
+  }
+}
+
+/** Held mail moves to the follow-up that failed, the worker's newest Dispatch, so the next send there takes it. */
+function holdUnreadMailOnFailedFollowUp(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  dispatchId: string,
+  receipt: Record<string, unknown>
+): void {
+  const unread = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])
+  const first = unread[0]
+  if (!first || !db.getDispatchContextById(dispatchId)?.follow_up_mail_at) {
+    return
+  }
+  noticeUnreadMailNotContinued(runtime, db, dispatchId, String(receipt.lastError ?? receipt.state))
+  const failed = receipt.dispatchId
+  if (typeof failed === 'string' && failed !== dispatchId) {
+    let page
+    do {
+      page = db.routeUnreadDirectMessagesToDispatchMailbox(
+        failed,
+        first.run_id,
+        `dispatch:${dispatchId}`
+      )
+    } while (page.hasMore)
+    markUnreadFollowUpMail(db, failed)
+    clearFollowUpMail(db, dispatchId)
   }
 }
 
