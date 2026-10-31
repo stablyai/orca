@@ -97,6 +97,7 @@ function Harness({ handle, liveInputEnabled }: Selection) {
     activeHandleRef,
     inputRef: liveInputRef,
     commandInputRef,
+    dismissKeyboard: () => {},
     canSend: true,
     keyboardHeight: 0,
     lifecycleIdentity: null,

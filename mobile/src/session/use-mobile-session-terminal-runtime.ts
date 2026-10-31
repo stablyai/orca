@@ -182,19 +182,20 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const canCompose = inputGate.canCompose
   const canSend = inputGate.canSend && clientId !== null
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
-  const { handleTerminalSwipeDown, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
-    activeHandleRef,
-    canSend,
-    commandInputRef,
-    dismissKeyboard: () => Keyboard.dismiss(),
-    inputRef: liveInputRef,
-    keyboardHeight,
-    lifecycleIdentity: client,
-    lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
-    liveInputEnabled,
-    reopenFocusedInputWhenKeyboardHidden: reopensFocusedInputWhenKeyboardHidden(),
-    timerRef: liveInputFocusTimerRef
-  })
+  const { handleTerminalSwipeDown, handleTerminalTap, resetLiveInputFocus } =
+    useTerminalLiveInputFocus({
+      activeHandleRef,
+      canSend,
+      commandInputRef,
+      dismissKeyboard: () => Keyboard.dismiss(),
+      inputRef: liveInputRef,
+      keyboardHeight,
+      lifecycleIdentity: client,
+      lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
+      liveInputEnabled,
+      reopenFocusedInputWhenKeyboardHidden: reopensFocusedInputWhenKeyboardHidden(),
+      timerRef: liveInputFocusTimerRef
+    })
   useFocusEffect(
     useCallback(() => {
       // Expo retains this route while pushed screens are visible.

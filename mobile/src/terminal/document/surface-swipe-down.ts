@@ -1,4 +1,6 @@
+import { getTotalScale } from './cell-metrics'
 import type { TerminalDocumentScope } from './document-scope'
+import { touchesInRoot } from './document-host-seams'
 import { notify } from './host-notify'
 
 // A release this far below its start, mostly vertical, reads as "swipe down" (the host may dismiss the keyboard).
@@ -29,4 +31,19 @@ export function reportSwipeDown(
   } else if (!pansHorizontally && dx >= SWIPE_BACK_MIN_PX && dx > 2 * Math.abs(dy)) {
     notify(scope, { type: 'terminal-swipe-back' })
   }
+}
+
+export function markSwipeStart(scope: TerminalDocumentScope, touch: Touch | null) {
+  scope.touchGesture.swipeStartX = touch?.clientX ?? null
+  scope.touchGesture.swipeStartY = touch?.clientY ?? null
+}
+
+export function terminalPansHorizontally(scope: TerminalDocumentScope): boolean {
+  const element = scope.term?.element
+  return !!element && element.scrollWidth * getTotalScale(scope) > scope.viewportRect().width + 1
+}
+
+export function reportSwipeRelease(scope: TerminalDocumentScope, e: TouchEvent) {
+  const released = e.changedTouches ? touchesInRoot(scope.root, e.changedTouches)[0] : undefined
+  reportSwipeDown(scope, released, terminalPansHorizontally(scope))
 }
