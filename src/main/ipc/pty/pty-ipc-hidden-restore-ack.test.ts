@@ -1,3 +1,5 @@
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { onTestFinished } from 'vitest'
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './register-handlers'
@@ -48,6 +50,17 @@ vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
+function legacySourceSelection() {
+  const sourceRuntime = new OrcaRuntimeService()
+  const select = vi.fn(sourceRuntime.selectPtyLegacySemanticSource.bind(sourceRuntime))
+  onTestFinished(() => {
+    for (const [ptyId] of select.mock.calls) {
+      sourceRuntime.onPtyExit(ptyId, 0)
+    }
+  })
+  return select
+}
+
 describe('registerPtyHandlers hidden-output restore ack', () => {
   const {
     handlers,
@@ -59,6 +72,7 @@ describe('registerPtyHandlers hidden-output restore ack', () => {
 
   function buildRuntime(): Record<string, unknown> {
     return {
+      selectPtyLegacySemanticSource: legacySourceSelection(),
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),

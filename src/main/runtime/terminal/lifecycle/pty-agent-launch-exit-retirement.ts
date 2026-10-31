@@ -26,10 +26,10 @@ export abstract class OrcaRuntimeWithRetirePtyAgentLaunchAuthorityOnConfirmedExi
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
     // Why always: the recheck also reconciles an exited hook agent's status row.
     const presence = this.recheckHookAgentPresenceForPty(ptyId)
-    if (!pty.launchToken && !pty.launchAgent && !receipt) {
+    if (!pty.launchToken && !pty.launchAgent && !pty.launchCommandAgent && !receipt) {
       return
     }
-    const { incarnationId, launchToken, launchAgent } = pty
+    const { incarnationId, launchToken, launchAgent, launchCommandAgent } = pty
     const generation = this.getPtyLifecycleGeneration(ptyId)
     this.launchExitProofs.add(pty)
     const controller = this.ptyController
@@ -55,6 +55,7 @@ export abstract class OrcaRuntimeWithRetirePtyAgentLaunchAuthorityOnConfirmedExi
       census,
       Boolean(
         launchAgent ||
+        launchCommandAgent ||
         Array.from(paneKeys).some((key) =>
           this.getAgentProviderSessionRowsForPaneFn?.(key).some(
             (row) => row.providerSession && row.agentType
@@ -69,6 +70,7 @@ export abstract class OrcaRuntimeWithRetirePtyAgentLaunchAuthorityOnConfirmedExi
           pty.incarnationId === incarnationId &&
           pty.launchToken === launchToken &&
           pty.launchAgent === launchAgent &&
+          pty.launchCommandAgent === launchCommandAgent &&
           this.restoredOrchestrationAuthorityByPtyId.get(ptyId) === receipt &&
           this.getPtyLifecycleGeneration(ptyId) === generation
         ) {
@@ -84,7 +86,7 @@ export abstract class OrcaRuntimeWithRetirePtyAgentLaunchAuthorityOnConfirmedExi
       return
     }
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
-    if (!pty.launchToken && !receipt && !pty.launchAgent) {
+    if (!pty.launchToken && !receipt && !pty.launchAgent && !pty.launchCommandAgent) {
       return
     }
     // Why: collect before the delete below, which drops the restored-authority receipt a
@@ -94,6 +96,7 @@ export abstract class OrcaRuntimeWithRetirePtyAgentLaunchAuthorityOnConfirmedExi
     pty.launchToken = null
     pty.launchIncarnationId = null
     pty.launchAgent = null
+    pty.launchCommandAgent = null
     if (retireCapturedHooks) {
       retireCapturedHooks()
     } else {

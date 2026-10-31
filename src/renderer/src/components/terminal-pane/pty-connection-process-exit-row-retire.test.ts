@@ -1,3 +1,4 @@
+import type { IpcPtyTransportOptions } from './pty-transport-types'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -99,13 +100,38 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
+function admitConnectedTransport(
+  transport: MockTransport,
+  options: IpcPtyTransportOptions
+): MockTransport {
+  const attach = transport.attach.getMockImplementation()
+  transport.attach.mockImplementation((args) => {
+    const result = attach?.(args)
+    const id = transport.getPtyId()
+    if (id) {
+      options.onSourceAdmitted?.(id)
+    }
+    return result
+  })
+  const connect = transport.connect.getMockImplementation()
+  transport.connect.mockImplementation(async (args) => {
+    const result = await connect?.(args)
+    const id = typeof result === 'string' ? result : result?.id
+    if (id) {
+      options.onSourceAdmitted?.(id, typeof result === 'object' ? result.incarnationId : undefined)
+    }
+    return result ?? null
+  })
+  return transport
+}
+
 vi.mock('./pty-transport', () => ({
-  createIpcPtyTransport: vi.fn(() => {
+  createIpcPtyTransport: vi.fn((options: IpcPtyTransportOptions) => {
     const nextTransport = transportFactoryQueue.shift()
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
-    return nextTransport
+    return admitConnectedTransport(nextTransport, options)
   })
 }))
 
@@ -164,12 +190,38 @@ async function connectAgentPane(args: {
   await vi.advanceTimersByTimeAsync(20)
   await flushAsyncTicks()
   const paneKey = makePaneKey(tabId, leafIdForPane(paneId))
+  const { getTerminalSemanticResident } = await import('./terminal-semantic-residents')
+  const resident = getTerminalSemanticResident(args.ptyId)
+  expect(resident?.isLive).toBe(true)
+  if (!resident?.isLive) {
+    throw new Error('Expected actual admitted process-policy owner')
+  }
+  const source = globalThis.terminalConnectionTestDelivery?.sidecars.get(args.ptyId)
+  expect(source?.size).toBe(1)
+  const raw = source && [...source][0]
+  if (!raw) {
+    throw new Error('Expected own admitted raw-data source')
+  }
+  const coordinator = coordinatorOptionsByPaneKey.get(paneKey)
+  if (!coordinator?.onForegroundAgentExited) {
+    throw new Error('Expected actual resident coordinator')
+  }
+  const onForegroundAgentExited = coordinator.onForegroundAgentExited
+  let seq = 0
   return {
     paneKey,
     terminal: pane.terminal,
-    sendData: (data) => dataCallbackRef.current?.(data),
+    sendData: (data) => {
+      seq += data.length
+      const callback = dataCallbackRef.current
+      if (!callback) {
+        throw new Error('Expected connected view callback')
+      }
+      callback(data)
+      raw(data, { seq, rawLength: data.length })
+    },
     confirmExit: (agent) =>
-      coordinatorOptionsByPaneKey.get(paneKey)?.onForegroundAgentExited?.({
+      onForegroundAgentExited({
         agent,
         processName: agent
       })

@@ -383,7 +383,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
           terminalHandle: pane.evidence.terminalHandle,
           paneKey: pane.paneKey,
           processIncarnation: original.incarnationId,
-          hostScope: { kind: 'local', hostId: 'local' }
+          hostScope: { kind: 'local', hostId: 'local' } as const
         })
       }
       if (mode === 'generation') {
@@ -455,7 +455,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
         terminalHandle: pane.evidence.terminalHandle,
         paneKey: receiptPane,
         processIncarnation: 'incarnation-1',
-        hostScope: { kind: 'local', hostId: 'local' }
+        hostScope: { kind: 'local', hostId: 'local' } as const
       })
     )
     server.ingestRemote(

@@ -87,7 +87,13 @@ export class DaemonStreamDataBatcher {
   ): void {
     if (batch) {
       if (sessionId !== undefined) {
-        discardDaemonStreamEntry(batch, batch.latestSnapshots?.get(sessionId))
+        const snapshot = batch.latestSnapshots?.get(sessionId)
+        if (snapshot && batch.queue.at(-1) === snapshot) {
+          batch.queue.pop()
+          releaseDaemonStreamEntry(batch, snapshot)
+        } else {
+          discardDaemonStreamEntry(batch, snapshot)
+        }
         return
       }
       batch.queue = batch.queue.filter((entry) => {
@@ -146,6 +152,7 @@ export class DaemonStreamDataBatcher {
     }
 
     const batch = this.getOrCreateBatch(clientId)
+    this.removeSnapshot(batch, sessionId)
     const queuedAfter = appendDaemonStreamData(batch, sessionId, data, options)
     const queuedBefore = queuedAfter - data.length
     evaluateDroppableEnqueue(

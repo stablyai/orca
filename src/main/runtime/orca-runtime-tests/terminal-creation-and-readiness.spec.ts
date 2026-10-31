@@ -1,6 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import type { TerminalProcessInspection } from '../../../shared/terminal-process-inspection'
 import { committingSpawn, registerLivePty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService, electronMocks, makePaneKey } from '../orca-runtime-test-mocks.spec'
+import {
+  OrcaRuntimeService,
+  electronMocks,
+  makePaneKey,
+  setPlatform,
+  resetPlatform
+} from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
   RESTORED_AUTHORITY_TOKEN,
@@ -251,24 +258,53 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('retires a flagged command pane identity when the command exits', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-omp-flags-exit' })
+    setPlatform('win32')
+    onTestFinished(resetPlatform)
+    const spawn = vi
+      .fn()
+      .mockResolvedValue({ id: 'pty-omp-flags-exit', incarnationId: 'omp-process' })
+    const processExit = deferred<TerminalProcessInspection>()
+    const inspect = vi.fn(() => processExit.promise)
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
-      getForegroundProcess: async () => null
+      getForegroundProcess: async () => null,
+      inspectProcess: inspect
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'omp --model x' })
-    runtime.onPtyData('pty-omp-flags-exit', '\x1b]133;D;0\x07', 100)
-
-    // Why: the shell prompt left behind is not the agent — command-line identity ends with it.
     expect((await runtime.listTerminals()).terminals).toEqual([
-      expect.not.objectContaining({ agentIdentity: expect.anything() })
+      expect.objectContaining({ agentIdentity: 'omp' })
     ])
+    runtime.onPtyData('pty-omp-flags-exit', '\x1b]133;D;0\x07', 100)
+    expect((await runtime.listTerminals()).terminals).toEqual([
+      expect.objectContaining({ agentIdentity: 'omp' })
+    ])
+    expect(inspect).not.toHaveBeenCalled()
+    runtime.onPtyData('pty-omp-flags-exit', '\x1b]133;A\x07', 101)
+    await vi.waitFor(() =>
+      expect(inspect).toHaveBeenCalledExactlyOnceWith('pty-omp-flags-exit', {
+        scanChildProcesses: true,
+        expectedIncarnationId: 'omp-process'
+      })
+    )
+    expect((await runtime.listTerminals()).terminals).toEqual([
+      expect.objectContaining({ agentIdentity: 'omp' })
+    ])
+    processExit.resolve({
+      foregroundProcess: 'pwsh.exe',
+      hasChildProcesses: false,
+      childProcessEvidence: 'no-children'
+    })
+    await vi.waitFor(async () =>
+      expect((await runtime.listTerminals()).terminals).toEqual([
+        expect.not.objectContaining({ agentIdentity: expect.anything() })
+      ])
+    )
   })
 
   it('retires inherited launch authority when the agent command exits', async () => {

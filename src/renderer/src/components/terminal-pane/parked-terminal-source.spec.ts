@@ -152,12 +152,12 @@ export function registerParkedTerminalSourceTests(context: {
         baseline ? { baseline: true, source: capableSource } : undefined
       )
     }
-    const capableSource = {}
+    const capableSource = { onResponse: vi.fn() }
     deliver('runtime-1', 'physical', true)
     const resident = handler.getTerminalSemanticResident(ptyId)!
     const policy = resident.policy
     const legacySource = policy.legacySource
-    handler.installTerminalSideEffectSource('env-1', {}, false)
+    handler.installTerminalSideEffectSource('env-1', { onResponse: vi.fn() }, false)
     await vi.advanceTimersByTimeAsync(0)
     const first = context.getRemoteSubscriptions().at(-1)!
     expect(first).toBeDefined()
@@ -192,7 +192,7 @@ export function registerParkedTerminalSourceTests(context: {
     expect(retry.close).toHaveBeenCalledOnce()
     deliver('runtime-2', 'replacement', true)
     expect(resident.isLive).toBe(true)
-    handler.installTerminalSideEffectSource('env-1', {}, false)
+    handler.installTerminalSideEffectSource('env-1', { onResponse: vi.fn() }, false)
     await vi.advanceTimersByTimeAsync(0)
     context.getRemoteSubscriptions().at(-1)?.options?.onAdmitted?.({
       ptyId: 'terminal-1',

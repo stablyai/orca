@@ -26,9 +26,11 @@ const IDLE_TITLE = '✳ Build feature'
 const IDLE_TITLE_OSC = `\x1b]0;${IDLE_TITLE}\x07`
 
 export type MockStoreState = ReturnType<typeof createInitialStoreState> & {
-  setRuntimePaneTitle: ReturnType<typeof vi.fn>
+  setRuntimePaneTitle: ReturnType<
+    typeof vi.fn<(tabId: string, paneId: number, title: string) => void>
+  >
   clearRuntimePaneTitle: ReturnType<typeof vi.fn>
-  updateTabTitle: ReturnType<typeof vi.fn>
+  updateTabTitle: ReturnType<typeof vi.fn<(tabId: string, title: string) => void>>
   setCacheTimerStartedAt: ReturnType<typeof vi.fn>
 }
 
@@ -106,9 +108,9 @@ function createMockStoreState(): MockStoreState {
       terminalMainSideEffectAuthority: false,
       notifications: { enabled: true, agentTaskComplete: true }
     },
-    setRuntimePaneTitle: vi.fn(),
+    setRuntimePaneTitle: vi.fn<(tabId: string, paneId: number, title: string) => void>(),
     clearRuntimePaneTitle: vi.fn(),
-    updateTabTitle: vi.fn(),
+    updateTabTitle: vi.fn<(tabId: string, title: string) => void>(),
     markTerminalBell: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
     observeTerminalGitHubPullRequestLink: vi.fn(),
@@ -745,8 +747,8 @@ describe('startParkedTerminalByteWatcher', () => {
     mockStoreState.tabsByWorktree[WORKTREE_ID][0].ptyId = ptyId
     mockStoreState.ptyIdsByTabId[TAB_ID] = [ptyId]
     const layout = mockStoreState.terminalLayoutsByTabId?.[TAB_ID]
-    if (!layout) {
-      throw new Error('Expected the initialized terminal layout')
+    if (!layout?.ptyIdsByLeafId) {
+      throw new Error('Expected the initialized terminal leaf map')
     }
     layout.ptyIdsByLeafId[LEAF_ID] = ptyId
     const { dispose, getResident } = await startWatcher({ ptyId })

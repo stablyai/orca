@@ -1,3 +1,5 @@
+import type { TerminalResidentLegacySource } from '../../src/renderer/src/components/terminal-pane/terminal-resident-legacy-source'
+import type { TerminalSemanticResident } from '../../src/renderer/src/components/terminal-pane/terminal-semantic-residents'
 import { afterEach, beforeEach } from 'vitest'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { _resetTerminalSideEffectFactConsumersForTest } from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
@@ -21,7 +23,7 @@ import {
 } from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
 import type { RuntimeClientEventBridgeHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
 
-function measuredConsumption(resident: object): TerminalSnapshotConsumption {
+function measuredConsumption(resident: TerminalSemanticResident): TerminalSnapshotConsumption {
   const value: unknown = Object.getOwnPropertyDescriptor(resident, 'consumption')?.value
   if (!(value instanceof TerminalSnapshotConsumption)) {
     throw new Error('Expected actual resident cursor')
@@ -29,7 +31,7 @@ function measuredConsumption(resident: object): TerminalSnapshotConsumption {
   return value
 }
 
-function measuredParser(source: object): TerminalSnapshotObserver {
+function measuredParser(source: TerminalResidentLegacySource): TerminalSnapshotObserver {
   const value: unknown = Object.getOwnPropertyDescriptor(source, 'bytes')?.value
   if (!(value instanceof TerminalSnapshotObserver)) {
     throw new Error('Expected actual legacy parser')

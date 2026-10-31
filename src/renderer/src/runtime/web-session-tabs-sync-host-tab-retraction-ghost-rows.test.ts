@@ -79,8 +79,11 @@ function makeHostSnapshot(args: {
   hostNow: number
   hostAgentStatusTabIds?: readonly string[]
   hostAgentStatusState?: 'working' | 'done'
-}): RuntimeMobileSessionTabsResult & {
-  tabs: Extract<RuntimeMobileSessionTabsResult['tabs'][number], { type: 'terminal' }>[]
+}): Omit<RuntimeMobileSessionTabsResult, 'tabs'> & {
+  tabs: Extract<
+    RuntimeMobileSessionTabsResult['tabs'][number],
+    { type: 'terminal'; status: 'ready' }
+  >[]
 } {
   const leafByTab: Record<string, string> = {
     [KEEP_TAB]: KEEP_LEAF,

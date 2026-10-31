@@ -1,3 +1,5 @@
+import type { TerminalResidentLegacySource } from '../../src/renderer/src/components/terminal-pane/terminal-resident-legacy-source'
+import type { TerminalSemanticResident } from '../../src/renderer/src/components/terminal-pane/terminal-semantic-residents'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TerminalSnapshotConsumption } from '../../src/shared/terminal-snapshot-consumption'
@@ -22,7 +24,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function measuredConsumption(resident: object): TerminalSnapshotConsumption {
+function measuredConsumption(resident: TerminalSemanticResident): TerminalSnapshotConsumption {
   const value: unknown = Object.getOwnPropertyDescriptor(resident, 'consumption')?.value
   if (!(value instanceof TerminalSnapshotConsumption)) {
     throw new Error('Expected actual resident cursor')
@@ -30,7 +32,7 @@ function measuredConsumption(resident: object): TerminalSnapshotConsumption {
   return value
 }
 
-function measuredParser(source: object): TerminalSnapshotObserver {
+function measuredParser(source: TerminalResidentLegacySource): TerminalSnapshotObserver {
   const value: unknown = Object.getOwnPropertyDescriptor(source, 'bytes')?.value
   if (!(value instanceof TerminalSnapshotObserver)) {
     throw new Error('Expected actual legacy parser')

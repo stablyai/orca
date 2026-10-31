@@ -13,7 +13,11 @@ import * as leaves from '../../../../shared/terminal-pane-layout-tree'
 import { createTerminalForegroundPublication } from '@/components/terminal-pane/pty-connection/terminal-foreground-services'
 import { whenCodexTerminalAppears } from '@/components/terminal-pane/codex-terminal-presence'
 
-function readMeasuredProperty(target: object, key: PropertyKey, receiver: unknown): unknown {
+function readMeasuredProperty(
+  target: Record<string, PaneForegroundAgentEntry>,
+  key: PropertyKey,
+  receiver: unknown
+): unknown {
   let current: object | null = target
   while (current) {
     const descriptor = Object.getOwnPropertyDescriptor(current, key)

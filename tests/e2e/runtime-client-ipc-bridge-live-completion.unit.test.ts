@@ -1,3 +1,4 @@
+import type { TerminalSemanticResident } from '../../src/renderer/src/components/terminal-pane/terminal-semantic-residents'
 import { afterEach, beforeEach } from 'vitest'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { _resetTerminalSideEffectFactConsumersForTest } from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
@@ -17,7 +18,7 @@ import { getTerminalSemanticResident } from '../../src/renderer/src/components/t
 import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
 import type { RuntimeClientEventBridgeHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
 
-function measuredConsumption(resident: object): TerminalSnapshotConsumption {
+function measuredConsumption(resident: TerminalSemanticResident): TerminalSnapshotConsumption {
   const value: unknown = Object.getOwnPropertyDescriptor(resident, 'consumption')?.value
   if (!(value instanceof TerminalSnapshotConsumption)) {
     throw new Error('Expected actual resident cursor')

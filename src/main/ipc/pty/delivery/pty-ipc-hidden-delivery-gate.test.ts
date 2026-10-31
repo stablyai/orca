@@ -1,3 +1,5 @@
+import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
+import { onTestFinished } from 'vitest'
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from '../pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
@@ -48,6 +50,17 @@ vi.mock('../../../codex/codex-pane-account-registry', () =>
 vi.mock('../../../codex/codex-state-db-backfill-recovery', () =>
   import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
+
+function legacySourceSelection() {
+  const sourceRuntime = new OrcaRuntimeService()
+  const select = vi.fn(sourceRuntime.selectPtyLegacySemanticSource.bind(sourceRuntime))
+  onTestFinished(() => {
+    for (const [ptyId] of select.mock.calls) {
+      sourceRuntime.onPtyExit(ptyId, 0)
+    }
+  })
+  return select
+}
 
 describe('registerPtyHandlers', () => {
   const {
@@ -111,6 +124,7 @@ describe('registerPtyHandlers', () => {
     it('drops hidden PTY data after model ingestion and emits one out-of-band restore marker', async () => {
       vi.useFakeTimers()
       const runtime = {
+        selectPtyLegacySemanticSource: legacySourceSelection(),
         setPtyController: vi.fn(),
         registerPty: vi.fn(),
         noteTerminalSpawnCommand: vi.fn(),
@@ -610,6 +624,7 @@ describe('registerPtyHandlers', () => {
     it('keeps drop memory across a renderer reload while clearing hidden/interest state', async () => {
       vi.useFakeTimers()
       const runtime = {
+        selectPtyLegacySemanticSource: legacySourceSelection(),
         setPtyController: vi.fn(),
         registerPty: vi.fn(),
         noteTerminalSpawnCommand: vi.fn(),
@@ -663,6 +678,7 @@ describe('registerPtyHandlers', () => {
     it('clears leaked delivery interest on renderer reload so the gate re-engages', async () => {
       vi.useFakeTimers()
       const runtime = {
+        selectPtyLegacySemanticSource: legacySourceSelection(),
         setPtyController: vi.fn(),
         registerPty: vi.fn(),
         noteTerminalSpawnCommand: vi.fn(),

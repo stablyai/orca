@@ -1,3 +1,4 @@
+import type { IpcPtyTransportOptions } from './pty-transport-types'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../shared/terminal-mode-reset-profiles'
@@ -94,26 +95,51 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
+function admitConnectedTransport(
+  transport: MockTransport,
+  options: IpcPtyTransportOptions
+): MockTransport {
+  const attach = transport.attach.getMockImplementation()
+  transport.attach.mockImplementation((args) => {
+    const result = attach?.(args)
+    const id = transport.getPtyId()
+    if (id) {
+      options.onSourceAdmitted?.(id)
+    }
+    return result
+  })
+  const connect = transport.connect.getMockImplementation()
+  transport.connect.mockImplementation(async (args) => {
+    const result = await connect?.(args)
+    const id = typeof result === 'string' ? result : result?.id
+    if (id) {
+      options.onSourceAdmitted?.(id, typeof result === 'object' ? result.incarnationId : undefined)
+    }
+    return result ?? null
+  })
+  return transport
+}
+
 vi.mock('./pty-transport', () => ({
-  createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
-    createdTransportOptions.push(options)
+  createIpcPtyTransport: vi.fn((options: IpcPtyTransportOptions) => {
+    createdTransportOptions.push({ ...options })
     const nextTransport = transportFactoryQueue.shift()
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
-    return nextTransport
+    return admitConnectedTransport(nextTransport, options)
   })
 }))
 
 vi.mock('./remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
-    (_environmentId: string, options: Record<string, unknown>) => {
-      createdTransportOptions.push(options)
+    (_environmentId: string, options: IpcPtyTransportOptions) => {
+      createdTransportOptions.push({ ...options })
       const nextTransport = transportFactoryQueue.shift()
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
-      return nextTransport
+      return admitConnectedTransport(nextTransport, options)
     }
   )
 }))
@@ -153,7 +179,7 @@ describe('connectPanePty', () => {
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
       './use-notification-dispatch'
     )
-    const transport = createMockTransport()
+    const transport = createMockTransport('tab-pty')
     transportFactoryQueue.push(transport)
 
     // Invoke notification dispatch directly through the mocked useCallback; no React mount is needed.
@@ -187,12 +213,17 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
 
-    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
-      | ((title: string) => void)
-      | undefined
-    if (!idleHandler) {
-      throw new Error('Expected onAgentBecameIdle to be registered')
+    if (vi.isFakeTimers()) {
+      await vi.advanceTimersByTimeAsync(20)
     }
+    await flushAsyncTicks(40)
+    const { getTerminalSemanticResident } = await import('./terminal-semantic-residents')
+    const resident = getTerminalSemanticResident('tab-pty')
+    expect(resident?.isLive).toBe(true)
+    if (!resident?.isLive) {
+      throw new Error('Expected actual admitted idle-policy owner')
+    }
+    const idleHandler = resident.policy.callbacks.onAgentBecameIdle
 
     vi.useFakeTimers()
     idleHandler('* Claude done')
@@ -207,7 +238,8 @@ describe('connectPanePty', () => {
       source: 'agent-task-complete',
       terminalTitle: '* Claude done',
       ptyId: 'tab-pty',
-      paneKey
+      paneKey,
+      workspaceOwner: { executionHostId: 'local', runtimeEnvironmentId: null }
     })
     expect(mockStoreState.markAgentAttentionUnread).toHaveBeenCalledWith({
       workspaceId: 'wt-1',
@@ -235,7 +267,7 @@ describe('connectPanePty', () => {
 
   it('ignores title-only idle while fresh hook status is still working', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
+    const transport = createMockTransport('tab-pty')
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
     mockStoreState.agentStatusByPaneKey[paneKey] = {
@@ -254,12 +286,17 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
 
-    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
-      | ((title: string) => void)
-      | undefined
-    if (!idleHandler) {
-      throw new Error('Expected onAgentBecameIdle to be registered')
+    if (vi.isFakeTimers()) {
+      await vi.advanceTimersByTimeAsync(20)
     }
+    await flushAsyncTicks(40)
+    const { getTerminalSemanticResident } = await import('./terminal-semantic-residents')
+    const resident = getTerminalSemanticResident('tab-pty')
+    expect(resident?.isLive).toBe(true)
+    if (!resident?.isLive) {
+      throw new Error('Expected actual admitted idle-policy owner')
+    }
+    const idleHandler = resident.policy.callbacks.onAgentBecameIdle
 
     idleHandler('/var/folders/false-idle-title')
 
@@ -276,7 +313,7 @@ describe('connectPanePty', () => {
     { title: '✳ Claude Code', completion: true }
   ])('requires replacement identity over a fresh hook: $title', async ({ title, completion }) => {
     const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
+    const transport = createMockTransport('tab-pty')
     transportFactoryQueue.push(transport)
     vi.useFakeTimers()
     const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -296,12 +333,17 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
 
-    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
-      | ((title: string) => void)
-      | undefined
-    if (!idleHandler) {
-      throw new Error('Expected onAgentBecameIdle to be registered')
+    if (vi.isFakeTimers()) {
+      await vi.advanceTimersByTimeAsync(20)
     }
+    await flushAsyncTicks(40)
+    const { getTerminalSemanticResident } = await import('./terminal-semantic-residents')
+    const resident = getTerminalSemanticResident('tab-pty')
+    expect(resident?.isLive).toBe(true)
+    if (!resident?.isLive) {
+      throw new Error('Expected actual admitted idle-policy owner')
+    }
+    const idleHandler = resident.policy.callbacks.onAgentBecameIdle
 
     idleHandler(title)
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
@@ -320,7 +362,8 @@ describe('connectPanePty', () => {
       source: 'agent-task-complete',
       terminalTitle: title,
       ptyId: 'tab-pty',
-      paneKey
+      paneKey,
+      workspaceOwner: { executionHostId: 'local', runtimeEnvironmentId: null }
     })
     expect(pane.terminal.write).toHaveBeenCalledWith(
       RESET_TERMINAL_CURSOR_STYLE,
@@ -330,7 +373,7 @@ describe('connectPanePty', () => {
 
   it('ignores an explicit idle title while fresh hook identity is unknown', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
+    const transport = createMockTransport('tab-pty')
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
     mockStoreState.agentStatusByPaneKey[paneKey] = {
@@ -349,12 +392,17 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
 
-    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
-      | ((title: string) => void)
-      | undefined
-    if (!idleHandler) {
-      throw new Error('Expected onAgentBecameIdle to be registered')
+    if (vi.isFakeTimers()) {
+      await vi.advanceTimersByTimeAsync(20)
     }
+    await flushAsyncTicks(40)
+    const { getTerminalSemanticResident } = await import('./terminal-semantic-residents')
+    const resident = getTerminalSemanticResident('tab-pty')
+    expect(resident?.isLive).toBe(true)
+    if (!resident?.isLive) {
+      throw new Error('Expected actual admitted idle-policy owner')
+    }
+    const idleHandler = resident.policy.callbacks.onAgentBecameIdle
 
     idleHandler('Claude Code done')
 
@@ -368,7 +416,7 @@ describe('connectPanePty', () => {
 
   it('ignores a Pi idle title while compatible OMP hook status is active', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
+    const transport = createMockTransport('tab-pty')
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
     mockStoreState.agentStatusByPaneKey[paneKey] = {
@@ -387,12 +435,17 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
 
-    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
-      | ((title: string) => void)
-      | undefined
-    if (!idleHandler) {
-      throw new Error('Expected onAgentBecameIdle to be registered')
+    if (vi.isFakeTimers()) {
+      await vi.advanceTimersByTimeAsync(20)
     }
+    await flushAsyncTicks(40)
+    const { getTerminalSemanticResident } = await import('./terminal-semantic-residents')
+    const resident = getTerminalSemanticResident('tab-pty')
+    expect(resident?.isLive).toBe(true)
+    if (!resident?.isLive) {
+      throw new Error('Expected actual admitted idle-policy owner')
+    }
+    const idleHandler = resident.policy.callbacks.onAgentBecameIdle
 
     idleHandler('Pi ready')
 

@@ -10,7 +10,11 @@ import { SessionTransientObservations } from './session-transient-observations'
 import { SessionOutputPlane } from './session-output-plane'
 import type { DaemonEvent } from './daemon-stream-events'
 
-function readMeasuredProperty(target: object, key: PropertyKey, receiver: unknown): unknown {
+function readMeasuredProperty(
+  target: StreamQueueEntry[],
+  key: PropertyKey,
+  receiver: unknown
+): unknown {
   let current: object | null = target
   while (current) {
     const descriptor = Object.getOwnPropertyDescriptor(current, key)

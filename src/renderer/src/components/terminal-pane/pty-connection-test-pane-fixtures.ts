@@ -21,7 +21,7 @@ export type MockTransport = {
       opts: Parameters<PtyTransport['connect']>[0]
     ) => Promise<Awaited<ReturnType<PtyTransport['connect']>> | null>
   >
-  disconnect: ReturnType<typeof vi.fn>
+  disconnect: Mock<PtyTransport['disconnect']>
   detach?: ReturnType<typeof vi.fn>
   sendInput: Mock<(data: string, kind?: string, call?: TerminalInputCall) => boolean>
   sendInputImmediate: Mock<(data: string) => boolean>

@@ -1,3 +1,4 @@
+import type { PtyDataEvent } from '../providers/pty-provider-events'
 import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
@@ -316,7 +317,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           })
         })
       const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
-      const dataPayloads: Parameters<Parameters<DaemonPtyAdapter['onData']>[0]>[0][] = []
+      const dataPayloads: PtyDataEvent[] = []
       adapter2.onData((payload) => dataPayloads.push(payload))
 
       try {

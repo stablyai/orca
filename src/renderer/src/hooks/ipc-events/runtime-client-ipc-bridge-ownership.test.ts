@@ -1,3 +1,5 @@
+import type { TerminalSemanticResident } from '../../components/terminal-pane/terminal-semantic-residents'
+import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import { createHarness } from './runtime-client-ipc-bridge-harness-fixture'
 import { TerminalSnapshotConsumption } from '../../../../shared/terminal-snapshot-consumption'
@@ -27,7 +29,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function measuredConsumption(resident: object): TerminalSnapshotConsumption {
+function measuredConsumption(resident: TerminalSemanticResident): TerminalSnapshotConsumption {
   const value: unknown = Object.getOwnPropertyDescriptor(resident, 'consumption')?.value
   if (!(value instanceof TerminalSnapshotConsumption)) {
     throw new Error('Expected actual resident cursor')
