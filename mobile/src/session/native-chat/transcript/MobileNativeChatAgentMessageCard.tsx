@@ -18,6 +18,7 @@ import { MobileMarkdown } from '../../../components/MobileMarkdown'
 import { MobileAgentIcon } from '../../../components/MobileAgentIcon'
 import { AgentStateDot } from '../../../components/AgentStateDot'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
+import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { styles as markdownStyles } from '../../../components/mobile-markdown-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
@@ -126,6 +127,9 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
               onLongPress={onLongPress}
             />
           </View>
+          {measured && overflows && !open ? (
+            <MobileEdgeFade edge="bottom" height={(spacing.xl + spacing.xs) * fontScale} />
+          ) : null}
         </View>
         {status}
         {overflows ? (

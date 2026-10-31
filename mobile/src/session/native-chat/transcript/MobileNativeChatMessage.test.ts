@@ -10,6 +10,7 @@ import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../../../src/shared/agent-
 import { structuredQuestionTranscript } from '../../../../../src/shared/structured-agent-question-projection'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
 import { colors, typography } from '../../../theme/mobile-theme'
+import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { ANSWERED_PROMPT_ITEMS } from '../input/mobile-native-chat-answered-prompts.test-fixture'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { styles } from './mobile-native-chat-message-styles'
@@ -446,6 +447,58 @@ describe('MobileNativeChatMessage', () => {
     ).toBe(0)
     expect(textIn(tree.root)).not.toContain('Show more')
     expect(tree.root.findAllByProps({ accessibilityLabel: 'Copy message' })).toHaveLength(0)
+    expect(tree.root.findAllByType(MobileEdgeFade)).toHaveLength(0)
+  })
+
+  it('fades only the measured folded overflow without intercepting text selection', () => {
+    const tree = render({
+      ...userMessage([{ type: 'text', text: 'Done.\n\nChecked all 14 projects; details follow.' }]),
+      from: { kind: 'agent', orchestration: null, senders: [] }
+    })
+    const body = () =>
+      findAllByHostType(tree.root, 'View').find(
+        (node) => node.props.testID === 'agent-message-body'
+      )!
+    const viewport = findAllByHostType(tree.root, 'View').find(
+      (node) => node.props.testID === 'agent-message-viewport'
+    )!
+    const folded = viewport.props.style.height
+    const fades = () => tree.root.findAllByType(MobileEdgeFade)
+    expect(fades()).toHaveLength(0)
+    act(() => body().props.onLayout({ nativeEvent: { layout: { height: folded } } }))
+    expect(fades()).toHaveLength(0)
+    act(() => body().props.onLayout({ nativeEvent: { layout: { height: folded + 12 } } }))
+    expect(fades()).toHaveLength(1)
+    const overlay = findByHostType(fades()[0]!, 'View')
+    expect(overlay.props.pointerEvents).toBe('none')
+    expect(Object.assign({}, ...overlay.props.style)).toMatchObject({
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: 28
+    })
+    expect(
+      findAllByHostType(overlay, 'Stop').map((node) => [
+        node.props.stopColor,
+        node.props.stopOpacity
+      ])
+    ).toEqual([
+      [colors.bgPanel, 0],
+      [colors.bgPanel, 1]
+    ])
+    const toggle = () =>
+      findAllByHostType(tree.root, 'Pressable').find(
+        (node) => node.props.accessibilityState?.expanded !== undefined
+      )!
+    act(() => toggle().props.onPress())
+    expect(fades()).toHaveLength(0)
+    expect(viewport.props.style.height).toBe(folded + 12)
+    act(() => toggle().props.onPress())
+    expect(fades()).toHaveLength(1)
+    act(() => body().props.onLayout({ nativeEvent: { layout: { height: 20 } } }))
+    expect(fades()).toHaveLength(0)
+    expect(viewport.props.style.height).toBe(20)
   })
 
   it('measures the natural layer, expands and refolds, and preserves old-server body', () => {
