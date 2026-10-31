@@ -171,7 +171,7 @@ function detectFramedTerminalComposer(
   }
   const cursorIndex = context.rows.length - 1
   const codexFooterIndex = findCodexFooterIndex(context)
-  let afterCursor = context.afterCursor || context.rawAfterCursor
+  let afterCursor = context.afterCursor.trim() ? context.afterCursor : context.rawAfterCursor
   let continuationRows = composerContinuationRows(context, afterCursor, codexFooterIndex)
   const dimmedSuffix =
     !context.afterCursor.trim() &&

@@ -32,6 +32,18 @@ describe('rendered composer draft origin', () => {
       origin: 'agent_suggestion'
     },
     {
+      name: 'wrapped suggestion after undimmed spacing',
+      frame: `${CLAUDE_FRAME}\x1b7 \x1b[2m${'release '.repeat(14)}now\x1b[0m${CLAUDE_END}`,
+      draft: `${'release '.repeat(14)}now`,
+      origin: 'agent_suggestion'
+    },
+    {
+      name: 'wrapped stock placeholder after undimmed spacing',
+      frame: `${CLAUDE_FRAME}\x1b7 \x1b[2mTry "${'release '.repeat(14)}now"\x1b[0m${CLAUDE_END}`,
+      draft: undefined,
+      origin: 'agent_suggestion'
+    },
+    {
       name: 'real typed Claude draft',
       frame: `${CLAUDE_FRAME}approve the Nu .jsonl.zst path swap\x1b7${CLAUDE_END}`,
       draft: 'approve the Nu .jsonl.zst path swap',
