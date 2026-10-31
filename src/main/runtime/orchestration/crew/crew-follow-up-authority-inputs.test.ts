@@ -639,7 +639,16 @@ it('keeps a failed remote composite uncovered on the same adapter/key and retrie
         throw fault
       }
     }
-    expect(() => caller.childDepth(10)).toThrow(fault)
+    let caught: unknown
+    expect(() => {
+      try {
+        caller.childDepth(10)
+      } catch (error) {
+        caught = error
+        throw error
+      }
+    }).toThrow(fault)
+    expect(caught).toBe(fault)
     const failed = meter.executions.filter((row) => row.sql.startsWith('SELECT dispatch_id, depth'))
     expect(failed.map((row) => [row.rows, row.failed])).toEqual([
       [1, false],
@@ -672,7 +681,7 @@ it('keeps a failed remote composite uncovered on the same adapter/key and retrie
       meter.executions.filter((row) => row.sql === 'SELECT id, legacy FROM runs WHERE id = ?')
     ).toHaveLength(1)
     process.stdout.write(
-      `Crew remote incomplete retry ${JSON.stringify({ sameError: failed[1].failed, failed, retried, executions: meter.executions })}\n`
+      `Crew remote incomplete retry ${JSON.stringify({ sameError: caught === fault, failed, retried, executions: meter.executions })}\n`
     )
   } finally {
     meter.restore()
