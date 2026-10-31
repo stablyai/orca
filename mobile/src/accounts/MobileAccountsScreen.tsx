@@ -32,6 +32,7 @@ import { ConfirmModal } from '../components/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useRouteHandoff } from '../navigation/route-handoff'
+import { MobileAntigravityUsageSection } from './MobileAntigravityUsageSection'
 
 type AccountsNotice = { title: string; message: string }
 
@@ -376,6 +377,10 @@ export function MobileAccountsScreen() {
           <>
             {renderProviderSection('claude', 'Claude')}
             {renderProviderSection('codex', 'Codex')}
+            <MobileAntigravityUsageSection
+              limits={snapshot.rateLimits.antigravity ?? null}
+              now={now}
+            />
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>

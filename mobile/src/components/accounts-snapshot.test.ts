@@ -131,4 +131,32 @@ describe('decodeAccountsSnapshot', () => {
 
     expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
   })
+
+  it('validates optional Antigravity buckets including zero-duration windows and rejects wrong provider identity', () => {
+    const raw = makeSnapshot()
+    setPath(raw, ['rateLimits', 'antigravity'], {
+      provider: 'antigravity',
+      session: null,
+      weekly: null,
+      buckets: [
+        {
+          id: 'model-pool',
+          name: 'Gemini Pro',
+          usedPercent: 35,
+          windowMinutes: 0,
+          resetsAt: null,
+          resetDescription: null
+        }
+      ],
+      updatedAt: 100,
+      error: null,
+      status: 'ok'
+    })
+    const parsed = decodeAccountsSnapshot(raw)
+    expect(parsed.rateLimits.antigravity?.buckets?.[0]?.id).toBe('model-pool')
+    expect(parsed.rateLimits.antigravity?.buckets?.[0]?.windowMinutes).toBe(0)
+
+    setPath(raw, ['rateLimits', 'antigravity', 'provider'], 'claude')
+    expect(() => decodeAccountsSnapshot(raw)).toThrow('Invalid accounts snapshot from host')
+  })
 })
