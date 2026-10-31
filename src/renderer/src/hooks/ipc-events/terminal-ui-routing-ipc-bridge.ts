@@ -11,7 +11,7 @@ import type { AppState } from '../../store/types'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
-import { replacedTabHoldsSelection } from '@/lib/replaced-tab-selection'
+import { replacedTabGroupInView, replacedTabHoldsSelection } from '@/lib/replaced-tab-selection'
 import { focusTerminalInitiatedTab } from './terminal-command-state'
 import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 
@@ -166,12 +166,12 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       ) {
         return
       }
-      // A switch's destination: never reveal a workspace the user left, nor take a group's selection
-      // from a tab the user picked there.
+      // A switch's destination: never reveal a workspace the user left, pull focus from another
+      // group they moved to, nor take a group's selection from a tab the user picked there.
       if (
         sourceTabId &&
         tab &&
-        (store.activeWorktreeId !== worktreeId ||
+        (!replacedTabGroupInView(store, worktreeId, tab.groupId) ||
           !replacedTabHoldsSelection(store, worktreeId, {
             id: resolveWindowTabIdForHostTab(worktreeId, sourceTabId),
             groupId: tab.groupId

@@ -12,7 +12,7 @@ import { tryMakePaneKey } from './agent-status-routing'
 import { registerLaunchRecipe } from './launch-recipe-registration'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
-import { replacedTabHoldsSelection } from '@/lib/replaced-tab-selection'
+import { replacementSelection, selectReplacementInGroup } from '@/lib/replaced-tab-selection'
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
@@ -58,13 +58,9 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           const store = useAppStore.getState()
           // A replace opens in the replaced tab's group and takes its slot once the tab exists.
           const replaced = replaces && findUnifiedTab(worktreeId, replaces.tabId)
-          // Decided in this write: a replace takes the selection only from a tab that still holds
-          // it, in the workspace the user is in; otherwise the terminal fills the slot without
-          // moving the user (a source already gone is no proof the user stayed).
-          const takesSelection = replaced
-            ? store.activeWorktreeId === worktreeId &&
-              replacedTabHoldsSelection(store, worktreeId, replaced)
-            : !replaces
+          // Decided in this write: otherwise the terminal fills the slot without moving the user.
+          const selection = replaced ? replacementSelection(store, worktreeId, replaced) : 'none'
+          const takesSelection = replaced ? selection === 'focus' : !replaces
           const terminalPresentation = resolveTerminalPresentation({
             presentation: takesSelection ? presentation : 'background',
             activate,
@@ -155,6 +151,9 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                 ))
           const closedReplaced =
             placeCreatedTerminalTab(worktreeId, tab.id, { afterTabId, replaced }) && replaces
+          if (closedReplaced && selection === 'group') {
+            selectReplacementInGroup(worktreeId, tab.id)
+          }
           // Different reused IDs break the PTY’s baked-in paneKey attribution; warn in dev.
           if (tabId !== undefined && tab.id !== tabId) {
             console.warn(

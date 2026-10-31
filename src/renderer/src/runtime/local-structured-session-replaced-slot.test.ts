@@ -35,11 +35,13 @@ afterEach(() => {
 })
 
 it.each([
-  ['still held the selection', 'switched'],
-  ['lost the selection to another tab', 'after']
+  ['still held the selection', 'switched', GROUP],
+  ['lost the selection to another tab', 'after', GROUP],
+  // The user works in another split group: the group shows the chat, focus stays with the user.
+  ['held the selection of a group the user left', 'switched', 'group-2']
 ])(
   'puts the chat in the replaced terminal’s pinned slot, closing it as a replace, when it %s',
-  (_name, active) => {
+  (_name, active, activeGroup) => {
     const terminal = (id: string, isPinned = false) =>
       makeUnifiedTab({
         id,
@@ -70,11 +72,19 @@ it.each([
             activeTabId: active,
             tabOrder: ['before', 'switched', 'after'],
             recentTabIds: ['before', active]
-          })
+          }),
+          makeTabGroup({ id: 'group-2', worktreeId: WORKTREE, activeTabId: null, tabOrder: [] })
         ]
       },
-      layoutByWorktree: { [WORKTREE]: { type: 'leaf', groupId: GROUP } },
-      activeGroupIdByWorktree: { [WORKTREE]: GROUP },
+      layoutByWorktree: {
+        [WORKTREE]: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: GROUP },
+          second: { type: 'leaf', groupId: 'group-2' }
+        }
+      },
+      activeGroupIdByWorktree: { [WORKTREE]: activeGroup },
       openFiles: [],
       browserTabsByWorktree: {}
     })
@@ -114,5 +124,6 @@ it.each([
     expect(state.groupsByWorktree[WORKTREE]?.[0]?.activeTabId).toBe(
       active === 'switched' ? chat?.id : 'after'
     )
+    expect(state.activeGroupIdByWorktree[WORKTREE]).toBe(activeGroup)
   }
 )

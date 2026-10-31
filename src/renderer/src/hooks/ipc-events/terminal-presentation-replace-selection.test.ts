@@ -46,13 +46,15 @@ const GROUP = 'group-1'
 const TERMINAL = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 
 it.each([
-  ['still held it', 'chat-tab', WT, TERMINAL],
-  ['lost it to another tab', 'u-other', WT, 'u-other'],
-  // The user moved to another workspace while the switch ran: nothing reveals this one.
-  ['held it in a workspace the user left', 'chat-tab', 'repo1::/tmp/wt2', 'u-other']
+  ['still held it', 'chat-tab', WT, GROUP, TERMINAL],
+  ['lost it to another tab', 'u-other', WT, GROUP, 'u-other'],
+  // The user moved to another workspace, or another split group, while the switch ran: the group
+  // still shows the terminal in the chat's place, and nothing reveals or focuses it.
+  ['held it in a workspace the user left', 'chat-tab', 'repo1::/tmp/wt2', GROUP, TERMINAL],
+  ['held it while the user worked in another split group', 'chat-tab', WT, 'group-2', TERMINAL]
 ])(
   'takes the chat’s slot, and its selection only if the chat %s',
-  (_name, active, shown, after) => {
+  (_name, active, shown, activeGroup, after) => {
     seedStore(store, {
       activeWorktreeId: shown,
       worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/tmp/wt1' })] },
@@ -84,11 +86,12 @@ it.each([
             activeTabId: active,
             tabOrder: ['chat-tab', 'u-other'],
             recentTabIds: [active]
-          })
+          }),
+          makeTabGroup({ id: 'group-2', worktreeId: WT, activeTabId: null, tabOrder: [] })
         ]
       },
       layoutByWorktree: { [WT]: { type: 'leaf', groupId: GROUP } },
-      activeGroupIdByWorktree: { [WT]: GROUP },
+      activeGroupIdByWorktree: { [WT]: activeGroup },
       openFiles: [],
       browserTabsByWorktree: {}
     })
@@ -106,6 +109,7 @@ it.each([
     expect(group?.tabOrder).toEqual([TERMINAL, 'u-other'])
     expect(group?.activeTabId).toBe(after)
     expect(store.getState().activeWorktreeId).toBe(shown)
+    expect(store.getState().activeGroupIdByWorktree[WT]).toBe(activeGroup)
     expect(mocks.reply).toHaveBeenLastCalledWith(
       expect.objectContaining({ tabId: TERMINAL, closed: ['chat-tab'] })
     )
