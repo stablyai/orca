@@ -893,6 +893,13 @@
       "pluginNewFile": {
         "unavailable": "{{value0}}을(를) 더 이상 사용할 수 없습니다. 해당 플러그인을 다시 켜세요.",
         "failed": "파일을 만들 수 없습니다."
+      },
+      "pluginAutoUpdates": {
+        "one": "{{value0}}을(를) {{value1}}(으)로 업데이트했습니다",
+        "many": "플러그인 {{value0}}개를 업데이트했습니다"
+      },
+      "pluginInstallLink": {
+        "invalid": "유효하지 않은 플러그인 링크입니다."
       }
     },
     "lib": {
@@ -11280,7 +11287,8 @@
           "pathLabel": "개발 플러그인 폴더 경로",
           "placeholder": "플러그인 폴더 경로",
           "add": "경로 추가",
-          "reviewHelp": "한 번만 검토합니다. 이후 코드 변경은 묻지 않고 실행됩니다."
+          "reviewHelp": "한 번만 검토합니다. 이후 코드 변경은 묻지 않고 실행됩니다.",
+          "dialogTitle": "개발 폴더"
         },
         "PluginInstallDialog": {
           "localRequired": "플러그인 폴더 경로를 입력하세요.",
@@ -12452,7 +12460,9 @@
           "repository": "저장소",
           "stoppedDataBody": "파일을 불러오지 못했습니다. 다시 시작해 재시도하세요.",
           "newerBody": "보는 동안 카탈로그가 변경되었습니다.",
-          "showNewer": "새 버전 보기"
+          "showNewer": "새 버전 보기",
+          "newerTitle": "새 버전을 사용할 수 있습니다",
+          "alsoListedBy": "{{value0}}에도 등록되어 있습니다. 업데이트는 설치한 카탈로그에서만 받습니다. 바꾸려면 제거한 뒤 다시 설치하세요."
         },
         "PluginDetailSections": {
           "typeLanguagePack": "인터페이스 언어",
@@ -12502,7 +12512,9 @@
           "rollbackTo": "{{value0}}(으)로 되돌리기…",
           "copyContentHash": "콘텐츠 해시 복사",
           "reviewUpdate": "업데이트 검토",
-          "dataLoadFailed": "파일을 불러오지 못했습니다"
+          "dataLoadFailed": "파일을 불러오지 못했습니다",
+          "updateNeedsReview": "업데이트 {{value0}} 검토 필요",
+          "updatedTo": "{{value0}}(으)로 업데이트됨"
         },
         "PluginSettingsOverview": {
           "offTitle": "플러그인이 꺼져 있습니다"
@@ -12565,20 +12577,27 @@
           "dark": "다크",
           "light": "라이트",
           "languageIncomplete": "{{value0}}% 번역됨. Orca 언어로 사용하기에는 너무 불완전합니다",
-          "languageCoverage": "인터페이스 언어 · {{value0}}% 번역됨"
+          "languageCoverage": "인터페이스 언어 · {{value0}}% 번역됨",
+          "newFileMenu": "+ 메뉴에 추가"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "다른 접근 권한 없음",
           "replacesShortcut": "{{value0}}({{value1}})이(가) {{value2}}의 단축키를 대체합니다.",
           "updatesKeepApproval": "업데이트는 새 접근 권한이 있을 때만 다시 묻습니다",
           "fullAccessUpdates": "업데이트가 묻지 않고 코드를 바꿀 수 있습니다",
-          "editsFileTypes": "Orca에서 {{value0}} 파일을 열고 편집합니다. 연 파일을 읽을 수 있습니다."
+          "editsFileTypes": "Orca에서 {{value0}} 파일을 열고 편집합니다. 연 파일을 읽을 수 있습니다.",
+          "install": "설치 및 사용",
+          "keepOff": "끈 상태로 유지"
         },
         "PluginPageAction": {
-          "contentOnly": "콘텐츠만"
+          "contentOnly": "콘텐츠만",
+          "failedTitle": "{{value0}}을(를) 설치할 수 없습니다"
         },
         "PluginSettingsMenu": {
-          "autoUpdateHint": "새 접근 권한이 있을 때만 다시 묻습니다"
+          "autoUpdateHint": "새 접근 권한이 있을 때만 다시 묻습니다",
+          "label": "플러그인 설정",
+          "development": "개발 폴더…",
+          "autoUpdateLabel": "플러그인 자동 업데이트"
         },
         "PluginInUseAction": {
           "inUseDark": "사용 중 · 다크",
@@ -12699,6 +12718,21 @@
           "cancel": "취소",
           "addFolder": "폴더 추가",
           "install": "설치"
+        },
+        "PluginPageHero": {
+          "screenshots": "스크린샷",
+          "openScreenshot": "스크린샷 열기: {{value0}}",
+          "position": "{{value0}} / {{value1}}",
+          "previous": "이전 스크린샷",
+          "next": "다음 스크린샷"
+        },
+        "PluginChips": {
+          "updateNeedsReview": "업데이트 검토 필요",
+          "updatedTo": "{{value0}}(으)로 업데이트됨",
+          "devUnverified": "개발 · 미검증"
+        },
+        "PluginContributionActionNewFile": {
+          "create": "만들기"
         }
       },
       "right": {
@@ -16113,13 +16147,29 @@
           "message": ".{{value0}} 파일을 열 수 있는 플러그인: {{value1}}",
           "view": "플러그인 보기",
           "notNow": "나중에",
-          "never": ".{{value0}}에 대해 제안하지 않기"
+          "never": ".{{value0}}에 대해 제안하지 않기",
+          "editorMessage": "플러그인이 .{{value0}} 파일용 편집기를 추가합니다: {{value1}}"
         },
         "RichMarkdownEmojiMenu": {
           "chooseEmoji": "이모지 선택"
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "붙여 넣은 이미지를 문서 옆에 저장할 수 없습니다. Orca를 다시 시작한 후 불러오지 못할 수 있습니다."
+        },
+        "PluginCustomEditorFrame": {
+          "loading": "편집기 로드 중…",
+          "unresponsive": "{{value0}}이(가) 응답하지 않습니다. 계속 편집하려면 소스로 전환하세요.",
+          "loadFailed": "{{value0}}을(를) 불러올 수 없습니다. 이 파일을 편집하려면 소스로 전환하세요.",
+          "editTooLarge": "파일이 너무 커서 {{value0}}에서 변경 사항을 저장할 수 없습니다. 대신 소스를 사용하세요.",
+          "saveBlocked": "{{value0}}의 최신 변경 사항을 저장할 수 없습니다.",
+          "editsHeld": "{{value0}}이(가) 변경 사항을 너무 빠르게 보내고 있습니다. Orca가 곧 최신 변경 사항을 적용합니다.",
+          "largeFile": "큰 파일입니다. 잠시 걸릴 수 있습니다."
+        },
+        "PluginBytesCustomEditorSurface": {
+          "retry": "다시 시도",
+          "tooLarge": "{{value0}}은(는) 너무 커서 {{value1}}에서 열 수 없습니다({{value2}}, 한도는 {{value3}}).",
+          "unsupported": "{{value0}}은(는) 이 파일이 저장된 위치에서 읽을 수 없습니다. 파일을 호스팅하는 Orca 서버를 업데이트하거나 소스로 전환하세요.",
+          "readFailed": "{{value1}}에서 사용할 {{value0}}을(를) 읽을 수 없습니다. {{value2}}"
         }
       },
       "diff": {
@@ -16442,7 +16492,8 @@
           },
           "pluginQuickActions": {
             "description": "{{value0}} 플러그인 명령",
-            "keyword": "플러그인 명령"
+            "keyword": "플러그인 명령",
+            "newFileDescription": "활성 작업 공간에 제목 없는 {{value0}} 파일을 만듭니다."
           }
         }
       },
@@ -17679,7 +17730,8 @@
           "notInstalled": "설치 안 됨"
         },
         "PluginListGroup": {
-          "showAll": "{{value0}}개 더 보기"
+          "showAll": "{{value0}}개 더 보기",
+          "showAllTotal": "플러그인 {{value0}}개 모두 보기"
         },
         "PluginListRow": {
           "official": "공식"
@@ -18175,6 +18227,13 @@
         },
         "pluginInstallCount": {
           "installs": "{{value0}}회 설치"
+        },
+        "PluginCatalogLinkDialog": {
+          "failed": "이 카탈로그를 추가할 수 없습니다.",
+          "title": "카탈로그 {{value0}}을(를) 추가할까요?",
+          "cancel": "취소",
+          "add": "카탈로그 추가",
+          "body": "링크가 이 카탈로그의 {{value0}}을(를) 표시하도록 요청했습니다. 신뢰할 수 있는 사람의 카탈로그만 추가하세요."
         }
       }
     },

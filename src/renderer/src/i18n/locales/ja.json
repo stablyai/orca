@@ -893,6 +893,13 @@
       "pluginNewFile": {
         "unavailable": "{{value0}} は利用できなくなりました。プラグインを再度オンにしてください。",
         "failed": "ファイルを作成できませんでした。"
+      },
+      "pluginAutoUpdates": {
+        "one": "{{value0}} を {{value1}} にアップデートしました",
+        "many": "{{value0}} 件のプラグインをアップデートしました"
+      },
+      "pluginInstallLink": {
+        "invalid": "このプラグインのリンクは無効です。"
       }
     },
     "lib": {
@@ -11280,7 +11287,8 @@
           "pathLabel": "開発用プラグインのフォルダーパス",
           "placeholder": "プラグインフォルダーのパス",
           "add": "パスを追加",
-          "reviewHelp": "確認は一度だけ。その後のコード変更は確認なしで実行されます。"
+          "reviewHelp": "確認は一度だけ。その後のコード変更は確認なしで実行されます。",
+          "dialogTitle": "開発フォルダー"
         },
         "PluginInstallDialog": {
           "localRequired": "プラグインフォルダーのパスを入力してください。",
@@ -12452,7 +12460,9 @@
           "repository": "リポジトリ",
           "stoppedDataBody": "ファイルを読み込めませんでした。再起動して再試行してください。",
           "newerBody": "表示中にカタログが更新されました。",
-          "showNewer": "新しい版を表示"
+          "showNewer": "新しい版を表示",
+          "newerTitle": "新しいバージョンがあります",
+          "alsoListedBy": "{{value0}} にも掲載されています。アップデートはインストール元のカタログからのみ届きます。切り替えるには、削除してから再インストールしてください。"
         },
         "PluginDetailSections": {
           "typeLanguagePack": "表示言語",
@@ -12502,7 +12512,9 @@
           "rollbackTo": "{{value0}} に戻す…",
           "copyContentHash": "コンテンツハッシュをコピー",
           "reviewUpdate": "アップデートを確認",
-          "dataLoadFailed": "ファイルを読み込めませんでした"
+          "dataLoadFailed": "ファイルを読み込めませんでした",
+          "updateNeedsReview": "アップデート {{value0}} のレビューが必要です",
+          "updatedTo": "{{value0}} にアップデート済み"
         },
         "PluginSettingsOverview": {
           "offTitle": "プラグインはオフです"
@@ -12565,20 +12577,27 @@
           "dark": "ダーク",
           "light": "ライト",
           "languageIncomplete": "{{value0}}% 翻訳済み。Orca の言語として使うには不完全です",
-          "languageCoverage": "インターフェース言語 · {{value0}}% 翻訳済み"
+          "languageCoverage": "インターフェース言語 · {{value0}}% 翻訳済み",
+          "newFileMenu": "+ メニューに追加"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "その他のアクセスはありません",
           "replacesShortcut": "{{value0}}（{{value1}}）が {{value2}} のショートカットを置き換えます。",
           "updatesKeepApproval": "アップデートは新しいアクセスがあるときだけ確認します",
           "fullAccessUpdates": "アップデートで確認なしにコードが変わることがあります",
-          "editsFileTypes": "Orca で {{value0}} ファイルを開いて編集します。開いたファイルを読み取れます。"
+          "editsFileTypes": "Orca で {{value0}} ファイルを開いて編集します。開いたファイルを読み取れます。",
+          "install": "インストールして有効化",
+          "keepOff": "オフのままにする"
         },
         "PluginPageAction": {
-          "contentOnly": "コンテンツのみ"
+          "contentOnly": "コンテンツのみ",
+          "failedTitle": "{{value0}} をインストールできませんでした"
         },
         "PluginSettingsMenu": {
-          "autoUpdateHint": "新しいアクセスがあるときだけ確認します"
+          "autoUpdateHint": "新しいアクセスがあるときだけ確認します",
+          "label": "プラグイン設定",
+          "development": "開発フォルダー…",
+          "autoUpdateLabel": "プラグインを自動でアップデート"
         },
         "PluginInUseAction": {
           "inUseDark": "使用中 · ダーク",
@@ -12699,6 +12718,21 @@
           "cancel": "キャンセル",
           "addFolder": "フォルダーを追加",
           "install": "インストール"
+        },
+        "PluginPageHero": {
+          "screenshots": "スクリーンショット",
+          "openScreenshot": "スクリーンショットを開く: {{value0}}",
+          "position": "{{value0}} / {{value1}}",
+          "previous": "前のスクリーンショット",
+          "next": "次のスクリーンショット"
+        },
+        "PluginChips": {
+          "updateNeedsReview": "アップデートのレビューが必要",
+          "updatedTo": "{{value0}} にアップデート済み",
+          "devUnverified": "開発 · 未検証"
+        },
+        "PluginContributionActionNewFile": {
+          "create": "作成"
         }
       },
       "right": {
@@ -16113,13 +16147,29 @@
           "message": ".{{value0}} ファイルを開けるプラグインがあります: {{value1}}",
           "view": "プラグインを表示",
           "notNow": "今はしない",
-          "never": ".{{value0}} では提案しない"
+          "never": ".{{value0}} では提案しない",
+          "editorMessage": "プラグインが .{{value0}} ファイル用のエディターを追加します: {{value1}}"
         },
         "RichMarkdownEmojiMenu": {
           "chooseEmoji": "絵文字を選択"
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "貼り付けた画像をドキュメントの隣に保存できませんでした。Orca の再起動後に読み込めない場合があります。"
+        },
+        "PluginCustomEditorFrame": {
+          "loading": "エディターを読み込み中…",
+          "unresponsive": "{{value0}} が応答しなくなりました。編集を続けるにはソースに切り替えてください。",
+          "loadFailed": "{{value0}} を読み込めませんでした。このファイルを編集するにはソースに切り替えてください。",
+          "editTooLarge": "このファイルは大きすぎるため、{{value0}} では変更を保存できません。代わりにソースを使用してください。",
+          "saveBlocked": "{{value0}} からの最新の変更を保存できませんでした。",
+          "editsHeld": "{{value0}} からの変更の送信が速すぎます。Orca はまもなく最新の変更を適用します。",
+          "largeFile": "大きなファイルです。少し時間がかかる場合があります。"
+        },
+        "PluginBytesCustomEditorSurface": {
+          "retry": "再試行",
+          "tooLarge": "{{value0}} は大きすぎるため {{value1}} で開けません（{{value2}}、上限は {{value3}}）。",
+          "unsupported": "{{value0}} はこのファイルの保存場所から読み取れません。ホストしている Orca サーバーをアップデートするか、ソースに切り替えてください。",
+          "readFailed": "{{value1}} 用に {{value0}} を読み取れませんでした。{{value2}}"
         }
       },
       "diff": {
@@ -16442,7 +16492,8 @@
           },
           "pluginQuickActions": {
             "description": "{{value0}} プラグインのコマンド",
-            "keyword": "プラグインのコマンド"
+            "keyword": "プラグインのコマンド",
+            "newFileDescription": "アクティブなワークスペースに無題の {{value0}} ファイルを作成します。"
           }
         }
       },
@@ -17679,7 +17730,8 @@
           "notInstalled": "未インストール"
         },
         "PluginListGroup": {
-          "showAll": "さらに {{value0}} 件を表示"
+          "showAll": "さらに {{value0}} 件を表示",
+          "showAllTotal": "{{value0}} 件のプラグインをすべて表示"
         },
         "PluginListRow": {
           "official": "公式"
@@ -18175,6 +18227,13 @@
         },
         "pluginInstallCount": {
           "installs": "{{value0}} 件のインストール"
+        },
+        "PluginCatalogLinkDialog": {
+          "failed": "このカタログを追加できませんでした。",
+          "title": "カタログ {{value0}} を追加しますか？",
+          "cancel": "キャンセル",
+          "add": "カタログを追加",
+          "body": "リンクがこのカタログの {{value0}} の表示を求めています。カタログは信頼できる相手からのものだけを追加してください。"
         }
       }
     },

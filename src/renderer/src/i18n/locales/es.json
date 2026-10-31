@@ -901,6 +901,13 @@
       "pluginNewFile": {
         "unavailable": "{{value0}} ya no está disponible. Vuelve a activar su plugin.",
         "failed": "No se pudo crear el archivo."
+      },
+      "pluginAutoUpdates": {
+        "one": "{{value0}} se actualizó a {{value1}}",
+        "many": "{{value0}} plugins actualizados"
+      },
+      "pluginInstallLink": {
+        "invalid": "Ese enlace de plugin no es válido."
       }
     },
     "lib": {
@@ -11565,7 +11572,8 @@
           "pathLabel": "Ruta de la carpeta del plugin de desarrollo",
           "placeholder": "Ruta a una carpeta de plugin",
           "add": "Añadir ruta",
-          "reviewHelp": "Se revisa una vez. Los cambios de código posteriores se ejecutan sin preguntar."
+          "reviewHelp": "Se revisa una vez. Los cambios de código posteriores se ejecutan sin preguntar.",
+          "dialogTitle": "Carpetas de desarrollo"
         },
         "PluginInstallDialog": {
           "localRequired": "Introduce la ruta de la carpeta del plugin.",
@@ -12740,7 +12748,9 @@
           "repository": "Repositorio",
           "stoppedDataBody": "No se pudieron cargar sus archivos. Reinicia para volver a intentarlo.",
           "newerBody": "El catálogo cambió mientras estabas aquí.",
-          "showNewer": "Ver la nueva"
+          "showNewer": "Ver la nueva",
+          "newerTitle": "Hay una versión más reciente",
+          "alsoListedBy": "También aparece en {{value0}}. Las actualizaciones solo llegan del catálogo desde el que se instaló; para cambiar, elimínalo y vuelve a instalarlo."
         },
         "PluginDetailSections": {
           "typeLanguagePack": "Idioma de la interfaz",
@@ -12790,7 +12800,9 @@
           "rollbackTo": "Volver a {{value0}}…",
           "copyContentHash": "Copiar hash del contenido",
           "reviewUpdate": "Revisar actualización",
-          "dataLoadFailed": "No se pudieron cargar sus archivos"
+          "dataLoadFailed": "No se pudieron cargar sus archivos",
+          "updateNeedsReview": "la actualización {{value0}} requiere revisión",
+          "updatedTo": "actualizado a {{value0}}"
         },
         "PluginSettingsOverview": {
           "offTitle": "Los plugins están desactivados"
@@ -12853,20 +12865,27 @@
           "dark": "Oscuro",
           "light": "Claro",
           "languageIncomplete": "{{value0}} % traducido, demasiado incompleto para usarlo como idioma de Orca",
-          "languageCoverage": "Idioma de la interfaz · {{value0}} % traducido"
+          "languageCoverage": "Idioma de la interfaz · {{value0}} % traducido",
+          "newFileMenu": "Se añade al menú +"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "Ningún otro acceso",
           "replacesShortcut": "{{value0}} ({{value1}}) reemplaza tu atajo para {{value2}}.",
           "updatesKeepApproval": "Las actualizaciones solo vuelven a preguntar por accesos nuevos",
           "fullAccessUpdates": "Las actualizaciones pueden cambiar su código sin preguntar",
-          "editsFileTypes": "Abre y edita archivos {{value0}} en Orca. Puede leer los archivos que abre."
+          "editsFileTypes": "Abre y edita archivos {{value0}} en Orca. Puede leer los archivos que abre.",
+          "install": "Instalar y activar",
+          "keepOff": "Mantener desactivado"
         },
         "PluginPageAction": {
-          "contentOnly": "Solo contenido"
+          "contentOnly": "Solo contenido",
+          "failedTitle": "No se pudo instalar {{value0}}"
         },
         "PluginSettingsMenu": {
-          "autoUpdateHint": "Solo vuelve a preguntar por accesos nuevos"
+          "autoUpdateHint": "Solo vuelve a preguntar por accesos nuevos",
+          "label": "Ajustes de plugins",
+          "development": "Carpetas de desarrollo…",
+          "autoUpdateLabel": "Actualizar plugins automáticamente"
         },
         "PluginInUseAction": {
           "inUseDark": "En uso · Oscuro",
@@ -12987,6 +13006,21 @@
           "cancel": "Cancelar",
           "addFolder": "Añadir carpeta",
           "install": "Instalar"
+        },
+        "PluginPageHero": {
+          "screenshots": "Capturas de pantalla",
+          "openScreenshot": "Abrir captura de pantalla: {{value0}}",
+          "position": "{{value0}} de {{value1}}",
+          "previous": "Captura anterior",
+          "next": "Captura siguiente"
+        },
+        "PluginChips": {
+          "updateNeedsReview": "La actualización requiere revisión",
+          "updatedTo": "Actualizado a {{value0}}",
+          "devUnverified": "Desarrollo · sin verificar"
+        },
+        "PluginContributionActionNewFile": {
+          "create": "Crear"
         }
       },
       "right": {
@@ -16516,13 +16550,29 @@
           "message": "Un plugin puede abrir archivos .{{value0}}: {{value1}}",
           "view": "Ver plugin",
           "notNow": "Ahora no",
-          "never": "No sugerir para .{{value0}}"
+          "never": "No sugerir para .{{value0}}",
+          "editorMessage": "Un plugin añade un editor para archivos .{{value0}}: {{value1}}"
         },
         "RichMarkdownEmojiMenu": {
           "chooseEmoji": "Elegir un emoji"
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "No se pudo guardar la imagen pegada junto al documento. Es posible que no se cargue después de reiniciar Orca."
+        },
+        "PluginCustomEditorFrame": {
+          "loading": "Cargando editor…",
+          "unresponsive": "{{value0}} dejó de responder. Cambia a Código fuente para seguir editando.",
+          "loadFailed": "No se pudo cargar {{value0}}. Cambia a Código fuente para editar este archivo.",
+          "editTooLarge": "Este archivo es demasiado grande para que {{value0}} guarde cambios. Usa Código fuente.",
+          "saveBlocked": "No se pudieron guardar los últimos cambios de {{value0}}.",
+          "editsHeld": "{{value0}} envía cambios demasiado rápido; Orca aplicará el más reciente en breve.",
+          "largeFile": "Archivo grande: puede tardar un momento."
+        },
+        "PluginBytesCustomEditorSurface": {
+          "retry": "Reintentar",
+          "tooLarge": "{{value0}} es demasiado grande para abrirse en {{value1}} ({{value2}}; el límite es {{value3}}).",
+          "unsupported": "{{value0}} no puede leer este archivo desde donde está almacenado. Actualiza el servidor de Orca que lo aloja o cambia a Código fuente.",
+          "readFailed": "No se pudo leer {{value0}} para {{value1}}. {{value2}}"
         }
       },
       "diff": {
@@ -16851,7 +16901,8 @@
           },
           "pluginQuickActions": {
             "description": "Comando del plugin {{value0}}",
-            "keyword": "comando del plugin"
+            "keyword": "comando del plugin",
+            "newFileDescription": "Crea un archivo {{value0}} sin título en el espacio de trabajo activo."
           }
         }
       },
@@ -18141,7 +18192,8 @@
           "notInstalled": "No instalados"
         },
         "PluginListGroup": {
-          "showAll": "Mostrar {{value0}} más"
+          "showAll": "Mostrar {{value0}} más",
+          "showAllTotal": "Mostrar los {{value0}} plugins"
         },
         "PluginListRow": {
           "official": "Oficial"
@@ -18649,6 +18701,13 @@
         },
         "pluginInstallCount": {
           "installs": "{{value0}} instalaciones"
+        },
+        "PluginCatalogLinkDialog": {
+          "failed": "No se pudo añadir este catálogo.",
+          "title": "¿Añadir el catálogo {{value0}}?",
+          "cancel": "Cancelar",
+          "add": "Añadir catálogo",
+          "body": "Un enlace pidió mostrar {{value0}} de este catálogo. Añade catálogos solo de personas en las que confíes."
         }
       }
     },
