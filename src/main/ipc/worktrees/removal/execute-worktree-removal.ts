@@ -37,6 +37,7 @@ import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { isAlreadyRemovedWorktreePath } from './worktree-removal-filesystem'
 import { rememberPreservedBranchCleanupTarget } from './preserved-branch-cleanup'
 import { removeWorktreeMetadataAndTransientState } from './worktree-removal-ownership'
+import { maybePruneReviewHeadRefsAfterWorktreeDelete } from '../../../worktree-review-head-prune'
 import { removeFolderWorkspace } from './remove-folder-workspace'
 import { removeUnregisteredWorktree } from './remove-unregistered-worktree'
 import { removeRegisteredLocalWorktree } from './remove-registered-local-worktree'
@@ -151,6 +152,15 @@ export async function executeWorktreeRemoval(
       removedPushTarget
     )
     runtime.clearOptimisticReconcileToken(args.worktreeId)
+    await maybePruneReviewHeadRefsAfterWorktreeDelete({
+      store,
+      repoPath: repo.path,
+      repoId,
+      worktreeId: args.worktreeId,
+      hostId: removalHostId,
+      meta: removedMeta,
+      localGitOptions: localWorktreeGitOptions
+    })
     removeWorktreeMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,
