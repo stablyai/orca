@@ -475,6 +475,22 @@ describe('runtime file client', () => {
       expect(fsReadFile).toHaveBeenCalledWith(expect.not.objectContaining({ rangePreview: true }))
     })
 
+    it('keeps the image path for an SVG a host could only decode lossily', async () => {
+      fsReadFile
+        .mockResolvedValueOnce({ content: '<svg><title>caf\uFFFD</title></svg>', isBinary: false })
+        .mockResolvedValueOnce({ content: '', isBinary: true, mediaUrl: 'orca-media://file/t' })
+      await expect(
+        readRuntimeFileContent({
+          target: { kind: 'local' as const },
+          filePath: '/repo/latin1.svg',
+          relativePath: 'latin1.svg',
+          worktreeId: 'wt-1',
+          pageOversizedBinary: true
+        })
+      ).resolves.toMatchObject({ isBinary: true, mediaUrl: 'orca-media://file/t' })
+      expect(fsReadFile).toHaveBeenLastCalledWith(expect.objectContaining({ rangePreview: true }))
+    })
+
     it('streams a chat scratch video from its own address', async () => {
       fsGrantRuntimeFilePreview.mockResolvedValue(media)
       const root = `/state/chat-scratch/${'a'.repeat(32)}`

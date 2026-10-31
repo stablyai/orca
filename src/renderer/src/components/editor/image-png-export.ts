@@ -32,6 +32,10 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const image = new Image()
     image.onload = () => resolve(image)
     image.onerror = () => reject(new Error('Could not load image'))
+    // A web image drawn without CORS taints the canvas; servers that allow CORS can then be copied.
+    if (/^https?:/i.test(src)) {
+      image.crossOrigin = 'anonymous'
+    }
     image.src = src
   })
 }
