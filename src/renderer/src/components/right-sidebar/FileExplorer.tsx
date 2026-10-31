@@ -24,7 +24,7 @@ import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { SearchFilters } from './SearchFilters'
-import { SearchQueryRow } from './SearchQueryRow'
+import { SearchQueryWithReplace } from './SearchQueryWithReplace'
 import { SearchResultsPane } from './SearchResultsPane'
 import { useFileSearchPanel } from './useFileSearchPanel'
 import {
@@ -300,7 +300,12 @@ function FileExplorerFiles(): React.JSX.Element {
               />
             </div>
             <div hidden={explorerView !== 'search'}>
-              <SearchQueryRow {...searchPanel.queryRowProps} />
+              <SearchQueryWithReplace
+                queryRowProps={searchPanel.queryRowProps}
+                replaceRowProps={searchPanel.replaceRowProps}
+                replaceVisible={searchPanel.replaceVisible}
+                onToggleReplace={searchPanel.onToggleReplace}
+              />
             </div>
             <div hidden={explorerView !== 'search'}>
               <SearchFilters key={activeWorktreeId} {...searchPanel.filtersProps} />
