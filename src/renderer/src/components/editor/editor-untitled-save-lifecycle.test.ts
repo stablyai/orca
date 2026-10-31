@@ -175,8 +175,8 @@ describe('untitled note save lifecycle', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(disk.files.get(FILE_ID)).toBe('agent text')
     expect(disk.fs.deletePath).not.toHaveBeenCalled()
-    // Why: a background tab never reloaded the write, so only the size check knew it was a real note.
-    expect(isReopenable(store)).toBe(reloaded)
+    // Why: the post-close size check keeps a background-written note in the reopen stack.
+    expect(isReopenable(store)).toBe(true)
   })
 
   it("removes a never-saved note's placeholder on Don't Save", async () => {

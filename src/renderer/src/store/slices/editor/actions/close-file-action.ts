@@ -1,18 +1,22 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
-import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import {
-  type ClosedEditorTabSnapshot,
-  MAX_RECENT_CLOSED_EDITOR_TABS,
-  type OpenFile
-} from '../types/open-file'
+  getRecentlyClosedTabPosition,
+  pushRecentlyClosedTabKind,
+  takeClosedTabOrder
+} from '../../recently-closed-tabs'
+import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
+import { type ClosedEditorTabSnapshot, type OpenFile } from '../types/open-file'
 import { removeMarkdownVisibilityKeys } from '../tabs/workspace-editor-item'
 import {
   deleteUntouchedUntitledFile,
   shouldDeleteUntouchedUntitledFile
 } from '../tabs/untitled-file-cleanup'
 import { unifiedTabsKeepWorktreeSelected } from './unified-tabs-keep-worktree-selected'
+import {
+  placeClosedEditorSnapshot,
+  rememberKeptUntitledEditor
+} from './remember-kept-untitled-editor'
 import { mayShareEditorBackingFile } from '../file-ids/editor-file-ids'
 import { isSameOwnedDocument } from '../file-ids/same-owned-editor-document'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
@@ -98,6 +102,13 @@ export function createCloseFileAction(
         ORCA_LAYOUT_OWNER_IS_MAIN && preClose
           ? getRecentlyClosedTabPosition(get(), preClose.worktreeId, fileId)
           : undefined
+      // Captured before the tab is dropped; a deferred layout-owner close would otherwise lose the place.
+      const reopenPosition =
+        shouldDeleteFromDisk && preClose?.worktreeId
+          ? (closedPosition ?? getRecentlyClosedTabPosition(get(), preClose.worktreeId, fileId))
+          : undefined
+      // Why: stamp before the file stat so a tab closed while that stat is in flight stays ahead.
+      const closeOrder = takeClosedTabOrder()
       const cleanUp = (): void => {
         set((s) => {
           // Switch point: the frame that dropped the tab may have dropped its record already.
@@ -248,19 +259,19 @@ export function createCloseFileAction(
               : getRecentlyClosedTabPosition(s, wtRecent, fileId)
             nextRecentlyClosed = {
               ...s.recentlyClosedEditorTabsByWorktree,
-              [wtRecent]: [
-                {
-                  ...(snap as ClosedEditorTabSnapshot),
-                  reopenId: fileId,
-                  ...(position ? { position } : {})
-                },
-                ...stack
-              ].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
+              [wtRecent]: placeClosedEditorSnapshot(stack, {
+                ...(snap as ClosedEditorTabSnapshot),
+                reopenId: fileId,
+                closeOrder,
+                ...(position ? { position } : {})
+              })
             }
             nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
               s.recentlyClosedTabKindsByWorktree,
               wtRecent,
-              'editor'
+              'editor',
+              1,
+              closeOrder
             )
           }
 
@@ -298,7 +309,12 @@ export function createCloseFileAction(
 
         // Eagerly created empty untitled paths are bindable placeholders; delete them after close to avoid disk clutter.
         if (shouldDeleteFromDisk && preClose && typeof window !== 'undefined') {
-          deleteUntouchedUntitledFile(get, preClose)
+          void deleteUntouchedUntitledFile(get, preClose).then((deleted) => {
+            // Why: the placeholder is only omitted from reopen when the delete actually removes it (#23771).
+            if (!deleted) {
+              rememberKeptUntitledEditor(set, preClose, reopenPosition, closeOrder)
+            }
+          })
         }
       }
 
