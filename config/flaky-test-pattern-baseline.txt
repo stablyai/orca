@@ -850,7 +850,7 @@
 1 test-no-wall-clock:src/main/github/client-work-items.test.ts
 2 test-no-wall-clock:src/main/github/client/check/check-job-log-routing.test.ts
 6 test-no-wall-clock:src/main/github/pr-refresh-coordinator-active-burst-pacing.test.ts
-10 test-no-wall-clock:src/main/github/pr-refresh-coordinator-active-visible-priority.test.ts
+9 test-no-wall-clock:src/main/github/pr-refresh-coordinator-active-visible-priority.test.ts
 15 test-no-wall-clock:src/main/github/pr-refresh-coordinator-alias-coalescing.test.ts
 5 test-no-wall-clock:src/main/github/pr-refresh-coordinator-completion-order.test.ts
 2 test-no-wall-clock:src/main/github/pr-refresh-coordinator-error-cadence.test.ts
