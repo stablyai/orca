@@ -7,99 +7,128 @@ vi.mock('./cookies/browser-cookie-import', () => ({
   importCookiesFromJson: vi.fn()
 }))
 
+const { diag } = vi.hoisted(() => ({ diag: vi.fn() }))
+vi.mock('./cookies/browser-cookie-import-diagnostics', () => ({
+  diag,
+  summarizeCookieImportError: (value: unknown) => String(value).trim()
+}))
+
 import {
   AgentcookieSessionSync,
-  detectAgentcookie,
-  pullAgentcookieSession
+  pullAgentcookieSession,
+  resolveApprovedAgentcookie
 } from './agentcookie-session-sync'
 
-describe('detectAgentcookie', () => {
+function writeFakeAgentcookie(dir: string): string {
+  const exe = join(dir, 'approved-agentcookie')
+  writeFileSync(exe, '#!/bin/sh\necho "[]"\n')
+  chmodSync(exe, 0o755)
+  return exe
+}
+
+describe('resolveApprovedAgentcookie', () => {
   let dir: string
   afterEach(() => {
-    if (dir) {
-      rmSync(dir, { recursive: true, force: true })
-    }
+    rmSync(dir, { recursive: true, force: true })
   })
 
-  it('finds an executable agentcookie on PATH', () => {
-    dir = mkdtempSync(join(tmpdir(), 'ac-detect-'))
-    const exe = join(dir, 'agentcookie')
-    writeFileSync(exe, '#!/bin/sh\n')
-    chmodSync(exe, 0o755)
-    expect(detectAgentcookie(dir)).toBe(exe)
-  })
-
-  it('returns null when not on PATH', () => {
-    dir = mkdtempSync(join(tmpdir(), 'ac-detect-'))
-    expect(detectAgentcookie(dir)).toBeNull()
-    expect(detectAgentcookie('')).toBeNull()
+  it('accepts only an absolute path to an existing executable', () => {
+    dir = mkdtempSync(join(tmpdir(), 'ac-resolve-'))
+    const exe = writeFakeAgentcookie(dir)
+    expect(resolveApprovedAgentcookie(exe)).toBe(exe)
+    expect(resolveApprovedAgentcookie(join(dir, 'missing'))).toBeNull()
+    expect(resolveApprovedAgentcookie('approved-agentcookie')).toBeNull()
+    expect(resolveApprovedAgentcookie(null)).toBeNull()
   })
 })
 
 describe('pullAgentcookieSession', () => {
-  it('is a no-op (null) when agentcookie is not installed', async () => {
+  it('is a no-op (null) without a binary', async () => {
     expect(await pullAgentcookieSession('persist:orca-browser', null)).toBeNull()
+  })
+
+  it.skipIf(process.platform === 'win32')('logs stderr when the export fails', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ac-pull-'))
+    const exe = join(dir, 'approved-agentcookie')
+    writeFileSync(exe, '#!/bin/sh\necho "keychain denied" >&2\nexit 1\n')
+    chmodSync(exe, 0o755)
+    try {
+      expect(await pullAgentcookieSession('persist:orca-browser', exe)).toBeNull()
+      expect(diag).toHaveBeenCalledWith('agentcookie export failed: keychain denied')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
 describe('AgentcookieSessionSync', () => {
-  const origPath = process.env.PATH
-  afterEach(() => {
-    process.env.PATH = origPath
-  })
-
-  it('does nothing and reports not-detected when agentcookie is absent', () => {
-    process.env.PATH = ''
+  it('never finds a binary on PATH when no path is approved', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ac-sync-'))
+    const origPath = process.env.PATH
+    process.env.PATH = dir
+    writeFakeAgentcookie(dir)
     const onStatus = vi.fn()
     const sync = new AgentcookieSessionSync({
       targetPartition: 'persist:orca-browser',
       isEnabled: () => true,
+      getApprovedBinaryPath: () => null,
       onStatus
     })
-    sync.start()
-    expect(onStatus).toHaveBeenCalledWith({
-      detected: false,
-      lastSyncAt: null,
-      lastImportedCount: null
-    })
-    sync.stop()
+    const syncNow = vi.spyOn(sync, 'syncNow')
+    try {
+      sync.start()
+      expect(onStatus).toHaveBeenCalledWith({
+        detected: false,
+        lastSyncAt: null,
+        lastImportedCount: null
+      })
+      expect(syncNow).not.toHaveBeenCalled()
+    } finally {
+      sync.stop()
+      process.env.PATH = origPath
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
-  it('reports detected but does not sync when disabled', () => {
+  it('stays idle while disabled and starts pulling once enabled', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ac-sync-'))
-    const exe = join(dir, 'agentcookie')
-    writeFileSync(exe, '#!/bin/sh\necho "[]"\n')
-    chmodSync(exe, 0o755)
-    process.env.PATH = dir
-    const onStatus = vi.fn()
-    const sync = new AgentcookieSessionSync({
-      targetPartition: 'persist:orca-browser',
-      isEnabled: () => false,
-      onStatus
-    })
-    sync.start()
-    expect(onStatus).toHaveBeenCalledWith({
-      detected: true,
-      lastSyncAt: null,
-      lastImportedCount: null
-    })
-    // Disabled: no second status from a sync cycle.
-    expect(onStatus).toHaveBeenCalledTimes(1)
-    sync.stop()
-    rmSync(dir, { recursive: true, force: true })
+    const exe = writeFakeAgentcookie(dir)
+    vi.useFakeTimers()
+    try {
+      let enabled = false
+      const sync = new AgentcookieSessionSync({
+        targetPartition: 'persist:orca-browser',
+        isEnabled: () => enabled,
+        getApprovedBinaryPath: () => exe,
+        intervalMs: 1000
+      })
+      const syncNow = vi
+        .spyOn(sync, 'syncNow')
+        .mockResolvedValue({ detected: true, lastSyncAt: null, lastImportedCount: null })
+
+      sync.start()
+      vi.advanceTimersByTime(1000)
+      expect(syncNow).not.toHaveBeenCalled()
+
+      enabled = true
+      vi.advanceTimersByTime(1000)
+      expect(syncNow).toHaveBeenCalledTimes(1)
+      sync.stop()
+    } finally {
+      vi.useRealTimers()
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('keeps one timer across repeated start() calls and can restart after stop()', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ac-sync-'))
-    const exe = join(dir, 'agentcookie')
-    writeFileSync(exe, '#!/bin/sh\necho "[]"\n')
-    chmodSync(exe, 0o755)
-    process.env.PATH = dir
+    const exe = writeFakeAgentcookie(dir)
     vi.useFakeTimers()
     try {
       const sync = new AgentcookieSessionSync({
         targetPartition: 'persist:orca-browser',
-        isEnabled: () => true
+        isEnabled: () => true,
+        getApprovedBinaryPath: () => exe
       })
       const syncNow = vi
         .spyOn(sync, 'syncNow')

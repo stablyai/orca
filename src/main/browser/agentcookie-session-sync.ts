@@ -1,16 +1,17 @@
 // Why: agentcookie (https://github.com/mvanhorn/agentcookie) is an optional
-// companion tool that decrypts the user's real browser session. When it is
-// installed, orca's embedded browser can stay signed in automatically instead
-// of requiring a manual "import cookies" step: orca pulls the current session
-// from `agentcookie export` and loads it through its own validated importer, on
-// startup and on an interval. When agentcookie is not installed, nothing here
-// runs and orca behaves exactly as before.
+// companion tool that decrypts the user's real browser session. When the user
+// opts in and names the executable to trust, orca's embedded browser can stay
+// signed in automatically instead of requiring a manual "import cookies" step:
+// orca pulls the current session from `agentcookie export` and loads it through
+// its own validated importer, on startup and on an interval. Without both of
+// those settings nothing is executed and orca behaves exactly as before.
 import { accessSync, constants as fsConstants } from 'node:fs'
 import { execFile } from 'node:child_process'
-import { delimiter, join } from 'node:path'
+import { isAbsolute } from 'node:path'
 import { promisify } from 'node:util'
 
 import { importCookiesFromJson } from './cookies/browser-cookie-import'
+import { diag, summarizeCookieImportError } from './cookies/browser-cookie-import-diagnostics'
 import type { BrowserCookieImportResult } from '../../shared/browser-workspace-types'
 
 const execFileAsync = promisify(execFile)
@@ -28,33 +29,27 @@ export type AgentcookieSyncStatus = {
   lastImportedCount: number | null
 }
 
-// detectAgentcookie resolves an `agentcookie` executable on PATH, or null when
-// it is not installed. PATH-scan (no subprocess) so a missing tool is a cheap,
-// silent no-op rather than a spawned `which` per check.
-export function detectAgentcookie(pathVar = process.env.PATH ?? ''): string | null {
-  const exeName = process.platform === 'win32' ? 'agentcookie.exe' : 'agentcookie'
-  for (const dir of pathVar.split(delimiter)) {
-    if (!dir) {
-      continue
-    }
-    const candidate = join(dir, exeName)
-    try {
-      accessSync(candidate, fsConstants.X_OK)
-      return candidate
-    } catch {
-      /* not in this dir */
-    }
+// Why: never search PATH. The export output becomes session cookies, so a
+// matching filename planted in an earlier PATH directory must not get executed.
+export function resolveApprovedAgentcookie(approvedPath: string | null | undefined): string | null {
+  if (!approvedPath || !isAbsolute(approvedPath)) {
+    return null
   }
-  return null
+  try {
+    accessSync(approvedPath, fsConstants.X_OK)
+    return approvedPath
+  } catch {
+    return null
+  }
 }
 
 // pullAgentcookieSession runs `agentcookie export` and imports its JSON into the
-// target partition via orca's own pipeline. Returns null when agentcookie is
-// absent or the export fails (not configured yet, no cookies, etc.) so the
-// caller can treat it as "nothing to sync" rather than an error.
+// target partition via orca's own pipeline. Returns null when no binary was
+// given or the export fails (not configured yet, no cookies, etc.) so the caller
+// can treat it as "nothing to sync" rather than an error.
 export async function pullAgentcookieSession(
   targetPartition: string,
-  binary: string | null = detectAgentcookie()
+  binary: string | null
 ): Promise<BrowserCookieImportResult | null> {
   if (!binary) {
     return null
@@ -67,7 +62,9 @@ export async function pullAgentcookieSession(
       maxBuffer: EXPORT_MAX_BUFFER
     })
     stdout = result.stdout
-  } catch {
+  } catch (error) {
+    const stderr = error && typeof error === 'object' && 'stderr' in error ? error.stderr : null
+    diag(`agentcookie export failed: ${summarizeCookieImportError(stderr || error)}`)
     return null
   }
   if (!stdout.trim()) {
@@ -79,13 +76,15 @@ export async function pullAgentcookieSession(
 export type AgentcookieSessionSyncOptions = {
   targetPartition: string
   isEnabled: () => boolean
+  getApprovedBinaryPath: () => string | null | undefined
   onStatus?: (status: AgentcookieSyncStatus) => void
   intervalMs?: number
 }
 
 // AgentcookieSessionSync keeps the browser partition signed in from agentcookie:
-// an immediate pull on start, then a debounced interval. It is inert when
-// agentcookie is not installed or the feature is disabled. One pull runs at a
+// an immediate pull on start, then a debounced interval. Nothing is executed
+// until the feature is enabled and a binary is approved, and both are re-read on
+// every tick so turning it on takes effect without a restart. One pull runs at a
 // time so a slow export never overlaps the interval.
 export class AgentcookieSessionSync {
   private timer: ReturnType<typeof setInterval> | null = null
@@ -100,16 +99,15 @@ export class AgentcookieSessionSync {
     if (this.timer) {
       return
     }
-    const binary = detectAgentcookie()
+    const binary = resolveApprovedAgentcookie(this.options.getApprovedBinaryPath())
     this.options.onStatus?.({
       detected: binary !== null,
       lastSyncAt: null,
       lastImportedCount: null
     })
-    if (!binary || !this.options.isEnabled()) {
-      return
+    if (binary && this.options.isEnabled()) {
+      void this.syncNow()
     }
-    void this.syncNow()
     this.timer = setInterval(() => {
       if (this.options.isEnabled()) {
         void this.syncNow()
@@ -126,7 +124,7 @@ export class AgentcookieSessionSync {
 
   // syncNow pulls once. Concurrency-guarded so the interval can't stack pulls.
   async syncNow(): Promise<AgentcookieSyncStatus> {
-    const binary = detectAgentcookie()
+    const binary = resolveApprovedAgentcookie(this.options.getApprovedBinaryPath())
     if (!binary || this.running) {
       const status = { detected: binary !== null, lastSyncAt: null, lastImportedCount: null }
       this.options.onStatus?.(status)

@@ -291,7 +291,8 @@ export function buildDefaultSettings(args: {
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
     voice: args.voice,
-    agentcookieSyncEnabled: true,
+    agentcookieSyncEnabled: false,
+    agentcookieBinaryPath: null,
     agentcookieDetected: false,
     agentcookieLastSyncAt: null,
     agentcookieLastImportedCount: null
