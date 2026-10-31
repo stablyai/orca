@@ -217,7 +217,14 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       resolveEmulatorCleanupWorkspaceId: (selector) =>
         this.resolveEmulatorCleanupWorkspaceId(selector),
       getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
-      getSettings: () => this.requireStore().getSettings()
+      getSettings: () => this.requireStore().getSettings(),
+      updateEmulatorSettings: (updates) => {
+        const store = this.requireStore()
+        if (!store.updateSettings) {
+          throw new Error('This host cannot save emulator preferences.')
+        }
+        store.updateSettings(updates, { notifyListeners: true })
+      }
     }
   })
 

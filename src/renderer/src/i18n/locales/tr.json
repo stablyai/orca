@@ -8254,7 +8254,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Kodlama ajanlarının Orca CLI komutlarıyla etkin mobil emülatörü kontrol etmesine izin verin.",
           "f2f8d97bb6": "Ajan Mobil Emülatör Kontrolü",
-          "143961d031": "Varsayılan Cihaz",
           "8aec2f99a0": "Emülatör kullanılabilirliğini yenile",
           "ae1612c58c": "Kullanılabilirlik",
           "f9af91ea26": "Yeni Mobil Emülatör eylemini gösterir ve ajanların etkin emülatöre bağlanmasına izin verir.",
@@ -8267,9 +8266,7 @@
           "d704fb5023": "Kurulum gerekli",
           "06b06429c6": "Android SDK ve iOS Simulator desteği kontrol ediliyor.",
           "6d1483d4a0": "1 emülatör cihazı algılandı.",
-          "0a452d4d3b": "{{value0}} emülatör cihazı algılandı.",
-          "f62a1bb759": "Orca, cihazlar algılandıktan sonra otomatik olarak bir emülatör cihazı seçecektir.",
-          "b2fd62ea75": "Yeni emülatör sekmeleri ve ajan bağlanma komutları için varsayılan cihaz. Otomatik seçim, zaten çalışmakta olan bir cihazı tercih eder."
+          "0a452d4d3b": "{{value0}} emülatör cihazı algılandı."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "Arayüz bulunamadı"

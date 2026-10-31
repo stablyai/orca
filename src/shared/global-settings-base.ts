@@ -1,3 +1,4 @@
+import type { EmulatorOpeningSettings } from './emulator-opening-preferences'
 import type { BrowserExtensionGlobalSettings } from './browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
@@ -12,7 +13,8 @@ import type { WorktreeDeletionPreferences } from './worktree-deletion-preference
 import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
-export type GlobalSettingsBase = ClaudeAgentViewSettings &
+export type GlobalSettingsBase = EmulatorOpeningSettings &
+  ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
   WorktreeDeletionPreferences &
   ClaudeAccountSwitchSettings &

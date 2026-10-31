@@ -159,7 +159,12 @@ export function EmulatorPaneToolbar({
           variant={loading ? 'ghost' : 'default'}
           className={cn('h-7 px-2 text-xs', loading && 'text-muted-foreground')}
           onClick={onAttach}
-          disabled={loading || devices.length === 0}
+          disabled={
+            loading ||
+            devices.length === 0 ||
+            !selectedUdid ||
+            devices.find((device) => device.udid === selectedUdid)?.isAvailable === false
+          }
         >
           {loading
             ? translate(

@@ -8268,7 +8268,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Coding-Agenten die Steuerung des aktiven mobilen Emulators über Orca-CLI-Befehle ermöglichen.",
           "f2f8d97bb6": "Steuerung mobiler Emulatoren durch Agenten",
-          "143961d031": "Standardgerät",
           "8aec2f99a0": "Emulatorverfügbarkeit aktualisieren",
           "ae1612c58c": "Verfügbarkeit",
           "f9af91ea26": "Zeigt die Aktion „Neuer mobiler Emulator“ an und ermöglicht Agenten, sich mit dem aktiven Emulator zu verbinden.",
@@ -8281,9 +8280,7 @@
           "d704fb5023": "Einrichtung erforderlich",
           "06b06429c6": "Unterstützung für Android SDK und iOS Simulator wird geprüft.",
           "6d1483d4a0": "1 Emulatorgerät erkannt.",
-          "0a452d4d3b": "{{value0}} Emulatorgeräte erkannt.",
-          "f62a1bb759": "Orca wählt automatisch ein Emulatorgerät aus, sobald Geräte erkannt werden.",
-          "b2fd62ea75": "Standardgerät für neue Emulator-Tabs und Verbindungsbefehle von Agenten. Die automatische Auswahl bevorzugt ein bereits laufendes Gerät."
+          "0a452d4d3b": "{{value0}} Emulatorgeräte erkannt."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "Keine Schnittstellen gefunden"

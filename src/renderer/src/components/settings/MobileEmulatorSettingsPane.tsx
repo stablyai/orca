@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { cn } from '@/lib/utils'
@@ -6,12 +6,11 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { AndroidLogo, IosBrandIcon } from '../mobile/MobileBrandIcons'
+import { EmulatorOpeningSettings } from './EmulatorOpeningSettings'
 import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
 import { MobileEmulatorAvailabilityDetails } from './MobileEmulatorAvailabilityDetails'
 import { SearchableSetting } from './SearchableSetting'
-import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
+import { SettingsSwitchRow } from './SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
 import { translate } from '@/i18n/i18n'
 import { emulatorErrorText, emulatorMessageText } from '@/lib/emulator-error-copy'
@@ -41,11 +40,6 @@ type MobileEmulatorSettingsPaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }
 
-const AUTOMATIC_DEVICE_VALUE = '__orca_automatic_emulator_device__'
-const AUTOMATIC_DEVICE_LABEL = 'Auto-select device'
-const SIMULATOR_STATE_SUFFIX_RE =
-  /\s+\((Booted|Booting|Creating|Shutdown|Shutting Down|Unavailable|Unknown)\)\s*$/i
-
 function statusText(availability: EmulatorAvailability | null, enabled: boolean): string {
   if (!enabled) {
     return translate('auto.components.settings.MobileEmulatorSettingsPane.a4f1c82d90', 'Disabled')
@@ -71,32 +65,6 @@ function statusBadgeClassName(availability: EmulatorAvailability | null, enabled
   return availability.available
     ? 'border-status-success-border bg-status-success-background text-status-success'
     : 'border-destructive/30 bg-destructive/10 text-destructive'
-}
-
-function deviceLabel(device: SimulatorDeviceRow): string {
-  const state = device.state.trim()
-  const name = device.name.replace(SIMULATOR_STATE_SUFFIX_RE, '').trim()
-  if (device.isAvailable === false) {
-    return `${name} (Unavailable)`
-  }
-  if (!state || state.toLowerCase() === 'shutdown') {
-    return name
-  }
-  return `${name} (${state})`
-}
-
-function isAndroidDevice(device: SimulatorDeviceRow): boolean {
-  return device.runtime === 'Android'
-}
-
-function DeviceSelectItemLabel({ device }: { device: SimulatorDeviceRow }): React.JSX.Element {
-  const Icon = isAndroidDevice(device) ? AndroidLogo : IosBrandIcon
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <Icon className="size-3.5 shrink-0 fill-current text-muted-foreground" />
-      <span className="truncate">{deviceLabel(device)}</span>
-    </span>
-  )
 }
 
 function availabilityDetail(availability: EmulatorAvailability | null): string {
@@ -126,7 +94,7 @@ export function MobileEmulatorSettingsPane({
   settings,
   updateSettings
 }: MobileEmulatorSettingsPaneProps): React.JSX.Element {
-  const languageRevision = useUiLanguageRevision()
+  useUiLanguageRevision()
   const [availability, setAvailability] = useState<EmulatorAvailability | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const enabled = settings.mobileEmulatorEnabled !== false
@@ -166,28 +134,6 @@ export function MobileEmulatorSettingsPane({
   }, [refreshAvailability])
 
   const devices = availability?.devices ?? []
-  const selectedDeviceKnown = devices.some(
-    (device) => device.udid === settings.mobileEmulatorDefaultDeviceUdid
-  )
-  const selectValue =
-    settings.mobileEmulatorDefaultDeviceUdid && selectedDeviceKnown
-      ? settings.mobileEmulatorDefaultDeviceUdid
-      : AUTOMATIC_DEVICE_VALUE
-
-  const defaultDeviceDescription = useMemo(() => {
-    if (devices.length === 0) {
-      return translate(
-        'auto.components.settings.MobileEmulatorSettingsPane.f62a1bb759',
-        'Orca will auto-select an emulator device after devices are detected.'
-      )
-    }
-    return translate(
-      'auto.components.settings.MobileEmulatorSettingsPane.b2fd62ea75',
-      'Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device.'
-    )
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [devices.length, languageRevision])
-
   return (
     <div className="space-y-4">
       <SearchableSetting
@@ -266,41 +212,11 @@ export function MobileEmulatorSettingsPane({
           ) : null}
         </div>
 
-        <SettingsRow
-          alignTop
-          label={translate(
-            'auto.components.settings.MobileEmulatorSettingsPane.143961d031',
-            'Default Device'
-          )}
-          description={defaultDeviceDescription}
-          control={
-            <Select
-              value={selectValue}
-              disabled={!enabled}
-              onValueChange={(value) =>
-                updateSettings({
-                  mobileEmulatorDefaultDeviceUdid: value === AUTOMATIC_DEVICE_VALUE ? null : value
-                })
-              }
-            >
-              <SelectTrigger size="sm" className="w-56 max-w-full">
-                <SelectValue placeholder={AUTOMATIC_DEVICE_LABEL} />
-              </SelectTrigger>
-              <SelectContent position="popper" align="end">
-                <SelectItem value={AUTOMATIC_DEVICE_VALUE}>{AUTOMATIC_DEVICE_LABEL}</SelectItem>
-                {devices.map((device) => (
-                  <SelectItem
-                    key={device.udid}
-                    value={device.udid}
-                    textValue={deviceLabel(device)}
-                    disabled={device.isAvailable === false}
-                  >
-                    <DeviceSelectItemLabel device={device} />
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          }
+        <EmulatorOpeningSettings
+          settings={settings}
+          devices={devices}
+          enabled={enabled}
+          updateSettings={updateSettings}
         />
       </SearchableSetting>
 

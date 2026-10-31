@@ -63,7 +63,7 @@ async function inspectIosAvailability(bridge: EmulatorBridge): Promise<IosAvaila
 function toSimulatorRow(device: EmulatorDevice): SimulatorDevice {
   return {
     name: device.name,
-    udid: device.id,
+    udid: device.detail === 'avd' || device.detail === 'emulator' ? device.name : device.id,
     state: device.state === 'booted' ? 'Booted' : 'Shutdown',
     runtime: 'Android',
     isAvailable: device.isAvailable

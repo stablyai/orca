@@ -1,3 +1,4 @@
+import { emulatorDevicePreference } from '../emulator/emulator-opening-preference'
 import type { BrowserWindow } from 'electron'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { EmulatorError } from '../emulator/emulator-errors'
@@ -6,7 +7,7 @@ import {
   inspectEmulatorAvailability,
   type EmulatorAvailability
 } from '../emulator/emulator-availability'
-import { resolveDefaultAttachDevice } from '../emulator/emulator-default-attach-device'
+import { RuntimeEmulatorAttach, type RuntimeEmulatorAttachParams } from './runtime-emulator-attach'
 import { setConfiguredAndroidSdkPath } from '../emulator/android/android-sdk-host-discovery'
 import type { EmulatorGesturePoint } from '../emulator/emulator-gesture-sender'
 import type { EmulatorSessionInfo } from '../emulator/emulator-types'
@@ -16,7 +17,11 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 
 type EmulatorHostSettings = Pick<
   GlobalSettings,
-  'mobileEmulatorEnabled' | 'mobileEmulatorDefaultDeviceUdid' | 'androidSdkPath'
+  | 'mobileEmulatorEnabled'
+  | 'mobileEmulatorDefaultDeviceUdid'
+  | 'androidSdkPath'
+  | 'mobileEmulatorOpeningMode'
+  | 'mobileEmulatorRecentDevices'
 >
 
 export type RuntimeEmulatorCommandHost = {
@@ -25,12 +30,25 @@ export type RuntimeEmulatorCommandHost = {
   resolveEmulatorCleanupWorkspaceId(selector: string): Promise<string>
   getAuthoritativeWindow(): BrowserWindow
   getSettings(): EmulatorHostSettings
+  updateEmulatorSettings?(updates: Pick<GlobalSettings, 'mobileEmulatorRecentDevices'>): void
 }
 
 type EmulatorTargetParams = { device?: string; emulator?: string; worktree?: string }
 
 export class RuntimeEmulatorCommands {
-  constructor(private readonly host: RuntimeEmulatorCommandHost) {}
+  private readonly attachCommands: RuntimeEmulatorAttach
+  constructor(private readonly host: RuntimeEmulatorCommandHost) {
+    this.attachCommands = new RuntimeEmulatorAttach(
+      host,
+      () => this.requireEmulatorBridge(),
+      (worktreeId, info, focus) => {
+        this.notifyRendererEmulatorAutoAttach(worktreeId, info)
+        if (focus) {
+          this.notifyRendererEmulatorPaneFocus(worktreeId)
+        }
+      }
+    )
+  }
 
   private requireEmulatorBridge(): EmulatorBridge {
     const bridge = this.host.getEmulatorBridge()
@@ -119,63 +137,8 @@ export class RuntimeEmulatorCommands {
     })
   }
 
-  async emulatorAttach(params: {
-    device?: string
-    worktree?: string
-    focus?: boolean
-  }): Promise<{ attached: boolean; info?: EmulatorSessionInfo }> {
-    const settings = this.host.getSettings()
-    if (settings.mobileEmulatorEnabled === false) {
-      throw new EmulatorError('emulator_disabled', emulatorFailureText('disabled'))
-    }
-    const bridge = this.requireEmulatorBridge()
-    let device = params.device ?? settings.mobileEmulatorDefaultDeviceUdid ?? undefined
-    if (!device) {
-      device = await resolveDefaultAttachDevice(bridge)
-    }
-    if (!device) {
-      throw new EmulatorError('emulator_device_not_found', emulatorFailureText('noDeviceSpecified'))
-    }
-    const worktreeId = await this.resolveWorktreeId(params.worktree)
-    if (worktreeId) {
-      const reusable = await bridge.getReusableActiveForWorktree(worktreeId, device)
-      if (reusable) {
-        // Renderer remounts must reuse streams to avoid disconnected reload loops.
-        this.notifyRendererEmulatorAutoAttach(worktreeId, reusable)
-        if (params.focus) {
-          this.notifyRendererEmulatorPaneFocus(worktreeId)
-        }
-        return { attached: true, info: reusable }
-      }
-      // Device switch retains slow-boot Android emulators for fast switch-back.
-      await bridge.stopActiveForSwitch(worktreeId)
-    }
-    const lease = await bridge.acquireHelperForDevice(device)
-    const { info } = lease
-    if (worktreeId) {
-      try {
-        const currentWorktreeId = await this.resolveWorktreeId(params.worktree)
-        if (currentWorktreeId !== worktreeId) {
-          throw new EmulatorError('emulator_no_active', emulatorFailureText('workspaceChanged'))
-        }
-      } catch (error) {
-        // Workspaces can disappear during slow Android boots; release their lease.
-        await lease.release({ cleanupIfUnused: true }).catch(() => {})
-        if (error instanceof Error && error.message === 'selector_not_found') {
-          throw new EmulatorError('emulator_no_active', emulatorFailureText('workspaceChanged'))
-        }
-        throw error
-      }
-      bridge.registerActiveEmulator(worktreeId, info, { managed: true })
-      await lease.release()
-      this.notifyRendererEmulatorAutoAttach(worktreeId, info)
-      if (params.focus) {
-        this.notifyRendererEmulatorPaneFocus(worktreeId)
-      }
-    } else {
-      await lease.release()
-    }
-    return { attached: true, info }
+  emulatorAttach(params: RuntimeEmulatorAttachParams) {
+    return this.attachCommands.attach(params)
   }
 
   async emulatorList(_params: { worktree?: string } = {}): Promise<unknown> {
@@ -203,7 +166,20 @@ export class RuntimeEmulatorCommands {
   }
 
   async emulatorListDevices(_params: { worktree?: string } = {}): Promise<EmulatorDevice[]> {
-    return this.requireEmulatorBridge().listAllDevices()
+    const recent = this.host.getSettings().mobileEmulatorRecentDevices ?? []
+    const devices = await this.requireEmulatorBridge().listAllDevices()
+    return devices.map((device) => {
+      const identity = emulatorDevicePreference(device)
+      const remembered = recent.find(
+        (item) =>
+          item.backend === identity?.backend &&
+          item.kind === identity.kind &&
+          item.id === identity.id
+      )
+      return remembered && (!device.lastUsedAt || remembered.lastUsedAt > device.lastUsedAt)
+        ? { ...device, lastUsedAt: remembered.lastUsedAt }
+        : device
+    })
   }
 
   private async resolveWorktreeId(worktree?: string): Promise<string | undefined> {
