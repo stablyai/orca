@@ -2,9 +2,13 @@ import { randomUUID } from 'node:crypto'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
 import { buildObservedSetupCommand } from './orchestration/setup-completion-signal'
-import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
+import {
+  applySetupAutoCloseSetting,
+  buildSetupRunnerCommand
+} from '../../shared/setup-runner-command'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { DefaultTerminalTab } from '../../shared/workspace-layout/workspace-layout-command-types'
+import type { RuntimeStore } from './runtime-store-contract'
 
 type TerminalResult = { handle: string }
 export type WorktreeProvisionTerminalOptions = {
@@ -37,6 +41,8 @@ export type WorktreeTerminalProvisioningHost = {
     worktreeId: string,
     tabs: DefaultTerminalTab[]
   ) => Promise<readonly { tabId: string }[] | null>
+  // Read only for the setup auto-close setting; absent means off.
+  getSettings?: () => ReturnType<RuntimeStore['getSettings']>
   getPtyId: (handle: string) => string | undefined
   recordSetupCompletionToken: (ptyId: string, token: string) => void
 }
@@ -232,14 +238,18 @@ export async function provisionWorktreeTerminals(
             args.setup.shell
           )
         : null
-      const command =
+      const command = applySetupAutoCloseSetting(
         args.wrappedSetupCommand ??
-        observed?.command ??
-        buildSetupRunnerCommand(
-          args.setup.runnerScriptPath,
-          args.setupCommandPlatform,
-          args.setup.shell
-        )
+          observed?.command ??
+          buildSetupRunnerCommand(
+            args.setup.runnerScriptPath,
+            args.setupCommandPlatform,
+            args.setup.shell
+          ),
+        args.setupCommandPlatform,
+        args.setup.shell,
+        host.getSettings?.()
+      )
       const env = { ...args.setup.envVars, ...observed?.env }
       const setupTerminal = await host.createTerminal(args.worktreeSelector, {
         title: host.getSetupTerminalTitle?.() ?? 'Setup',

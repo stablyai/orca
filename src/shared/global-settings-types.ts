@@ -183,6 +183,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalAllowOsc52ClipboardDefaultedOnForAllUsers?: boolean
   /** Experimental Claude Agent Teams; native panes use a tmux-compatible shim so teammate output stays on the normal PTY path. */
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
+  /** Closes the dedicated Setup tab when the setup script exits 0; a failure stays open. Default off. */
+  closeSetupTabOnSuccess: boolean
   terminalScrollbackRows: number
   /** Optional app-level proxy for Electron networking and local PTYs; empty preserves system/inherited proxy env. */
   httpProxyUrl?: string

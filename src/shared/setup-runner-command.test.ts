@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildSetupRunnerCommand } from './setup-runner-command'
+import {
+  appendShellExitOnSetupSuccess,
+  applySetupAutoCloseSetting,
+  buildSetupRunnerCommand,
+  exitsShellOnSetupSuccess
+} from './setup-runner-command'
 
 describe('buildSetupRunnerCommand', () => {
   it('uses bash for WSL UNC runner scripts regardless of host casing', () => {
@@ -89,5 +94,60 @@ describe('buildSetupRunnerCommand cmd metacharacter guard', () => {
         executable: 'wsl.exe'
       })
     ).toBe("bash '/mnt/c/repo/a&b/.git/orca/setup-runner.sh'")
+  })
+})
+
+describe('appendShellExitOnSetupSuccess', () => {
+  const run = 'bash /r/setup-runner.sh'
+  const cmdRun = 'cmd.exe /c "C:\\r\\setup-runner.cmd"'
+  const psExit = '; if ($LASTEXITCODE -eq 0) { exit }'
+
+  it('uses && exit for POSIX panes: macOS/Linux, SSH, Git Bash and WSL', () => {
+    expect(appendShellExitOnSetupSuccess(run, 'posix', undefined, undefined)).toBe(`${run} && exit`)
+    expect(
+      appendShellExitOnSetupSuccess(run, 'windows', { family: 'posix' }, 'powershell.exe')
+    ).toBe(`${run} && exit`)
+    expect(
+      appendShellExitOnSetupSuccess(run, 'windows', { family: 'posix', executable: 'wsl.exe' }, '')
+    ).toBe(`${run} && exit`)
+  })
+
+  it('picks the clause from the configured Windows terminal shell', () => {
+    const cmd = { family: 'cmd' } as const
+    expect(appendShellExitOnSetupSuccess(cmdRun, 'windows', cmd, 'C:\\Windows\\cmd.exe')).toBe(
+      `${cmdRun} && exit`
+    )
+    expect(appendShellExitOnSetupSuccess(cmdRun, 'windows', cmd, 'powershell.exe')).toBe(
+      `${cmdRun}${psExit}`
+    )
+    expect(appendShellExitOnSetupSuccess(cmdRun, 'windows', cmd, 'pwsh.exe')).toBe(
+      `${cmdRun}${psExit}`
+    )
+    // Unset setting and a missing Git Bash both land on PowerShell.
+    expect(appendShellExitOnSetupSuccess(cmdRun, 'windows', cmd, '')).toBe(`${cmdRun}${psExit}`)
+  })
+
+  it('leaves the command alone when a remote Windows host picks the shell', () => {
+    expect(appendShellExitOnSetupSuccess(cmdRun, 'windows', undefined, 'cmd.exe')).toBe(cmdRun)
+  })
+
+  it('is recognised by exitsShellOnSetupSuccess', () => {
+    expect(exitsShellOnSetupSuccess(`${run} && exit`)).toBe(true)
+    expect(exitsShellOnSetupSuccess(`${cmdRun}${psExit}`)).toBe(true)
+    expect(exitsShellOnSetupSuccess(run)).toBe(false)
+    expect(exitsShellOnSetupSuccess(undefined)).toBe(false)
+  })
+})
+
+describe('applySetupAutoCloseSetting', () => {
+  it('only appends the exit clause when the setting is on', () => {
+    const run = 'bash /r/setup-runner.sh'
+    expect(applySetupAutoCloseSetting(run, 'posix', undefined, undefined)).toBe(run)
+    expect(
+      applySetupAutoCloseSetting(run, 'posix', undefined, { closeSetupTabOnSuccess: false })
+    ).toBe(run)
+    expect(
+      applySetupAutoCloseSetting(run, 'posix', undefined, { closeSetupTabOnSuccess: true })
+    ).toBe(`${run} && exit`)
   })
 })

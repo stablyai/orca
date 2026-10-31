@@ -1,6 +1,7 @@
 import type { WorktreeSetupLaunch } from '../../../shared/worktree/launch-types'
-import { buildSetupRunnerCommand } from './setup-runner'
+import { applySetupAutoClose, buildSetupRunnerCommand } from './setup-runner'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore
@@ -22,11 +23,15 @@ export function queueSetupAndIssueCommands(
   opts: InitialTerminalOptions | undefined
 ): void {
   if (setup) {
+    const settings = useAppStore.getState().settings
     const setupCommand = {
-      command:
+      command: applySetupAutoClose(
         wrappedSetupCommandStr ??
-        setup.command ??
-        buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
+          setup.command ??
+          buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
+        setup,
+        settings
+      ),
       env: setup.envVars
     }
     const setupTab = store.createTab(worktreeId, undefined, undefined, {

@@ -138,6 +138,7 @@ export type RuntimeStore = {
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
     // Read by the launch-line carry rule to name the shell a local line is typed into.
     terminalDefaultShell?: GlobalSettings['terminalDefaultShell']
+    closeSetupTabOnSuccess?: GlobalSettings['closeSetupTabOnSuccess']
     floatingTerminalEnabled?: GlobalSettings['floatingTerminalEnabled']
     floatingTerminalCwd?: GlobalSettings['floatingTerminalCwd']
     floatingTerminalTrustedCwds?: GlobalSettings['floatingTerminalTrustedCwds']

@@ -12,6 +12,7 @@ import { isProvenProcessExit } from '../../../../../shared/terminal-exit-cause'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-verdict'
+import { exitsShellOnSetupSuccess } from '../../../../../shared/setup-runner-command'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { isPtyExitReplacedByRestart } from '../pty-exit-delivery'
@@ -254,7 +255,10 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     const panes = session.manager.getPanes()
     if (panes.length <= 1) {
       // Keep sole fresh, never-typed shell failures visible for diagnostics instead of closing the tab and deactivating the workspace; explicit exit and dead reattach still close.
-      if (keepsUntouchedFreshPane(session, ptyId)) {
+      // A setup that exited its shell on success asked to close, so the guard does not apply.
+      const setupExitedOnSuccess =
+        exitCode === 0 && exitsShellOnSetupSuccess(processExitState.startup?.command)
+      if (keepsUntouchedFreshPane(session, ptyId) && !setupExitedOnSuccess) {
         return
       }
       session.deps.onPtyExitRef.current(ptyId, exitCode)

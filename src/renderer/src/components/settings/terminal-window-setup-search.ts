@@ -131,3 +131,17 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+
+export const getTerminalSetupScriptSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'components.settings.TerminalSetupScript.closeOnSuccess',
+      'Close Setup Tab When It Succeeds'
+    ),
+    description: translate(
+      'components.settings.TerminalSetupScript.closeOnSuccessDescription',
+      'Close the Setup tab once the script exits successfully. A failed setup stays open so you can read the error.'
+    ),
+    keywords: ['setup', 'script', 'workspace', 'close', 'auto', 'success', 'exit', 'tab']
+  }
+])

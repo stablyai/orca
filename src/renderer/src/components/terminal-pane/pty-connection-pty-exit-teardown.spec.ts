@@ -310,6 +310,33 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       expect(manager.closePane).not.toHaveBeenCalled()
     })
 
+    it('closes a fresh sole setup terminal whose shell exited because setup succeeded', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      for (const [command, exitCode, closes] of [
+        ['bash /repo/.git/orca/setup-runner.sh && exit', 0, true],
+        ['cmd.exe /c "C:\\r\\setup-runner.cmd"; if ($LASTEXITCODE -eq 0) { exit }', 0, true],
+        ['bash /repo/.git/orca/setup-runner.sh', 0, false]
+      ] as const) {
+        transportFactoryQueue.push(createMockTransport('tab-pty'))
+        createdTransportOptions = []
+        const deps = createDeps({ startup: { command } })
+
+        connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+        const { onPtySpawn, onPtyExit } = createdTransportOptions[0] ?? {}
+        if (typeof onPtySpawn !== 'function' || typeof onPtyExit !== 'function') {
+          throw new Error('transport callbacks were not captured')
+        }
+        onPtySpawn('tab-pty')
+        onPtyExit('tab-pty', exitCode)
+
+        if (closes) {
+          expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty', 0)
+        } else {
+          expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
+        }
+      }
+    })
+
     it('keeps a worktree sole terminal mounted when only a captured shortcut preceded the exit', async () => {
       // Shortcut-driven redraw activity is not typed input; Shift+Enter must not turn startup failure into tab closure.
       const { connectPanePty } = await import('./pty-connection')
