@@ -127,11 +127,14 @@ describe('a keyboard the phone closes', () => {
 
     touch(field)
     TextInputState.focusTextInput(field)
+    let focusSessions = 0
+    field.addEventListener('focus', () => focusSessions++)
     shellReports(300)
     shellReports(0)
     vi.advanceTimersByTime(50)
 
     expect(document.activeElement).toBe(field)
+    expect(focusSessions).toBe(1)
   })
 
   it('still ends focus on a quick Back after a touch that landed on no field while nothing was focused', () => {
