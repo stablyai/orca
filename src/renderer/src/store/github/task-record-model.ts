@@ -9,7 +9,9 @@ import type { HostIdentityFence } from '../host-catalog-fencing'
 import { applyTaskChange, type TaskChange, type TaskFacts } from './task-change'
 
 /** The shared task record's shape and the pure rules every layer of the record cache uses. */
-export type TaskBinding = { observation: GitHubTaskObservation; incarnation: object }
+/** One account/source binding's identity: a fresh token per incarnation, compared by reference (A→B→A gets a new one). */
+export type BindingIncarnation = { readonly kind: 'task-binding-incarnation' }
+export type TaskBinding = { observation: GitHubTaskObservation; incarnation: BindingIncarnation }
 export type AcceptedTask = {
   binding: TaskBinding
   /** Addresses the issue (id, repo, URL); its facts are never projected or accepted. */

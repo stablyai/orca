@@ -25,6 +25,7 @@ import {
   sameFacts,
   withFacts,
   type AcceptedTask,
+  type BindingIncarnation,
   type TaskBinding
 } from './task-record-model'
 
@@ -32,7 +33,7 @@ import {
 export abstract class TaskRecordOwners {
   protected bindings = new Map<
     string,
-    { signature: string; incarnation: object; id: number; unsupported?: string }
+    { signature: string; incarnation: BindingIncarnation; id: number; unsupported?: string }
   >()
   protected records = new Map<string, AcceptedTask>()
   protected listeners = new Set<() => void>()
@@ -54,7 +55,11 @@ export abstract class TaskRecordOwners {
       const signature = githubTaskBinding(repo)
       live.add(key)
       if (this.bindings.get(key)?.signature !== signature) {
-        this.bindings.set(key, { signature, incarnation: {}, id: nextProviderRequestId() })
+        this.bindings.set(key, {
+          signature,
+          incarnation: { kind: 'task-binding-incarnation' },
+          id: nextProviderRequestId()
+        })
       }
     }
     for (const key of this.bindings.keys()) {
@@ -63,7 +68,7 @@ export abstract class TaskRecordOwners {
       }
     }
     let changed = false
-    const reconnected = new Set<object>()
+    const reconnected = new Set<BindingIncarnation>()
     for (const [key, record] of this.records) {
       const observed = record.binding
       if (!this.keep(key, record)) {
@@ -259,5 +264,5 @@ export abstract class TaskRecordOwners {
     return record && this.current(record.binding) ? this.projectWith(row, record) : row
   }
   /** Gives one owed read on the binding its turn (an external delivery or reconnect). */
-  protected abstract wake(incarnation: object): void
+  protected abstract wake(incarnation: BindingIncarnation): void
 }

@@ -18,6 +18,7 @@ import {
   sources,
   version,
   type AcceptedTask,
+  type BindingIncarnation,
   type TaskBinding
 } from './task-record-model'
 import { TaskRecordOwners } from './task-record-owners'
@@ -71,7 +72,7 @@ export abstract class TaskRecordReads extends TaskRecordOwners {
     return stored
   }
   /** Each external delivery retries at most one owed read per binding, the longest-waiting first. */
-  protected wake(incarnation: object) {
+  protected wake(incarnation: BindingIncarnation) {
     let next: AcceptedTask | undefined
     for (const record of this.records.values()) {
       if (
