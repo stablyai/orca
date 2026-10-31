@@ -174,7 +174,15 @@ describe('host agent planner', () => {
   })
 })
 
-it.each([
+type HostStartupFixture = {
+  name: string
+  agent: TuiAgent
+  args?: string | null
+  options: Record<string, SessionOptionValue>
+  expected: string[]
+}
+
+const fixtures: HostStartupFixture[] = [
   {
     name: 'absent Args',
     agent: 'claude',
@@ -253,48 +261,54 @@ it.each([
     options: { model: 'claude-opus-4-8', thinking: 'true', effort: 'high' },
     expected: ['--verbose', '--model', 'claude-opus-4-8-thinking-high']
   }
-] satisfies {
-  name: string
-  agent: TuiAgent
-  args?: string | null
-  options: Record<string, SessionOptionValue>
-  expected: string[]
-}[])('delivers $name through the existing host planner and final compiler', async (fixture) => {
-  setPlatform('linux')
-  const settings = {
-    agentDefaultArgs: { claude: '--verbose' },
-    agentDefaultEnv: { claude: { CUSTOM_ENV: 'kept' } },
-    agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'low', fastMode: 'true' } } },
-    agentPermissionDefault: 'own' as const
+]
+
+it.each(fixtures)(
+  'delivers $name through the existing host planner and final compiler',
+  async (fixture) => {
+    setPlatform('linux')
+    const settings = {
+      agentDefaultArgs: { claude: '--verbose' },
+      agentDefaultEnv: { claude: { CUSTOM_ENV: 'kept' } },
+      agentLaunchChoices: {
+        claude: { model: 'opus', options: { effort: 'low', fastMode: 'true' } }
+      },
+      agentPermissionDefault: 'own' as const
+    }
+    const fullHost = { ...host, store: partialRuntimeStore({ getSettings: () => settings }) }
+    const opts = {
+      startupAgent: fixture.agent,
+      ...('args' in fixture ? { agentArgs: fixture.args } : {})
+    }
+    const result = await resolveAgentTerminalCreateOptions(
+      workspace,
+      opts,
+      fullHost,
+      fixture.options
+    )
+    const parsed = tokenizeStartupCommand(result.command ?? '', 'posix')
+    expect(parsed.ok && parsed.tokens).toEqual([
+      fixture.agent === 'cursor' ? 'cursor-agent' : fixture.agent,
+      ...fixture.expected
+    ])
+    const oracle = buildAgentStartupPlan({
+      ...resolveAgentStartupPlanInputs({
+        agent: fixture.agent,
+        settings,
+        platform: 'linux',
+        isRemote: false,
+        shell: 'posix',
+        ...('args' in fixture ? { agentArgs: fixture.args } : {}),
+        sessionOptions: fixture.options
+      }),
+      prompt: '',
+      allowEmptyPromptLaunch: true
+    })
+    expect(result.command).toBe(oracle?.launchCommand)
+    expect(result.launchConfig).toEqual(oracle?.launchConfig)
+    expect(result.launchConfig?.agentArgs).toBe(oracle?.launchConfig.agentArgs)
+    if (fixture.agent === 'claude') {
+      expect(result.env).toMatchObject({ CUSTOM_ENV: 'kept' })
+    }
   }
-  const fullHost = { ...host, store: partialRuntimeStore({ getSettings: () => settings }) }
-  const opts = {
-    startupAgent: fixture.agent,
-    ...('args' in fixture ? { agentArgs: fixture.args } : {})
-  }
-  const result = await resolveAgentTerminalCreateOptions(workspace, opts, fullHost, fixture.options)
-  const parsed = tokenizeStartupCommand(result.command ?? '', 'posix')
-  expect(parsed.ok && parsed.tokens).toEqual([
-    fixture.agent === 'cursor' ? 'cursor-agent' : fixture.agent,
-    ...fixture.expected
-  ])
-  const oracle = buildAgentStartupPlan({
-    ...resolveAgentStartupPlanInputs({
-      agent: fixture.agent,
-      settings,
-      platform: 'linux',
-      isRemote: false,
-      shell: 'posix',
-      ...('args' in fixture ? { agentArgs: fixture.args } : {}),
-      sessionOptions: fixture.options
-    }),
-    prompt: '',
-    allowEmptyPromptLaunch: true
-  })
-  expect(result.command).toBe(oracle?.launchCommand)
-  expect(result.launchConfig).toEqual(oracle?.launchConfig)
-  expect(result.launchConfig?.agentArgs).toBe(oracle?.launchConfig.agentArgs)
-  if (fixture.agent === 'claude') {
-    expect(result.env).toMatchObject({ CUSTOM_ENV: 'kept' })
-  }
-})
+)

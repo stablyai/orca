@@ -1,5 +1,5 @@
 import { act, fireEvent, waitFor } from '@testing-library/react'
-import { expect, type vi } from 'vitest'
+import { expect } from 'vitest'
 import type { Root } from 'react-dom/client'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -15,7 +15,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 
-export async function verifyOmniboxPresetIdentity(root: Root, launch: ReturnType<typeof vi.fn>) {
+export async function verifyOmniboxPresetIdentity(
+  root: Root,
+  launch: (...args: unknown[]) => void
+) {
   const previous = useAppStore.getState()
   const worktree = makeWorktree({
     repoId: 'repo1',

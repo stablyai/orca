@@ -23,6 +23,8 @@ import { resolveSourceControlActionRecipe } from '../../../../shared/source-cont
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
 import { tokenizeStartupCommand } from '../../../../shared/tui-agent-startup-shell'
+import * as setupOwner from '../agent/agent-launch-picker-drafts'
+import * as optionRows from '../agent/agent-launch-setup-option-rows'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: () => null },
@@ -50,37 +52,39 @@ vi.mock('../agent/use-agent-launch-picker-inventory', () => ({
   useAgentLaunchPickerInventory: (_id: string | undefined, model: NewTabAgentMenuModel) =>
     model.state !== 'settled'
       ? []
-      : [...new Set(model.rows.map((row) => row.agent))].map((agent): AgentPickerEntry => ({
-          agent,
-          label: formatAgentTypeLabel(agent),
-          ownerKey: `action-${agent}`,
-          rows: model.rows.filter((row) => row.agent === agent),
-          surfaces: ['chat', 'terminal'],
-          defaultSurface: model.rows.some((row) => row.agent === agent && row.kind === 'chat')
-            ? 'chat'
-            : 'terminal',
-          ...agentPickerChoiceSeeds(agent, useAppStore.getState().settings),
-          catalog: {
-            origin: 'probe',
-            fetchedAt: 1,
-            models: (agent === 'claude' ? ['opus', 'sonnet'] : ['o3', 'gpt-5.5']).map(
-              (id, index) => ({
-                id,
-                label: id,
-                isDefault: index === 0,
-                defaultEffort: 'high',
-                efforts: [
-                  { value: 'low', label: 'Low' },
-                  { value: 'high', label: 'High' }
-                ],
-                supportsFastMode: true,
-                ...(agent === 'codex'
-                  ? { serviceTiers: [{ value: 'priority', label: 'Fast' }] }
-                  : {})
-              })
-            )
-          }
-        }))
+      : [...new Set(model.rows.map((row) => row.agent))].map(
+          (agent: AgentPickerEntry['agent']): AgentPickerEntry => ({
+            agent,
+            label: formatAgentTypeLabel(agent),
+            ownerKey: `action-${agent}`,
+            rows: model.rows.filter((row) => row.agent === agent),
+            surfaces: ['chat', 'terminal'],
+            defaultSurface: model.rows.some((row) => row.agent === agent && row.kind === 'chat')
+              ? 'chat'
+              : 'terminal',
+            ...agentPickerChoiceSeeds(agent, useAppStore.getState().settings),
+            catalog: {
+              origin: 'probe',
+              fetchedAt: 1,
+              models: (agent === 'claude' ? ['opus', 'sonnet'] : ['o3', 'gpt-5.5']).map(
+                (id, index) => ({
+                  id,
+                  label: id,
+                  isDefault: index === 0,
+                  defaultEffort: 'high',
+                  efforts: [
+                    { value: 'low', label: 'Low' },
+                    { value: 'high', label: 'High' }
+                  ],
+                  supportsFastMode: true,
+                  ...(agent === 'codex'
+                    ? { serviceTiers: [{ value: 'priority', label: 'Fast' }] }
+                    : {})
+                })
+              )
+            }
+          })
+        )
 }))
 const initial = useAppStore.getState()
 afterEach(() => {
@@ -491,6 +495,8 @@ it.each([
 it.each([true, false] as const)(
   'executes accepted Customize Fast=%s through the actual queued pane intent and host compiler',
   async (fast) => {
+    const setupReads = vi.spyOn(setupOwner, 'useAgentPickerSetup')
+    const rows = vi.spyOn(optionRows, 'agentLaunchSetupOptionRows')
     const f = mountSourceDialog(
       {
         agentId: 'claude',
@@ -536,7 +542,7 @@ it.each([true, false] as const)(
           ...settings,
           nativeChatProviders: {},
           agentLaunchChoices: {
-            claude: { model: 'opus', options: { effort: 'low', fastMode: !fast } }
+            claude: { model: 'opus', options: { effort: 'low', fastMode: String(!fast) } }
           },
           agentDefaultArgs: {
             claude: `--settings '{"fastMode":${!fast},"theme":"light"}' --add-dir defaults`
@@ -561,11 +567,36 @@ it.each([true, false] as const)(
     })
     fireEvent.blur(screen.getByRole('textbox', { name: 'Arguments' }))
     const toggle = screen.getByRole('switch')
+    expect(toggle).toHaveProperty('disabled', false)
+    const descriptor = rows.mock.results.at(-1)
+    expect(
+      descriptor?.type === 'return' && descriptor.value.find((row) => row.id === 'fastMode')
+    ).toMatchObject({ settable: true, valueSource: 'unknown' })
+    const readDraft = () => {
+      const latest = setupReads.mock.results.at(-1)
+      return latest?.type === 'return' ? latest.value.getDraft() : undefined
+    }
+    expect(readDraft()?.delegated).toContain('fastMode')
+    expect(readDraft()?.choices.options?.fastMode).toBeUndefined()
+    expect(
+      readDraft()?.recipeEdits?.selection.source.authoredPreferences?.modelSelection?.options
+        ?.fastMode
+    ).toEqual({ agentId: 'claude', value: null })
     if ((toggle.getAttribute('aria-checked') === 'true') === fast) {
       await user.click(toggle)
     }
     await user.click(toggle)
+    expect(readDraft()?.choices.options?.fastMode).toBe(String(fast))
+    expect(readDraft()?.delegated).not.toContain('fastMode')
+    expect(
+      readDraft()?.recipeEdits?.selection.source.authoredPreferences?.modelSelection?.options
+        ?.fastMode
+    ).toEqual({ agentId: 'claude', value: String(fast) })
     await user.click(screen.getByRole('button', { name: 'Use' }))
+    expect(f.controller.recipe.launchPreferences?.modelSelection?.options?.fastMode).toEqual({
+      agentId: 'claude',
+      value: String(fast)
+    })
     act(() => f.controller.onSaveAgentDefaultChange('repo'))
     await user.click(screen.getByRole('button', { name: 'Save & start agent' }))
     await waitFor(() => expect(createTab).toHaveBeenCalledOnce())
@@ -711,16 +742,16 @@ it.each(['claude', 'codex'] as const)(
     )
     await user.click(screen.getByRole('button', { name: 'Use' }))
     expect(f.controller.recipe).toMatchObject(recipe)
-    await user.click(screen.getByRole('radio', { name: 'Chat', exact: true }))
+    await user.click(screen.getByRole('radio', { name: 'Chat' }))
     expect(f.controller.recipe).toMatchObject({ ...recipe, surface: 'chat' })
     await open()
     await user.click(
       screen.getByRole('menuitem', { name: new RegExp(agent === 'claude' ? '^Claude' : '^Codex') })
     )
     expect(f.controller.recipe).toMatchObject({ ...recipe, surface: 'chat' })
-    await user.click(screen.getByRole('radio', { name: 'Terminal', exact: true }))
+    await user.click(screen.getByRole('radio', { name: 'Terminal' }))
     expect(f.controller.recipe).toMatchObject(recipe)
-    await user.click(screen.getByRole('radio', { name: 'Chat', exact: true }))
+    await user.click(screen.getByRole('radio', { name: 'Chat' }))
     act(() => f.controller.onSaveAgentDefaultChange('repo'))
     await user.click(screen.getByRole('button', { name: 'Save & start agent' }))
     await waitFor(() => expect(f.persist).toHaveBeenCalledOnce())

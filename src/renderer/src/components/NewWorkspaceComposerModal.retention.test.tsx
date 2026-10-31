@@ -11,6 +11,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import NewWorkspaceComposerModal from './NewWorkspaceComposerModal'
 import type { NewWorkspaceComposerCardProps } from './new-workspace/new-workspace-composer-card-props'
 import type * as SetupButtonModule from './agent/AgentLaunchSetupButton'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPickerDraft } from '../../../shared/agent-launch-picker'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 
@@ -110,7 +111,7 @@ vi.mock('@/components/new-workspace/SmartWorkspaceNameField', () => ({
 }))
 
 const noOp = () => {}
-const detected = new Set(['claude', 'codex'])
+const detected = new Set<TuiAgent>(['claude', 'codex'])
 const projects = [
   {
     kind: 'project' as const,
@@ -261,14 +262,12 @@ async function open(agent: string) {
   fireEvent.click(configure)
   await waitFor(() => expect(textarea()).not.toBeNull())
   await waitFor(() =>
-    expect(screen.getByRole('radio', { name: 'Low', exact: true }).hasAttribute('disabled')).toBe(
-      false
-    )
+    expect(screen.getByRole('radio', { name: 'Low' }).hasAttribute('disabled')).toBe(false)
   )
 }
 async function useDraft() {
   fireEvent.blur(textarea())
-  fireEvent.click(screen.getByRole('button', { name: 'Use', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
   await waitFor(() =>
     expect(
       document.querySelector(
@@ -318,27 +317,23 @@ it('pr35802 retains ordinary W1 accepted Low/verbose after parent echo then W2 C
   render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
   await open('Claude')
   const start = snapshot('w1-before')
-  fireEvent.click(screen.getByRole('radio', { name: 'Low', exact: true }))
+  fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
   fireEvent.change(textarea(), { target: { value: '--verbose' } })
   await useDraft()
   evidence.phase = 'w1-immediate-reopen'
   await open('Claude')
   expect(textarea().value).toBe('--verbose')
-  expect(screen.getByRole('radio', { name: 'Low', exact: true }).getAttribute('aria-checked')).toBe(
-    'true'
-  )
+  expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
   const echo = snapshot('w1-echo')
   expect(echo.initial?.choices.options?.effort).toBe('low')
   expect(echo.initial?.arguments).toBe('--verbose')
   await visit('W2 folder')
   evidence.phase = 'w2-codex'
   await open('Codex')
-  fireEvent.click(screen.getByRole('radio', { name: 'Med', exact: true }))
+  fireEvent.click(screen.getByRole('radio', { name: 'Med' }))
   await useDraft()
   await open('Codex')
-  expect(screen.getByRole('radio', { name: 'Med', exact: true }).getAttribute('aria-checked')).toBe(
-    'true'
-  )
+  expect(screen.getByRole('radio', { name: 'Med' }).getAttribute('aria-checked')).toBe('true')
   const w2 = last('codex')
   await visit('W1 git')
   evidence.phase = 'w1-return'
@@ -348,23 +343,17 @@ it('pr35802 retains ordinary W1 accepted Low/verbose after parent echo then W2 C
   expect(returned.authority).toBe(start.authority)
   expect(returned.initial).toBeUndefined()
   expect.soft(textarea().value).toBe('--verbose')
-  expect
-    .soft(screen.getByRole('radio', { name: 'Low', exact: true }).getAttribute('aria-checked'))
-    .toBe('true')
+  expect.soft(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
   fireEvent.change(textarea(), { target: { value: '--pending-after-accepted' } })
   await visit('W2 folder')
   await open('Codex')
-  expect(screen.getByRole('radio', { name: 'Med', exact: true }).getAttribute('aria-checked')).toBe(
-    'true'
-  )
+  expect(screen.getByRole('radio', { name: 'Med' }).getAttribute('aria-checked')).toBe('true')
   expect(last('codex').authority).toBe(w2.authority)
   expect(textarea().value).toBe('')
   await visit('W1 git')
   await open('Claude')
   expect(textarea().value).toBe('--pending-after-accepted')
-  expect(screen.getByRole('radio', { name: 'Low', exact: true }).getAttribute('aria-checked')).toBe(
-    'true'
-  )
+  expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
   expect(evidence.submit).not.toHaveBeenCalled()
 })
 
@@ -410,19 +399,15 @@ it('pr35802 keeps the searched W1 Sonnet High row across W2 Use as a positive co
   await visit('W1 git')
   await openPreset()
   expect(textarea().value).toBe('--verbose')
-  expect(
-    screen.getByRole('radio', { name: 'High', exact: true }).getAttribute('aria-checked')
-  ).toBe('true')
+  expect(screen.getByRole('radio', { name: 'High' }).getAttribute('aria-checked')).toBe('true')
   await visit('W2 folder')
   await open('Codex')
-  fireEvent.click(screen.getByRole('radio', { name: 'Med', exact: true }))
+  fireEvent.click(screen.getByRole('radio', { name: 'Med' }))
   await useDraft()
   await visit('W1 git')
   await openPreset()
   expect(textarea().value).toBe('--verbose')
-  expect(
-    screen.getByRole('radio', { name: 'High', exact: true }).getAttribute('aria-checked')
-  ).toBe('true')
+  expect(screen.getByRole('radio', { name: 'High' }).getAttribute('aria-checked')).toBe('true')
   expect(document.querySelector('[cmdk-item][data-current="true"]')?.textContent).toContain(
     'Sonnet'
   )
@@ -433,28 +418,24 @@ it('pr35802 keeps the searched W1 Sonnet High row across W2 Use as a positive co
   await visit('W1 git')
   await openPreset()
   expect(textarea().value).toBe('--pending-preset')
-  expect(
-    screen.getByRole('radio', { name: 'High', exact: true }).getAttribute('aria-checked')
-  ).toBe('true')
+  expect(screen.getByRole('radio', { name: 'High' }).getAttribute('aria-checked')).toBe('true')
   expect(evidence.submit).not.toHaveBeenCalled()
 })
 
 it('keeps accepted and newer pending ordinary intent across same-target agent switches and explicit routes', async () => {
   render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
   await open('Claude')
-  fireEvent.click(screen.getByRole('radio', { name: 'Low', exact: true }))
+  fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
   fireEvent.change(textarea(), { target: { value: '--accepted' } })
   await useDraft()
   await open('Claude')
   fireEvent.change(textarea(), { target: { value: '--pending' } })
   await closeMenu()
   for (const route of ['Chat', 'Terminal'] as const) {
-    fireEvent.click(screen.getByRole('radio', { name: route, exact: true }))
+    fireEvent.click(screen.getByRole('radio', { name: route }))
     await open('Claude')
     expect(textarea().value).toBe('--pending')
-    expect(
-      screen.getByRole('radio', { name: 'Low', exact: true }).getAttribute('aria-checked')
-    ).toBe('true')
+    expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
     await useDraft()
     expect(last('claude').initial?.surface).toBe(route.toLowerCase())
   }
@@ -462,20 +443,16 @@ it('keeps accepted and newer pending ordinary intent across same-target agent sw
   await useDraft()
   await open('Claude')
   expect(textarea().value).toBe('--pending')
-  expect(screen.getByRole('radio', { name: 'Low', exact: true }).getAttribute('aria-checked')).toBe(
-    'true'
-  )
+  expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
   expect(evidence.submit).not.toHaveBeenCalled()
   await useDraft()
   const captured: unknown[] = []
   for (const route of ['Chat', 'Terminal'] as const) {
-    fireEvent.click(screen.getByRole('radio', { name: route, exact: true }))
+    fireEvent.click(screen.getByRole('radio', { name: route }))
     await open('Claude')
     await useDraft()
     await closeMenu()
-    await act(async () =>
-      fireEvent.click(screen.getByRole('button', { name: 'Create worktree', exact: true }))
-    )
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Create worktree' })))
     const submitted = evidence.submit.mock.calls.at(-1)!
     expect(submitted[0]).toBe('claude')
     expect(submitted[1]).toMatchObject({

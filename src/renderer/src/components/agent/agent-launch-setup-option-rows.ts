@@ -90,7 +90,9 @@ export function agentLaunchSetupOptionRows({
         !disabled &&
         !defaultsPending &&
         // A settled level the agent picks itself shows unselected but stays pickable.
-        (valueKnown || option.kind.type === 'select') &&
+        (valueKnown ||
+          option.kind.type === 'select' ||
+          Boolean(currentModel && draft.delegated?.includes(option.id))) &&
         (!(option.id === 'fastMode' || option.id === 'serviceTier') ||
           !entry.surfaces.includes('terminal') ||
           argumentsKnown)

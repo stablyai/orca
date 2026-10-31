@@ -173,7 +173,18 @@ describe('a terminal the host fails to create', () => {
   })
 })
 
-it.each([
+type WebLaunchFixture = {
+  name: string
+  capable: boolean
+  agent: TuiAgent
+  options: Record<string, SessionOptionValue>
+  raw: string
+  tokens?: string[]
+  authority?: { model: string; effort?: string }
+  env?: Record<string, string>
+}
+
+const fixtures: WebLaunchFixture[] = [
   {
     name: 'capable Fast',
     capable: true,
@@ -299,16 +310,9 @@ it.each([
     tokens: ['goose', '--verbose'],
     env: { GOOSE_MODE: 'auto' }
   }
-] satisfies {
-  name: string
-  capable: boolean
-  agent: TuiAgent
-  options: Record<string, SessionOptionValue>
-  raw: string
-  tokens?: string[]
-  authority?: { model: string; effort?: string }
-  env?: Record<string, string>
-}[])('conserves $name through the actual web create adapter', async (fixture) => {
+]
+
+it.each(fixtures)('conserves $name through the actual web create adapter', async (fixture) => {
   stubTerminalCreateEnvironment(mocks)
   const capabilities = await import('@/components/settings/agent-launch-settings-transport')
   const preferences = await import('@/components/settings/use-host-agent-launch-preferences')
@@ -320,6 +324,8 @@ it.each([
   const { launchAgentInWebHostTab } = await import('@/lib/launch-agent-web-host-tab')
   vi.spyOn(capabilities, 'hostSupportsLaunchChoices').mockResolvedValue(fixture.capable)
   vi.spyOn(preferences, 'ensureAgentLaunchPreferences').mockResolvedValue({
+    defaultTuiAgent: undefined,
+    disabledTuiAgents: undefined,
     agentLaunchChoices: {}
   })
   const call = vi.fn(async (request: { method: string }) => ({
