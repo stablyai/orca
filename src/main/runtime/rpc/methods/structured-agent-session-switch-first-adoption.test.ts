@@ -1,6 +1,7 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { z } from 'zod'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
@@ -17,6 +18,7 @@ import {
   PTY_A
 } from '../../main-owned-workspace-runtime-fixture'
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
+import type { SwitchToChatParams } from './structured-agent-session-schemas'
 
 // A Codex CLI that was never a chat, stopped mid-reply by a switch whose rollout moved during the
 // stop: the switch fails, but the proven stop is kept, so a retry once the file is back reads
@@ -25,6 +27,10 @@ import { executeStructuredSessionSwitch } from './structured-agent-session-switc
 const THREAD = '019a0000-0000-7000-8000-000000000001'
 const SESSION = 'session-first-adoption'
 const PANE = `${TAB_ID}:${LEAF_A}`
+
+type SwitchSource = NonNullable<
+  NonNullable<z.infer<typeof SwitchToChatParams>['execution']>['source']
+>
 
 let rig: RestTestRig
 beforeEach(async () => {
@@ -44,7 +50,7 @@ afterEach(async () => {
   vi.unstubAllEnvs()
 })
 
-function switchParams(sessionId: string, source?: object) {
+function switchParams(sessionId: string, source?: SwitchSource) {
   const fields = {
     worktree: `id:${WORKTREE_ID}`,
     agent: 'codex' as const,
