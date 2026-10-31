@@ -173,6 +173,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** 'auto' resolves to PowerShell 7+ when present, else falls back to inbox Windows PowerShell. */
   terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
   terminalFocusFollowsMouse: boolean
+  /** Gates click/drag mouse reports to a tracking TUI behind Alt so a stray click can't answer its prompt; wheel is unaffected. Default off. */
+  terminalMouseEventsRequireAlt?: boolean
   /** X11/gnome-terminal "copy on select": selecting text auto-copies to the clipboard; default off. */
   terminalClipboardOnSelect: boolean
   /** Drops the left gutter agent CLIs paint their output behind when copying a terminal selection; default on. */

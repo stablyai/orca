@@ -5,6 +5,7 @@ import { Label } from '../ui/label'
 import { ScrollSpeedSlider } from './TerminalScrollSpeedSlider'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
+import { TerminalMouseInputGateSetting } from './TerminalMouseInputGateSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getTerminalRightClickToPasteSearchEntry } from './terminal-windows-search'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
@@ -236,6 +237,8 @@ export function TerminalInteractionSection({
             }
           />
         </SearchableSetting>
+
+        <TerminalMouseInputGateSetting settings={settings} updateSettings={updateSettings} />
 
         <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
