@@ -89,7 +89,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-message-choices.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-queued-messages.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts',
-  'src/main/orcad/serve-profile-ssh-targets.test.ts',
+  'src/main/orcad/serve-profile-electron-features.test.ts',
   'src/main/runtime/orca-runtime.test.ts',
   'src/main/runtime/worktree-agent-first-surface.test.ts',
   'src/main/runtime/runtime-client-agent-launch-settings-durability.test.ts',

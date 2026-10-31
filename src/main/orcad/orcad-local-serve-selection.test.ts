@@ -121,32 +121,37 @@ describe('orca serve runtime selection', () => {
     }
   })
 
-  it('stays on Electron by default when the profile has SSH targets orcad cannot serve (#25886)', async () => {
-    const options = input({ profileHasSshTargets: () => true })
-    expect(await selectServeRuntime(options)).toEqual({
-      kind: 'electron',
-      reason: 'this profile has SSH targets, which orcad cannot serve yet'
+  describe.each([
+    ['SSH targets', 'profileHasSshTargets'],
+    ['installed plugins', 'profileHasInstalledPlugins'],
+    ['VM recipe workspaces', 'profileHasEphemeralVmRuntimes']
+  ] as const)('a profile with %s', (feature, probe) => {
+    it('stays on Electron by default, since orcad cannot serve them (#25886, #35633)', async () => {
+      const options = input({ [probe]: () => true })
+      expect(await selectServeRuntime(options)).toEqual({
+        kind: 'electron',
+        reason: `this profile has ${feature}, which orcad cannot serve yet`
+      })
+      expect(options.materializeSlot).not.toHaveBeenCalled()
     })
-    expect(options.materializeSlot).not.toHaveBeenCalled()
-  })
 
-  it('keeps orcad for SSH profiles when orcad is asked for by name', async () => {
-    const named = input({ env: { [SERVE_RUNTIME_ENV]: 'orcad' }, profileHasSshTargets: () => true })
-    expect(await selectServeRuntime(named)).toMatchObject({ kind: 'orcad' })
-  })
+    it('keeps orcad when orcad is asked for by name', async () => {
+      const named = input({ env: { [SERVE_RUNTIME_ENV]: 'orcad' }, [probe]: () => true })
+      expect(await selectServeRuntime(named)).toMatchObject({ kind: 'orcad' })
+    })
 
-  it('stays on Electron when it cannot tell whether the profile has SSH targets', async () => {
-    const unreadable = input({
-      profileHasSshTargets: () => {
-        throw new Error('locked')
-      }
+    it('stays on Electron when it cannot tell', async () => {
+      const unreadable = input({
+        [probe]: () => {
+          throw new Error('locked')
+        }
+      })
+      expect(await selectServeRuntime(unreadable)).toEqual({
+        kind: 'electron',
+        reason: `could not tell whether this profile has ${feature}, which orcad cannot serve yet (locked)`
+      })
+      expect(unreadable.materializeSlot).not.toHaveBeenCalled()
     })
-    expect(await selectServeRuntime(unreadable)).toEqual({
-      kind: 'electron',
-      reason:
-        'could not tell whether this profile has SSH targets, which orcad cannot serve yet (locked)'
-    })
-    expect(unreadable.materializeSlot).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -180,6 +185,24 @@ describe('orca serve runtime selection', () => {
   it('reads SSH targets from the profile on disk', async () => {
     writeFileSync(join(root, 'orca-data.json'), JSON.stringify({ sshTargets: [{ id: 'ssh-1' }] }))
     expect(await selectServeRuntime(input())).toMatchObject({ kind: 'electron' })
+  })
+
+  it('reads installed plugins and VM recipe workspaces from userData', async () => {
+    mkdirSync(join(root, 'plugins', 'acme.recipes'), { recursive: true })
+    writeFileSync(join(root, 'plugins', 'acme.recipes', 'current'), 'a'.repeat(64))
+    expect(await selectServeRuntime(input())).toMatchObject({
+      kind: 'electron',
+      reason: expect.stringContaining('installed plugins')
+    })
+    rmSync(join(root, 'plugins'), { recursive: true })
+    writeFileSync(
+      join(root, 'orca-ephemeral-vm-runtimes.json'),
+      JSON.stringify({ version: 1, runtimes: [{ id: 'vm-1', status: 'running' }] })
+    )
+    expect(await selectServeRuntime(input())).toMatchObject({
+      kind: 'electron',
+      reason: expect.stringContaining('VM recipe workspaces')
+    })
   })
 
   it('runs the local slot on its pinned Node, linked into userData beside it', async () => {
