@@ -49,6 +49,42 @@ function hostAnswers(result: unknown): void {
 }
 
 describe('a paired-server link outside its own workspace', () => {
+  it('opens granted HTML outside every registered workspace as a preview', async () => {
+    hostAnswers({
+      worktree: 'wt-feat',
+      relativePath: null,
+      absolutePath: '/tmp/report.html',
+      exists: true,
+      isDirectory: false,
+      openTarget: {
+        kind: 'absolute-file',
+        provider: 'local',
+        absolutePath: '/tmp/report.html',
+        grantId: 'file-grant'
+      }
+    })
+    const plan = { status: 'doc-preview' } as const
+    const previewPlan = vi
+      .spyOn(filePreview, 'getWorkspaceFilePreviewPlan')
+      .mockReturnValueOnce(plan)
+    const openPreview = vi.spyOn(filePreview, 'openFileInBrowserTab').mockReturnValueOnce(plan)
+    try {
+      openDetectedFilePath('/tmp/report.html', null, null, featureWorktree)
+      await flushDoubleRaf()
+
+      expect(openPreview).toHaveBeenCalledWith({
+        filePath: '/tmp/report.html',
+        worktreeId: 'wt-feat'
+      })
+      expect(openFileMock).not.toHaveBeenCalled()
+      expect(openFilePathMock).not.toHaveBeenCalled()
+      expect(downloadAndOpenRemoteTerminalFile).not.toHaveBeenCalled()
+    } finally {
+      previewPlan.mockRestore()
+      openPreview.mockRestore()
+    }
+  })
+
   it('retains the host-resolved HTML owner when opening in another workspace', async () => {
     storeState.unifiedTabsByWorktree = {
       'wt-feat': [

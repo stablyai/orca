@@ -236,7 +236,7 @@ export function openDetectedFilePath(
     }
 
     // Route local HTML to Orca browser, including system-browser opens OS could not launch.
-    if (isHtmlFilePath(mappedFilePath) && hostGrant === null) {
+    if (isHtmlFilePath(mappedFilePath)) {
       if (deps.openInSourceGroup) {
         refuseExplicitNonEditorRoute()
         return

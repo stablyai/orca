@@ -19,6 +19,7 @@ import {
   type DocPreviewGrant
 } from './doc-preview-grant-registry'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
+import { readDocPreviewTerminalFile } from './doc-preview-terminal-file-reader'
 
 const DOC_PREVIEW_READ_TIMEOUT_MS = 15_000
 // Why: under files.readDocPreviewChunk's 512 KiB cap, and a multiple of 3 so its base64 has no padding.
@@ -235,6 +236,9 @@ export async function readDocPreviewFile(
       return notFoundOutcome(SSH_HOST_NOT_SERVED_MESSAGE)
     }
     const runtimeOwner = grant.owner
+    if (runtimeOwner.fileAccess === 'terminal-artifact') {
+      return toOutcome(await readDocPreviewTerminalFile(runtimeOwner, absolutePath), contentType)
+    }
     const worktreeRelativePath = toRuntimeWorktreeRelativePath(
       runtimeOwner.worktreeRoot,
       absolutePath

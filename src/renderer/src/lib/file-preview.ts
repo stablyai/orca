@@ -6,7 +6,7 @@ import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-ac
 import { webClientDocPreviewRefusal } from '@/lib/doc-preview-web-client'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { basename, getRelativePathInsideRoot } from '@/lib/path'
+import { basename } from '@/lib/path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { activateBrowserWorkspaceTab } from '@/lib/browser-workspace-tab-activation'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
@@ -15,27 +15,17 @@ import {
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
   TWIN_FILE_BROWSER_UNSUPPORTED_MESSAGE
 } from '@/lib/workspace-file-browser-open-target'
-import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '@/store/slices/tabs'
 import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
-import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { findWorkspaceShowingDoc } from './file-preview-page-conversion'
 
 export { convertBrowserPageToWorkspaceDoc } from './file-preview-page-conversion'
 
 export type PreviewableLanguage = 'html'
-
-/** Localized lazily: a module constant would freeze the language at import time. */
-function pairedOutsideWorktreeMessage(): string {
-  return translate(
-    'auto.lib.file.preview.pairedOutsideWorktree',
-    "Files outside the workspace can't be previewed on a paired server yet."
-  )
-}
 
 function getLocalFilePreviewPlan(
   state: AppState,
@@ -57,7 +47,7 @@ function getLocalFilePreviewPlan(
 export type WorkspaceFilePreviewPlan =
   | { status: 'browser-tab'; url: string; title: string }
   | { status: 'doc-preview' }
-  | { status: 'unsupported'; message: string; reason: 'no-channel' | 'outside-worktree' }
+  | { status: 'unsupported'; message: string; reason: 'no-channel' }
 
 export function getWorkspaceFilePreviewPlan(
   state: AppState,
@@ -90,16 +80,6 @@ export function getWorkspaceFilePreviewPlan(
   }
   // Document preview needs no remote browser/screencast capability.
   if (runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)) {
-    const worktreeRoot = state.getKnownWorktreeById(worktreeId)?.path ?? null
-    const outsideWorktree = worktreeRoot && !getRelativePathInsideRoot(filePath, worktreeRoot)
-    // Paired files.read is bounded to worktrees/chat scratch roots; explain out-of-root paths before they become preview 404s.
-    if (outsideWorktree && !chatScratchFileAddress(filePath)) {
-      return {
-        status: 'unsupported',
-        message: pairedOutsideWorktreeMessage(),
-        reason: 'outside-worktree'
-      }
-    }
     return webClientDocPreviewRefusal() ?? { status: 'doc-preview' }
   }
   const availability = getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser']
@@ -119,8 +99,7 @@ export function canShowWorkspaceFileBrowserAction(
   filePath: string
 ): boolean {
   const plan = getWorkspaceFilePreviewPlan(state, worktreeId, filePath)
-  // Keep unsupported paired-path actions visible so activation can explain their workspace boundary.
-  return plan.status !== 'unsupported' || plan.reason === 'outside-worktree'
+  return plan.status !== 'unsupported'
 }
 
 export function useWorkspaceFileBrowserActionPredicate(
