@@ -80,7 +80,8 @@ test.describe('Tab strip active-tab dock', () => {
     }) => {
       const worktreeId = await waitForActiveWorktree(orcaPage)
       for (let i = 0; i < 3; i++) {
-        await createBackgroundTerminalTab(orcaPage, worktreeId)
+        const tabId = await createBackgroundTerminalTab(orcaPage, worktreeId)
+        await expect(orcaPage.locator(slotSelector(tabId))).toBeVisible()
       }
       const ids = await readStripSlotIds(orcaPage)
       const activeTabId = (edge === 'start' ? ids.at(0) : ids.at(-1))!
