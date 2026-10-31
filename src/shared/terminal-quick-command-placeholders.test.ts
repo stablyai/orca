@@ -95,7 +95,9 @@ describe('substituteTerminalQuickCommandPlaceholders', () => {
     '/repo/$(touch pwned).py',
     '/repo/`touch pwned`.py',
     '/repo/a";touch pwned;".py',
-    '/repo/a\nb.py'
+    '/repo/a\nb.py',
+    '/repo/run!9999.py',
+    '/repo/%USERNAME%/a.py'
   ])('refuses a path a shell could execute: %j', (filePath) => {
     expect(
       substituteTerminalQuickCommandPlaceholders('python "${file}"', {
@@ -134,6 +136,16 @@ describe('substituteTerminalQuickCommandPlaceholders', () => {
         workspaceFolder: '/repo'
       })
     ).toEqual({ status: 'unsafe-path' })
+  })
+
+  it('keeps a lone percent sign, which no shell expands', () => {
+    expect(
+      substituteTerminalQuickCommandPlaceholders('python "${file}"', {
+        filePath: '/repo/100%.py',
+        relativePath: '100%.py',
+        workspaceFolder: '/repo'
+      })
+    ).toEqual({ status: 'ok', command: 'python "/repo/100%.py"' })
   })
 
   it('keeps paths with shell punctuation inside plain double quotes', () => {

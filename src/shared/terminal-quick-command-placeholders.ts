@@ -22,8 +22,9 @@ export type TerminalQuickCommandPlaceholderResult =
   | { status: 'unsafe-path' }
 
 // Why: values are pasted into a shell line, so a file named `$(touch x).py` would run even inside
-// the documented `"${file}"` quoting.
-const UNSAFE_PATH_VALUE = /[\p{Cc}$`"]/u
+// the documented `"${file}"` quoting. `!` is bash history expansion and `%NAME%` is a cmd.exe
+// variable; both expand inside double quotes too.
+const UNSAFE_PATH_VALUE = /[\p{Cc}$`"!]|%[^%]+%/u
 
 // Why: inert inside plain double quotes, but they end `'${file}'` or chain a bare `${file}`.
 const UNSAFE_PATH_VALUE_OUTSIDE_DOUBLE_QUOTES = /[';&|<>()]/
