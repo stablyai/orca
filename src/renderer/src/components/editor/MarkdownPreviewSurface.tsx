@@ -83,7 +83,7 @@ export function MarkdownPreviewSurface({
           fontSize: `${editorFontSize}px`,
           overflowAnchor: largePreview ? 'none' : undefined
         }}
-        className={`markdown-preview h-full min-h-0 overflow-auto scrollbar-editor ${isDark ? 'markdown-dark' : 'markdown-light'}`}
+        className={`markdown-preview h-full min-h-0 overflow-auto scrollbar-editor ${isDark ? 'markdown-dark' : 'markdown-light'} ${canShowReviewTools ? 'has-markdown-review-notes' : ''}`}
       >
         {isSearchOpen ? (
           <MarkdownPreviewSearchBar

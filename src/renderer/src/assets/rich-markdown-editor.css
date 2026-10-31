@@ -1,4 +1,5 @@
 .rich-markdown-editor-shell {
+  --rich-markdown-review-space: 0px;
   position: relative;
   display: flex;
   min-height: 0;
@@ -240,8 +241,8 @@
   }
 }
 
-.rich-markdown-editor-shell.has-rich-markdown-review-notes .rich-markdown-editor {
-  padding-right: clamp(252px, 28%, 308px);
+.rich-markdown-editor-shell.has-rich-markdown-review-notes {
+  --rich-markdown-review-space: clamp(220px, calc(28cqw - 32px), 276px);
 }
 
 .rich-markdown-review-rail-actions {
@@ -295,7 +296,10 @@
 .rich-markdown-review-note-layer {
   position: absolute;
   top: 0;
-  right: 16px;
+  right: max(
+    16px,
+    calc((100% - var(--markdown-document-max-width) - var(--rich-markdown-review-space)) / 2 + 16px)
+  );
   /* Why: the card action pill needs the same minimum rail width as preview mode. */
   width: clamp(220px, 24%, 250px);
   pointer-events: none;
@@ -494,7 +498,10 @@
 
 .rich-markdown-editor {
   min-height: 100%;
+  max-width: calc(var(--markdown-document-max-width) + var(--rich-markdown-review-space));
+  margin-inline: auto;
   padding: 24px 32px 96px;
+  padding-right: calc(32px + var(--rich-markdown-review-space));
   font-size: calc(14px + (var(--editor-font-zoom-level, 0) * 1px));
   line-height: 1.7;
   outline: none;

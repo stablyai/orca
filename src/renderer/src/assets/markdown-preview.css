@@ -16,6 +16,21 @@
   container-type: inline-size;
 }
 
+.markdown-preview > .markdown-body {
+  max-width: calc(var(--markdown-document-max-width) - 64px);
+  margin-inline: auto;
+}
+
+.markdown-preview.has-markdown-review-notes {
+  --markdown-review-space: calc(clamp(220px, 28cqw, 300px) + 32px);
+  padding-right: calc(32px + var(--markdown-review-space));
+}
+
+.markdown-preview.has-markdown-review-notes .markdown-annotation-block,
+.markdown-preview.has-markdown-review-notes .markdown-annotation-list-block {
+  width: calc(100% + var(--markdown-review-space));
+}
+
 .markdown-preview:focus-visible {
   outline: none;
 }
@@ -448,6 +463,15 @@
 }
 
 @container (max-width: 760px) {
+  .markdown-preview.has-markdown-review-notes {
+    padding-right: 32px;
+  }
+
+  .markdown-preview.has-markdown-review-notes .markdown-annotation-block,
+  .markdown-preview.has-markdown-review-notes .markdown-annotation-list-block {
+    width: auto;
+  }
+
   .markdown-annotation-block,
   .markdown-annotation-list-block {
     display: block;
