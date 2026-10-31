@@ -1,5 +1,6 @@
+import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ITheme, Terminal, ILinkHandler } from '@xterm/xterm'
+import type { ITheme, Terminal } from '@xterm/xterm'
 import { useShallow } from 'zustand/react/shallow'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
@@ -115,7 +116,7 @@ export function AgentTerminalPreview({
     let terminal: Terminal | null = null
     let offData: (() => void) | null = null
     const previewApi = terminalPreviewApiFor(ptyId)
-    let linkDefaults: ILinkHandler | undefined
+    let linkDefaults: PreviewTerminalLinkHandler | undefined
     let linkInteraction: ReturnType<typeof installDashboardPreviewLinkInteraction> | null = null
     const sendInput = (data: string): boolean | Promise<boolean> => previewApi.input(ptyId, data)
     const installLinks = (): void => {
@@ -131,7 +132,7 @@ export function AgentTerminalPreview({
         defaultHandlers: linkDefaults
       })
     }
-    const linkHandlers = (defaults: ILinkHandler): ILinkHandler => {
+    const linkHandlers = (defaults: PreviewTerminalLinkHandler): PreviewTerminalLinkHandler => {
       linkDefaults = defaults
       return {
         activate: (event, uri, range) => linkInteraction?.handlers.activate(event, uri, range),

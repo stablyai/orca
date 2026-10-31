@@ -4,13 +4,14 @@ import { installGuardedLinkProviderRegistration } from '@/lib/pane-manager/termi
 import { isTerminalHttpLinkActivation } from '@/components/terminal-pane/terminal-http-link-activation'
 import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal-http-url-extraction'
 
-type PreviewTerminalLinkHandler = Omit<ILinkHandler, 'activate'> & {
+export type PreviewTerminalLinkHandler = Omit<ILinkHandler, 'activate' | 'leave'> & {
   activate(event: MouseEvent, uri: string, range?: IBufferRange): void
+  leave?(event: MouseEvent, uri: string, range?: IBufferRange): void
 }
 
 export type PreviewTerminalLinkHandlers =
   | PreviewTerminalLinkHandler
-  | ((defaults: ILinkHandler) => PreviewTerminalLinkHandler)
+  | ((defaults: PreviewTerminalLinkHandler) => PreviewTerminalLinkHandler)
 
 /** Use pane-style Mod+click but open externally because pop-outs have no workspace-scoped browser pane. */
 export function installPreviewTerminalLinks(

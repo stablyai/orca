@@ -1,4 +1,5 @@
-import type { ILinkHandler, Terminal } from '@xterm/xterm'
+import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
+import type { Terminal } from '@xterm/xterm'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import { installTerminalLinkifierClickPriming } from '@/components/terminal-pane/terminal-linkifier-click-priming'
 import { installTerminalLinkPointerGesture } from '@/components/terminal-pane/terminal-link-pointer-gesture'
@@ -23,7 +24,7 @@ import {
 export function installDashboardPreviewLinkInteraction(
   terminal: Terminal,
   deps: {
-    defaultHandlers?: ILinkHandler
+    defaultHandlers?: PreviewTerminalLinkHandler
     getSettings: () => GlobalSettings | null
     getSource: () => DashboardPreviewLinkSource | undefined
     onForegroundOpen: () => (() => void) | undefined
@@ -91,7 +92,7 @@ export function installDashboardPreviewLinkInteraction(
   const activate = (
     event: MouseEvent,
     uri: string,
-    range?: Parameters<ILinkHandler['activate']>[2]
+    range?: Parameters<PreviewTerminalLinkHandler['activate']>[2]
   ): void => {
     if (!isActionUri(uri)) {
       if (!disposed && range) {
@@ -138,7 +139,7 @@ export function installDashboardPreviewLinkInteraction(
       terminal.clearSelection()
     }
   }
-  const handlers: ILinkHandler = {
+  const handlers: PreviewTerminalLinkHandler = {
     activate,
     hover: (event, uri, range) => {
       hovered = isActionUri(uri) ? { uri, range } : null

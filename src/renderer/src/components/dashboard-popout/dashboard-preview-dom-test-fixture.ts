@@ -1,5 +1,5 @@
+import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
 import { vi } from 'vitest'
-import type { ILinkHandler } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { openStandaloneTerminal } from '../standalone-terminal/open-standalone-terminal'
@@ -140,7 +140,7 @@ export function mountPreviewLinkInteraction(
   const container = document.createElement('div')
   document.body.appendChild(container)
   let interaction: ReturnType<typeof installDashboardPreviewLinkInteraction> | undefined
-  let defaultHandlers: ILinkHandler | undefined
+  let defaultHandlers: PreviewTerminalLinkHandler | undefined
   const sink = vi.fn<(data: string) => boolean | Promise<boolean>>(() => true)
   const instance = openStandaloneTerminal({
     container,
@@ -154,7 +154,7 @@ export function mountPreviewLinkInteraction(
     getTerminalInput: () => null,
     ...(withInteraction
       ? {
-          linkHandlers: (defaults: ILinkHandler): ILinkHandler => {
+          linkHandlers: (defaults: PreviewTerminalLinkHandler): PreviewTerminalLinkHandler => {
             defaultHandlers = defaults
             return {
               activate: (e, uri, range) => interaction?.handlers.activate(e, uri, range),

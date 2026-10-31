@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom'
+import { Toaster } from '@/components/ui/sonner'
 import { useAppMenuPaste } from '@/hooks/useAppMenuPaste'
 import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
@@ -10,5 +12,13 @@ export function DashboardPopoutRoot(): React.JSX.Element {
   useAppMenuSelectionActions()
   useAgentDashboardTelemetry('popout')
   const snapshot = useDashboardSnapshot()
-  return <AgentKanbanBoard snapshot={snapshot} />
+  return (
+    <>
+      <AgentKanbanBoard snapshot={snapshot} />
+      {createPortal(
+        <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />,
+        document.body
+      )}
+    </>
+  )
 }
