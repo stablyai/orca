@@ -87,7 +87,11 @@ function row(
   target: RuntimeClientTarget = { kind: 'local' },
   offered = true,
   agent: AgentType = 'claude',
-  messages: readonly NativeChatMessage[] = []
+  messages: readonly NativeChatMessage[] = [],
+  recovery: Parameters<typeof NativeChatUsageLimitActionsProvider>[0]['recovery'] = {
+    readCurrent: true,
+    canSwitchAccount: mocks.follows
+  }
 ) {
   const view: NativeChatOrcaStopView = {
     hostLabel: null,
@@ -101,7 +105,7 @@ function row(
   return (
     <TooltipProvider>
       <NativeChatUsageLimitActionsProvider
-        recovery={{ readCurrent: true, canSwitchAccount: mocks.follows }}
+        recovery={recovery}
         view={view}
         pane={{
           tabId: 'tab',
@@ -132,6 +136,21 @@ function row(
     </TooltipProvider>
   )
 }
+function expectInlineActions(accountName: string | null) {
+  const leadIn = screen.getByText('Continue this chat without waiting:')
+  const actions = leadIn.parentElement
+  const handOff = screen.getByRole('button', { name: 'Hand Off to Another Agent' })
+  const account = accountName ? screen.getByRole('button', { name: accountName }) : null
+  expect(actions).toHaveClass('flex', 'flex-wrap', 'items-center')
+  expect(Array.from(actions?.children ?? [])).toEqual([
+    leadIn,
+    ...(account ? [account.parentElement] : []),
+    handOff
+  ])
+  if (account) {
+    expect(account.parentElement).toHaveClass('w-32', 'shrink-0')
+  }
+}
 function snapshot(count: number) {
   return {
     claude: {
@@ -156,11 +175,18 @@ it('offers host-owned recovery actions for the current usage-limit cut', async (
   const openSettingsTarget = vi.fn()
   useAppStore.setState({ openSettingsTarget, openSettingsPage: vi.fn() })
   try {
-    const view = render(row(target))
+    const view = render(
+      row(target, true, 'claude', [], { readCurrent: false, canSwitchAccount: undefined })
+    )
+    expectInlineActions('Switch Account')
+    expect(screen.getByRole('button', { name: 'Switch Account' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Hand Off to Another Agent' })).toBeDisabled()
+    view.rerender(row(target))
     expect(screen.getByRole('button', { name: 'Switch Account' })).toBeDisabled()
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Switch Account' })).toBeEnabled()
     )
+    expectInlineActions('Switch Account')
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Switch Account' }), {
       button: 0,
       ctrlKey: false,
@@ -189,11 +215,15 @@ it('offers host-owned recovery actions for the current usage-limit cut', async (
     mocks.snapshot.mockResolvedValue(snapshot(1))
     render(row(target))
     await waitFor(() => expect(screen.queryByRole('button', { name: /Account/ })).toBeNull())
+    expect(
+      screen.getByText('Continue this chat without waiting:').parentElement?.querySelector('.w-32')
+    ).toHaveClass('empty:hidden')
     const watcher = mocks.watch.mock.lastCall?.[1]
     watcher.onSnapshot(snapshot(2))
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Switch Account' })).toBeEnabled()
     )
+    expectInlineActions('Switch Account')
     cleanup()
     const local: RuntimeClientTarget = { kind: 'local' }
     render(row(local))
@@ -210,6 +240,7 @@ it('offers host-owned recovery actions for the current usage-limit cut', async (
     render(row(target, true, 'codex'))
     expect(screen.getByRole('button', { name: 'Hand Off to Another Agent' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: /Account/ })).toBeNull()
+    expectInlineActions(null)
   } finally {
     useAppStore.setState({
       openSettingsPage: original.openSettingsPage,
@@ -228,6 +259,10 @@ it('admits one preparation and discards it after Continue supersedes the cut', a
   )
   mocks.follows = false
   const view = render(row())
+  expect(
+    screen.getByText('Continue this chat without waiting:').parentElement?.querySelector('.w-32')
+  ).toBeNull()
+  expectInlineActions(null)
   const button = screen.getByRole('button', { name: 'Hand Off to Another Agent' })
   fireEvent.click(button)
   fireEvent.click(button)
