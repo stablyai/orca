@@ -61,6 +61,10 @@ export const WorktreeCreate = z
       .optional(),
     workspaceStatus: OptionalString,
     manualOrder: OptionalFiniteNumber,
+    /** For a Perforce project: the new workspace is a copy on the chosen stream; the host validates it. */
+    perforceCopy: z
+      .object({ stream: z.unknown().optional(), settings: z.unknown().optional() })
+      .optional(),
     // Why: the client's "Nest Workspaces" choice; absent (older clients) keeps the host's own setting.
     nestWorkspaces: z.boolean().optional(),
     // Why: the client's Keep Local Main Up to Date choice; absent (older clients) keeps the host's.

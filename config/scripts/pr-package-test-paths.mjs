@@ -101,6 +101,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts',
   'src/shared/secure-file-fsync-flags.test.ts',
   'src/shared/secure-path-windows-acl.win32.test.ts',
+  'src/shared/perforce/workspace-copy/workspace-copy-remove-lock.test.ts',
   'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',
   'src/main/ipc/pty/pty-codex-account-attribution.test.ts',
   'src/main/ipc/pty/pty-spawn-env-codex-resume-provenance.test.ts',

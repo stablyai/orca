@@ -4,6 +4,7 @@ import type {
   CreateWorktreeArgs,
   CreateWorktreeResult
 } from '../../../../../../shared/worktree/create-types'
+import type { PerforceSettings } from '../../../../../../shared/perforce/perforce-settings'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
@@ -32,6 +33,7 @@ export type CreateWorktreeCallOptions = {
   displayNameKind?: CreateWorktreeArgs['displayNameKind']
   /** Parent picked in the composer. Sets sidebar nesting only; ignored if it no longer exists. */
   parentWorktreeId?: string
+  perforceCopy?: CreateWorktreeArgs['perforceCopy']
   provisionedRoot?: {
     runtimeId: string
     executionHostId: ExecutionHostId
@@ -52,6 +54,8 @@ export type CreatedWorktreeResult = CreateWorktreeResult & { hostPlannedStartup?
 /** Pack create inputs once for both transports; retry-specific fields live in WorktreeCreateAttempt. */
 export type WorktreeCreateRequest = Omit<CreateWorktreeArgs, 'parentWorkspace' | 'manualOrder'> & {
   options?: CreateWorktreeCallOptions
+  /** Sent with a Perforce copy create to an Orca server, which has the user's copy options only this way. */
+  perforceSettings?: PerforceSettings
 }
 
 /** Per-attempt values: names carry the conflict-retry suffix, the parent can be dropped on retry. */
@@ -118,7 +122,8 @@ function sharedCreateFields(
     ...(options?.linkedWorkItem !== undefined ? { linkedWorkItem: options.linkedWorkItem } : {}),
     ...(options?.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: options.linkedTaskSourceContext }
-      : {})
+      : {}),
+    ...(options?.perforceCopy ? { perforceCopy: options.perforceCopy } : {})
   }
 }
 
@@ -154,6 +159,9 @@ export function buildRuntimeWorktreeCreateParams(
       ? { creationId: request.creationId }
       : {}),
     ...(options?.startupDraft ? { startupDraft: options.startupDraft } : {}),
+    ...(options?.perforceCopy && request.perforceSettings
+      ? { perforceCopy: { ...options.perforceCopy, settings: request.perforceSettings } }
+      : {}),
     ...(hostAgentLaunch
       ? buildHostAgentLaunchParams(hostAgentLaunch)
       : startup

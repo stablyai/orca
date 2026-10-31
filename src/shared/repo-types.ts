@@ -11,6 +11,9 @@ import type { OrcadRetainedMarker } from './orcad-retained-marker'
 
 export type RepoKind = 'git' | 'folder'
 
+/** Version control of a folder project; Git projects use `kind: 'git'` instead. */
+export type RepoVcs = 'perforce'
+
 /** Explicit choices survive remote-topology changes; absent/auto uses upstream when present, otherwise origin.
  * Explicit upstream falls back to origin with a toast if that remote vanishes. */
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
@@ -47,6 +50,10 @@ export type Repo = {
   upstream?: GitHubRepositoryIdentity | null
   addedAt: number
   kind?: RepoKind
+  /** 'perforce' makes a folder project a Perforce project: its workspaces are Perforce copies on
+   *  their own streams. Kept on a folder project so Orca builds without Perforce support still treat
+   *  it as a plain folder rather than as Git. */
+  vcs?: RepoVcs
   /** Git root proven during folder upgrade; keeps the original checkout locator stable. */
   folderUpgradeGitRootPath?: string
   gitUsername?: string

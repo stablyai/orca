@@ -8,6 +8,10 @@ import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/w
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { invalidateAuthorizedRootsCache } from '../../ipc/registered-worktree-roots-cache'
 import { isFolderRepo } from '../../../shared/repo-kind'
+import {
+  isPerforceCopyWorktreeIdForRepo,
+  PERFORCE_COPY_GENERIC_REMOVAL_MESSAGE
+} from '../../../shared/worktree/perforce-copy-worktree'
 import { getRuntimeFolderWorkspaceRootId } from '../runtime-folder-workspace'
 import { killAllProcessesForWorktree } from '../worktree-teardown'
 import { teardownFolderWorkspacePtys } from '../folder-workspace-pty-teardown'
@@ -105,6 +109,9 @@ export async function removeOrphanOrFolderWorktree({
   }
   if (removalTarget.id === getRuntimeFolderWorkspaceRootId(repo)) {
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
+  }
+  if (isPerforceCopyWorktreeIdForRepo(repo, removalTarget.id)) {
+    throw new Error(PERFORCE_COPY_GENERIC_REMOVAL_MESSAGE)
   }
   // Use the resolved SSH owner, including executionHostId-only rows; runtime-nested targets belong to that environment's namespace.
   const folderHost = parseExecutionHostId(removalHostId)

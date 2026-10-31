@@ -16,6 +16,7 @@ import { HOST_RUNTIME_CAPABILITIES } from './host-runtime-capabilities'
 import { MOBILE_RUNTIME_CAPABILITIES } from './mobile-runtime-capabilities'
 import { ORCAD_RUNTIME_CAPABILITIES } from './orcad-runtime-capabilities'
 import { ORCHESTRATION_RUNTIME_CAPABILITIES } from './orchestration-runtime-capabilities'
+import { PERFORCE_RUNTIME_CAPABILITIES } from './perforce/perforce-runtime-capability'
 import { PREFLIGHT_RUNTIME_CAPABILITIES } from './preflight-runtime-capabilities'
 import {
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
@@ -151,7 +152,8 @@ export const RUNTIME_CAPABILITIES = [
   ...BROWSER_RUNTIME_CAPABILITIES,
   ...SOURCE_CONTROL_RUNTIME_CAPABILITIES,
   ...TASK_SOURCE_RUNTIME_CAPABILITIES,
-  ...AI_VAULT_RUNTIME_CAPABILITIES
+  ...AI_VAULT_RUNTIME_CAPABILITIES,
+  ...PERFORCE_RUNTIME_CAPABILITIES
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

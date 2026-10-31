@@ -5,6 +5,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { isPerforceCopyWorktreeIdForRepo } from '../../shared/worktree/perforce-copy-worktree'
 import { findExtraFolderWorkspaceIds } from '../folder-workspace-meta-presence'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
@@ -54,7 +55,11 @@ function isUpgradeCandidate(repo: Repo): boolean {
 
 // The repo write would refuse upgrades hiding extra folder workspaces; skip without logging an error.
 function hasExtraFolderWorkspaces(store: Store, repo: Repo): boolean {
-  return findExtraFolderWorkspaceIds(repo, store.getAllWorktreeMeta()).length > 0
+  const metaById = store.getAllWorktreeMeta()
+  return (
+    findExtraFolderWorkspaceIds(repo, metaById).length > 0 ||
+    Object.keys(metaById).some((key) => isPerforceCopyWorktreeIdForRepo(repo, key))
+  )
 }
 
 /** Identity of the `.git` entry, or null when there is none. */

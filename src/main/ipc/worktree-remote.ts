@@ -898,7 +898,7 @@ export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating',
   creationId?: string,
-  detail?: Pick<CreateWorktreeProgressEvent, 'checkout' | 'worktreeId'>
+  detail?: Pick<CreateWorktreeProgressEvent, 'checkout' | 'worktreeId' | 'detail'>
 ): void {
   if (!mainWindow.isDestroyed()) {
     const event: CreateWorktreeProgressEvent = { creationId, phase, ...detail }

@@ -25,6 +25,10 @@ const appStoreMocks = vi.hoisted(() => ({
 
 const renameFileOnDiskMock = vi.hoisted(() => vi.fn())
 
+vi.mock('../right-sidebar/perforce/use-perforce-edited-tab', () => ({
+  usePerforceEditedTab: () => false
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
   return {

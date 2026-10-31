@@ -26,6 +26,7 @@ import { adoptProvisionedRootSshCheckout } from '../../../provisioned-root-ssh-a
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { createFolderWorkspace } from './folder-workspace-creation'
+import { createPerforceCopyWorkspace } from '../perforce-copies/perforce-copy-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import { requireWorktreeCreateRoute } from '../../../worktree-create-execution-host-route'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -78,7 +79,9 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           // Track operational failures; malformed IPC rejected above is outside the creation funnel.
           if (isFolderRepo(repo)) {
             // Folder creation only registers metadata, so it needs no filesystem host route.
-            result = createFolderWorkspace(createArgs, repo, store)
+            result = createArgs.perforceCopy
+              ? await createPerforceCopyWorkspace(createArgs, repo, store, mainWindow)
+              : createFolderWorkspace(createArgs, repo, store)
           } else {
             // Resolve executionHostId-only SSH ownership before any local Git operation.
             const createRoute = requireWorktreeCreateRoute(repo)

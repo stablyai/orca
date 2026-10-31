@@ -65,6 +65,7 @@ import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-agent-sess
 import { MANAGED_RUNTIME_INSTALL_METHODS } from './managed-runtime-install'
 import { ARTIFACT_METHODS } from './artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks'
+import { PERFORCE_METHODS } from './perforce'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
 import { CONNECTOR_METHODS } from './connector'
 import {
@@ -123,6 +124,7 @@ export const ALL_RPC_METHODS = [
   ...NATIVE_CHAT_METHODS,
   ...FILE_METHODS,
   ...GIT_METHODS,
+  ...PERFORCE_METHODS,
   ...GITHUB_METHODS,
   ...GITLAB_METHODS,
   ...HOSTED_REVIEW_METHODS,

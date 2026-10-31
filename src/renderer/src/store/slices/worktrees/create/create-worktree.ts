@@ -1,5 +1,5 @@
 import { showWorktreeCreateWarningToast } from './worktree-create-warning-toast'
-import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
+import { createWorktreeOnRuntimeHost, type HostCreateSettings } from './host-planned-agent-launch'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
 import {
@@ -9,10 +9,6 @@ import {
 import { adoptFromEndpoint } from '../../../adopt-from-endpoint'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import {
-  pickClientWorktreeCreateSettings,
-  type ClientWorktreeCreateSettings
-} from './client-worktree-create-settings'
 import {
   CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
   getClientWorktreeCreateCandidate,
@@ -34,6 +30,7 @@ import {
 import { ensureLocalRuntimeCapabilities } from '../../../../runtime/local-runtime-capabilities'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
+import { announcePerforceCopy } from '@/components/perforce-copies/perforce-copy-announcement'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
 import { adoptRuntimeProvisionedRoot } from './runtime-provisioned-root-adoption'
@@ -63,7 +60,7 @@ async function runCreateAttempt(
   request: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt,
   target: RuntimeTarget,
-  clientCreateSettings: ClientWorktreeCreateSettings = {}
+  settings: HostCreateSettings
 ): Promise<CreateAttemptOutcome> {
   const provisionedRoot = request.options?.provisionedRoot
   const create = async (
@@ -90,7 +87,7 @@ async function runCreateAttempt(
             target.environmentId,
             request,
             { ...attempt, parentWorkspace },
-            clientCreateSettings
+            settings
           )
   try {
     return { result: await create(attempt.parentWorkspace), droppedParent: false }
@@ -267,7 +264,7 @@ export function createCreateWorktree(
               manualOrder
             },
             target,
-            pickClientWorktreeCreateSettings(get().settings)
+            get().settings
           )
           if (lostRequestedParent(outcome, parent, target)) {
             warnParentDroppedOnce()
@@ -286,6 +283,7 @@ export function createCreateWorktree(
           if (result.baseFallback) {
             requestWorktreeBaseFallbackNotice(result.baseFallback)
           }
+          announcePerforceCopy(result.perforceCopy)
           showLocalBaseRefUpdateSuggestionToast(result.localBaseRefUpdateSuggestion, {
             updateSettings: get().updateSettings,
             getSettings: () => get().settings,

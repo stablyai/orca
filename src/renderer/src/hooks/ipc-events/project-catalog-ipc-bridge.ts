@@ -90,6 +90,7 @@ export function registerProjectCatalogIpcBridge(
       useAppStore.getState().updatePendingWorktreeCreation(data.creationId, {
         phase: data.phase,
         checkoutProgress: data.checkout ?? undefined,
+        ...(data.detail ? { progressDetail: data.detail } : {}),
         ...(data.worktreeId ? { worktreeId: data.worktreeId } : {})
       })
     }) ?? (() => {})

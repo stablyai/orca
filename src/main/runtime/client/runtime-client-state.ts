@@ -22,8 +22,48 @@ import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/na
 import type { WorktreeTerminalStopOptions } from '../terminal/stop/worktree-terminal-stop-options'
 import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
 import type { Automation } from '../../../shared/automations-types'
+import type { RuntimeStore } from '../runtime-store-contract'
+import {
+  RuntimePerforceCommands,
+  installRuntimePerforceCommandSurface,
+  type RuntimePerforceCommandSurface
+} from '../runtime-perforce-commands'
+import { RuntimePerforceCopyCommands } from '../runtime-perforce-copy-commands'
 
+// oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The constructor installs the Perforce command surface.
 export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithStateFields {
+  // Why here: this layer owns the PTY stop and reaches the later-layer purge the copy commands need.
+  protected abstract purgeRemovedWorktree(
+    store: RuntimeStore,
+    worktreeId: string,
+    repoId: string,
+    removalHostId?: ExecutionHostId
+  ): void
+
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithStateFields>) {
+    super(...args)
+    installRuntimePerforceCommandSurface(this, {
+      workspaces: new RuntimePerforceCommands({
+        resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
+        getRuntimeSettings: () => this.store?.getSettings?.() ?? {},
+        getCommitMessageAgentEnvironment: () => this.accounts.getCommitMessageAgentEnvironment()
+      }),
+      copies: new RuntimePerforceCopyCommands({
+        resolveRepo: (selector) => this.resolveRepoSelector(selector),
+        getStore: () => this.requireStore(),
+        getRuntimeSettings: () => this.store?.getSettings?.() ?? {},
+        acquireFileWatcherRemoval: (...args) => this.acquireFileWatcherRemoval(...args),
+        stopWorkspaceTerminals: (...args) => this.stopPtysForDestructiveWorktreeRemoval(...args),
+        forgetWorktree: (...args) => this.purgeRemovedWorktree(this.requireStore(), ...args),
+        worktreesChanged: (repoId) => {
+          this.invalidateWorktreeScanCacheForRepo(repoId)
+          this.notifyWorktreesChanged(repoId)
+        },
+        reposChanged: () => this.notifyReposChanged()
+      })
+    })
+  }
+
   abstract retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean
 
   abstract getPtyLivenessVerdict(ptyId: string): PtyLivenessVerdict | null
@@ -231,3 +271,6 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     return this.automation.list()
   }
 }
+
+// oxlint-disable-next-line typescript/consistent-type-definitions -- SAFETY: This merge models the constructor-installed Perforce methods.
+export interface OrcaRuntimeWithPtyForegroundProcessReads extends RuntimePerforceCommandSurface {}

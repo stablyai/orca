@@ -5,7 +5,7 @@ import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, Smartphone } from 
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
-import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
+import { useEditorTabLabel } from './use-editor-tab-label'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
@@ -208,7 +208,7 @@ export default function EditorFileTab({
   )
 
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
-  const tabLabel = getEditorDisplayLabel(file)
+  const tabLabel = useEditorTabLabel(file, worktree?.path ?? null, repo)
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
