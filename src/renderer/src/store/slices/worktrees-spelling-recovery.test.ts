@@ -1,5 +1,5 @@
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildValidWorktreeIdsForSessionHydration } from '../../../../shared/worktree/degraded-repo-worktree-validity'
 import { recentlyRenamedWorktreeIdExpiry } from '@/lib/worktree-rename-grace'
 import {
@@ -59,8 +59,14 @@ beforeEach(() => {
   recentlyRenamedWorktreeIdExpiry.clear()
 })
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('saved worktree spelling recovery', () => {
   it('recovers split tabs into the listed spelling without replacing its layout or selection', async () => {
+    const now = 1_000_000
+    vi.useFakeTimers({ now, toFake: ['Date'] })
     const store = createTestStore()
     const paneLayout = makeLayout()
     const destinationLayout = {
@@ -143,7 +149,7 @@ describe('saved worktree spelling recovery', () => {
       ['kept-file', NEW],
       ['source-file', NEW]
     ])
-    expect(recentlyRenamedWorktreeIdExpiry.get(OLD)).toBeGreaterThan(Date.now())
+    expect(recentlyRenamedWorktreeIdExpiry.get(OLD)).toBeGreaterThan(now)
     expect(mockApi.runtime.call).not.toHaveBeenCalled()
   })
 
