@@ -35,6 +35,39 @@ describe('listSimulatorDevices', () => {
     platformMock.mockReturnValue('darwin')
   })
 
+  it('keeps lastBootedAt as usage evidence only when lastUsedAt is absent', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(
+        null,
+        JSON.stringify({
+          devices: {
+            'com.apple.CoreSimulator.SimRuntime.iOS-26-0': [
+              {
+                udid: 'booted-before',
+                name: 'iPhone',
+                state: 'Shutdown',
+                lastBootedAt: '2026-10-29T10:00:00Z'
+              },
+              {
+                udid: 'used-after',
+                name: 'iPhone',
+                state: 'Shutdown',
+                lastBootedAt: '2026-10-29T10:00:00Z',
+                lastUsedAt: '2026-10-30T11:00:00Z'
+              }
+            ]
+          }
+        }),
+        ''
+      )
+    })
+    const devices = await listSimulatorDevices()
+    expect(devices.map((device) => device.lastUsedAt)).toEqual([
+      '2026-10-29T10:00:00Z',
+      '2026-10-30T11:00:00Z'
+    ])
+  })
+
   it('normalizes missing simctl errors for UI and CLI callers', async () => {
     execFileMock.mockImplementation((_command, _args, _options, callback) => {
       callback(

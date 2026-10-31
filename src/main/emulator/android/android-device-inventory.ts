@@ -1,3 +1,4 @@
+import { readAndroidDeviceSystemMetadata } from './android-device-system-metadata'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { adbDevicesArgs, parseAdbDevices, type AndroidAdbDevice } from './adb-devices'
@@ -58,7 +59,8 @@ export async function findRunningAvdSerial(
 
 export async function listAndroidDevices(
   runner: AndroidCommandRunner,
-  sdk: AndroidSdkPaths
+  sdk: AndroidSdkPaths,
+  options: { includeSystemMetadata?: boolean } = {}
 ): Promise<EmulatorDevice[]> {
   const [running, avdsResult] = await Promise.all([
     listRunningAdbDevices(runner, sdk),
@@ -66,7 +68,16 @@ export async function listAndroidDevices(
   ])
   const avds = parseAvdList(avdsResult.stdout)
   const runningAvdBySerial = await resolveRunningAvdNames(runner, sdk, running)
-  return mergeAndroidDevices(running, avds, runningAvdBySerial)
+  const devices = mergeAndroidDevices(running, avds, runningAvdBySerial)
+  if (options.includeSystemMetadata === false) {
+    return devices
+  }
+  return Promise.all(
+    devices.map(async (device) => ({
+      ...device,
+      ...(await readAndroidDeviceSystemMetadata(device, runner, sdk).catch(() => ({})))
+    }))
+  )
 }
 
 // adb appends an OK status after the AVD name.

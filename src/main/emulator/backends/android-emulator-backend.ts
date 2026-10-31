@@ -150,7 +150,8 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     if (!this.sdkState.resolve()) {
       return false
     }
-    const devices = await this.listDevices()
+    const sdk = this.requireSdk()
+    const devices = await listAndroidDevices(this.runner, sdk, { includeSystemMetadata: false })
     return devices.some((device) => device.id === id || device.name === id)
   }
 

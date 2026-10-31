@@ -1,11 +1,5 @@
 import { Home, Power, RotateCw, Smartphone } from 'lucide-react'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { EmulatorDevicePicker } from './emulator-device-picker'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -58,27 +52,12 @@ export function EmulatorPaneToolbar({
         {statusLabel}
       </span>
       <div className="flex-1" />
-      <Select
-        value={selectedUdid ?? ''}
-        onValueChange={onSelectDevice}
-        disabled={loading || devices.length === 0}
-      >
-        <SelectTrigger className="h-7 w-[180px] text-xs">
-          <SelectValue
-            placeholder={translate(
-              'auto.components.emulator.pane.emulator.pane.toolbar.3d836b879c',
-              'Choose emulator'
-            )}
-          />
-        </SelectTrigger>
-        <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-          {devices.map((d) => (
-            <SelectItem key={d.udid} value={d.udid} className="text-xs">
-              {d.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <EmulatorDevicePicker
+        devices={devices}
+        selectedUdid={selectedUdid}
+        onSelectDevice={onSelectDevice}
+        disabled={loading}
+      />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -159,7 +138,12 @@ export function EmulatorPaneToolbar({
           variant={loading ? 'ghost' : 'default'}
           className={cn('h-7 px-2 text-xs', loading && 'text-muted-foreground')}
           onClick={onAttach}
-          disabled={loading || devices.length === 0}
+          disabled={
+            loading ||
+            devices.length === 0 ||
+            !selectedUdid ||
+            devices.find((device) => device.udid === selectedUdid)?.isAvailable === false
+          }
         >
           {loading
             ? translate(

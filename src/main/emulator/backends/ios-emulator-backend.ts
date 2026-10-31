@@ -300,8 +300,11 @@ function toEmulatorDevice(device: SimulatorDevice): EmulatorDevice {
     backend: 'ios',
     id: device.udid,
     name: device.name,
-    state: device.state === 'Booted' ? 'booted' : 'shutdown',
+    state:
+      device.state === 'Booted' ? 'booted' : device.state === 'Booting' ? 'booting' : 'shutdown',
     detail: device.runtime,
+    lastUsedAt: device.lastUsedAt,
+    availabilityError: device.availabilityError,
     isAvailable: device.isAvailable !== false
   }
 }

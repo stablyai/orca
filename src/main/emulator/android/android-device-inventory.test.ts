@@ -71,12 +71,21 @@ describe('listAndroidDevices', () => {
         if (binary === SDK.adb && a === '-s emulator-5554 emu avd name') {
           return 'Pixel_7\nOK'
         }
+        if (binary === SDK.adb && a === '-s emulator-5554 shell getprop') {
+          return '[ro.build.version.release]: [16]\n[ro.build.version.sdk]: [36]'
+        }
         return ''
       })
     )
     const devices = await listAndroidDevices(fake as unknown as AndroidCommandRunner, SDK)
     expect(devices).toHaveLength(1)
-    expect(devices[0]).toMatchObject({ id: 'emulator-5554', name: 'Pixel_7', state: 'booted' })
+    expect(devices[0]).toMatchObject({
+      id: 'emulator-5554',
+      name: 'Pixel_7',
+      state: 'booted',
+      osVersion: '16',
+      apiLevel: '36'
+    })
   })
 })
 
