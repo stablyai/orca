@@ -89,7 +89,8 @@ export function useMobilePanZoom(content: PanZoomSize | null, upscale: boolean):
       zoomViewAt({ ...g, view: from, nextZoom, anchor, contain: true })
     const toggleZoom = (point: PanZoomPoint, g: Geometry): void => {
       setManualView((current) => {
-        if (current) {
+        // A drag at fit leaves a view at zoom 1; that still counts as fitted.
+        if (current && current.zoom !== 1) {
           return null
         }
         // Prefer actual size when it is a real step up from fit; otherwise a fixed magnification.
