@@ -48,7 +48,7 @@ export async function exerciseBusyChatReuse(
   const sessionId = 'codex_automation_reuse'
   vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW)
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-34332-accepted-')))
-  const repo = { ...target.repo, path: root, executionHostId: 'local' }
+  const repo = { ...target.repo, path: root, executionHostId: 'local' as const }
   const location = { ...HOST_TEST_LOCATION, workspaceId: getRepoMainWorktreeId(repo) }
   const rig = await createQueuedMessageTestRig({ restartable: true, sessionId, location })
   controls.setHost(rig.host)
