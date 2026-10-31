@@ -1,8 +1,12 @@
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   NativeChatMessage,
   NativeChatSubagentEntry
 } from '../../../../shared/native-chat-types'
+import { installFakeAppEnvironment } from '../../../../../config/scripts/vitest-host-ports-setup'
 import type { RpcContext } from '../core'
 
 // Return a deterministic transcript with an oversized tool result to verify client-specific clipping.
@@ -238,39 +242,57 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
   })
 
   it.each(['mobile', 'runtime', undefined] as const)(
-    'omits inline image bodies and oversized metadata for %s clients',
+    'persists valid inline image bodies to fetchable paths and omits the rest for %s clients',
     async (clientKind) => {
-      cachedResult.value = {
-        messages: [
-          {
-            ...makeMessage('ignored'),
-            blocks: [
-              {
-                type: 'image-ref',
-                url: `data:image/png;base64,${'a'.repeat(10_000)}`,
-                alt: 'Inline image'
-              },
-              { type: 'image-ref', url: ' \tdata:image/png;base64,abc' },
-              { type: 'image-ref', url: 'https://example.com/reference.png' },
-              { type: 'image-ref', path: '/'.repeat(600) }
-            ]
-          }
-        ]
+      const cacheDir = mkdtempSync(join(tmpdir(), 'nnc-rpc-matrix-'))
+      installFakeAppEnvironment({ getPath: () => cacheDir })
+      try {
+        cachedResult.value = {
+          messages: [
+            {
+              ...makeMessage('ignored'),
+              blocks: [
+                {
+                  type: 'image-ref',
+                  url: `data:image/png;base64,${'a'.repeat(10_000)}`,
+                  alt: 'Inline image'
+                },
+                { type: 'image-ref', url: ' \tdata:image/png;base64,abc' },
+                { type: 'image-ref', url: 'https://example.com/reference.png' },
+                { type: 'image-ref', path: '/'.repeat(600) }
+              ]
+            }
+          ]
+        }
+
+        const result = await readSessionHandler()(
+          { agent: 'codex', sessionId: 's' },
+          ctxWith(clientKind)
+        )
+        const messages = (result as { messages: NativeChatMessage[] }).messages
+
+        const [persisted, malformed, remote, oversized] = messages[0].blocks
+        if (persisted?.type !== 'image-ref' || !persisted.path) {
+          throw new Error('expected the valid inline image to ship as a path ref')
+        }
+        expect(persisted.path.startsWith(cacheDir)).toBe(true)
+        expect(persisted).toEqual({
+          type: 'image-ref',
+          path: persisted.path,
+          alt: 'Inline image'
+        })
+        expect(readFileSync(persisted.path).toString('base64')).toBe('a'.repeat(10_000))
+        expect(malformed).toEqual({ type: 'image-ref' })
+        expect(remote).toEqual({
+          type: 'image-ref',
+          url: 'https://example.com/reference.png'
+        })
+        expect(oversized).toEqual({ type: 'image-ref' })
+        expect(JSON.stringify(messages).length).toBeLessThan(1_000)
+      } finally {
+        installFakeAppEnvironment()
+        rmSync(cacheDir, { recursive: true, force: true })
       }
-
-      const result = await readSessionHandler()(
-        { agent: 'codex', sessionId: 's' },
-        ctxWith(clientKind)
-      )
-      const messages = (result as { messages: NativeChatMessage[] }).messages
-
-      expect(messages[0].blocks).toEqual([
-        { type: 'image-ref', alt: 'Inline image' },
-        { type: 'image-ref' },
-        { type: 'image-ref', url: 'https://example.com/reference.png' },
-        { type: 'image-ref' }
-      ])
-      expect(JSON.stringify(messages).length).toBeLessThan(1_000)
     }
   )
 
@@ -480,6 +502,61 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
 })
 
 describe('nativeChat.subscribe initial snapshot', () => {
+  it.each([true, false])(
+    'delivers screenshots across every stream frame with writable cache %s',
+    async (writable) => {
+      const userData = mkdtempSync(join(tmpdir(), 'nnc-stream-images-'))
+      const root = writable ? userData : join(userData, 'blocked')
+      if (!writable) {
+        writeFileSync(root, 'not a directory')
+      }
+      installFakeAppEnvironment({ getPath: () => root })
+      try {
+        watcher.watching = true
+        watcher.args = null
+        const emitted: unknown[] = []
+        const data =
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+        const message: NativeChatMessage = {
+          id: 'shot',
+          role: 'tool',
+          blocks: [{ type: 'image-ref', url: `data:image/png;base64,${data}` }],
+          timestamp: null,
+          source: 'transcript'
+        }
+        await subscribeHandler()(
+          { agent: 'claude', sessionId: 'screenshots' },
+          streamingContext('mobile'),
+          (value) => emitted.push(value)
+        )
+        const callbacks = activeWatcherArgs()
+        callbacks.onInitialSnapshot?.([message], false, 0)
+        callbacks.onReplace?.([message], false, 0)
+        callbacks.onAppend([message])
+
+        let path: string | undefined
+        if (writable) {
+          const cacheDir = join(root, 'native-chat-images')
+          const entries = readdirSync(cacheDir)
+          expect(entries).toHaveLength(1)
+          path = join(cacheDir, entries[0]!)
+          expect(readFileSync(path).toString('base64')).toBe(data)
+        }
+        expect(emitted).toEqual(
+          ['snapshot', 'replacement', 'appended'].map((type) => ({
+            type,
+            ...(type === 'appended' ? {} : { hasMore: false, beforeOffset: 0 }),
+            messages: [{ ...message, blocks: [{ type: 'image-ref', ...(path ? { path } : {}) }] }]
+          }))
+        )
+        expect(JSON.stringify(emitted)).not.toContain(data)
+      } finally {
+        installFakeAppEnvironment()
+        rmSync(userData, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('preserves long assistant text across mobile stream frame types', async () => {
     watcher.watching = true
     watcher.args = null

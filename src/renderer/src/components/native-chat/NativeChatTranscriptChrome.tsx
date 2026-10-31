@@ -212,7 +212,7 @@ export function NativeChatImageAttachments({
 }: {
   blocks: NativeChatBlock[]
   runtimeContext?: RuntimeFileOperationArgs | null
-  /** Callers without an image owner get label-only chips. */
+  /** Host-file and remote previews stay chips in the terminal lane; inline images always preview. */
   enablePreview?: boolean
 }): React.JSX.Element | null {
   const images = blocks.filter((block) => block.type === 'image-ref')
@@ -232,6 +232,16 @@ export function NativeChatImageAttachments({
           const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
           const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
           imageKeyCounts.set(imageKeyBase, occurrence + 1)
+          // Inline bytes need no host file access or network fetch, so they preview in this lane too.
+          if (/^data:/i.test(image.url?.trim() ?? '')) {
+            return (
+              <TranscriptImagePreview
+                key={`${imageKeyBase}-${occurrence}`}
+                block={image}
+                runtimeContext={runtimeContext}
+              />
+            )
+          }
           const name =
             image.path && isNativeChatPastedImagePath(image.path)
               ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')

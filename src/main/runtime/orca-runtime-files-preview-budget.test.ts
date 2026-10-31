@@ -10,6 +10,7 @@ import {
 import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './files/file-preview-budget'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-budget'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
+import { hydrateNativeChatImageRefs } from '../native-chat/transcript-image-cache'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -99,6 +100,35 @@ describe('RuntimeFileCommands', () => {
         isImage: true,
         mimeType: 'image/png'
       })
+    })
+
+    it('reads a cached tool screenshot through the existing chat-image path', async () => {
+      vi.useRealTimers()
+      const cacheDir = await previewFixture()
+      const content = Buffer.from('tool screenshot').toString('base64')
+      const [message] = hydrateNativeChatImageRefs(
+        [
+          {
+            id: 'screenshot',
+            role: 'tool',
+            blocks: [{ type: 'image-ref', url: `data:image/png;base64,${content}` }],
+            timestamp: null,
+            source: 'transcript'
+          }
+        ],
+        { cacheDir }
+      )
+      const image = message?.blocks[0]
+      if (image?.type !== 'image-ref' || !image.path) {
+        throw new Error('expected a cached screenshot path')
+      }
+      const { commands } = createRuntimeFileCommands()
+      statMock.mockResolvedValue({ isFile: () => true })
+      resolveAuthorizedPathMock.mockRejectedValue(new Error('Access denied'))
+
+      await expect(
+        commands.readChatImagePreview('id:wt-1', image.path, REMOTE_RPC_MAX_CONTENT_BYTES)
+      ).resolves.toEqual({ content, isBinary: true, isImage: true, mimeType: 'image/png' })
     })
 
     // Phones read images a chat names by host path; only image files on this machine qualify.

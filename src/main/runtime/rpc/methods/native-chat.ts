@@ -1,4 +1,5 @@
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { hydrateNativeChatImageRefs } from '../../../native-chat/transcript-image-cache'
 import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat-agent-support'
 import {
   readNativeChatTranscriptTail,
@@ -36,7 +37,7 @@ function sanitizeAppendForClient(
   messages: readonly NativeChatMessage[],
   clientKind: RpcContext['clientKind']
 ): NativeChatMessage[] {
-  return messages.map((message) => sanitizeMessage(message, clientKind))
+  return hydrateNativeChatImageRefs(messages).map((message) => sanitizeMessage(message, clientKind))
 }
 
 /** Window every RPC client by message count; apply mobile-only character clipping separately. */
@@ -57,8 +58,9 @@ function pageForClient(
   agent?: string
 ): { messages: NativeChatMessage[]; hasMore: boolean; beforeOffset: number } {
   const isOpenCode = resolveNativeChatTranscriptAgent(agent) === 'opencode'
-  const sanitized = (isOpenCode ? messages : windowTranscript(messages, limit)).map((message) =>
-    sanitizeMessage(message, clientKind)
+  const sanitized = sanitizeAppendForClient(
+    isOpenCode ? messages : windowTranscript(messages, limit),
+    clientKind
   )
   return isOpenCode
     ? boundNativeChatRpcPageByBytes(sanitized, hasMore, beforeOffset)

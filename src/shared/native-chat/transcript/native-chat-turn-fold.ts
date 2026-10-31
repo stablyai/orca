@@ -49,6 +49,7 @@ export function nativeChatTurnFoldRow(
         (block) =>
           isSubagentGroupBlock(block) ||
           isBackgroundTaskBlock(block) ||
+          (message.role === 'tool' && block.type === 'image-ref') ||
           isStoppedBeforeStartBlock(block)
       ),
     // A row about Orca's own stop is stored red for clients that predate it; it reports no failure.

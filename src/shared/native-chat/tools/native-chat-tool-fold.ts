@@ -1,5 +1,6 @@
 import {
   isBackgroundTaskBlock,
+  isImageRefBlock,
   isSubagentGroupBlock,
   isToolCallBlock,
   isToolResultBlock,
@@ -18,6 +19,16 @@ function isToolOnlyMessage(message: NativeChatMessage): boolean {
   return (
     message.blocks.length > 0 &&
     message.blocks.every((block) => isToolCallBlock(block) || isToolResultBlock(block))
+  )
+}
+
+// Fold the result into its call while keeping screenshots in their own row.
+function isToolScreenshotMessage(message: NativeChatMessage): boolean {
+  return (
+    message.role === 'tool' &&
+    message.blocks.some(isToolResultBlock) &&
+    message.blocks.some(isImageRefBlock) &&
+    message.blocks.every((block) => isToolResultBlock(block) || isImageRefBlock(block))
   )
 }
 
@@ -89,7 +100,10 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
       clonedAssistantIndex = -1
       continue
     }
-    if (isHarnessSidecarToolMessage(message) && mutableAssistantIndex >= 0) {
+    if (
+      (isHarnessSidecarToolMessage(message) || isToolScreenshotMessage(message)) &&
+      mutableAssistantIndex >= 0
+    ) {
       const index = mutableAssistantIndex
       const assistant = output[index]
       if (assistant?.role === 'assistant') {

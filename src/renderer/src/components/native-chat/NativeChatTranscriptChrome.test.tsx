@@ -205,6 +205,41 @@ describe('NativeChatImageAttachments', () => {
     root.unmount()
   })
 
+  it('previews inline tool screenshots without a host image owner', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const url = 'data:image/png;base64,AA=='
+    await act(async () => {
+      root.render(
+        createElement(NativeChatImageAttachments, {
+          blocks: [{ type: 'image-ref' as const, url }],
+          enablePreview: false
+        })
+      )
+      await flushPromises()
+    })
+
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(url)
+    root.unmount()
+  })
+
+  it('keeps remote URLs as chips without a host image owner', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        createElement(NativeChatImageAttachments, {
+          blocks: [{ type: 'image-ref' as const, url: 'https://x.test/shot.png' }],
+          enablePreview: false
+        })
+      )
+      await flushPromises()
+    })
+
+    expect(container.querySelector('img')).toBeNull()
+    root.unmount()
+  })
+
   it.each([
     'data:image/png;base64,AA==',
     'blob:sent-original',
