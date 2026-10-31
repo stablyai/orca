@@ -19417,6 +19417,8 @@
       },
       "composer": {
         "send": "Send",
+        "alternateSteerHint": "{{shortcut}} to steer",
+        "alternateQueueHint": "{{shortcut}} to queue",
         "noPty": "No live terminal — toggle back to reconnect.",
         "locked": "Input is held by another device.",
         "placeholder": "Ask anything, @ to mention files, / for commands",
@@ -21546,7 +21548,7 @@
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
-      "nextLaunch": "{{value0}} → {{value1}}. The next Claude you start uses it. Running sessions keep their account.",
+      "nextLaunch": "{{value0}} → {{value1}}. The next Claude terminal you start uses it. Running Claude terminals keep their account.",
       "profileSwitching": "Switching applies to the next Claude you start in any tab.",
       "systemDefault": "System default",
       "unnamedAccount": "Claude account",
@@ -21572,8 +21574,8 @@
         "session": "Claude session",
         "busy": "Working",
         "idle": "Idle",
-        "settingTitle": "When you switch accounts while Claude is running",
-        "settingDescription": "Restarting continues each running conversation on the new account.",
+        "settingTitle": "When you switch accounts while Claude is running in terminals",
+        "settingDescription": "Restarting continues each terminal conversation on the new account.",
         "keyword": {
           "restart": "restart",
           "running": "running"

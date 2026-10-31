@@ -1,3 +1,4 @@
+import { admitOutcomeFormat2 } from './journal-outcome-format-2'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -193,7 +194,10 @@ const prefix = z
   )
 
 function plain(state: JournalReducerState): unknown {
-  const fields: Record<string, unknown> = { ...state }
+  const { inputEntries, inputCards, ...ordinary } = state
+  expect([...inputEntries]).toEqual([])
+  expect([...inputCards]).toEqual([['card-2', { introduced: 11 }]])
+  const fields: Record<string, unknown> = ordinary
   return JSON.parse(
     JSON.stringify({
       ...Object.fromEntries(
@@ -223,7 +227,9 @@ it('folds the checked-in input rows into the same chat, every value of which sto
   }
   expect(plain(loaded.state)).toEqual(prefix.expected)
   const collections = journalStateCollections(loaded.state)
-  expect(collections.filter(({ entries }) => [...entries].length === 0)).toEqual([])
+  expect(
+    collections.filter(({ entries }) => [...entries].length === 0).map(({ path }) => path)
+  ).toEqual(['inputEntries'])
   expect(collections.length).toBeGreaterThanOrEqual(15)
   // What restating this chat on a new epoch would store, admitted as this build stores it.
   const stored = [
@@ -247,7 +253,13 @@ it('folds the checked-in input rows into the same chat, every value of which sto
   ]
   expect(stored.length).toBeGreaterThan(20)
   for (const value of stored) {
-    expect(admitOutcomeFormat1({ ...value, deleted: false })).toEqual({
+    const native = value.field === 'inputCards' || value.field === 'inputEntries'
+    if (native) {
+      expect(admitOutcomeFormat1({ ...value, deleted: false })).toBe('unknown')
+    }
+    expect(
+      (native ? admitOutcomeFormat2 : admitOutcomeFormat1)({ ...value, deleted: false })
+    ).toEqual({
       entryKey: JSON.parse(value.key),
       kept: JSON.parse(value.json)
     })
@@ -274,4 +286,16 @@ it('reads an open string such as an agent type as a value, and still refuses a k
   ).toBeUndefined()
   // @ts-expect-error `host` is a key the stored provider handle does not declare
   expect(declared<UndeclaredStorageKeys<Later, Stored>>()).toBeUndefined()
+})
+
+it('keeps explicitly opaque annotation values whole without hiding sibling or nested structured keys', () => {
+  type Actual = { annotation: { future: { keys: number[] } }; nested: { kept: string } }
+  type Stored = { annotation?: unknown; nested: { kept: string } }
+  expect(declared<UndeclaredStorageKeys<Actual, Stored>>()).toBeUndefined()
+  // @ts-expect-error an opaque annotation does not declare a sibling key
+  expect(declared<UndeclaredStorageKeys<Actual & { extra: string }, Stored>>()).toBeUndefined()
+  expect(
+    // @ts-expect-error structured siblings still recursively declare their nested keys
+    declared<UndeclaredStorageKeys<Actual & { nested: { kept: string; extra: number } }, Stored>>()
+  ).toBeUndefined()
 })

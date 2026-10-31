@@ -21,25 +21,22 @@ import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import { structuredQueuePauses } from './structured-agent-session-queued-pause'
-import { nextSendableQueuedCard } from '../agent-session-journal/queued-message-pause'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
+import {
+  selectStructuredAgentSessionInput,
+  structuredInputExecutionWorking
+} from './structured-agent-session-input-selection'
 
 /** Preserve order and holds; only automatic drain stops at edit leases, which still count as admission backlog. */
 function oldestActionableQueuedMessage(
   journal: Pick<AgentSessionJournal, 'queuedMessages'>,
   automatic: boolean
 ): QueuedMessageRow | null {
-  const rows = journal.queuedMessages.list()
-  if (!rows.some((row) => row.state === 'waiting')) {
-    return null
-  }
-  const edited = automatic ? journal.queuedMessages.editLeases.heldIds(rows) : undefined
-  return nextSendableQueuedCard(structuredQueuePauses(journal), rows, edited)
+  return journal.queuedMessages.nextInputCard(automatic)
 }
 
 /** Host-local gate shared by admission, drain and Send-now; only Send-now overrides working. */
@@ -66,12 +63,20 @@ export function structuredQueueHold(input: StructuredQueueGateInput): Structured
 export function nextStructuredQueuedMessage(
   input: StructuredQueueGateInput & { journal: AgentSessionJournal }
 ): QueuedMessageRow | null {
-  const next = oldestActionableQueuedMessage(input.journal, true)
-  // Check cheap working state before the prompt scan on every streamed frame.
-  if (next === null || input.work.working()) {
+  if (structuredInputExecutionWorking(input.journal, input.work)) {
     return null
   }
-  return structuredQueueHold(input) === null ? next : null
+  const selected = selectStructuredAgentSessionInput(input.journal)
+  const next = selected.kind === 'card' ? selected.card : null
+  // Check cheap working state before the prompt scan on every streamed frame.
+  if (next === null) {
+    return null
+  }
+  return !input.record ||
+    structuredAgentSessionSendBlock(input.record) ||
+    input.work.hasActionablePrompt()
+    ? null
+    : next
 }
 
 /** Queue behind work/actionable backlog; held or returned cards cannot trap a fresh send that lifts their pause. */
@@ -215,9 +220,11 @@ export class StructuredAgentSessionQueuedMessageDrain {
     }
     // Skip serialized work during token streams; settlement/generation-end schedules a fresh gate check.
     try {
+      const work = this.deps.currentWork(sessionId)
       if (
-        oldestActionableQueuedMessage(journal, true) === null ||
-        this.deps.currentWork(sessionId)?.working() !== false
+        !work ||
+        nextStructuredQueuedMessage({ journal, record: this.deps.getRecord(sessionId), work }) ===
+          null
       ) {
         return
       }

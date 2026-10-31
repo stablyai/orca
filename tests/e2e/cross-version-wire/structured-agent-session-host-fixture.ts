@@ -161,6 +161,7 @@ export function installableHost(
   const logger: StructuredAgentSessionHost['deps']['logger'] = { warn: vi.fn(), error: vi.fn() }
   const host = {
     ...hostCalls,
+    readModelCatalog: hostCalls.modelCatalog,
     // The catalog read checks the session's record for a floating chat's own folder; none here.
     deps: {
       logger,
