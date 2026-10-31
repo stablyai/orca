@@ -232,4 +232,33 @@ describe('submit settle before Enter', () => {
     const [slowProof] = await submitTimes('ls -la', false, 250)
     expect(slowProof).toBe(unproven)
   })
+
+  it('does not submit when the send is cancelled during a successful idle proof', async () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const controller = new AbortController()
+    const writer = new RuntimeTerminalWriter(
+      (_id, data) => {
+        writes.push(data)
+        return true
+      },
+      () => 'linux',
+      () => null,
+      undefined,
+      () =>
+        new Promise<boolean>((resolve) => {
+          setTimeout(() => resolve(true), 200)
+        })
+    )
+    const pending = writer.writeAction('pty', { text: 'ls', enter: true }, 'ls\r', {
+      inputKind: 'driving',
+      signal: controller.signal
+    })
+    const rejected = expect(pending).rejects.toThrow('request_aborted')
+    await vi.advanceTimersByTimeAsync(100)
+    controller.abort()
+    await vi.advanceTimersByTimeAsync(200)
+    await rejected
+    expect(writes).toEqual(['ls'])
+  })
 })

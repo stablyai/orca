@@ -97,6 +97,9 @@ export class RuntimeTerminalWriter {
           Math.max(0, delayMs - (Date.now() - claimStartedAt)),
           options.signal
         )
+      } else if (options.signal?.aborted) {
+        // Match the settle path: a send cancelled during the idle proof must not submit.
+        throw new Error('request_aborted')
       }
       try {
         await options.beforeWrite?.(ptyId)
