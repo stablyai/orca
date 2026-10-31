@@ -57,6 +57,11 @@ export function agentMessageSenderLabel(facts: {
   )
 }
 
+/** A Dispatch address names work, not a pane; every other sender address can be opened. */
+export function agentMessageSenderCanOpen(sender: AgentMessageSender): boolean {
+  return !sender.party.address.startsWith('dispatch:')
+}
+
 export function agentMessagePrimarySender(
   from: AgentMessageSource
 ): AgentMessageSender | undefined {

@@ -633,7 +633,7 @@ it.each([
     expect(prompt).toContain(`Your task ID is: ${from.orchestration.taskId}`)
     if (queued) {
       expect(agentMessageHeading(from)).toBe('task')
-      expect(agentMessageSenderCanOpen(from.senders[0], true)).toBe(true)
+      expect(agentMessageSenderCanOpen(from.senders[0])).toBe(true)
       expect(agentSessionMessagePayload(body)).not.toHaveProperty('from')
       expect(agentSessionSendBodyFingerprint(WORKER, body)).toBe(
         agentSessionSendBodyFingerprint(WORKER, agentSessionMessagePayload(body))

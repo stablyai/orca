@@ -7,6 +7,7 @@ import {
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { sameAgentIdentity } from '../../../../shared/agent-title-owner'
+import { agentMessageSenderCanOpen } from '../../../../shared/agent-session/agent-message-presentation'
 import {
   readAgentMessageSenderRow,
   type SenderLocation
@@ -84,7 +85,7 @@ export function agentMessageSenderOpens(
   target: AgentMessageSenderTarget,
   sender: AgentMessageSender
 ): boolean {
-  if (sender.party.address.startsWith('dispatch:')) {
+  if (!agentMessageSenderCanOpen(sender)) {
     return false
   }
   switch (target.kind) {
