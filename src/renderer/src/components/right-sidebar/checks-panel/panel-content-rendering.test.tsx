@@ -109,94 +109,111 @@ describe('checks panel concrete content', () => {
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy()
   })
 
-  it('keeps the classified GitHub empty state over a manual failure', () => {
-    const now = Date.parse('2026-10-30T12:00:00Z')
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(now)
-    const model: ChecksPanelEmptyContentModel = {
-      activeReview: null,
-      activeWorktree: makeWorktree({ id: 'worktree-1', repoId: 'repo-1' }),
-      activeWorktreeId: 'worktree-1',
-      branch: 'without-pr',
-      checksPanelHasHardRefreshError: false,
-      checksPanelReviewLookup: 'unknown',
-      checksPanelReviewLookupResult: { state: 'unknown', openReviewUrl: null },
-      confirmedReadiness: { confirmed: false, needsPush: false },
-      conflictOperation: 'unknown',
-      createComposerOpen: false,
-      createPrError: null,
-      createPrPushFirst: false,
-      detachedHeadDisplay: null,
-      emptyRefreshing: false,
-      gitStatusInputs: { hasUncommittedChanges: false, remoteStatus: undefined },
-      gitStatusProbeErrorContextKey: null,
-      handleCancelGeneratePullRequestFields: vi.fn(),
-      handleCreatePullRequest: vi.fn(),
-      handleGeneratePullRequestFields: vi.fn(),
-      handleLinkSuppressedPullRequest: vi.fn(),
-      handlePrBaseChange: vi.fn(),
-      handlePrTitleChange: vi.fn(),
-      handlePublishBranch: vi.fn(),
-      handleRefresh: vi.fn(async () => {}),
-      handleSyncBranch: vi.fn(),
-      hardRefreshError: null,
-      hostedReviewCreateCopy: localizedHostedReviewCopy('github'),
-      hostedReviewCreateProvider: 'github',
-      hostedReviewCreation: null,
-      isCreatingPr: false,
-      isFolder: false,
-      isGitHubReviewContext: true,
-      isPublishingBranch: false,
-      isRemoteOperationActive: false,
-      isSyncingBranch: false,
-      linkedGitLabMR: null,
-      linkedPR: null,
-      linkedReviewNumber: null,
-      manualRefreshError: getHostedReviewManualRefreshError('github'),
-      panelContextKey: 'worktree-1::without-pr',
-      prAiGenerationEnabled: false,
-      prBase: '',
-      prBaseQuery: '',
-      prBaseResults: [],
-      prBaseSearchError: null,
-      prBaseSearchPending: false,
-      prBody: '',
-      prDraft: false,
-      prGenerateDisabled: false,
-      prGenerateDisabledReason: undefined,
-      prGenerateError: null,
-      prGenerating: false,
-      prNumber: null,
-      prRefreshState: {
-        status: 'error',
-        errorType: 'rate_limited',
-        reason: 'manual',
-        updatedAt: now,
-        nextAutoRetryAt: now + 600_000,
-        retryDisabledUntil: now + 600_000
-      },
-      prRepoDefaultBaseRef: null,
-      prStackedCreationSupported: false,
-      prTitle: '',
-      publishActionHasUncommittedChanges: false,
-      publishActionRemoteStatus: undefined,
-      setEmptyRefreshing: vi.fn(),
-      setPrBaseQuery: vi.fn(),
-      setPrBaseResults: vi.fn(),
-      setPrBody: vi.fn(),
-      setPrDraft: vi.fn(),
-      sourceControlAiActionsVisible: false,
-      stackParentReview: null,
-      suppressedGitHubPR: null
+  it.each([
+    [
+      'rate limited',
+      { status: 'error', errorType: 'rate_limited' },
+      'GitHub refresh paused',
+      'Orca will retry at',
+      true
+    ],
+    [
+      'signed out',
+      { status: 'error', errorType: 'auth' },
+      'GitHub authentication failed',
+      'Check the GitHub login',
+      false
+    ]
+  ] as const)(
+    'keeps the classified GitHub empty state over a manual failure (%s)',
+    (_name, refresh, title, nextStep, retryDisabled) => {
+      const now = Date.parse('2026-10-30T12:00:00Z')
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(now)
+      const model: ChecksPanelEmptyContentModel = {
+        activeReview: null,
+        activeWorktree: makeWorktree({ id: 'worktree-1', repoId: 'repo-1' }),
+        activeWorktreeId: 'worktree-1',
+        branch: 'without-pr',
+        checksPanelHasHardRefreshError: false,
+        checksPanelReviewLookup: 'unknown',
+        checksPanelReviewLookupResult: { state: 'unknown', openReviewUrl: null },
+        confirmedReadiness: { confirmed: false, needsPush: false },
+        conflictOperation: 'unknown',
+        createComposerOpen: false,
+        createPrError: null,
+        createPrPushFirst: false,
+        detachedHeadDisplay: null,
+        emptyRefreshing: false,
+        gitStatusInputs: { hasUncommittedChanges: false, remoteStatus: undefined },
+        gitStatusProbeErrorContextKey: null,
+        handleCancelGeneratePullRequestFields: vi.fn(),
+        handleCreatePullRequest: vi.fn(),
+        handleGeneratePullRequestFields: vi.fn(),
+        handleLinkSuppressedPullRequest: vi.fn(),
+        handlePrBaseChange: vi.fn(),
+        handlePrTitleChange: vi.fn(),
+        handlePublishBranch: vi.fn(),
+        handleRefresh: vi.fn(async () => {}),
+        handleSyncBranch: vi.fn(),
+        hardRefreshError: null,
+        hostedReviewCreateCopy: localizedHostedReviewCopy('github'),
+        hostedReviewCreateProvider: 'github',
+        hostedReviewCreation: null,
+        isCreatingPr: false,
+        isFolder: false,
+        isGitHubReviewContext: true,
+        isPublishingBranch: false,
+        isRemoteOperationActive: false,
+        isSyncingBranch: false,
+        linkedGitLabMR: null,
+        linkedPR: null,
+        linkedReviewNumber: null,
+        manualRefreshError: getHostedReviewManualRefreshError('github'),
+        panelContextKey: 'worktree-1::without-pr',
+        prAiGenerationEnabled: false,
+        prBase: '',
+        prBaseQuery: '',
+        prBaseResults: [],
+        prBaseSearchError: null,
+        prBaseSearchPending: false,
+        prBody: '',
+        prDraft: false,
+        prGenerateDisabled: false,
+        prGenerateDisabledReason: undefined,
+        prGenerateError: null,
+        prGenerating: false,
+        prNumber: null,
+        prRefreshState: {
+          ...refresh,
+          reason: 'manual',
+          updatedAt: now,
+          nextAutoRetryAt: now + 600_000,
+          retryDisabledUntil: retryDisabled ? now + 600_000 : undefined
+        },
+        prRepoDefaultBaseRef: null,
+        prStackedCreationSupported: false,
+        prTitle: '',
+        publishActionHasUncommittedChanges: false,
+        publishActionRemoteStatus: undefined,
+        setEmptyRefreshing: vi.fn(),
+        setPrBaseQuery: vi.fn(),
+        setPrBaseResults: vi.fn(),
+        setPrBody: vi.fn(),
+        setPrDraft: vi.fn(),
+        sourceControlAiActionsVisible: false,
+        stackParentReview: null,
+        suppressedGitHubPR: null
+      }
+
+      const { container } = render(<ChecksPanelEmptyContent model={model} />)
+
+      expect(container.textContent).toContain(title)
+      expect(container.textContent).toContain(nextStep)
+      expect(container.textContent).not.toContain('Refresh failed')
+      expect(container.textContent).not.toContain('Try again')
     }
-
-    const { container } = render(<ChecksPanelEmptyContent model={model} />)
-
-    expect(container.textContent).toContain('GitHub refresh paused')
-    expect(container.textContent).toContain('Orca will retry at')
-    expect(container.textContent).not.toContain('Refresh failed')
-    expect(container.textContent).not.toContain('Try again')
-  })
+  )
 
   it('renders the active review header and empty check/comment sections with accessible actions', () => {
     const model = {
