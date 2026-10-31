@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync, chmodSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { mkdirSync, writeFileSync, chmodSync, renameSync, rmSync } from 'node:fs'
+import { dirname, join, posix as posixPath, win32 as win32Path } from 'node:path'
 import { shouldWaitForSetupBeforeAgentStartup } from '../shared/setup-agent-startup-policy'
 import { nativeWindowsPathToPosixShellPath } from '../shared/setup-runner-command'
 import { scriptDeclaresPosixShell } from '../shared/setup-script-shebang'
@@ -21,6 +21,8 @@ import type { ProjectExecutionRuntimeResolution } from '../shared/project-execut
 import type { SetupRunnerShell } from '../shared/setup-runner-command'
 
 type SetupRunnerShellSettings = Record<string, unknown> | undefined
+
+let runnerTmpSequence = 0
 
 function getGitPath(cwd: string, relativePath: string): string {
   return gitExecFileSync(['rev-parse', '--git-path', relativePath], {
@@ -94,22 +96,42 @@ function createWorktreeRunnerScript(args: {
     : null
   let runnerScriptPath = fromLink ?? getGitPath(worktreePath, gitRelPath)
 
+  // A main worktree's --git-path is worktree-relative. fs calls must not resolve it from the app cwd.
+  // win32.isAbsolute also treats rooted Linux paths from git-in-WSL as absolute.
+  const isPathAbsolute = process.platform === 'win32' ? win32Path.isAbsolute : posixPath.isAbsolute
+  if (!isPathAbsolute(runnerScriptPath)) {
+    runnerScriptPath = join(worktreePath, runnerScriptPath)
+  }
+
   // Convert WSL Git's Linux path to a path Windows filesystem calls can reach.
   if (wslWorktree && !fromLink) {
     const wslInfo = getHookWslContext(worktreePath, runtimeTarget)
-    if (wslInfo?.distro) {
+    if (wslInfo?.distro && runnerScriptPath.startsWith('/')) {
       runnerScriptPath = toWindowsWslPath(runnerScriptPath.trim(), wslInfo.distro)
     }
   }
 
   mkdirSync(dirname(runnerScriptPath), { recursive: true })
 
-  if (runnerShell.family === 'cmd') {
-    writeFileSync(runnerScriptPath, buildWindowsRunnerScript(script), 'utf-8')
-  } else {
-    writeFileSync(runnerScriptPath, buildPosixRunnerScript(script), 'utf-8')
-    if (!nativeWindowsWorktree) {
-      chmodSync(runnerScriptPath, 0o755)
+  const runnerContent =
+    runnerShell.family === 'cmd' ? buildWindowsRunnerScript(script) : buildPosixRunnerScript(script)
+  // A manual re-run can overwrite a script bash is still reading by byte offset.
+  // rename swaps the inode so the running shell keeps its own copy.
+  // The suffix is per-call so overlapping preparations do not share one tmp file.
+  const tmpRunnerPath = `${runnerScriptPath}.tmp-${process.pid}-${++runnerTmpSequence}`
+  try {
+    writeFileSync(tmpRunnerPath, runnerContent, 'utf-8')
+    if (runnerShell.family !== 'cmd' && !nativeWindowsWorktree) {
+      chmodSync(tmpRunnerPath, 0o755)
+    }
+    renameSync(tmpRunnerPath, runnerScriptPath)
+  } catch {
+    try {
+      // Windows can refuse to replace a runner cmd.exe still holds open. The mode
+      // stays 0644 here, which is fine only while consumers run `bash <path>`.
+      writeFileSync(runnerScriptPath, runnerContent, 'utf-8')
+    } finally {
+      rmSync(tmpRunnerPath, { force: true })
     }
   }
 

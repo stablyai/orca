@@ -170,8 +170,14 @@ export function getSetupCommandSource(
     return localSetup ? { source: 'local', command: localSetup } : null
   }
 
-  if (policy === 'run-both' && yamlSetup && localSetup) {
-    return { source: 'both', command: `${yamlSetup}\n${localSetup}` }
+  // run-both degrades like create: either script alone still runs.
+  if (policy === 'run-both' && (yamlSetup || localSetup)) {
+    if (yamlSetup && localSetup) {
+      return { source: 'both', command: `${yamlSetup}\n${localSetup}` }
+    }
+    return yamlSetup
+      ? { source: 'yaml', command: yamlSetup }
+      : { source: 'local', command: localSetup as string }
   }
 
   if (yamlSetup) {

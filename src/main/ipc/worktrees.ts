@@ -8,6 +8,7 @@ import { registerWorktreePrefetchHandler } from './worktrees/create/register-wor
 import { registerReviewBaseHandlers } from './worktrees/create/register-review-base-handlers'
 import { registerWorktreeHookCheckHandler } from './hooks/register-worktree-hook-check-handler'
 import { registerWorktreeHookFileHandlers } from './hooks/register-worktree-hook-file-handlers'
+import { registerWorktreeSetupRunnerHandler } from './hooks/register-worktree-setup-runner-handler'
 import { registerWorktreeHookInspectionHandler } from './hooks/register-worktree-hook-inspection-handler'
 import { registerDetectedWorktreeHandlers } from './worktrees/listing/register-detected-worktree-handlers'
 import { registerHostCatalogHandlers } from './worktrees/listing/register-host-catalog-handlers'
@@ -54,6 +55,7 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:getBranchRenameFailureOutput',
   'hooks:check',
   'hooks:inspectSetupScriptImports',
+  'hooks:prepareSetupRunner',
   'hooks:readIssueCommand',
   'hooks:writeIssueCommand'
 ] as const
@@ -96,4 +98,5 @@ export function registerWorktreeHandlers(
   registerWorktreeHookCheckHandler(context)
   registerWorktreeHookInspectionHandler(context)
   registerWorktreeHookFileHandlers(context)
+  registerWorktreeSetupRunnerHandler(context)
 }

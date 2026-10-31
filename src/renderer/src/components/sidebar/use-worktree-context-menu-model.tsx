@@ -36,6 +36,8 @@ import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-comm
 import { useWorktreeParentPickerTransition } from './use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { runWorktreeSetupScript } from '@/lib/run-worktree-setup-script'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
 
 export type WorktreeContextMenuProps = {
@@ -335,6 +337,17 @@ export function useWorktreeContextMenuModel({
       updateWorktreeLineage
     })
 
+  const handleRunSetupScript = useCallback(() => {
+    setMenuOpenState(false)
+    // Close the menu before trust prompts so focus teardown does not fight the setup terminal.
+    window.setTimeout(() => {
+      void runWorktreeSetupScript(worktree.id)
+    }, 50)
+  }, [setMenuOpenState, worktree.id])
+
+  const canRunSetupScript =
+    !isMultiContext && !folderWorkspaceId && repo != null && !isFolderRepo(repo)
+
   const handleCloseAutoFocus = useCallback(
     (event: Event) => {
       // Suppress Radix focus restoration to a hidden trigger that can scroll the virtual list after Sleep/Delete.
@@ -369,8 +382,10 @@ export function useWorktreeContextMenuModel({
     developerMenuRevealed,
     eligibleParentCount,
     effectiveSelectedWorktrees,
+    canRunSetupScript,
     folderWorkspaceId,
     handleCloseAutoFocus,
+    handleRunSetupScript,
     handleOpenParentPicker,
     handleParentPickerOpenChange,
     handleRemoveParentLink,

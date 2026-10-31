@@ -7,6 +7,13 @@ import type { Repo } from '../shared/repo-types'
 
 import { describe, expect, it, vi } from 'vitest'
 
+function runnerTmpPath(finalPath: string) {
+  return expect.stringMatching(
+    new RegExp(`^${finalPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.tmp-\\d+-\\d+$`)
+  )
+}
+
+
 const { execFileSyncMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn()
 }))
@@ -16,7 +23,9 @@ vi.mock('fs', () => ({
   existsSync: vi.fn(),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
-  chmodSync: vi.fn()
+  chmodSync: vi.fn(),
+  renameSync: vi.fn(),
+  rmSync: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
@@ -64,7 +73,7 @@ describe('createSetupRunnerScript', () => {
         shell: { family: 'cmd' }
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd',
+        runnerTmpPath('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd'),
         [
           '@echo off',
           'setlocal EnableExtensions DisableDelayedExpansion',
@@ -114,13 +123,13 @@ describe('createSetupRunnerScript', () => {
         shell: { family: 'posix' }
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        runnerTmpPath('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh'),
         '#!/usr/bin/env bash\nset -e\npnpm install\n',
         'utf-8'
       )
       // Only guest Linux paths need chmod; native Windows paths do not.
       expect(vi.mocked(fs.chmodSync)).not.toHaveBeenCalledWith(
-        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        runnerTmpPath('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh'),
         0o755
       )
     } finally {
@@ -292,12 +301,12 @@ describe('createSetupRunnerScript', () => {
         })
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        runnerTmpPath('\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh'),
         '#!/usr/bin/env bash\nset -e\npnpm install\n',
         'utf-8'
       )
       expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
-        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        runnerTmpPath('\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh'),
         0o755
       )
     } finally {
@@ -338,12 +347,12 @@ describe('createSetupRunnerScript', () => {
         })
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        runnerTmpPath('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh'),
         '#!/usr/bin/env bash\nset -e\npnpm install\n',
         'utf-8'
       )
       expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
-        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        runnerTmpPath('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh'),
         0o755
       )
     } finally {
