@@ -104,7 +104,7 @@ function expectSameState(actual: JournalReducerState, expected: JournalReducerSt
   expect(renderJournalState(actual)).toStrictEqual(renderJournalState(expected))
 }
 
-it('round trips the complete replayed reducer, including insertion order and undefined echoes', () => {
+it('round trips the complete replayed reducer, including insertion order and valueless echoes', () => {
   for (const table of [
     'journal_state',
     'journal_items',
@@ -167,7 +167,8 @@ it('round trips the complete replayed reducer, including insertion order and und
       itemId: itemId(2),
       revision: 1,
       body: text('echo'),
-      echoOf: undefined
+      // A declaration without a known original, as the writers store it (JSON keeps no undefined).
+      echoOf: null
     },
     { ...base(7), kind: 'item', itemId: itemId(3), revision: 1, body: text('removed') },
     { ...base(8), kind: 'tombstone', itemId: itemId(3), revision: 2 },
@@ -240,7 +241,7 @@ it('round trips the complete replayed reducer, including insertion order and und
   const state = write(rows)
   expect(state.items.has(agentJournalSubmissionKey('send-1'))).toBe(true)
   expect(state.itemEchoes.has(itemId(2))).toBe(true)
-  expect(state.itemEchoes.get(itemId(2))).toBeUndefined()
+  expect(state.itemEchoes.get(itemId(2))).toBeNull()
   expect([...state.appliedSettlementIds][0]).toBe('settlement-2')
   expect(state.derivedTurnScope.snapshot()).toBe(itemId(5))
   const source = journalOutcomeSource(database.db, identity.sessionId, epoch)
