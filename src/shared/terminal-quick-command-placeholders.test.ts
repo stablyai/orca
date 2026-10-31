@@ -111,14 +111,14 @@ describe('substituteTerminalQuickCommandPlaceholders', () => {
     ).toEqual({ status: 'unsafe-path' })
   })
 
-  it('keeps a drive root, the one value that ends in a backslash', () => {
+  it('refuses a drive root, which escapes its closing quote in Git Bash', () => {
     expect(
-      substituteTerminalQuickCommandPlaceholders('cd "${fileDirname}"', {
-        filePath: 'C:\\script.py',
-        relativePath: 'script.py',
-        workspaceFolder: 'C:\\'
+      substituteTerminalQuickCommandPlaceholders('echo "${fileDirname}" "${fileBasename}"', {
+        filePath: 'D:\\a;touch PWN;#.py',
+        relativePath: 'a;touch PWN;#.py',
+        workspaceFolder: 'D:\\'
       })
-    ).toEqual({ status: 'ok', command: 'cd "C:\\"' })
+    ).toEqual({ status: 'unsafe-path' })
   })
 
   it('refuses a ${workspaceFolder} ending in a backslash', () => {

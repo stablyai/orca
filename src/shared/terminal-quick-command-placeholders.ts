@@ -30,9 +30,9 @@ const UNSAFE_PATH_VALUE = /[\p{Cc}$`"!\u201C-\u201E]|%[^%]+%/u
 // PowerShell reads U+2018-U+201B as single quotes.
 const UNSAFE_PATH_VALUE_OUTSIDE_DOUBLE_QUOTES = /[';&|<>()\u2018-\u201B]/
 
-// Why: bash reads `"/repo/a\"` as an escaped quote and waits for input. `C:\` stays usable because
-// fileDirname returns it for files at a drive root, and cmd and PowerShell do not escape with `\`.
-const TRAILING_BACKSLASH_OUTSIDE_DRIVE_ROOT = /^(?![A-Za-z]:\\$).*\\$/su
+// Why: bash, including Git Bash on Windows, reads `"D:\"` as an escaped quote. The rest of the line
+// then shifts in or out of quoting, so even a drive root can let a later path run as code.
+const TRAILING_BACKSLASH = /\\$/
 
 const PLACEHOLDER_NAME_SET = new Set<string>(TERMINAL_QUICK_COMMAND_PLACEHOLDER_NAMES)
 
@@ -52,7 +52,7 @@ export function substituteTerminalQuickCommandPlaceholders(
   const usable = (value: string, offset: number): string => {
     unsafePath ||=
       UNSAFE_PATH_VALUE.test(value) ||
-      TRAILING_BACKSLASH_OUTSIDE_DRIVE_ROOT.test(value) ||
+      TRAILING_BACKSLASH.test(value) ||
       (UNSAFE_PATH_VALUE_OUTSIDE_DOUBLE_QUOTES.test(value) &&
         !isPlainlyDoubleQuoted(command, offset))
     return value
