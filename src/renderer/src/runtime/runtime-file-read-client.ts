@@ -49,11 +49,7 @@ export async function readRuntimeFileContent(
     return readRuntimeFileContentAsStored(args)
   }
   const result = await readRuntimeFileContentAsStored({ ...args, pageOversizedBinary: false })
-  if (!result.isBinary) {
-    // A host decodes text as lossy UTF-8; a non-UTF-8 SVG keeps the image path so its bytes survive.
-    return result.content.includes('\uFFFD') ? readRuntimeFileContentAsStored(args) : result
-  }
-  const markup = result.content ? decodeSvgBase64(result.content) : null
+  const markup = result.isBinary && result.content ? decodeSvgBase64(result.content) : null
   if (markup === null) {
     return result
   }
