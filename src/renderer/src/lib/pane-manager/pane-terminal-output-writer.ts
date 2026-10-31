@@ -208,6 +208,7 @@ export function writeTerminalOutputImpl(
         options.stripTransientCursorShows ? removeTransientCursorShowSequences(data) : data,
         {
           forceViewportRefresh: options.forceForegroundRefresh === true,
+          throttleForcedRefresh: true,
           followupViewportRefresh: options.followupForegroundRefresh === true,
           shouldRefreshViewportSynchronously:
             options.shouldRefreshForegroundSynchronously ?? ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
