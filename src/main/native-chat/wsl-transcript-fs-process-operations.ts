@@ -31,6 +31,8 @@ export class WslTranscriptFsProcessOperations {
         return true
       case 'stat':
         return stat(request.path)
+      case 'statBigInt':
+        return stat(request.path, { bigint: true })
       case 'lstat':
         return lstat(request.path)
       case 'readdir':
@@ -42,6 +44,13 @@ export class WslTranscriptFsProcessOperations {
         const handleId = this.nextHandleId++
         this.handles.set(handleId, handle)
         return handleId
+      }
+      case 'fstatBigInt': {
+        const handle = this.handles.get(request.handleId)
+        if (!handle) {
+          throw invalidTranscriptHandleError()
+        }
+        return handle.stat({ bigint: true })
       }
       case 'read': {
         const handle = this.handles.get(request.handleId)

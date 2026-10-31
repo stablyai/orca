@@ -57,6 +57,8 @@ vi.mock('../native-chat/wsl-transcript-fs-process-dispatch', async (importOrigin
         return true
       case 'stat':
         return stat(path)
+      case 'statBigInt':
+        return stat(path, { bigint: true })
       case 'lstat':
         return lstat(path)
       case 'readdir':
