@@ -215,6 +215,11 @@ function computeAgentLabel(title: string): string | null {
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
+  // Why: after other named agents so mixed titles keep the owner; still before
+  // Claude's braille fallback (keep in sync with agent-title-identity.ts).
+  if (titleHasAgentName(title, 'qwen')) {
+    return 'Qwen Code'
+  }
   if (isClaudeAgent(title)) {
     return 'Claude Code'
   }
@@ -243,6 +248,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   OpenCode: 'opencode',
   'OpenCode 2': 'opencode2',
   'MiMo Code': 'mimo-code',
+  'Qwen Code': 'qwen-code',
   Aider: 'aider',
   Cursor: 'cursor',
   Droid: 'droid',
