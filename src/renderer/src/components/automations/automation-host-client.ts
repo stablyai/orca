@@ -181,3 +181,18 @@ export async function runAutomationNowForTarget(
   )
   return result.run
 }
+
+/** Report files live with the run on the host that executed it. */
+export async function readAutomationRunOutputForTarget(
+  target: AutomationHostTarget,
+  runId: string,
+  outputId: string
+): Promise<string> {
+  const result = await callRuntimeRpc<{ content: string }>(
+    target,
+    'automation.readOutput',
+    { runId, outputId },
+    { timeoutMs: 15_000 }
+  )
+  return result.content
+}

@@ -17667,7 +17667,6 @@
           "rowActions": "Automation actions",
           "tableLastRun": "Last run",
           "ownerChanged": "This automation changed hosts. Refresh and try again.",
-          "runError": "Error:",
           "deleteAutomationDescription": "Delete <name/> and its run history. Workspaces created by previous runs are not deleted.",
           "deleteExternalAutomationDescription": "Delete <name/> from <provider/> on <host/>.",
           "runUsageSummaryTokens_one": "{{cost}} est. · {{tokens}} token",
@@ -17975,7 +17974,8 @@
           "runStatusSkippedMissed": "Skipped",
           "runStatusSkippedUnavailable": "Unavailable",
           "runStatusSkippedNeedsInteractiveAuth": "Needs credentials",
-          "runStatusDispatchFailed": "Failed"
+          "runStatusDispatchFailed": "Failed",
+          "runStatusCompletedWithWarnings": "Done with warnings"
         },
         "runContent": {
           "noOutput": "No output content available."
@@ -18016,6 +18016,25 @@
         "hostSummary": {
           "partialFailureOfHosts_one": "{{failed}} of {{count}} host could not be loaded",
           "partialFailureOfHosts_other": "{{failed}} of {{count}} hosts could not be loaded"
+        },
+        "automationRunOutputActions": {
+          "saveFailed": "Couldn't save '{{title}}'.",
+          "openFailed": "Couldn't open the saved file at '{{path}}'."
+        },
+        "AutomationRunResults": {
+          "download": "Download",
+          "evidence": "Details",
+          "noWarningsReported": "No warnings reported.",
+          "saveAndOpen": "Save and open",
+          "attachments": "Attachments",
+          "resolved": "Resolved",
+          "resolvedWith": "Resolved: {{resolution}}",
+          "warnings": "Warnings",
+          "previewFailed": "Couldn't load preview.",
+          "retry": "Retry"
+        },
+        "AutomationRunDetailsPage": {
+          "summary": "Summary"
         }
       },
       "agent": {

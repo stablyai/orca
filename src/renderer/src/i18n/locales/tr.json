@@ -17358,7 +17358,6 @@
           "rowActions": "Otomasyon işlemleri",
           "tableLastRun": "Son çalıştırma",
           "ownerChanged": "Bu otomasyonun sunucusu değişti. Yenileyin ve tekrar deneyin.",
-          "runError": "Hata:",
           "deleteAutomationDescription": "<name/> ve çalıştırma geçmişini sil. Önceki çalıştırmaların oluşturduğu çalışma alanları silinmez.",
           "deleteExternalAutomationDescription": "<host/> üzerindeki <provider/> içinden <name/> otomasyonunu sil.",
           "runUsageSummaryTokens_other": "Tahmini {{cost}} · {{tokens}} token",
@@ -17666,7 +17665,8 @@
           "runStatusSkippedMissed": "Atlandı",
           "runStatusSkippedUnavailable": "Kullanılamıyor",
           "runStatusSkippedNeedsInteractiveAuth": "Kimlik bilgileri gerekli",
-          "runStatusDispatchFailed": "Başarısız"
+          "runStatusDispatchFailed": "Başarısız",
+          "runStatusCompletedWithWarnings": "Uyarılarla tamamlandı"
         },
         "runContent": {
           "noOutput": "Çıktı içeriği yok."
@@ -17707,6 +17707,22 @@
         "hostSummary": {
           "partialFailureOfHosts_one": "{{count}} sunucudan {{failed}} tanesi yüklenemedi",
           "partialFailureOfHosts_other": "{{count}} sunucudan {{failed}} tanesi yüklenemedi"
+        },
+        "automationRunOutputActions": {
+          "saveFailed": "'{{title}}' kaydedilemedi."
+        },
+        "AutomationRunResults": {
+          "download": "İndir",
+          "evidence": "Ayrıntılar",
+          "noWarningsReported": "Bildirilen uyarı yok.",
+          "saveAndOpen": "Kaydet ve aç",
+          "attachments": "Ekler",
+          "resolved": "Çözüldü",
+          "resolvedWith": "Çözüldü: {{resolution}}",
+          "warnings": "Uyarılar"
+        },
+        "AutomationRunDetailsPage": {
+          "summary": "Özet"
         }
       },
       "agent": {

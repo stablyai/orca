@@ -1,5 +1,6 @@
 import React from 'react'
-import type { Badge } from '@/components/ui/badge'
+import { CircleX } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { translate } from '@/i18n/i18n'
@@ -55,9 +56,19 @@ export function formatAutomationDateTimeWithRelative(
   return relative ? `${absolute} (${relative})` : absolute
 }
 
+/** A clean finish whose agent reported missing work; recovered warnings don't count. */
+export function hasOpenAutomationRunWarnings(run: Pick<AutomationRun, 'warnings'>): boolean {
+  return (run.warnings ?? []).some((warning) => warning.resolvedAt === null)
+}
+
 export function getAutomationRunStatusVariant(
-  status: AutomationRun['status']
+  status: AutomationRun['status'],
+  hasOpenWarnings = false
 ): React.ComponentProps<typeof Badge>['variant'] {
+  // Monochrome emphasis: the warning reads as a quieter outline, never a tint.
+  if (status === 'completed' && hasOpenWarnings) {
+    return 'outline'
+  }
   if (status === 'dispatched' || status === 'completed') {
     return 'secondary'
   }
@@ -70,7 +81,16 @@ export function getAutomationRunStatusVariant(
   return 'dot'
 }
 
-export function getAutomationRunStatusLabel(status: AutomationRun['status']): string {
+export function getAutomationRunStatusLabel(
+  status: AutomationRun['status'],
+  hasOpenWarnings = false
+): string {
+  if (status === 'completed' && hasOpenWarnings) {
+    return translate(
+      'auto.components.automations.automationPageParts.runStatusCompletedWithWarnings',
+      'Done with warnings'
+    )
+  }
   switch (status) {
     case 'pending':
       return translate('auto.components.automations.automationPageParts.runStatusPending', 'Queued')
@@ -114,6 +134,25 @@ export function getAutomationRunStatusLabel(status: AutomationRun['status']): st
   }
 }
 
+/** Fixed-width status columns keep rows aligned; long labels truncate and keep their full text in the title. */
+export function AutomationRunStatusBadge({
+  run
+}: {
+  run: Pick<AutomationRun, 'status' | 'warnings'>
+}): React.JSX.Element {
+  const warned = hasOpenAutomationRunWarnings(run)
+  const label = getAutomationRunStatusLabel(run.status, warned)
+  return (
+    <Badge
+      variant={getAutomationRunStatusVariant(run.status, warned)}
+      className="max-w-full"
+      title={label}
+    >
+      <span className="truncate">{label}</span>
+    </Badge>
+  )
+}
+
 export const AUTOMATION_EDITOR_SECTION_LABEL_CLASS =
   'text-[11px] font-semibold uppercase tracking-[0.05em]'
 
@@ -141,7 +180,7 @@ export function AutomationRunErrorNotice({
   error,
   className
 }: {
-  label: string
+  label?: string
   error: string
   className?: string
 }): React.JSX.Element {
@@ -149,11 +188,15 @@ export function AutomationRunErrorNotice({
     <div
       role="alert"
       className={cn(
-        'rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive',
+        'flex gap-2 rounded-lg bg-[color-mix(in_srgb,var(--muted)_60%,var(--background))] px-3 py-2.5 text-sm',
         className
       )}
     >
-      <span className="font-medium">{label}</span> {error}
+      <CircleX className="mt-0.5 size-4 shrink-0 text-destructive" />
+      <div className="min-w-0 space-y-0.5 break-words">
+        {label ? <div className="font-medium text-foreground">{label}</div> : null}
+        <div className={label ? 'text-muted-foreground' : 'text-foreground'}>{error}</div>
+      </div>
     </div>
   )
 }

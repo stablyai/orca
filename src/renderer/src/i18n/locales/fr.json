@@ -17483,7 +17483,6 @@
           "moveOriginalUnverified": "Créé sur {host}, mais la suppression d'origine n'a pas pu être vérifiée. Vérifiez l'ancien hôte avant de réessayer.",
           "tableHost": "Hôte",
           "ownerChanged": "Cette automatisation a changé d'hôtes. Actualisez et réessayez.",
-          "runError": "Erreur :",
           "deleteAutomationDescription": "Supprimer <name/> et son historique d’exécution. Les espaces de travail créés par les exécutions précédentes ne seront pas supprimés.",
           "deleteExternalAutomationDescription": "Supprimer <name/> de <provider/> sur <host/>.",
           "runUsageSummaryTokens_one": "{{cost}} (est.) · {{tokens}} token",
@@ -17798,7 +17797,8 @@
           "runStatusSkippedMissed": "Ignorée",
           "runStatusSkippedUnavailable": "Indisponible",
           "runStatusSkippedNeedsInteractiveAuth": "Identifiants requis",
-          "runStatusDispatchFailed": "Échec"
+          "runStatusDispatchFailed": "Échec",
+          "runStatusCompletedWithWarnings": "Terminé avec des avertissements"
         },
         "runContent": {
           "noOutput": "Aucun contenu de sortie disponible."
@@ -17841,6 +17841,22 @@
           "partialFailureOfHosts_one": "Échec du chargement de {{failed}} sur {{count}} hôte",
           "partialFailureOfHosts_other": "Échec du chargement de {{failed}} sur {{count}} hôtes",
           "partialFailureOfHosts_many": "Échec du chargement de {{failed}} sur {{count}} hôtes"
+        },
+        "automationRunOutputActions": {
+          "saveFailed": "Impossible d'enregistrer '{{title}}'."
+        },
+        "AutomationRunResults": {
+          "download": "Télécharger",
+          "evidence": "Détails",
+          "noWarningsReported": "Aucun avertissement signalé.",
+          "saveAndOpen": "Enregistrer et ouvrir",
+          "attachments": "Pièces jointes",
+          "resolved": "Résolu",
+          "resolvedWith": "Résolu : {{resolution}}",
+          "warnings": "Avertissements"
+        },
+        "AutomationRunDetailsPage": {
+          "summary": "Résumé"
         }
       },
       "agent": {

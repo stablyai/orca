@@ -16871,7 +16871,6 @@
           "rowActions": "자동화 작업",
           "tableLastRun": "마지막 실행",
           "ownerChanged": "이 자동화로 인해 호스트가 변경되었습니다. 새로고침하고 다시 시도하세요.",
-          "runError": "오류:",
           "deleteAutomationDescription": "<name/> 및 실행 기록을 삭제합니다. 이전 실행에서 생성된 워크스페이스는 삭제되지 않습니다.",
           "deleteExternalAutomationDescription": "<host/>의 <provider/>에서 <name/>을(를) 삭제합니다.",
           "runUsageSummaryTokens_other": "예상 {{cost}} · {{tokens}} 토큰"
@@ -17147,7 +17146,8 @@
           "runStatusSkippedMissed": "건너뜀",
           "runStatusSkippedUnavailable": "사용할 수 없음",
           "runStatusSkippedNeedsInteractiveAuth": "인증 정보 필요",
-          "runStatusDispatchFailed": "실패"
+          "runStatusDispatchFailed": "실패",
+          "runStatusCompletedWithWarnings": "경고와 함께 완료"
         },
         "runContent": {
           "noOutput": "사용 가능한 출력 내용이 없습니다."
@@ -17186,6 +17186,22 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "호스트 {{count}}개 중 {{failed}}개를 불러오지 못했습니다"
+        },
+        "automationRunOutputActions": {
+          "saveFailed": "'{{title}}'을(를) 저장하지 못했습니다."
+        },
+        "AutomationRunResults": {
+          "download": "다운로드",
+          "evidence": "세부 정보",
+          "noWarningsReported": "보고된 경고가 없습니다.",
+          "saveAndOpen": "저장 후 열기",
+          "attachments": "첨부 파일",
+          "resolved": "해결됨",
+          "resolvedWith": "해결됨: {{resolution}}",
+          "warnings": "경고"
+        },
+        "AutomationRunDetailsPage": {
+          "summary": "요약"
         }
       },
       "agent": {
