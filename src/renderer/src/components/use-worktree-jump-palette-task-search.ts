@@ -1,5 +1,4 @@
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
-import { makeCmdJTaskSearchResult } from './cmd-j/task-search-results'
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
@@ -7,6 +6,7 @@ import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import { createCmdJTaskSearchRequests } from './cmd-j/task-search-requests'
 import {
   isCmdJTaskSearchQuery,
+  makeCmdJTaskSearchResult,
   mergeCmdJTaskSearchResults,
   type CmdJTaskSearchResult
 } from './cmd-j/task-search-results'
