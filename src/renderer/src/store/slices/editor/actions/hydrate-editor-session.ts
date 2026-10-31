@@ -8,6 +8,7 @@ import { migrateHydratedEditorTabsAndGroups } from '../file-ids/hydrated-editor-
 import { buildHydratedEditorSessionState } from './hydrated-editor-session-state'
 import { selectFolderWorkspaces } from '../../../workspace-record-selectors'
 
+/** Restores persisted editor files and reuses their stored IDs when available. */
 export function createHydrateEditorSession(
   set: EditorSet,
   _get: EditorGet

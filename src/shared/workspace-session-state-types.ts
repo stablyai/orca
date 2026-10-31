@@ -13,6 +13,8 @@ import type { ClosedTerminalPanesByPaneKey } from './closed-terminal-panes'
 
 /** Persist edit-mode files only; reconstruct transient diffs/conflicts from git state. */
 export type PersistedOpenFile = {
+  /** Why: restore must reuse this identity; omitting it remints a new id for the same path. */
+  id?: string
   filePath: string
   relativePath: string
   worktreeId: string
