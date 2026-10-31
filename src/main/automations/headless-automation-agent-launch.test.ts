@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { AutomationRun } from '../../shared/automations-types'
@@ -16,7 +17,7 @@ beforeEach(() => {
   deliverTerminalAgentLaunchPrompt.mockResolvedValue(true)
 })
 
-const CHAT_DEFAULT_ON = { experimentalNativeChat: true }
+const CHAT_DEFAULT_ON = { nativeChatProviders: EVERY_AGENT_CHAT }
 
 function harness(
   options: {

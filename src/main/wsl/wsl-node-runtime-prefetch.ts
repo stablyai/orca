@@ -16,7 +16,7 @@ let started: Promise<void> | null = null
 
 export type WslNodeRuntimePrefetchOptions = {
   userDataPath: string
-  /** The build's architecture: an x64 Orca runs x64 WSL distros, an arm64 one arm64. */
+  /** The build's architecture, usually the distros'; an x64 build emulated on Arm fetches the unused x64 archive. */
   arch?: string
   materialize?: typeof materializeNodeRuntimeArchive
 }
@@ -76,7 +76,14 @@ export function wireWslNodeRuntimePrefetch(wiring: WslNodeRuntimePrefetchWiring)
       return
     }
     scheduled = true
-    schedule(() => void prefetchWslNodeRuntime(wiring))
+    schedule(() => {
+      // Turned off during the delay: skip, and let a later turn-on schedule again.
+      if (!gateOpen() || wiring.store.getSettings().experimentalWslHosts !== true) {
+        scheduled = false
+        return
+      }
+      void prefetchWslNodeRuntime(wiring)
+    })
   }
   consider(wiring.store.getSettings().experimentalWslHosts === true)
   wiring.store.onSettingsChanged((updates, settings) => {

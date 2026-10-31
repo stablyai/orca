@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 const choices: AgentLaunchChoices = {}
+const nativeChatProviders: Record<string, boolean> = {}
 const folderWorkspaces: FolderWorkspace[] = []
 const projectGroups: ProjectGroup[] = []
 const hostStatuses = new Map<
@@ -42,7 +43,7 @@ export const store = {
     agentCmdOverrides: {} as Record<string, string>,
     agentDefaultArgs: {} as Record<string, string>,
     agentDefaultEnv: {} as Record<string, Record<string, string>>,
-    experimentalNativeChat: false,
+    nativeChatProviders,
     activeRuntimeEnvironmentId: 'web-runtime' as string | null
   },
   projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
@@ -155,7 +156,7 @@ beforeEach(() => {
     agentCmdOverrides: {},
     agentDefaultArgs: {},
     agentDefaultEnv: {},
-    experimentalNativeChat: false,
+    nativeChatProviders: {},
     activeRuntimeEnvironmentId: 'web-runtime'
   }
   store.runtimeStatusByEnvironmentId = new Map([
