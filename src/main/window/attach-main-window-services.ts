@@ -41,6 +41,7 @@ import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { registerDroppedPathPreparation } from './dropped-path-preparation-ipc'
+import { isPluginFramePermissionRequest } from './host-frame-permission-policy'
 
 export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 
@@ -138,6 +139,11 @@ export function attachMainWindowServices(
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
     (_webContents, permission, callback, details) => {
+      // Plugin srcdoc frames share this session but never the app's trust.
+      if (isPluginFramePermissionRequest(details)) {
+        callback(false)
+        return
+      }
       if (permission === 'media') {
         void requestSystemMediaAccess(details).then(callback, (error: unknown) => {
           console.error('[permissions] Failed to request media access:', error)
