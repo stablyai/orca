@@ -60,6 +60,50 @@ describe('agent hook extraction boundaries', () => {
     expect(resolveHookSource('/HOOK/DEVIN')).toBeNull()
   })
 
+  // Why: Trae has no full event schema yet; session_id posts must still stamp resume identity
+  // with an intentional done placeholder (CodeRabbit on #11278).
+  it('routes Trae session_id posts to a done placeholder with providerSession', () => {
+    expect(resolveHookSource('/hook/trae')).toBe('trae')
+    const event = normalizeHookPayload(
+      createHookListenerState(),
+      'trae',
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        payload: {
+          hook_event_name: 'session_report',
+          session_id: 'trae-session-1'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.connectionId).toBeNull()
+    expect(event!.providerSession).toEqual({ key: 'session_id', id: 'trae-session-1' })
+    expect(event!.providerSessionOnly).toBeUndefined()
+    expect(event!.payload).toMatchObject({
+      state: 'done',
+      prompt: '',
+      agentType: 'trae'
+    })
+  })
+
+  it('extracts Trae providerSession from sessionId camelCase', () => {
+    const event = normalizeHookPayload(
+      createHookListenerState(),
+      'trae',
+      {
+        paneKey: PANE,
+        payload: { sessionId: 'trae-camel-id' }
+      },
+      'production'
+    )
+    expect(event?.providerSession).toEqual({ key: 'session_id', id: 'trae-camel-id' })
+    expect(event?.payload.agentType).toBe('trae')
+    expect(event?.payload.state).toBe('done')
+  })
+
   it('preserves thin provider lifecycle branches and source attribution', () => {
     const cases = [
       ['devin', 'UserPromptSubmit', 'working'],
