@@ -227,7 +227,7 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
           agent: 'claude',
           processIncarnation: 'process:term_helper',
           providerSession: { key: 'session_id', id: 'fixture-conversation' },
-          observedAt: Date.now()
+          observedAt: 1
         })
         vi.spyOn(h.runtime, 'resumeAgentSessionInWorkspace').mockResolvedValue({
           ok: true,
