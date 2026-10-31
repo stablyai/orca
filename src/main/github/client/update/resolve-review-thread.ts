@@ -1,9 +1,6 @@
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
-/**
- * Resolve or unresolve a PR review thread via GraphQL.
- */
 export async function resolveReviewThread(
   repoPath: string,
   threadId: string,

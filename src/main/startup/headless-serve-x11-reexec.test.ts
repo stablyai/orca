@@ -6,11 +6,7 @@ vi.mock('electron', () => ({ app: { commandLine: { getSwitchValue: () => 'waylan
 
 const EXEC_PATH = '/opt/Orca/orca-ide'
 
-/**
- * Electron's pre-main `--ozone-platform-hint=auto` resolution, verified against Electron 43 on
- * Linux: `XDG_SESSION_TYPE=wayland` alone selects Wayland, and app.commandLine changes made
- * afterwards do not move it, so only argv decides.
- */
+/** Electron 43 resolves Wayland before main from XDG_SESSION_TYPE alone; later commandLine mutation cannot change it. Model argv-driven selection. */
 function resolveOzonePlatform(argv: readonly string[], env: NodeJS.ProcessEnv): string {
   const explicit = argv.find((arg) => arg.startsWith('--ozone-platform='))
   if (explicit) {
@@ -23,7 +19,6 @@ function resolveOzonePlatform(argv: readonly string[], env: NodeJS.ProcessEnv): 
   return wayland ? 'wayland' : 'x11'
 }
 
-/** Boots a fake Electron and returns the platform Chromium ends up on, following any exec. */
 function bootServe(argv: string[], env: NodeJS.ProcessEnv): { platform: string; execs: number } {
   let execs = 0
   let current = argv

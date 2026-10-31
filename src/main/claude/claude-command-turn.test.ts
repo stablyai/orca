@@ -1,6 +1,3 @@
-// A `/compact` as the Claude translator's open turn, driven by real captured frames: which of them
-// end the command, how, and what the timeline draws.
-
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type {
@@ -38,7 +35,6 @@ const RUNNING = {
 
 type Row = { key: string; body: AgentJournalItemBody; turnScope?: AgentJournalTurnScope }
 
-/** A sink over a journal that holds the host's running command turn, revising rows in place. */
 function harness() {
   const rows = new Map<string, Row>([[COMMAND_KEY, { key: COMMAND_KEY, body: RUNNING }]])
   const writes: Row[] = []
@@ -52,6 +48,7 @@ function harness() {
     writes.push(row)
   }
   const journal: StructuredAgentSessionRevisionJournal = {
+    item: () => null,
     epoch: 'epoch-1',
     itemBody: (itemId) => rows.get(itemId)?.body ?? null,
     visitItems: (visit) => {
@@ -98,8 +95,6 @@ function harness() {
       providerSessionId: CAPTURED_COMPACT_SESSION_ID,
       sentUuid
     })
-  /** Replays a capture as the adapter delivers it: `/compact` goes through `beginCommand`, and a
-   *  Stop marks the interrupt the way the cancel path does. */
   const replay = (events: readonly CapturedCompactEvent[]) => {
     for (const event of events) {
       if ('sent' in event) {
@@ -132,7 +127,6 @@ describe('a captured /compact as the open Claude turn', () => {
       requestedAt: RUNNING.requestedAt,
       startedAt: RUNNING.startedAt
     })
-    // Not the continuation summary, not the command's echo, not a lifecycle opcode row.
     expect(drawn()).toEqual([
       {
         key: agentJournalItemKey({ provider: 'orca', clientMessageId: 'command-result:cmd-1' }),
@@ -147,7 +141,6 @@ describe('a captured /compact as the open Claude turn', () => {
     const { replay, commandTurn, drawn, rows } = harness()
     replay(CAPTURED_COMPACT_STOPPED_THEN_SEND)
 
-    // Claude's result for the stopped command is `success` like a finished one's.
     expect(commandTurn()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
     const answer = drawn().find((row) => row.body.kind === 'message')
     expect(answer?.body).toMatchObject({ role: 'assistant' })
@@ -156,13 +149,11 @@ describe('a captured /compact as the open Claude turn', () => {
       answer?.turnScope?.kind === 'turn' ? rows.get(answer.turnScope.turnItemId)?.body : undefined
     )
     expect(answered).toMatchObject({ state: 'completed', outcome: 'success' })
-    // "Compaction canceled." is the command's own output, and a stop earns no failure row.
     expect(drawn().filter((row) => row.body.kind === 'status')).toEqual([])
   })
 
   it('reads a compaction with no boundary and no stop as a failure, with Claude’s reason', () => {
     const { replay, commandTurn, drawn } = harness()
-    // The stopped capture without Orca's stop: Claude reported the compaction failed.
     replay(CAPTURED_COMPACT_STOPPED_THEN_SEND.filter((event) => !('interrupt' in event)))
 
     expect(commandTurn()).toMatchObject({ state: 'completed', outcome: 'failure' })
@@ -187,7 +178,6 @@ describe('a captured /compact as the open Claude turn', () => {
 
   it('reads a stop that lands after the summary but before the boundary as a cancellation', () => {
     const { replay, commandTurn, drawn } = harness()
-    // Only the boundary says the conversation was replaced; the status that precedes it does not.
     replay(
       CAPTURED_COMPACT_SUCCEEDS.flatMap((event): CapturedCompactEvent[] =>
         'frame' in event && event.frame.subtype === 'compact_boundary'

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
@@ -16,6 +16,7 @@ const FAILED = exited('', 1)
 
 import {
   _resetWslCachesForTests,
+  _setWslCachesForTests,
   listRunningWslDistrosAsync,
   listRunningWslHomeDirsAsync
 } from './wsl'
@@ -45,6 +46,9 @@ async function withPlatform<T>(value: NodeJS.Platform, fn: () => Promise<T>): Pr
 }
 
 describe('running WSL distro discovery', () => {
+  // A healthy host whose installed list is known, so an empty running list needs no second look.
+  beforeEach(() => _setWslCachesForTests({ distros: ['Ubuntu'] }))
+
   afterEach(() => {
     runProcessMock.mockReset()
     _resetWslCachesForTests()
@@ -91,8 +95,7 @@ describe('running WSL distro discovery', () => {
   })
 
   it('confirms an empty list when no distro runs', async () => {
-    // Captured on WSL 2.7: with nothing running, `--quiet` exits 0 with empty stdout in both
-    // encodings; only the non-quiet form prints the localized message and exits -1.
+    // WSL 2.7 --quiet returns empty stdout with exit 0; non-quiet output is localized and exits -1.
     runProcessMock.mockResolvedValueOnce(exited('Ubuntu\r\n')).mockResolvedValueOnce(exited(''))
 
     await withPlatform('win32', async () => {
@@ -276,8 +279,6 @@ describe('running WSL distro discovery', () => {
     })
   })
 
-  // Consumer-level: what a live transcript watcher sees when wsl.exe stays broken across
-  // a whole polling session, not just a single failed call.
   it('keeps reporting a session running through a sustained wsl.exe outage, without unbounded spawns', async () => {
     let spawnCount = 0
     runProcessMock.mockImplementation(
@@ -289,11 +290,9 @@ describe('running WSL distro discovery', () => {
     )
 
     await withPlatform('win32', async () => {
-      // Seed a real last-known-good answer before the outage starts.
       await expect(listRunningWslDistrosAsync()).resolves.toEqual(['Ubuntu'])
       expect(spawnCount).toBe(1)
 
-      // wsl.exe now fails on every call — a persistent, not transient, break.
       runProcessMock.mockImplementation(
         () =>
           new Promise<ProcessResult>((resolve) => {
@@ -314,16 +313,12 @@ describe('running WSL distro discovery', () => {
         }
       )
 
-      // 30 minutes of the 2s transcript-watcher poll (~900 ticks) against a broken wsl.exe.
       await vi.advanceTimersByTimeAsync(30 * 60_000)
       stop()
 
-      // A live session must never be reported as stopped just because discovery is broken —
-      // that would make every open WSL transcript vanish out from under the user.
       expect(observedStates.length).toBeGreaterThan(0)
       expect(observedStates.every((state) => state === true)).toBe(true)
 
-      // Backoff must keep the real wsl.exe spawn count far below one per 2s poll tick.
       expect(spawnCount).toBeLessThan(15)
     })
   })

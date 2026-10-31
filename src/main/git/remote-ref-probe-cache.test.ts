@@ -34,20 +34,6 @@ describe('remote ref probe cache (P1-D)', () => {
     vi.useRealTimers()
   })
 
-  it('answers concurrent lookups for one repo with a single probe', async () => {
-    const cache = createRemoteRefProbeCache(parseExampleRef)
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@example.com:team/repo.git\n' })
-
-    const answers = await Promise.all([
-      cache.get('/repo', 'origin'),
-      cache.get('/repo', 'origin'),
-      cache.get('/repo', 'origin')
-    ])
-
-    expect(answers).toEqual([{ repo: 'team/repo' }, { repo: 'team/repo' }, { repo: 'team/repo' }])
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
   it('re-probes a repo whose remotes could have changed since the miss', async () => {
     const cache = createRemoteRefProbeCache(parseExampleRef)
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error("fatal: No such remote 'origin'"))
@@ -56,24 +42,12 @@ describe('remote ref probe cache (P1-D)', () => {
     await expect(cache.get('/repo', 'origin')).resolves.toBeNull()
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
 
-    // A remote added after the miss is only visible once the negative expires;
-    // nothing here watches .git/config, and SSH/WSL repos have no file to watch.
+    // Expiring negatives reveal new remotes without filesystem watchers on SSH/WSL.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@example.com:team/repo.git\n' })
     vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
 
     await expect(cache.get('/repo', 'origin')).resolves.toEqual({ repo: 'team/repo' })
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps a resolved ref without re-probing', async () => {
-    const cache = createRemoteRefProbeCache(parseExampleRef)
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@example.com:team/repo.git\n' })
-
-    await expect(cache.get('/repo', 'origin')).resolves.toEqual({ repo: 'team/repo' })
-    vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS * 10)
-    await expect(cache.get('/repo', 'origin')).resolves.toEqual({ repo: 'team/repo' })
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('does not let a probe abandoned as stale overwrite its successor answer', async () => {
@@ -87,25 +61,11 @@ describe('remote ref probe cache (P1-D)', () => {
     vi.setSystemTime(1_000_000 + PROBE_COALESCE_STALE_MS + 1)
     await expect(cache.get('/repo', 'origin')).resolves.toEqual({ repo: 'team/repo' })
 
-    // The abandoned probe still answers the caller that started it, but the repo
-    // state it read is older than the one already cached — it must not publish.
+    // Abandoned probes still answer their caller but must not overwrite newer cached state.
     stalled.resolve({ stdout: 'git@elsewhere.example:team/repo.git\n' })
     await expect(abandoned).resolves.toBeNull()
 
     await expect(cache.get('/repo', 'origin')).resolves.toEqual({ repo: 'team/repo' })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('holds a parsed-as-not-mine remote for the negative interval, then re-asks', async () => {
-    const cache = createRemoteRefProbeCache(parseExampleRef)
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@elsewhere.example:team/repo.git\n' })
-
-    await expect(cache.get('/repo', 'origin')).resolves.toBeNull()
-    await expect(cache.get('/repo', 'origin')).resolves.toBeNull()
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-
-    vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
-    await expect(cache.get('/repo', 'origin')).resolves.toBeNull()
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 

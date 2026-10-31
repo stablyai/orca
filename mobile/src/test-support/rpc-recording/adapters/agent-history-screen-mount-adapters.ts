@@ -9,12 +9,11 @@ import type { RpcClientContextValue } from '../../../transport/rpc-client-contex
 const HOST = 'host-1'
 const WORKTREE = 'wt-history'
 
-/** The panel reads its client through the shared context, whose handle is module-private. */
+// Expose the module-private shared context so the real panel owns client acquisition.
 export const agentHistoryScreenMountExposures: readonly OperationExposure[] = [
   hostClientContextExposure
 ]
 
-/** The agent history screen: the worktree list that seeds its scopes, then the session scan. */
 export function agentHistoryScreenMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

@@ -2,10 +2,7 @@ import { isSyntheticWorkspaceRoute } from '../session/synthetic-workspace-route'
 import type { ConnectionState } from '../transport/types'
 import type { HomeWorktreeSummary, HostWorktreeInfo } from './home-worktree-info'
 
-// Picks what the home screen's Resume card shows, and whether tapping it can do anything.
-// Why the two are separate: gating the card itself on 'connected' made it appear above Tasks
-// seconds after first paint, sliding Tasks out from under the user's thumb. A candidate known
-// from the persisted snapshot reserves the slot immediately and stays inert until a host connects.
+// Reserve Resume’s slot from persisted history before connection so Tasks cannot move under the user’s thumb.
 
 export type HomeResumeCard = Readonly<{
   hostId: string
@@ -22,7 +19,6 @@ export type HomeResumeCardInput = Readonly<{
   cachedWorktrees: (hostId: string) => HomeWorktreeSummary[] | null
 }>
 
-/** The worktree last opened on this device, so Resume reflects mobile session history. */
 function lastVisitedCard({
   lastVisited,
   cachedWorktrees,
@@ -61,18 +57,21 @@ function hostHistoryCard(
   return null
 }
 
-/** Whether tapping this card would open a workspace the host has already listed without.
- *  Deliberately one-directional: `provenWorktrees` is null whenever the catalog is a cold-start
- *  snapshot or still loading, and an unproven catalog is not evidence of a deletion — that case
- *  navigates as before and the session screen bounces once the host answers. */
+// Only a proven catalog can establish deletion; cold/loading snapshots leave navigation to the session’s later check.
 export function isResumeTargetConfirmedMissing(
-  card: HomeResumeCard,
-  provenWorktrees: readonly { worktreeId: string }[] | null
+  card: Readonly<{ worktree: Readonly<{ worktreeId: string }> }>,
+  provenWorktrees: readonly unknown[] | null
 ): boolean {
   if (!provenWorktrees || isSyntheticWorkspaceRoute(card.worktree.worktreeId)) {
     return false
   }
-  return !provenWorktrees.some((worktree) => worktree.worktreeId === card.worktree.worktreeId)
+  return !provenWorktrees.some(
+    (worktree) =>
+      typeof worktree === 'object' &&
+      worktree !== null &&
+      'worktreeId' in worktree &&
+      worktree.worktreeId === card.worktree.worktreeId
+  )
 }
 
 export function selectHomeResumeCard(input: HomeResumeCardInput): HomeResumeCard | null {
@@ -84,6 +83,5 @@ export function selectHomeResumeCard(input: HomeResumeCardInput): HomeResumeCard
   if (connected) {
     return connected
   }
-  // Nothing live to resume yet: hold the slot with whatever the snapshot remembers.
   return visited ?? hostHistoryCard(input, false)
 }

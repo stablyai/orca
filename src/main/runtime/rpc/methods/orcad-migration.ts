@@ -1,11 +1,12 @@
 import type { z } from 'zod'
 import {
   OrcadMigrationCatalogParams,
+  OrcadMigrationCatalogReferenceParams,
   OrcadMigrationCommitCatalogParams
 } from '../../../../shared/rpc-contract/orcad-migration-params'
-import { parseOrcadMigrationManifest } from '../../../../shared/orcad-migration-manifest-validation'
-import { OrcadMigrationSnapshotChunkRequestSchema } from '../../../../shared/orcad-migration-scrollback'
-import { OrcadMigrationBlobChunkRequestSchema } from '../../../../shared/orcad-migration-blob-transfer'
+import { parseOrcadMigrationManifest } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import { OrcadMigrationSnapshotChunkRequestSchema } from '../../../../shared/orcad-migration/orcad-migration-scrollback'
+import { OrcadMigrationBlobChunkRequestSchema } from '../../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import { assertOrcadMigrationManifestDigest } from '../../../orcad/orcad-migration-manifest-digest'
 import { assertOrcadMigrationSourceServedHere } from '../../../orcad/orcad-migration-wsl-destination'
 import { defineMethod, type RpcContext } from '../core'
@@ -61,6 +62,18 @@ export const ORCAD_MIGRATION_METHODS = [
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)
       return context.runtime.abortStagedOrcadMigrationCatalog(migrationManifest(params), {
+        signal: context.signal
+      })
+    }
+  }),
+  // Why a reference: a source fenced on a manifest no request can carry must still be releasable.
+  defineMethod({
+    name: 'orcad.migration.abortCatalogByReference',
+    permission: 'host-admin',
+    params: OrcadMigrationCatalogReferenceParams,
+    handler: async (params, context) => {
+      requireMigrationRuntimeClient(context)
+      return context.runtime.abortStagedOrcadMigrationCatalogByReference(params, {
         signal: context.signal
       })
     }

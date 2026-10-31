@@ -1,5 +1,3 @@
-// A windowless host's saved chat tab against a real chat host: the index hiding a chat reaches the
-// runtime and takes the tab out of the layout, and a chat whose record is gone loses its tab.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,15 +8,22 @@ import {
 } from '../../shared/agent-session-record.test-fixture'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { normalizeExecutionHostId } from '../../shared/execution-host'
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
-import { withChatTabChanges } from './agent-session-tab-layout'
+import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
+import {
+  chatTabCommandsSettled as settled,
+  layoutApplyOn
+} from './session-layout-apply.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const WT = 'workspace-1'
 // Session ids are 8 to 128 characters; a shorter one is not a readable record.
@@ -43,7 +48,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -76,34 +81,48 @@ async function runtimeWithSavedChats(
   const store = {
     getRepos: () => [],
     getSettings: () => ({}),
+    // An unsaved partition reads as the default layout, as the Store answers it.
     getWorkspaceSession: (hostId = 'local') =>
-      hostId === 'local' ? state.session : (partitions.get(hostId) ?? null),
-    getWorkspaceSessionHostIds: () => ['local', ...partitions.keys()],
+      hostId === 'local' ? state.session : (partitions.get(hostId) ?? getDefaultWorkspaceSession()),
+    getWorkspaceSessionHostIds: () =>
+      ['local', ...partitions.keys()].flatMap((id) => normalizeExecutionHostId(id) ?? []),
     setWorkspaceSession: (next: WorkspaceSessionState, hostId = 'local') => {
       if (hostId === 'local') {
         state.session = next
       } else {
         partitions.set(hostId, next)
       }
-    }
+    },
+    applyLayoutCommand: layoutApplyOn(
+      (hostId) => (hostId === 'local' ? state.session : (partitions.get(hostId) ?? null)),
+      (next, hostId) => store.setWorkspaceSession(next, hostId)
+    )
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only these store methods on these paths.
-  const runtime = new OrcaRuntimeService(store as never)
-  for (const sessionId of sessionIds) {
-    await runtime.publishStructuredAgentSessionTab({
-      workspaceId: WT,
-      sessionId,
-      agent: 'codex',
-      activate: false
-    })
-  }
+  state.session =
+    withChatTabChanges(
+      'local',
+      state.session,
+      WT,
+      sessionIds.map((sessionId) => ({
+        open: { sessionId, agent: 'codex', tabId: structuredAgentSessionTabId(sessionId) }
+      }))
+    ) ?? state.session
+  const runtime = new WindowlessRuntime(partialRuntimeStore(store))
+  await settled()
   return { runtime, state }
 }
 
-function installHost(runtime: OrcaRuntimeService) {
+class WindowlessRuntime extends OrcaRuntimeService {
+  capturedSelection() {
+    return this.legacyStructuredSessionTabIds
+  }
+}
+
+function installHost(runtime: WindowlessRuntime) {
   return ensureStructuredAgentSessionHost({
     logger: recordingStructuredAgentSessionLogger().logger,
     stateDirectory: root,
+    legacySessionTabIds: runtime.capturedSelection(),
     hostId: 'local',
     claimKeyId: 'key-1',
     resolveWorkspacePath: async () => root,
@@ -115,7 +134,7 @@ function installHost(runtime: OrcaRuntimeService) {
 }
 
 /** A runtime whose startup restore installs a host rooted at `root`, with no PTY daemon. */
-function restoringRuntime(runtime: OrcaRuntimeService): void {
+function restoringRuntime(runtime: WindowlessRuntime): void {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the runtime's own protected members; the test roots the host at `root` and stubs the PTY daemon.
   const internal = runtime as unknown as {
     hasPersistedStructuredAgentSessionStore(): boolean
@@ -152,6 +171,7 @@ describe('a windowless chat tab against the chat host', () => {
     expect(host.deps.store.getRecord(CHAT_A)).not.toBeNull()
 
     await host.setSessionTabVisibility(CHAT_A, false)
+    await settled()
 
     expect(savedChatIds(state)).toEqual([CHAT_B])
   })
@@ -166,6 +186,7 @@ describe('a windowless chat tab against the chat host', () => {
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
     expect(savedChatIds(state)).toEqual([CHAT_B])
   })
@@ -189,6 +210,7 @@ describe('a windowless chat tab against the chat host', () => {
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
     expect(savedChatIds(state)).toEqual([CHAT_B])
   })
@@ -203,6 +225,7 @@ describe('a windowless chat tab against the chat host', () => {
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
     expect(savedChatIds(state)).toEqual(['short', CHAT_B])
   })
@@ -225,6 +248,7 @@ describe('a windowless chat tab against the chat host', () => {
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
     expect(savedChatIds(state)).toEqual([CHAT_B, CHAT_SSH])
   })
@@ -252,19 +276,25 @@ describe('a windowless chat tab against the chat host', () => {
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
     expect(partitions.get('runtime:env-y')?.unifiedTabs?.[WT]?.map((tab) => tab.entityId)).toEqual([
       CHAT_REMOTE
     ])
   })
 
-  it('prunes nothing at startup when the store has no tab index', async () => {
+  it('materializes the complete representable legacy base before missing-record cleanup', async () => {
     await seedTestAgentSessionRecordStore(root, { records: [released(CHAT_B)] })
     const { runtime, state } = await runtimeWithSavedChats([CHAT_GONE, CHAT_B])
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
-    expect(savedChatIds(state)).toEqual([CHAT_GONE, CHAT_B])
+    expect(savedChatIds(state)).toEqual([CHAT_B])
+    expect((await installHost(runtime)).getPersistedVisibleSessionTabIndex()).toEqual({
+      present: true,
+      sessionIds: [CHAT_B]
+    })
   })
 })

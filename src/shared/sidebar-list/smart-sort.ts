@@ -19,6 +19,8 @@ import {
   type WorktreeAttention
 } from './smart-attention'
 import { smartSortPhase } from './smart-sort-phase'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../sidebar-inputs-switch'
+import { compareSmartStamps, recentStamp } from './stamp-order'
 
 export type SortBy = WorkspaceSortBy
 
@@ -37,21 +39,13 @@ export function getWorktreeSortLabel(worktree: WorktreeSortLabelInput): string {
     return displayName
   }
 
-  // Why: persisted or remote worktree state can briefly omit displayName after
-  // a custom workspace name is removed; sorting must stay render-safe.
+  // Persisted/remote rows may omit displayName briefly after a rename clear; keep sorting render-safe.
   const pathLabel =
     typeof worktree.path === 'string' ? getRuntimePathBasename(worktree.path).trim() : ''
   return pathLabel || worktree.id
 }
 
-/**
- * Sort labels precomputed once per sort, so the O(N log N) comparator does O(1)
- * lookups instead of re-deriving both labels on every comparison.
- *
- * Why keyed on the row and not its id: a two-host id collision (STA-4343) puts
- * two rows with different paths under one id, and an id key would hand one of
- * them the other's label.
- */
+/** Precompute labels once for O(1) comparisons. Key by row object: same-ID cross-host rows can have different labels (STA-4343). */
 export type WorktreeSortLabels = ReadonlyMap<WorktreeSortLabelInput, string>
 
 export function buildWorktreeSortLabels<T extends WorktreeSortLabelInput>(
@@ -77,15 +71,41 @@ export function compareWorktreeSortLabel(
   )
 }
 
-/**
- * Build a comparator for sorting worktrees based on the current sort mode.
- *
- * Smart mode requires `attentionByWorktree` — a per-worktree class +
- * timestamp map built once before sorting (see `buildAttentionByWorktree`).
- * Why non-optional: a forgotten caller would silently regress every worktree
- * to Class 5 (idle) and degrade the comparator to recent-activity ordering;
- * making the param required surfaces the omission as a typecheck error.
- */
+function worktreeSortReads(
+  repoMap: Map<string, Pick<Repo, 'displayName'>>,
+  labels: WorktreeSortLabels | undefined
+) {
+  return {
+    label: (worktree: Worktree): string => labels?.get(worktree) ?? getWorktreeSortLabel(worktree),
+    identity: getWorktreeHostIdentity,
+    repoLabel: (worktree: Worktree) => repoMap.get(worktree.repoId)?.displayName ?? '',
+    // Legacy users have sortOrder but no manualOrder; seed Manual from saved order instead of alphabetizing.
+    manualRank: (worktree: Worktree) => worktree.manualOrder ?? worktree.sortOrder
+  }
+}
+
+function buildStampComparator(
+  sortBy: SortBy,
+  repoMap: Map<string, Pick<Repo, 'displayName'>>,
+  labels: WorktreeSortLabels | undefined
+): (a: Worktree, b: Worktree) => number {
+  return buildWorkspaceRowComparator<Worktree>(sortBy, {
+    ...worktreeSortReads(repoMap, labels),
+    recentActivity: recentStamp,
+    compareSmart: compareSmartStamps
+  })
+}
+
+/** Sorts in place by the owning hosts' stamps, reading no clock: the order every stamp reader shares. */
+export function sortWorktreesByStamps<W extends Worktree>(
+  worktrees: W[],
+  sortBy: SortBy,
+  repoMap: Map<string, Pick<Repo, 'displayName'>>
+): W[] {
+  return worktrees.sort(buildStampComparator(sortBy, repoMap, buildWorktreeSortLabels(worktrees)))
+}
+
+/** Require the precomputed attention map: omission would silently reduce Smart to idle/recent ordering. */
 export function buildWorktreeComparator(
   sortBy: SortBy,
   repoMap: Map<string, Pick<Repo, 'displayName'>>,
@@ -93,47 +113,30 @@ export function buildWorktreeComparator(
   attentionByWorktree: Map<string, WorktreeAttention>,
   labels?: WorktreeSortLabels
 ): (a: Worktree, b: Worktree) => number {
-  const label = (worktree: Worktree): string =>
-    labels?.get(worktree) ?? getWorktreeSortLabel(worktree)
+  // Switch point: Recent and Smart read the owning host's stamps, with no clock.
+  if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+    return buildStampComparator(sortBy, repoMap, labels)
+  }
   return buildWorkspaceRowComparator<Worktree>(sortBy, {
-    label,
-    identity: getWorktreeHostIdentity,
-    repoLabel: (worktree) => repoMap.get(worktree.repoId)?.displayName ?? '',
+    ...worktreeSortReads(repoMap, labels),
     recentActivity: (worktree) => effectiveRecentActivity(worktree, now),
-    // Why fallback to sortOrder: existing users have a persisted smart-sort snapshot but no
-    // manualOrder yet, so Manual starts from that order instead of alphabetizing.
-    manualRank: (worktree) => worktree.manualOrder ?? worktree.sortOrder,
     compareSmart: (a, b) => {
       const aw = attentionByWorktree.get(a.id) ?? IDLE
       const bw = attentionByWorktree.get(b.id) ?? IDLE
       return (
-        // Why: 1 < 2 < 3 < 4 < 5 — lower class outranks higher.
+        // Lower class outranks higher.
         aw.cls - bw.cls ||
-        // Why: within a class, the more recent attention event ranks first.
+        // Latest attention wins within a class.
         bw.attentionTimestamp - aw.attentionTimestamp ||
-        // Why: idle worktrees fall through to recency (and the create-grace
-        // floor for brand-new worktrees) before alphabetical.
+        // Idle falls back to recency/create grace before labels.
         effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now)
       )
     }
   })
 }
 
-/**
- * Sort worktrees by the smart-attention comparator (status class first,
- * recency-of-attention second). On cold start (no live PTYs yet), falls back
- * to persisted `sortOrder` descending so the sidebar restores the pre-quit
- * order until the agent-status snapshot lands.
- *
- * Both the palette and `getVisibleWorktreeIds()` import this to avoid
- * duplicating the cold/warm branching logic.
- *
- * `agentStatusByPaneKey` carries the primary signal; `runtimePaneTitlesByTabId`
- * and `ptyIdsByTabId` enable the title-heuristic fallback for hookless agents
- * (Edge case 9 in the design doc). Why all three are non-optional: a forgotten
- * caller would silently regress every worktree to Class 5 or quietly disable
- * the hookless-fallback path.
- */
+/** Share palette/sidebar Smart ordering: class then attention time; without live evidence use saved sortOrder.
+ * Require hook/title/PTY sources so omitted callers cannot silently disable attention or hookless fallback. */
 export function sortWorktreesSmart(
   worktrees: Worktree[],
   tabsByWorktree: Record<string, TerminalTab[]>,
@@ -171,10 +174,16 @@ export type SmartSortSources = {
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
 }
 
+/** For stamp-sorted callers: the stamps need no live terminal or agent sources. */
+export const NO_LIVE_SMART_SORT_SOURCES: SmartSortSources = Object.freeze({
+  tabsByWorktree: {},
+  agentStatusByPaneKey: {},
+  runtimePaneTitlesByTabId: {},
+  ptyIdsByTabId: {}
+})
+
 export type WorktreeSortRanking<W extends Worktree> = {
   sorted: W[]
-  /** Smart only, and only once warm. */
-  attentionByWorktree: Map<string, WorktreeAttention> | null
   /** True when this sort found the live signal that latches Smart for the list's lifetime. */
   detectedLiveSmartSignal: boolean
 }
@@ -192,6 +201,11 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
   const { worktrees, sortBy, now, sources } = args
   // Why precompute: the label tiebreaker runs on every comparison in every mode.
   const labels = buildWorktreeSortLabels(worktrees)
+  // Switch point: stamps need no cold phase, latch or attention map.
+  if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+    worktrees.sort(buildStampComparator(sortBy, args.repoMap, labels))
+    return { sorted: worktrees, detectedLiveSmartSignal: false }
+  }
   let detectedLiveSmartSignal = false
 
   // Why cold-start detection: agent-status hydrates async, so the warm comparator would collapse all to Class 4; keep the persisted order until a live signal appears.
@@ -207,7 +221,7 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
       detectedLiveSmartSignal = true
     } else {
       worktrees.sort((a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b, labels))
-      return { sorted: worktrees, attentionByWorktree: null, detectedLiveSmartSignal: false }
+      return { sorted: worktrees, detectedLiveSmartSignal: false }
     }
   }
 
@@ -226,9 +240,5 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
         )
       : new Map<string, WorktreeAttention>()
   worktrees.sort(buildWorktreeComparator(sortBy, args.repoMap, now, attentionByWorktree, labels))
-  return {
-    sorted: worktrees,
-    attentionByWorktree: sortBy === 'smart' ? attentionByWorktree : null,
-    detectedLiveSmartSignal
-  }
+  return { sorted: worktrees, detectedLiveSmartSignal }
 }

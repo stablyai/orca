@@ -9,7 +9,7 @@ export type AcpOversizedLineTarget = {
   diagnose: (message: string) => void
 }
 
-/** The Codex reader's prefix classification: settle whoever was owed the message that was lost. */
+/** Settle requests whose replies were lost to the framing limit. */
 export function settleOversizedAcpLine(
   rejected: NdjsonRejectedRecord & { kind: 'line-too-long' },
   target: AcpOversizedLineTarget
@@ -31,8 +31,8 @@ export function settleOversizedAcpLine(
       (method) => new AcpFrameTooLargeError(method, observedBytes, maxLineBytes)
     )
   } else if (record.kind === 'response-unknown') {
-    // A numeric id with no readable result: any pending call could be the one that never settles.
+    // An unreadable response ID leaves every pending call suspect.
     target.close(new AcpFrameTooLargeError(null, observedBytes, maxLineBytes))
   }
-  // A notification or non-JSON-RPC output (a stray log line) settles nothing; closing would end the session.
+  // Ignore oversized notifications and stray output without ending the session.
 }

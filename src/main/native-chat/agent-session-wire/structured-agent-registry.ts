@@ -1,14 +1,9 @@
-// The structured agents this runtime drives, built once from their registrations.
-//
-// The one place a definition is looked up: the router routes with it and every host reader asks it
-// what an agent declares. A declaration the agent's adapter could not honour is refused here, so a
-// declared capability always has the adapter method behind it.
+// Reject capabilities without adapter implementations so declarations remain trustworthy.
 
 import type { AgentSessionCapabilities } from '../../../shared/agent-session-capabilities'
 import type { StructuredAgentDefinition } from './structured-agent-definition'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
-/** One structured agent this runtime drives: its definition, and the adapter that runs it. */
 export type StructuredAgentRegistration = {
   definition: StructuredAgentDefinition
   adapter: StructuredAgentSessionAdapter
@@ -16,12 +11,15 @@ export type StructuredAgentRegistration = {
 
 type AdapterMethod = keyof StructuredAgentSessionAdapter
 
-/** The adapter methods each declared capability needs. */
-function requiredAdapterMethods(capabilities: AgentSessionCapabilities): AdapterMethod[] {
+/** Rewind may use provider recovery or a fork on next launch. */
+function requiredAdapterMethods(
+  capabilities: AgentSessionCapabilities,
+  adapter: StructuredAgentSessionAdapter
+): AdapterMethod[] {
   return [
     ...(capabilities.compact ? (['compact'] as const) : []),
     ...(capabilities.threadGoal ? (['changeThreadGoal'] as const) : []),
-    ...(capabilities.rewind ? (['rewind', 'recoverRewind'] as const) : [])
+    ...(capabilities.rewind && !adapter.forkForRewind ? (['rewind', 'recoverRewind'] as const) : [])
   ]
 }
 
@@ -35,7 +33,7 @@ export class StructuredAgentRegistry {
       if (byAgent.has(agent)) {
         throw new Error(`structured agent ${agent} is registered twice`)
       }
-      const missing = requiredAdapterMethods(capabilities).find(
+      const missing = requiredAdapterMethods(capabilities, registration.adapter).find(
         (method) => !registration.adapter[method]
       )
       if (missing) {
@@ -48,7 +46,6 @@ export class StructuredAgentRegistry {
     this.byAgent = byAgent
   }
 
-  /** The registration for `agent`; null for an agent this runtime does not drive. */
   registration(agent: string): StructuredAgentRegistration | null {
     return this.byAgent.get(agent) ?? null
   }
@@ -65,7 +62,7 @@ export class StructuredAgentRegistry {
     return this.registrations().map((registration) => registration.definition)
   }
 
-  /** What `agent` declares; a live session may narrow it (see `rewindSupport`), never widen it. */
+  /** Live sessions may narrow declared capabilities, never widen them. */
   capabilities(agent: string): AgentSessionCapabilities | null {
     return this.definition(agent)?.capabilities ?? null
   }

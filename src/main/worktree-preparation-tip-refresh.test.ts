@@ -247,7 +247,6 @@ describe('prepared checkout timing across a tip refresh', () => {
     build.resolve()
     await armed
 
-    // The dialog opens a minute later and refreshes the spare once a 2 s fetch settles.
     now = 100_000
     const fetch = Promise.withResolvers<void>()
     const refreshed = prepareWorktreeCreateForRepo(store, repo, 'origin/main', fetch.promise)

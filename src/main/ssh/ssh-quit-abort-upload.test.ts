@@ -6,11 +6,10 @@ import { Writable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { SFTPWrapper } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
-import { uploadSshDirectory } from './ssh-connection-file-transfers'
+import { uploadSshDirectory } from './connection/ssh-connection-file-transfers'
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
 
-/** An SFTP session whose writes are accepted but still flushing when the app quits. */
 function flushingSftp(): SFTPWrapper {
   const sftp = Object.assign(new EventEmitter(), {
     mkdir: (_path: string, cb: (err?: Error | null) => void) => cb(null),

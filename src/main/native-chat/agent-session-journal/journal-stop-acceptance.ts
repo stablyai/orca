@@ -1,6 +1,4 @@
-// A person's Stop accepted in ONE transaction: the withdrawal of every send still queued, its Stop
-// event, and the command receipt that names that event. Nothing of it is durable unless all of it
-// is, so a Stop whose acceptance fails withdraws nothing and interrupts nothing.
+// Commit withdrawals, Stop event and receipt atomically; failed acceptance must interrupt nothing.
 
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -14,22 +12,20 @@ import { journalStopEventRowBuilder } from './journal-stop-and-resume-rows'
 export type JournalStopAcceptanceInput = {
   event: Omit<JournalStopEvent, 'at'>
   fence: number
-  /** The turn live as the event is written, by the host's read of what runs. */
+  /** Read the live turn when the event is written. */
   liveTurnId: () => string | null
 }
 
-// Only host-held sends are withdrawn, so each carries proof it never reached the agent.
+// Host-held sends prove non-delivery.
 const STOP_WITHDRAWAL = agentSessionFailureWords(
   agentSessionFailureFact('cancelled', { neverReachedAgent: true }),
   { surface: 'rejection' }
 )
 
 export type JournalStopAcceptance = {
-  /** Where the Stop event landed. */
   mark: AgentJournalCursor
-  /** The sends it withdrew, by client message id. */
   withdrawn: string[]
-  /** The turn its event names: the one it named, else the one live as it was written. */
+  /** Explicitly named turn, otherwise the turn live at write time. */
   turnId: string | null
 }
 
@@ -41,12 +37,11 @@ export class JournalStopAcceptor {
     }
   ) {}
 
-  /** Whether a tombstone removed turn `turnId`'s record, as a rewind does: over, for a Stop. */
+  /** Rewound turns count as ended for Stop. */
   turnWasRemoved(turnId: string): boolean {
     return this.deps.state().removedTurnIds.has(turnId)
   }
 
-  /** The withdrawal, the event and `receipt`, in one transaction at its turn in the queue. */
   async accept(
     input: JournalStopAcceptanceInput,
     receipt?: JournalOperationReceipt
@@ -54,8 +49,6 @@ export class JournalStopAcceptor {
     const { state } = this.deps
     let turnId: string | null = null
     const rows = await this.deps.writer.enqueueRows(
-      // The same rows the chat's queued withdrawal always wrote, then the event, naming the turn
-      // live as it is written unless the Stop named one.
       () => {
         turnId = input.event.turnId ?? input.liveTurnId()
         const event = { ...input.event, ...(turnId !== null ? { turnId } : {}) }

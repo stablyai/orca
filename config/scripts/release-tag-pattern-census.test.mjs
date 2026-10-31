@@ -29,6 +29,7 @@ const DESKTOP_ONLY_PROOFS = {
   },
   'config/scripts/publish-complete-draft-releases.mjs': async () => {
     const { isReleaseCutDraft } = await import('./publish-complete-draft-releases.mjs')
+    expect(isReleaseCutDraft(rulesRelease('v1.4.2-rc.1', { draft: true }))).toBe(true)
     for (const tag of RULES_TAGS) {
       expect(isReleaseCutDraft(rulesRelease(tag, { draft: true }))).toBe(false)
     }
@@ -43,6 +44,10 @@ const DESKTOP_ONLY_PROOFS = {
   },
   'config/scripts/assert-github-release-is-draft.mjs': async () => {
     const { matchingDesktopReleases } = await import('./assert-github-release-is-draft.mjs')
+    const desktop = { tag_name: 'v1.4.1' }
+    expect(
+      matchingDesktopReleases([...RULES_TAGS.map((tag) => rulesRelease(tag)), desktop], 'v1.4.1')
+    ).toEqual([desktop])
     expect(
       matchingDesktopReleases(
         RULES_TAGS.map((tag) => rulesRelease(tag)),
@@ -52,13 +57,18 @@ const DESKTOP_ONLY_PROOFS = {
   },
   'config/scripts/verify-release-required-assets.mjs': async () => {
     const { verifyRequiredReleaseAssets } = await import('./verify-release-required-assets.mjs')
+    const releases = RULES_TAGS.map((tag) => rulesRelease(tag))
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(JSON.stringify(RULES_TAGS.map((tag) => rulesRelease(tag)))))
+      vi.fn(async () => new Response(JSON.stringify(releases)))
     )
     await expect(
       verifyRequiredReleaseAssets({ repo: 'stablyai/orca', tag: 'v1.4.1', token: '' })
     ).rejects.toThrow('was not found')
+    releases.push({ tag_name: 'v1.4.1', assets: [] })
+    await expect(
+      verifyRequiredReleaseAssets({ repo: 'stablyai/orca', tag: 'v1.4.1', token: '' })
+    ).rejects.toThrow('Release v1.4.1 is missing required assets.')
   }
 }
 
@@ -68,14 +78,9 @@ afterEach(() => {
 
 describe('release tag pattern census', () => {
   it.each(Object.keys(DESKTOP_ONLY_PROOFS))(
-    '%s imports the shared patterns or proves it admits only desktop tags',
+    '%s excludes agent state rules releases from desktop selection',
     async (path) => {
-      const proof = DESKTOP_ONLY_PROOFS[path]
-      expect(
-        proof,
-        `${path} lists releases: import release-tag-patterns.mjs or add a proof`
-      ).toBeDefined()
-      await proof()
+      await DESKTOP_ONLY_PROOFS[path]()
     }
   )
 
@@ -84,6 +89,8 @@ describe('release tag pattern census', () => {
       expect(isAgentStateRulesTag(tag)).toBe(true)
       expect(DESKTOP_STABLE_TAG.test(tag) || DESKTOP_RC_TAG.test(tag)).toBe(false)
     }
+    expect(DESKTOP_STABLE_TAG.test('v1.4.1')).toBe(true)
+    expect(DESKTOP_RC_TAG.test('v1.4.2-rc.1')).toBe(true)
     expect(() => agentStateRulesTag(1, 'beta')).toThrow()
   })
 })

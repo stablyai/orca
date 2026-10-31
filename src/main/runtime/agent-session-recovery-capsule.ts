@@ -23,11 +23,6 @@ import {
   type RecoveryEntry
 } from './agent-session-recovery-capsule-entries'
 
-export type {
-  AgentSessionResumeFailureInput,
-  AgentSessionResumeFailureRecord
-} from './agent-session-recovery-capsule-entries'
-
 export const AGENT_SESSION_RECOVERY_CAPSULE_FILE = 'agent-session-recovery.json'
 const MAX_CAPSULE_BYTES = 4 * 1024 * 1024
 
@@ -51,7 +46,7 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
-  /** Offers that were acted on and did not end with the agent carrying on. Read-only, like `list`. */
+  /** Read settled failed actions without consuming their records. */
   listFailed(now: number): Promise<AgentSessionResumeFailureRecord[]> {
     return withFileTransactionLock(
       this.filePath,
@@ -92,16 +87,13 @@ export class AgentSessionRecoveryCapsule {
         // A newer witness than a recorded failure supersedes it when the records are normalized.
         bySession.set(marker.sessionId, { state: 'pending', marker })
       }
-      // Keep the fence after a newer interruption. It still admits genuinely newer markers,
-      // while an older delayed writer remains unable to resurrect a dismissed chat later.
+      // Keep dismissal fences across newer interruptions; older delayed writers must not resurrect offers.
       await this.publish({ entries: [...bySession.values()], failed }, now, dismissedAt)
     })
   }
 
-  /** Reserves only the selected pending sessions for one explicit user action. A recorded failure
-   *  is reserved too when the action names it — that is a retry — but never by an unselective
-   *  action, which must not re-run what already failed. The failure stays on record until the
-   *  retry settles. */
+  /** Reserve selected offers for one user action; failures retry only when named explicitly.
+   * Preserve failure guidance until the retry settles. */
   beginResume(
     sessionIds: readonly string[] | undefined,
     operationId: string,
@@ -132,7 +124,6 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
-  /** The agent carried on: the reservation and any failure it was retrying both go. */
   completeResume(operationId: string, sessionIds: readonly string[], now: number): Promise<void> {
     return withFileTransactionLock(this.filePath, async () => {
       const selected = new Set(sessionIds)
@@ -157,9 +148,7 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
-  /** Records how a reserved session's action ended when the agent did not carry on, replacing any
-   *  earlier failure of the same chat. Only rows this operation owns move, so a competing owner's
-   *  reservation cannot be settled by proxy. */
+  /** Settle only this operation's reserved failures; competing reservations remain untouched. */
   failResume(
     operationId: string,
     failures: readonly AgentSessionResumeFailureInput[],
@@ -184,7 +173,7 @@ export class AgentSessionRecoveryCapsule {
           reason: record.reason.slice(0, MAX_FAILURE_FIELD_LENGTH),
           latestPrompt: record.latestPrompt.slice(0, MAX_FAILURE_FIELD_LENGTH)
         })
-        // A newer teardown seen mid-action is a fresh offer; normalizing drops the stale verdict.
+        // Newer teardown witnesses supersede action-failure verdicts.
         return entry.replacement ? [{ state: 'pending' as const, marker: entry.replacement }] : []
       })
       await this.publish(
@@ -201,12 +190,11 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
-  /** Forgets the named sessions, or every session, whatever their state. Unlike `clearAll`, this
-   *  is not a fence: a later teardown of the same chat may record a fresh offer. */
+  /** Dismiss selected/all records without fencing later teardown offers; clearAll provides that fence. */
   dismiss(
     sessionIds: readonly string[] | 'all',
     now: number,
-    /** A record this answers true for stays: read against the stored marker, under the lock. */
+    /** Evaluate preserved records under the lock against their stored markers. */
     keep: (marker: AgentSessionResumeMarker) => boolean = () => false
   ): Promise<number> {
     return withFileTransactionLock(this.filePath, async () => {
@@ -232,9 +220,7 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
-  /** Drops records the chat itself has since superseded — the user's own newer message ends both a
-   *  pending offer and a recorded failure. Witness-keyed (`recordedAt`, and `failedAt` for a
-   *  failure) so a fresh record written after the caller read the stale one is kept. */
+  /** New user messages remove only the observed witness (and failedAt for failures), preserving concurrently newer records. */
   forgetSuperseded(
     superseded: readonly { sessionId: string; recordedAt: number; failedAt?: number }[],
     now: number
@@ -274,27 +260,24 @@ export class AgentSessionRecoveryCapsule {
           ? { state: 'pending', marker: entry.replacement ?? entry.marker }
           : entry
       )
-      // Normalizing on publish keeps a rolled-back retry a failure rather than a pending offer.
+      // Normalize rollback to retain settled failures instead of recreating pending offers.
       await this.publish({ entries: next, failed }, now, state.dismissedAt)
     })
   }
 
-  /** `keep` names records this host does not list; they stay for the Orca that can act on them. */
+  /** Preserve records unreadable to this host for a compatible Orca. */
   clearAll(now: number, keep: KeepRecord = () => false): Promise<number> {
     return withFileTransactionLock(this.filePath, async () => {
       let state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>
       try {
         state = normalizeState(await this.readState(), now)
       } catch {
-        // Dismiss is an explicit request to forget this advisory file. Replace unreadable bytes
-        // with an empty, fenced capsule so a late teardown writer cannot resurrect the offer.
+        // Explicit dismiss may replace unreadable advisory data; fence it against late teardown resurrection.
         await this.publish({ entries: [], failed: [] }, now, now)
         return 0
       }
       const { kept, dismissedPending } = splitDismissedAll(state, keep)
-      // Dismiss is the explicit user request to forget every recovery record it was shown. An
-      // in-flight action may still finish, but its later complete/rollback becomes a no-op and
-      // cannot resurrect a row the user dismissed.
+      // Fence every dismissed record; in-flight completion/rollback then cannot resurrect it.
       await this.publish(kept, now, now)
       return dismissedPending
     })

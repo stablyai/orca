@@ -247,8 +247,6 @@ export function useMobileTasksProjectFileMergeActions(model: ProjectReviewCheckA
       setError('')
       const nextState = item.source.state === 'closed' ? 'open' : 'closed'
       try {
-        // The method and its params were a pair of local ternaries over the item type, not a step
-        // handed in at runtime, so each arm sends its own operation with its own params type.
         const updated =
           item.source.type === 'issue'
             ? githubIssueUpdate.interpret(

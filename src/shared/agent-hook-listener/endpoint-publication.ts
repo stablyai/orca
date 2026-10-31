@@ -4,15 +4,13 @@ import { join } from 'node:path'
 
 import { sweepStaleAgentHookEndpointTemps } from '../agent-hook-endpoint-temp-cleanup'
 
-// ─── Endpoint-file writing ──────────────────────────────────────────
-
 export function getEndpointFileName(): string {
-  // Why: per-platform extension lets hook scripts source the file natively (POSIX `. "$file"` / Windows `call "%file%"`); the OpenCode plugin regex accepts both shapes.
+  // Use native sourceable extensions: POSIX .env / Windows .cmd; OpenCode accepts both.
   return process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
 }
 
 export function isShellSafeEndpointValue(value: string): boolean {
-  // Why: values are shell-sourced; the + rejects empty strings so a sourced `KEY=` can't clear the env var.
+  // Shell-sourced values must be safe and nonempty or KEY= would clear inherited state.
   return /^[A-Za-z0-9._:/-]+$/.test(value)
 }
 
@@ -25,9 +23,7 @@ export type EndpointFileFields = {
   openCodeTui?: boolean
 }
 
-/** Atomically write the endpoint file at `endpointDir/<getEndpointFileName()>`.
- *  Returns true on success, false on error (caller may fall back to PTY env).
- *  Kept in sync with `AgentHookServer.writeEndpointFile`. */
+/** Atomically publish; false lets callers fall back to PTY env. Keep aligned with AgentHookServer.writeEndpointFile. */
 export function writeEndpointFile(
   endpointDir: string,
   finalPath: string,
@@ -59,17 +55,17 @@ export function writeEndpointFile(
   const lines = [...valuesToWrite.map(([key, value]) => `${prefix}${key}=${value}`), '']
   let tmpWritten = false
   try {
-    // Why: 0o700 owner-only so the dir doesn't leak this install's existence to other local users.
+    // Keep the endpoint directory owner-only to hide this install from other local users.
     mkdirSync(endpointDir, { recursive: true, mode: 0o700 })
     if (process.platform !== 'win32') {
-      // Why: mkdirSync mode only applies on creation; chmod fixes perms on a pre-existing dir (POSIX-only).
+      // Creation mode does not repair existing directories; chmod them on POSIX.
       try {
         chmodSync(endpointDir, 0o700)
       } catch {
         // best-effort
       }
     }
-    // Why: crash-orphan cleanup must not materialize a tampered, enormous directory.
+    // Bound crash-orphan sweeps even in tampered directories.
     sweepStaleAgentHookEndpointTemps(endpointDir)
     const separator = process.platform === 'win32' ? '\r\n' : '\n'
     writeFileSync(tmpPath, lines.join(separator), { mode: 0o600 })

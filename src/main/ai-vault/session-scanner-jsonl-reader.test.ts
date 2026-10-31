@@ -31,7 +31,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it('decodes a single owned unterminated tail without copying it or advancing its cursor', async () => {
+it('decodes a single owned unterminated tail without concatenation or cursor advancement', async () => {
   const tail = JSON.stringify({ text: 'é😀 growing final record' })
   const prefix = '\r\nmalformed\n{"type":"user"}\r\n'
   const content = prefix + tail
@@ -85,7 +85,7 @@ it('still joins an unterminated multi-part UTF-8 tail exactly once', async () =>
   expect(copiedBytes).toEqual([bytes.length])
 })
 
-it('copies only the carried line when the next chunk contains many complete lines', async () => {
+it('bounds concatenation when the next chunk contains many complete lines', async () => {
   source.chunks = Array.from({ length: 100 }, () => Buffer.from(`${'a\n'.repeat(1000)}x`))
   const original = Buffer.concat
   let copied = 0
@@ -151,21 +151,18 @@ it('preserves UTF-8/CRLF carry, byte callbacks and stop offsets', async () => {
   expect(onLine).toHaveBeenCalledWith('🦀')
 })
 
-// Why: a chunk boundary is not aligned to anything — it can land mid-record,
-// mid-UTF-8-sequence, between CR and LF, or on an empty line. A dropped or
-// merged line here silently corrupts an agent transcript, and a wrong
-// `consumedThrough` makes the next incremental scan resume mid-line.
+// Arbitrary chunk cuts must preserve UTF-8, CRLF boundaries and byte-accurate resume offsets.
 it('yields identical lines and resume offsets for every single-byte chunk split', async () => {
   const bigRecord = `{"d":${'"'.padEnd(2000, 'z')}"}`
   const expectedLines = [
-    '{"a":1}', // plain LF record
+    '{"a":1}',
     '{"b":"🦀 é 𝄞"}', // CRLF record whose content is 2/3/4-byte UTF-8
-    '', // empty line
-    '', // empty CRLF line
+    '',
+    '',
     '{"c":"x\ry"}', // lone CR inside a record
-    bigRecord // single record larger than any carried prefix
+    bigRecord
   ]
-  const trailing = '{"partial":' // final line with no trailing newline
+  const trailing = '{"partial":'
   const buffer = Buffer.from(
     `{"a":1}\n{"b":"🦀 é 𝄞"}\r\n\n\r\n{"c":"x\ry"}\n${bigRecord}\n${trailing}`,
     'utf-8'
@@ -191,10 +188,7 @@ it('yields identical lines and resume offsets for every single-byte chunk split'
   }
 })
 
-// Why: a single 10 MiB base64 image used to abort the fold, which dropped the
-// whole session from the vault. Skipping must cost exactly one record, and the
-// resume cursor must land on the byte after that record's newline — anything
-// else makes the next incremental scan resume mid-line.
+// One oversized record must cost only that record and resume after its newline.
 const OVERSIZED = 'x'.repeat(MAX_SESSION_TRANSCRIPT_RECORD_BYTES + 1)
 
 function chunksAt(buffer: Buffer, ...cuts: number[]): Buffer[] {
@@ -210,12 +204,10 @@ it('drops one oversized record and folds the rest of the session', async () => {
   const after = '{"b":2}\n{"c":3}\n'
   const buffer = Buffer.from(`${before}${OVERSIZED}\n${after}`, 'utf-8')
   const recordStart = before.length
-  const recordEnd = recordStart + OVERSIZED.length // index of the terminating '\n'
+  const recordEnd = recordStart + OVERSIZED.length
   const start = 41
 
-  // Every cut that can land somewhere structurally different: inside the
-  // surviving prefix, at each edge of the skipped span, and mid-skip. The
-  // multi-cut rows carry one skip across three and five chunks.
+  // Exercise skip boundaries within one chunk and across multiple chunks.
   const layouts: number[][] = [
     [],
     [3],
@@ -243,7 +235,6 @@ it('drops one oversized record and folds the rest of the session', async () => {
     expect({ cuts, lines, ...result }).toEqual({
       cuts,
       lines: ['{"a":1}', '{"b":2}', '{"c":3}'],
-      // The cursor sits past the whole file: the skipped span is consumed, not re-read.
       consumedThrough: start + buffer.length,
       trailingPartialLine: null,
       bytesRead: buffer.length,
@@ -265,15 +256,13 @@ it('leaves the cursor before an unterminated oversized tail and skips it once te
   })
   expect(firstLines).toEqual(['{"a":1}'])
   expect(first).toEqual({
-    // Held at the record's start: an unterminated record may still be growing,
-    // so the next read re-reads it rather than guessing where it ends.
+    // Resume at the growing record start until its terminator is observed.
     consumedThrough: start + before.length,
     trailingPartialLine: null,
     bytesRead: growing.length,
     skippedRecords: [{ byteOffset: start + before.length, approximateBytes: OVERSIZED.length }]
   })
 
-  // The next read resumes at that offset; the record is complete now.
   const rest = Buffer.from(`${OVERSIZED}\n{"b":2}\n`, 'utf-8')
   source.chunks = chunksAt(rest, 7, OVERSIZED.length, OVERSIZED.length + 1)
   const restLines: string[] = []

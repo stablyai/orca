@@ -1,4 +1,3 @@
-// Test fixture: a packaged Node slot whose runtime is the real pinned Node, laid out as shipped.
 import { copyFileSync, existsSync, linkSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { copyFile, link, mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -6,7 +5,11 @@ import type * as NodePty from 'node-pty'
 import { join, resolve } from 'node:path'
 import { it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../shared/node-runtime-pin'
+import {
+  NODE_RUNTIME_ASSETS,
+  SERVER_TARGETS,
+  type ServerTarget
+} from '../../shared/node-runtime-pin'
 import {
   ORCAD_NODE_PTY_DIR,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
@@ -17,15 +20,13 @@ import { detectNativeHostAbi, nativeSlotName } from './native-host-abi'
 
 export function hostServerTarget(): ServerTarget {
   const slot = nativeSlotName(detectNativeHostAbi())
-  const target = Object.keys(NODE_RUNTIME_ASSETS).find((candidate) => candidate === slot)
+  const target = SERVER_TARGETS.find((candidate) => candidate === slot)
   if (!target) {
     throw new Error(`No pinned Node runtime for host slot ${slot}`)
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: found among NODE_RUNTIME_ASSETS keys, which are ServerTargets.
-  return target as ServerTarget
+  return target
 }
 
-/** The pinned Node the runner (run-node-server-tests.mjs) or `build:orcad` provided, if any. */
 export function locatePinnedNodeForTests(): string | null {
   const target = hostServerTarget()
   const candidates = [
@@ -46,7 +47,6 @@ const crossRuntimeBunVersion = readFileSync(
   'utf8'
 ).trim()
 
-/** The shared Bun pin (BUN_EXECUTABLE, else `bun` on PATH), if available. */
 export function locateBunForTests(): string | null {
   const candidate = process.env.BUN_EXECUTABLE ?? 'bun'
   try {
@@ -57,7 +57,6 @@ export function locateBunForTests(): string | null {
   }
 }
 
-/** Writes `<root>/slot/{.server-target,.runtime-node}` and links the runtime into `<root>/runtimes/`. */
 export async function writeNodeSlotFixture(
   root: string,
   pinnedNode: string
@@ -70,12 +69,11 @@ export async function writeNodeSlotFixture(
   await writeFile(join(slotDir, ORCAD_NODE_RUNTIME_MARKER_FILENAME), `${executableSha256}\n`)
   const runtime = join(slotDir, ...orcadNodeRuntimeRelativePath(target, executableSha256))
   await mkdir(join(runtime, '..'), { recursive: true })
-  // Why a hard link: the runtime is ~120 MB, and a copy per test would dominate the suite.
+  // Hard-link the ~120 MB runtime to avoid a copy per test.
   await link(pinnedNode, runtime).catch(() => copyFile(pinnedNode, runtime))
   return { slotDir, runtime }
 }
 
-/** Installs a built or materialized slot under `<root>/orcad-test` with its pinned runtime beside it. */
 export function installPackagedOrcadSlotForTests(
   root: string,
   pinnedNode: string,
@@ -110,7 +108,6 @@ export function installPackagedOrcadSlotForTests(
   return { slotDir, runtime }
 }
 
-/** Comma-separated input groups a lane must have; set by run-node-server-tests.mjs. */
 export const ORCA_REQUIRED_TEST_INPUTS_ENV = 'ORCA_REQUIRED_TEST_INPUTS'
 export type RequiredTestInputGroup = 'artifact' | 'cross-runtime'
 
@@ -118,10 +115,7 @@ function laneRequires(group: RequiredTestInputGroup): boolean {
   return (process.env[ORCA_REQUIRED_TEST_INPUTS_ENV] ?? '').split(',').includes(group)
 }
 
-/**
- * node-pty as orcad loads it: an artifact lane's packaged slot, else the dev install.
- * Why: server lanes install without building node-pty, and Linux has no upstream prebuild.
- */
+/** Server lanes skip native builds; load node-pty from their qualified slot. */
 export async function loadNodePtyForTests(): Promise<typeof NodePty> {
   if (!laneRequires('artifact')) {
     return import('node-pty')
@@ -133,10 +127,7 @@ export async function loadNodePtyForTests(): Promise<typeof NodePty> {
   return createRequire(import.meta.url)(packaged)
 }
 
-/**
- * True when a suite must skip for `missing` inputs. A lane that named `group` as required
- * gets a failing test instead, so a missing input can never pass as a silent skip.
- */
+/** Required CI inputs fail instead of silently skipping when absent. */
 export function skipForMissingInputs(
   group: RequiredTestInputGroup,
   missing: readonly string[]

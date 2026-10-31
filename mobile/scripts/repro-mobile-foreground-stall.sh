@@ -1,25 +1,8 @@
 #!/usr/bin/env bash
-# Repro driver for "mobile sits on Connecting… after leaving and re-entering the
-# app" (Slack P0, iOS 0.0.39(2)).
-#
-# Two things the iOS Simulator will not do on its own, and how this works around
-# them:
-#
-#   * It never suspends an app the way a device does, so the JS runtime keeps
-#     servicing timers while backgrounded and the bug hides. SIGSTOP on the app
-#     process reproduces real suspension: timers frozen, socket left dangling.
-#   * SIGSTOP on the desktop runtime makes its port blackhole — the kernel still
-#     completes the TCP handshake from the listen backlog, but no WebSocket
-#     upgrade ever comes back, which is what a wedged Tailscale tunnel or a relay
-#     with nothing behind it looks like to the phone.
-#
-# Everything is driven with xcrun simctl rather than `orca emulator`, because the
-# emulator CLI routes through the desktop runtime that this script freezes.
-#
-# Setup:
-#   node scripts/start-emulator.mjs --device "iPhone 17 Pro" --wait-for-ready \
-#     > /tmp/orca-emulator-boot.log 2>&1 &
-#
+# Reproduce iOS 0.0.39(2)’s foreground “Connecting…” stall. Simulator does not suspend JS:
+# SIGSTOP the app to freeze timers/leave its socket dangling; SIGSTOP desktop to accept TCP
+# without WebSocket upgrades, like a wedged tunnel/relay. Use simctl because Orca’s runtime is frozen.
+# Setup: node scripts/start-emulator.mjs --device "iPhone 17 Pro" --wait-for-ready > /tmp/orca-emulator-boot.log 2>&1 &
 # Usage: repro-mobile-foreground-stall.sh <udid> <paired-host-port> [log]
 set -euo pipefail
 
@@ -65,8 +48,7 @@ xcrun simctl launch "$UDID" "$BUNDLE_ID" >/dev/null 2>&1
 T0=$(date +%s)
 step "[5] user returns to Orca  <-- t0, desktop still down"
 
-# The desktop is deliberately still unreachable here: the only question is
-# whether returning to the app abandons the dead dial or waits it out.
+# Keep desktop unreachable to test whether foregrounding abandons the dead dial immediately.
 sleep 6
 echo "--- first 6s after t0 ---"
 since "$MARK" | grep -E "$PORT|foreground" \

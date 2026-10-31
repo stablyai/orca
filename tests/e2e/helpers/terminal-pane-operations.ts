@@ -4,6 +4,10 @@ import {
   readPaneIdentitySnapshot,
   resolveActiveTabId
 } from './terminal-pane-identity'
+import {
+  REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT,
+  REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT
+} from '../../../src/renderer/src/constants/terminal'
 
 export async function readTerminalPaneDomLeafOrder(page: Page): Promise<string[]> {
   const snapshot = await readPaneIdentitySnapshot(page)
@@ -98,25 +102,15 @@ export async function splitActiveTerminalPane(
     throw new Error('splitActiveTerminalPane: no active terminal tab')
   }
   await page.evaluate(
-    ({ tabId, direction }) => {
-      const paneManagers = window.__paneManagers
-      if (!paneManagers) {
-        throw new Error('splitActiveTerminalPane: terminal store/manager unavailable')
-      }
-
-      const manager = paneManagers.get(tabId)
-      const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-      if (!manager?.splitPane || !activePane) {
+    ({ tabId, direction, splitEvent }) => {
+      const manager = window.__paneManagers?.get(tabId)
+      if (!manager?.getActivePane?.() && !manager?.getPanes?.()[0]) {
         throw new Error('splitActiveTerminalPane: active pane manager not ready')
       }
-
-      // Why: Electron key delivery to the terminal pane layer is flaky in E2E
-      // even when the visible pane tree is mounted. Driving the active
-      // PaneManager directly still exercises the real split/layout/PTY path
-      // without depending on window-focus timing.
-      manager.splitPane(activePane.id, direction)
+      // Hidden-window key delivery is unreliable; the pane-menu split event still commits through main.
+      window.dispatchEvent(new CustomEvent(splitEvent, { detail: { tabId, direction } }))
     },
-    { tabId, direction }
+    { tabId, direction, splitEvent: REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT }
   )
 }
 
@@ -125,25 +119,49 @@ export async function closeActiveTerminalPane(page: Page): Promise<void> {
   if (!tabId) {
     throw new Error('closeActiveTerminalPane: no active terminal tab')
   }
-  await page.evaluate((tabId) => {
-    const paneManagers = window.__paneManagers
-    if (!paneManagers) {
-      throw new Error('closeActiveTerminalPane: terminal store/manager unavailable')
-    }
+  await requestTerminalPaneClose(page, tabId, 'active')
+}
 
-    const manager = paneManagers.get(tabId)
-    const panes = manager?.getPanes?.() ?? []
-    if (!manager?.closePane || panes.length < 2) {
-      return
-    }
-
-    const activePane = manager.getActivePane?.() ?? panes[0]
-    if (!activePane) {
-      return
-    }
-
-    manager.closePane(activePane.id)
-  }, tabId)
+// Use the user close command so main drops the pane before PaneManager cleanup, including unattached panes.
+export async function requestTerminalPaneClose(
+  page: Page,
+  tabId: string,
+  pane: 'active' | 'last'
+): Promise<void> {
+  const leafId = await page.evaluate(
+    ({ tabId, pane, closeEvent }) => {
+      const manager = window.__paneManagers?.get(tabId)
+      if (!manager) {
+        throw new Error(`requestTerminalPaneClose: no mounted pane manager for tab ${tabId}`)
+      }
+      const panes = manager.getPanes()
+      const target = pane === 'last' ? panes.at(-1) : (manager.getActivePane() ?? panes[0])
+      if (!target || panes.length < 2) {
+        return null
+      }
+      manager.setActivePane(target.id, { focus: false })
+      window.dispatchEvent(new CustomEvent(closeEvent, { detail: { tabId } }))
+      return target.leafId
+    },
+    { tabId, pane, closeEvent: REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT }
+  )
+  if (!leafId) {
+    return
+  }
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ({ tabId, leafId }) =>
+            window.__paneManagers
+              ?.get(tabId)
+              ?.getPanes()
+              .some((candidate) => candidate.leafId === leafId) ?? false,
+          { tabId, leafId }
+        ),
+      { timeout: 15_000, message: `pane ${leafId} did not close` }
+    )
+    .toBe(false)
 }
 
 export async function focusLastTerminalPane(page: Page): Promise<void> {
@@ -168,8 +186,7 @@ export async function focusLastTerminalPane(page: Page): Promise<void> {
   }, tabId)
 }
 
-// Why: hidden-window E2E mode keeps DOM visibility signals false. The pane
-// manager tracks the authoritative active split layout independently of CSS.
+// Hidden-window visibility stays false; count the pane manager’s active layout instead.
 export async function countVisibleTerminalPanes(page: Page): Promise<number> {
   const tabId = await resolveActiveTabId(page)
   if (!tabId) {
@@ -186,7 +203,7 @@ export async function countVisibleTerminalPanes(page: Page): Promise<number> {
       return 0
     }
 
-    // Why: `root: null` means the default single-pane tab (no splits yet).
+    // A null root represents the default single pane.
     type N = { type: 'leaf' } | { type: 'split'; first: N | null; second: N | null } | null
     const countLeaves = (node: N): number => {
       if (!node || node.type === 'leaf') {

@@ -31,6 +31,7 @@ export class RuntimeBrowserTabQueries {
       | 'resolveBrowserCommandTarget'
       | 'resolveBrowserWorktreeId'
       | 'notifyRendererBrowserPaneFocus'
+      | 'ensureBrowserPageActive'
     >,
     private readonly catalog: Pick<
       RuntimeBrowserTabCatalog,
@@ -111,6 +112,17 @@ export class RuntimeBrowserTabQueries {
         `${label} out of range (0-${listed.tabs.length - 1})`
       )
     }
+    if (selected.loaded === false) {
+      try {
+        await this.targets.ensureBrowserPageActive(
+          selected.worktreeId ?? undefined,
+          selected.browserPageId,
+          { waitForFirstLoad: true }
+        )
+      } catch {
+        // The switch below reports browser_tab_not_found if the page could not load.
+      }
+    }
     const clientPage = this.host.getRuntimeBrowserPageRegistry().getPage(selected.browserPageId)
     if (clientPage) {
       this.host
@@ -136,7 +148,7 @@ export class RuntimeBrowserTabQueries {
     if (worktreeId) {
       this.host.getRuntimeBrowserPageRegistry().deactivateWorkspace(worktreeId)
     }
-    // Why: scope focus to the tab's owning worktree; the renderer never yanks the user across worktrees on this signal (see focusBrowserTabInWorktree).
+    // Scope focus to the owning worktree; never switch the user's workspace.
     const focusWorktreeId =
       worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
     publishSwitchedBrowserSessionTab(this.host, {

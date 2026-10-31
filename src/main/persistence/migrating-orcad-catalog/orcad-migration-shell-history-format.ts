@@ -1,21 +1,15 @@
-/**
- * The `shell-history` migration blob: one worktree's history file for one shell, keyed
- * `<hashWorktreeId(destination worktree id)>-<shell>`. The bytes are a one-line JSON header naming
- * that worktree id, then the history file verbatim. The header is there because a key's hash
- * cannot be reversed, the destination's meta.json needs the id (history GC prunes by it), and the
- * catalog does not list every git worktree a terminal ever ran in.
- */
+// The JSON header carries the unhashed worktree ID needed for history GC; raw history follows.
 import { z } from 'zod'
-import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../shared/orcad-migration-blob-transfer'
+import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import { hashWorktreeId } from '../../terminal-history-id'
 
-/** fish keeps its history in the distro's own fish data dir, not Orca's store, so it never moves. */
+// fish history lives outside Orca's store and cannot migrate.
 export const ORCAD_MIGRATION_SHELL_HISTORY_SHELLS = ['zsh', 'bash'] as const
 
 export type OrcadMigrationShellHistoryShell = (typeof ORCAD_MIGRATION_SHELL_HISTORY_SHELLS)[number]
 
 export const ORCAD_MIGRATION_SHELL_HISTORY_VERSION = 1
-/** Bounds the scan for the header's newline; a worktree id is a repo id plus one path. */
+/** Bound header scanning; worktree IDs contain a repo ID and path. */
 export const ORCAD_MIGRATION_SHELL_HISTORY_HEADER_SCAN_BYTES = 16 * 1024
 const NEWLINE = 0x0a
 
@@ -35,13 +29,8 @@ export type OrcadMigrationShellHistoryKey = {
 
 export type OrcadMigrationShellHistoryHeader = {
   worktreeId: string
-  /**
-   * The desktop's WSL bridge names every pane's history `bash_history`, but wsl.exe runs the
-   * distro's login shell, so the file holds that shell's history; set only on such a bash file
-   * that has no zsh sibling.
-   */
+  /** WSL bridge history uses bash_history for the distro login shell when no zsh sibling exists. */
   loginShell: boolean
-  /** Where the history bytes start. */
   byteLength: number
 }
 
@@ -52,7 +41,6 @@ export function orcadMigrationShellHistoryKey(
   return `${hashWorktreeId(worktreeId)}-${shell}`
 }
 
-/** The history file a shell keeps in a worktree's history directory (see terminal-history.ts). */
 export function shellHistoryFileName(shell: OrcadMigrationShellHistoryShell): string {
   return `${shell}_history`
 }
@@ -85,10 +73,7 @@ export function encodeOrcadMigrationShellHistoryHeader(
   return header
 }
 
-/**
- * Reads only the header from the first bytes of a blob and checks it names the worktree the key
- * hashes. `totalBytes` is the whole blob's size, so an empty history is refused without a read.
- */
+/** Verify the header matches the hashed key; totalBytes includes the header and must leave history bytes. */
 export function parseOrcadMigrationShellHistoryHeader(
   key: string,
   head: Buffer,

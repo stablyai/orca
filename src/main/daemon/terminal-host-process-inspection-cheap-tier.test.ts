@@ -13,8 +13,7 @@ import type { TerminalHostInspectionTier } from './terminal-host-process-inspect
 import type * as AnchorModule from './terminal-host-steady-state-anchor'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Two seams because the two tiers spawn differently: the full evidence reader still forks
-// through node:child_process, the cheap reader through Orca's runProcess entry point.
+// Full and cheap readers use different process entry points, so mock both.
 const { execFileMock, runProcessMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
   runProcessMock: vi.fn()
@@ -199,7 +198,7 @@ async function inspect(
 }
 
 async function settle(): Promise<void> {
-  // The tracker's recognizing refresh runs off the same TTL-shared capture; let it land.
+  // Let the recognizing refresh settle on the same shared process-table capture.
   for (let i = 0; i < 8; i += 1) {
     await Promise.resolve()
   }
@@ -249,7 +248,6 @@ describe.each(['darwin', 'linux'])('daemon cheap-tier process inspection (%s)', 
     }
   })
 
-  /** Bring a session to a recognized anchor the way production does: one full cadence tick. */
   async function anchoredSession(): Promise<Session> {
     const session = createSession(() => 'node')
     const first = await inspect(session, { steadyState: true })
@@ -371,7 +369,7 @@ describe.each(['darwin', 'linux'])('daemon cheap-tier process inspection (%s)', 
     await advance(2_000)
     await inspect(session, { steadyState: true })
     expect(anchorModule.getSteadyStateAnchor(session)).toBeNull()
-    // Back with a new agent, but the pane must re-anchor via a FULL capture first.
+    // A returning agent must establish fresh identity through a full capture.
     table = { agent: 'claude' }
     await advance(2_000)
     const cheapBefore = forks.cheap

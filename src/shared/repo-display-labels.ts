@@ -7,11 +7,7 @@ type RepoDisplayLabelItem = {
   executionHostId?: ExecutionHostId | null
 }
 
-// Why: two repos can share the same absolute path across hosts (e.g. a local
-// /Users/alice and an SSH host's /Users/alice). Keying labels by raw path alone
-// lets one repo's label overwrite the other's, so scope the key by execution
-// host. getRepoExecutionHostId returns 'local' for local repos and falls back to
-// the connectionId (ssh:<id>) for SSH folder-repos that leave executionHostId unset.
+// Scope labels by execution host: same-path local/SSH/runtime repos must not overwrite one another’s labels.
 export function getRepoDisplayLabelKey(
   item: Pick<RepoDisplayLabelItem, 'path' | 'connectionId' | 'executionHostId'>
 ): string {
@@ -40,17 +36,19 @@ export function getRepoDisplayLabelsByPath(
   items: readonly RepoDisplayLabelItem[]
 ): Map<string, string> {
   const labels = new Map<string, string>()
-  const itemsByName = new Map<string, RepoDisplayLabelItem[]>()
+  const itemsByHostAndName = new Map<string, RepoDisplayLabelItem[]>()
 
   for (const item of items) {
     const displayName = item.displayName || item.path
     labels.set(getRepoDisplayLabelKey(item), displayName)
-    const colliding = itemsByName.get(displayName) ?? []
+    // Host labels already distinguish projects on different machines.
+    const collisionKey = JSON.stringify([getRepoExecutionHostId(item), displayName])
+    const colliding = itemsByHostAndName.get(collisionKey) ?? []
     colliding.push({ ...item, displayName })
-    itemsByName.set(displayName, colliding)
+    itemsByHostAndName.set(collisionKey, colliding)
   }
 
-  for (const collidingItems of itemsByName.values()) {
+  for (const collidingItems of itemsByHostAndName.values()) {
     if (collidingItems.length < 2) {
       continue
     }

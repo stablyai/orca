@@ -22,11 +22,7 @@ export function spawnedPtyEnv(call: unknown): Record<string, string> {
     pane,
     jcodeRuntimeDir: pane
       ? buildJcodeRuntimeDirEnv(pane.paneKey)?.[JCODE_RUNTIME_DIR_ENV_KEY]
-      : undefined,
-    isDaemonHostSpawn: false,
-    launchAgent: undefined,
-    cwd: undefined,
-    prewarmsJcodeOnDaemonHost: false
+      : undefined
   })
   return env
 }

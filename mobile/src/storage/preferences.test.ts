@@ -1,9 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  HOST_DOCK_MAX_WIDTH,
-  HOST_DOCK_MIN_WIDTH,
-  HOST_SIDEBAR_DEFAULT_WIDTH,
   HOST_SIDEBAR_MAX_WIDTH,
   HOST_SIDEBAR_MIN_WIDTH,
   clampHostDockWidth,
@@ -30,12 +27,13 @@ import {
   updateSessionViewOverride
 } from './session-view-preferences'
 
-// A store rather than two bare spies: the mirrored write path reads a key back after writing it,
-// so a `setItem` that answers with nothing is not a store any caller could have (ruling 35).
+const stored = vi.hoisted(() => new Map<string, string>())
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
-    getItem: vi.fn(),
-    setItem: vi.fn(async () => undefined)
+    getItem: vi.fn(async (key: string) => stored.get(key) ?? null),
+    setItem: vi.fn(async (key: string, value: string) => {
+      stored.set(key, value)
+    })
   }
 }))
 
@@ -49,8 +47,15 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 describe('session view preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it('defaults to terminal and persists the chat default', async () => {
@@ -58,7 +63,9 @@ describe('session view preference', () => {
     await expect(loadDefaultSessionView()).resolves.toBe('terminal')
     expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:defaultSessionView')
 
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) => stored.get(key) ?? null)
     await saveDefaultSessionView('chat')
+    await expect(loadDefaultSessionView()).resolves.toBe('chat')
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:defaultSessionView', 'chat')
 
     vi.mocked(AsyncStorage.getItem).mockResolvedValue('bogus')
@@ -178,9 +185,11 @@ describe('session view preference', () => {
   it('orders per-tab mutations across callers without losing saved siblings', async () => {
     let stored = JSON.stringify({ saved: 'chat' })
     const firstWrite = deferred<void>()
+    const firstStarted = deferred<void>()
     vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
     vi.mocked(AsyncStorage.setItem)
       .mockImplementationOnce(async (_key, value) => {
+        firstStarted.resolve()
         await firstWrite.promise
         stored = value
       })
@@ -189,7 +198,7 @@ describe('session view preference', () => {
       })
 
     const first = updateSessionViewOverride('host', 'worktree', 'first', 'terminal')
-    await vi.waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1))
+    await firstStarted.promise
     const second = updateSessionViewOverride('host', 'worktree', 'second', 'chat')
     const reloaded = loadSessionViewOverrides('host', 'worktree')
 
@@ -276,8 +285,15 @@ describe('session view preference', () => {
 
 describe('push notification preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it.each(['true', 'false'])('requires fresh consent for legacy choice %s', async (legacy) => {
@@ -331,8 +347,15 @@ describe('push notification preference', () => {
 
 describe('terminal autocomplete preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it('defaults to disabled when unset', async () => {
@@ -361,18 +384,27 @@ describe('terminal autocomplete preference', () => {
   it('persists the selected value', async () => {
     await saveTerminalAutocompleteEnabled(true)
 
+    await expect(loadTerminalAutocompleteEnabled()).resolves.toBe(true)
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled', 'true')
 
     await saveTerminalAutocompleteEnabled(false)
 
+    await expect(loadTerminalAutocompleteEnabled()).resolves.toBe(false)
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled', 'false')
   })
 })
 
 describe('terminal live input disabled handles preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it('defaults to no disabled handles when unset', async () => {
@@ -417,6 +449,9 @@ describe('terminal live input disabled handles preference', () => {
       'folder:C:\\repo',
       new Set(['pty-2', 'pty-1'])
     )
+    await expect(
+      loadDisabledTerminalLiveInputHandles('host/one', 'folder:C:\\repo')
+    ).resolves.toEqual(new Set(['pty-2', 'pty-1']))
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       'orca:terminalLiveInputDisabled:host%2Fone:folder%3AC%3A%5Crepo',
@@ -427,28 +462,35 @@ describe('terminal live input disabled handles preference', () => {
 
 describe('host sidebar width preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it('clamps saved widths to the supported sidebar range', () => {
-    expect(clampHostSidebarWidth(HOST_SIDEBAR_MIN_WIDTH - 10)).toBe(HOST_SIDEBAR_MIN_WIDTH)
-    expect(clampHostSidebarWidth(HOST_SIDEBAR_MAX_WIDTH + 10)).toBe(HOST_SIDEBAR_MAX_WIDTH)
+    expect(clampHostSidebarWidth(270)).toBe(280)
+    expect(clampHostSidebarWidth(570)).toBe(560)
     expect(clampHostSidebarWidth(337.6)).toBe(338)
   })
 
   it('falls back to the default width for missing, invalid, or unreadable storage', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
 
-    await expect(loadHostSidebarWidth()).resolves.toBe(HOST_SIDEBAR_DEFAULT_WIDTH)
+    await expect(loadHostSidebarWidth()).resolves.toBe(340)
 
     vi.mocked(AsyncStorage.getItem).mockResolvedValue('not-a-number')
 
-    await expect(loadHostSidebarWidth()).resolves.toBe(HOST_SIDEBAR_DEFAULT_WIDTH)
+    await expect(loadHostSidebarWidth()).resolves.toBe(340)
 
     vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
 
-    await expect(loadHostSidebarWidth()).resolves.toBe(HOST_SIDEBAR_DEFAULT_WIDTH)
+    await expect(loadHostSidebarWidth()).resolves.toBe(340)
   })
 
   it('loads and persists clamped sidebar widths', async () => {
@@ -467,16 +509,23 @@ describe('host sidebar width preference', () => {
 
 describe('host dock width preference', () => {
   it('clamps saved widths to the supported dock range', () => {
-    expect(clampHostDockWidth(HOST_DOCK_MIN_WIDTH - 10)).toBe(HOST_DOCK_MIN_WIDTH)
-    expect(clampHostDockWidth(HOST_DOCK_MAX_WIDTH + 10)).toBe(HOST_DOCK_MAX_WIDTH)
+    expect(clampHostDockWidth(270)).toBe(280)
+    expect(clampHostDockWidth(570)).toBe(560)
     expect(clampHostDockWidth(337.6)).toBe(338)
   })
 })
 
 describe('terminal link open mode preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it('defaults to Orca browser when unset', async () => {
@@ -500,9 +549,31 @@ describe('terminal link open mode preference', () => {
     await expect(loadTerminalLinkOpenMode()).resolves.toBe('orca-browser')
   })
 
+  it('orders writes across settings mounts and makes readers wait for the latest choice', async () => {
+    const firstWrite = deferred<void>()
+    let stored: string | null = 'orca-browser'
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (_key, value) => {
+      if (value === 'phone-browser') {
+        await firstWrite.promise
+      }
+      stored = value
+    })
+    const firstMount = saveTerminalLinkOpenMode('phone-browser')
+    const secondMount = saveTerminalLinkOpenMode('orca-browser')
+    const reader = loadTerminalLinkOpenMode()
+    await Promise.resolve()
+    expect(stored).toBe('orca-browser')
+    firstWrite.resolve()
+    await Promise.all([firstMount, secondMount])
+    await expect(reader).resolves.toBe('orca-browser')
+    expect(stored).toBe('orca-browser')
+  })
+
   it('persists the selected mode', async () => {
     await saveTerminalLinkOpenMode('phone-browser')
 
+    await expect(loadTerminalLinkOpenMode()).resolves.toBe('phone-browser')
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
   })
 })

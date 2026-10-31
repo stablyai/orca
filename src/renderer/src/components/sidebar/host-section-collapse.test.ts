@@ -48,7 +48,8 @@ for (const [groupBy, sectionKey, pinned] of [
         ],
         workspaceHostScope: 'all',
         visibleWorkspaceHostIds: ['local', hostId],
-        defaultHostId: 'local'
+        defaultHostId: 'local',
+        localHostLabel: 'Local Mac'
       })
 
       it('keeps remote pins visible while local pins are collapsed', () => {

@@ -31,7 +31,7 @@ describe('markup document undo/redo', () => {
     expect(canRedo(doc)).toBe(false)
   })
 
-  it('commits shapes and clears the redo stack', () => {
+  it('commits shapes in order and enables undo', () => {
     let doc = createMarkupDocument()
     doc = commitShape(doc, pen('a'))
     doc = commitShape(doc, pen('b'))
@@ -79,7 +79,7 @@ describe('markup document undo/redo', () => {
 
   it('undoes an edit (not just an add) via whole-list snapshots', () => {
     let doc = commitShape(createMarkupDocument(), pen('a'))
-    doc = setShapes(doc, []) // delete everything
+    doc = setShapes(doc, [])
     expect(doc.shapes).toHaveLength(0)
     doc = undoShape(doc)
     expect(doc.shapes.map((s) => s.id)).toEqual(['a'])
@@ -115,7 +115,7 @@ describe('markup geometry', () => {
     ])
   })
 
-  it('scales rect/arrow endpoints and text position + font size', () => {
+  it('scales arrow endpoints and text position + font size', () => {
     const arrow: ArrowShape = {
       id: 'a',
       kind: 'arrow',
@@ -160,7 +160,5 @@ describe('markup geometry', () => {
   })
 })
 
-// Why: exhaustiveness guard — if a new MarkupShape kind is added without a
-// scaleShape branch, this fails to type-check at the cast site below.
 const _exhaustive: MarkupShape['kind'][] = ['pen', 'highlight', 'arrow', 'rect', 'ellipse', 'text']
 void _exhaustive

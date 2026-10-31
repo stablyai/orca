@@ -22,6 +22,9 @@ describe('WSL host row status', () => {
   it('names the row a WSL distro and adds the state when it is not plain', () => {
     expect(getWslHostRowDetail(status('ready'))).toBe('WSL distro')
     expect(getWslHostRowDetail(status('distro-stopped'))).toBe('WSL distro · Distro stopped')
+    expect(getWslHostRowDetail({ ...status('closed'), removalPending: true })).toBe(
+      'WSL distro · Removal didn’t finish'
+    )
   })
 
   it('marks the WSL host’s own row, which connects like an SSH host while stopped', () => {

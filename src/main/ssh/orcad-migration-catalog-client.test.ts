@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration-manifest-validation'
-import type { OrcadMigrationManifest } from '../../shared/orcad-migration-manifest'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { computeOrcadMigrationManifestSha256 } from '../orcad/orcad-migration-manifest-digest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 
 const sendRequest = vi.hoisted(() => vi.fn())
 const status = vi.hoisted(() => ({ capabilities: ['orcad.migration-catalog.v1'] }))
-// Runs the status preflight, then hands the request to the old single-call shape the cases assert.
-vi.mock('../../shared/remote-runtime-client', () => ({
+// Run status preflight, then adapt to the existing single-call assertions.
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequestWithStatusPreflight: async (
     pairing: unknown,
     method: string,
@@ -115,7 +115,12 @@ describe('remote orcad migration catalog client', () => {
                 { id: 'nested', folderPath: '/root/b', projectGroupId: 'g', connectionId: 'ssh-x' }
               ]
             }
-          : { groups: [{ id: 'g', name: 'G', parentGroupId: null }, { id: 'h' }] }
+          : {
+              groups: [
+                { id: 'g', name: 'G', parentGroupId: null },
+                { id: 'h', executionHostId: 'ssh:other' }
+              ]
+            }
     }))
     await expect(listRemoteOrcadFolderCatalog(pairingCode)).resolves.toEqual({
       folderWorkspaces: [
@@ -124,7 +129,7 @@ describe('remote orcad migration catalog client', () => {
       ],
       projectGroups: [
         { id: 'g', parentGroupId: null },
-        { id: 'h', parentGroupId: null }
+        { id: 'h', parentGroupId: null, executionHostId: 'ssh:other' }
       ]
     })
     expect(sendRequest.mock.calls.map((call) => call[1]).sort()).toEqual([

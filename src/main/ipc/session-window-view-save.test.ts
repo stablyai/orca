@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import {
   addWorkspace,
   emptySession,
@@ -30,7 +30,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn().mockReturnValue({}) }))
-vi.mock('../ssh/ssh-config-parser', () => ({
+vi.mock('../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -89,8 +89,16 @@ describe('a window save in a layout-owner build', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
     store = createStore()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the save handlers never reach the runtime.
-    registerSessionHandlers(store, {} as never)
+    // Reconnect facts are covered separately in window-save-reconnect-facts.test.ts.
+    const runtime = {
+      shutdownReconnectFactsFor: (session: WorkspaceSessionState) => ({
+        activeWorktreeIdsOnShutdown: session.activeWorktreeIdsOnShutdown,
+        remoteSessionIdsByTabId: session.remoteSessionIdsByTabId,
+        activeConnectionIdsAtShutdown: session.activeConnectionIdsAtShutdown
+      })
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the save handlers reach only this runtime method.
+    registerSessionHandlers(store, runtime as never)
   })
   afterEach(async () => {
     await closeTestStores()
@@ -129,7 +137,6 @@ describe('a window save in a layout-owner build', () => {
 
     const layout = store.getWorkspaceSession('local').terminalLayoutsByTabId['tab-a']
     expect(layout?.root).toEqual(mainSession().terminalLayoutsByTabId['tab-a']!.root)
-    // The Store moves a saved buffer into a scrollback snapshot.
     expect(Object.keys(layout?.scrollbackRefsByLeafId ?? {})).toEqual([leaf(1)])
     expect(terminalTabs(store.getWorkspaceSession('local'))).toEqual(['tab-a', 'tab-b'])
   })

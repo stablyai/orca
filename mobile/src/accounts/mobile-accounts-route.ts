@@ -1,7 +1,6 @@
 import type { HostStackRouteTarget } from '../navigation/host-stack-navigation'
 
-/** Host id stays raw — the navigator owns the params, so pre-encoding one would
- *  reach the accounts screen still escaped. */
+// Keep host id raw: navigator owns params and pre-encoding would leave it escaped on arrival.
 export function mobileAccountsRouteTarget(hostId: string): HostStackRouteTarget {
   return {
     name: '[hostId]/accounts',

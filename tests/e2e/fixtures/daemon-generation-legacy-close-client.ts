@@ -162,7 +162,7 @@ async function main(): Promise<void> {
         return true
       },
       kill: () => false,
-      listProcesses: (options) => router.listProcesses(options),
+      listProcesses: (_hostId, options) => router.listProcesses(options),
       hasPty: (ptyId) => router.hasPty(ptyId),
       getForegroundProcess: (ptyId) => router.getForegroundProcess(ptyId)
     })
@@ -187,45 +187,45 @@ async function main(): Promise<void> {
     } as never)
     runtime.attachWindow(1)
 
-    const snapshots: RuntimeMobileSessionTabsSnapshot[] = config.sessions.map((session, index) => {
+    const viewers = config.sessions.map((session, index) => {
       const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
-      return {
+      const tab = {
+        type: 'terminal' as const,
+        id: `${session.tabId}::${leafId}`,
+        parentTabId: session.tabId,
+        leafId,
+        ptyId: session.sessionId,
+        title: session.tabId,
+        isActive: true
+      }
+      const snapshot: RuntimeMobileSessionTabsSnapshot = {
         worktree: session.worktreeId,
         publicationEpoch: `legacy-viewer-${index + 1}`,
         snapshotVersion: 1,
         activeGroupId: null,
-        activeTabId: `${session.tabId}::${leafId}`,
+        activeTabId: tab.id,
         activeTabType: 'terminal',
-        tabs: [
-          {
-            type: 'terminal',
-            id: `${session.tabId}::${leafId}`,
-            parentTabId: session.tabId,
-            leafId,
-            ptyId: session.sessionId,
-            title: session.tabId,
-            isActive: true
-          }
-        ]
+        tabs: [tab]
       }
+      return { session, tab, snapshot }
     })
     runtime.syncWindowGraph(1, {
-      tabs: snapshots.map((snapshot) => ({
-        tabId: snapshot.tabs[0]!.parentTabId,
-        worktreeId: snapshot.worktree,
-        title: snapshot.tabs[0]!.title,
-        activeLeafId: snapshot.tabs[0]!.leafId,
+      tabs: viewers.map(({ session, tab }) => ({
+        tabId: tab.parentTabId,
+        worktreeId: session.worktreeId,
+        title: tab.title,
+        activeLeafId: tab.leafId,
         layout: null
       })),
-      leaves: snapshots.map((snapshot, index) => ({
-        tabId: snapshot.tabs[0]!.parentTabId,
-        worktreeId: snapshot.worktree,
-        leafId: snapshot.tabs[0]!.leafId,
+      leaves: viewers.map(({ session, tab }, index) => ({
+        tabId: tab.parentTabId,
+        worktreeId: session.worktreeId,
+        leafId: tab.leafId,
         paneRuntimeId: index + 1,
-        ptyId: config.sessions[index]!.sessionId,
-        paneTitle: snapshot.tabs[0]!.title
+        ptyId: session.sessionId,
+        paneTitle: tab.title
       })),
-      mobileSessionTabs: snapshots
+      mobileSessionTabs: viewers.map(({ snapshot }) => snapshot)
     })
 
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })

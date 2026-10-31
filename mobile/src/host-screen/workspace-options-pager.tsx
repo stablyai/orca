@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { View } from 'react-native'
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -9,10 +9,11 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 const PAGE_SLIDE_MS = 200
 
-/** Which page is open, and the slide that brings it in from the right and takes it back out. */
 export function useOptionPager<Key extends string>() {
   const reduceMotion = useReducedMotionEnabled()
   const duration = reduceMotion ? 0 : PAGE_SLIDE_MS
@@ -47,20 +48,17 @@ export function useOptionPager<Key extends string>() {
 
 export type OptionPagerControls<Key extends string> = ReturnType<typeof useOptionPager<Key>>
 
-/**
- * The main sheet with a page over it. The main sheet stays laid out underneath, so the drawer
- * keeps its height while a page is open and does not jump on the way in or out.
- */
+// Keep the main sheet laid out under its page so opening or closing it cannot change drawer height.
 export function OptionPager(props: {
   pager: { slide: SharedValue<number> }
   main: ReactNode
-  /** The open page; null shows the main sheet. */
   page: ReactNode | null
 }) {
+  useMobileColorScheme()
   const [width, setWidth] = useState(0)
   const [mainHeight, setMainHeight] = useState<number | null>(null)
   const { slide } = props.pager
-  // Why the dependency list: the page bundle has no worklet plugin, so web mappers read only it.
+  // Web has no worklet plugin; mapper hooks need this explicit dependency list.
   const pageStyle = useAnimatedStyle(
     () => ({ transform: [{ translateX: slide.value * width }] }),
     [slide, width]
@@ -85,9 +83,8 @@ export function OptionPager(props: {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   pager: { overflow: 'hidden' },
   underlay: { position: 'absolute', top: 0, left: 0, right: 0 },
-  // Opaque and as tall as the pager, so no part of the main sheet shows around the page.
-  page: { flexGrow: 1, backgroundColor: colors.bgBase }
-})
+  page: { flexGrow: 1, backgroundColor: colors.sheetSurface }
+}))

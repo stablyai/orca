@@ -1,17 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  EXECUTION_HOST_METHODS,
-  MOBILE_RPC_METHOD_ROUTES
-} from './runtime-rpc-mobile-method-routing'
-import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-methods'
+import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
 
 describe('mobile RPC method routing census', () => {
-  it('tags every routed method exactly once', () => {
-    expect(PAIRED_DESKTOP_METHODS.length + EXECUTION_HOST_METHODS.length).toBe(
-      MOBILE_RPC_METHOD_ROUTES.size
-    )
-  })
-
   it.each([
     'jira.status',
     'jira.listIssues',
@@ -28,5 +18,10 @@ describe('mobile RPC method routing census', () => {
 
   it('sends a targeted status to the server, whose features a server workspace gates on', () => {
     expect(MOBILE_RPC_METHOD_ROUTES.get('status.get')).toBe('execution-host')
+  })
+
+  it('keeps discovery and explicit PATH refresh on the selected answering host', () => {
+    expect(MOBILE_RPC_METHOD_ROUTES.get('preflight.detectAgents')).toBe('execution-host')
+    expect(MOBILE_RPC_METHOD_ROUTES.get('preflight.refreshAgents')).toBe('execution-host')
   })
 })

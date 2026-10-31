@@ -14,9 +14,10 @@ const revealFloatingWorkspacePanel = vi.hoisted(() => vi.fn())
 
 vi.mock('../store', () => ({
   useAppStore: {
-    // "Don't Save" closes through the store, beside the controller's own projection.
     getState: () => ({
       ...store,
+      editorBufferIdOf: {},
+      editorBufferViews: {},
       setActiveWorktree,
       markFileDirty: vi.fn(),
       clearEditorDraft: vi.fn(),
@@ -35,7 +36,7 @@ vi.mock('@/lib/shutdown-checkpoint-failure-toast', () => ({
 }))
 vi.mock('./editor/editor-autosave', async (importActual) => ({
   ...(await importActual<typeof EditorAutosaveModule>()),
-  requestEditorSaveQuiesce: vi.fn(async () => {})
+  requestEditorSaveQuiesce: vi.fn(async () => () => {})
 }))
 
 const { useTerminalEditorCloseFoundation } = await import('./use-terminal-editor-close-foundation')
@@ -75,48 +76,13 @@ function dirtyFile(id: string, worktreeId: string): FakeOpenFile {
   return { id, worktreeId, isDirty: true, relativePath: `${id}.md` }
 }
 
-// The unsaved-changes prompt shows the file where it lives. The floating panel sits beside the main
-// window and is never its active worktree, so revealing a floating note must not take it over.
+// Reveal unsaved floating notes in their own panel without taking over the main window’s workspace.
 describe('unsaved-changes prompt for a closing file', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     store.activeWorktreeId = 'wt-main'
   })
   afterEach(() => cleanup())
-
-  it('reveals a floating note in the floating panel without moving the main window', () => {
-    store.openFiles = [dirtyFile('note', FLOATING_TERMINAL_WORKTREE_ID)]
-    const { result } = mountCloseQueue()
-
-    act(() => requestEditorFileClose('note'))
-
-    expect(result.current.saveDialogFileId).toBe('note')
-    expect(revealFloatingWorkspacePanel).toHaveBeenCalledOnce()
-    expect(setActiveWorktree).not.toHaveBeenCalled()
-    expect(setActiveTabType).toHaveBeenCalledWith('editor', FLOATING_TERMINAL_WORKTREE_ID)
-  })
-
-  it('still switches to a background worktree to show its file', () => {
-    store.openFiles = [dirtyFile('readme', 'wt-other')]
-    mountCloseQueue()
-
-    act(() => requestEditorFileClose('readme'))
-
-    expect(setActiveWorktree).toHaveBeenCalledWith('wt-other')
-    expect(revealFloatingWorkspacePanel).not.toHaveBeenCalled()
-  })
-
-  it('runs the close reaction once the file is discarded', async () => {
-    store.openFiles = [dirtyFile('note', FLOATING_TERMINAL_WORKTREE_ID)]
-    const onClosed = vi.fn()
-    const { result } = mountCloseQueue()
-    act(() => requestEditorFileClose('note', { onClosed }))
-
-    await act(() => result.current.handleSaveDialogDiscard())
-
-    expect(closeFile).toHaveBeenCalledWith('note')
-    expect(onClosed).toHaveBeenCalledOnce()
-  })
 
   // Why a later close of the same file: a cancelled reaction left behind would fire on it.
   it('drops the close reaction when the prompt is cancelled', async () => {

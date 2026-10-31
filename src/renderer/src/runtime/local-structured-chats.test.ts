@@ -8,15 +8,17 @@ vi.mock('./local-structured-session-tabs-sync/inventory-refresh', () => ({
   restoreLocalStructuredSessionTabsOnce: vi.fn(async () => undefined)
 }))
 
+import { restoreLocalStructuredSessionTabsOnce } from './local-structured-session-tabs-sync/inventory-refresh'
 import {
   resetLocalStructuredChatsForTests,
   restoreLocalStructuredChatsAtStartup
 } from './local-structured-chats'
 
-const SETTING_OFF = { experimentalNativeChat: false }
-const SETTING_ON = { experimentalNativeChat: true }
+const SETTING_OFF = {}
+const SETTING_ON = { agentDefaultSurface: 'chat' as const, nativeChatProviders: { claude: false } }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   mocks.held = false
   mocks.isWebClient = false
   resetLocalStructuredChatsForTests()
@@ -42,19 +44,21 @@ describe("startup's restore of this machine's structured chats", () => {
   // Existing chats come back whatever the setting says.
   it('restores the chats this machine holds with the setting off', async () => {
     mocks.held = true
-    const step = vi.fn(async () => undefined)
+    const step = vi.fn(async (restore: () => Promise<void>) => restore())
 
     await restoreLocalStructuredChatsAtStartup(SETTING_OFF, step)
 
     expect(step).toHaveBeenCalledOnce()
+    expect(restoreLocalStructuredSessionTabsOnce).toHaveBeenCalledOnce()
   })
 
   it('restores when the setting launches structured chats', async () => {
-    const step = vi.fn(async () => undefined)
+    const step = vi.fn(async (restore: () => Promise<void>) => restore())
 
     await restoreLocalStructuredChatsAtStartup(SETTING_ON, step)
 
     expect(step).toHaveBeenCalledOnce()
+    expect(restoreLocalStructuredSessionTabsOnce).toHaveBeenCalledOnce()
   })
 
   it('never restores in the browser client', async () => {

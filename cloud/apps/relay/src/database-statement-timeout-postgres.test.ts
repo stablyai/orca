@@ -16,19 +16,10 @@ describePostgres('PostgreSQL statement deadline', () => {
     for (const database of databases) await database.close()
   })
 
-  it('serves requests under the configured deadline', async () => {
-    const database = await openRelayDatabase({ databaseUrl, dataDir: '', statementTimeoutMs: 300 })
-    databases.push(database)
-
-    expect(await database.query(`SELECT current_setting('statement_timeout') AS statement_timeout`)).toEqual([
-      { statement_timeout: '300ms' }
-    ])
-  })
-
   // Why: a real 57014 aborts the transaction exactly as a lock timeout does. If
   // it escapes the bounded retry it becomes a failed assignment instead of a
   // slow one.
-  it('retries a real statement timeout on a fresh client', async () => {
+  it('retries a transaction after a real statement timeout', async () => {
     const database = await openRelayDatabase({ databaseUrl, dataDir: '', statementTimeoutMs: 300 })
     databases.push(database)
     let attempts = 0
@@ -42,11 +33,7 @@ describePostgres('PostgreSQL statement deadline', () => {
     expect(result).toBe(2)
   }, 15_000)
 
-  // Why: relay_invites carries a CREATE INDEX IF NOT EXISTS, which (unlike CREATE TABLE IF NOT
-  // EXISTS) really does queue behind an ACCESS EXCLUSIVE lock on the table. The catalog pre-check
-  // asks pg_class whether that index is already there, and the read takes no lock on relay_invites,
-  // so a boot on a migrated database no longer joins the queue at all. It used to, and every writer
-  // queued behind it in lock order.
+  // CREATE INDEX IF NOT EXISTS still queues table locks before checking existence; pg_class precheck avoids blocking writers on migrated databases.
   it('boots without queueing behind a held ACCESS EXCLUSIVE lock', async () => {
     let releaseTable!: () => void
     const tableReleased = new Promise<void>((resolve) => {
@@ -61,33 +48,35 @@ describePostgres('PostgreSQL statement deadline', () => {
       tableHeld()
       await tableReleased
     })
-    await tableHeldPromise
+    try {
+      await tableHeldPromise
 
-    // Resolving while the lock is still held is the whole proof: a statement that queued would hit
-    // the schema connection's 1s lock_timeout and fail the boot, which is no longer retried.
-    const database = await openRelayDatabase({
-      databaseUrl,
-      dataDir: '',
-      applicationName,
-      // Far too short for a blocked DDL; the serving pool wears it, the schema
-      // connection must not.
-      statementTimeoutMs: 200
-    })
-    databases.push(database)
-    const waiting = await databases[0]!.query(
-      `SELECT count(*) AS waiting FROM pg_stat_activity
+      // Resolving while the lock is still held is the whole proof: a statement that queued would hit
+      // the schema connection's 1s lock_timeout and fail the boot, which is no longer retried.
+      const database = await openRelayDatabase({
+        databaseUrl,
+        dataDir: '',
+        applicationName,
+        // Far too short for a blocked DDL; the serving pool wears it, the schema
+        // connection must not.
+        statementTimeoutMs: 200
+      })
+      databases.push(database)
+      const waiting = await databases[0]!.query(
+        `SELECT count(*) AS waiting FROM pg_stat_activity
        WHERE datname = current_database() AND wait_event_type = 'Lock'
          AND application_name = ?`,
-      [`${applicationName}/schema`]
-    )
-    expect(Number(waiting[0]!.waiting)).toBe(0)
+        [`${applicationName}/schema`]
+      )
+      expect(Number(waiting[0]!.waiting)).toBe(0)
 
-    releaseTable()
-    await holder
-
-    // The serving pool still carries the short deadline it was opened with.
-    expect(await database.query(`SELECT current_setting('statement_timeout') AS statement_timeout`)).toEqual([
-      { statement_timeout: '200ms' }
-    ])
+      // The serving pool still carries the short deadline it was opened with.
+      expect(
+        await database.query(`SELECT current_setting('statement_timeout') AS statement_timeout`)
+      ).toEqual([{ statement_timeout: '200ms' }])
+    } finally {
+      releaseTable()
+      await holder
+    }
   }, 15_000)
 })

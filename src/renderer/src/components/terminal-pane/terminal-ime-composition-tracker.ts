@@ -2,19 +2,13 @@ import type { IDisposable } from '@xterm/xterm'
 
 export type TerminalImeCompositionTracker = IDisposable & {
   isActive: () => boolean
-  /** True while candidate-selection keys (Space/digits) should be treated as
-   *  IME-owned: during a live composition, and briefly after compositionend to
-   *  absorb the committing key's trailing press/release. */
+  /** Candidate-key ownership spans live composition and a brief trailing release window. */
   isCandidateKeyGuardActive: () => boolean
 }
 
-// Why: suppressed candidate keys are preventDefault-ed and fire no input
-// event, so a stale tracker (missed compositionend) has no natural unstick
-// path. Expire the guard so Space/digits cannot stay dead indefinitely.
+// Suppressed keys produce no input event to unstick a missed compositionend; expire ownership to avoid permanently dead Space/digits.
 export const TERMINAL_IME_CANDIDATE_GUARD_STALE_COMPOSITION_EXPIRY_MS = 10_000
-// Why: Sogou/fcitx can deliver the committing Space/digit as plain keydown and
-// keyup after compositionend; a narrow window absorbs those trailing events
-// without making the keys globally unavailable after IME use.
+// A narrow post-end window absorbs Sogou/fcitx trailing plain candidate keys without blocking ordinary typing.
 export const TERMINAL_IME_CANDIDATE_GUARD_POST_COMPOSITION_MS = 250
 
 export function installTerminalImeCompositionTracker(
@@ -59,9 +53,7 @@ export function installTerminalImeCompositionTracker(
   }
   const updateComposition = (event: Event): void => {
     lastCompositionEventAt = now()
-    // Why: Sogou/fcitx can emit empty compositionupdate data while its
-    // candidate popup is still open — empty data must not deactivate.
-    // compositionend, non-composition input, and blur own deactivation.
+    // Empty Sogou/fcitx updates can leave candidates open; only end, non-composition input or blur deactivates.
     if (!(event instanceof CompositionEvent)) {
       return
     }
@@ -73,8 +65,7 @@ export function installTerminalImeCompositionTracker(
   }
   const handleCompositionEnd = (): void => {
     active = false
-    // Why: only Sogou/fcitx-style empty updates prove a trailing plain
-    // Space/digit is likely IME-owned; broad post-end guards drop real typing.
+    // Only empty Sogou/fcitx updates justify the trailing guard; a broader rule swallows real typing.
     compositionEndedAt = sawEmptyCompositionUpdate ? now() : null
     sawEmptyCompositionUpdate = false
   }
@@ -83,8 +74,7 @@ export function installTerminalImeCompositionTracker(
       return
     }
     active = false
-    // Why: real non-composition input means ordinary typing resumed; keeping
-    // the post-end window would swallow a legitimate Space/digit.
+    // Non-composition input proves ordinary typing resumed; release trailing key ownership.
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
   }

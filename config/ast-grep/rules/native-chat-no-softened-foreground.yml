@@ -1,0 +1,29 @@
+# Native-chat class strings stay on the chat design tokens, including variant-prefixed classes.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: native-chat-no-softened-foreground
+language: typescript
+severity: error
+message: "Don't soften text-foreground by hand: use text-chat-foreground on the chat canvas or text-muted-foreground on a lifted surface. See docs/styleguide/native-chat.md."
+files:
+  - '**/src/renderer/src/components/native-chat/**'
+ignores:
+  - '**/*.test.*'
+  - '**/*.spec.*'
+  - '**/*-benchmark.*'
+rule:
+  kind: string_fragment
+  regex: '(?:^|\s)!?(?:(?:\[[^\]\s]*\]|[^\s:\[\]])+:)*!?text-foreground/\d+!?(?:\s|$)'
+---
+id: native-chat-no-softened-foreground-tsx
+language: tsx
+severity: error
+message: "Don't soften text-foreground by hand: use text-chat-foreground on the chat canvas or text-muted-foreground on a lifted surface. See docs/styleguide/native-chat.md."
+files:
+  - '**/src/renderer/src/components/native-chat/**'
+ignores:
+  - '**/*.test.*'
+  - '**/*.spec.*'
+  - '**/*-benchmark.*'
+rule:
+  kind: string_fragment
+  regex: '(?:^|\s)!?(?:(?:\[[^\]\s]*\]|[^\s:\[\]])+:)*!?text-foreground/\d+!?(?:\s|$)'

@@ -68,6 +68,92 @@ describe('hosted review cache revalidation', () => {
     _clearHostedReviewRequestGenerationsForTest()
   })
 
+  it('does not let a pre-click forced flight satisfy manual refresh or replace its result', async () => {
+    let finishOld: (value: HostedReviewInfo) => void = () => {}
+    mockApi.hostedReview.forBranch
+      .mockReturnValueOnce(
+        new Promise<HostedReviewInfo>((resolve) => {
+          finishOld = resolve
+        })
+      )
+      .mockResolvedValueOnce({ ...review, state: 'merged' })
+    const store = makeStore()
+    const before = store.getState().fetchHostedReviewForBranch('/repo', 'feature', { force: true })
+    const options = { force: true, userRefresh: true }
+    const click = store.getState().fetchHostedReviewForBranch('/repo', 'feature', options)
+    finishOld(review)
+    await before
+    await expect(click).resolves.toMatchObject({ state: 'merged' })
+    expect(mockApi.hostedReview.forBranch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ userRefresh: true })
+    )
+    expect(Object.values(store.getState().hostedReviewCache)[0]?.data?.state).toBe('merged')
+    expect(_getHostedReviewRequestGenerationCountForTest()).toBe(0)
+  })
+
+  it('retains last-good after refused manual dispatch without restoring a superseded renderer owner', async () => {
+    const store = makeStore()
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature')
+    const original = Object.values(store.getState().hostedReviewCache)[0]
+    let finishOld: (value: HostedReviewInfo) => void = () => {}
+    mockApi.hostedReview.forBranch
+      .mockReturnValueOnce(
+        new Promise<HostedReviewInfo>((resolve) => {
+          finishOld = resolve
+        })
+      )
+      .mockRejectedValueOnce(new Error('capacity refused'))
+    const before = store.getState().fetchHostedReviewForBranch('/repo', 'feature', { force: true })
+    const options = { force: true, userRefresh: true }
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature', options)
+    ).rejects.toThrow('capacity refused')
+    finishOld({ ...review, state: 'merged' })
+    await before
+    expect(Object.values(store.getState().hostedReviewCache)[0]).toEqual(original)
+    expect(_getHostedReviewRequestGenerationCountForTest()).toBe(0)
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce({ ...review, state: 'merged' })
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature', { force: true })
+    ).resolves.toMatchObject({ state: 'merged' })
+  })
+
+  it('settles a failed manual runtime flight separately for an ordinary joiner without renewing last-good', async () => {
+    const store = makeStore()
+    store.setState((state) => ({
+      repos: state.repos.map((repo) => ({ ...repo, executionHostId: 'runtime:paired' }))
+    }))
+    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature')
+    const original = Object.values(store.getState().hostedReviewCache)[0]
+    let reject: (error: Error) => void = () => {}
+    runtimeRpc.callRuntimeRpc.mockReturnValueOnce(
+      new Promise((_, fail) => {
+        reject = fail
+      })
+    )
+    const manual = store
+      .getState()
+      .fetchHostedReviewForBranch('/repo', 'feature', { force: true, userRefresh: true })
+    const failed = expect(manual).rejects.toThrow('offline')
+    const ordinary = store
+      .getState()
+      .fetchHostedReviewForBranch('/repo', 'feature', { force: true })
+    reject(new Error('offline'))
+    await failed
+    await expect(ordinary).resolves.toEqual(review)
+    expect(runtimeRpc.callRuntimeRpc).toHaveBeenCalledTimes(2)
+    expect(runtimeRpc.callRuntimeRpc).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'environment', environmentId: 'paired' }),
+      'hostedReview.forBranch',
+      expect.objectContaining({ userRefresh: true }),
+      { timeoutMs: 30_000 }
+    )
+    expect(Object.values(store.getState().hostedReviewCache)[0]).toEqual(original)
+    expect(_getHostedReviewRequestGenerationCountForTest()).toBe(0)
+  })
+
   it('dedupes repeated linked PR retries while a stronger lookup is in flight', async () => {
     let resolveLinkedLookup: (value: typeof review) => void = () => {}
     const linkedLookup = new Promise<typeof review>((resolve) => {

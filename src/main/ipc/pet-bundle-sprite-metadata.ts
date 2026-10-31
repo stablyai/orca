@@ -1,4 +1,5 @@
 import { nativeImage } from 'electron'
+import { PetImportError } from '../../shared/pet-import-failure-copy'
 import { readFile } from 'node:fs/promises'
 import type { CustomPet } from '../../shared/pet-types'
 import { MAX_BYTES } from './pet-import-size-limits'
@@ -8,13 +9,12 @@ import type { PetManifestLike, ResolvedPetManifest } from './pet-bundle'
 async function readSheetDimensions(
   buffer: Buffer
 ): Promise<{ width: number; height: number } | null> {
-  // Why: nativeImage can fail on some valid WebP that Chromium renders — read WebP dims from the header before native decode.
+  // Chromium renders some WebP variants nativeImage cannot decode; prefer header dimensions.
   const webpDims = readWebpDimensionsFromBuffer(buffer)
   if (webpDims) {
     return webpDims
   }
 
-  // Why: nativeImage can't decode SVG (vector → no pixel grid) — pet bundles must use a raster sheet.
   const image = nativeImage.createFromBuffer(buffer)
   if (image.isEmpty()) {
     return null
@@ -26,49 +26,56 @@ async function readSheetDimensions(
   return { width: size.width, height: size.height }
 }
 
-/** Undefined when the manifest declares no frame layout — the renderer then falls back to spriteFps. */
+/** Without a frame layout, the renderer uses spriteFps. */
 export async function buildBundleSprite<T extends PetManifestLike>(
   manifest: ResolvedPetManifest<T>,
   sheetSrc: string
 ): Promise<NonNullable<CustomPet['sprite']> | undefined> {
   let sprite: NonNullable<CustomPet['sprite']> | undefined
   if (manifest.frame) {
-    // Why: only decode when a frame layout needs validating — nativeImage can fail on some WebP variants in headless contexts.
+    // Decode only for layout validation; nativeImage may reject otherwise renderable WebP.
     const sheetBuf = await readFile(sheetSrc)
-    // Why: defend against TOCTOU — file may have grown between stat and read.
+    // Recheck the read size because the file may have grown after stat.
     if (sheetBuf.byteLength > MAX_BYTES) {
-      throw new Error('Spritesheet exceeded the size limit.')
+      throw new PetImportError('sheetSizeLimitExceeded')
     }
     const dims = await readSheetDimensions(sheetBuf)
     if (!dims) {
-      throw new Error('Could not decode the spritesheet image.')
+      throw new PetImportError('sheetUndecodable')
     }
     const { width: fw, height: fh } = manifest.frame
     if (dims.width % fw !== 0 || dims.height % fh !== 0) {
-      throw new Error(
-        `Spritesheet ${dims.width}×${dims.height} is not a clean multiple of frame ${fw}×${fh}.`
-      )
+      throw new PetImportError('sheetFrameMismatch', {
+        sheetWidth: dims.width,
+        sheetHeight: dims.height,
+        frameWidth: fw,
+        frameHeight: fh
+      })
     }
     const columns = dims.width / fw
     const rows = dims.height / fh
     if (manifest.animations) {
       for (const [name, anim] of Object.entries(manifest.animations)) {
         if (anim.row >= rows) {
-          throw new Error(`Animation "${name}" references row ${anim.row} but sheet has ${rows}.`)
+          throw new PetImportError('animationRowOutOfRange', { name, row: anim.row, rows })
         }
         if (anim.frames > columns) {
-          throw new Error(
-            `Animation "${name}" has ${anim.frames} frames but sheet only has ${columns} columns.`
-          )
+          throw new PetImportError('animationTooManyFrames', {
+            name,
+            frames: anim.frames,
+            columns
+          })
         }
         if (anim.frameDurationsMs && anim.frameDurationsMs.length !== anim.frames) {
-          throw new Error(
-            `Animation "${name}" declares ${anim.frameDurationsMs.length} frame durations but ${anim.frames} frames.`
-          )
+          throw new PetImportError('animationDurationMismatch', {
+            name,
+            durations: anim.frameDurationsMs.length,
+            frames: anim.frames
+          })
         }
       }
       if (manifest.defaultAnimation && !manifest.animations[manifest.defaultAnimation]) {
-        throw new Error(`defaultAnimation "${manifest.defaultAnimation}" not in animations.`)
+        throw new PetImportError('defaultAnimationMissing', { name: manifest.defaultAnimation })
       }
     }
     sprite = {

@@ -78,8 +78,7 @@ describe('getInstalledAgentSkillVerdict', () => {
     expect(unverifiable({ sources: [source('repo', 'unavailable')] })).toBe(false)
   })
 
-  // The reported bug: `sources` is empty until a result lands, so a scan that
-  // errored before answering is invisible to the unreadable-root check.
+  // Pre-answer failure leaves sources empty, so missing results need a separate unknown check.
   it('cannot vouch for a negative when the scan errored before ever answering', () => {
     expect(unverifiable({ settled: false, error: 'scan failed' })).toBe(true)
   })
@@ -110,5 +109,38 @@ describe('getInstalledAgentSkillVerdict', () => {
 
   it('stays quiet for a trustworthy negative', () => {
     expect(error({ sources: [source('home')] })).toBeNull()
+  })
+})
+
+describe('installed-skill verdict while a WSL distro is stopped (E9)', () => {
+  // What main answers for a blocked WSL target or a blocked repo root: never read, never "missing".
+  const stoppedDistroSource = (sourceKind: SkillSourceKind): SkillDiscoverySource => ({
+    id: `wsl-unavailable-${sourceKind}-ubuntu`,
+    label: 'WSL Ubuntu',
+    path: '',
+    sourceKind,
+    providers: [],
+    owner: null,
+    exists: false,
+    skippedReason: 'unavailable'
+  })
+
+  it('doubts a negative answer instead of confirming the skill is not installed', () => {
+    const verdict = getInstalledAgentSkillVerdict(
+      scan({ sources: [stoppedDistroSource('home'), stoppedDistroSource('repo')] })
+    )
+    expect(verdict.installedUnverifiable).toBe(true)
+    expect(verdict.error).toBe('A skill folder did not respond, so this status may be incomplete.')
+  })
+
+  it('still confirms "not installed" for an answer that read every folder', () => {
+    expect(unverifiable({ sources: [source('home', 'missing')] })).toBe(false)
+    expect(unverifiable({ sources: [] })).toBe(false)
+  })
+
+  it('ignores a stopped distro source outside the kinds the surface asked about', () => {
+    expect(unverifiable({ sources: [stoppedDistroSource('plugin')], sourceKinds: ['home'] })).toBe(
+      false
+    )
   })
 })

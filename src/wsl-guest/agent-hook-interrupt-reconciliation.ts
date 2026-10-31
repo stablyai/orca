@@ -77,6 +77,7 @@ export function applyRelayClaudeInterrupt(
     {
       ...row,
       hookEventName: undefined,
+      toolAgentId: undefined,
       hasExplicitPrompt: undefined,
       hostEvidenceObservedAt: Date.now(),
       claudeRunningNonAgentTask: claudeRowHasUnlistedLiveWork(host.state, row.paneKey),

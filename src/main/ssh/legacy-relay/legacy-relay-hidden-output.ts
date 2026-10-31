@@ -1,26 +1,17 @@
-/**
- * Bridged panes no visible view shows: their output stops here instead of crossing renderer IPC,
- * and the reveal re-reads the screen the relay kept, since main holds no model of these terminals.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
- */
+/** Suppress hidden-pane IPC and reread the relay screen on reveal; main has no terminal model. COMPAT(legacy-relay-bridge): revisit 2027-01-15. */
 import {
   EMPTY_OUTPUT_SALVAGE,
   salvageHiddenOutput,
   type OutputSalvageState
 } from './legacy-relay-output-salvage'
 
-export type LegacyRelayHiddenOutputDeps = {
+type LegacyRelayHiddenOutputDeps = {
   onData: (ptyId: string, data: string) => void
-  /** A whole screen that replaces what the pane shows. */
   onReplay: (ptyId: string, replay: string) => void
-  /**
-   * Re-reads the relay's screen, calling `atSnapshot` in stream order with it. Never calling it
-   * means the screen could not be read; the bridge then reattaches the pane with a full screen.
-   */
+  /** Call atSnapshot in stream order; no callback means unreadable, requiring full-screen reattach. */
   reread: (ptyId: string, atSnapshot: (replay: string) => void) => Promise<void>
 }
 
-/** Present while output is dropped; `revealing` once a view wants it and its screen is on the way. */
 type HiddenPane = {
   dropped: boolean
   revealing: boolean
@@ -32,7 +23,7 @@ type HiddenPane = {
 
 export class LegacyRelayHiddenOutput {
   private readonly hidden = new Map<string, HiddenPane>()
-  /** A sequence a shown pane's last chunk left open, so a pause mid-sequence still finishes it. */
+  /** Finish a visible pane's split escape sequence even if it becomes hidden mid-sequence. */
   private readonly openSequences = new Map<string, OutputSalvageState>()
 
   constructor(private readonly deps: LegacyRelayHiddenOutputDeps) {}
@@ -87,7 +78,7 @@ export class LegacyRelayHiddenOutput {
     void this.reveal(ptyId, hidden)
   }
 
-  /** At an attach's snapshot: what was dropped before it is in the screen that attach returns. */
+  /** An attach snapshot covers all earlier dropped output. */
   screenSent(ptyId: string): void {
     const hidden = this.hidden.get(ptyId)
     if (hidden) {
@@ -101,8 +92,7 @@ export class LegacyRelayHiddenOutput {
   }
 
   private async reveal(ptyId: string, pane: HiddenPane): Promise<void> {
-    // Why output stays dropped until the snapshot: everything before it is in the screen, and the
-    // screen must reach the window before anything printed after it.
+    // Keep dropping until the snapshot, then send its screen before later bytes.
     await this.deps
       .reread(ptyId, (replay) => {
         if (this.hidden.get(ptyId) === pane && pane.revealing) {
@@ -111,12 +101,12 @@ export class LegacyRelayHiddenOutput {
       })
       .catch(() => {})
     if (this.hidden.get(ptyId) === pane && pane.revealing) {
-      // Unreadable: the pane goes live again, and its reattach brings the whole screen.
+      // Unreadable snapshots fall back to full-screen reattach.
       this.show(ptyId, pane, null)
     }
   }
 
-  /** Brings a hidden pane's screen current so a cursor or mode query is answered truthfully. */
+  /** Refresh cursor/mode state before answering queries from hidden output. */
   private async resync(ptyId: string, pane: HiddenPane): Promise<void> {
     pane.resyncing = true
     let answered = false
@@ -135,7 +125,7 @@ export class LegacyRelayHiddenOutput {
       return
     }
     if (!answered) {
-      // Unreadable: a stale answer beats a program waiting forever.
+      // On snapshot failure, a stale answer beats leaving the program blocked.
       this.flushHeld(ptyId, pane)
     } else if (pane.stateful) {
       void this.resync(ptyId, pane)
@@ -148,8 +138,7 @@ export class LegacyRelayHiddenOutput {
       this.deps.onReplay(ptyId, replay)
     }
     this.flushHeld(ptyId, pane)
-    // A sequence split where output was dropped; the next live chunk finishes it. An oversized OSC
-    // is reopened so its remaining payload parses as one instead of printing as text.
+    // Finish split sequences on reveal; reopen oversized OSC so remaining payload cannot print as text.
     const open = (pane.salvage.skippingOsc ? '\x1b]' : '') + pane.salvage.tail
     if (open) {
       this.deps.onData(ptyId, open)
@@ -171,7 +160,7 @@ export class LegacyRelayHiddenOutput {
     if (!open && lastEscape === -1) {
       return
     }
-    // Only the chunk's end can leave a sequence open, unless one already spans chunks.
+    // Only the chunk's end can leave a sequence open unless one already spans chunks.
     const { state } = salvageHiddenOutput(
       open || lastEscape === -1 ? data : data.slice(lastEscape),
       open ?? EMPTY_OUTPUT_SALVAGE

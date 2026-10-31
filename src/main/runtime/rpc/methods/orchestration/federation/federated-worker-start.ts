@@ -7,7 +7,8 @@ import {
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { orchestrationMigrationData } from '../../../../../../shared/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -29,18 +30,22 @@ import {
 } from './federated-attach-receipt'
 import { isWorkerStartTimeoutWithinTimerLimit } from '../../../../../../shared/orchestration-timing-budgets'
 import {
+  federatedFailedReceipt,
   federatedUnknownReceipt,
   isKnownRemoteStartFailure
 } from './federated-worker-start-receipts'
-import { parseTaskDeps } from '../worker/task-deps-argument'
 import { releaseRetriedWorkerTerminal } from '../worker/retried-worker-terminal-release'
+import { withWorkerStartNext } from '../receipt-next'
+import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
   runtime: OrcaRuntimeService
   db: OrchestrationDb
-  runId: string
+  /** Called only once preflight passes, so a refused start binds no new Run. */
+  bindRunId: () => string
   task?: { id: string; spec: string; status: string }
+  taskDeps: string[] | undefined
   orchestrationMutation?: {
     callerFingerprint: string
     requestId: string
@@ -50,7 +55,8 @@ export async function startFederatedWorker(args: {
   /** The coordinator's resolved session, when it is one; recorded as the Dispatch creator. */
   callerSession?: OrchestrationSessionCaller
 }): Promise<unknown> {
-  const { params, runtime, db, task, runId, orchestrationMutation } = args
+  const { params, runtime, db, task, orchestrationMutation } = args
+  const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -120,13 +126,14 @@ export async function startFederatedWorker(args: {
         : 1
 
   const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
+  const runId = args.bindRunId()
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from, args.callerSession),
     maxDepth: runtime.getNestedWorkerMaxDepth(),
     taskId: task?.id,
     taskSpec: params.spec,
     taskTitle: params.taskTitle,
-    taskDeps: parseTaskDeps(params.deps),
+    taskDeps: args.taskDeps,
     taskParentId: params.parent,
     taskRunId: runId,
     retryOf: params.retryOf,
@@ -162,6 +169,7 @@ export async function startFederatedWorker(args: {
   const createdTask = started.task
   const taskForRemote = task ?? createdTask
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
+  let readyResult: unknown
   try {
     const remote = parseRemoteFederatedWorkerStartReceipt(
       await runtime.callOrchestrationWorkerServer(
@@ -172,8 +180,7 @@ export async function startFederatedWorker(args: {
           dispatchId: started.dispatch.id,
           taskId: taskForRemote.id,
           taskSpec: taskForRemote.spec,
-          // Carry the home dispatch depth across the federation boundary so a
-          // remote worker cannot be mistaken for a root when it dispatches again.
+          // Carry home dispatch depth so remote workers cannot re-enter as roots when nesting.
           depth: started.dispatch.depth,
           protocolVersion: federationProtocolVersion,
           worktree,
@@ -230,66 +237,62 @@ export async function startFederatedWorker(args: {
       })
       const readyWorker = db.markWorkerDispatchReady(started.dispatch.id)
       runtime.ensureOrchestrationFederationRelay(runId)
-      return {
-        runId,
-        taskId: taskForRemote.id,
-        dispatchId: started.dispatch.id,
-        state: 'ready',
-        stage: readyWorker.stage,
-        server: { environmentId: server.environmentId, name: server.name },
-        setup: remote.setup,
-        launch,
-        timeoutMs: budgets.readinessTimeoutMs,
-        effects: remote.effects ?? [],
-        residualResources: remote.residualResources ?? []
-      }
-    }
-    if (remote.state === 'outcome_unknown') {
+      const reportsTurnStops = status.capabilities?.includes(
+        ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
+      )
+      readyResult = withWorkerStartNext(
+        {
+          runId,
+          taskId: taskForRemote.id,
+          dispatchId: started.dispatch.id,
+          state: 'ready',
+          stage: readyWorker.stage,
+          server: { environmentId: server.environmentId, name: server.name },
+          setup: remote.setup,
+          launch,
+          timeoutMs: budgets.readinessTimeoutMs,
+          effects: remote.effects ?? [],
+          residualResources: remote.residualResources ?? []
+        },
+        reportsTurnStops ? undefined : { name: server.name, dispatchId: started.dispatch.id }
+      )
+    } else if (remote.state === 'outcome_unknown') {
       const worker = db.markWorkerStartUnknown(
         started.dispatch.id,
         remote.failedStage ?? 'remote_attach',
         remote.lastError ?? 'The worker server reported an unknown start outcome.'
       )
       return federatedUnknownReceipt(worker, taskForRemote.id, server.name, launch)
-    }
-    const worker = db.failWorkerStart(
-      started.dispatch.id,
-      remote.failedStage ?? 'remote_attach',
-      remote.lastError ?? `The worker server returned ${remote.state}.`
-    )
-    return {
-      runId,
-      taskId: taskForRemote.id,
-      dispatchId: started.dispatch.id,
-      state: worker.state,
-      stage: worker.stage,
-      server: { environmentId: server.environmentId, name: server.name },
-      failedStage: worker.stage,
-      lastError: worker.last_error,
-      setup: remote.setup,
-      launch,
-      effects: remote.effects ?? [],
-      residualResources: remote.residualResources ?? []
+    } else {
+      const worker = db.failWorkerStart(
+        started.dispatch.id,
+        remote.failedStage ?? 'remote_attach',
+        remote.lastError ?? `The worker server returned ${remote.state}.`
+      )
+      return federatedFailedReceipt(worker, { runId, taskId: taskForRemote.id }, server, {
+        setup: remote.setup,
+        launch,
+        effects: remote.effects,
+        residualResources: remote.residualResources
+      })
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     if (error instanceof OrchestrationError && isKnownRemoteStartFailure(error.code)) {
       const worker = db.failWorkerStart(started.dispatch.id, 'remote_attach', reason)
-      return {
-        runId,
-        taskId: taskForRemote.id,
-        dispatchId: started.dispatch.id,
-        state: worker.state,
-        stage: worker.stage,
-        server: { environmentId: server.environmentId, name: server.name },
-        failedStage: worker.stage,
-        lastError: worker.last_error,
-        launch: requestedLaunch,
-        effects: [],
-        residualResources: []
-      }
+      return federatedFailedReceipt(worker, { runId, taskId: taskForRemote.id }, server, {
+        launch: requestedLaunch
+      })
     }
     const worker = db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', reason)
     return federatedUnknownReceipt(worker, taskForRemote.id, server.name, requestedLaunch)
   }
+  if (!params.terminal) {
+    recordStart({
+      dispatchId: started.dispatch.id,
+      workerAddress: `dispatch:${started.dispatch.id}`,
+      task: taskForRemote.spec
+    })
+  }
+  return readyResult
 }

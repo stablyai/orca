@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
 
 import type { ProcessTerminationBarrier } from '@orca/process-host/process-spec'
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { WSL_UNC_RUNNING_LEASE_MS, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { isWslUserActFor } from '../wsl/wsl-user-act-scope'
+import { readWslDistroRunningState } from '../wsl-background-distro-gate'
 
 const GUEST_TERMINATION_ATTEMPTS = 40
 const GUEST_TERMINATION_INTERVAL_SECONDS = '0.025'
@@ -16,6 +19,8 @@ export type WslProcessGroupTermination = ProcessTerminationBarrier & {
 export function createWslProcessGroupTermination(distro: string): WslProcessGroupTermination {
   const marker = `__ORCA_WSL_PROCESS_GROUP_${randomUUID()}__=`
   let processGroupId: number | null = null
+  // When the guest proved it ran; a 'stopped' read probed before then cannot prove the group ended.
+  let groupObservedAt = -Infinity
   let stderrTail = ''
 
   const observeStderr = (chunk: Buffer | string): void => {
@@ -25,12 +30,24 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
     const parsed = match ? Number(match[1]) : 0
     if (Number.isSafeInteger(parsed) && parsed > 1) {
       processGroupId = parsed
+      groupObservedAt = performance.now()
     }
   }
 
   const terminate = async (signal: 'TERM' | 'KILL'): Promise<boolean> => {
     if (processGroupId === null) {
       return false
+    }
+    // A cancel or timeout can land after the distro stopped; a kill would boot it again (E9).
+    // A confirmed stop already ended the group, while an unanswered read proves nothing.
+    if (wslDistroForPath('', distro) && !isWslUserActFor(distro)) {
+      const state = await readWslDistroRunningState(distro, {
+        startedAfter: Math.max(groupObservedAt, performance.now() - WSL_UNC_RUNNING_LEASE_MS),
+        retryUnverifiable: true
+      })
+      if (state !== 'running') {
+        return state === 'stopped'
+      }
     }
     const script = [
       '_orca_group=$1',
@@ -42,8 +59,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
       `  sleep ${GUEST_TERMINATION_INTERVAL_SECONDS}`,
       'done'
     ].join('\n')
-    // loginPath 'none': the payload is builtins and coreutils on the default
-    // PATH, so a login probe would only add latency to a kill.
+    // Builtins/coreutils use the default PATH; a login probe only delays termination.
     const result = await runWslProcess({
       script,
       args: [String(processGroupId)],
@@ -64,10 +80,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
         `printf '%s%s\\n' ${quotePosixShell(marker)} "$$" >&2`,
         'exec "$@"'
       ].join('\n')
-      // Why probe rather than assume: BusyBox `setsid` has no `--wait`, so there
-      // the wrapper would fail the Git command outright. Without a new session the
-      // reported group is not ours to kill, so the fallback reports no identity
-      // and the caller falls back to waiting for the root exit.
+      // BusyBox setsid lacks --wait; without a new session, report no group to avoid killing another owner.
       const script = [
         'if setsid --wait true 2>/dev/null; then',
         `  exec setsid --wait sh -c ${quotePosixShell(reportGroup)} orca-wsl-process-group "$@"`,

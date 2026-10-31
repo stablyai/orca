@@ -9,8 +9,6 @@ import {
   assertBrowserHostCommandResultAuthority,
   assertBrowserHostCommandOrder,
   createBrowserHostCommandRecord,
-  DEFAULT_MAX_CACHED_RESULTS,
-  DEFAULT_MAX_CACHED_RESULTS_PER_PAGE,
   DEFAULT_MAX_OUTSTANDING_COMMANDS,
   DEFAULT_MAX_OUTSTANDING_COMMANDS_PER_PAGE,
   DEFAULT_MAX_PAGES,
@@ -20,6 +18,7 @@ import {
   type BrowserHostCommandResultParams,
   positiveBrowserHostCommandLimit,
   recordBrowserHostCommandOrder,
+  resolveBrowserHostCommandCacheLimits,
   snapshotBrowserHostPageCommand
 } from './browser-host-command-state'
 import { replayOutstandingBrowserHostCommands } from './browser-host-command-replay'
@@ -59,11 +58,7 @@ export class BrowserHostCommandLedger {
       DEFAULT_MAX_OUTSTANDING_COMMANDS_PER_PAGE
     )
     this.resultCache = new BrowserHostCommandResultCache(
-      positiveBrowserHostCommandLimit(options.maxCachedResults, DEFAULT_MAX_CACHED_RESULTS),
-      positiveBrowserHostCommandLimit(
-        options.maxCachedResultsPerPage,
-        DEFAULT_MAX_CACHED_RESULTS_PER_PAGE
-      ),
+      resolveBrowserHostCommandCacheLimits(options),
       (browserPageId) => this.pages.delete(browserPageId)
     )
     this.maxPages = positiveBrowserHostCommandLimit(options.maxPages, DEFAULT_MAX_PAGES)
@@ -113,9 +108,18 @@ export class BrowserHostCommandLedger {
     if (page.outstanding >= this.maxOutstandingCommandsPerPage) {
       throw new Error('browser_host_page_command_capacity')
     }
+    if (page.profileSwitchPending) {
+      throw new Error('browser_host_profile_switch_pending')
+    }
+    if (command.type === 'switchProfile' && page.outstanding !== 0) {
+      throw new Error('browser_host_profile_switch_pending')
+    }
     assertBrowserHostCommandOrder(page, command, input.resultAdmission ?? 'placed-page')
     admission.commit()
     recordBrowserHostCommandOrder(page, command)
+    if (command.type === 'switchProfile') {
+      page.profileSwitchPending = true
+    }
     const commandSequence = page.nextIssueSequence
     const event = Object.freeze({
       type: 'command' as const,
@@ -160,6 +164,16 @@ export class BrowserHostCommandLedger {
     assertBrowserHostCommandResultAuthority(this.authority, params)
     const page = this.pages.get(params.browserPageId)
     if (!page || page.generation !== params.pageHostGeneration) {
+      const previous = page?.records.get(params.commandSequence)
+      if (
+        page &&
+        previous?.event.command.type === 'switchProfile' &&
+        previous.settled &&
+        previous.event.pageHostGeneration === params.pageHostGeneration &&
+        params.pageHostGeneration < page.generation
+      ) {
+        return replaySettledBrowserHostCommand(page, params)
+      }
       throw new Error('browser_host_command_result_page_stale')
     }
     if (params.commandSequence < page.nextSettlementSequence) {
@@ -179,14 +193,26 @@ export class BrowserHostCommandLedger {
     page.outstanding -= 1
     this.outstandingCommands -= 1
     page.settledSequences.push(params.commandSequence)
-    this.resultCache.remember(page, record)
+    if (record.event.command.type === 'switchProfile' && result.status === 'failed') {
+      page.profileSwitchPending = false
+    }
     if (record.event.command.type === 'closePage' && result.status === 'failed') {
       page.terminalCommandIssued = false
     } else if (record.event.command.type === 'closePage' && !page.activeCapacityReleased) {
       page.activeCapacityReleased = true
       this.activePages -= 1
     }
+    this.resultCache.remember(page, record)
     return true
+  }
+
+  advancePageGeneration(browserPageId: string, previous: number, next: number): void {
+    const page = this.pages.get(browserPageId)
+    if (!page || page.generation !== previous || next <= previous || page.outstanding !== 0) {
+      throw new Error('browser_host_command_page_stale')
+    }
+    page.generation = next
+    page.profileSwitchPending = false
   }
 
   close(): void {

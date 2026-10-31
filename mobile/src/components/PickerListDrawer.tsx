@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { FlatList, StyleSheet, View } from 'react-native'
 
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { triggerSelection } from '../platform/haptics'
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
+import { LIST_LEADING_INSET, LIST_ROW_PADDING } from './list/ListGroup'
+import { ListRow } from './list/ListRow'
+import { SheetHeader } from './nav-bar/SheetHeader'
 
 type PickerListItem = { id: string; label: string; detail?: string }
 
@@ -27,6 +32,7 @@ export function PickerListDrawer<T extends PickerListItem>({
   onClose,
   renderIcon
 }: Props<T>) {
+  const colorScheme = useMobileColorScheme()
   const [closing, setClosing] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const drawerVisible = visible && !closing
@@ -71,65 +77,53 @@ export function PickerListDrawer<T extends PickerListItem>({
       contentScrollable={false}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
+        <SheetHeader title={title} />
       </View>
       <FlatList
         data={items}
+        extraData={colorScheme}
         keyExtractor={(item) => item.id}
         style={styles.group}
         contentContainerStyle={items.length === 0 ? styles.emptyContent : undefined}
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
-        ItemSeparatorComponent={PickerSeparator}
-        renderItem={({ item }) => {
-          const selected = item.id === selectedId
-          return (
-            <Pressable
-              style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
-              onPress={() => closeThenSelect(item)}
-            >
-              {renderIcon?.(item)}
-              <View style={styles.itemCopy}>
-                <Text
-                  style={[styles.itemText, selected && styles.itemTextSelected]}
-                  numberOfLines={1}
-                >
-                  {item.label}
-                </Text>
-                {item.detail ? (
-                  <Text style={styles.itemDetail} numberOfLines={1}>
-                    {item.detail}
-                  </Text>
-                ) : null}
-              </View>
-              {selected && <Check size={14} color={colors.textPrimary} />}
-            </Pressable>
-          )
-        }}
+        ItemSeparatorComponent={renderIcon ? PickerIconSeparator : PickerSeparator}
+        renderItem={({ item }) => (
+          <ListRow
+            title={item.label}
+            subtitle={item.detail || undefined}
+            leading={renderIcon ? (renderIcon(item) ?? null) : undefined}
+            selected={item.id === selectedId}
+            onPress={() => {
+              triggerSelection()
+              closeThenSelect(item)
+            }}
+          />
+        )}
       />
     </BottomDrawer>
   )
 }
 
 function PickerSeparator() {
+  useMobileColorScheme()
   return <View style={styles.separator} />
 }
 
-const styles = StyleSheet.create({
+function PickerIconSeparator() {
+  useMobileColorScheme()
+  return <View style={[styles.separator, styles.separatorIcon]} />
+}
+
+const styles = themedStyleSheet(() => ({
   header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
+    marginTop: -spacing.xs
   },
   group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     overflow: 'hidden',
-    maxHeight: 420,
+    maxHeight: 460,
     flexGrow: 0
   },
   emptyContent: {
@@ -138,32 +132,9 @@ const styles = StyleSheet.create({
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
+    marginLeft: LIST_ROW_PADDING
   },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  itemPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  itemText: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  itemCopy: {
-    flex: 1,
-    minWidth: 0
-  },
-  itemDetail: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginTop: 1
-  },
-  itemTextSelected: {
-    fontWeight: '600'
+  separatorIcon: {
+    marginLeft: LIST_LEADING_INSET
   }
-})
+}))

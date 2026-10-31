@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// A settled parent whose subagent asks and is answered. Its done keeps the turn's own end time,
-// which the blocked ask postdates, so the Activity row must read the pane's row for its state and
-// order the timeline by when each switch was seen, not by the states' own times.
+// An answered subagent ask restores its parent’s older turn-end timestamp. Order switches by observation time, but read unread/state from the pane’s current turn.
 
 import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -17,6 +15,10 @@ import { activityThreadRowCopy, activityThreadStatusId } from './activity-thread
 import { clearActivityThread } from './activity-clear-completed'
 import { countActivityUnread } from './useActivityUnreadCount'
 import { useAgentPaneThreads } from './use-agent-pane-threads'
+import { useAppStore } from '@/store'
+import { makeTabGroup } from '@/store/slices/store-test-helpers'
+import { tabActivationPatch } from '@/store/slices/tabs/tabs-focus-actions'
+import { getStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 
 type TestStore = {
   getState: () => AppState
@@ -40,8 +42,6 @@ vi.mock('@/store', async () => {
 })
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null,
   getExecutionHostIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
     state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
 }))
@@ -161,6 +161,82 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
     resetStructuredAgentSessionStatusFeedsForTests()
   })
 
+  it('keeps the saved native name across focus and follows naming-only updates', async () => {
+    const unrelated = { ...structuredTab, id: 'other-tab', entityId: 'other-session' }
+    const terminal: Tab = { ...structuredTab, id: 'terminal', contentType: 'terminal' }
+    useAppStore.setState({
+      unifiedTabsByWorktree: { 'wt-1': [structuredTab, unrelated, terminal] },
+      groupsByWorktree: {
+        'wt-1': [
+          makeTabGroup({
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            tabOrder: [structuredTab.id, unrelated.id, terminal.id],
+            activeTabId: structuredTab.id
+          })
+        ]
+      }
+    })
+    const emit = await connect()
+    emit({
+      type: 'snapshot',
+      sessions: [
+        summary({ latestPrompt: 'Implement the requested change' }),
+        summary({ sessionId: unrelated.entityId })
+      ],
+      conversationNames: [{ sessionId: structuredTab.entityId, conversationName: 'Saved name' }]
+    })
+    const stop = useAppStore.subscribe(() => getStructuredChatTabNames())
+    try {
+      const activity = renderActivity()
+      const row = (id = structuredTab.id) => {
+        const found = activity.result.current.allThreads.find((item) => item.tab.id === id)
+        if (!found) {
+          throw new Error('Missing Activity row')
+        }
+        return found
+      }
+      const otherRow = row(unrelated.id)
+      expect(activityThreadRowCopy(row()).taskTitle).toBe('Saved name')
+      const focus = (current: Tab) =>
+        act(() => {
+          const state = useAppStore.getState()
+          useAppStore.setState(tabActivationPatch(state, current, 'wt-1', undefined, false))
+        })
+      for (let i = 0; i < 2; i += 1) {
+        const before = useAppStore.getState().unifiedTabsByWorktree['wt-1'][0]
+        focus(before)
+        const current = useAppStore.getState().unifiedTabsByWorktree['wt-1'][0]
+        expect(current).not.toBe(before)
+        expect(getStructuredChatTabNames().has(current)).toBe(true)
+        expect(activityThreadRowCopy(row()).taskTitle).toBe('Saved name')
+        expect(activity.result.current.storeData.activityTabs['wt-1'][0]).toBe(current)
+        expect(row(unrelated.id)).toBe(otherRow)
+      }
+      const projectedTerminal = activity.result.current.storeData.activityTabs['wt-1'][2]
+      focus(terminal)
+      expect(activity.result.current.storeData.activityTabs['wt-1'][2]).toBe(projectedTerminal)
+      const threads = activity.result.current.allThreads
+      activity.rerender()
+      expect(activity.result.current.allThreads).toBe(threads)
+      const state = useAppStore.getState()
+      for (const name of ['Renamed on host', null]) {
+        emit({
+          type: 'snapshot',
+          sessions: [],
+          conversationNames: [{ sessionId: structuredTab.entityId, conversationName: name }]
+        })
+        expect(activityThreadRowCopy(row()).taskTitle).toBe(
+          name ?? 'Implement the requested change'
+        )
+        expect(useAppStore.getState().unifiedTabsByWorktree).toBe(state.unifiedTabsByWorktree)
+        expect(useAppStore.getState().agentStatusByPaneKey).toBe(state.agentStatusByPaneKey)
+      }
+    } finally {
+      stop()
+    }
+  })
+
   it('reads done, lists Blocked then done, and leaves the answer read', async () => {
     const emit = await connect()
     emit({ type: 'snapshot', sessions: [summary()] })
@@ -176,7 +252,6 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
     const row = thread(renderActivity())
     expect(activityThreadStatusId(row)).toBe('done')
     expect(activityThreadRowCopy(row).needsAttention).toBe(false)
-    // Newest first: the answer's done, the ask, then the turn's original done.
     expect(row.events.map((event) => event.state)).toEqual(['done', 'blocked', 'done'])
     expect(row.events.map((event) => [event.state, event.timestamp, event.observedAt])).toEqual([
       ['done', SETTLED, ANSWERED],
@@ -208,8 +283,7 @@ describe("an answered subagent ask on a settled parent's Activity row", () => {
       emit({ type: 'status', session: summary({ updatedAt: askedAt + 200 }) })
     }
 
-    // Every done repeats the turn's end, so only when each was seen keeps them apart and in order;
-    // the oldest of the six falls to the per-pane cap.
+    // Repeated done events share a turn end; observation times distinguish/order them before the per-pane cap.
     expect(thread(renderActivity()).events.map((event) => [event.state, event.observedAt])).toEqual(
       [
         ['done', ASKED + 1_000],

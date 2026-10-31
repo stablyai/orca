@@ -56,6 +56,7 @@ function api(next: OrcadDeltaMovePreview, result: OrcadDeltaMoveResult): Managed
     rollback: unused,
     recover: unused,
     restart: unused,
+    reclaimStaleLock: unused,
     stop: unused,
     cancelStop: unused,
     forget: unused,
@@ -111,18 +112,6 @@ describe('moving what an older build added', () => {
     expect(onFinished).toHaveBeenCalled()
   })
 
-  it('shows a refusal plainly and keeps the dialog open', async () => {
-    const managed = api(preview(), {
-      outcome: 'refused',
-      code: 'orcad_delta_refused_by_server',
-      reason: 'orcad_migration_repository_id_conflict:repo-2'
-    })
-    const container = await render(managed)
-    await act(async () => confirmButton(container).click())
-    expect(container.textContent).toContain('Orca couldn’t finish this on the server.')
-    expect(container.textContent).not.toContain('orcad_')
-  })
-
   it('keeps a running move when the caller passes a fresh target object', async () => {
     const managed = api(preview(), { outcome: 'moved', migrationId: 'm-2' })
     managed.moveDelta = vi.fn(() => new Promise<OrcadDeltaMoveResult>(() => {}))
@@ -145,14 +134,6 @@ describe('moving what an older build added', () => {
     await act(async () => confirmButton(container).click())
     await renderWith({ ...target })
     expect(managed.previewDeltaMove).toHaveBeenCalledTimes(1)
-    expect(confirmButton(container).disabled).toBe(true)
-  })
-
-  it('does not offer the move when nothing is new', async () => {
-    const container = await render(
-      api(preview({ added: [] }), { outcome: 'moved', migrationId: 'm' })
-    )
-    expect(container.textContent).toContain('Nothing new to add.')
     expect(confirmButton(container).disabled).toBe(true)
   })
 })

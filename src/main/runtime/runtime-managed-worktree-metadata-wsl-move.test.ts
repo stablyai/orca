@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import type { Store } from '../persistence'
 import { wslMoveCutoverFixture as cutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
@@ -16,6 +16,7 @@ import {
   updateRuntimeManagedWorktreeMetadata
 } from './runtime-managed-worktree-metadata'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -113,8 +114,8 @@ describe('updateRuntimeManagedWorktreeMetadata under a WSL move', () => {
 
 describe('persistRuntimeManagedWorktreeSortOrder under a WSL move', () => {
   it('drops the moving project from the batch and writes the rest', () => {
-    store.setWorktreeMeta(MOVING, { sortOrder: 1 })
-    store.setWorktreeMeta(STAYING, { sortOrder: 2 })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: MOVING, hostId: 'local' }), { sortOrder: 1 })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: STAYING, hostId: 'local' }), { sortOrder: 2 })
     const result = persistRuntimeManagedWorktreeSortOrder({
       orderedIds: [MOVING, STAYING],
       store,

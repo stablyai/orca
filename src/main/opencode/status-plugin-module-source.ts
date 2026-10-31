@@ -32,7 +32,6 @@ export function getOpenCodeFamilyPluginSource(
     expectedAgent?: 'opencode' | 'opencode2'
   }
 ): string {
-  // Why: the plugin posts PTY environment data from OpenCode to the shared hooks server.
   return [
     ...getStatusPluginEndpointSource(),
     ...getStatusPluginRuntimeStateSource(),

@@ -1,17 +1,12 @@
-/**
- * The relays an older Orca left listening for this target, and each one's own `--connect` command.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
- *
- * Read-only: lists sockets or pipes and reads each daemon's argv; never starts, stops or removes
- * anything. Another desktop's relay hashes another target id, so it is never listed here.
- */
-import type { SshConnection } from '../ssh-connection'
-import { shellEscape } from '../ssh-connection-utils'
-import { RELAY_REMOTE_DIR } from '../remote-frame-protocol'
+/** List this target's legacy sockets/pipes and their own bridge commands without changing them; other desktops hash different target ids. COMPAT(legacy-relay-bridge): revisit 2027-01-15. */
+import type { SshConnection } from '../connection/ssh-connection'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { RELAY_REMOTE_DIR } from '../remote-exec/remote-frame-protocol'
 import { SHORT_RELAY_SOCKET_DIR_PREFIX } from '../relay-socket-path-limit'
-import { execCommand } from '../remote-exec-command'
+import { execCommand } from '../remote-exec/remote-exec-command'
 import { readRelayDaemonRuntimes } from './ssh-relay-endpoint-runtime'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import { probeRelayEndpointIncumbent } from './ssh-relay-endpoint-incumbent'
 import { readRemoteHomeCommand } from '../ssh-remote-commands'
 import { resolveRemoteNodePath } from '../ssh-remote-node-resolution'
 import { detectRemoteHostPlatform } from '../ssh-remote-platform-detection'
@@ -31,9 +26,8 @@ import { windowsRelayConnectCommand } from './ssh-relay-windows-launch-command'
 const MAX_ENDPOINTS = 32
 
 export type LegacyRelayEndpoint = {
-  /** The socket path, or the Windows pipe path. */
   endpoint: string
-  /** The relay's own `relay.js --connect`; null when no Node is known to run it with. */
+  /** Null when no Node runtime is available for this relay's own bridge. */
   connectCommand: string | null
   /** POSIX commands run through the login-shell wrapper; Windows PowerShell commands do not. */
   wrapCommand: boolean
@@ -51,9 +45,9 @@ export type LegacyRelayEndpointListing =
   | { kind: 'unverifiable' }
 
 export function legacyRelayEndpointListCommand(remoteHome: string, sockName: string): string {
-  const name = shellEscape(sockName)
+  const name = quotePosixShell(sockName)
   return [
-    `base=${shellEscape(`${remoteHome}/${RELAY_REMOTE_DIR}`)}`,
+    `base=${quotePosixShell(`${remoteHome}/${RELAY_REMOTE_DIR}`)}`,
     `short_base="${SHORT_RELAY_SOCKET_DIR_PREFIX}$(id -u 2>/dev/null)"`,
     `for sock in "$base"/relay-*/${name} "$short_base"/relay-*/${name}; do`,
     '  [ -S "$sock" ] && printf \'%s\\n\' "$sock"',
@@ -62,11 +56,7 @@ export function legacyRelayEndpointListCommand(remoteHome: string, sockName: str
   ].join('\n')
 }
 
-/**
- * The relay's own bridge, run from its own version directory so it presents its own build hash.
- * A socket relocated under the short `/tmp` base (long `$HOME`) keeps its `relay.js` and credential
- * in the matching `~/.orca-remote/relay-<version>/`, where every relay of that era wrote them.
- */
+/** Use the relay's own version/hash. Short /tmp sockets still keep relay.js and credentials in the matching ~/.orca-remote/relay-<version>/. */
 export function posixLegacyRelayConnectCommand(
   remoteHome: string,
   nodePath: string,
@@ -81,9 +71,9 @@ export function posixLegacyRelayConnectCommand(
   }
   const relayDir = `${remoteHome}/${RELAY_REMOTE_DIR}/${versionDir}`
   return (
-    `cd ${shellEscape(relayDir)} && ${shellEscape(nodePath)} relay.js --connect ` +
-    `--sock-path ${shellEscape(sockPath)} ` +
-    `--credential-file ${shellEscape(`${relayDir}/${sockName}.credential`)}`
+    `cd ${quotePosixShell(relayDir)} && ${quotePosixShell(nodePath)} relay.js --connect ` +
+    `--sock-path ${quotePosixShell(sockPath)} ` +
+    `--credential-file ${quotePosixShell(`${relayDir}/${sockName}.credential`)}`
   )
 }
 
@@ -135,7 +125,7 @@ async function listPosixEndpoints(
   if (sockets.length === 0) {
     return { kind: 'listed', endpoints: [], exhaustive: true }
   }
-  // Each relay is driven with the runtime it runs on; a socket whose daemon is gone with any Node.
+  // Use each daemon's runtime; a dead socket may use any available Node.
   const runtimes = await readRelayDaemonRuntimes(conn, signal)
   let fallback: Promise<string | null> | undefined
   const endpoints: LegacyRelayEndpoint[] = []
@@ -156,7 +146,7 @@ async function listPosixEndpoints(
   return { kind: 'listed', endpoints, exhaustive: true }
 }
 
-/** Pipes have no inode to list, so this account's version directories name which pipe is ours. */
+/** Map pipes to this account through its version directories; pipes have no inode to list. */
 async function listWindowsEndpoints(
   conn: SshConnection,
   host: RemoteHostPlatform,
@@ -182,7 +172,7 @@ async function listWindowsEndpoints(
   }
   const credentialName = `${sockName}.credential`.toLowerCase()
   const endpoints: LegacyRelayEndpoint[] = []
-  // A pipe no version directory here names could still be ours, so its absence proves nothing.
+  // Unmapped pipes may still belong to this account, so absence cannot prove exit.
   let exhaustive = true
   for (const pipe of inventory.pipes) {
     const owner = inventory.owners.get(pipe.toLowerCase())
@@ -208,4 +198,21 @@ async function listWindowsEndpoints(
     })
   }
   return { kind: 'listed', endpoints, exhaustive }
+}
+
+/** Proven POSIX exit requires refused connect, complete no-holder evidence and local storage; Windows pipes remain unverifiable. */
+export async function posixEndpointExited(
+  conn: SshConnection,
+  endpoint: LegacyRelayEndpoint
+): Promise<boolean> {
+  if (isWindowsRemoteHost(endpoint.host) || !endpoint.nodePath) {
+    return false
+  }
+  const incumbent = await probeRelayEndpointIncumbent(
+    conn,
+    endpoint.host,
+    endpoint.nodePath,
+    endpoint.endpoint
+  )
+  return incumbent.verdict === 'exited'
 }

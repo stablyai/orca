@@ -1,6 +1,6 @@
 import { expect, type ElectronApplication, type Page } from '@stablyai/playwright-test'
 import { PNG } from 'pngjs'
-import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
 import { nodeTerminalCommand } from '../terminal-node-command'
 import { execInTerminal, waitForTerminalOutput } from './terminal'
 import { readInlineImageState } from './terminal-inline-image-proof'

@@ -18,12 +18,7 @@ function leafIdsOf(node: TerminalPaneLayoutNode, into: string[] = []): string[] 
   return into
 }
 
-/**
- * Rearranges the mounted panes into `layout`'s shape by moving their containers, so no terminal is
- * recreated; ratios are left to `applyPaneLayoutGeometry`. False, changing nothing, when the
- * mounted panes are not exactly the layout's leaves. Never reports a layout change: the shape is
- * the host's, not an edit to push back.
- */
+/** Reshape matching mounted leaves without recreating terminals; applyPaneLayoutGeometry owns ratios. Reject leaf mismatches unchanged and emit no layout edit/pushback for host-owned shape. */
 export function movePanesToMatchTree(
   host: PaneManagerHost,
   layout: TerminalPaneLayoutNode
@@ -41,8 +36,7 @@ export function movePanesToMatchTree(
   for (const leafId of leafIds.slice(1)) {
     detachPaneFromTree(pane(leafId), callbacks)
   }
-  // Each split's region is held by its leftmost pane; its second side is placed before either side
-  // is divided, so the new split wraps the whole region.
+  // Leftmost panes anchor split regions; position the second side before dividing either, so wrapping includes the full region.
   const place = (node: TerminalPaneLayoutNode): void => {
     if (node.type === 'leaf') {
       return

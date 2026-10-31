@@ -1,4 +1,9 @@
 import type { AppState } from '@/store/types'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export function pickSpaceWindowState(state: AppState) {
   return {
@@ -8,12 +13,12 @@ export function pickSpaceWindowState(state: AppState) {
     workspaceSpaceScanning: state.workspaceSpaceScanning,
     workspaceSpaceMeasurements: state.workspaceSpaceMeasurements,
     repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    worktreesByRepo: selectWorktreesByRepo(state),
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
     runtimeEnvironments: state.runtimeEnvironments,
     runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
     removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
-    folderWorkspaces: state.folderWorkspaces,
+    folderWorkspaces: selectFolderWorkspaces(state),
     projectGroups: state.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
     settings: state.settings,
@@ -42,6 +47,8 @@ export function pickSpaceWindowState(state: AppState) {
 }
 
 export type SpaceWindowState = ReturnType<typeof pickSpaceWindowState>
+export type SpaceWindowStateUpdate = Omit<SpaceWindowState, 'editorDrafts'> &
+  Partial<Pick<SpaceWindowState, 'editorDrafts'>>
 
 export function selectSpaceWindowAnalysis(
   current: SpaceWindowState['workspaceSpaceAnalysis'],
@@ -61,7 +68,7 @@ export function selectSpaceWindowAnalysis(
   return detailCount(incoming) > detailCount(current) ? incoming : current
 }
 
-export function isSpaceWindowState(value: unknown): value is SpaceWindowState {
+export function isSpaceWindowState(value: unknown): value is SpaceWindowStateUpdate {
   return (
     value !== null &&
     typeof value === 'object' &&

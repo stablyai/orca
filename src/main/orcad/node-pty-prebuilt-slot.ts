@@ -1,22 +1,5 @@
-/**
- * Install the shipped node-pty prebuilt that matches this host, so a deployment needs
- * no C/C++ toolchain.
- *
- * Why copy into `build/Release` rather than leave it in `prebuilds/`: node-pty's own
- * loader falls back to `prebuilds/<platform>-<arch>` with no libc in the name, so a
- * glibc binary parked there is loaded on Alpine and dies in the dynamic loader. Putting
- * the chosen slot's binary in `build/Release` is what makes the libc dimension real —
- * node-pty only ever sees the one we picked.
- *
- * The prebuilds themselves are built from the PATCHED source (config/patches/node-pty@1.1.0.patch)
- * by config/scripts/build-orcad-prebuilds.mjs. An upstream tarball would not do: the patch
- * carries the `.symver` pins and the `--no-as-needed` libutil/libpthread flags that hold the
- * glibc 2.28 server-slot floor.
- *
- * The gate is N-API + libc + arch, not NODE_MODULE_VERSION: the slots are Node-API addons,
- * so one build loads on the pinned Node and on any host Node whose N-API level is at least
- * the slot's (design D2/D6 rung C).
- */
+// Copy the selected N-API/libc/arch slot into build/Release to avoid node-pty’s libc-blind fallback.
+// Build slots from patched sources: symbol pins and linker flags preserve the glibc floor.
 import { createHash } from 'node:crypto'
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -32,14 +15,14 @@ import {
 } from './native-host-abi'
 
 const SHA256 = /^[0-9a-f]{64}$/
-// Why: slot-relative POSIX paths only, so a tampered manifest cannot write outside build/Release.
+// Slot-relative POSIX paths prevent manifest traversal outside build/Release.
 const SLOT_FILE = /^(?!.*(?:^|\/)\.\.(?:\/|$))[\w.-]+(?:\/[\w.-]+)*$/
 
 const PrebuiltSlotEntrySchema = z.object({
   platform: z.string(),
   arch: z.string(),
   libc: z.enum(['glibc', 'musl', 'none']),
-  /** Highest strong GLIBC_ symbol version the slot needs; null off glibc. */
+  /** Highest required strong GLIBC_ symbol; null off glibc. */
   glibc: z.string().nullable(),
   napi: z.number().int().positive(),
   files: z.record(z.string().regex(SLOT_FILE), z.string().regex(SHA256))
@@ -54,9 +37,9 @@ const PrebuiltSlotManifestSchema = z.object({
 })
 
 export type PrebuiltSlotEntry = z.infer<typeof PrebuiltSlotEntrySchema>
-export type PrebuiltSlotManifest = z.infer<typeof PrebuiltSlotManifestSchema>
+type PrebuiltSlotManifest = z.infer<typeof PrebuiltSlotManifestSchema>
 
-export type PrebuiltSlotRefusal =
+type PrebuiltSlotRefusal =
   | 'no-slot'
   | 'no-prebuilds-dir'
   | 'no-manifest'
@@ -70,10 +53,7 @@ export type PrebuiltSlotOutcome =
   | { installed: true; slot: string; spawnHelper: boolean }
   | { installed: false; slot: string; why: PrebuiltSlotRefusal; detail?: string }
 
-/**
- * Where a deployment's prebuilds live: beside the bundle that is running. `argv[1]` is
- * `orcad.js` itself, so this stays correct wherever the install directory ends up.
- */
+/** Resolve beside the running bundle, independent of install location. */
 export function resolveOrcadPrebuildsDir(entryScript = process.argv[1]): string | null {
   const override = process.env.ORCA_ORCAD_PREBUILDS_DIR
   if (override) {
@@ -93,11 +73,8 @@ export function readPrebuiltSlotManifest(prebuildsDir: string): PrebuiltSlotMani
   return parsed.success ? parsed.data : null
 }
 
-/**
- * Why each check refuses instead of copying: a binary this host cannot load would replace
- * a "no usable prebuilt" diagnosis with a loader failure that reads as a corrupt install.
- */
-export function checkPrebuiltSlotEntry(
+/** Reject incompatible binaries before they obscure the missing-prebuilt diagnosis. */
+function checkPrebuiltSlotEntry(
   entry: PrebuiltSlotEntry,
   abi: NativeHostAbi,
   hostNapi: number | null
@@ -120,7 +97,7 @@ export function checkPrebuiltSlotEntry(
       detail: `slot needs N-API ${entry.napi}, this Node supports ${hostNapi ?? 'no N-API version it reports'}`
     }
   }
-  // An unread host version is not evidence of an old glibc; the load probe decides then.
+  // Unknown glibc versions defer compatibility to the load probe.
   if (entry.glibc && abi.glibcVersion && compareDottedVersions(abi.glibcVersion, entry.glibc) < 0) {
     return {
       why: 'glibc-too-old',
@@ -134,8 +111,7 @@ function sha256File(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
-/** Compat slots (design D6 rung B) tried after `slot`'s own, e.g. linux-x64-glibc217 for linux-x64-glibc. */
-export function compatSlotsFor(slot: string): string[] {
+function compatSlotsFor(slot: string): string[] {
   return COMPAT_SERVER_TARGETS.filter((compat) => COMPAT_SERVER_TARGET_BASES[compat] === slot)
 }
 
@@ -143,10 +119,7 @@ type SlotChoice =
   | { slot: string; entry: PrebuiltSlotEntry }
   | { slot: string; why: PrebuiltSlotRefusal; detail?: string }
 
-/**
- * The host's own slot, or a compat slot when the own one is missing or needs a newer glibc.
- * Why only those two: any other refusal (libc, arch, N-API) holds for the compat slot too.
- */
+/** Try compat slots only for absence/old glibc; libc, arch and N-API refusals apply to both. */
 function chooseSlot(
   manifest: PrebuiltSlotManifest,
   slot: string,
@@ -169,10 +142,6 @@ function chooseSlot(
   return ownRefusal ? { slot, ...ownRefusal } : { slot, why: 'no-slot' }
 }
 
-/**
- * Copy every file the manifest lists for this host's slot (or its compat slot) into node-pty's
- * `build/Release`, after checking N-API, libc, arch, glibc and each file's sha256.
- */
 export function installPrebuiltSlot(options: {
   abi: NativeHostAbi
   nodePtyDir: string
@@ -219,9 +188,7 @@ export function installPrebuiltSlot(options: {
     copyFileSync(join(prebuildsDir, slot, ...file.split('/')), destination)
   }
 
-  // Why this matters as much as pty.node: on macOS node-pty posix_spawns
-  // build/Release/spawn-helper. Without it every spawn fails with ENOENT at the moment
-  // a user opens a terminal, long after the "install succeeded" line.
+  // macOS execs spawn-helper at terminal creation; validate it before claiming installation succeeded.
   const spawnHelper =
     usesNodePtySpawnHelper(options.abi.platform) && Object.hasOwn(entry.files, 'spawn-helper')
   if (spawnHelper) {

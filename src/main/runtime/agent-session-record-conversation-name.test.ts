@@ -9,7 +9,6 @@ import { setAgentSessionRecordConversationName } from './agent-session-record-co
 
 const NOW = 9_000
 
-/** Validates the record as its row stores it. */
 function storedRecordIsValid(
   record: Omit<AgentSessionRecord, 'conversationName'> & { conversationName?: unknown }
 ): boolean {

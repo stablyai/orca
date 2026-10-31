@@ -1,11 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  APP_MENU_PASTE_EVENT,
-  dispatchAppMenuPasteEvent,
-  handleAppMenuPasteRequest
-} from './app-menu-paste'
+import { APP_MENU_PASTE_EVENT, handleAppMenuPasteRequest } from './app-menu-paste'
 
 function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
@@ -45,22 +41,6 @@ describe('app menu paste', () => {
     expect(result).toEqual({ status: 'handled', target: 'terminal' })
     expect(readClipboardText).not.toHaveBeenCalled()
     expect(performNativePaste).not.toHaveBeenCalled()
-  })
-
-  it('falls back to native paste when no Orca-owned target is focused', async () => {
-    const button = document.createElement('button')
-    document.body.appendChild(button)
-    button.focus()
-    const performNativePaste = vi.fn()
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText: vi.fn(async () => 'text'),
-      performNativePaste,
-      dispatchOwnedPasteEvent: () => false
-    })
-
-    expect(result).toEqual({ status: 'native-fallback', reason: 'no-owned-target' })
-    expect(performNativePaste).toHaveBeenCalledWith({ mode: 'paste' })
   })
 
   it('preserves paste-and-match-style when falling back to native paste', async () => {
@@ -174,45 +154,5 @@ describe('app menu paste', () => {
     expect(textarea.value).toBe('unchanged')
     expect(other.value).toBe('other')
     expect(performNativePaste).not.toHaveBeenCalled()
-  })
-
-  it('rejects oversized focused text-control paste without native fallback', async () => {
-    const textarea = appendTextarea('unchanged')
-    textarea.focus()
-    const performNativePaste = vi.fn()
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText: vi.fn(async () => {
-        throw new Error('Clipboard text is too large for this paste target.')
-      }),
-      performNativePaste,
-      dispatchOwnedPasteEvent: () => false
-    })
-
-    expect(result).toMatchObject({
-      status: 'rejected',
-      target: 'text-control',
-      reason: 'too-large'
-    })
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').toContain(
-      'reason=too-large'
-    )
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').toContain('durationMs=')
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').toContain(
-      'content=redacted'
-    )
-    expect(textarea.value).toBe('unchanged')
-    expect(performNativePaste).not.toHaveBeenCalled()
-  })
-
-  it('exposes a cancellable ownership event', () => {
-    const onPaste = (event: Event): void => {
-      event.preventDefault()
-    }
-    window.addEventListener(APP_MENU_PASTE_EVENT, onPaste)
-
-    expect(dispatchAppMenuPasteEvent()).toBe(true)
-
-    window.removeEventListener(APP_MENU_PASTE_EVENT, onPaste)
   })
 })

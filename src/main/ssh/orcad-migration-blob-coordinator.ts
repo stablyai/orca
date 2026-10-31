@@ -1,10 +1,4 @@
-/**
- * Sending a migration's blobs to the destination in bounded, resumable chunks, beside the
- * manifest's scrollback snapshots. Every kind is checked against the destination's capabilities
- * before the first byte: a kind it cannot install is refused by name, never dropped. Offsets
- * resume from the destination's staged state, and a lost acknowledgement is confirmed by
- * re-reading that state, never assumed.
- */
+/** Check every blob kind against destination capabilities before uploading. Resume from staged offsets and confirm lost acknowledgements by re-reading state; never assume delivery or silently omit unsupported data. */
 import {
   ORCAD_MIGRATION_BLOB_CHUNK_BYTES,
   type OrcadMigrationBlobChunkRequest,
@@ -15,14 +9,14 @@ import {
   orcadMigrationBlobIdentity,
   orcadMigrationBlobKindUnsupportedBlocker,
   sameOrcadMigrationBlob
-} from '../../shared/orcad-migration-blob-transfer'
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 
 export type OrcadMigrationBlobSource = {
-  /** Up to `maxBytes` bytes of the blob starting at `offset`, exactly as the descriptor hashed. */
+  /** Return the descriptor's exact hashed bytes at offset, up to maxBytes. */
   readChunk: (
     descriptor: OrcadMigrationBlobDescriptor,
     offset: number,
@@ -36,7 +30,7 @@ export type OrcadMigrationBlobDestination = {
   stageChunk: (request: OrcadMigrationBlobChunkRequest) => Promise<OrcadMigrationBlobChunkResult>
 }
 
-export type OrcadMigrationBlobTransfer = {
+type OrcadMigrationBlobTransfer = {
   source: OrcadMigrationBlobSource
   manifest: OrcadMigrationManifest
   blobs: readonly OrcadMigrationBlobDescriptor[]
@@ -104,7 +98,7 @@ function receivedOffsets(
   const offsets = new Map<string, number>()
   for (const upload of state.blobUploads ?? []) {
     const blob = wanted.get(orcadMigrationBlobIdentity(upload))
-    // A staged key with other bytes is a different capture; restaging it would mix the two.
+    // A reused key with different bytes is another capture; restaging would mix them.
     if (!blob || !sameOrcadMigrationBlob(blob, upload)) {
       throw new Error(`orcad_migration_blob_descriptor_conflict:${upload.blobKind}`)
     }
@@ -147,7 +141,7 @@ async function stageChunkWithRecovery(
         return received
       }
     } catch {
-      // The chunk stays unverifiable; report the first failure.
+      // Unverifiable chunks retain the original failure.
     }
     throw error
   }

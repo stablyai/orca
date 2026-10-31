@@ -7,11 +7,11 @@ import { clampGrabPayload } from './browser-grab-payload'
 
 describe('buildGuestOverlayScript', () => {
   it.each([
-    ['arm', '7786b94188002262ad921efb05cf4e4e22ad605b3fdb5bee6e040381f8dd95e7'],
-    ['awaitClick', '80ab6e9d7fe561791bab56e44e8dbee49698c03fa1ea87a1014e41143d463efd'],
+    ['arm', '439b0ce31b117a77e1191aab0cb7302be1dc3c237c007b5d28b427dadeba51c5'],
+    ['awaitClick', '8ba243bf8379049145b89cc11732364d323ab832e2f1b07139bfa7e3f14bfed5'],
     ['finalize', '91bd9836b0536c9579e0d4648d30679c0b4a5893d9a43110a70e67d6804fd291'],
     ['extractHover', 'cf0ee3ac61669daefa7db9389233c1abfe9f0fb9e7257300c761987aac914b02'],
-    ['teardown', '732efde1022745f26dd4250d2891a663023eecafdf025fd66dde87781a985d81']
+    ['teardown', 'b794f7e6baadefdce1b34f4a68d744a765e5519312b228fae57628cf34a9a152']
   ] as const)('preserves the serialized %s guest script', (action, expectedSha256) => {
     expect(createHash('sha256').update(buildGuestOverlayScript(action)).digest('hex')).toBe(
       expectedSha256
@@ -98,12 +98,6 @@ describe('buildGuestOverlayScript', () => {
     expect(script).toContain("pointerEvents = 'none'")
   })
 
-  it('awaitClick script blocks right-click', () => {
-    const script = buildGuestOverlayScript('awaitClick')
-    expect(script).toContain('contextmenu')
-    expect(script).toContain('preventDefault')
-  })
-
   it('teardown script cleans up the overlay', () => {
     const script = buildGuestOverlayScript('teardown')
     expect(script).toContain('cleanup')
@@ -133,7 +127,6 @@ describe('buildGuestOverlayScript', () => {
 
   it('arm script sanitizeUrl returns empty string on parse failure', () => {
     const script = buildGuestOverlayScript('arm')
-    // The catch block should return '' not the raw URL
     expect(script).toContain("return '';")
   })
 
@@ -175,17 +168,12 @@ describe('buildGuestOverlayScript', () => {
   })
 })
 
-// Regression coverage for issue #9947: Zone.js swaps the global Promise for a
-// non-native thenable, which executeJavaScript won't unwrap — so a page-global
-// `new Promise(...)` crossed as its raw `__zone_symbol__*` wrapper, not { page, target }.
 describe('awaitClick under a Zone.js-patched global Promise', () => {
   type Executor<T> = (resolve: (value: T) => void, reject: (reason: unknown) => void) => void
 
-  // Native promises are kept off the instance so its own enumerable keys match
-  // Zone.js exactly: ['__zone_symbol__state', '__zone_symbol__value'].
+  // Keep native promises off-instance to match Zone.js's enumerable wrapper fields.
   const nativeOf = new WeakMap<object, Promise<unknown>>()
 
-  /** A non-native thenable that mimics Zone.js's ZoneAwarePromise wrapper. */
   class ZoneAwarePromiseLike<T = unknown> {
     __zone_symbol__state: unknown = null
     __zone_symbol__value: unknown = undefined
@@ -210,10 +198,7 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
       )
     }
 
-    // Why: real Zone.js defines `get [Symbol.toStringTag]() { return 'Promise' }`,
-    // so an Object.prototype.toString check is fooled into seeing a promise. The
-    // boundary below deliberately uses the brand-based V8 check instead, and the
-    // control test asserts this tag does NOT let the wrapper masquerade as native.
+    // Zone.js spoofs the Promise tag; the boundary must use V8's brand check.
     get [Symbol.toStringTag](): string {
       return 'Promise'
     }
@@ -228,13 +213,7 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
     }
   }
 
-  /**
-   * Models Electron's boundary: it awaits only genuine V8 promises and
-   * serializes anything else — including non-native thenables — by value.
-   * `util.types.isPromise` is V8's brand-based IsPromise (what Electron uses):
-   * realm-independent and unforgeable, unlike an Object.prototype.toString /
-   * Symbol.toStringTag check that a ZoneAwarePromise would defeat.
-   */
+  /** Electron unwraps genuine V8 promises and serializes other thenables by value. */
   async function crossExecuteJavaScriptBoundary(completionValue: unknown): Promise<unknown> {
     if (types.isPromise(completionValue)) {
       return await (completionValue as Promise<unknown>)
@@ -243,8 +222,6 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
   }
 
   const validPayload = (): Record<string, unknown> => ({
-    // A minimal but structurally valid payload — page + target are what
-    // clampGrabPayload requires and what the bug stripped away.
     page: { title: 'Angular App' },
     target: { tagName: 'button' },
     nearbyText: [],
@@ -261,30 +238,24 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
     contextmenu: () => void
     cancel: () => void
   } {
-    const handlers: Record<string, (event: unknown) => void> = {}
-    const noopEvent = {
-      preventDefault(): void {},
-      stopPropagation(): void {},
-      stopImmediatePropagation(): void {}
-    }
     const grab: Record<string, unknown> = {
-      host: {
-        addEventListener(type: string, fn: (event: unknown) => void): void {
-          handlers[type] = fn
-        },
-        removeEventListener(): void {}
-      },
       extractPayload: options?.extractPayload ?? validPayload,
       getCurrentElement: options?.getCurrentElement ?? ((): unknown => ({})),
       freezeHighlight(): void {},
       cleanup(): void {}
     }
     const window = { __orcaGrab: grab }
+    // The overlay hands each real pointer pick to the awaiting script.
+    const pick = (type: string): void => {
+      const onPick = grab.onPick
+      if (typeof onPick === 'function') {
+        onPick({ type })
+      }
+    }
     return {
       window,
-      click: () => handlers.click?.(noopEvent),
-      contextmenu: () => handlers.contextmenu?.(noopEvent),
-      // cancelAwait is installed on __orcaGrab by the script itself at runtime.
+      click: () => pick('click'),
+      contextmenu: () => pick('contextmenu'),
       cancel: () => (window.__orcaGrab.cancelAwait as (() => void) | undefined)?.()
     }
   }
@@ -306,8 +277,6 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
     const harness = armGrabHarness()
     const completion = runAwaitClick(harness)
 
-    // The async IIFE hands Electron an intrinsic promise even though the global
-    // Promise is a non-native thenable — so the boundary unwraps it.
     expect(types.isPromise(completion)).toBe(true)
 
     harness.click()
@@ -342,9 +311,6 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
   })
 
   it('rejects across the boundary when selection fails despite ZoneAwarePromise', async () => {
-    // getCurrentElement -> null drives onClick's reject(new Error('cancelled')),
-    // which must surface as a rejected intrinsic promise (not a serialized value)
-    // so the controller classifies it as a cancellation rather than a payload.
     const harness = armGrabHarness({ getCurrentElement: () => null })
     const completion = runAwaitClick(harness)
 
@@ -353,14 +319,9 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
   })
 
   it('control: a bare page-global new Promise would cross as the raw wrapper', async () => {
-    // Proves the harness detects the regression: without the async wrapper the
-    // completion value is the ZoneAwarePromise itself, which the boundary
-    // serializes to __zone_symbol__* fields with no page/target.
     const bare = runInNewContext('new Promise(function(r){ r({ page: {}, target: {} }); })', {
       Promise: ZoneAwarePromiseLike
     })
-    // Symbol.toStringTag='Promise' fools a toString check — exactly why the
-    // boundary must use the brand-based IsPromise, which still rejects it.
     expect(Object.prototype.toString.call(bare)).toBe('[object Promise]')
     expect(types.isPromise(bare)).toBe(false)
 

@@ -1,9 +1,3 @@
-// A user's Stop inside a live Claude chat interrupts the turn before the host ends its child. The
-// turn's end then comes from the CLI's result frame, which CLIs before 2.1.91 send with no
-// terminal_reason. The translator then writes an interrupted end with no verdict and no error row,
-// and the host's Stop event, written before the interrupt, decides whose end it was as the journal
-// writes it (`turnEndAfterStop`).
-
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
@@ -20,6 +14,7 @@ import {
   type FakeConnection
 } from './claude-structured-session-test-support'
 
+// Claude before 2.1.91 omitted terminal_reason; the journal Stop determines the outcome.
 const CUT_SHORT = {
   type: 'result',
   subtype: 'error_during_execution',
@@ -33,7 +28,6 @@ async function runningChat(claude: ReturnType<typeof fakeClaude>): Promise<{
   bodies: Map<string, AgentJournalItemBody>
   connection: FakeConnection
   turnId: string
-  /** What the host's Stop writes before the interrupt. */
   stopEvent: (turnId: string) => void
 }> {
   const bodies = new Map<string, AgentJournalItemBody>()
@@ -57,7 +51,6 @@ async function runningChat(claude: ReturnType<typeof fakeClaude>): Promise<{
     fence: 7
   })
   const connection = claude.connections[0]!
-  // Claude adopts the client uuid for the echo that opens the turn.
   connection.handlers.onMessage?.({ ...connection.sent.at(-1)! })
   const turnId = [...bodies.values()]
     .map((body) => readAgentJournalTurn(body))
@@ -88,7 +81,6 @@ describe("a user's Stop inside a live Claude chat", () => {
   it('leaves the turn the interrupt cut to the Stop when the CLI names no reason', async () => {
     const claude = fakeClaude({
       routes: {
-        // The CLI aborts the turn, then acknowledges the interrupt.
         interrupt: () => {
           claude.connections[0]!.handlers.onMessage?.(CUT_SHORT)
           return undefined
@@ -107,7 +99,6 @@ describe("a user's Stop inside a live Claude chat", () => {
     expect(providerRows(bodies)).toEqual([])
   })
 
-  // The chat's Stop button names no turn: it stops whatever the conversation has open.
   it('leaves the open turn a Stop naming no turn cut to that Stop', async () => {
     const claude = fakeClaude({
       routes: {
@@ -118,7 +109,7 @@ describe("a user's Stop inside a live Claude chat", () => {
       }
     })
     const { adapter, bodies, turnId, stopEvent } = await runningChat(claude)
-    // The host names the open turn on the Stop's event.
+    // The host records the target even when the adapter request omits it.
     stopEvent(turnId)
 
     await expect(adapter.cancelTurn({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
@@ -141,7 +132,6 @@ describe("a user's Stop inside a live Claude chat", () => {
 
   it('keeps a Stop naming no turn off the turn after it', async () => {
     const claude = fakeClaude({
-      // Each turn is its own uuid, as Claude's are: the Stop names the first.
       replayUuids: ['user-uuid-0', 'user-uuid-1'],
       routes: {
         interrupt: () => {
@@ -172,7 +162,6 @@ describe("a user's Stop inside a live Claude chat", () => {
     expect(settled(bodies, nextTurnId)).toMatchObject({ state: 'completed', outcome: 'failure' })
   })
 
-  // The Stop ends the child next, so the turn it was asked for is the Stop's however it ends.
   it.each([
     ['naming the turn', true],
     ['naming no turn', false]

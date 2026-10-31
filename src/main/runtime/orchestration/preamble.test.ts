@@ -58,10 +58,9 @@ describe('buildDispatchPreamble', () => {
       .split('\n')
       .filter((line) => line.trimStart().startsWith('orca orchestration'))
 
-    expect(commandLines).toHaveLength(5)
+    expect(commandLines).toHaveLength(3)
     expect(result).not.toContain('\\\n')
     expect(commandLines.filter((line) => line.includes('--type worker_done'))).toHaveLength(1)
-    expect(commandLines.filter((line) => line.includes('--type heartbeat'))).toHaveLength(1)
     expect(commandLines.filter((line) => line.includes('orchestration ask'))).toHaveLength(1)
     expect(commandLines.filter((line) => line.includes('--type escalation'))).toHaveLength(1)
   })
@@ -75,8 +74,7 @@ describe('buildDispatchPreamble', () => {
     expect(codeBlocks[0]).toMatchObject({ lang: 'sh', value: cliFence(result) })
   })
 
-  // Why: a `---` rule directly under a paragraph is a setext H2, so the optional
-  // sections' closing rules must not turn their last sentence into a heading.
+  // A closing rule directly below prose becomes a setext heading; keep a blank line.
   it('renders no Markdown headings when the sub-dispatch and drift sections are present', () => {
     const result = buildDispatchPreamble(
       baseParams({ canDispatchSubWorkers: true, baseDrift: driftParams })
@@ -86,8 +84,8 @@ describe('buildDispatchPreamble', () => {
     expect(headings).toHaveLength(0)
     expect(codeBlocks).toHaveLength(2)
     expect(codeBlocks[1]).toMatchObject({ lang: 'sh' })
-    expect(codeBlocks[1].value).toContain('orchestration worker-start --task <task_id>')
-    expect(result).toContain('able to dispatch further.\n\n---')
+    expect(codeBlocks[1].value).toContain('orchestration worker-start --from')
+    expect(result).toContain('helpers of their own.\n\n---')
     expect(result).toContain('before starting.\n\n---')
   })
 
@@ -109,12 +107,9 @@ describe('buildDispatchPreamble', () => {
     expect(section).toContain('do NOT run a sleep/poll loop')
     expect(section).toContain('do NOT keep calling')
     expect(section).toContain('A direct instruction from the user takes precedence')
-    expect(section).toMatch(/follow it without coordinator approval or a\s+fresh Dispatch/)
-    expect(section).toMatch(
-      /do not send lifecycle messages using the settled task or\s+Dispatch IDs/
-    )
+    expect(section).toMatch(/do it without the settled task or\s+Dispatch IDs/)
     expect(section).toContain('Never refuse a direct user request because you were a worker')
-    expect(section).toMatch(/fresh\s+preamble \+ TASK block/)
+    expect(section).toMatch(/fresh preamble\s+and TASK block/)
     expect(section).not.toMatch(/2 minutes/)
     expect(section).not.toMatch(/10 minutes/)
     expect(section).not.toMatch(/may exit/)
@@ -153,6 +148,12 @@ describe('buildDispatchPreamble', () => {
     expect(result).not.toMatch(/(^|\s)orca orchestration/m)
   })
 
+  it('never mentions heartbeats', () => {
+    const result = buildDispatchPreamble(baseParams())
+    expect(result).not.toMatch(/heartbeat/i)
+    expect(cliFence(result)).toContain('orchestration ask')
+  })
+
   it('appends a BASE DRIFT section when baseDrift.behind > 0', () => {
     const result = buildDispatchPreamble({
       taskId: 'task_x',
@@ -172,7 +173,6 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('  - fix: A')
     expect(result).toContain('  - feat: B')
     expect(result).toContain('  - chore: C')
-    // drift section must appear before the task spec
     expect(result.indexOf('--- BASE DRIFT ---')).toBeLessThan(result.indexOf('=== TASK ==='))
   })
 
@@ -217,8 +217,6 @@ describe('buildDispatchPreamble', () => {
   })
 
   it('renders a stable snapshot of the full preamble', () => {
-    // Why: single strict snapshot catches any accidental regression in
-    // formatting or rule presence in one line.
     const result = buildDispatchPreamble({
       taskId: 'task_SNAP',
       dispatchId: 'ctx_SNAP',
@@ -256,11 +254,11 @@ describe('sub-dispatch section', () => {
     )
   })
 
-  it('appears with the run-create sequence when budget remains', () => {
+  it('starts helpers on this Dispatch, without a Run of their own, when budget remains', () => {
     const preamble = buildDispatchPreamble({ ...base, canDispatchSubWorkers: true })
     expect(preamble).toContain('=== SUB-DISPATCH ===')
-    expect(preamble).toContain('orchestration run-create')
-    expect(preamble).toContain('orchestration worker-start')
+    expect(preamble).toContain('orchestration worker-start --from term_worker --spec')
+    expect(preamble).not.toContain('orchestration run-create')
   })
 
   it('keeps the task block last so the spec is not buried', () => {
@@ -293,7 +291,7 @@ describe('how the preamble names the worker and its coordinator, by kind', () =>
       expect(chat).not.toContain('Exit the shell')
       expect(chat).not.toContain('Your terminal')
       expect(chat).toContain('return to an idle prompt')
-      expect(chat).toContain(`check --terminal ${SESSION_WORKER}`)
+      expect(chat).toContain(`--from ${SESSION_WORKER}`)
       expect(afterWorkerDoneSection(chat).trimEnd().endsWith(CHAT_REDISPATCH)).toBe(true)
     }
   })

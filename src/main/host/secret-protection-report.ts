@@ -2,22 +2,7 @@ import { dirname, join } from 'node:path'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { getSecretStore } from '../../shared/secret-store'
 
-/**
- * Report at-rest secret protection, but only when the answer changes.
- *
- * Why this exists: the port has always been able to describe a protection gap, and
- * nothing read it — so a Linux user whose secrets are obfuscated with a built-in key
- * was told nothing at all.
- *
- * Why not every launch: the gap is usually not something the user can fix right now
- * (it needs a keyring installed and unlocked), so repeating it every start is nagging
- * they cannot act on and will learn to ignore. Reporting on change means they hear it
- * when it starts being true, hear it again if it becomes true for a different reason,
- * and are told once when it is fixed.
- *
- * Deliberately not fatal and not a dialog: sealing still works, so blocking startup
- * would be worse than the gap it reports.
- */
+/** Report protection gaps and recovery only on change; repeated startup warnings would obscure an unresolved keyring problem. */
 
 type ReportOptions = {
   /** Profile data file; the report state lives beside it. */
@@ -52,8 +37,7 @@ export function reportSecretProtectionGap(options: ReportOptions): string | null
   try {
     gap = getSecretStore().describeProtectionGap()
   } catch (error) {
-    // Why swallow: this is diagnostics. An uninstalled store is already a hard failure
-    // at the first real read, and that error is the useful one.
+    // Diagnostics must not preempt the useful error from the first real secret read.
     log(`[secrets] could not determine at-rest protection: ${String(error)}`)
     return null
   }
@@ -66,8 +50,7 @@ export function reportSecretProtectionGap(options: ReportOptions): string | null
     if (gap) {
       log(`[secrets] ${gap}`)
     } else if (previous?.lastReportedGap) {
-      // Why announce the recovery: the previous warning said secrets were not protected,
-      // so silence would leave the user assuming that is still true.
+      // Silence would leave the previous unprotected warning unresolved.
       log('[secrets] At-rest protection is now provided by the OS keyring.')
     }
   }
@@ -76,7 +59,7 @@ export function reportSecretProtectionGap(options: ReportOptions): string | null
     try {
       writeFileSync(path, JSON.stringify({ lastReportedGap: gap }), 'utf-8')
     } catch (error) {
-      // Best effort: re-reporting next launch is strictly better than failing startup.
+      // Re-reporting next launch is preferable to failing startup.
       log(`[secrets] could not persist the protection report state: ${String(error)}`)
     }
   }

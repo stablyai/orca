@@ -15,6 +15,15 @@ import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import { getMarkdownRenderMode, type MarkdownRenderState } from './markdown-render-mode'
 import { getCachedMarkdownRichModeEligibility } from './markdown-rich-mode-eligibility-cache'
 import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
+import {
+  customEditorToggleValue,
+  resolveCustomEditorToggle,
+  type CustomEditorToggle
+} from './custom-editor-toggle'
+import type {
+  ActivePluginCustomEditor,
+  CustomEditorViewChoice
+} from '@/store/plugin-custom-editors'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
 
@@ -28,6 +37,9 @@ type EditorPanelRenderModelParams = {
   markdownRichModeSizeOverridden: boolean
   isChangesMode: boolean
   canOpenWorkspaceFileBrowser: boolean
+  /** Enabled plugins' editors for this file, in priority order. */
+  customEditors?: readonly ActivePluginCustomEditor[]
+  customEditorChoice?: CustomEditorViewChoice
 }
 
 export function getEditorPanelRenderModel({
@@ -39,7 +51,9 @@ export function getEditorPanelRenderModel({
   markdownViewMode,
   markdownRichModeSizeOverridden,
   isChangesMode,
-  canOpenWorkspaceFileBrowser
+  canOpenWorkspaceFileBrowser,
+  customEditors = [],
+  customEditorChoice
 }: EditorPanelRenderModelParams) {
   const isSingleDiff =
     activeFile.mode === 'diff' &&
@@ -54,16 +68,15 @@ export function getEditorPanelRenderModel({
       activeFile.diffSource === 'combined-uncommitted' ||
       activeFile.diffSource === 'combined-branch' ||
       activeFile.diffSource === 'combined-commit')
+  // Why: diff drafts vanish on save, so shebang detection there would flicker; diffs stay name-based.
   const resolvedLanguage =
     activeFile.mode === 'diff'
       ? detectLanguage(activeFile.relativePath)
-      : detectLanguage(activeFile.filePath)
-  // Why: an AI Vault View Log tab must show the exact raw bytes read-only. A
-  // rich/preview/mermaid/csv/notebook renderer would depart from raw text (and
-  // can look editable), so neutralize specialized viewers + view-mode chrome
-  // for read-only tabs. `resolvedLanguage` still drives read-only Monaco
-  // tokenization (e.g. jsonl stays colorized); only viewer selection is forced
-  // to a plain source rendering here.
+      : detectLanguage(
+          activeFile.filePath,
+          editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content
+        )
+  // Read-only artifact tabs require raw source viewers; retain real-language tokenization while suppressing rich/preview modes and their editing affordances.
   const rawReadOnly = activeFile.mode === 'edit' && activeFile.readOnly === true
   const viewerLanguage = rawReadOnly ? 'plaintext' : resolvedLanguage
   const worktreeEntries = gitStatusEntries ?? []
@@ -117,11 +130,37 @@ export function getEditorPanelRenderModel({
     isBinaryEditSurface || !canUseChangesModeForFile(activeFile)
       ? editorToggleModes.filter((mode) => mode !== 'changes')
       : editorToggleModes
+  const inlineFileContent = activeFile.mode === 'edit' ? fileContents[activeFile.id] : undefined
+  const customEditorContentReady =
+    activeFile.mode === 'edit' &&
+    inlineFileContent !== undefined &&
+    !inlineFileContent.loadError &&
+    inlineFileContent.csvPreview === undefined &&
+    activeFile.conflict === undefined
+  // Read-only tabs keep raw source, as for every other rich view.
+  const textEditorEligible =
+    customEditorContentReady && !rawReadOnly && inlineFileContent?.isBinary !== true
+  // Bytes editors honor read-only themselves, so they open read-only tabs too; they need a pageable route.
+  const bytesEditorEligible =
+    customEditorContentReady && inlineFileContent?.byteSource !== undefined
+  const eligibleCustomEditors = customEditors.filter((editor) =>
+    editor.contentKind === 'bytes' ? bytesEditorEligible : textEditorEligible
+  )
+  const customEditorToggle: CustomEditorToggle | null = resolveCustomEditorToggle({
+    editors: eligibleCustomEditors,
+    choice: customEditorChoice,
+    eligible: eligibleCustomEditors.length > 0,
+    sourceModes: availableEditorToggleModes
+  })
+  const activeCustomEditor = isChangesMode ? null : (customEditorToggle?.active ?? null)
   const effectiveToggleValue: EditorToggleValue = isChangesMode
     ? 'changes'
-    : hasViewModeToggle
-      ? mdViewMode
-      : 'edit'
+    : activeCustomEditor
+      ? customEditorToggleValue(activeCustomEditor)
+      : hasViewModeToggle
+        ? mdViewMode
+        : 'edit'
+  const toggleModes = customEditorToggle?.modes ?? availableEditorToggleModes
   const inlineMarkdownContent =
     activeFile.mode === 'edit'
       ? (editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null)
@@ -129,7 +168,6 @@ export function getEditorPanelRenderModel({
   const shouldShowMarkdownExportAction =
     viewerLanguage === 'markdown' &&
     (activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview')
-  const inlineFileContent = activeFile.mode === 'edit' ? fileContents[activeFile.id] : undefined
   const canRenderInlineMarkdown =
     viewerLanguage === 'markdown' &&
     activeFile.mode === 'edit' &&
@@ -192,24 +230,31 @@ export function getEditorPanelRenderModel({
     isMermaid: viewerLanguage === 'mermaid',
     isCsv: viewerLanguage === 'csv' || viewerLanguage === 'tsv',
     isNotebook: viewerLanguage === 'notebook',
-    // Why: the preview renders the on-disk file, so diff surfaces only get it
-    // when the modified side still exists on disk (canOpen excludes deleted
-    // files and commit diffs whose content may not match the working tree).
+    // Preview reads disk; exclude deleted modified sides and historical commit snapshots that may not match it.
     canOpenPreviewToSide:
       canOpenWorkspaceFileBrowser &&
       canPreviewLanguage(viewerLanguage) &&
       (activeFile.mode === 'edit' || (isSingleDiff && openFileState.canOpen)),
     mdViewMode,
     hasViewModeToggle,
-    availableEditorToggleModes,
-    hasEditorToggle: availableEditorToggleModes.length > 1,
+    availableEditorToggleModes: toggleModes,
+    hasEditorToggle: toggleModes.length > 1,
     effectiveToggleValue,
+    customEditors: customEditorToggle?.editors ?? [],
+    customEditorTitles: Object.fromEntries(
+      (customEditorToggle?.editors ?? []).map((editor) => [
+        customEditorToggleValue(editor),
+        editor.title
+      ])
+    ),
+    activeCustomEditor,
     isMarkdownTableOfContentsDisabled: hasViewModeToggle && mdViewMode === 'source',
     shouldShowMarkdownExportAction,
     canExportMarkdownToPdf,
     inlineMarkdownRenderState,
     canShowMarkdownTableOfContents:
       viewerLanguage === 'markdown' &&
+      activeCustomEditor === null &&
       (hasViewModeToggle || activeFile.mode === 'markdown-preview'),
     canShowMarkdownPreview: canOpenMarkdownPreview({
       language: viewerLanguage,

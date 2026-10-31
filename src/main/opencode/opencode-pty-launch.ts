@@ -2,7 +2,10 @@ import { addWslEnvKeys } from '../../shared/wsl-env'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID, createHash } from 'node:crypto'
 import { agentHookServer } from '../agent-hooks/server'
-import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
+import {
+  tokenizeStartupCommand,
+  type AgentStartupShell
+} from '../../shared/tui-agent-startup-shell'
 import { isOpenCodeRunCommand } from '../../shared/opencode-headless-command'
 import {
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,
@@ -24,6 +27,7 @@ import { deleteRequestedEnvKeys } from '../ipc/pty/host-env/path'
 import { probeOpenCodeLaunchCapabilities } from './opencode-launch-capabilities'
 import { reserveOpenCodeStartupPrompt } from './opencode-startup-prompt-owner'
 import { installOpenCodeStartupPromptForLaunch } from './opencode-startup-prompt-installer'
+import { needsOpenCodePrivateServer, withOpenCodeStandaloneServer } from './opencode-private-server'
 
 export async function prepareOpenCodePtyLaunch(options: {
   command: string | undefined
@@ -34,6 +38,7 @@ export async function prepareOpenCodePtyLaunch(options: {
   connectionId?: string | null
   isFreshLaunch: boolean
   wsl?: { distro?: string }
+  shell?: AgentStartupShell
 }): Promise<{ env: Record<string, string> | undefined; command: string | undefined }> {
   let command = options.command
   const env = options.env ? { ...options.env } : undefined
@@ -130,6 +135,13 @@ export async function prepareOpenCodePtyLaunch(options: {
           }
         }
       }
+    }
+  }
+  if (capabilities.pluginApi === 'v2' && options.shell && !options.wsl && command) {
+    // Only launches that would start the shared service may claim its port.
+    const standalone = withOpenCodeStandaloneServer(command, options.shell)
+    if (standalone !== command && needsOpenCodePrivateServer(probeEnv)) {
+      command = standalone
     }
   }
   if (options.wsl) {

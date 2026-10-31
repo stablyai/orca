@@ -1,3 +1,5 @@
+import type { AutomationDefinitionOperations } from './automation-definition-operations'
+import type { WorkspaceRunContext } from '../../../shared/task-source-context'
 import type {
   Automation,
   AutomationPrecheckResult,
@@ -129,15 +131,12 @@ export function getAutomationContextsForRepo(
   const projection = projectHostSetupProjectionFromRepos([repo])
   const projectedProject = projection.projects[0]
   const projectedSetup = projection.setups[0]
-  // Why the host filter first: a repo id can be shared across hosts, and the
-  // contexts must describe the copy this record resolved to, not a sibling's.
+  // Shared repo IDs require host-scoped context lookup.
   const repoHostId = getRepoExecutionHostId(repo)
   const setup =
     projectHostSetups.find(
       (candidate) => candidate.repoId === repo.id && candidate.hostId === repoHostId
-    ) ??
-    projectHostSetups.find((candidate) => candidate.repoId === repo.id) ??
-    projectedSetup
+    ) ?? projectedSetup
   const runContext = setup
     ? buildWorkspaceRunContext({
         projectId: setup.projectId,
@@ -185,7 +184,11 @@ export function backfillLegacyAutomationContexts(
 } {
   let changed = false
   const contextsByAutomationId = new Map<string, Pick<Automation, 'runContext' | 'sourceContext'>>()
-  const reposById = new Map((state.repos ?? []).map((repo) => [repo.id, repo]))
+  // Ambiguous same-ID repos remain unresolved so dispatch can refuse safely.
+  const reposById = new Map<string, Repo | undefined>()
+  for (const repo of state.repos ?? []) {
+    reposById.set(repo.id, reposById.has(repo.id) ? undefined : repo)
+  }
   const automations = (state.automations ?? []).map((automation) => {
     const contexts = getAutomationContextsForRepo(
       reposById.get(getAutomationLegacyRepoId(automation)),
@@ -193,7 +196,7 @@ export function backfillLegacyAutomationContexts(
     )
     const next: Automation = { ...automation }
     if (!Object.hasOwn(next, 'runContext')) {
-      // Why: pre-host-context automations only stored a repo id; backfill the run target once so dispatch/precheck stop inferring it.
+      // Backfill legacy repo-only targets once so dispatch/precheck no longer infer ownership.
       next.runContext = contexts.runContext
       changed = true
     }
@@ -239,4 +242,40 @@ export function backfillLegacyAutomationContexts(
     },
     changed: true
   }
+}
+
+/**
+ * Writes the run target a legacy record resolved to, once: a record that already has one keeps it,
+ * so a stamp can never retarget an automation the user or a migration placed.
+ */
+export function stampLegacyAutomationRunContext(
+  operations: AutomationDefinitionOperations,
+  id: string,
+  runContext: WorkspaceRunContext
+): boolean {
+  const current = (operations.state.automations ?? []).find((entry) => entry.id === id)
+  if (!current || current.runContext) {
+    return false
+  }
+  // Replaced, not patched in place: the list projection caches on array identity.
+  operations.state.automations = operations.state.automations.map((entry) =>
+    entry.id === id ? { ...entry, runContext } : entry
+  )
+  operations.flush()
+  return true
+}
+
+export function automationContextAfterUpdate<T>(
+  saved: T | null | undefined,
+  update: T | null | undefined,
+  registry: T | null | undefined,
+  retargeted: boolean
+): T | null | undefined {
+  return update === null
+    ? null
+    : retargeted
+      ? (registry ?? update ?? null)
+      : saved === undefined
+        ? registry
+        : saved
 }

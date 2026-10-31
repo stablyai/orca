@@ -1,6 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// Context facts ride turn rows. Every kind the writer produces must replay, and
-// one this build cannot read must cost the fact, never the row or the journal.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -37,7 +35,6 @@ export function registerJournalRowContextUsageTests(): void {
     outputTokens: 5
   }
 
-  /** One of each part and kind, as the writer builds them. */
   const FACTS: AgentSessionContextUsage[] = [
     { window: { tokens: 1_000_000, capturedAt: 3 } },
     { used: { kind: 'estimate', usage: USAGE, capturedAt: 4 } },
@@ -62,7 +59,7 @@ export function registerJournalRowContextUsageTests(): void {
 
   let root: string
   let clock = 1_000
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
 
   const open = () =>
     journals.open({
@@ -126,10 +123,10 @@ export function registerJournalRowContextUsageTests(): void {
       try {
         const rowJson = liveTestJournalRows(opened.db, IDENTITY.sessionId)[1]?.rowJson ?? ''
         const future = JSON.parse(rowJson)
-        future.body.contextUsage = { used: { kind: 'measured-later', tokens: 'many' } }
+        future.body.contextUsage = { used: { kind: 'unknown', capturedAt: 'later' } }
         updateTestJournalRowJson(opened.db, IDENTITY.sessionId, 2, JSON.stringify(future))
       } finally {
-        opened.close()
+        await opened.close()
       }
 
       const reopened = await open()

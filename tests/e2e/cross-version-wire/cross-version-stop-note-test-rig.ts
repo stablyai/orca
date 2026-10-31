@@ -4,10 +4,14 @@ import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, expect } from 'vitest'
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
@@ -16,8 +20,10 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalCursor,
   type AgentJournalItemBody,
+  type AgentJournalRenderItem,
   type AgentJournalTurnLifecycle
 } from '../../../src/shared/agent-session-journal-types'
+import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session-journal-schemas'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult,
@@ -51,15 +57,23 @@ export type ScenarioPort = {
   ) => Promise<RpcReply[]>
   runtimeStub: () => unknown
 }
-export const turnIdentity = { provider: 'orca', clientMessageId: 'turn-stop-test' } as const
+export const turnIdentity = {
+  provider: 'orca',
+  clientMessageId: 'turn-stop-test'
+} as const
 export const turnItemId = agentJournalItemKey(turnIdentity)
-export const noteIdentity = { provider: 'orca', clientMessageId: 'stop:turn-stop-test' } as const
+export const noteIdentity = {
+  provider: 'orca',
+  clientMessageId: 'stop:turn-stop-test'
+} as const
 export const noteId = agentJournalItemKey(noteIdentity)
 export const scope = { kind: 'turn', turnItemId } as const
 export const ordinary = { kind: 'status', text: 'Cancellation requested.' }
 export const unconfirmed: AgentJournalItemBody = {
   kind: 'status',
-  ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), { surface: 'row' })
+  ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), {
+    surface: 'row'
+  })
 }
 
 export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
@@ -83,23 +97,33 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
       claimKeyId: 'key-1',
       logger: createStructuredAgentSessionLogger(),
       now: () => NOW,
-      adapter: {
-        supportsCreate: () => true,
-        acquire: async ({ fence, spawnToken }) => ({
-          process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
-          link: {
-            linkId: `link-${fence}`,
-            handle: codexProviderHandle(THREAD),
-            origin: 'created',
-            mintedAtFence: fence,
-            observedAt: NOW
-          }
-        }),
-        dispatch: async () => ({ state: 'unknown', reason: 'unused' }),
-        cancelTurn: async () => ({ cancelled: true }),
-        answerPrompt: async () => {},
-        setOption: async () => {}
-      }
+      // A ready provider proves its start as soon as it is published.
+      adapter: startsWhenPublished(
+        {
+          supportsCreate: () => true,
+          acquire: async ({ fence, spawnToken }) => ({
+            acquisitionGeneration: `stop-note-${fence}`,
+            process: {
+              hostId: 'local',
+              pid: 4242,
+              processStartTimeMs: NOW,
+              spawnToken
+            },
+            link: {
+              linkId: `link-${fence}`,
+              handle: codexProviderHandle(THREAD),
+              origin: 'created',
+              mintedAtFence: fence,
+              observedAt: NOW
+            }
+          }),
+          dispatch: async () => ({ state: 'unknown', reason: 'unused' }),
+          cancelTurn: async () => ({ cancelled: true }),
+          answerPrompt: async () => {},
+          setOption: async () => {}
+        },
+        () => host
+      )
     })
     setStructuredAgentSessionHost(host)
     expect(await host.attach({ callerKey: 'released-client' }, attachParams(null))).toMatchObject({
@@ -111,6 +135,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     setStructuredAgentSessionHost(null)
     await host.flushAllStreamedEvents()
     await journal.close()
+    await closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   })
   function call(method: string, params: unknown) {
@@ -126,6 +151,14 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
       port.runtimeStub()
     )
   }
+  /** The released client's schema decides admission; this build's guard types what it kept. */
+  function admit(item: unknown): AgentJournalRenderItem {
+    const admitted = client.AgentJournalRenderItemSchema.parse(item)
+    if (!isAdmissibleAgentJournalRenderItem(admitted)) {
+      throw new Error('released client admitted an item this build cannot read')
+    }
+    return admitted
+  }
   async function page(params: Record<string, unknown>): Promise<AgentSessionHistoryPage> {
     const reply = (await call('agentSession.history', { sessionId: SESSION, ...params }))[0]
     expect(reply?.ok).toBe(true)
@@ -136,7 +169,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     }
     return {
       ...result.page,
-      items: result.page.items.map((item) => client.AgentJournalRenderItemSchema.parse(item))
+      items: result.page.items.map(admit)
     }
   }
   async function subscribe(
@@ -154,9 +187,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
             ...event,
             batch: {
               ...event.batch,
-              items: event.batch.items.map((item) =>
-                client.AgentJournalRenderItemSchema.parse(item)
-              )
+              items: event.batch.items.map(admit)
             }
           }
         : event
@@ -179,13 +210,24 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
           settlementId: `end-${state}`,
           fence: 1,
           mutations: [
-            { kind: 'item', identity: turnIdentity, body, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+            {
+              kind: 'item',
+              identity: turnIdentity,
+              body,
+              turnScope: AGENT_JOURNAL_THREAD_SCOPE
+            }
           ]
         })
-      : journal.appendItem(turnIdentity, body, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }))
+      : journal.appendItem(turnIdentity, body, {
+          fence: 1,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }))
   }
   async function note(body: AgentJournalItemBody = unconfirmed) {
-    await journal.appendItem(noteIdentity, body, { fence: 1, turnScope: scope })
+    await journal.appendItem(noteIdentity, body, {
+      fence: 1,
+      turnScope: scope
+    })
   }
   async function seed() {
     await turn('running')

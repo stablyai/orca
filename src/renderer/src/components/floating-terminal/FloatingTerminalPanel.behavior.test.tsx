@@ -1,15 +1,30 @@
+import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import './FloatingTerminalPanel.bounds.spec'
 import './FloatingTerminalPanel.focus.spec'
 import './FloatingTerminalPanel.shortcuts.spec'
 import './FloatingTerminalPanel.tab-lifecycle.spec'
 
+// Why: the specs read the stubbed window's listeners in place of the app keyboard router's stage.
+vi.mock('@/lib/app-keyboard-router', () => ({
+  addAppKeyListener: (type: 'keydown' | 'keyup', handler: (e: KeyboardEvent) => void) =>
+    window.addEventListener(type, handler, { capture: true }),
+  removeAppKeyListener: (type: 'keydown' | 'keyup', handler: (e: KeyboardEvent) => void) =>
+    window.removeEventListener(type, handler, { capture: true })
+}))
+
+vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
+  admitStructuredAgentSession: (
+    await import('@/store/slices/store-session-test-harness')
+  ).admissionFromBusy(() => false)
+}))
+
 vi.mock('zustand/react/shallow', () => ({
   // Why: zustand resolves the real react (unmocked in node_modules); the memo wrapper is inert here.
   useShallow: (selector: unknown) => selector
 }))
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
   return { ...actual, ...createReactHookOverrides() }
 })
@@ -82,6 +97,16 @@ vi.mock('@/components/contextual-tours/use-contextual-tour', async () => {
 vi.mock('@/components/ui/dialog', async () => {
   return (await import('./floating-terminal-panel-component-stubs')).createDialogModule()
 })
+// The panel is probed without a React dispatcher; confirm immediately to keep bulk-close assertions synchronous.
+vi.mock('@/components/use-bulk-tab-close-confirmation', () => ({
+  useBulkTabCloseConfirmation:
+    () => (_scope: string, selectTabIds: () => string[], closeTabs: (tabIds: string[]) => void) => {
+      const tabIds = selectTabIds()
+      if (tabIds.length > 0) {
+        closeTabs(tabIds)
+      }
+    }
+}))
 vi.mock('@/components/terminal/useTerminalSaveDialog', async () => {
   return (
     await import('./floating-terminal-panel-test-module-mocks')
@@ -118,6 +143,8 @@ vi.mock('@/lib/connection-context', async () => {
 vi.mock('@/lib/create-untitled-markdown', () => ({
   createUntitledMarkdownFileWithTemplateSelection: vi.fn()
 }))
+// Why inline and sync: the shortcuts spec imports this module to assert the launch destination.
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: vi.fn(() => null) }))
 vi.mock('@/lib/ipc-error', async () => {
   return (await import('./floating-terminal-panel-test-module-mocks')).createIpcErrorModule()
 })

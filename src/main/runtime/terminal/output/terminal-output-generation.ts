@@ -3,10 +3,20 @@ import type { AgentStatus } from '../../../../shared/agent-detection'
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
 import { findLastCompleteOscTitleRange } from '../../orca-runtime-core'
 import { extractLastOscTitle } from '../../../../shared/osc-title-extraction'
-import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
 import type { RuntimeTerminalDataMeta } from '../../runtime-terminal-stream-consumers'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
+  private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
+
+  protected getPtyLifecycleSignal(ptyId: string): AbortSignal {
+    let controller = this.ptyLifecycleCancellation.get(ptyId)
+    if (!controller) {
+      controller = new AbortController()
+      this.ptyLifecycleCancellation.set(ptyId, controller)
+    }
+    return controller.signal
+  }
+
   protected recordAgentPromptLifecycleState(ptyId: string, status: AgentStatus | null): void {
     if (status === 'permission') {
       this.recordAgentPromptPermissionObservation(ptyId)
@@ -58,7 +68,8 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     if (title === null) {
       return
     }
-    const status = detectAgentStatusFromTitle(title)
+    // Explicit-first, as the title observer classified it: a program's activity outranks the glyph.
+    const status = this.classifyPtyTitleStatus(ptyId, title)
     const current = this.agentPromptLifecycleByPtyId.get(ptyId)
     if (!current || current.status === status) {
       return
@@ -87,6 +98,9 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
 
   protected advancePtyLifecycleGeneration(ptyId: string): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    const cancellation = this.ptyLifecycleCancellation.get(ptyId)
+    this.ptyLifecycleCancellation.delete(ptyId)
+    cancellation?.abort()
     this.clearAgentPromptCorrelationForPty(ptyId)
     // A stop intent belongs to one process incarnation; never let it label a
     // replacement process when the provider reports a generation reset.
@@ -95,8 +109,12 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
     this.legacyWorkerRecovery.deleteRecoveredPty(ptyId)
-    // Why: a respawn under the same session id needs its own subscriber-driven attach.
-    this.terminalViewSubscribers.resetGeneration(ptyId)
+    // Why: a respawn under the same session id needs its own main attach.
+    this.mainDaemonAttachments.forget(ptyId)
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      pty.outputObservedSince = null
+    }
     // Why: a provider response belongs to the process generation that issued
     // it; a respawn must neither reuse its frame nor join its in-flight call.
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
@@ -145,6 +163,8 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
         pty.wslDistro = null
       }
       if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
+        // The replaced process's live facet says nothing about its successor.
+        this.clearLiveProgramStatusFacet(ptyId)
         this.resetTrackedTerminalStateForProviderGeneration(ptyId)
       }
     }

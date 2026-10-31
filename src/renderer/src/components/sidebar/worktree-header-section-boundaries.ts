@@ -1,6 +1,6 @@
 import { estimateRenderRowSize } from './worktree-list/viewport/virtual-rows'
 import type { RenderRow } from './worktree-list/listing/render-row'
-import type { GroupHeaderRow } from '../../../../shared/sidebar-list/row-types'
+import { getHeaderDragRepo, type GroupHeaderRow } from '../../../../shared/sidebar-list/row-types'
 
 function getEstimatedRenderRowStarts(
   rows: readonly RenderRow[],
@@ -16,9 +16,7 @@ function getEstimatedRenderRowStarts(
   return starts
 }
 
-// Why indexed once instead of a findIndex per header: both boundary passes ran a full row scan
-// for every header row, so the sidebar row model cost O(headers x rows) on every rebuild — and it
-// rebuilds on agent-status ticks, not just on drag. First match wins, matching findIndex.
+// Index once to avoid O(headers × rows) rebuilds on agent ticks; preserve findIndex’s first-match behavior.
 function indexHeaderRenderRows(
   rows: readonly RenderRow[],
   keyOf: (row: GroupHeaderRow) => string | null | undefined
@@ -33,8 +31,7 @@ function indexHeaderRenderRows(
   return indexByKey
 }
 
-// Kept per bucket: an id can sit in more than one bucket, and the caller's bucket lookup decides
-// which ordering applies. First occurrence wins within a bucket, matching indexOf.
+// Index successors per bucket; duplicate IDs retain each bucket’s first occurrence, matching indexOf.
 function indexBucketSuccessors(
   idsByBucket: ReadonlyMap<string, readonly string[]>
 ): Map<string, ReadonlyMap<string, string | undefined>> {
@@ -92,12 +89,15 @@ export function getRepoHeaderSectionEndByRepoId(args: {
   repoHeaderBucketByRepoId: ReadonlyMap<string, string>
 }): Map<string, number> {
   const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
-  const repoHeaderIndexByRepoId = indexHeaderRenderRows(args.rows, (row) => row.repo?.id)
+  const repoHeaderIndexByRepoId = indexHeaderRenderRows(
+    args.rows,
+    (row) => getHeaderDragRepo(row)?.id
+  )
   const repoSuccessorsByBucket = indexBucketSuccessors(args.sidebarRepoHeaderIdsByBucket)
   const sectionEndByRepoId = new Map<string, number>()
   for (let index = 0; index < args.rows.length; index++) {
     const row = args.rows[index]
-    const repoId = row?.type === 'header' ? row.repo?.id : undefined
+    const repoId = row?.type === 'header' ? getHeaderDragRepo(row)?.id : undefined
     if (!repoId) {
       continue
     }
@@ -122,7 +122,7 @@ export function getProjectGroupHeaderSectionEndByGroupId(args: {
 }): Map<string, number> {
   const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
   const projectGroupHeaderIndexByGroupId = indexHeaderRenderRows(args.rows, (row) =>
-    row.repo ? undefined : row.projectGroup?.id
+    row.repo || row.repeated ? undefined : row.projectGroup?.id
   )
   const groupSuccessorsByBucket = indexBucketSuccessors(args.sidebarProjectGroupHeaderIdsByBucket)
   const sectionEndByGroupId = new Map<string, number>()
@@ -131,6 +131,7 @@ export function getProjectGroupHeaderSectionEndByGroupId(args: {
     const projectGroupHeader =
       row?.type === 'header' &&
       !row.repo &&
+      !row.repeated &&
       row.projectGroup &&
       typeof row.projectGroup.id === 'string'
         ? { row, groupId: row.projectGroup.id }

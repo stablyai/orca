@@ -6,7 +6,6 @@ import { mountFixture } from '../recorder-fixture-shape'
 
 const REPO_ID = 'repo-1'
 
-/** A PR review comment: has a path, a numeric line and a numeric id, so a reply is a review reply. */
 const REVIEW_COMMENT = {
   id: 501,
   author: 'octocat',
@@ -18,7 +17,6 @@ const REVIEW_COMMENT = {
   isResolved: false
 } as const
 
-/** An issue comment: no path or line, so a reply falls back to a plain issue comment. */
 const ISSUE_COMMENT = {
   id: 'comment-2',
   author: 'octocat',
@@ -87,11 +85,7 @@ const PR_ROW = {
   fieldValuesByFieldId: {}
 } as const
 
-/**
- * A single-select field as the board actually holds one. `kind` is the discriminant
- * `optimisticProjectFieldValue` switches on, and the option has to be present for the optimistic
- * value to carry its name and colour rather than the not-found fallback.
- */
+// Include the selected option so optimistic field values retain its name/color rather than the not-found fallback.
 const STATUS_FIELD = {
   kind: 'single-select',
   id: 'field-1',
@@ -107,10 +101,6 @@ const PROJECT_TABLE = {
   rows: [ISSUE_ROW, PR_ROW]
 }
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -158,10 +148,6 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * Writing a board row's own state: a project field value, and re-running or reviewing the checks
- * on the pull request behind a row.
- */
 export function taskProjectRowFieldMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

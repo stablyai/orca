@@ -2,6 +2,10 @@ import { access, constants as fsConstants, stat } from 'node:fs/promises'
 import { statSync, type Stats } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import { getExecutableNames } from '../../shared/node-cli-command-resolution'
+import { forEachWithConcurrency } from '../../shared/map-with-concurrency'
+import { directoryNameKey } from './command-path-directory'
+import { readDetectionDirectoryViaWorker } from './command-path-directory-worker-client'
 
 export type ResolveCommandOptions = {
   /** Defaults to `process.platform`. Lets tests exercise the win32 lookup on posix. */
@@ -14,9 +18,7 @@ export type ResolveCommandOptions = {
   maxResults?: number
 }
 
-// Why: Windows env keys are case-insensitive (PATH is usually stored as `Path`,
-// PATHEXT as `PathExt`), but the merged env object we search is a plain,
-// case-sensitive Record — so look the key up case-insensitively.
+// Windows environment keys are case-insensitive even though this Record is not.
 function readEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | undefined {
   const direct = env[key]
   if (direct !== undefined) {
@@ -31,15 +33,24 @@ function readEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | u
   return undefined
 }
 
-function getWindowsExtensions(env: NodeJS.ProcessEnv, command: string): string[] {
+function getWindowsPathSearchExtensions(env: NodeJS.ProcessEnv, command: string): string[] {
   const pathext = readEnvCaseInsensitive(env, 'PATHEXT') ?? '.EXE;.CMD;.BAT;.COM'
   const extensions = pathext.split(';').filter((ext) => ext.length > 0)
-  // Why: when the command already carries an extension (e.g. `node.exe`), an
-  // exact-name match must be allowed alongside the PATHEXT permutations.
+  // Explicit extensions also permit exact-name matches alongside PATHEXT variants.
   if (command.includes('.')) {
     extensions.unshift('')
   }
   return extensions
+}
+
+/** Agent CLI fallback also checks a literal executable name without an extension. */
+function getWindowsBatchDetectionExtensions(env: NodeJS.ProcessEnv, command: string): string[] {
+  return [
+    ...new Set([
+      ...getWindowsPathSearchExtensions(env, command),
+      ...getExecutableNames('win32', command).map((name) => name.slice(command.length))
+    ])
+  ]
 }
 
 type LocalCommandSelection = {
@@ -147,10 +158,10 @@ export function resolveSelectedLocalCommand(
 
 async function isExecutableFile(candidate: string, isWin: boolean): Promise<boolean> {
   try {
-    // Why: stat (not lstat) so symlinked CLIs resolve to their real target.
+    // Follow symlinked CLIs to their real targets.
     const stats = await stat(candidate)
     if (stats.isDirectory()) {
-      // Why: PATH dirs carry the search/exec bit; reject them like `[ ! -d ]`.
+      // PATH directories are not executable files despite their search bit.
       return false
     }
     if (isWin) {
@@ -164,21 +175,104 @@ async function isExecutableFile(candidate: string, isWin: boolean): Promise<bool
   }
 }
 
-/**
- * Resolve whether `command` is an executable on PATH using only `node:fs`
- * — zero `where`/`which` subprocess spawns. Mirrors the canonical
- * which(1)/where.exe lookup, including the current preflight quirk that only
- * counts matches which resolve to an ABSOLUTE path (so relative PATH entries
- * and relative command paths stay not-found, exactly as before).
- *
- * Stops at the first match; use {@link listLocalCommandPaths} when the rest of
- * the PATH matters too.
- */
+/** Filesystem-only PATH lookup preserving the preflight absolute-path filter; use listLocalCommandPaths for shadowed candidates. */
 export async function isCommandOnLocalPath(
   command: string,
   options: ResolveCommandOptions = {}
 ): Promise<boolean> {
   return (await findLocalCommandPaths(command, options, true)).length > 0
+}
+
+const DIRECT_DETECTION_COMMAND_LIMIT = 4
+
+/** Bounded, lazy PATH detection; listings eliminate repeated probes for absence-heavy inventories. */
+export async function findCommandsOnLocalPath(
+  commands: readonly string[],
+  options: ResolveCommandOptions = {}
+): Promise<Set<string>> {
+  const found = new Set<string>()
+  const bareCommands = new Set<string>()
+  const isWin = (options.platform ?? process.platform) === 'win32'
+  for (const command of commands.filter(Boolean)) {
+    if (command.includes('/') || (isWin && command.includes('\\'))) {
+      if (await isCommandOnLocalPath(command, options)) {
+        found.add(command)
+      }
+    } else {
+      bareCommands.add(command)
+    }
+  }
+  if (bareCommands.size === 0) {
+    return found
+  }
+
+  const env = options.env ?? process.env
+  const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
+  // Native Windows joining preserves UNC roots; POSIX hosts retain synthetic lookups.
+  const joinPath = isWin ? path.join : path.posix.join
+  const pathDirs = (readEnvCaseInsensitive(env, 'PATH') ?? '')
+    .split(isWin ? ';' : ':')
+    // The install-dir fallback also searches trimmed PATH entries.
+    .flatMap((dir) => [dir, dir.trim()])
+  const cwd = options.cwd ?? process.cwd()
+  const searchDirs = [...new Set((isWin ? [cwd, ...pathDirs] : pathDirs).filter(isAbsolute))]
+  const extensions = new Map(
+    [...bareCommands].map((command) => [
+      command,
+      isWin ? getWindowsBatchDetectionExtensions(env, command) : ['']
+    ])
+  )
+
+  const allFound = Promise.withResolvers<void>()
+  const scanDirectory = async (dir: string): Promise<void> => {
+    if (bareCommands.size === 0) {
+      return
+    }
+    const names =
+      !isWin && bareCommands.size <= DIRECT_DETECTION_COMMAND_LIMIT
+        ? null
+        : await readDetectionDirectoryViaWorker(dir)
+    await Promise.all(
+      [...bareCommands].map(async (command) => {
+        const seenCandidates = new Set<string>()
+        for (const ext of extensions.get(command) ?? []) {
+          const wanted = command + ext
+          const listed = names?.get(directoryNameKey(wanted))
+          if (names !== null && listed === undefined) {
+            continue
+          }
+          // POSIX stat must decide volume case sensitivity, even for a folded-name match.
+          const candidate = joinPath(dir, isWin ? (listed ?? wanted) : wanted)
+          const candidateKey = isWin ? candidate.toLowerCase() : candidate
+          if (seenCandidates.has(candidateKey)) {
+            continue
+          }
+          seenCandidates.add(candidateKey)
+          if (await isExecutableFile(candidate, isWin)) {
+            found.add(command)
+            bareCommands.delete(command)
+            if (bareCommands.size === 0) {
+              allFound.resolve()
+            }
+            break
+          }
+        }
+      })
+    )
+  }
+  // Preserve first-directory hits; overlap later absence scans without waiting on unrelated ones.
+  if (searchDirs.length > 0) {
+    await scanDirectory(searchDirs[0])
+    await Promise.race([
+      allFound.promise,
+      forEachWithConcurrency(
+        searchDirs.slice(1),
+        commands.length <= DIRECT_DETECTION_COMMAND_LIMIT ? 1 : 4,
+        scanDirectory
+      )
+    ])
+  }
+  return found
 }
 
 /** The absolute path `isCommandOnLocalPath` found, or null. */
@@ -209,27 +303,23 @@ async function findLocalCommandPaths(
   const env = options.env ?? process.env
   const cwd = options.cwd ?? process.cwd()
   const isWin = platform === 'win32'
-  // Why: apply platform-correct absolute-path semantics (e.g. `C:\..` is
-  // absolute on win32 but not posix) for the same-as-before isAbsolute gate.
+  // Use the requested platform's absolute-path rules, not the test host's.
   const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
   const delimiter = isWin ? ';' : ':'
 
   const hasPathSeparator = command.includes('/') || (isWin && command.includes('\\'))
   const pathDirs = (readEnvCaseInsensitive(env, 'PATH') ?? '').split(delimiter)
-  // Why: a slash short-circuits PATH (resolve the command directly), matching
-  // which(1). On win32, where.exe searches the current directory first.
+  // Separators bypass PATH; Windows searches cwd first.
   const searchDirs = hasPathSeparator ? [''] : isWin ? [cwd, ...pathDirs] : pathDirs
-  const extensions = isWin ? getWindowsExtensions(env, command) : ['']
+  const extensions = isWin ? getWindowsPathSearchExtensions(env, command) : ['']
 
   const found: string[] = []
   const seen = new Set<string>()
   for (const dir of searchDirs) {
     for (const ext of extensions) {
-      // Why: forward-slash joins so candidates are statable on every platform
-      // (Windows fs accepts `/`), keeping the win32 lookup testable off-Windows.
+      // Windows accepts forward slashes; POSIX joins keep synthetic Windows lookups testable everywhere.
       const candidate = path.posix.join(dir, command) + ext
-      // Why: preserve the prior `.some(line => path.isAbsolute(line))` filter
-      // over where/which stdout — only absolute resolutions count.
+      // Preserve the prior where/which absolute-resolution filter.
       const candidateKey = isWin ? candidate.toLowerCase() : candidate
       if (!isAbsolute(candidate) || seen.has(candidateKey)) {
         continue

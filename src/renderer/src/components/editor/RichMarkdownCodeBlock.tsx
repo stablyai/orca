@@ -5,6 +5,7 @@ import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
 import MermaidBlock from './MermaidBlock'
+import { useMermaidDiagramExpand } from './use-mermaid-diagram-expand'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { translate } from '@/i18n/i18n'
 import {
@@ -20,15 +21,13 @@ export function RichMarkdownCodeBlock({
   useTranslation()
   const language = (node.attrs.language as string) || ''
   const [copied, setCopied] = useState(false)
-  // Why: ProseMirror renders every node view in the document, so eagerly
-  // mounting the full language list cost ~25 <option> elements per code block —
-  // in a large document that dwarfs the prose DOM and slows every keystroke.
+  // ProseMirror mounts every node view; defer full language options so large documents avoid per-block DOM cost on each keystroke.
   const [languageListMounted, setLanguageListMounted] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after the node view unmounts; avoid
-  // starting a reset timer that will outlive the component.
+  // Clipboard IPC may settle after unmount; do not start an orphan reset timer.
   const isMountedRef = useRef(false)
   const isDark = useDocumentDarkTheme()
+  const expandMermaidDiagram = useMermaidDiagramExpand()
 
   const isMermaid = language === 'mermaid'
 
@@ -53,8 +52,7 @@ export function RichMarkdownCodeBlock({
     if (languageListMounted) {
       return
     }
-    // Why: the native popup opens as this same discrete event's default action,
-    // so the list must be in the DOM before React's normal flush would land.
+    // Populate before the native popup’s default action; React’s normal flush would arrive too late.
     flushSync(() => setLanguageListMounted(true))
   }, [languageListMounted])
 
@@ -83,7 +81,7 @@ export function RichMarkdownCodeBlock({
           }, 1500)
         })
         .catch(() => {
-          // Silently swallow clipboard write failures (e.g. permission denied).
+          // Clipboard permission failures must not disrupt editing.
         })
     },
     [clearCopiedResetTimer, node]
@@ -106,11 +104,10 @@ export function RichMarkdownCodeBlock({
             </option>
           ))
         ) : (
-          // Why: a closed <select> only paints its selected option, so until the
-          // user reaches for the list one entry renders the same visible label.
+          // Closed selects need only their selected option until the user requests the list.
           <option value={language}>{getCodeBlockLanguageLabel(language)}</option>
         )}
-        {/* If the document has a language not in our list, show it as-is */}
+        {/* Preserve document languages absent from the built-in list. */}
         {languageListMounted && language && !isKnownCodeBlockLanguage(language) ? (
           <option key={language} value={language}>
             {language}
@@ -141,14 +138,15 @@ export function RichMarkdownCodeBlock({
         )}
       </button>
       <NodeViewContent<'pre'> as="pre" />
-      {/* Why: mermaid diagrams render as a live SVG preview below the editable
-          source so users can see the result while editing. The code block stays
-          editable — the diagram is read-only output. This preview also goes
-          through MermaidBlock's sanitized SVG path, so it must opt out of
-          Mermaid HTML labels just like markdown preview to keep labels visible. */}
+      {/* Keep Mermaid source editable; native SVG labels survive the preview’s sanitization. */}
       {isMermaid && node.textContent.trim() && (
         <div contentEditable={false} className="mermaid-preview">
-          <MermaidBlock content={node.textContent.trim()} isDark={isDark} htmlLabels={false} />
+          <MermaidBlock
+            content={node.textContent.trim()}
+            isDark={isDark}
+            htmlLabels={false}
+            onExpand={expandMermaidDiagram}
+          />
         </div>
       )}
     </NodeViewWrapper>

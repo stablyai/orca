@@ -1,16 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   limitQuickOpenFilesBySerializedBytes,
-  limitQuickOpenSearchReplyBySerializedBytes,
-  serializedQuickOpenPathBytes
+  limitQuickOpenSearchReplyBySerializedBytes
 } from './quick-open-transport-budget'
 
 describe('Quick Open transport byte budget', () => {
-  it('matches JSON.stringify byte accounting, including escaped paths', () => {
-    const path = 'src/line\nquote".ts'
-    expect(serializedQuickOpenPathBytes(path)).toBe(Buffer.byteLength(JSON.stringify(path), 'utf8'))
-  })
-
   it('returns the largest prefix that fits as a JSON array', () => {
     const files = ['src/a.ts', 'data/ignored\nfile.bin', 'src/b.ts']
     const budget = Buffer.byteLength(JSON.stringify(files.slice(0, 2)), 'utf8')

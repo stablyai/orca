@@ -1,39 +1,34 @@
 import {
   captureStructuredAgentCliSource,
-  structuredAgentCliSourcePathFromEvidence
+  structuredAgentCliSourceFromEvidence
 } from '../../native-chat/structured-agent-cli-source'
 import type { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce as RestoreStructuredAgentSessionTabsOnceMethods } from './structured-session-tab-restoration'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/workspace-process-listing'
+import { StructuredSessionWorkspaceScope } from './structured-session-workspace-scope'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
   requireUnownedStructuredAgentSessionAdoption,
   resolveStructuredAgentSessionAdoptionForCreate,
+  structuredAgentSessionAdoptAttach,
   type StructuredAgentSessionCreateIntentInput
 } from '../structured-agent-session-create-adoption'
-import { isNativeLocalLocation, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
 import {
   resolveHostStructuredAgentCreateSupport,
   resolveHostStructuredAgentLaunchEnvironment
 } from '../structured-agent-launch-support'
 import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
-import { structuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
+import { structuredAgentChatProgramNeedsInstall } from '../structured-agent-availability'
+import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../structured-agent-session-runtime'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../structured-agent-session-host-refusal'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
-import {
-  isFloatingWorkspaceId,
-  isFloatingWorkspaceSelector
-} from '../../../shared/floating-workspace-worktree'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 
-export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithGetWorktreePs {
+export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends StructuredSessionWorkspaceScope {
   protected abstract restoreStructuredAgentSessionTabsOnce(
     ...args: Parameters<
       RestoreStructuredAgentSessionTabsOnceMethods['restoreStructuredAgentSessionTabsOnce']
@@ -42,56 +37,29 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     RestoreStructuredAgentSessionTabsOnceMethods['restoreStructuredAgentSessionTabsOnce']
   >
 
+  /** `requireInstalledChatProgram` is for launches with no chat tab to offer Orca's install. */
   async getStructuredAgentSessionCreateSupport(
     worktreeSelector: string,
-    agent: StructuredAgentId
-  ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
-    return resolveHostStructuredAgentCreateSupport({
+    agent: StructuredAgentId,
+    options?: { requireInstalledChatProgram?: boolean }
+  ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' | 'chat-program' }> {
+    const support = await resolveHostStructuredAgentCreateSupport({
       agent,
       worktreeSelector,
       location: await this.resolveStructuredAgentSessionLocation(worktreeSelector),
       runtime: this
     })
-  }
-
-  /** Where a launch of `agent` finds its account, resolved on this host by the agent's own
-   *  registration; null for an agent this runtime does not register, whose create is refused. */
-  protected structuredAgentAccountHomeResolver(
-    agent: StructuredAgentId,
-    worktree: string,
-    purpose: 'launch' | 'read',
-    hostLaunchDirectory?: string
-  ) {
-    const registration = structuredAgentRuntimeMetadata(agent)
-    if (!registration) {
-      return null
+    if (
+      support.supported &&
+      options?.requireInstalledChatProgram &&
+      (await structuredAgentChatProgramNeedsInstall(agent, this))
+    ) {
+      return { supported: false, reason: 'chat-program' }
     }
-    return async ({ launchEnv, location }) =>
-      registration.resolveAccountHome(
-        {
-          launchEnv,
-          location: location ?? null,
-          purpose,
-          workspacePath:
-            purpose === 'launch'
-              ? async () =>
-                  hostLaunchDirectory ??
-                  (await this.resolveRuntimeFileTarget(worktree)).worktree.path
-              : null
-        },
-        {
-          getClaudeConfigDirectory: (target) => this.accounts.getClaudeConfigDirectory(target),
-          prepareCodexLaunchHome: this.prepareCodexStructuredLaunchFn,
-          readCodexLaunchHome: this.resolveCodexStructuredLaunchHomeFn,
-          workspaceTrustSettings: () => this.requireStore().getSettings(),
-          // The chat host's own state root (ensureStructuredAgentSessionHost).
-          stateDirectory: getProfileUserDataPath()
-        }
-      )
+    return support
   }
 
-  /** The definition this runtime registers for `agent`: what its account home pins. Read from the
-   *  registration list, so neither create nor a catalog read installs the host to learn it. */
+  /** Use this runtime's registered definition to pin account home; reads/create must not install the host just to inspect it. */
   protected requireRegisteredStructuredAgent(agent: StructuredAgentId) {
     const definition = structuredAgentRuntimeMetadata(agent)?.definition
     if (!definition) {
@@ -102,68 +70,43 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     return definition
   }
 
-  /** The saved selection a new chat here starts with. createSupport reports it too, so a client's
-   *  picker shows what create will run; one resolver keeps the two from drifting. */
+  /** Share new-chat selection between create and createSupport so client pickers show what create will run. */
   structuredAgentSessionLaunchSeedOptions(
     agent: StructuredAgentId
   ): Record<string, string> | undefined {
     return structuredLaunchSeedOptions(this.requireStore().getSettings(), agent)
   }
 
-  protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
-    const target = await this.resolveRuntimeFileTarget(worktreeSelector)
-    const repo = this.store?.getRepo(target.worktree.repoId)
-    const folderScope = parseWorkspaceKey(target.worktree.id)
-    // The floating workspace is a plain directory with no repo git options, which is exactly what
-    // `folder` denotes here — it describes how Orca manages the place, not whether git is in it.
-    const folderWorkspace =
-      folderScope?.type === 'folder' || isFloatingWorkspaceId(target.worktree.id)
-    // WSL routing describes *this* machine; no remote or runtime host may inherit
-    // it. Both branches key on executionHostId: the target no longer carries a
-    // connectionId, which used to spell remote, unresolved and local alike.
-    const isLocalHost = target.executionHostId === LOCAL_EXECUTION_HOST_ID
-    const configuredWslDistro =
-      repo && isLocalHost
-        ? (getLocalProjectWorktreeGitOptions(this.requireStore(), repo).wslDistro ?? null)
-        : null
-    // Folder workspaces have no repo Git options, so a WSL UNC path is the only
-    // durable signal that native Windows structured Codex cannot safely use it.
-    const wslDistro =
-      configuredWslDistro ??
-      (folderWorkspace && isLocalHost
-        ? (parseWslUncPath(target.worktree.path)?.distro ?? null)
-        : null)
-    return {
-      executionHostId: target.executionHostId,
-      wslDistro,
-      workspaceId: target.worktree.id,
-      workspaceKind: folderWorkspace ? ('folder' as const) : ('git-worktree' as const)
-    }
-  }
-
-  /** Where a structured chat here would run, when that is a directory on this machine. */
-  async resolveStructuredAgentSessionLocalWorkspacePath(worktreeSelector: string) {
-    const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
-    if (!isNativeLocalLocation(location)) {
-      return null
-    }
-    return (await this.resolveRuntimeFileTarget(worktreeSelector)).worktree.path
-  }
-
   async resolveStructuredAgentSessionCreateIntent(
     input: StructuredAgentSessionCreateIntentInput
   ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
     if (input.resumeFrom) {
-      requireUnownedStructuredAgentSessionAdoption({
-        host: getStructuredAgentSessionHost(),
-        agent: input.agent,
-        providerSessionId: input.resumeFrom.providerSessionId,
-        selfSessionId: input.envelope.sessionId
-      })
+      const { providerSessionId, cliSource } = input.resumeFrom
+      try {
+        requireUnownedStructuredAgentSessionAdoption({
+          host: getStructuredAgentSessionHost(),
+          agent: input.agent,
+          providerSessionId,
+          selfSessionId: input.envelope.sessionId
+        })
+      } catch (ownerConflict) {
+        // Refuse transfer from a live terminal or the chat's first send starts a second writer.
+        await this.assertStructuredAdoptionTerminalWritersExited(
+          input.agent,
+          providerSessionId,
+          cliSource
+        )
+        throw ownerConflict
+      }
     }
-    const structuredAgentCliSourceEvidence = input.structuredAgentCliSourceEvidence ??
+    const structuredAgentCliSourceEvidence =
+      input.structuredAgentCliSourceEvidence ??
       (input.resumeFrom?.cliSource
-        ? captureStructuredAgentCliSource(() => this.getAgentProviderSessionRows())
+        ? captureStructuredAgentCliSource(
+            () => this.getAgentProviderSessionRows(),
+            input.resumeFrom.cliSource,
+            (source) => this.getStructuredAgentCliSourceRoute(source)
+          )
         : undefined)
     const hostLaunchDirectory = isFloatingWorkspaceSelector(input.worktree)
       ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
@@ -186,11 +129,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
   }
 
-  /**
-   * The account home a structured launch for this agent would pin right now,
-   * for reads that have no session record to answer from (the model catalog).
-   * Same resolver as the create intent above — never a second copy.
-   */
+  /** Resolve catalog account home through the same host create-intent resolver when no session record exists. */
   async resolveStructuredAgentAccountHome(
     agent: StructuredAgentId
   ): Promise<AgentSessionAccountHome> {
@@ -200,6 +139,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         reason: 'hostUnsupported'
       })
     }
+    // A read, not a launch: only the account push is awaited, never a folder refresh.
+    await this.accounts.prepareHostAgentLaunch(null)
     const launchEnv = this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())
     return resolveAccountHome({ launchEnv, location: null })
   }
@@ -225,9 +166,16 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         reason: 'hostUnsupported'
       })
     }
+    await this.accounts.prepareHostAgentLaunch(input.agent)
     const settings = this.requireStore().getSettings()
     const launchEnv = this.structuredAgentLaunchEnv(input.agent, settings)
-    const options = this.structuredAgentSessionLaunchSeedOptions(input.agent)
+    const options = structuredLaunchSeedOptions(
+      {
+        ...settings,
+        agentLaunchChoices: input.resumeFrom ? undefined : settings.agentLaunchChoices
+      },
+      input.agent
+    )
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const definition = this.requireRegisteredStructuredAgent(input.agent)
     const host = getStructuredAgentSessionHost()
@@ -241,12 +189,18 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       return committedReplay
     }
     const resumeFrom = input.resumeFrom
-    const workspaceCwd = resumeFrom ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path : ''
+    if (resumeFrom) {
+      await this.assertStructuredAdoptionTerminalWritersExited(
+        input.agent,
+        resumeFrom.providerSessionId,
+        resumeFrom.cliSource
+      )
+    }
+    const workspaceCwd = resumeFrom
+      ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
+      : ''
     const selectedAccountHome = await resolveAccountHome({ launchEnv, location })
-    // Adopting pins the account home to wherever the conversation actually lives, which is not
-    // necessarily the one a fresh create would pick: Codex resolves its rollout under
-    // `accountHome.path`, and Claude reads its transcript under `<home>/projects`. Resuming under
-    // the wrong home finds nothing and lands the user in a blank chat wearing the old chat's name.
+    // Adoption pins the transcript's actual account home; fresh-create defaults may open a blank conversation under the old name.
     const adoption =
       resumeFrom && transcriptImport
         ? await resolveStructuredAgentSessionAdoptionForCreate({
@@ -254,10 +208,13 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
             agent: input.agent,
             transcriptImport,
             providerSessionId: resumeFrom.providerSessionId,
-            resolveTranscriptPath: () => structuredAgentCliSourcePathFromEvidence({
-              agent: input.agent, resumeFrom, workspaceId: location.workspaceId,
-              evidence: input.structuredAgentCliSourceEvidence
-            }),
+            resolveTranscriptSource: () =>
+              structuredAgentCliSourceFromEvidence({
+                agent: input.agent,
+                resumeFrom,
+                workspaceId: location.workspaceId,
+                evidence: input.structuredAgentCliSourceEvidence
+              }),
             prepareCodexResume: this.prepareAiVaultSessionResumeFn ?? undefined,
             selectedAccountHome,
             launchEnv: await resolveHostStructuredAgentLaunchEnvironment(input.agent, settings),
@@ -278,23 +235,22 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       ...(options ? { options } : {}),
       ...(input.resumeFrom && adoption
         ? {
-            // `adopt` is what makes the reservation seed the handle chain. Presence of
-            // `providerHandle` alone must not: `agentSession.ensure` already passes one today
-            // without adopting anything.
-            adopt: {
-              providerHandle: {
-                transport: definition.handleTransport,
-                agent: definition.agent,
-                nativeId: transcriptImport!.handleNamesTranscript
-                  ? adoption.transcriptPath
-                  : input.resumeFrom.providerSessionId
-              },
+            adopt: structuredAgentSessionAdoptAttach({
+              definition,
+              handleNamesTranscript: transcriptImport!.handleNamesTranscript,
+              ...(input.agent === 'codex'
+                ? {
+                    conversationStore:
+                      transcriptImport!.conversationStore({
+                        accountHome: adoption.accountHome,
+                        launchEnv
+                      }) ?? undefined
+                  }
+                : {}),
               transcriptPath: adoption.transcriptPath,
-              source: {
-                providerSessionId: input.resumeFrom.providerSessionId,
-                workspaceCwd: workspaceCwd
-              }
-            }
+              providerSessionId: input.resumeFrom.providerSessionId,
+              workspaceCwd
+            })
           }
         : {}),
       runtimeKind: 'native'
@@ -305,8 +261,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     this.structuredAgentSessionTabRestorePromise ??=
       this.restoreStructuredAgentSessionTabsOnce().then(
         () => {
-          // Only a host's answer is final: without one, the next caller restores again, so a journal
-          // that opens later republishes the chats.
+          // Only host answers finalize restoration; without one, retry so journals opened later can publish.
           if (this.structuredAgentSessionInventoryUnverifiable) {
             this.structuredAgentSessionTabRestorePromise = null
           }
@@ -332,8 +287,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     if (!this.hasPersistedStructuredAgentSessionStore()) {
       return
     }
-    // Durable agent records must exist before daemon inventory can be reconciled against them.
-    // A refused host is no host: startup goes on, and only structured requests are refused.
+    // Load durable agent records before reconciling daemon inventory; refused hosts block only structured requests, not app startup.
     await ensureStructuredAgentSessionHostUnlessRefused(() =>
       this.ensureStructuredAgentSessionHost()
     )

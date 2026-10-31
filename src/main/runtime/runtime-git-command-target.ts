@@ -18,19 +18,9 @@ export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 
 export type RuntimeGitTarget = {
   worktree: ResolvedRuntimeGitWorktree
-  /**
-   * Display and settings metadata only (shared-link paths, source-control AI defaults). It can be
-   * a same-id row from another host when the worktree's own host carries none, so it must not
-   * decide routing — `executionHostId` does.
-   */
+  /** Repo display/settings metadata may come from another host; only executionHostId decides routing. */
   repo?: Repo
-  /**
-   * The host this worktree's Git runs on. Never optional and never null: the field it replaced
-   * (`connectionId?: string`) spelled "runtime host", "unresolved" and "genuinely local" all as
-   * `undefined`, so every path that could not resolve answered "local" and ran remote work on the
-   * client (#11163). Unresolved now fails at resolution time instead of arriving here as a
-   * silently-local target.
-   */
+  /** Required execution host: resolution must refuse unknown routes, never conflate unresolved/runtime/local as absent connectionId (#11163). */
   executionHostId: ExecutionHostId
   /** Only consulted when `executionHostId` is `local`; see `localGitOptionsForTarget`. */
   localGitOptions?: GitRuntimeOptions
@@ -43,22 +33,14 @@ export type RuntimeGitCommandHost = {
   /** `undefined` keeps cached metadata; `null` is the authoritative unlinked answer. */
   getWorktreeLinkedIssue?(worktreeId: string): number | null | undefined
   getWorktreeLinkedIssueMeta?(worktreeId: string): PullRequestLinkedIssueMeta | null | undefined
-  /** Why (#17828 review follow-up): RuntimeGitSyncCommands deliberately materializes with
-   *  no store (avoids unrelated ownership-inheritance/refspec-migration side effects), so a
-   *  lazily-minted remote still needs a way back into the store's `pushTarget.remoteCreated`
-   *  for #17842's orphan sweep. Called only when materialize reports `remoteCreated: true`. */
-  persistMaterializedPushTarget?(worktreeId: string, pushTarget: GitPushTarget): void
+  /** Persist lazily created push remotes for orphan cleanup (#17842); sync materialization skips Store to avoid ownership/refspec side effects (#17828). */
+  persistMaterializedPushTarget?(
+    worktree: Pick<Worktree, 'id' | 'hostId'>,
+    pushTarget: GitPushTarget
+  ): void
 }
 
-/**
- * The two hosts this process can itself execute a runtime Git command on, narrowed from the shared
- * host-keyed route in `src/main/providers/execution-host-provider-dispatch.ts`.
- *
- * `runtime:<env>` is deliberately not a variant. Its Git is executed by that environment's own
- * server, and the SSH target on its repo row is that server's *nested* one — addressable only as
- * the pair (environmentId, targetId). Handing that id to this client's SSH table dials a
- * same-named target in the wrong namespace, so it throws rather than routing.
- */
+/** Dispatch only hosts this process serves. runtime:<env> targets belong to that server's nested SSH namespace; local lookup could dial a same-named wrong host. */
 export type RuntimeGitRoute =
   | { kind: 'local'; createProvider: typeof createLocalGitProvider }
   /** An SSH target this process does not serve; it fails or reports unavailable, never runs here. */

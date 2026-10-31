@@ -45,16 +45,12 @@ export type AcpSessionRuntimeOptions = {
   clientInfo?: InitializeRequest['clientInfo']
   peer?: AcpPeerOptions
   onPermission?: AcpPermissionHandler
-  /** Agent requests other than permissions. The handler owns its request: once `context.signal`
-   *  aborts, send the agent's own cancelled reply, finish an answer already in progress, or throw
-   *  (-32800). The runtime never answers for it; a request left unanswered ends at `close()`. */
+  /** After abort, handlers still reply or throw (-32800); close ends unanswered requests. */
   onRequest?: (method: string, params: unknown, context: AcpRequestContext) => unknown
-  /** Agent notifications other than `session/update` (protocol extensions), delivered
-   *  synchronously in arrival order with the `subscribe` events. */
+  /** Delivered synchronously in arrival order with subscription events. */
   onExtensionNotification?: (method: string, params: unknown) => void
   onDiagnostic?: (message: string) => void
   onClose?: (error: Error) => void
-  /** A stdout line that is not a protocol message. */
   onOtherLine?: (line: string, cut?: boolean) => void
   /** Authentication answers, published synchronously as responses are accepted. */
   onAuthAnswered?: (signedIn: boolean) => void
@@ -133,8 +129,7 @@ export class AcpSessionRuntime {
     return this.call('authenticate', { methodId }, AuthenticateResponseSchema)
   }
 
-  /** A vendor extension method, answered as the agent sent it. Core methods have typed calls here,
-   *  so a session-free caller can never create or touch a session through this. */
+  /** Reject core session methods for session-free discovery. */
   async requestSessionFreeExtension(method: string, params: unknown): Promise<unknown> {
     if (!method.includes('/') || method.startsWith('session/')) {
       throw new Error(`Not an ACP extension method: ${method}`)
@@ -143,12 +138,14 @@ export class AcpSessionRuntime {
     return this.peer.request(method, params, { timeoutMs: null })
   }
 
-  /** Copies saved session `sessionId` into a new one the agent saves (`session/fork`) and answers
-   *  its id; this connection starts no session of its own. Ask only an agent that advertises it. */
+  /** Fork without starting a session here; requires advertised fork support. */
   async forkSession(sessionId: string, cwd: string): Promise<string> {
     const params = { sessionId, cwd, mcpServers: [] }
     return (await this.call('session/fork', params, ForkSessionResponseSchema)).sessionId
   }
+
+  /** Requires advertised session deletion support. */
+  deleteSession = (sessionId: string) => this.call('session/delete', { sessionId }, z.unknown())
 
   start(options: AcpSessionStartOptions): Promise<AcpSessionStarted> {
     if (this.started) {
@@ -204,7 +201,6 @@ export class AcpSessionRuntime {
     return this.call('session/set_mode', params, SetSessionModeResponseSchema)
   }
 
-  /** Dialect-owned control requests share this session's transport and bounded lifetime. */
   requestExtension(method: string, params: unknown, timeoutMs = 30_000): Promise<unknown> {
     this.sessionId()
     if (!method.startsWith('_')) {
@@ -276,7 +272,7 @@ export class AcpSessionRuntime {
     if (!request) {
       throw new AcpRpcError(-32602, 'Invalid ACP permission request')
     }
-    // Whether a turn the agent began itself may ask is the caller's call; the runtime cannot see it.
+    // The caller decides whether agent-initiated turns may request permission.
     if (request.sessionId !== this.started?.sessionId) {
       return { outcome: { outcome: 'cancelled' } }
     }

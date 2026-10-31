@@ -4,12 +4,12 @@ import {
   getDiscardAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry
-} from '../commit/discard-all-sequence'
+} from '../../../../../../shared/source-control-discard-all-sequence'
 import {
   collectSourceControlTreeFileEntries,
   type SourceControlTreeNode
-} from '../../source-control-tree'
-import type { SourceControlSectionArea } from './section-order'
+} from '../../../../../../shared/source-control-tree'
+import type { SourceControlSectionArea } from '../../../../../../shared/source-control-section-order'
 
 export type GitStatusSourceControlTreeNode = SourceControlTreeNode<
   GitStatusEntry,

@@ -1,14 +1,11 @@
-/**
- * The host-agnostic hostile-host setup: app environment and a real SshConnection. The Docker
- * matrix and the Windows SSH-host lanes both run cells through it.
- */
+/** Share app isolation and real SSH setup across Docker, loopback and Windows hostile-host lanes. */
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setAppEnvironment } from '../../../shared/app-environment'
 import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { SshConnection } from '../ssh-connection'
+import { SshConnection } from '../connection/ssh-connection'
 
 export function installHostileHostAppEnvironment(): () => void {
   const userData = mkdtempSync(join(tmpdir(), 'orca-hostile-hosts-userdata-'))

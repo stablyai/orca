@@ -1,28 +1,21 @@
 import { isGitForWindowsBashLauncherPath } from '../git-bash'
 import type { WindowsProcessIdentityRow } from '../windows/windows-process-table'
+import {
+  buildProcessTableIndex,
+  collectDescendantsFromIndex
+} from '../../shared/process-table-index'
 
 const MSYS_BASH_IMAGE = 'bash.exe'
 
-/**
- * Whether a pane's job holds only its shell: the shell pid alone, or, for Git
- * for Windows' `bin\bash.exe` launcher, one unbranched chain of MSYS bash
- * processes below it.
- *
- * The launcher hands off to `usr\bin\bash.exe` and waits, and every MSYS `exec`
- * (Orca's `chcp.com ...; exec "$BASH" ... -i` startup) leaves the pre-exec
- * process alive as a stub waiting on its successor. So an idle prompt is
- * `launcher -> bash -> ... -> bash`, the leaf being the interactive shell. A
- * command at the prompt adds a non-bash leaf, and a background job branches.
- *
- * Residual: a foreground bash running only builtins (a nested `bash`, a
- * subshell loop, a fork caught before its exec) is also a bash leaf, so it reads
- * as a shell at a prompt.
- */
+/** Git Bash launcher/MSYS exec stubs form a live unbranched bash chain; commands add a non-bash leaf or branch.
+ * Builtin-only/nested bash remains indistinguishable from idle. Optional console proof excludes detached orphans;
+ * ancestry alone cannot distinguish them from live MSYS children with exited Win32 parents. */
 export async function isWindowsShellAloneInJob(
   shellPid: number,
   spawnedShellPath: string,
   jobProcessIds: ReadonlySet<number> | null | undefined,
-  readIdentityTable: () => Promise<WindowsProcessIdentityRow[]>
+  readIdentityTable: () => Promise<WindowsProcessIdentityRow[]>,
+  readConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>
 ): Promise<boolean> {
   if (!jobProcessIds?.has(shellPid)) {
     return false
@@ -30,12 +23,20 @@ export async function isWindowsShellAloneInJob(
   if (jobProcessIds.size === 1) {
     return true
   }
-  if (!isGitForWindowsBashLauncherPath(spawnedShellPath)) {
+  const isLauncher = isGitForWindowsBashLauncherPath(spawnedShellPath)
+  if (!isLauncher && !readConsoleAttachedProcessIds) {
     return false
   }
-  const members = (await readIdentityTable()).filter((row) => jobProcessIds.has(row.pid))
+  const rows = (await readIdentityTable()).filter((row) => jobProcessIds.has(row.pid))
   // A member missing from the table exited or was never readable: no proof either way.
-  if (members.length !== jobProcessIds.size) {
+  if (rows.length !== jobProcessIds.size) {
+    return false
+  }
+  const members = await withoutDetachedOrphans(shellPid, rows, readConsoleAttachedProcessIds)
+  if (members.length === 1) {
+    return true
+  }
+  if (!isLauncher) {
     return false
   }
   const startMsByPid = new Map(members.map((row) => [row.pid, row.creationTimeMs]))
@@ -55,6 +56,26 @@ export async function isWindowsShellAloneInJob(
     parentPid = child.pid
   }
   return true
+}
+
+/** Drops members that are neither linked to the shell through live parents nor on its console. */
+async function withoutDetachedOrphans(
+  shellPid: number,
+  members: WindowsProcessIdentityRow[],
+  readConsoleAttachedProcessIds: (() => Promise<ReadonlySet<number> | null>) | undefined
+): Promise<WindowsProcessIdentityRow[]> {
+  if (!readConsoleAttachedProcessIds) {
+    return members
+  }
+  const linked = new Set([
+    shellPid,
+    ...collectDescendantsFromIndex(buildProcessTableIndex(members), shellPid).map((row) => row.pid)
+  ])
+  if (members.every((row) => linked.has(row.pid))) {
+    return members
+  }
+  const attached = await readConsoleAttachedProcessIds().catch(() => null)
+  return attached ? members.filter((row) => linked.has(row.pid) || attached.has(row.pid)) : members
 }
 
 /** A child older than its parent carries a reused ppid; only checkable when the snapshot has start times. */

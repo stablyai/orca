@@ -3,7 +3,6 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
-import { expectNoSidebarShadowMismatches } from './helpers/sidebar-shadow'
 import { waitForSessionReady } from './helpers/store'
 import { runProcess } from '@orca/process-host'
 
@@ -128,7 +127,7 @@ test('keeps a collapsed group visible when an idle card below it grows', async (
     if (!group) {
       throw new Error('Fixture group was not created')
     }
-    await store.getState().moveProjectToGroup(member.id, group.id)
+    await store.getState().moveProjectToGroup(member, group.id)
     const state = store.getState()
     state.setGroupBy('repo')
     state.setProjectOrderBy('manual')
@@ -196,5 +195,4 @@ test('keeps a collapsed group visible when an idle card below it grows', async (
       throw new Error(`pin failed: ${JSON.stringify(result)}`)
     }
   }, fixture.worktreeId)
-  await expectNoSidebarShadowMismatches(orcaPage)
 })

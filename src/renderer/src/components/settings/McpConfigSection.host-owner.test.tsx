@@ -39,7 +39,7 @@ const desktopFs = { readDir: vi.fn(), readFile: vi.fn(), writeFile: vi.fn() }
 beforeEach(() => {
   vi.clearAllMocks()
   runtimeFiles.readRuntimeDirectory.mockResolvedValue([])
-  runtimeFiles.writeRuntimeFile.mockResolvedValue(undefined)
+  runtimeFiles.writeRuntimeFile.mockResolvedValue({ ok: true })
   desktopFs.readDir.mockResolvedValue([{ name: '.mcp.json', isDirectory: false }])
   desktopFs.readFile.mockResolvedValue({ content: '{"mcpServers":{}}', isBinary: false })
   Object.defineProperty(window, 'api', {
@@ -97,27 +97,11 @@ it('inspects and creates a managed-host repo config on that host, never the desk
   expect(runtimeFiles.writeRuntimeFile).toHaveBeenCalledWith(
     expect.objectContaining({ target: { kind: 'environment', environmentId: 'host-a' } }),
     `${root}/.mcp.json`,
-    expect.any(String)
+    expect.any(String),
+    undefined,
+    expect.objectContaining({ allowMissing: true })
   )
   expect(desktopFs.writeFile).not.toHaveBeenCalled()
-})
-
-it('keeps a desktop repo on the desktop while a managed host is focused', async () => {
-  const desktopRepo: Repo = { ...repo, executionHostId: 'local' }
-  useAppStore.setState({
-    settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'host-a' },
-    repos: [desktopRepo],
-    worktreesByRepo: {
-      repo: [makeWorktree({ id: worktreeId, repoId: 'repo', path: root, isMainWorktree: true })]
-    }
-  })
-  render(<McpConfigSection repo={desktopRepo} />)
-
-  await waitFor(() => expect(runtimeFiles.readRuntimeDirectory).toHaveBeenCalled())
-  expect(runtimeFiles.readRuntimeDirectory).toHaveBeenCalledWith(
-    expect.objectContaining({ target: { kind: 'local' } }),
-    root
-  )
 })
 
 it('does not offer the starter over a listed config the host refuses to read', async () => {

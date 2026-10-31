@@ -1,108 +1,171 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import { readTranscriptSlice } from '../native-chat/wsl-transcript-fs-access'
+import { readTranscriptSlice, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import {
   CLAUDE_CWD_BUCKET_LAYOUT,
   CODEBUDDY_CWD_BUCKET_LAYOUT,
   PI_CWD_BUCKET_LAYOUT,
   type CwdBucketLayout
 } from './session-cwd-bucket-layouts'
-import type { FileWithMtime } from './session-scanner-types'
+import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
 import { asRecord } from './session-scanner-record-value'
 import { extractString, parseJsonObject } from './session-scanner-values'
+import { clineManifestCwd } from './session-scanner-cline-parser'
+import { cursorChatMetaUnavailable, readCursorChatMeta } from './session-scanner-cursor-chat-meta'
+import { rovoSessionCwd } from './session-scanner-graph-parsers'
+import { grokSessionCwd } from './session-scanner-grok-parser'
+import { listedKiroMetadata } from './session-scanner-kiro-parser'
+import { openCodeSessionCwd } from './session-scanner-opencode-parser'
 
 type HeadRecord = Record<string, unknown>
 
-/**
- * How Workspace and Project views find a transcript's cwd without a full parse,
- * so an agent's older in-scope sessions are selected before the recency cap.
- * - bucket: the agent keeps one directory per cwd.
- * - head: the cwd sits in the transcript's opening records.
- * - parse: only the (cached) full parse knows it.
- * - none: the agent never records a cwd, so no session can belong to a scope.
- */
+/** { cwd: null } settles absence; null means the read could not settle it. */
+export type ScopeCwdRead = { cwd: string | null } | null
+
+/** Scope selection uses cwd buckets, bounded reads, full parses, or no cwd, depending on the agent. */
 export type SessionScopeCwdSource =
   | { kind: 'bucket'; layout: CwdBucketLayout }
-  | { kind: 'head'; cwdOf: (record: HeadRecord) => unknown; firstReadBytes?: number }
+  | {
+      kind: 'read'
+      readCwd: (candidate: SessionFileCandidate, signal?: AbortSignal) => Promise<ScopeCwdRead>
+    }
   | { kind: 'parse' }
   | { kind: 'none' }
 
 const PARSE: SessionScopeCwdSource = { kind: 'parse' }
-// Pi-family header: `{"type":"session","cwd":...}`.
-const SESSION_HEADER: SessionScopeCwdSource = {
-  kind: 'head',
-  cwdOf: (record) => (record.type === 'session' ? record.cwd : undefined)
+
+/** Opening-record cwd is provisional; a cached full parse takes precedence. */
+function head(
+  cwdOf: (record: HeadRecord) => unknown,
+  firstReadBytes?: number
+): SessionScopeCwdSource {
+  return {
+    kind: 'read',
+    readCwd: async ({ file }, signal) => {
+      const cwd = await readTranscriptHeadCwd(file, { cwdOf, firstReadBytes }, signal)
+      return cwd === null ? null : { cwd }
+    }
+  }
 }
 
-// Keyed by every agent, so a new agent cannot list without saying how its scope is found.
+function document(cwdOf: (content: string) => string | null): SessionScopeCwdSource {
+  return { kind: 'read', readCwd: ({ file }, signal) => readDocumentCwd(file, cwdOf, signal) }
+}
+
+async function readDocumentCwd(
+  file: FileWithMtime,
+  cwdOf: (content: string) => string | null,
+  signal?: AbortSignal
+): Promise<ScopeCwdRead> {
+  const content = await settledRead(
+    () => wslGatedReadFile(file.path, 'utf-8', 'scan', signal),
+    signal
+  )
+  if (content === null) {
+    return null
+  }
+  try {
+    return { cwd: cwdOf(content) }
+  } catch {
+    return null
+  }
+}
+
+function jsonRecord(content: string): Record<string, unknown> | null {
+  return asRecord(JSON.parse(content) as unknown)
+}
+
+const SESSION_HEADER = head((record) => (record.type === 'session' ? record.cwd : undefined))
+
+const CURSOR: SessionScopeCwdSource = {
+  kind: 'read',
+  readCwd: async ({ file }, signal) => {
+    const meta = await settledRead(() => readCursorChatMeta(file.path, signal), signal)
+    if (meta) {
+      return { cwd: meta.cwd }
+    }
+    return file.sidecar === 'none' && !cursorChatMetaUnavailable(file.path) ? { cwd: null } : null
+  }
+}
+
 export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSource> = {
   claude: { kind: 'bucket', layout: CLAUDE_CWD_BUCKET_LAYOUT },
   pi: { kind: 'bucket', layout: PI_CWD_BUCKET_LAYOUT },
   codebuddy: { kind: 'bucket', layout: CODEBUDDY_CWD_BUCKET_LAYOUT },
-  codex: {
-    kind: 'head',
-    cwdOf: (record) =>
-      record.type === 'session_meta' ? asRecord(record.payload)?.cwd : undefined,
-    // Its first record carries the base instructions (about 20 KB): one read, not two.
-    firstReadBytes: 64 * 1024
-  },
-  qoder: { kind: 'head', cwdOf: (record) => record.cwd },
+  // Codex base instructions can enlarge the first record beyond the default read chunk.
+  codex: head(
+    (record) => (record.type === 'session_meta' ? asRecord(record.payload)?.cwd : undefined),
+    64 * 1024
+  ),
+  qoder: head((record) => record.cwd),
   omp: SESSION_HEADER,
   'prime-agent': SESSION_HEADER,
   openclaw: SESSION_HEADER,
-  droid: {
-    kind: 'head',
-    cwdOf: (record) => (record.type === 'session_start' ? record.cwd : undefined)
-  },
-  // Gemini transcripts carry no cwd at all.
+  droid: head((record) => (record.type === 'session_start' ? record.cwd : undefined)),
   gemini: { kind: 'none' },
-  // Small per-session documents, a cwd recorded mid-file, a sidecar, or a database row.
+  grok: document((content) => {
+    const summary = jsonRecord(content)
+    return summary ? grokSessionCwd(summary) : null
+  }),
+  rovo: document((content) => {
+    const metadata = jsonRecord(content)
+    return metadata ? rovoSessionCwd(metadata) : null
+  }),
+  cline: document(clineManifestCwd),
+  kiro: document((content) => {
+    const metadata = listedKiroMetadata(content)
+    return metadata ? extractString(metadata.cwd) : null
+  }),
+  cursor: CURSOR,
+  // Legacy session files; database rows (`<db>#<id>`) are already filtered by directory in SQL.
+  opencode: {
+    kind: 'read',
+    readCwd: async ({ file }, signal) =>
+      file.path.includes('#')
+        ? null
+        : readDocumentCwd(
+            file,
+            (content) => {
+              const record = jsonRecord(content)
+              return record ? openCodeSessionCwd(record) : null
+            },
+            signal
+          )
+  },
+  // A cwd recorded mid-file, a sidecar join, a shared index, or a database row.
   hermes: PARSE,
-  cursor: PARSE,
   antigravity: PARSE,
-  rovo: PARSE,
   copilot: PARSE,
-  opencode: PARSE,
   opencode2: PARSE,
   zcode: PARSE,
-  grok: PARSE,
   devin: PARSE,
-  cline: PARSE,
   kimi: PARSE,
   muse: PARSE,
-  jcode: PARSE,
-  kiro: PARSE
+  jcode: PARSE
 }
 
-/** Whether a scan with these scope paths walks this agent's files past the recency cap. */
 export function scopeWalksAgentFiles(
   agent: AiVaultAgent,
   scopePaths: readonly string[] | undefined
 ): boolean {
   const kind = AI_VAULT_SCOPE_CWD_SOURCES[agent].kind
-  return (scopePaths?.length ?? 0) > 0 && (kind === 'head' || kind === 'parse')
+  return (scopePaths?.length ?? 0) > 0 && (kind === 'read' || kind === 'parse')
 }
 
 const HEAD_READ_BYTES = 8 * 1024
 const HEAD_WIDENED_READ_BYTES = 64 * 1024
 
-/**
- * The cwd named by a transcript's opening records, or null when the head does not
- * settle it (no such record, an oversized first line, an unreadable file). Null
- * is "unknown", never "out of scope": the caller falls back to a full parse.
- */
+/** Null means unknown, requiring a full parse; it never proves the transcript is out of scope. */
 export async function readTranscriptHeadCwd(
   file: FileWithMtime,
   source: { cwdOf: (record: HeadRecord) => unknown; firstReadBytes?: number },
   signal?: AbortSignal
 ): Promise<string | null> {
-  const cached = headCwdCache.get(file.path)
-  if (cached && cached.mtimeMs === file.mtimeMs && cached.sizeBytes === file.sizeBytes) {
-    return cached.cwd
-  }
   const { cwdOf } = source
   let cwd: string | null = null
   const first = source.firstReadBytes ?? HEAD_READ_BYTES
-  for (const length of first < HEAD_WIDENED_READ_BYTES ? [first, HEAD_WIDENED_READ_BYTES] : [first]) {
+  for (const length of first < HEAD_WIDENED_READ_BYTES
+    ? [first, HEAD_WIDENED_READ_BYTES]
+    : [first]) {
     let head: Buffer
     try {
       head = await readTranscriptSlice(file.path, 0, length, 'scan', signal)
@@ -119,13 +182,6 @@ export async function readTranscriptHeadCwd(
     if (cwd !== null || head.length < length) {
       break
     }
-  }
-  if (cwd !== null) {
-    headCwdCache.set(file.path, {
-      mtimeMs: file.mtimeMs,
-      sizeBytes: file.sizeBytes,
-      cwd: internCwd(cwd)
-    })
   }
   return cwd
 }
@@ -144,39 +200,13 @@ function firstHeadCwd(
   return null
 }
 
-// In memory only: a restart re-reads heads, and parsed files answer from the parse cache.
-const headCwdCache = new Map<
-  string,
-  { mtimeMs: number; sizeBytes: number | undefined; cwd: string }
->()
-// Thousands of transcripts share a handful of cwds.
-const cwdStrings = new Map<string, string>()
-
-function internCwd(cwd: string): string {
-  const existing = cwdStrings.get(cwd)
-  if (existing !== undefined) {
-    return existing
-  }
-  cwdStrings.set(cwd, cwd)
-  return cwd
-}
-
-/** Drops cached heads for transcripts the latest scoped scan no longer discovered. */
-export function pruneTranscriptHeadCwdCache(discoveredPaths: ReadonlySet<string>): void {
-  for (const path of headCwdCache.keys()) {
-    if (!discoveredPaths.has(path)) {
-      headCwdCache.delete(path)
+async function settledRead<T>(read: () => Promise<T>, signal?: AbortSignal): Promise<T | null> {
+  try {
+    return await read()
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error
     }
+    return null
   }
-  const liveCwds = new Set([...headCwdCache.values()].map((entry) => entry.cwd))
-  for (const cwd of cwdStrings.keys()) {
-    if (!liveCwds.has(cwd)) {
-      cwdStrings.delete(cwd)
-    }
-  }
-}
-
-export function resetTranscriptHeadCwdCacheForTests(): void {
-  headCwdCache.clear()
-  cwdStrings.clear()
 }

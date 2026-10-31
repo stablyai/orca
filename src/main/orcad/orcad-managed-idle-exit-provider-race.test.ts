@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-idle-exit'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 import { bindOrcadIdleShutdown, beginOrcadIdleExit } from './orcad-managed-idle-exit-host'
 import { installOrcadManagedIdleExit } from './orcad-managed-idle-exit'
 import type * as ManagedIdleExit from './orcad-managed-idle-exit'
@@ -63,6 +63,7 @@ it.each(['provider', 'client', 'request', 'recent request'])(
       agentStates: () => [],
       hasStagedMigration: () => false,
       automationsBusy: () => false,
+      emulatorsBusy: async () => false,
       registerCleanup: () => {}
     })
     const installed = vi.mocked(installOrcadManagedIdleExit).mock.calls.at(-1)?.[0]
@@ -79,7 +80,6 @@ it.each(['provider', 'client', 'request', 'recent request'])(
     expect(await stopping).toBe(false)
     expect(shutdown).not.toHaveBeenCalled()
     expect(discardOrcadIdleStopRecord).toHaveBeenCalledWith('test-profile')
-    // The retired daemon is replaced so the server that stays can still open terminals.
     expect(restartDaemon).toHaveBeenCalledOnce()
   }
 )

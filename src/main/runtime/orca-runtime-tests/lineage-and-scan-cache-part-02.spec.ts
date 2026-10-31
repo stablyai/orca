@@ -8,6 +8,10 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../../shared/worktree/host-qualified-identity'
 
 const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
 
@@ -16,10 +20,12 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
-    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
-      metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
-      return metaById[worktreeId]
-    })
+    const setWorktreeMeta = vi.fn(
+      ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      }
+    )
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
@@ -35,7 +41,10 @@ describe('OrcaRuntimeService', () => {
       orcaCreationWorkspaceLayout: { path: '/tmp', nestWorkspaces: false }
     })
 
-    expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, { comment: 'keep me' })
+    expect(setWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: TEST_WORKTREE_ID, hostId: 'local' }),
+      { comment: 'keep me' }
+    )
   })
 
   it('ignores stale instance-mismatched lineage when validating manual cycle repairs', async () => {
@@ -47,12 +56,12 @@ describe('OrcaRuntimeService', () => {
       [parentId]: makeWorktreeMeta({ instanceId: 'new-parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
-    const setWorktreeLineage = vi.fn((_worktreeId, lineage) => lineage)
+    const setWorktreeLineage = vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
         return metaById[worktreeId]
       },
@@ -93,7 +102,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(setWorktreeLineage).toHaveBeenCalledWith(
-      childId,
+      hostWorktreeTarget({ id: childId, hostId: 'local' }),
       expect.objectContaining({
         worktreeId: childId,
         worktreeInstanceId: 'child-instance',
@@ -101,6 +110,74 @@ describe('OrcaRuntimeService', () => {
         parentWorktreeInstanceId: 'new-parent-instance'
       })
     )
+  })
+
+  it('refuses a reparent that closes a three-workspace loop through saved lineage', async () => {
+    const names = ['a', 'b', 'c', 'd', 'e', 'f', 'h']
+    const [aId, bId, cId, dId, eId, fId, hId] = names.map(
+      (name) => `${TEST_REPO_ID}::/tmp/worktree-${name}`
+    )
+    const gId = 'repo-remote::/remote/worktree-g'
+    const metaById: Record<string, WorktreeMeta> = Object.fromEntries(
+      [aId, bId, cId, dId, eId, fId, gId, hId].map((id) => [
+        id,
+        makeWorktreeMeta({ instanceId: `${id}-instance` })
+      ])
+    )
+    const edge = (child: string, parent: string): WorktreeLineage => ({
+      worktreeId: child,
+      worktreeInstanceId: `${child}-instance`,
+      parentWorktreeId: parent,
+      parentWorktreeInstanceId: `${parent}-instance`,
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    })
+    const lineageById: Record<string, WorktreeLineage> = {
+      [aId]: edge(aId, bId),
+      [bId]: edge(bId, cId),
+      [dId]: edge(dId, eId),
+      [eId]: edge(eId, dId),
+      // Legacy cross-host lineage must never be followed.
+      [fId]: edge(fId, gId),
+      [gId]: edge(gId, hId)
+    }
+    const setWorktreeLineage = vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [
+        ...store.getRepos(),
+        { id: 'repo-remote', path: '/remote', displayName: 'remote', connectionId: 'box' }
+      ],
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId],
+      setWorktreeLineage
+    }
+    vi.mocked(listWorktrees).mockResolvedValue(
+      names.map((name) => makeWorktreeInfo(`/tmp/worktree-${name}`))
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    // Reparent invalidates resolved cache; lineage walks must not depend on it.
+    await expect(
+      runtime.updateManagedWorktreeMeta(`id:${cId}`, { lineage: { parentWorktree: `id:${aId}` } })
+    ).rejects.toThrow('lineage cycle')
+    expect(setWorktreeLineage).not.toHaveBeenCalled()
+
+    for (const [childId, parentId] of [
+      [cId, dId],
+      [hId, fId]
+    ]) {
+      await runtime.updateManagedWorktreeMeta(`id:${childId}`, {
+        lineage: { parentWorktree: `id:${parentId}` }
+      })
+      expect(setWorktreeLineage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ id: childId }),
+        expect.objectContaining({ parentWorktreeId: parentId })
+      )
+    }
+    expect(metaById[gId].hostId).toBeUndefined()
   })
 
   it('rejects lineage updates when upgraded metadata is missing a parent instance id', async () => {
@@ -116,12 +193,12 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
         return metaById[worktreeId]
       },
       getWorktreeLineage: () => undefined,
-      setWorktreeLineage: vi.fn((_worktreeId: string, lineage) => lineage)
+      setWorktreeLineage: vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     }
     vi.mocked(listWorktrees).mockResolvedValue([
       {
@@ -170,18 +247,18 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
-    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const setWorktreeLineage = vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
         return metaById[worktreeId]
       },
       getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId],
       getAllWorktreeLineage: () => lineageById,
-      removeWorktreeLineage: vi.fn((worktreeId: string) => {
+      removeWorktreeLineage: vi.fn(({ id: worktreeId }: HostWorktreeTarget) => {
         delete lineageById[worktreeId]
       }),
       setWorktreeLineage
@@ -227,7 +304,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(setWorktreeLineage).toHaveBeenCalledWith(
-      childId,
+      hostWorktreeTarget({ id: childId, hostId: 'local' }),
       expect.objectContaining({
         worktreeInstanceId: 'child-instance',
         parentWorktreeInstanceId: rotatedParentInstance
@@ -255,17 +332,19 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
-    const removeWorktreeLineage = vi.fn((worktreeId: string) => {
+    const removeWorktreeLineage = vi.fn(({ id: worktreeId }: HostWorktreeTarget) => {
       delete lineageById[worktreeId]
     })
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
-        return metaById[worktreeId]
-      }),
+      setWorktreeMeta: vi.fn(
+        ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+          metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+          return metaById[worktreeId]
+        }
+      ),
       getAllWorktreeLineage: () => lineageById,
       removeWorktreeLineage
     }
@@ -340,9 +419,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  // Why (#10562): the renderer purges its state regardless of the sweep result, so
-  // revalidating against a cached scan (30s TTL) that still lists an already-deleted
-  // directory would strand those PTYs permanently — nothing asks a second time.
+  // #10562: renderer purges even after failed sweep; stale 30s scan rows would strand PTYs with no later retry.
   it('revalidates against a fresh scan instead of a warm worktree-scan cache', async () => {
     const deletedId = `${TEST_REPO_ID}::/tmp/deleted`
     const localProvider = {
@@ -355,14 +432,12 @@ describe('OrcaRuntimeService', () => {
       getLocalProvider: () => localProvider as never
     })
 
-    // Warm the scan cache while the worktree still exists.
     vi.mocked(listWorktrees).mockResolvedValueOnce([
       { path: '/tmp/deleted', head: 'abc', branch: 'd', isBare: false, isMainWorktree: false }
     ])
     await runtime.teardownMissingManagedWorktreeTerminals(`id:${TEST_REPO_ID}`, [deletedId])
     expect(localProvider.shutdown).not.toHaveBeenCalled()
 
-    // The worktree is now gone; the cached scan must not mask that.
     vi.mocked(listWorktrees).mockResolvedValue([])
     const result = await runtime.teardownMissingManagedWorktreeTerminals(`id:${TEST_REPO_ID}`, [
       deletedId
@@ -400,9 +475,7 @@ describe('OrcaRuntimeService', () => {
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
   })
 
-  // Why: an explicit connection identity only narrows the selector, it must not
-  // change the grammar. Treating the selector as a bare repo id made every
-  // `path:`/`name:` selector fail repo_not_found on this path alone.
+  // Connection identity narrows scope, never selector grammar; path/name selectors must still resolve.
   it('resolves non-id selectors when a connection identity is supplied', async () => {
     const deletedId = `${TEST_REPO_ID}::/tmp/deleted`
     const localProvider = {
@@ -427,7 +500,6 @@ describe('OrcaRuntimeService', () => {
       worktrees: []
     })
 
-    // `path:` is ambiguous across the two rows; connectionId null selects the local one.
     const result = await runtime.teardownMissingManagedWorktreeTerminals(
       `path:${localRepo.path}`,
       [deletedId],
@@ -471,7 +543,6 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.teardownMissingManagedWorktreeTerminals(TEST_REPO_ID, [deletedId], 'ssh-1')
 
-    // The SSH repo was selected, so the local inventory is never swept.
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
   })
 
@@ -555,12 +626,12 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => (id === folderRepo.id ? folderRepo : undefined),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },
       getAllWorktreeLineage: () => lineageById
-    } as never)
+    })
 
     const result = await runtime.listDetectedManagedWorktrees(`id:${folderRepo.id}`)
 

@@ -1,13 +1,9 @@
 import type { ExtraUsageBalance } from '../../shared/rate-limit-types'
 import type { CodexRateLimitWindowsSnapshot } from './codex-rate-limit-window-classification'
 
-// Codex's pay-as-you-go credit balance, reported alongside the rate windows.
-// `balance` is a plain credit count (string), not a currency amount.
 type RpcCredits = NonNullable<CodexRateLimitWindowsSnapshot['credits']>
 
-// Codex credits are a unitless count, not currency. Only surface the balance
-// when the account actually has credits (or unlimited) so accounts that never
-// bought any don't get an empty "0 credits" row.
+// Credits are unitless, not currency; suppress empty balances for accounts that never bought credits.
 export function mapCodexCredits(raw: RpcCredits | null | undefined): ExtraUsageBalance | null {
   if (!raw || (raw.hasCredits !== true && raw.unlimited !== true)) {
     return null

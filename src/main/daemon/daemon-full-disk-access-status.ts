@@ -4,7 +4,7 @@ import { getDaemonProvider } from './daemon-provider-state'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { getMacosFullDiskAccessStatus } from '../macos-full-disk-access-status'
 
-/** macOS only; the caller gates it. A denied generation wins; granted needs every generation. */
+/** Caller gates macOS; all daemon generations must grant access, and any denial wins. */
 export async function getTerminalHostsFullDiskAccessStatus(): Promise<DeveloperPermissionStatus> {
   const provider = getDaemonProvider()
   if (!provider) {

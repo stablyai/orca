@@ -12,8 +12,7 @@ test.describe('Diff note edit', () => {
     const seededBody = 'edit-me note'
     const editedBody = 'edited note from the inline card'
 
-    // Why: create a real modified-file diff so Monaco mounts the saved-note
-    // view zone on the same local surface that wires updateDiffComment.
+    // Use a real modified-file diff so Monaco mounts the local saved-note zone.
     const { relativePath } = await orcaPage.evaluate(async (wId) => {
       const store = window.__store
       if (!store) {

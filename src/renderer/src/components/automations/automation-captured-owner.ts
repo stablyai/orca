@@ -1,19 +1,11 @@
-/**
- * What a row's captured owner permits.
- *
- * The owner is captured when the row is listed and travels with it; nothing
- * here re-derives ownership from the active runtime, the desktop store, or the
- * record's `runContext`. That is the whole point: an automation the user is
- * looking at may have moved hosts since it was fetched, and the fence only
- * works if the request names the incarnation the user actually saw.
- *
- * Three outcomes, kept distinct because they mean different things to the user:
- * an owned row acts normally; an orphan row still deletes and pauses under the
- * orphan precondition but can never execute; a legacy row proves nothing and
- * stays view-only until its authority advertises fencing.
- */
+/** Carry the listed owner into actions so a host move fences against the incarnation the user saw. Owned rows act normally, orphans allow pause/delete/history but cannot execute, and unfenced legacy rows stay view-only. */
 
-import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
+import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../../../shared/automation-owner-conflict'
+import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automation-list-scope'
+import type {
+  AutomationAuthorityRef,
+  AutomationOwnerRef
+} from '../../../../shared/automation-owner-ref'
 import { ownerKey } from '../../../../shared/automation-owner-key'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automation-owner-precondition'
 import { translate } from '@/i18n/i18n'
@@ -35,6 +27,7 @@ export type AutomationActionBlock = {
 
 export type AutomationCapturedOwner = {
   owner: AutomationOwnerRef | null
+  authority?: AutomationAuthorityRef
   /** How the authority qualified the row; null when no list metadata was captured at all. */
   selector: AutomationHostRowSelector | null
 }
@@ -43,25 +36,35 @@ export type AutomationActionAvailability =
   | { kind: 'owned'; owner: AutomationOwnerRef; precondition: AutomationOwnerPrecondition }
   | { kind: 'orphan-fenced'; precondition: AutomationOwnerPrecondition }
   | { kind: 'blocked'; block: AutomationActionBlock }
-  /**
-   * No owner metadata exists for this row yet, so the caller keeps its legacy
-   * unfenced path. Removed with the inference in Step 9, never in the same
-   * change — a mixed-version client still depends on it.
-   */
+  /** No metadata was captured; preserve the unfenced legacy path for mixed-version clients until host ownership can be established. */
   | { kind: 'uncaptured' }
 
 export const UNCAPTURED_AUTOMATION_OWNER: AutomationCapturedOwner = { owner: null, selector: null }
 
-/** Delete and pause survive on an orphan; running it would need a host that no longer exists. */
+/** Orphans retain pause, delete and history; execution requires a live owning host. */
 const ORPHAN_ACTIONS: ReadonlySet<AutomationRowAction> = new Set(['delete', 'toggle', 'history'])
 
-function orphanBlock(): AutomationActionBlock {
+export function automationHostReselectionMessage(
+  captured: AutomationCapturedOwner | undefined
+): string | null {
+  return captured?.selector?.kind === 'orphan' &&
+    captured.selector.issue === AUTOMATION_ORPHAN_ISSUES.hostReselection
+    ? translate(
+        'auto.components.automations.capturedOwner.hostReselection',
+        AUTOMATION_CAPTURED_HOST_REFUSALS[AUTOMATION_ORPHAN_ISSUES.hostReselection]
+      )
+    : null
+}
+
+function orphanBlock(captured: AutomationCapturedOwner): AutomationActionBlock {
   return {
     reason: 'orphan',
-    message: translate(
-      'auto.components.automations.capturedOwner.orphan',
-      'This automation has no host to run on. Delete it, or re-add the host it belongs to.'
-    ),
+    message:
+      automationHostReselectionMessage(captured) ??
+      translate(
+        'auto.components.automations.capturedOwner.orphan',
+        'This automation has no host to run on. Delete it, or re-add the host it belongs to.'
+      ),
     recovery: null
   }
 }
@@ -92,9 +95,13 @@ export function automationActionAvailability(
     return { kind: 'uncaptured' }
   }
   if (captured.selector.kind === 'orphan') {
-    return ORPHAN_ACTIONS.has(action)
+    const repair =
+      captured.authority &&
+      captured.selector.issue === AUTOMATION_ORPHAN_ISSUES.hostReselection &&
+      (action === 'edit' || action === 'save')
+    return ORPHAN_ACTIONS.has(action) || repair
       ? { kind: 'orphan-fenced', precondition: ORPHAN_OWNER_PRECONDITION }
-      : { kind: 'blocked', block: orphanBlock() }
+      : { kind: 'blocked', block: orphanBlock(captured) }
   }
   // A qualified selector with no owner is a legacy row: no generation was ever captured.
   return { kind: 'blocked', block: unfencedBlock() }
@@ -115,37 +122,26 @@ export type AutomationCapturedRow = {
   row: AutomationHostRow
 }
 
-/**
- * The owner map the page keys its actions by. Built from the rows a host query
- * committed, so a row that never loaded simply has no entry and its actions
- * fall back rather than guessing an owner.
- *
- * Keyed by the row key, not the automation ID: an ID is unique only inside one
- * authority, so under All hosts a bare-ID map hands every colliding row the
- * owner of whichever host was listed last. The key stays incarnation-free
- * because it answers "which row is this" — the incarnation lives in the captured
- * `owner` it returns, which is what the request fences on.
- */
+/** Capture owners by authority-qualified, incarnation-free row key; IDs collide across hosts. The returned owner supplies the incarnation fence. Unloaded rows have no entry and keep their legacy fallback. */
 export function captureAutomationOwners(
   rows: Iterable<AutomationCapturedRow>
 ): Map<string, AutomationCapturedOwner> {
   const captured = new Map<string, AutomationCapturedOwner>()
   for (const { rowKey, row } of rows) {
-    captured.set(rowKey, { owner: row.owner, selector: row.selector })
+    captured.set(rowKey, { owner: row.owner, selector: row.selector, authority: row.authority })
   }
   return captured
 }
 
-/**
- * Identifies the authority a row was listed under. Distinguishes "listed under
- * this owner" from "listed with no owner at all", so a bare automation ID —
- * unique only inside one authority — is never what a cached result is matched by.
- */
+/** Match cached results by listed authority, including the distinction between captured ownership and no metadata; bare IDs are authority-local. */
 export function capturedAutomationOwnerKey(captured: AutomationCapturedOwner): string {
   if (captured.owner) {
     return ownerKey(captured.owner)
   }
-  return captured.selector ? `selector:${captured.selector.kind}` : 'uncaptured'
+  const authority = captured.authority
+    ? ownerKey({ authority: captured.authority, selector: { kind: 'self' } })
+    : ''
+  return captured.selector ? `${authority}selector:${captured.selector.kind}` : 'uncaptured'
 }
 
 export function capturedAutomationOwner(

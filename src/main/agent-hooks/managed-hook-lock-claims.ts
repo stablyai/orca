@@ -130,7 +130,7 @@ async function claimManagedHookLock(
   })
   try {
     try {
-      // Why: renaming the witness elects one claimant without ever dropping the hard link.
+      // Rename elects one claimant while preserving the hard-link witness.
       await rename(source.sourcePath, claimedOwnerPath)
     } catch (error) {
       if (hasCode(error, 'ENOENT')) {
@@ -207,8 +207,7 @@ export async function removeManagedHookLock(
       try {
         await cleanAcquiredClaim(claimed)
       } catch (error) {
-        // Why: the canonical lock is already gone; residue cleanup must not
-        // turn a successful release into a failed installation.
+        // Residue cleanup must not turn a completed release into installation failure.
         console.warn('[agent-hooks] Failed to clean managed-hook recovery claim', error)
       }
     }

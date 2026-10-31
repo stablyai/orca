@@ -3,12 +3,12 @@
 # Prune: pnpm check:legacy-relay-fence-ratchet --prune
 config/scripts/pr-code-change-scope.mjs
 config/scripts/pr-e2e-source-routing.mjs
-src/main/ipc/ssh-connect-flow.ts
-src/main/ipc/ssh-host-server-connect.ts
-src/main/ipc/ssh-host-server-on-connect-wiring.test.ts
-src/main/ipc/ssh-host-server-on-connect-wiring.ts
-src/main/ipc/ssh-session-teardown.ts
-src/main/ipc/ssh.ts
+src/main/ipc/ssh/ssh-connect-flow.ts
+src/main/ipc/ssh/ssh-host-server-connect.ts
+src/main/ipc/ssh/ssh-host-server-on-connect-wiring.test.ts
+src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
+src/main/ipc/ssh/ssh-session-teardown.ts
+src/main/ipc/ssh/ssh.ts
 src/main/runtime/orchestration/terminal-authority/verify-orchestration-compatibility-caller.ts
 src/main/runtime/runtime-terminal-contracts.ts
 src/main/ssh/orcad-migration-delta-move.test.ts
@@ -20,7 +20,7 @@ src/main/ssh/orcad-migration-terminal-gate.ts
 src/main/managed-server/lifecycle/orcad-runtime-conversion.test.ts
 src/main/ssh/ssh-host-server-on-connect.test.ts
 src/main/ssh/ssh-host-server-on-connect.ts
-src/main/ssh/ssh-target-orcad-preflight.ts
+src/main/ssh/targets/ssh-target-orcad-preflight.ts
 src/preload/api-types.ts
 src/preload/api/legacy-relay-bridge-api.ts
 src/renderer/src/components/terminal-pane/legacy-relay-bridge-panes.ts
@@ -40,3 +40,4 @@ tests/e2e/helpers/build-released-relay-bundle.mts
 tests/e2e/helpers/legacy-relay-docker-host.ts
 tests/e2e/helpers/orcad-upgrade-profile.ts
 tests/e2e/ssh-orcad-legacy-relay-bridge.spec.ts
+tests/e2e/ssh-orcad-relay-tab-only-shell.spec.ts

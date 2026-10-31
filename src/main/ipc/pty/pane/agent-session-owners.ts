@@ -1,3 +1,7 @@
+import {
+  classifyTerminalCreationFailure,
+  terminalExitError
+} from '../../../../shared/terminal-start-failure'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-host-authority'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
 import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
@@ -7,20 +11,13 @@ import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { registeredPtyProviders, tryGetProviderForPty } from '../provider/registry'
 
-// Why: one main process can route the same remote provider namespace through
-// multiple SSH relays; coordinate claims above every provider boundary too.
+// Coordinate claims across provider boundaries, including shared namespaces reached through different relays.
 export const agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
 let agentSessionOwnerReconciliation: Promise<void> | null = null
-// Why: this reconcile gates spawn; a wedged relay listing must fail closed (rejecting
-// with unknown ownership) instead of blocking the spawn path indefinitely.
+// Bound spawn-gating reconciliation; stalled relay listings must reject as unknown ownership.
 const OWNER_LISTING_DEADLINE_MS = 5_000
 
-// Why: restore payloads (reattach snapshot / cold-restore scrollback / relay
-// replay + lastTitle) ride spawn RPC results, never onPtyData, so EVERY spawn
-// choke point — renderer pty:spawn and the runtime controller — must seed the
-// terminal list/read records or headless/CLI-created reattaches stay blank.
-// The runtime's empty-record guard makes a second seed for the same session a
-// no-op, so overlapping paths cannot double-apply history.
+// Spawn-result restores bypass onPtyData; both entry points must seed list/read history. The empty-record guard prevents duplicate seeding.
 export function seedTerminalRestoreRecordsFromSpawnResult(
   runtime: OrcaRuntimeService | undefined,
   result: PtySpawnResult
@@ -37,14 +34,16 @@ export function seedTerminalRestoreRecordsFromSpawnResult(
   const lastTitle =
     typeof result.lastTitle === 'string' && result.lastTitle.length > 0
       ? result.lastTitle
-      : typeof result.coldRestore?.lastTitle === 'string' && result.coldRestore.lastTitle.length > 0
-        ? result.coldRestore.lastTitle
-        : undefined
+      : undefined
   if (text !== undefined || lastTitle !== undefined) {
     runtime?.seedTerminalRestoreTail?.(result.id, {
       ...(text !== undefined ? { text } : {}),
       ...(lastTitle !== undefined ? { lastTitle } : {})
     })
+  }
+  if (result.isReattach === true) {
+    runtime?.startReattachedOutputClock?.(result.id)
+    runtime?.restoreReattachedAgentStatus?.(result.id)
   }
 }
 
@@ -52,10 +51,25 @@ export function assertSpawnReplyWasLive(result: PtySpawnResult): void {
   if (!result.exitedBeforeSpawnReply) {
     return
   }
-  // Why: lower owners can resolve a different canonical id, so controller-local pending ids cannot prove this exit.
-  throw Object.assign(new Error('agent_session_exited_during_start'), {
-    agentSessionOperationOutcome: 'unknown' as const
-  })
+  // Lower layers may canonicalize IDs; controller-local pending identity cannot prove this exit.
+  const error = Object.assign(
+    terminalExitError('agent_session_exited_during_start', result.exitCause, result.incarnationId),
+    {
+      agentSessionOperationOutcome: 'unknown' as const
+    }
+  )
+  throw classifyTerminalCreationFailure(error, result)
+}
+
+export function assertSpawnRegistrationAllowed(
+  runtime: Pick<OrcaRuntimeService, 'assertPtyRegistrationAllowed'> | undefined,
+  result: PtySpawnResult
+): void {
+  try {
+    runtime?.assertPtyRegistrationAllowed?.(result.id, result.incarnationId)
+  } catch (error) {
+    throw classifyTerminalCreationFailure(error, result)
+  }
 }
 
 export async function reconcileAgentSessionOwnerListings(): Promise<void> {
@@ -84,7 +98,7 @@ export async function reconcileAgentSessionOwnerListings(): Promise<void> {
         let hasAdvertisedOwner = false
         for (const owner of session.agentSessionOwners ?? []) {
           if (owner.ptyId !== session.id || !isPtyIncarnationId(incarnationId)) {
-            // Why: a recovered claim without process-incarnation proof cannot safely reject a delayed exit.
+            // Without incarnation proof, a recovered claim cannot safely reject delayed exits.
             throw new Error('agent_session_ownership_unknown')
           }
           advertisedOwners.push(owner)
@@ -96,8 +110,7 @@ export async function reconcileAgentSessionOwnerListings(): Promise<void> {
       }
     }
     agentSessionOwners.reconcileAuthoritative(advertisedOwners, {
-      // Why: an unregistered relay can still own a live PTY during reconnect;
-      // only providers that serialize claims may make listing absence authoritative.
+      // Reconnecting relays can still own live PTYs; only claim-listing providers prove absence.
       isInAuthoritativeScope: (owner) => {
         const provider = tryGetProviderForPty(owner.ptyId)
         return provider?.providesAgentSessionOwnerListings?.(owner.ptyId) === true

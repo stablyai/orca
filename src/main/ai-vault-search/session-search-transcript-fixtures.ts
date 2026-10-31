@@ -6,9 +6,6 @@ import {
 } from '../ai-vault/session-scanner-parse-cache'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 
-// Transcript builders shared by the session-search store tests; each file owns
-// its temp directories, this module only shapes records and drives the parser.
-
 export const CLAUDE_SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 export const CODEX_SESSION_ID = '019f0000-1111-7222-8333-444444444444'
 export const CODEX_ROLLOUT_FILE = `rollout-2026-05-01T10-00-00-${CODEX_SESSION_ID}.jsonl`
@@ -86,7 +83,6 @@ function codexLine(record: Record<string, unknown>): string {
   return JSON.stringify(record)
 }
 
-/** Minimal Codex rollout: meta, one user message, one completed shell command. */
 export function codexRolloutLines(command: string[], output: string, prompt: string): string[] {
   return [
     codexLine({

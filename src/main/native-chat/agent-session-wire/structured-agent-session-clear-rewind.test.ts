@@ -29,10 +29,10 @@ afterEach(() => rig.dispose())
 
 const journal = () => rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
 const db = () => openTestJournalHostDatabase(rig.root).db
-const rawPrefix = (sequence: number) =>
+const canonicalPrefix = (sequence: number) =>
   db()
     .prepare(
-      'SELECT seq, row_json FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq <= ? ORDER BY seq'
+      'SELECT seq, field, entry_key, ordinal, value_json, deleted FROM journal_outcomes WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ? AND epoch = ?) AND seq <= ? ORDER BY seq, field, entry_key'
     )
     .all(SESSION, journal().cursor().epoch, sequence)
 
@@ -43,6 +43,8 @@ async function clear() {
     envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId())
   })
   expect(result).toMatchObject({ ok: true })
+  await rig.host.drainStatusWrites()
+  expect(rig.store.getRecord(SESSION)?.lastTurn).toBeUndefined()
 }
 
 async function send(text: string, turn: string) {
@@ -60,7 +62,7 @@ async function seed() {
   const prefix = journal()
     .snapshot()
     .items.filter((item) => item.sequence <= floor.sequence)
-  const raw = rawPrefix(floor.sequence)
+  const raw = canonicalPrefix(floor.sequence)
   const kept = await send('kept after clear', 'kept')
   const target = await send('rewound after clear', 'target')
   const fields = { itemId: target, expectedEpoch: journal().cursor().epoch }
@@ -140,9 +142,7 @@ describe('rewind behind a clear boundary', () => {
     const target = agentJournalSubmissionKey(later)
     const newer = await journal().queuedMessages.insert({
       messageId: 'queued-after-stop',
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'newer card' }] },
-      fingerprint: 'newer-card',
-      hostInstance: 'test'
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'newer card' }] }
     })
     const originalPause = structuredQueuePauses(journal()).find(
       (entry) => entry.reason === 'stopped'
@@ -194,11 +194,7 @@ describe('rewind behind a clear boundary', () => {
       expect(prepared.contextClearOperationId).toBe(
         rig.store.getRecord(SESSION)!.providerContextBoundary!.operationId
       )
-      expect(prepared.retained).toHaveLength(1)
-      expect(prepared.retained[0].body).toMatchObject({
-        kind: 'message',
-        blocks: [{ text: 'kept after clear' }]
-      })
+      expect(prepared).not.toHaveProperty('retained')
       return { ok: true }
     })
     const result = await rig.host.rewind(CALLER, params)
@@ -209,9 +205,17 @@ describe('rewind behind a clear boundary', () => {
     expect(
       journal()
         .snapshot()
+        .items.filter((item) => item.sequence > floor.sequence)
+        .map((item) => item.body)
+    ).toContainEqual(
+      expect.objectContaining({ blocks: [expect.objectContaining({ text: 'kept after clear' })] })
+    )
+    expect(
+      journal()
+        .snapshot()
         .items.filter((item) => item.sequence <= floor.sequence)
     ).toEqual(prefix)
-    expect(rawPrefix(floor.sequence)).toEqual(raw)
+    expect(canonicalPrefix(floor.sequence)).toEqual(raw)
     expect(
       journal()
         .snapshot()
@@ -237,12 +241,14 @@ describe('rewind behind a clear boundary', () => {
       rig.store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)?.outcome.status
     ).toBe('pending')
     db().exec('DROP TRIGGER fail_rewind')
-    await recoverStructuredRewind(
-      rig.host.deps,
-      SESSION,
-      journal(),
-      rig.store.getRecord(SESSION)!.lease.runtimeFence
-    )
+    await rig.host.close(SESSION, 'evict')
+    await rig.host.revealSession(SESSION)
+    await rig.host.drainStatusWrites()
+    expect(rig.host.readStatusSummary(SESSION)).toMatchObject({
+      status: 'idle',
+      latestPrompt: 'kept after clear'
+    })
+    expect(rig.store.getRecord(SESSION)?.lastTurn).toBeUndefined()
     const recovered = journal().snapshot()
     await recoverStructuredRewind(
       rig.host.deps,
@@ -251,7 +257,7 @@ describe('rewind behind a clear boundary', () => {
       rig.store.getRecord(SESSION)!.lease.runtimeFence
     )
     expect(journal().snapshot()).toEqual(recovered)
-    expect(rawPrefix(floor.sequence)).toEqual(raw)
+    expect(canonicalPrefix(floor.sequence)).toEqual(raw)
     expect(rewind).toHaveBeenCalledOnce()
     expect(await rig.host.rewind(CALLER, params)).toMatchObject({ ok: true, replayed: true })
   })

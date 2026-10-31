@@ -7,7 +7,7 @@ import {
   printResult,
   type HostNameResult
 } from '../format'
-import { listSshTargets } from '../host-selector-alternatives'
+import { listSshTargets, LOCAL_HOST_LIST_NAME } from '../host-selector-alternatives'
 import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
 import type { RuntimeClient, RuntimeRpcSuccess } from '../runtime-client'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
@@ -29,8 +29,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError('invalid_argument', 'Missing value for --name')
     }
     if (typeof requestedName === 'string') {
-      // Why: an older runtime rejects the unknown settings field with a bare `invalid_params`;
-      // a runtime that does not publish a name cannot store one either, so say so plainly.
+      // Check name support before an older settings schema can reject the write as invalid_params.
       const current = await client.call<RuntimeStatus>('status.get')
       if (current.result.machineName === undefined) {
         throw new RuntimeClientError(
@@ -40,8 +39,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       }
       await client.call('settings.update', { machineName: requestedName })
     }
-    // Why: print what the runtime publishes after the write (a blank `--name` means the detected
-    // name), inside the runtime's own envelope so a routed answer is stamped with that runtime.
+    // A blank override restores the detected name; read it from the runtime after writing.
     const status = await client.call<RuntimeStatus>('status.get')
     printResult({ ...status, result: describeRuntimeHost(status.result) }, json, formatHostName)
   },
@@ -61,9 +59,6 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
         `Saved environment ${result.environment.name} (${result.environment.id}).`
     )
   },
-  // Why: an agent told "run it on <name>" had nowhere to look. `orca environment list` showed
-  // paired servers only, and nothing in the CLI listed SSH targets at all, so the wrong-axis
-  // guess was the only move available. This is the one place that answers both.
   'host list': async ({ client, flags, json }) => {
     rejectLocalPairingStoreRetargeting(
       flags,
@@ -79,8 +74,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       ...(target.connectionStatus ? { connectionStatus: target.connectionStatus } : {}),
       ...(target.remotePlatform ? { platform: target.remotePlatform } : {})
     }))
-    // Why: this listing answers from the local pairing store; dialing each paired server would make
-    // it slow and offline-fragile. `orca host name --environment <name>` asks one server directly.
+    // Read the local pairing store without dialing every server, so listing works offline.
     const localStatus = await readLocalHostDescriptor(client)
     const environments = listEnvironments(getDefaultUserDataPath()).map((environment) => ({
       kind: 'environment' as const,
@@ -91,7 +85,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
     const hosts = [
       {
         kind: 'local' as const,
-        name: 'this machine',
+        name: LOCAL_HOST_LIST_NAME,
         id: 'local',
         selector: '--host local',
         ...localStatus,
@@ -148,13 +142,7 @@ async function readLocalHostDescriptor(client: RuntimeClient): Promise<HostNameR
   }
 }
 
-/**
- * These two listings are pinned local by `shouldIgnoreRemoteSelection`, so a runtime selector is
- * dropped for routing. It used to still reach the SSH half of `host list` through the routed
- * client, producing a listing whose SSH rows came from the named server and whose paired-server
- * rows came from this machine — one answer describing two hosts, stamped `runtimeId: local`.
- * Failing is the only answer that is true of a single machine.
- */
+// Both listings read the local pairing store; reject flags that imply a different runtime.
 function rejectLocalPairingStoreRetargeting(
   flags: Map<string, string | boolean>,
   suffix: string,

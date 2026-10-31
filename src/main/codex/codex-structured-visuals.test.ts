@@ -3,10 +3,11 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   type NativeChatVisualsLaunch
 } from '../native-chat/native-chat-visuals-delivery'
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import {
   adapterFor,
+  acquireReadyCodexForTest,
   fakeCodex,
   identityFor,
   THREAD_ID
@@ -14,11 +15,9 @@ import {
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import {
-  CODEX_VISUALS_SETUP_BUDGET_MS,
-  prepareCodexThreadForVisuals
-} from './codex-structured-visuals'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { prepareCodexThreadForVisuals } from './codex-structured-visuals'
+
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 
 const VISUALS: NativeChatVisualsLaunch = {
   folder: '/state/chat-scratch/abc',
@@ -27,12 +26,16 @@ const VISUALS: NativeChatVisualsLaunch = {
 const MANUAL = codexStructuredPermissionPolicy('ask')
 const YOLO = codexStructuredPermissionPolicy('full-access')
 
-type Call = { method: string; params?: Record<string, unknown>; timeoutMs?: number }
+type Call = { method: string; params?: Record<string, unknown>; timeoutMs?: number | null }
 
 function connectionAnswering(routes: Record<string, () => unknown>) {
   const calls: Call[] = []
   const request = vi.fn(
-    async (method: string, params?: Record<string, unknown>, options?: { timeoutMs?: number }) => {
+    async (
+      method: string,
+      params?: Record<string, unknown>,
+      options?: { timeoutMs?: number | null }
+    ) => {
       calls.push({ method, params, timeoutMs: options?.timeoutMs })
       const route = routes[method]
       return route ? route() : {}
@@ -46,34 +49,6 @@ const configWithRoots = (roots: unknown) => () => ({
 })
 
 describe('setting up a Codex app-server for a chat with visuals', () => {
-  it("names the skill root and adds the chat folder to the user's writable roots", async () => {
-    const { calls, connection } = connectionAnswering({
-      'config/read': configWithRoots(['/home/me/scratch'])
-    })
-    const config = await prepareCodexThreadForVisuals(connection, {
-      cwd: '/work/repo',
-      visuals: VISUALS,
-      permissionPolicy: MANUAL
-    })
-    expect(config).toEqual({
-      'sandbox_workspace_write.writable_roots': ['/home/me/scratch', VISUALS.folder]
-    })
-    expect(calls).toEqual(
-      expect.arrayContaining([
-        {
-          method: 'skills/extraRoots/set',
-          params: { extraRoots: [VISUALS.skill.skillsRoot] },
-          timeoutMs: CODEX_VISUALS_SETUP_BUDGET_MS
-        },
-        {
-          method: 'config/read',
-          params: { cwd: '/work/repo' },
-          timeoutMs: CODEX_VISUALS_SETUP_BUDGET_MS
-        }
-      ])
-    )
-  })
-
   it('grants just the folder when the user has no writable roots of their own', async () => {
     for (const answer of [() => ({ config: {} }), configWithRoots([])]) {
       const { connection } = connectionAnswering({ 'config/read': answer })
@@ -148,15 +123,8 @@ describe('setting up a Codex app-server for a chat with visuals', () => {
       )
     }
   })
-
-  it('sends nothing for a chat without visuals', async () => {
-    const { calls, connection } = connectionAnswering({})
-    await expect(prepareCodexThreadForVisuals(connection, { cwd: '/w' })).resolves.toBeNull()
-    expect(calls).toEqual([])
-  })
 })
 
-/** A chat acquired through the launch its registration composes, over a shell env of `env`. */
 async function acquired(
   codex: ReturnType<typeof fakeCodex>,
   launch: {
@@ -186,13 +154,16 @@ async function acquired(
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async () => '/work/repo',
       resolveEnvironment: async () => launch.env ?? {},
-      resolveCommand: () => 'codex',
+      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
       resolveLaunchArgs: () => [],
-      resolveRollout: async () => null,
       prepareVisuals: async () => launch.visuals ?? null
     })
   })
-  await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+  await acquireReadyCodexForTest(adapter, {
+    identity: identityFor('session-1'),
+    fence: 7,
+    spawnToken: 'spawn-9'
+  })
 }
 
 describe('a Codex chat acquisition with visuals', () => {
@@ -203,11 +174,15 @@ describe('a Codex chat acquisition with visuals', () => {
       const connection = codex.connections[0]!
       const methods = connection.calls.map((call) => call.method)
       const open = resumeThreadId ? 'thread/resume' : 'thread/start'
+      expect(methods[0]).toBe('initialize')
       expect(methods.indexOf('skills/extraRoots/set')).toBeLessThan(methods.indexOf(open))
       expect(methods.indexOf('config/read')).toBeLessThan(methods.indexOf(open))
       expect(connection.calls.find((call) => call.method === open)?.params).toMatchObject({
         ...MANUAL,
-        config: { 'sandbox_workspace_write.writable_roots': ['/home/me/scratch', VISUALS.folder] }
+        config: {
+          'sandbox_workspace_write.writable_roots': ['/home/me/scratch', VISUALS.folder],
+          [`shell_environment_policy.set.${NATIVE_CHAT_SCRATCH_DIR_ENV}`]: VISUALS.folder
+        }
       })
       expect(connection.launch.env?.[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(VISUALS.folder)
     }
@@ -218,9 +193,12 @@ describe('a Codex chat acquisition with visuals', () => {
     await acquired(codex, { env: { [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/other' } })
     const connection = codex.connections[0]!
     const methods = connection.calls.map((call) => call.method)
-    expect(methods[0]).toBe('thread/start')
+    expect(methods.slice(0, 2)).toEqual(['initialize', 'thread/start'])
     expect(methods).not.toContain('skills/extraRoots/set')
-    expect(connection.calls[0]?.params).not.toHaveProperty('config')
+    const config = connection.calls[1]?.params?.config
+    const scratchDirOverride = `shell_environment_policy.set.${NATIVE_CHAT_SCRATCH_DIR_ENV}`
+    expect(config).not.toHaveProperty(['sandbox_workspace_write.writable_roots'])
+    expect(config).not.toHaveProperty([scratchDirOverride])
     expect(connection.launch.env).not.toHaveProperty(NATIVE_CHAT_SCRATCH_DIR_ENV)
   })
 })

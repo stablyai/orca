@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
+import { readAcpFixture } from '../acp/acp-timeline-fixture.test-support'
 import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -19,7 +21,10 @@ const OTHER_UUID = '019fd633-4d5e-7f60-b172-8d9e0f1a2b3c'
 const OMP_FILE = `/Users/me/.omp/agent/sessions/--Users-me-repo--/2026-10-09T10-00-00-000Z_${OMP_ID}.jsonl`
 const PI_FILE = `/Users/me/.pi/agent/sessions/--Users-me-repo--/2026-10-09T10-00-00-000Z_${PI_ID}.jsonl`
 
-const acp = (agent: 'opencode' | 'grok' | 'omp', nativeId: string): AgentSessionProviderHandle => ({
+const acp = (
+  agent: 'opencode' | 'opencode2' | 'grok' | 'omp',
+  nativeId: string
+): AgentSessionProviderHandle => ({
   transport: 'acp',
   agent,
   nativeId
@@ -39,7 +44,12 @@ const refused = (command: string) =>
     'agent_session_conflict'
   )
 
-function ownedRow(agent: AiVaultAgent, sessionId: string, filePath: string) {
+function ownedRow(
+  agent: AiVaultAgent,
+  sessionId: string,
+  filePath: string,
+  title = 'First prompt'
+) {
   const result = listResult()
   result.sessions = [
     {
@@ -47,7 +57,7 @@ function ownedRow(agent: AiVaultAgent, sessionId: string, filePath: string) {
       agent,
       sessionId,
       filePath,
-      title: 'First prompt'
+      title
     }
   ]
   return projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
@@ -66,6 +76,19 @@ describe('Session History rows owned by OpenCode, Grok, OMP and Pi chats', () =>
     {
       handle: acp('opencode', OPENCODE_ID),
       rowAgent: 'opencode2' as const,
+      sessionId: OPENCODE_ID,
+      filePath: `/Users/me/.local/share/opencode/opencode.db#${OPENCODE_ID}`
+    },
+    // Upgraded OpenCode databases can retain both history formats under one conversation id.
+    {
+      handle: acp('opencode2', OPENCODE_ID),
+      rowAgent: 'opencode2' as const,
+      sessionId: OPENCODE_ID,
+      filePath: `/Users/me/.local/share/opencode/opencode.db#${OPENCODE_ID}`
+    },
+    {
+      handle: acp('opencode2', OPENCODE_ID),
+      rowAgent: 'opencode' as const,
       sessionId: OPENCODE_ID,
       filePath: `/Users/me/.local/share/opencode/opencode.db#${OPENCODE_ID}`
     },
@@ -88,11 +111,14 @@ describe('Session History rows owned by OpenCode, Grok, OMP and Pi chats', () =>
       filePath: PI_FILE
     }
   ])(
-    'owns the $rowAgent row of a $handle.agent chat under its CLI title and refuses preparing its resume',
+    'owns the $rowAgent row of a $handle.agent chat under the chat name and refuses preparing its resume',
     ({ handle, rowAgent, sessionId, filePath }) => {
+      // An unnamed chat's row keeps the CLI's title; once named, the row shows the chat's name.
+      installOwnership({ handle })
+      expect(ownedRow(rowAgent, sessionId, filePath)).toMatchObject({ title: 'First prompt' })
       installOwnership({ handle, conversationName: 'Quokka harbor chat' })
       expect(ownedRow(rowAgent, sessionId, filePath)).toMatchObject({
-        title: 'First prompt',
+        title: 'Quokka harbor chat',
         structuredSession: {
           sessionId: 'session-alpha',
           workspaceId: 'workspace-1'
@@ -117,13 +143,37 @@ describe('Session History rows owned by OpenCode, Grok, OMP and Pi chats', () =>
     installOwnership({ handle: acp('omp', OMP_ID) })
     expect(ownedRow('pi', OMP_ID, OMP_FILE)).not.toHaveProperty('structuredSession')
   })
+})
 
-  // A row agent's owner is the first registration claiming it, so a second claim would be ignored.
-  it('gives each history row agent one owning registration', () => {
-    const rowAgents = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.flatMap(
-      ({ sessionHistory }) => sessionHistory.rowAgents
-    )
-    expect(new Set(rowAgents).size).toBe(rowAgents.length)
+it('shows the saved native name over a recorded OMP provider title, retaining that title while unnamed', async () => {
+  // Scrubbed OMP 17.0.5 ACP output already replayed by acp-structured-omp-recordings.test.ts.
+  const frames = await readAcpFixture('omp-v17-reply-after-thought')
+  const info = frames.flatMap((frame) => {
+    const parsed = z
+      .object({
+        sessionId: z.string(),
+        update: z.object({ sessionUpdate: z.literal('session_info_update'), title: z.string() })
+      })
+      .safeParse(frame.message.params)
+    return frame.direction === 'in' && frame.message.method === 'session/update' && parsed.success
+      ? [parsed.data]
+      : []
+  })[0]
+  if (!info) {
+    throw new Error('Recorded OMP session title missing')
+  }
+  const handle = acp('omp', info.sessionId)
+  const row = () =>
+    ownedRow('omp', info.sessionId, '/recording/omp-session.jsonl', info.update.title)
+  installOwnership({ handle })
+  expect(row()).toMatchObject({
+    title: info.update.title,
+    structuredSession: { sessionId: 'session-alpha' }
+  })
+  installOwnership({ handle, conversationName: 'My saved OMP name' })
+  expect(row()).toMatchObject({
+    title: 'My saved OMP name',
+    structuredSession: { sessionId: 'session-alpha' }
   })
 })
 
@@ -137,7 +187,6 @@ describe('terminal resumes of a conversation an OpenCode chat owns', () => {
     `opencode -c`,
     `opencode --continue`,
     `opencode --session`,
-    // Ids compare in any case.
     `opencode --session ${OPENCODE_ID.toLowerCase()}`,
     // After `--` the flag is prompt text, so the session is resumed, not forked.
     `opencode -s ${OPENCODE_ID} -- --fork`
@@ -152,11 +201,18 @@ describe('terminal resumes of a conversation an OpenCode chat owns', () => {
     `opencode -c --fork`,
     `opencode`,
     `opencode export ${OPENCODE_ID}`,
-    // The `-c` belongs to bash, not to OpenCode.
     `cd /Users/me/src/opencode && bash -c 'make'`
   ])('allows %s', async (command) => {
     installOwnership({ handle: acp('opencode', OPENCODE_ID) })
     await allowed(command)
+  })
+
+  it.each([
+    `opencode --session ${OPENCODE_ID}`,
+    `opencode2 --standalone --session '${OPENCODE_ID}'`
+  ])('refuses %s while an OpenCode 2 chat owns it', async (command) => {
+    installOwnership({ handle: acp('opencode2', OPENCODE_ID) })
+    await refused(command)
   })
 })
 
@@ -316,7 +372,7 @@ describe('another agent named in a command', () => {
   })
 })
 
-// The guard runs on every terminal.send text, so a long text naming agents often must stay linear.
+// terminal.send parses every submission, so frequent agent names must not cause repeated scans.
 describe('parsing cost', () => {
   afterEach(() => vi.restoreAllMocks())
 

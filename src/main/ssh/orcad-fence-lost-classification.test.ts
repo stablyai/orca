@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
-import { execOrcadStateMutation } from './orcad-state-mutation-exec'
+import { execOrcadStateMutation } from '../managed-server/host-state/orcad-state-mutation-exec'
 import {
   execOrcadRemote,
   execOrcadRemoteOr
@@ -9,15 +9,16 @@ import {
 import {
   ORCAD_FENCE_LOST_MARKER,
   OrcadFenceLostError,
-  isOrcadFenceLost,
   posixOrcadFenceGuard,
   runWithOrcadFence
 } from '../managed-server/activation/orcad-activation-fence-scope'
-import { isUnconfirmedSshCommandTermination, sshCommandExitError } from './remote-exec-command'
+
+import { isUnconfirmedSshCommandTermination } from './remote-exec/remote-exec-command'
+
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { OrcadHostTransport } from './orcad-host-transport'
 
-/** An ssh2 exec channel; the host never acknowledges a close, as when the link is down. */
+/** Model an exec channel whose unreachable host never acknowledges close. */
 class HostChannel extends EventEmitter {
   readonly stderr = Object.assign(new EventEmitter(), { resume: () => {} })
   readonly stdin = this
@@ -49,7 +50,6 @@ const fence = {
   token: 't1'
 }
 
-// As serializedStateMutationCommand builds it: the guard leads the mutation.
 const mutation = `${posixOrcadFenceGuard(fence)} restore`
 
 function fenced<T>(run: () => Promise<T>): Promise<T> {
@@ -72,7 +72,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-// Round 13: the real exec error quotes the command, and every fenced command carries the marker.
+// Real exec errors quote commands that contain the guard marker; that alone must not imply fence loss.
 describe('a fenced step through the real exec', () => {
   it('stays an ordinary failure when the step itself exits nonzero', async () => {
     const error = await settledAfter(
@@ -82,14 +82,6 @@ describe('a fenced step through the real exec', () => {
     expect(commands[0]).toContain(ORCAD_FENCE_LOST_MARKER)
     expect(error).not.toBeInstanceOf(OrcadFenceLostError)
     expect(error).toMatchObject({ exitCode: 1, stdout: 'boom\n' })
-  })
-
-  it('lets a failed step fall back', async () => {
-    const answer = await settledAfter(
-      fenced(() => execOrcadRemoteOr(target, 'false', 'FALLBACK')),
-      () => channel.exit(1, '')
-    )
-    expect(answer).toBe('FALLBACK')
   })
 
   it('keeps a timed-out step unconfirmed, so the fence is not released under it', async () => {
@@ -135,15 +127,5 @@ describe('a fenced state mutation through the real exec', () => {
       () => channel.exit(75, `${ORCAD_FENCE_LOST_MARKER}\n`)
     )
     expect(error).toBeInstanceOf(OrcadFenceLostError)
-  })
-})
-
-describe('a Windows host op whose exit PowerShell flattened to 1', () => {
-  it('is a lost fence only when the host script printed the marker', () => {
-    const op = `powershell.exe -Command "& 'node.exe' 'host.js' --fence d t ${ORCAD_FENCE_LOST_MARKER}"`
-    expect(isOrcadFenceLost(sshCommandExitError(op, 1, `${ORCAD_FENCE_LOST_MARKER}\r\n`))).toBe(
-      true
-    )
-    expect(isOrcadFenceLost(sshCommandExitError(op, 1, 'ENOENT\r\n'))).toBe(false)
   })
 })

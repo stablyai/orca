@@ -1,13 +1,13 @@
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
-import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
-import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { resolveOwnerOrLocal } from './worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import {
-  resolveStrictWorktreeOperationRouteResultForHost,
+  resolveWorktreeOperationRouteResultForHost,
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
 import { routeForOwner } from './worktree-owner-route'
+import { getLocalPathOpenOwnerForRoute } from './local-path-open-guard'
 
 export type WorktreeRowOpenInOwner = {
   runtimeEnvironmentId: string | null
@@ -46,21 +46,37 @@ export function resolveWorktreeRowOpenInRuntimeOwner(
     return runtimeEnvironmentId ? resolved(runtimeEnvironmentId) : UNRESOLVED
   }
   if (!worktree.hostId) {
-    return resolved(
-      getRuntimeEnvironmentIdForWorktree(state, worktree.id),
-      getResolvedExecutionHostIdForWorktree(state, worktree.id)
-    )
+    // Why: a twin names no owner, and Open in must not launch it as this desktop's checkout.
+    const owner = resolveOwnerOrLocal(state, { workspaceId: worktree.id })
+    if (owner.kind === 'ambiguous') {
+      return UNRESOLVED
+    }
+    // Why: an owner no row places was read as this desktop before the fold, and still is.
+    if (owner.kind === 'missing') {
+      return resolved(null)
+    }
+    const { endpoint, at } = owner.owner
+    return resolved(endpoint.kind === 'environment' ? endpoint.environmentId : null, at)
   }
   // Why: an inactive row can name its host before the catalog has it, so the explicit host wins.
-  const resolution = resolveStrictWorktreeOperationRouteResultForHost(
-    state,
-    worktree.id,
-    worktree.hostId
-  )
+  const resolution = resolveWorktreeOperationRouteResultForHost(state, worktree.id, worktree.hostId)
   return resolution.kind === 'resolved'
     ? resolved(
         resolution.route.runtimeEnvironmentId,
         resolution.route.executionHostId ?? worktree.hostId
       )
     : UNRESOLVED
+}
+
+/** The same owner as a local-path guard owner, for row actions beside Open in such as Copy Path. */
+export function getWorktreeRowLocalPathOpenOwner(
+  state: WorktreeOperationRouteState & WorktreeRuntimeOwnerState,
+  worktree: Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>,
+  repoConnectionId: string | null | undefined
+): ExecutionHostId | 'unresolved' {
+  const owner = resolveWorktreeRowOpenInRuntimeOwner(state, worktree)
+  return getLocalPathOpenOwnerForRoute({
+    ...owner,
+    connectionId: owner.connectionId ?? repoConnectionId
+  })
 }

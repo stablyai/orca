@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from './pairing'
 import {
   addEnvironmentFromPairingCode,
+  addOrUpdateEnvironmentFromPairingCode,
   getEnvironmentStorePath,
   listEnvironments,
   markEnvironmentUsed,
@@ -50,10 +51,12 @@ describe('runtime environment store with records this build cannot read', () => 
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
+  // Why a key per name: two names with one key are one server, which the store refreshes in place.
   function add(name: string) {
+    const publicKeyB64 = Buffer.alloc(32, name).toString('base64')
     return addEnvironmentFromPairingCode(userDataPath, {
       name,
-      pairingCode: encodePairingOffer(pairing),
+      pairingCode: encodePairingOffer({ ...pairing, publicKeyB64 }),
       now: 100
     })
   }
@@ -186,6 +189,17 @@ describe('runtime environment store with records this build cannot read', () => 
         'newer version of Orca'
       )
       expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Hiding 1 server'))
+    })
+
+    it('refuses a second entry for its server even though it is hidden', () => {
+      const { other } = setup()
+      expect(() =>
+        addOrUpdateEnvironmentFromPairingCode(userDataPath, {
+          name: 'Pinned again',
+          pairingCode: encodePairingOffer({ ...pairing, endpoint: 'ws://192.0.2.10:6768' })
+        })
+      ).toThrow('already paired as "Pinned"')
+      expect(listEnvironments(userDataPath)).toEqual([other])
     })
 
     it('is never replaced, pruned, or orphaned by writes', () => {

@@ -1,7 +1,4 @@
-/**
- * Adopts a recipe-provisioned project root that this host runs, as the desktop does for a direct
- * SSH root: the root becomes the main worktree's workspace, and no linked worktree is created.
- */
+/** Use the host-run recipe root as main workspace, as for direct SSH adoption; create no linked worktree. */
 import type { Repo } from '../../shared/repo-types'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
@@ -17,6 +14,7 @@ import {
 import { gitExecFileAsync } from '../git/runner'
 import type { RuntimeStore } from './runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 
 export type RuntimeProvisionedRootRequest = ProvisionedRootRequest & { expectedPath: string }
 
@@ -58,7 +56,7 @@ export async function adoptRuntimeProvisionedRoot(
   })
   const worktreeId = `${repo.id}::${gitWorktree.path}`
   ports.store.setWorktreeMeta(
-    worktreeId,
+    hostWorktreeTargetForRepo(worktreeId, repo),
     buildProvisionedRootMeta(ports.store, repo, request, {
       branchName: gitWorktree.branch.replace(/^refs\/heads\//, ''),
       now: Date.now(),

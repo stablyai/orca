@@ -8,34 +8,101 @@ import {
   captureAgentGenerationFailureOutput,
   type AgentGenerationFailureOutput
 } from './agent-failure-output'
-import type { InternalTextGenerationResult } from './source-control-text-generation-types'
+import type {
+  InternalTextGenerationResult,
+  TextGenerationOperation
+} from './source-control-text-generation-types'
 import { parseOpenCodeGenerationOutput } from '../../shared/opencode-generation-output'
+import { parseAntigravityGenerationOutput } from '../../shared/antigravity-generation-stream'
+import {
+  findKimiGenerationFailure,
+  parseKimiGenerationOutput
+} from '../../shared/kimi-generation-output'
+import { formatKimiGenerationFailure } from './kimi-generation-failure'
+import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import {
+  textGenerationFailure,
+  type TextGenerationFailureFields
+} from '../../shared/text-generation-failure-copy'
+
+type AgentCliFailureOptions = {
+  includeLocalMacDnsHint?: boolean
+  includeStdoutDetail?: boolean
+}
 
 export function formatAgentCliFailureMessage(
   label: string,
   stdout: string,
   stderr: string,
   exitCode: number | null,
-  options?: { includeLocalMacDnsHint?: boolean; includeStdoutDetail?: boolean }
+  options?: AgentCliFailureOptions
 ): string {
+  return agentCliFailure(label, stdout, stderr, exitCode, options).error
+}
+
+function agentCliFailure(
+  label: string,
+  stdout: string,
+  stderr: string,
+  exitCode: number | null,
+  options?: AgentCliFailureOptions
+): TextGenerationFailureFields {
   const detail = sanitizeAgentFailureDetail(
     excerptAgentFailureOutput(options?.includeStdoutDetail === false ? '' : stdout, stderr)
   )
-  const message =
+  const failure =
     exitCode === null
       ? detail
-        ? `${label} CLI command was terminated before exiting: ${detail}`
-        : `${label} CLI command was terminated before exiting.`
+        ? textGenerationFailure('cliTerminatedWithDetail', { label, detail })
+        : textGenerationFailure('cliTerminated', { label })
       : detail
-        ? `${label} CLI command failed with code ${exitCode}: ${detail}`
-        : `${label} CLI command failed with code ${exitCode}.`
-  return options?.includeLocalMacDnsHint === false
-    ? message
-    : withMacTailscaleDnsHint(message, detail)
+        ? textGenerationFailure('cliFailedWithDetail', {
+            label,
+            exitCode,
+            detail
+          })
+        : textGenerationFailure('cliFailed', { label, exitCode })
+  if (options?.includeLocalMacDnsHint === false) {
+    return failure
+  }
+  const hinted = withMacTailscaleDnsHint(failure.error, detail)
+  // The appended DNS hint is English-only, so a hinted message stays uncoded.
+  return hinted === failure.error ? failure : { error: hinted }
 }
 
-export function userFacingUnsafeWindowsBatchArgs(label: string): string {
-  return `${label} runs through a Windows batch script that cannot take the multi-line prompt as an argument. Point Settings at the agent's executable, or use a custom command without {prompt} so Orca sends the prompt on stdin.`
+export function userFacingUnsafeWindowsBatchArgs(label: string): TextGenerationFailureFields {
+  return textGenerationFailure('windowsBatchUnsafeArguments', { label })
+}
+
+const EMPTY_RESULT_FAILURES = {
+  'commit-message': ['emptyCommitMessage', 'emptyCommitMessageWithDetail'],
+  'pull-request-fields': ['emptyPullRequestDetails', 'emptyPullRequestDetailsWithDetail'],
+  'jira-issue-summary': ['emptyJiraSummary', 'emptyJiraSummaryWithDetail']
+} as const
+
+const UNCODED_EMPTY_RESULT_NAMES = {
+  'branch-name': 'branch name',
+  'conversation-name': 'chat name'
+} as const
+
+export function emptyResultFailure(
+  operation: TextGenerationOperation,
+  label: string,
+  detail?: string | null
+): TextGenerationFailureFields {
+  if (operation === 'branch-name' || operation === 'conversation-name') {
+    // Background rename failures are stored as English rename errors, outside the coded result path.
+    const name = UNCODED_EMPTY_RESULT_NAMES[operation]
+    return {
+      error: detail
+        ? `${label} returned an empty ${name}. CLI output: ${detail}`
+        : `${label} returned an empty ${name}.`
+    }
+  }
+  const [plain, withDetail] = EMPTY_RESULT_FAILURES[operation]
+  return detail
+    ? textGenerationFailure(withDetail, { label, detail })
+    : textGenerationFailure(plain, { label })
 }
 
 export function finalizeFromAgentOutput(args: {
@@ -43,34 +110,51 @@ export function finalizeFromAgentOutput(args: {
   stdout: string
   stderr: string
   label: string
-  emptyResultName: string
+  operation: TextGenerationOperation
   includeLocalMacDnsHint?: boolean
   includeStdoutDetail?: boolean
-  outputFormat?: 'opencode-json'
+  outputFormat?: CommitMessagePlan['outputFormat']
 }): InternalTextGenerationResult {
-  const { code, stdout, stderr, label, emptyResultName } = args
+  const { code, stdout, stderr, label } = args
   const parsed =
-    args.outputFormat === 'opencode-json' ? parseOpenCodeGenerationOutput(stdout) : null
+    args.outputFormat === 'opencode-json'
+      ? parseOpenCodeGenerationOutput(stdout)
+      : args.outputFormat === 'antigravity-stream-json'
+        ? parseAntigravityGenerationOutput(stdout)
+        : args.outputFormat === 'kimi-stream-json' && code === 0
+          ? parseKimiGenerationOutput(stdout)
+          : null
   if (code !== 0) {
-    console.error('[commit-message] Generator failed:', { label, exitCode: code, stdout, stderr })
+    console.error('[commit-message] Generator failed:', {
+      label,
+      exitCode: code,
+      stdout,
+      stderr
+    })
     return {
       success: false,
-      error: formatAgentCliFailureMessage(
-        label,
-        stdout,
-        parsed && !parsed.ok && parsed.error !== 'OpenCode returned invalid JSON events.'
-          ? parsed.error
-          : stderr,
-        code,
-        args
-      ),
+      ...(args.outputFormat === 'kimi-stream-json'
+        ? formatKimiGenerationFailure(findKimiGenerationFailure(stdout), stderr, code, args)
+        : agentCliFailure(
+            label,
+            stdout,
+            // Orca's own parse failures (coded) say nothing about why the agent exited.
+            parsed && !parsed.ok && parsed.errorCode === undefined ? parsed.error : stderr,
+            code,
+            args
+          )),
       failureOutput: captureFailureOutput(label, code, stdout, stderr)
     }
   }
   if (parsed && !parsed.ok) {
+    const reported = sanitizeAgentFailureDetail(parsed.error)
     return {
       success: false,
-      error: sanitizeAgentFailureDetail(parsed.error) ?? 'OpenCode reported an error.',
+      ...(parsed.errorCode !== undefined
+        ? { error: parsed.error, errorCode: parsed.errorCode }
+        : reported !== null
+          ? { error: reported }
+          : textGenerationFailure('agentReportedError', { label })),
       failureOutput: captureFailureOutput(label, code, stdout, stderr)
     }
   }
@@ -89,9 +173,11 @@ export function finalizeFromAgentOutput(args: {
   }
   return {
     success: false,
-    error: detail
-      ? `${label} returned an empty ${emptyResultName}. CLI output: ${detail}`
-      : `${label} returned an empty ${emptyResultName}.`,
+    ...emptyResultFailure(
+      args.operation,
+      label,
+      args.outputFormat !== 'kimi-stream-json' ? detail : null
+    ),
     failureOutput: captureFailureOutput(label, code, stdout, stderr)
   }
 }

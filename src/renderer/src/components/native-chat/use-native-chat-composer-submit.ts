@@ -1,7 +1,11 @@
 import { useCallback, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import { applyPickerSuggestion, type NativeChatPickerItem } from './native-chat-picker-items'
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import { applyPickerSuggestion } from '../../../../shared/native-chat/input/native-chat-picker-triggers'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
+import type {
+  NativeChatComposerSendIntent,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
 import {
@@ -12,6 +16,11 @@ import {
   isBareStructuredAgentSessionGoalCommand,
   structuredAgentSessionGoalObjective
 } from '../../../../shared/structured-agent-session-composer'
+
+import {
+  admitNativeChatPastedText,
+  resolveNativeChatPastedText
+} from './native-chat-composer-pasted-text-references'
 
 const GOAL_COMMAND = 'goal'
 
@@ -25,11 +34,7 @@ export type NativeChatComposerGoalMode = {
   ) => (item: TItem) => void
 }
 
-/**
- * What submitting the composer does: set the goal in goal mode, otherwise send
- * through the structured or PTY path. Goal mode exists only where the host can
- * set a goal, so it is inert everywhere else.
- */
+/** Submit objectives only where host goals are supported; route other drafts through structured/PTY sends. */
 export function useNativeChatComposerSubmit(args: {
   structuredTransport?: NativeChatStructuredComposerTransport
   draftScopeKey: string
@@ -38,12 +43,21 @@ export function useNativeChatComposerSubmit(args: {
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   disabled: boolean
   sendPty: () => void
-  sendStructured: (text: string, attachments: readonly NativeChatComposerImageAttachment[]) => void
+  sendStructured: (
+    text: string,
+    attachments: readonly NativeChatComposerImageAttachment[],
+    intent?: NativeChatComposerSendIntent
+  ) => void
+  /** Runs a command Orca owns, like `/resume`; true means the draft never reaches the agent. */
+  consumeOrcaCommand?: (draft: string) => boolean
   setDraft: (value: string) => void
   setCaret: (caret: number) => void
-}): { send: () => void; goalMode: NativeChatComposerGoalMode } {
+}): {
+  send: (intent?: NativeChatComposerSendIntent) => void
+  goalMode: NativeChatComposerGoalMode
+} {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
-  const { setCaret, setDraft, structuredTransport } = args
+  const { consumeOrcaCommand, setCaret, setDraft, structuredTransport } = args
   const threadGoal = structuredTransport?.threadGoal
   const [entered, setEntered] = useState(false)
   const active = entered && threadGoal !== undefined
@@ -65,12 +79,11 @@ export function useNativeChatComposerSubmit(args: {
     [caret, draft, setCaret, setDraft, threadGoal]
   )
 
-  // Setting a goal is a host round trip; the draft is cleared only if it is still
-  // the one that was submitted, as with any other host command.
-  // In-flight changes are serialized by the session's goal controller, which
-  // answers false to a second submit while the first is unsettled.
+  // Clear only the submitted draft after host acceptance; the goal controller refuses concurrent submissions.
   const setGoal = useCallback(() => {
-    const objective = structuredAgentSessionGoalObjective(draft)
+    const objective = structuredAgentSessionGoalObjective(
+      resolveNativeChatPastedText(draftScopeKey, draft)
+    )
     if (!threadGoal || !structuredTransport || objective === '') {
       return
     }
@@ -84,52 +97,73 @@ export function useNativeChatComposerSubmit(args: {
       return
     }
     structuredTransport.onSubmitted?.()
+    const isCurrent = structuredTransport.capturePresentation()
     const submitted = readNativeChatComposerDraft(draftScopeKey)
     void threadGoal.setObjective(objective).then((accepted) => {
       if (!accepted) {
         return
       }
-      structuredTransport.onError(null)
       if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
         return
       }
-      setCaret(0)
-      setEntered(false)
+      if (isCurrent()) {
+        structuredTransport.onError(null)
+        setCaret(0)
+        setEntered(false)
+      }
     })
   }, [draft, draftScopeKey, imageAttachments.length, setCaret, structuredTransport, threadGoal])
 
-  const send = useCallback(() => {
-    if (nativeChatImagesHoldSend(imageAttachments)) {
-      return
-    }
-    if (threadGoal && structuredTransport && isBareStructuredAgentSessionGoalCommand(draft)) {
-      // Same entrance as picking `/goal`: the token becomes the chip. Typed inside
-      // goal mode it is still the entrance, never an objective.
-      setDraft('')
-      setCaret(0)
-      setEntered(true)
-    } else if (active) {
-      if (!disabled) {
-        setGoal()
+  const send = useCallback(
+    (intent?: NativeChatComposerSendIntent) => {
+      // Before goal mode too: a navigation command must never become an objective.
+      if (consumeOrcaCommand?.(draft)) {
+        return
       }
-    } else if (!structuredTransport) {
-      sendPty()
-    } else if ((draft.trim() !== '' || imageAttachments.length > 0) && !disabled) {
-      sendStructured(draft, imageAttachments)
-    }
-  }, [
-    active,
-    disabled,
-    draft,
-    imageAttachments,
-    sendPty,
-    sendStructured,
-    setCaret,
-    setDraft,
-    setGoal,
-    structuredTransport,
-    threadGoal
-  ])
+      if (
+        structuredTransport &&
+        !admitNativeChatPastedText(draftScopeKey, draft, structuredTransport.onError)
+      ) {
+        return
+      }
+      if (nativeChatImagesHoldSend(imageAttachments)) {
+        return
+      }
+      if (threadGoal && structuredTransport && isBareStructuredAgentSessionGoalCommand(draft)) {
+        // Bare /goal always enters goal mode; even there it must not become an objective.
+        setDraft('')
+        setCaret(0)
+        setEntered(true)
+      } else if (active) {
+        if (!disabled) {
+          setGoal()
+        }
+      } else if (!structuredTransport) {
+        sendPty()
+      } else if ((draft.trim() !== '' || imageAttachments.length > 0) && !disabled) {
+        if (intent) {
+          sendStructured(draft, imageAttachments, intent)
+        } else {
+          sendStructured(draft, imageAttachments)
+        }
+      }
+    },
+    [
+      active,
+      consumeOrcaCommand,
+      disabled,
+      draft,
+      draftScopeKey,
+      imageAttachments,
+      sendPty,
+      sendStructured,
+      setCaret,
+      setDraft,
+      setGoal,
+      structuredTransport,
+      threadGoal
+    ]
+  )
 
   const exit = useCallback(() => setEntered(false), [])
   const goalMode = useMemo(() => ({ active, exit, interceptPick }), [active, exit, interceptPick])

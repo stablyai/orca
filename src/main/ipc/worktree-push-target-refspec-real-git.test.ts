@@ -1,9 +1,3 @@
-// Real-binary coverage for #17828: the mocked-exec suites in
-// `worktree-push-target-setup.test.ts` / `worktree-push-target-refspec-migration.test.ts`
-// prove the decision logic, but not that real `git remote add -t/--no-tags`, a plain
-// `git fetch <remote>`, and `git config --get-all/--unset-all/--add` behave the way this
-// fix assumes. In particular this proves the core claim of the fix: a minted remote never
-// imports more than the branch(es) Orca asked for, even from a fork with many branches.
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -62,7 +56,7 @@ function storeOf(entries: Record<string, GitPushTarget | undefined>): WorktreePu
 }
 
 beforeEach(async () => {
-  // realpath: macOS hands out /var/... temp paths while Git reports /private/var/...
+  // macOS temp aliases must match Git's canonical paths.
   scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-fork-refspec-')))
   repoPath = join(scratchDir, 'repo')
   forkPath = join(scratchDir, 'fork')
@@ -73,8 +67,6 @@ beforeEach(async () => {
   await git(['add', '-A'], repoPath)
   await git(['commit', '-qm', 'seed'], repoPath)
 
-  // A large fork: the tracked PR branch plus a dozen unrelated branches, simulating the
-  // 1000+-branch forks the issue describes (scaled down for test speed).
   await git(['clone', '-q', repoPath, forkPath], scratchDir)
   await setIdentity(forkPath)
   for (const branch of [TRACKED_BRANCH, ...OTHER_FORK_BRANCHES]) {
@@ -109,9 +101,7 @@ describe('minting a fork remote against the real Git binary (#17828)', () => {
       git(['config', '--get', `remote.${FORK_REMOTE}.tagOpt`], repoPath)
     ).resolves.toContain('--no-tags')
 
-    // The critical claim: a later plain `git fetch <remote>` (no explicit refspec) --
-    // exactly what Orca's own Fetch action and any agent/user command run -- must not
-    // import the fork's other dozen branches.
+    // Plain fetch must retain only requested branches even when the fork has many others.
     await git(['fetch', FORK_REMOTE], repoPath)
     await expect(trackedRefsUnder(FORK_REMOTE)).resolves.toEqual([
       `${FORK_REMOTE}/${TRACKED_BRANCH}`
@@ -125,24 +115,18 @@ describe('minting a fork remote against the real Git binary (#17828)', () => {
       remoteUrl: forkPath
     }
     await prepareWorktreePushTargetWithExec(execGit, repoPath, target, () => false)
-    // Mirrors `configureCreatedWorktreePushTargetWithExec`: local branch tracks the fork
-    // remote, so a *bare* `git fetch` (the shape an agent running raw git actually types)
-    // resolves to this remote via `branch.<name>.remote` -- not `origin`.
+    // Bare fetch follows branch.remote to the fork; test the agent/user command shape too.
     await git(['checkout', '-qb', 'local-branch', `${FORK_REMOTE}/${TRACKED_BRANCH}`], repoPath)
     await git(
       ['branch', '--set-upstream-to', `${FORK_REMOTE}/${TRACKED_BRANCH}`, 'local-branch'],
       repoPath
     )
 
-    // Contributor deletes the branch after the PR merges/closes (checkout any other
-    // branch first -- the fork's actual default-branch name isn't relevant here).
     await git(['checkout', '-q', OTHER_FORK_BRANCHES[0]!], forkPath)
     await git(['branch', '-D', TRACKED_BRANCH], forkPath)
 
-    // Before this fix's trailing-`*` refspec, this exact command hard-failed with
-    // "couldn't find remote ref" -- degrading a common agent/user action into a fatal error.
+    // Trailing-* refspecs let ordinary fetch tolerate deletion of the tracked branch.
     await expect(git(['fetch'], repoPath)).resolves.toBeDefined()
-    // And `--prune` (Orca's own Fetch action) correctly reclaims the now-dead ref.
     await git(['fetch', '--prune'], repoPath)
     await expect(trackedRefsUnder(FORK_REMOTE)).resolves.toEqual([])
   })
@@ -168,26 +152,20 @@ describe('minting a fork remote against the real Git binary (#17828)', () => {
     expect(refs.sort()).toEqual(
       [`${FORK_REMOTE}/${TRACKED_BRANCH}`, `${FORK_REMOTE}/${secondBranch}`].sort()
     )
-    // Only the two branches Orca actually asked for -- not the other ten.
     expect(refs).toHaveLength(2)
   })
 })
 
 describe('migrateForkRemoteRefspecsWithExec against the real Git binary', () => {
   it('narrows a pre-existing wide-refspec remote and prunes the strays it already fetched', async () => {
-    // Simulate a remote minted before the #17828 fix: bare `remote add`, full fetch.
+    // Model legacy wide-fetch materialization.
     const forkBranchCount = (await git(['branch', '--format=%(refname:short)'], forkPath))
       .split(/\r?\n/)
       .filter(Boolean).length
     await git(['remote', 'add', FORK_REMOTE, forkPath], repoPath)
     await git(['fetch', FORK_REMOTE], repoPath)
     const before = await trackedRefsUnder(FORK_REMOTE)
-    // Every fork branch imported (tracked branch + unrelated ones + the fork's default branch).
-    // Git >= 2.44's `followRemoteHEAD` auto-creates `refs/remotes/<name>/HEAD` on a fetch
-    // matching the full wildcard refspec (verified: absent on 2.44, present on 2.55) --
-    // excluded here since it isn't a branch this test (or the migration) cares about.
-    // `%(refname:short)` shortens the remote's own HEAD symref to just the remote name
-    // (no `/HEAD` suffix) -- verified against real git.
+    // Newer Git auto-creates remote HEAD, shortened to the remote name; exclude that symref from branch counts.
     const headRef = FORK_REMOTE
     expect(before.filter((ref) => ref !== headRef).length).toBe(forkBranchCount)
 
@@ -212,16 +190,13 @@ describe('migrateForkRemoteRefspecsWithExec against the real Git binary', () => 
     expect(refspecs).toEqual([
       `+refs/heads/${TRACKED_BRANCH}*:refs/remotes/${FORK_REMOTE}/${TRACKED_BRANCH}*`
     ])
-    // `pruneUntrackedForkRemoteRefs` deliberately never deletes `HEAD` (see its docstring),
-    // so a `HEAD` symref this git version auto-created above legitimately survives pruning --
-    // assert on the branch refs only, same exclusion as above.
+    // Pruning preserves remote HEAD; compare only branch refs across Git versions.
     const after = await trackedRefsUnder(FORK_REMOTE)
     expect(after.filter((ref) => ref !== headRef)).toEqual([`${FORK_REMOTE}/${TRACKED_BRANCH}`])
   })
 
   it('clears the refspec of a wide pr-* remote with zero worktree-metadata trace, and prunes its refs', async () => {
-    // Simulates a remote whose worktree was removed outside preserve-on-delete: no live
-    // worktree, and no surviving metadata entry either -- the store knows nothing about it.
+    // External removal can erase both live-worktree and metadata ownership traces.
     await git(['remote', 'add', FORK_REMOTE, forkPath], repoPath)
     await git(['fetch', FORK_REMOTE], repoPath)
     const before = await trackedRefsUnder(FORK_REMOTE)
@@ -238,8 +213,7 @@ describe('migrateForkRemoteRefspecsWithExec against the real Git binary', () => 
     await expect(
       git(['config', '--get-all', `remote.${FORK_REMOTE}.fetch`], repoPath)
     ).rejects.toThrow()
-    // The remote itself survives (only #17842's reconciliation removes remotes outright),
-    // and stays pushable -- just imports nothing on a subsequent plain fetch.
+    // Ref migration preserves the remote for pushes while disabling unpinned fetch imports.
     await expect(
       git(['config', '--get', `remote.${FORK_REMOTE}.url`], repoPath)
     ).resolves.toContain(forkPath)

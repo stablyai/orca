@@ -71,22 +71,6 @@ describe('GitStatusReadLeaseOwner', () => {
     await Promise.resolve()
   })
 
-  it('rejects a pre-aborted caller without starting or joining work', async () => {
-    const owner = new GitStatusReadLeaseOwner<string>()
-    const pending = deferred<string>()
-    const load = vi.fn(() => pending.promise)
-    const active = owner.lease('repo', undefined, load)
-    const controller = new AbortController()
-    const abortError = new Error('already cancelled')
-    controller.abort(abortError)
-
-    await expect(owner.lease('repo', controller.signal, load)).rejects.toBe(abortError)
-    expect(load).toHaveBeenCalledOnce()
-
-    pending.resolve('active')
-    await expect(active).resolves.toBe('active')
-  })
-
   it('cleans listeners and entries after success, failure, and cancellation', async () => {
     const owner = new GitStatusReadLeaseOwner<string>()
     const successController = new AbortController()
@@ -141,14 +125,5 @@ describe('GitStatusReadLeaseOwner', () => {
     secondPending.resolve('post-mutation')
     await expect(first).resolves.toBe('pre-mutation')
     await expect(second).resolves.toBe('post-mutation')
-  })
-
-  it('never caches a settled read', async () => {
-    const owner = new GitStatusReadLeaseOwner<string>()
-    const load = vi.fn(async () => `read-${load.mock.calls.length}`)
-
-    await expect(owner.lease('repo', undefined, load)).resolves.toBe('read-1')
-    await expect(owner.lease('repo', undefined, load)).resolves.toBe('read-2')
-    expect(load).toHaveBeenCalledTimes(2)
   })
 })

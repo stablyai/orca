@@ -1,16 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  agentSessionAttentionKey,
-  type AgentSessionAttentionEdge,
-  type StructuredAttentionState
+import type {
+  AgentSessionAttentionEdge,
+  StructuredAttentionState
 } from '../../shared/agent-session-attention'
+
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import type { NotificationSettings } from '../../shared/notification-settings-types'
+
 import {
   createStructuredAttentionMobileDelivery,
-  readStructuredAttentionWorkspaceLabels,
   type StructuredAttentionMobileDeliveryDeps
 } from './structured-agent-session-mobile-attention'
+
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
 
 const SCOPE = {
@@ -73,7 +74,7 @@ function harness(overrides: Partial<StructuredAttentionMobileDeliveryDeps> = {})
   const delivery = createStructuredAttentionMobileDelivery({
     readNotificationSettings: () => settings(),
     readWorkspaceLabels: () => ({ repoLabel: 'orca', worktreeLabel: 'feature' }),
-    isWorkspaceHidden: () => false,
+    isWorkspaceMuted: () => false,
     dispatch: (event) => sent.push(event),
     reconcile: (state) => reconciled.push(state),
     now: () => 42,
@@ -83,51 +84,13 @@ function harness(overrides: Partial<StructuredAttentionMobileDeliveryDeps> = {})
 }
 
 describe('structured attention mobile delivery', () => {
-  it('pushes a raised prompt at once as "needs input", keyed by the prompt', () => {
-    const h = harness()
-    h.delivery.deliver(PROMPT, SUMMARY)
-    const key = agentSessionAttentionKey(PROMPT)
-    expect(h.sent).toEqual([
-      {
-        type: 'notification',
-        emittedAt: 42,
-        source: 'agent-task-complete',
-        title: 'orca / feature - Claude needs input',
-        body: 'May I run the migration?',
-        worktreeId: SCOPE.workspaceId,
-        notificationId: key,
-        attentionKey: key,
-        agentState: 'blocked'
-      }
-    ])
-  })
-
-  it('words a settled turn by its outcome, and a failure as a failure even while a prompt waits', () => {
-    const h = harness()
-    h.delivery.deliver(completion('success'), SUMMARY)
-    h.delivery.deliver(completion('success', true), SUMMARY)
-    h.delivery.deliver(completion('failure', true), SUMMARY)
-    expect(h.sent.map((event) => [event.agentState, event.title])).toEqual([
-      ['done', 'orca / feature - Claude finished'],
-      ['blocked', 'orca / feature - Claude needs input'],
-      ['done', 'orca / feature - Claude failed']
-    ])
-  })
-
-  it('sends nothing for a workspace the desktop Filters hide, unless hidden workspaces notify', () => {
-    const isWorkspaceHidden = vi.fn(() => true)
-    const quiet = harness({
-      isWorkspaceHidden,
-      readNotificationSettings: () => settings({ notifyHiddenWorkspaces: false })
-    })
+  it('sends nothing for a workspace whose notifications are muted', () => {
+    const isWorkspaceMuted = vi.fn(() => true)
+    const quiet = harness({ isWorkspaceMuted })
     quiet.delivery.deliver(PROMPT, SUMMARY)
     quiet.delivery.deliver(completion('success'), SUMMARY)
     expect(quiet.sent).toEqual([])
-    expect(isWorkspaceHidden).toHaveBeenCalledWith(SCOPE)
-
-    const optedIn = harness({ isWorkspaceHidden })
-    optedIn.delivery.deliver(PROMPT, SUMMARY)
-    expect(optedIn.sent).toHaveLength(1)
+    expect(isWorkspaceMuted).toHaveBeenCalledWith(SCOPE)
   })
 
   it('still sends when labels cannot be read, worded generically', () => {
@@ -159,49 +122,4 @@ describe('structured attention mobile delivery', () => {
     h.delivery.deliver(edge, SUMMARY)
     expect(h.sent).toEqual([])
   })
-
-  it('forwards current prompt state for reconciliation', () => {
-    const h = harness()
-    const state = { scope: SCOPE, sessionId: 'session-1', pendingPromptIds: ['a', 'b'] }
-    h.delivery.reconcile(state)
-    expect(h.reconciled).toEqual([state])
-  })
-})
-
-describe('readStructuredAttentionWorkspaceLabels', () => {
-  const store = {
-    getRepo: vi.fn((id: string) => (id === 'repo-1' ? { displayName: 'orca' } : undefined)),
-    getWorktreeMeta: vi.fn((id: string) =>
-      id === SCOPE.workspaceId ? { displayName: 'feature' } : undefined
-    ),
-    getFolderWorkspaces: vi.fn(() => [{ id: 'folder-1', name: 'Notes' }])
-  }
-
-  it('reads a worktree and its repo from persisted metadata', () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the read fields are stubbed.
-    const labels = readStructuredAttentionWorkspaceLabels(store as never, SCOPE)
-    expect(labels).toEqual({ repoLabel: 'orca', worktreeLabel: 'feature' })
-  })
-
-  it('reads a folder workspace by its own id', () => {
-    const labels = readStructuredAttentionWorkspaceLabels(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the read fields are stubbed.
-      store as never,
-      { ...SCOPE, workspaceId: 'folder-1', workspaceKind: 'folder' }
-    )
-    expect(labels).toEqual({ worktreeLabel: 'Notes' })
-  })
-})
-
-it('preserves the missing notification settings failure before dispatch', () => {
-  let reads = 0
-  const h = harness({
-    readNotificationSettings() {
-      reads += 1
-      return undefined
-    }
-  })
-  expect(() => h.delivery.deliver(PROMPT, SUMMARY)).toThrow(TypeError)
-  expect(reads).toBe(1)
-  expect(h.sent).toEqual([])
 })

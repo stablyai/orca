@@ -1,11 +1,4 @@
-/**
- * Lease values only older builds wrote.
- *
- * Records an older build persisted can still carry a terminal owner (`runtimeKind: 'tui'`), a
- * handoff stage (`preparing`, `old-owner-stopped`), or the removed ownerless-reservation latch
- * (`manual-recovery`). They are accepted on disk and mapped here, once, at decode, so no in-memory
- * lease holds a value nothing in this build produces.
- */
+/** Decode legacy tui owners, preparing/old-owner-stopped handoffs and manual-recovery latches once at load so in-memory leases contain only current values. */
 
 import type {
   AgentSessionHandoffStage,
@@ -32,10 +25,23 @@ export type PersistedAgentSessionLease = Omit<AgentSessionLease, 'runtimeKind' |
 /** A record as a row stores it. Decode through `decodePersistedAgentSessionRecord`. */
 export type PersistedAgentSessionRecord = Omit<
   AgentSessionRecord,
-  'lease' | 'providerHandleChain'
+  'lease' | 'providerHandleChain' | 'sleptAt' | 'lastTurn'
 > & {
   lease: PersistedAgentSessionLease
+  sleptAt?: unknown
+  lastTurn?: unknown
   providerHandleChain: PersistedAgentSessionProviderHandleLink[]
+}
+
+/** Checked stored facts before the independent next-grant floor has been validated. */
+export type PersistedAgentSessionObservationLease = Omit<
+  PersistedAgentSessionLease,
+  'minimumNextFence'
+> & {
+  minimumNextFence?: unknown
+}
+export type PersistedAgentSessionObservationRecord = Omit<PersistedAgentSessionRecord, 'lease'> & {
+  lease: PersistedAgentSessionObservationLease
 }
 
 export function isPersistedAgentSessionRuntimeKind(
@@ -62,13 +68,18 @@ function isLegacyHandoffStage(
   return stage === 'preparing' || stage === 'old-owner-stopped' || stage === 'manual-recovery'
 }
 
-export function leaseCarriesLegacyHandoffValues(lease: PersistedAgentSessionLease): boolean {
+export function leaseCarriesLegacyHandoffValues(
+  lease: PersistedAgentSessionObservationLease
+): boolean {
   return lease.runtimeKind === 'tui' || isLegacyHandoffStage(lease.handoffStage)
 }
 
 /** Identity for every lease this build writes. */
-export function normalizeLegacyHandoffLease(lease: PersistedAgentSessionLease): AgentSessionLease {
-  const { runtimeKind, handoffStage } = lease
+export function normalizeLegacyHandoffLease<L extends PersistedAgentSessionObservationLease>(
+  lease: L
+): Omit<L, 'runtimeKind' | 'handoffStage' | 'claimStatus'> &
+  Pick<AgentSessionLease, 'runtimeKind' | 'handoffStage' | 'claimStatus'> {
+  const { runtimeKind, handoffStage }: PersistedAgentSessionObservationLease = lease
   // Why: every one of these awaited proof about an owner, which is what `recovering` resolves.
   const stage = isLegacyHandoffStage(handoffStage) ? 'recovering' : handoffStage
   if (runtimeKind === 'native') {
@@ -78,8 +89,7 @@ export function normalizeLegacyHandoffLease(lease: PersistedAgentSessionLease): 
     ...lease,
     runtimeKind: 'native',
     handoffStage: stage,
-    // Why: a recorded terminal is the user's foreground agent. `conflicted` is the claim every
-    // build probes but never stops; a plain native owner would be stopped by restart recovery.
+    // Legacy terminal owners are user foreground agents: keep them conflicted and probe-only; native restart recovery would stop them.
     claimStatus: lease.ownerProcess === null ? lease.claimStatus : 'conflicted'
   }
 }

@@ -1,5 +1,5 @@
 import { defineMethod, defineStreamingMethod } from '../core'
-import { Screencast } from './browser-schemas'
+import { Screencast } from '../../../../shared/rpc-contract/browser-params'
 import { BrowserError } from '../../../browser/browser-error'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/runtime-types'
 import { runtimeBrowserCommandsFactoryIsAvailable } from '../../runtime-browser-commands-factory'
@@ -18,7 +18,7 @@ export const BROWSER_SCREENCAST_METHODS = [
       runtime.browserScreencast(params, {
         connectionId,
         pairedDeviceId,
-        // Why: the pairing scope is what tells a phone driver apart from a desktop/web viewer of the same stream.
+        // Pairing scope distinguishes phone drivers from desktop/web viewers of the same stream.
         clientKind,
         sendBinary,
         signal,

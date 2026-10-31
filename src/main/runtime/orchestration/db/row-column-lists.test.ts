@@ -3,6 +3,7 @@ import { OrchestrationDb } from './orchestration-db'
 import {
   ATTEMPT_OBSERVATION_FACT_COLUMNS,
   DISPATCH_CONTEXT_COLUMNS,
+  REMOTE_DISPATCH_ATTACHMENT_COLUMNS,
   RUN_COLUMNS,
   selectColumns,
   TASK_COLUMNS
@@ -21,26 +22,20 @@ function tableColumns(table: string): string[] {
 }
 
 describe('row column lists', () => {
-  // Why: these lists replaced `SELECT *`, so a column added to the schema without being listed here
-  // would silently stop being read. tsc pins list↔type; this pins list↔schema.
+  // Typechecks pin projections to types; this test also pins them to the migrated schema.
   it.each([
     ['runs', RUN_COLUMNS],
     ['tasks', TASK_COLUMNS],
     ['dispatch_contexts', DISPATCH_CONTEXT_COLUMNS],
-    ['attempt_observation_facts', ATTEMPT_OBSERVATION_FACT_COLUMNS]
+    ['attempt_observation_facts', ATTEMPT_OBSERVATION_FACT_COLUMNS],
+    ['remote_dispatch_attachments', REMOTE_DISPATCH_ATTACHMENT_COLUMNS]
   ])('projects every %s column the migrated schema declares', (table, columns) => {
     db = new OrchestrationDb(':memory:')
 
     expect([...columns].sort()).toEqual(tableColumns(table))
   })
 
-  it('qualifies each column when the statement joins under an alias', () => {
-    expect(selectColumns(['id', 'run_id'])).toBe('id, run_id')
-    expect(selectColumns(['id', 'run_id'], 't')).toBe('t.id, t.run_id')
-  })
-
-  // Why: an alias-qualified projection must key the returned row by the bare column name, exactly as
-  // the `t.*` it replaced did — otherwise every lineage consumer reads undefined.
+  // Alias-qualified SQL must still return bare column names for lineage readers.
   it('returns bare column names for an alias-qualified projection', () => {
     db = new OrchestrationDb(':memory:')
     const run = db.createRun({

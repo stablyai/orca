@@ -173,6 +173,7 @@ describe('Wayland clipboard CI cache recovery', () => {
         fi
         return "$REBUILD_STATUS"
       }
+      export -f node
       ${build.run}
     `
     const result = runProcessSync({
@@ -181,6 +182,7 @@ describe('Wayland clipboard CI cache recovery', () => {
       cwd: root,
       env: {
         ...process.env,
+        GITHUB_ACTION_PATH: join(process.cwd(), '.github/actions/prepare-wayland-clipboard'),
         CACHE_HIT: String(hit),
         INITIAL_STATUS: String(initial),
         REBUILD_STATUS: String(rebuild)

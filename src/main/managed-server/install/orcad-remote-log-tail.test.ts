@@ -1,4 +1,4 @@
-import type * as ExecCommandModule from '../../ssh/remote-exec-command'
+import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,11 +11,12 @@ import {
   parseOrcadLogTail,
   withOrcadLogTail
 } from './orcad-remote-log-tail'
-import { ORCAD_WINDOWS_HOST_SCRIPT } from '../../ssh/orcad-windows-host-script'
+import { ORCAD_WINDOWS_HOST_SCRIPT } from '../host-state/orcad-windows-host-script'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 const execCommand = vi.hoisted(() => vi.fn())
-vi.mock('../../ssh/remote-exec-command', async (importOriginal) => ({
+vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand
 }))
@@ -24,8 +25,7 @@ const linux = getRemoteHostPlatform('linux-x64')
 const windows = getRemoteHostPlatform('win32-x64')
 const SLOT = '/home/me/.orca-remote/orcad-1.0.0'
 const WINDOWS_SLOT = 'C:\\Users\\me\\.orca-remote\\orcad-1.0.0'
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked; the connection is never used.
-const conn = {} as never
+const conn = unusedOrcadHostTransport()
 
 let dir = ''
 beforeEach(() => {

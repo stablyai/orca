@@ -1,3 +1,7 @@
+import {
+  linearIssueReadFixture,
+  readLinearIssueForTest
+} from '@/store/slices/linear-slice-test-harness'
 import { describe, expect, it, vi } from 'vitest'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearConnectionStatus } from '../../../shared/linear/workspace-types'
@@ -24,20 +28,24 @@ function issue(organizationUrlKey = 'stably'): LinearIssue {
 
 describe('Linear issue URL lookup', () => {
   it('uses the known workspace named by the URL', async () => {
-    const fetchLinearIssue = vi.fn(async () => issue())
+    const fetchLinearIssue = vi.fn(() =>
+      linearIssueReadFixture<LinearIssue | null>(async () => issue())
+    )
     const readLinearStatus = vi.fn<() => Promise<LinearConnectionStatus>>()
 
     await expect(
-      lookupLinearIssueUrl({
-        intent,
-        knownStatus: {
-          viewer: null,
-          workspaces: [{ id: 'stably-workspace', organizationUrlKey: 'stably' } as never]
-        },
-        sourceContext: null,
-        fetchLinearIssue,
-        readLinearStatus
-      })
+      readLinearIssueForTest(
+        lookupLinearIssueUrl({
+          intent,
+          knownStatus: {
+            viewer: null,
+            workspaces: [{ id: 'stably-workspace', organizationUrlKey: 'stably' } as never]
+          },
+          sourceContext: null,
+          fetchLinearIssue,
+          readLinearStatus
+        })
+      )
     ).resolves.toMatchObject({ identifier: 'STA-4084' })
     expect(fetchLinearIssue).toHaveBeenCalledWith('STA-4084', 'stably-workspace', {
       sourceContext: null
@@ -46,53 +54,61 @@ describe('Linear issue URL lookup', () => {
   })
 
   it('refreshes status from the source owner when the known workspace is stale', async () => {
-    const fetchLinearIssue = vi.fn(async (_identifier: string, workspaceId?: string | null) =>
-      workspaceId === 'remote-stably-workspace' ? issue() : null
+    const fetchLinearIssue = vi.fn((_identifier: string, workspaceId?: string | null) =>
+      linearIssueReadFixture<LinearIssue | null>(async () =>
+        workspaceId === 'remote-stably-workspace' ? issue() : null
+      )
     )
 
     await expect(
-      lookupLinearIssueUrl({
-        intent,
-        knownStatus: {
-          viewer: null,
-          workspaces: [{ id: 'stale-workspace', organizationUrlKey: 'stably' } as never]
-        },
-        sourceContext: null,
-        fetchLinearIssue,
-        readLinearStatus: async () => ({
-          connected: true,
-          viewer: null,
-          workspaces: [
-            {
-              id: 'remote-stably-workspace',
-              organizationUrlKey: 'stably'
-            } as never
-          ]
+      readLinearIssueForTest(
+        lookupLinearIssueUrl({
+          intent,
+          knownStatus: {
+            viewer: null,
+            workspaces: [{ id: 'stale-workspace', organizationUrlKey: 'stably' } as never]
+          },
+          sourceContext: null,
+          fetchLinearIssue,
+          readLinearStatus: async () => ({
+            connected: true,
+            viewer: null,
+            workspaces: [
+              {
+                id: 'remote-stably-workspace',
+                organizationUrlKey: 'stably'
+              } as never
+            ]
+          })
         })
-      })
+      )
     ).resolves.toMatchObject({ workspaceId: 'stably-workspace' })
     expect(fetchLinearIssue).toHaveBeenCalledTimes(2)
   })
 
   it('uses legacy viewer status when mixed versions omit the workspace list', async () => {
-    const fetchLinearIssue = vi.fn(async () => issue())
+    const fetchLinearIssue = vi.fn(() =>
+      linearIssueReadFixture<LinearIssue | null>(async () => issue())
+    )
 
     await expect(
-      lookupLinearIssueUrl({
-        intent,
-        knownStatus: {
-          viewer: {
-            displayName: 'Linear User',
-            email: null,
-            organizationName: 'Stably',
-            organizationUrlKey: 'stably'
+      readLinearIssueForTest(
+        lookupLinearIssueUrl({
+          intent,
+          knownStatus: {
+            viewer: {
+              displayName: 'Linear User',
+              email: null,
+              organizationName: 'Stably',
+              organizationUrlKey: 'stably'
+            },
+            activeWorkspaceId: 'legacy-workspace'
           },
-          activeWorkspaceId: 'legacy-workspace'
-        },
-        sourceContext: null,
-        fetchLinearIssue,
-        readLinearStatus: vi.fn()
-      })
+          sourceContext: null,
+          fetchLinearIssue,
+          readLinearStatus: vi.fn()
+        })
+      )
     ).resolves.toMatchObject({ identifier: 'STA-4084' })
     expect(fetchLinearIssue).toHaveBeenCalledWith('STA-4084', 'legacy-workspace', {
       sourceContext: null
@@ -100,25 +116,29 @@ describe('Linear issue URL lookup', () => {
   })
 
   it('probes a legacy workspace that omitted its organization URL key', async () => {
-    const fetchLinearIssue = vi.fn(async () => issue())
+    const fetchLinearIssue = vi.fn(() =>
+      linearIssueReadFixture<LinearIssue | null>(async () => issue())
+    )
 
     await expect(
-      lookupLinearIssueUrl({
-        intent,
-        knownStatus: {
-          viewer: {
-            displayName: 'Linear User',
-            email: null,
-            organizationName: 'Saved Linear workspace'
+      readLinearIssueForTest(
+        lookupLinearIssueUrl({
+          intent,
+          knownStatus: {
+            viewer: {
+              displayName: 'Linear User',
+              email: null,
+              organizationName: 'Saved Linear workspace'
+            },
+            activeWorkspaceId: 'legacy',
+            selectedWorkspaceId: 'legacy',
+            workspaces: [{ id: 'legacy', organizationName: 'Saved Linear workspace' } as never]
           },
-          activeWorkspaceId: 'legacy',
-          selectedWorkspaceId: 'legacy',
-          workspaces: [{ id: 'legacy', organizationName: 'Saved Linear workspace' } as never]
-        },
-        sourceContext: null,
-        fetchLinearIssue,
-        readLinearStatus: vi.fn()
-      })
+          sourceContext: null,
+          fetchLinearIssue,
+          readLinearStatus: vi.fn()
+        })
+      )
     ).resolves.toMatchObject({ identifier: 'STA-4084' })
     expect(fetchLinearIssue).toHaveBeenCalledWith('STA-4084', 'legacy', {
       sourceContext: null
@@ -126,23 +146,27 @@ describe('Linear issue URL lookup', () => {
   })
 
   it('does not fall back to an all-workspaces lookup that can collide across organizations', async () => {
-    const fetchLinearIssue = vi.fn(async () => issue('other'))
+    const fetchLinearIssue = vi.fn(() =>
+      linearIssueReadFixture<LinearIssue | null>(async () => issue('other'))
+    )
 
     await expect(
-      lookupLinearIssueUrl({
-        intent,
-        knownStatus: {
-          viewer: null,
-          workspaces: [{ id: 'other-workspace', organizationUrlKey: 'other' } as never]
-        },
-        sourceContext: null,
-        fetchLinearIssue,
-        readLinearStatus: async () => ({
-          connected: true,
-          viewer: null,
-          workspaces: [{ id: 'other-workspace', organizationUrlKey: 'other' } as never]
+      readLinearIssueForTest(
+        lookupLinearIssueUrl({
+          intent,
+          knownStatus: {
+            viewer: null,
+            workspaces: [{ id: 'other-workspace', organizationUrlKey: 'other' } as never]
+          },
+          sourceContext: null,
+          fetchLinearIssue,
+          readLinearStatus: async () => ({
+            connected: true,
+            viewer: null,
+            workspaces: [{ id: 'other-workspace', organizationUrlKey: 'other' } as never]
+          })
         })
-      })
+      )
     ).resolves.toBeNull()
     expect(fetchLinearIssue).not.toHaveBeenCalled()
   })

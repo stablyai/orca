@@ -1,7 +1,9 @@
-// Codex's default multi-agent mode announces a helper only by the `collabAgentToolCall` items that
-// spawn, message, wait on or close it. These frames, through the real adapter, must register that
-// helper the same way a `subAgentActivity` does: one child in the strip and the host's records,
-// which the host saves as the helper's row.
+import {
+  acquireReadyCodexForTest,
+  fakeCodex,
+  identityFor,
+  THREAD_ID
+} from './codex-structured-session-adapter-fixture'
 
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
@@ -11,7 +13,6 @@ import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status-child
 import { createAgentStatusStore } from '../../shared/agent-status-store'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { fakeCodex, identityFor, THREAD_ID } from './codex-structured-session-adapter-fixture'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
@@ -37,7 +38,6 @@ const PARENT_TURN = '01a0d112-6f86-7092-8c87-b8618f259efa'
 const HELPER_TURN = 'helper-turn-1'
 const PROMPT =
   'Run the shell command exactly: `sleep 45; echo CHILD_DONE`. After it completes, reply with the single word `CHILD_REPLY` and nothing else.'
-/** The prompt's head, as the helper's row names it. */
 const LABEL = 'Run the shell command exactly: `sleep 45; echo CHILD_DONE`. After it completes,…'
 const COMMAND = "/bin/zsh -lc 'sleep 45; echo CHILD_DONE'"
 
@@ -114,7 +114,6 @@ const helperShell = (method: 'item/started' | 'item/completed'): Frame =>
     id: 'call_3iUPkSEtwkUYstngZm5CNJ52',
     command: COMMAND,
     cwd: '/work/repo',
-    // As the live session reported it; a command is tracked the same whatever its source.
     source: 'unifiedExecStartup',
     status: method === 'item/started' ? 'inProgress' : 'completed',
     ...(method === 'item/completed' ? { exitCode: 0, aggregatedOutput: 'CHILD_DONE\n' } : {})
@@ -161,7 +160,7 @@ async function session() {
     appendTombstone: () => {},
     publish: () => {}
   }
-  await adapter.acquire({
+  await acquireReadyCodexForTest(adapter, {
     identity: identityFor('session-1'),
     fence: 7,
     spawnToken: 'spawn-9',
@@ -190,7 +189,6 @@ describe('Codex default-mode helpers', () => {
   it('registers a helper announced only by its spawn call, in the strip and the records', async () => {
     const run = await session()
     run.send(turn('turn/started', THREAD_ID, PARENT_TURN), spawnStarted)
-    // The call has not said which thread the helper is yet.
     expect(run.agents()).toEqual([])
     expect(run.strip()).toEqual([])
 
@@ -207,7 +205,6 @@ describe('Codex default-mode helpers', () => {
       { id: `codex-agent:${HELPER}`, kind: 'agent', description: LABEL }
     ])
 
-    // While the helper runs, its command is the helper's work, not the session's own.
     run.send(helperShell('item/started'))
     expect(run.strip()).toEqual([
       { id: `codex-agent:${HELPER}`, kind: 'agent', description: LABEL }
@@ -222,7 +219,6 @@ describe('Codex default-mode helpers', () => {
     expect(run.agents()[0]?.operation).toMatchObject({ toolName: 'Bash', input: COMMAND })
 
     run.send(helperShell('item/completed'))
-    // A finished command leaves no record behind.
     expect(run.commands()).toEqual([])
 
     run.send(helperReply, turn('turn/completed', HELPER, HELPER_TURN))
@@ -302,7 +298,6 @@ describe('Codex default-mode helpers', () => {
       expect.objectContaining({ membership: 'live', state: 'working', description: LABEL })
     ])
     expect(run.strip()).toHaveLength(1)
-    // The call keeps its own row.
     expect(run.toolRow('spawn_agent')).toMatchObject({
       state: 'completed',
       input: { description: LABEL }
@@ -311,8 +306,7 @@ describe('Codex default-mode helpers', () => {
 
   it('registers a helper whose spawn call failed but created its thread, as Codex reports an errored one', async () => {
     const run = await session()
-    // The shape Codex builds for a helper that errored at birth: the call fails, yet names the
-    // thread it created, and that thread can still run.
+    // A failed spawn can still create a thread that later runs.
     const spawnFailedWithThread = collab('item/completed', {
       id: 'call-failed-spawn',
       tool: 'spawnAgent',
@@ -332,7 +326,6 @@ describe('Codex default-mode helpers', () => {
     expect(run.agents()).toEqual([
       expect.objectContaining({ membership: 'live', state: 'working', description: LABEL })
     ])
-    // Its command is the helper's, not a bare command of the session's own.
     expect(run.strip()).toEqual([
       { id: `codex-agent:${HELPER}`, kind: 'agent', description: LABEL }
     ])
@@ -378,8 +371,7 @@ describe('Codex default-mode helpers', () => {
       turn('turn/started', THREAD_ID, PARENT_TURN),
       spawnCompleted,
       turn('turn/started', HELPER, HELPER_TURN),
-      // What Codex reports for a close that failed on a running helper: the status is the
-      // helper's, not the close's, so `completed` says nothing about whether it stopped.
+      // A completed close call can report a helper snapshot that is still running.
       collab('item/completed', {
         id: 'call-close-errored',
         tool: 'closeAgent',
@@ -391,7 +383,6 @@ describe('Codex default-mode helpers', () => {
     expect(run.agents()).toEqual([expect.objectContaining({ membership: 'live' })])
     expect(run.strip()).toHaveLength(1)
 
-    // A close that works aborts the helper's turn, which Codex reports on the helper's thread.
     run.send(closeCompleted, turn('turn/completed', HELPER, HELPER_TURN, 'interrupted'))
     expect(run.agents()).toEqual([
       expect.objectContaining({ membership: 'settled', outcome: 'cancelled' })
@@ -413,8 +404,6 @@ describe('Codex default-mode helpers', () => {
       turn('turn/completed', HELPER, HELPER_TURN),
       closeCompleted
     )
-    // The close shuts the helper's thread down and kills its processes; each still reports its
-    // exit on the helper's thread, and that exit is what ends the command.
     expect(run.commands()).toEqual([expect.objectContaining({ membership: 'live' })])
     run.send(helperShell('item/completed'))
     expect(run.commands()).toEqual([])
@@ -475,7 +464,6 @@ describe('a helper whose spawn was never seen', () => {
     ])
 
     run.send(sendInput)
-    // No spawn named it, so it reads as any unnamed subagent does.
     expect(run.strip()).toEqual([{ id: `codex-agent:${HELPER}`, kind: 'agent' }])
     expect(run.agents()).toEqual([
       expect.objectContaining({ membership: 'live', state: 'working' })
@@ -526,7 +514,6 @@ describe('a helper whose spawn was never seen', () => {
       turn('turn/completed', THREAD_ID, 'parent-turn-2'),
       turn('turn/started', HELPER, 'helper-turn-2')
     )
-    // One record per helper, back at work.
     expect(run.agents()).toEqual([
       expect.objectContaining({ membership: 'live', state: 'working' })
     ])
@@ -636,7 +623,6 @@ describe('a restored thread', () => {
   it('claims no running helper for a name it learned from history', () => {
     const { executions, tracker, bodies } = restored()
     expect(executions.workingChildren()).toEqual([])
-    // A live frame republishes the strip and drains evidence: neither holds the helper.
     tracker.observe({
       method: 'turn/started',
       threadId: THREAD_ID,

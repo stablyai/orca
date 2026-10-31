@@ -12,11 +12,7 @@ const BUILD_OUTPUT = join(
 
 let built = false
 
-/**
- * The real orca-agent-hook.exe the package ships. CI builds it before the Windows lane, so the build
- * script's fingerprint makes this a read-only check there; a local run builds it on first use.
- * Suites copy it before running it, so no hook ever maps the shared output.
- */
+/** CI verifies the prebuilt binary; local runs build on demand, and suites execute private copies. */
 export function buildWindowsNativeHookExecutable(): string {
   if (!built) {
     const result = runProcessSync({

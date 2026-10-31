@@ -1,3 +1,6 @@
+import type { AgentLaunchChoices } from '../../shared/agent-launch-choices'
+import { prepareStructuredAgentSessionCreateForWorktree } from './rpc/methods/structured-agent-session-create'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { prepareAdoptedTranscript } from '../native-chat/agent-session-wire/structured-agent-session-adopted-import'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -53,7 +56,7 @@ function createCodexIntentRuntime(
       worktree: `id:${workspaceId}`,
       agent: 'codex'
     })
-  return { prepareCodexStructuredLaunch, createIntent }
+  return { prepareCodexStructuredLaunch, createIntent, runtime }
 }
 
 describe('structured Codex folder trust', () => {
@@ -75,8 +78,8 @@ describe('structured Codex folder trust', () => {
     expect(attachFingerprintFields(intent)).not.toHaveProperty('hostLaunchDirectory')
   })
 
-  it('pre-trusts the chat folder before launch preparation, as a Codex terminal launch does', async () => {
-    const { prepareCodexStructuredLaunch, createIntent } = createCodexIntentRuntime({})
+  it('pre-trusts the chat folder in the account home launch preparation selected', async () => {
+    const { createIntent } = createCodexIntentRuntime({})
 
     await createIntent()
 
@@ -84,11 +87,9 @@ describe('structured Codex folder trust', () => {
       env: expect.any(Object),
       claudeAuth: null,
       wslDistro: null,
-      connectionId: null
+      connectionId: null,
+      codexHome: '/accounts/selected/home'
     })
-    expect(applyAgentWorkspaceTrust.mock.invocationCallOrder[0]).toBeLessThan(
-      prepareCodexStructuredLaunch.mock.invocationCallOrder[0]
-    )
   })
 
   it('writes nothing with the setting off, and still prepares the launch', async () => {
@@ -104,28 +105,77 @@ describe('structured Codex folder trust', () => {
 })
 
 describe('structured agent-session create intent', () => {
-  it('returns the recorded owner before CLI source lookup, new-launch support or account preparation', async () => {
+  it.each([true, false])(
+    'preserves remembered Fast=%s through defaults and full create, including explicit false and clear',
+    async (fastMode) => {
+      const remembered = {
+        codex: {
+          model: 'gpt-5.6-sol',
+          valuesByModel: { 'gpt-5.6-sol': { effort: 'medium', fastMode } }
+        }
+      }
+      const settings: {
+        nativeChatSessionOptions: typeof remembered
+        agentLaunchChoices: AgentLaunchChoices
+      } = {
+        nativeChatSessionOptions: remembered,
+        agentLaunchChoices: { codex: { model: 'gpt-5.6-sol', options: { effort: 'high' } } }
+      }
+      const { createIntent, runtime } = createCodexIntentRuntime(settings)
+      expect((await createIntent()).options).toMatchObject({
+        model: 'gpt-5.6-sol',
+        effort: 'high',
+        fastMode: String(fastMode)
+      })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preparation only carries this host through before attachment; no host methods run.
+      const host = { deps: {} } as unknown as StructuredAgentSessionHost
+      const explicit = await prepareStructuredAgentSessionCreateForWorktree({
+        runtime,
+        ensureHost: async () => host,
+        envelope: {
+          sessionId: 'explicit',
+          clientOperationId: 'explicit',
+          expectedRuntimeFence: null,
+          payloadFingerprint: ''
+        },
+        worktree: 'id:workspace-1',
+        agent: 'codex',
+        caller: { callerKey: 'test' },
+        options: { model: 'gpt-5.6-sol', fastMode: 'false' }
+      })
+      expect(explicit.attachParams.options).toMatchObject({ fastMode: 'false' })
+      settings.agentLaunchChoices = { codex: { model: 'different', options: { effort: 'low' } } }
+      expect((await createIntent()).options).toMatchObject({ model: 'different', effort: 'low' })
+      expect((await createIntent()).options).not.toHaveProperty('fastMode')
+      settings.agentLaunchChoices = {}
+      expect((await createIntent()).options).toMatchObject({
+        model: 'gpt-5.6-sol',
+        effort: 'medium',
+        fastMode: String(fastMode)
+      })
+      expect(settings.nativeChatSessionOptions).toEqual(remembered)
+    }
+  )
+
+  it('returns the recorded owner, once no terminal still runs it, before launch support or account preparation', async () => {
     const record = agentSessionRecordFixture()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: early ownership admission only reads the host's record list.
     setStructuredAgentSessionHost({
-      deps: { store: { listRecords: () => [record] } }
+      deps: { store: { listConversations: () => [agentSessionConversationView(record)] } }
     } as unknown as StructuredAgentSessionHost)
     const runtime = new OrcaRuntimeService()
     const support = vi
       .spyOn(runtime, 'getStructuredAgentSessionCreateSupport')
       .mockRejectedValue(new Error('fresh launch is unavailable'))
-    const sourceRows = vi.spyOn(runtime, 'getAgentProviderSessionRows').mockImplementation(() => {
-      throw new Error('source is unavailable')
-    })
+    const writers = vi
+      .spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited')
+      .mockResolvedValue()
     await expect(
       runtime.resolveStructuredAgentSessionCreateIntent({
         envelope: { sessionId: 'new-chat', clientOperationId: 'operation-1' },
         worktree: 'id:another-workspace',
         agent: 'claude',
-        resumeFrom: {
-          providerSessionId: 'provider-session-alpha-1',
-          cliSource: { workspaceId: 'another-workspace', paneKey: 'missing-pane' }
-        }
+        resumeFrom: { providerSessionId: 'provider-session-alpha-1' }
       })
     ).rejects.toMatchObject({
       refusal: {
@@ -137,7 +187,40 @@ describe('structured agent-session create intent', () => {
       }
     })
     expect(support).not.toHaveBeenCalled()
-    expect(sourceRows).not.toHaveBeenCalled()
+    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1', undefined)
+  })
+
+  it('refuses a switch out of a live terminal before naming the chat that owns the conversation', async () => {
+    const record = agentSessionRecordFixture()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: early ownership admission only reads the host's record list.
+    setStructuredAgentSessionHost({
+      deps: { store: { listConversations: () => [agentSessionConversationView(record)] } }
+    } as unknown as StructuredAgentSessionHost)
+    const runtime = new OrcaRuntimeService()
+    const writers = vi.spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited')
+    const intent = () =>
+      runtime.resolveStructuredAgentSessionCreateIntent({
+        envelope: { sessionId: 'new-chat', clientOperationId: 'operation-1' },
+        worktree: 'id:another-workspace',
+        agent: 'claude',
+        resumeFrom: {
+          providerSessionId: 'provider-session-alpha-1',
+          cliSource: { workspaceId: 'another-workspace', paneKey: 'pane-1' }
+        }
+      })
+    const liveWriter = Object.assign(new Error('live'), {
+      refusal: { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
+    })
+    writers.mockRejectedValueOnce(liveWriter)
+    await expect(intent()).rejects.toBe(liveWriter)
+    writers.mockResolvedValueOnce()
+    await expect(intent()).rejects.toMatchObject({
+      refusal: { details: { owner: { sessionId: record.sessionId } } }
+    })
+    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1', {
+      workspaceId: 'another-workspace',
+      paneKey: 'pane-1'
+    })
   })
 
   it('pins the selected Codex launch home after normal launch preparation', async () => {
@@ -220,8 +303,7 @@ describe('structured agent-session create intent', () => {
 
     const accountHome = await runtime.resolveStructuredAgentAccountHome('codex')
 
-    // A read must not run launch preparation: no home sync, no session bridge,
-    // no cleared account selection — the read-only sibling answers instead.
+    // Reads must not sync homes, bridge sessions or clear account selections; use read-only home resolution.
     expect(prepareCodexStructuredLaunch).not.toHaveBeenCalled()
     expect(resolveCodexStructuredLaunchHome).toHaveBeenCalledWith({
       launchEnv: expect.objectContaining({ CODEX_HOME: '/configured/home' })
@@ -279,7 +361,6 @@ describe('structured agent-session create intent', () => {
     })
 
     expect(prepareCodexStructuredLaunch).not.toHaveBeenCalled()
-    // Claude was never pre-trusted for a structured chat.
     expect(applyAgentWorkspaceTrust).not.toHaveBeenCalled()
     expect(intent.accountHome).toEqual({
       variable: 'CLAUDE_CONFIG_DIR',
@@ -291,7 +372,6 @@ describe('structured agent-session create intent', () => {
       fastMode: 'true',
       permissionMode: 'ask'
     })
-    // createSupport reports this same seed, so a paired client's picker shows what create runs.
     expect(runtime.structuredAgentSessionLaunchSeedOptions('claude')).toEqual(intent.options)
   })
 
@@ -383,6 +463,7 @@ describe('adopting a conversation recorded outside Orca', () => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create intent only reads getSettings from the store.
         {
           getSettings: () => ({
+            agentLaunchChoices: { omp: { model: 'fresh-only', options: { effort: 'high' } } },
             agentDefaultEnv: {
               omp: {
                 PI_CODING_AGENT_DIR: accountHome,
@@ -417,6 +498,8 @@ describe('adopting a conversation recorded outside Orca', () => {
         resumeFrom: { providerSessionId: sessionId }
       })
 
+      expect(intent.options ?? {}).not.toHaveProperty('model')
+      expect(intent.options ?? {}).not.toHaveProperty('effort')
       expect(intent.adopt?.transcriptPath).toBe(sessionFile)
       expect(intent.accountHome).toEqual({ variable: 'PI_CODING_AGENT_DIR', path: accountHome })
     } finally {
@@ -439,7 +522,6 @@ describe('adopting a conversation recorded outside Orca', () => {
       runtime.resolveStructuredAgentSessionCreateIntent({
         envelope: { sessionId: 'session-1', clientOperationId: 'operation-1' },
         worktree: 'id:workspace-1',
-        // Every registered agent adopts; an unregistered one has no importer.
         agent: 'hermes',
         resumeFrom: { providerSessionId: 'provider-1' }
       })

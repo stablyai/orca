@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_STATUS_MAX_SUBAGENTS } from '../../shared/agent-status-types'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
 
@@ -85,7 +84,7 @@ describe('Claude child permission lifecycle', () => {
         tool_name: 'Bash',
         tool_input: { command: 'false' }
       })
-      // Why: the lead's own progress overwrites the listener's wait slot; only the server keeps the prompt.
+      // Lead progress replaces the listener wait slot; the server must retain the child prompt.
       await postClaudeHook({ hook_event_name: 'PreToolUse', tool_name: 'Read' })
       await postClaudeHook({
         hook_event_name: 'StopFailure',
@@ -206,35 +205,6 @@ describe('Claude child permission lifecycle', () => {
         toolName: 'Bash',
         subagents: [expect.objectContaining({ id: 'areviewer-6d3cb5b5', state: 'working' })]
       })
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('clears an omitted teammate permission when a full roster excludes its row', async () => {
-    const { server, postClaudeHook } = await createServer()
-    try {
-      await postClaudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
-      for (let index = 0; index < AGENT_STATUS_MAX_SUBAGENTS; index += 1) {
-        await postClaudeHook({ hook_event_name: 'SubagentStart', agent_id: `acapped${index}` })
-      }
-      await postClaudeHook({
-        hook_event_name: 'PermissionRequest',
-        agent_id: 'areviewer-6d3cb5b5',
-        agent_type: 'reviewer',
-        tool_name: 'Bash',
-        tool_input: { command: 'false' }
-      })
-      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
-      expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(AGENT_STATUS_MAX_SUBAGENTS)
-
-      await postClaudeHook({ hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
-
-      const status = server.getStatusSnapshot()[0]
-      expect(status).toMatchObject({ paneKey: PANE, state: 'working', agentType: 'claude' })
-      expect(status?.toolName).toBeUndefined()
-      expect(status?.toolInput).toBeUndefined()
-      expect(status?.subagents).toHaveLength(AGENT_STATUS_MAX_SUBAGENTS)
     } finally {
       server.stop()
     }

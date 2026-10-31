@@ -1,4 +1,5 @@
 import nacl from 'tweetnacl'
+import { decodeBase64Bytes } from '@/lib/base64-bytes'
 
 if (globalThis.crypto?.getRandomValues) {
   nacl.setPRNG((bytes, count) => {
@@ -15,7 +16,7 @@ export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Ar
 }
 
 export function publicKeyFromBase64(b64: string): Uint8Array {
-  const key = base64ToBytes(b64)
+  const key = decodeBase64Bytes(b64)
   if (key.length !== 32) {
     throw new Error(`Invalid public key: expected 32 bytes, got ${key.length}`)
   }
@@ -31,7 +32,7 @@ export function encrypt(plaintext: string, sharedKey: Uint8Array): string {
 }
 
 export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null {
-  const plaintext = decryptBytes(base64ToBytes(encrypted), sharedKey)
+  const plaintext = decryptBytes(decodeBase64Bytes(encrypted), sharedKey)
   return plaintext ? new TextDecoder().decode(plaintext) : null
 }
 
@@ -58,15 +59,6 @@ export function decryptBytes(
   const ciphertext = bundle.slice(nacl.box.nonceLength)
   const plaintext = nacl.box.open.after(ciphertext, nonce, sharedKey)
   return plaintext ? new Uint8Array(plaintext) : null
-}
-
-function base64ToBytes(value: string): Uint8Array {
-  const binary = window.atob(value)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-  return bytes
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

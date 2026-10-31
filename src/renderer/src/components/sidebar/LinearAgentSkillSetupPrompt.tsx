@@ -6,14 +6,10 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
 } from '@/hooks/useInstalledAgentSkills'
-import {
-  LINEAR_AGENT_SKILL_NAMES,
-  ORCA_LINEAR_SKILL_INSTALL_COMMAND
-} from '@/lib/agent-feature-install-commands'
-import { getLinearAgentSkillUpdateCommand } from '@/lib/linear-agent-skill-update-command'
+import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-skill-names'
+import { getLinearAgentSkillUpdateTarget } from '@/lib/linear-agent-skill-update-target'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { cn } from '@/lib/utils'
-import { buildSkillCommandForRuntime } from '../settings/CliSkillRuntimeSetup'
 import {
   getLinearAgentSkillSetupInlineRuntimeCopy,
   getLinearAgentSkillSetupMissingLabel,
@@ -32,7 +28,6 @@ import {
   getLinearPromptAgentRuntime,
   getLinearPromptSetupCheckIdentity,
   getLinearPromptSkillDiscoveryTarget,
-  getLinearPromptTerminalShellOverride,
   getLocalDismissStorageKey,
   readLocalDismissed,
   type LinearAgentSkillPromptSettings
@@ -96,8 +91,7 @@ export function LinearAgentSkillSetupPrompt({
     readLocalDismissed(localDismissStorageKey)
   )
   const [previousDismissStorageKey, setPreviousDismissStorageKey] = useState(localDismissStorageKey)
-  // Why: dismissal is scoped to the selected runtime, so read the new key before
-  // paint rather than briefly showing the previous runtime's prompt state.
+  // Read runtime-scoped dismissal before paint so switching targets cannot flash the previous prompt state.
   if (localDismissStorageKey !== previousDismissStorageKey) {
     setPreviousDismissStorageKey(localDismissStorageKey)
     setLocalDismissed(readLocalDismissed(localDismissStorageKey))
@@ -107,22 +101,9 @@ export function LinearAgentSkillSetupPrompt({
     discoveryTarget: skillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  const command = useMemo(
-    () => buildSkillCommandForRuntime(ORCA_LINEAR_SKILL_INSTALL_COMMAND, agentRuntime),
-    [agentRuntime]
-  )
-  const installedCommand = useMemo(
-    () =>
-      buildSkillCommandForRuntime(
-        getLinearAgentSkillUpdateCommand(skill.skills, skill.installed),
-        agentRuntime
-      ),
-    [agentRuntime, skill.installed, skill.skills]
-  )
-  const terminalShellOverride = getLinearPromptTerminalShellOverride(
-    currentPlatform,
-    settings,
-    agentRuntime
+  const updateSkillName = useMemo(
+    () => getLinearAgentSkillUpdateTarget(skill.skills, skill.installed).skillName,
+    [skill.installed, skill.skills]
   )
   const setupReady = linked && !skill.loading && skill.installed
   const missingSetup = linked && !localDismissed && !skill.loading && !setupReady
@@ -148,7 +129,6 @@ export function LinearAgentSkillSetupPrompt({
       setActiveSetupCheckIdentity(null)
       return
     }
-    // Wait until the refreshed skill state is ready for this target.
     if (setupCheckResult === 'checking' && setupReady) {
       setSetupCheckResult('ready')
       return
@@ -220,9 +200,7 @@ export function LinearAgentSkillSetupPrompt({
         showSuccess={showSuccessModal}
         successDescription={successDescription}
         missingLabel={missingLabel}
-        command={command}
-        installedCommand={installedCommand}
-        terminalShellOverride={terminalShellOverride}
+        updateSkillName={updateSkillName}
         terminalRuntime={agentRuntime}
         installed={skill.installed}
         loading={showCheckingModal || skill.loading}

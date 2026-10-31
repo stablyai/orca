@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { hookMount, performHookAction } from '../test-support/rpc-recording/hook-mount'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
@@ -82,7 +81,7 @@ function mountDocuments(readReply: () => Promise<RpcResponse>) {
     unmount: hook.unmount,
     read(id: string) {
       const target = tab(id)
-      tabs.current = [target]
+      tabs.current = [...tabs.current.filter((current) => current.id !== id), target]
       return performHookAction(() => readers?.readMarkdownTab(target))
     },
     close(id: string) {
@@ -107,15 +106,30 @@ function delayedReply() {
 }
 
 describe('mobile Markdown document lifetime', () => {
-  it('releases 40 MiB of clean content after twenty reads and successful closes', async () => {
-    const h = mountDocuments(async () => success(randomBytes(1536 * 1024).toString('base64')))
+  it('releases only the closed clean document and preserves other cached documents', async () => {
+    const readReply = vi
+      .fn()
+      .mockResolvedValueOnce(success('# a'))
+      .mockResolvedValueOnce(success('# b'))
+      .mockResolvedValueOnce(success('# c'))
+    const h = mountDocuments(readReply)
     try {
-      for (let index = 0; index < 20; index += 1) {
-        await h.read('tab-' + index)
-        const doc = h.docs.get('tab-' + index)
-        expect(doc?.status === 'ready' && Buffer.byteLength(doc.content)).toBe(2 * 1024 * 1024)
-        await h.close('tab-' + index)
-      }
+      await h.read('a')
+      await h.read('b')
+      await h.read('c')
+      expect(h.docs.get('a')).toMatchObject({ status: 'ready', content: '# a' })
+      expect(h.docs.get('b')).toMatchObject({ status: 'ready', content: '# b' })
+      expect(h.docs.get('c')).toMatchObject({ status: 'ready', content: '# c' })
+      const a = h.docs.get('a')
+      const c = h.docs.get('c')
+      await h.close('b')
+      expect([...h.docs.keys()]).toEqual(['a', 'c'])
+      expect(h.docs.get('a')).toBe(a)
+      expect(h.docs.get('c')).toBe(c)
+      await h.close('a')
+      expect([...h.docs.keys()]).toEqual(['c'])
+      expect(h.docs.get('c')).toBe(c)
+      await h.close('c')
       expect(h.docs.size).toBe(0)
     } finally {
       h.unmount()

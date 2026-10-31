@@ -18,7 +18,6 @@ const CONTEXT = {
   now: () => 1
 }
 
-/** Commands over every workspace and tab a profile holds, covering adds, drops, edits and moves. */
 function commandsFor(model: WorkspaceLayoutModel): LayoutCommand[] {
   const commands: LayoutCommand[] = []
   for (const [workspace, layout] of Object.entries(model.workspaces)) {
@@ -181,7 +180,6 @@ describe('patchStoredSession', () => {
       const before = saveWorkspaceLayout(loaded)
       const normalizedAtLoad = diffStoredSession(stored, before).length > 0
       let applied = 0
-      // Legacy rows the load folds into a tab-bar tab (dropped, or terminals taken off them).
       const entryIds = new Set(
         Object.values(stored.unifiedTabs ?? {})
           .flat()
@@ -213,11 +211,9 @@ describe('patchStoredSession', () => {
         const patched = patchStoredSession(stored, before, after)
         const label = `${command.type} ${JSON.stringify(command)}`
         if (!normalizedAtLoad) {
-          // A partition the load leaves alone: the patch is the full save, field for field.
           expect(stableJson(patched), label).toBe(stableJson(after))
         }
-        // The written partition loads to what the command produced. The revision is exempt: the
-        // load's tombstone retirement bumps it again on every load.
+        // Ignore the revision here: loading the tombstone bumps it again on each reload.
         const reloaded = (session: typeof stored) => ({
           ...saveWorkspaceLayout(
             loadWorkspaceLayout(profile.hostId, session, nameBasedLoadContext())
@@ -226,7 +222,7 @@ describe('patchStoredSession', () => {
         })
         expect(stableJson(reloaded(patched)), label).toBe(stableJson(reloaded(after)))
         const written = changedRecords(diffStoredSession(stored, patched))
-        // A folded row may be written only in its loaded form, and a selection naming it with it.
+        // A touched folded row must take its loaded form, together with any selection naming it.
         const notLoadForm = new Set(changedRecords(diffStoredSession(before, patched)))
         const loadForms = written.filter(
           (record) =>
@@ -393,7 +389,6 @@ describe('patchStoredSession', () => {
       `layout/${tabId}/root`,
       'session/session/terminalTopologyRevisionByRepoId'
     ])
-    // Stored fields keep their order; the command's new field follows them.
     expect(Object.keys(patched).slice(0, Object.keys(stored).length)).toEqual(Object.keys(stored))
   })
 

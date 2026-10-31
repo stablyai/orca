@@ -1,17 +1,9 @@
-/**
- * Every field of a migration payload that is, contains or is keyed by a source-host path, in one
- * table, with the few that are deliberately never rewritten. Consumed by the export's path-rewrite
- * stage (orcad-migration-path-rewrite.ts).
- */
+/** List source-path locations and deliberate exceptions for export rewriting. */
 
-/**
- * `absolute`: always an absolute path. `maybe-absolute`: an absolute path only when it is one
- * (a relative base path, a terminal tab id). `relative`: relative to a worktree or repo root.
- * `url`: a page URL, a `file:` URL only when it is one.
- */
+/** Rewrite absolute/maybe-absolute values only when absolute; relative paths stay relative and URLs change only for file:. */
 export type OrcadMigrationPathForm = 'absolute' | 'maybe-absolute' | 'relative' | 'url'
 
-/** Composite values a path hides inside; each rebuilds only when its path actually changed. */
+/** Rebuild composite ids only when their embedded path changes. */
 type CompositeKind =
   /** `<repoId>::<path>`, optionally `::workspace:<uuid>` for a folder project. */
   | 'worktree-id'
@@ -24,10 +16,7 @@ type CompositeKind =
 
 export type OrcadMigrationPathFieldKind = OrcadMigrationPathForm | CompositeKind
 
-/**
- * Field locations: `.` steps into a property, `[]` into array items, `{}` into record values, and
- * a final `{key}` names the record's keys. Absent and null values are left alone.
- */
+/** Locations use . for properties, [] for items, {} for values and final {key} for keys; leave missing/null values alone. */
 export const ORCAD_MIGRATION_PATH_FIELDS: readonly {
   at: string
   kind: OrcadMigrationPathFieldKind
@@ -135,6 +124,10 @@ export const ORCAD_MIGRATION_PATH_FIELDS: readonly {
     kind: 'absolute'
   },
   {
+    at: 'dormantState.workspaceSession.sleepingAgentSessionsByPaneKey{}.providerSession.cwd',
+    kind: 'absolute'
+  },
+  {
     at: 'dormantState.workspaceSession.sleepingAgentSessionsByPaneKey{}.launchConfig.ompResumeFilePath',
     kind: 'absolute'
   },
@@ -170,6 +163,10 @@ export const ORCAD_MIGRATION_PATH_FIELDS: readonly {
     at: 'dormantState.clientState.mobileClientTabSelectionsByDeviceId{}{}.activeTabIdByGroupId{}',
     kind: 'editor-file-id'
   },
+  {
+    at: 'dormantState.clientState.mobileClientTabSelectionsByDeviceId{}{}.recentTabIds[]',
+    kind: 'editor-file-id'
+  },
   { at: 'dormantState.clientState.uiRouting.lastActiveWorktreeId', kind: 'worktree-id' },
   { at: 'dormantState.clientState.uiRouting.showDotfilesByWorktree{key}', kind: 'owner-key' },
   {
@@ -178,10 +175,7 @@ export const ORCAD_MIGRATION_PATH_FIELDS: readonly {
   }
 ]
 
-/**
- * Path-bearing fields the stage deliberately leaves alone. Source keys name rows on the source,
- * which the desktop subtracts after commit; derived keys must be recomputed, not string-mapped.
- */
+/** Keep source keys for post-commit subtraction; recompute derived keys instead of mapping their strings. */
 export const ORCAD_MIGRATION_UNREWRITTEN_PATH_FIELDS: readonly { at: string; why: string }[] = [
   { at: 'dormantState.worktreeMeta[].sourceKey', why: 'source-side key' },
   { at: 'dormantState.worktreeLineage[].sourceKey', why: 'source-side key' },

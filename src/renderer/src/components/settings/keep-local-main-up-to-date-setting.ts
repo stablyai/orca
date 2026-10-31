@@ -1,8 +1,6 @@
 import { translate } from '@/i18n/i18n'
 
-// Why: the GitPane toggle and the stale-local-main toast both reference this
-// setting's title and deep-link anchor, so they share one source of truth
-// rather than drifting string literals across modules.
+// Share title/deep-link copy between GitPane and stale-main toasts to prevent drift.
 export function getKeepLocalMainUpToDateTitle(): string {
   return translate(
     'auto.components.settings.keep.local.main.up.to.date.setting.f8bda25f29',

@@ -81,8 +81,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
   unsubs.push(
     window.api.ui.onJumpToWorktreeIndex((index) => {
       const store = useAppStore.getState()
-      // Why: while Cmd+J is open the digit chord means "activate recent row N" — main already
-      // preventDefault'd it, so routing it here keeps digits out of the palette's search input.
+      // Route Cmd+J digits to palette recents because main already prevented their native input.
       if (store.activeModal === 'worktree-palette') {
         emitCmdJRowIndexJump(index)
         return

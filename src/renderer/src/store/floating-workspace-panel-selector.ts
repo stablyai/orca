@@ -27,10 +27,7 @@ const EMPTY_UNIFIED_TABS: NonNullable<AppState['unifiedTabsByWorktree'][string]>
 
 let floatingVisibleTabCountCache: FloatingVisibleTabCountCache | null = null
 
-/**
- * Whether the floating workspace panel is on screen. The overlay only renders while the feature is
- * on, and its panel is aria-hidden while closed — so that pair is what "on screen" means.
- */
+/** Panel is visible only with feature enabled and panel open; closed panels are aria-hidden. */
 export function selectFloatingWorkspacePanelVisible(
   state: FloatingWorkspacePanelVisibilityState
 ): boolean {
@@ -76,8 +73,7 @@ export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountStat
     } else if (tab.contentType === 'browser') {
       count += browserIds.has(tab.entityId) ? 1 : 0
     } else if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
-      // Why: simulator and structured-chat unified tabs have no separate backing
-      // record; the tab itself is the visible floating workspace item.
+      // Simulator/structured-chat tabs have no backing records; unified tabs are the visible floating items.
       count += 1
     } else {
       count += editorIds.has(tab.entityId) ? 1 : 0
@@ -98,7 +94,6 @@ export function resetFloatingVisibleTabCountSelectorCacheForTest(): void {
   floatingVisibleTabCountCache = null
 }
 
-/** The panel is on screen showing its empty state, which it renders exactly when no tab is visible. */
 export function selectEmptyFloatingWorkspacePanelVisible(
   state: EmptyFloatingWorkspacePanelState
 ): boolean {

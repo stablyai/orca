@@ -32,31 +32,32 @@ export function useMobileSessionFoundation() {
     created?: string
     warning?: string
   }>()
-  const isFolderWorkspaceRoute = worktreeId.startsWith('folder:') // Synthetic ids have no repo scope.
-  // Why: the floating sentinel has no repo/worktree, so repo-backed surfaces hide.
+  const isFolderWorkspaceRoute = worktreeId.startsWith('folder:')
   const isFloatingWorkspaceRoute = isFloatingWorkspaceWorktreeId(worktreeId)
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
-  // Why: shared client per host owned by RpcClientProvider (docs/mobile-shared-client-per-host.md).
   const { client, clientId, state: connState } = useWorkspaceClient(hostId)
   const { hostCapabilities } = useHostProtocolGates()
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
-  const { name: worktreeName, resolution: worktreeResolution } = useLiveWorktreeName({
+  const {
+    name: worktreeName,
+    path: worktreePath,
+    hostId: worktreeHostId,
+    resolution: worktreeResolution
+  } = useLiveWorktreeName({
     client,
     connState,
     routeName: routeWorktreeName,
     worktreeId
   })
-  // Why: a workspace deleted on the desktop leaves every RPC on this route failing forever.
   useMissingWorktreeBounce({
     hostId,
     worktreeId,
     resolution: worktreeResolution,
     bounce: (id) => router.replace(hostRouteWithNotice(id, 'worktree-missing'))
   })
-  // Master-detail state: wide layouts dock a tapped panel beside the session; narrow keeps it null and pushes full-screen routes.
   const { isWideLayout } = useResponsiveLayout()
   const [activePanel, setActivePanel] = useState<ActivePanel>(null)
   const [sessionContentRowWidth, setSessionContentRowWidth] = useState(0)
@@ -67,17 +68,16 @@ export function useMobileSessionFoundation() {
       availableWidth: sessionContentRowWidth,
       dockWidth: HOST_DOCK_MIN_WIDTH
     })
-  // Why: if rotation/split-screen makes the docked row too narrow, clear activePanel so it doesn't survive into overlay/push mode.
+  // Clear dock selection when rotation makes it too narrow so it cannot survive into push/overlay layout.
   useEffect(() => {
     if (!canDockPanel && activePanel !== null) {
       setActivePanel(null)
     }
   }, [canDockPanel, activePanel])
-  // GitHub remote probe gates the PR dock icon so non-GitHub providers can't open the hosted-review surface; skip the unused identity RPCs.
+  // Gate hosted reviews on repo provider without paying for unused branch identity reads.
   const { isGithubRepo: prIsGithubRepo, repoLoaded: prRepoContextLoaded } =
     useMobilePrBranchContext({
-      // Why: a null client parks the hook in its not-ready state — the floating
-      // sentinel has no repo to probe.
+      // Synthetic floating workspaces have no repo; a null client prevents the probe.
       client: isFloatingWorkspaceRoute ? null : client,
       connState,
       worktreeId,
@@ -107,6 +107,8 @@ export function useMobileSessionFoundation() {
     lastConnectedAt,
     forceReconnectHost,
     worktreeName,
+    worktreePath,
+    worktreeHostId,
     worktreeResolution,
     isWideLayout,
     activePanel,

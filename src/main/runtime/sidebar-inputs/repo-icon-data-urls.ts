@@ -4,6 +4,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { readRasterImageDimensions } from '../../../shared/raster-image-dimensions'
 import {
   MAX_REPO_ICON_DATA_URL_BYTES,
+  repoIconFeedKey,
   type RepoIconDataUrlsReply
 } from '../../../shared/sidebar-list/repo-icon-data-urls-contract'
 import {
@@ -15,8 +16,7 @@ import type { RuntimeDesktopSurface } from '../runtime-desktop-surface'
 
 export type RepoIconPngEncoder = NonNullable<RuntimeDesktopSurface['encodeRepoIconPng']>
 
-// Why two decode caps: fetched bytes are untrusted; local icons were picked by the user and already
-// show on the desktop, so only a decode-bomb bound applies.
+// Remote bytes are untrusted; user-picked local icons already display on desktop and need only a decode-bomb cap.
 const MAX_REMOTE_DECODE_EDGE_PX = 512
 const MAX_LOCAL_DECODE_EDGE_PX = 2048
 const ENCODED_EDGES_PX = [64, 32]
@@ -24,7 +24,7 @@ const SUCCESS_TTL_MS = 60 * 60 * 1000
 const FAILURE_TTL_MS = 5 * 60 * 1000
 const MAX_CACHE_BYTES = 1024 * 1024
 const CACHE_ENTRY_OVERHEAD_BYTES = 128
-// Why 4: a lone 16-id read of slow hosts then ends within 20 s, under the phone's 30 s timeout.
+// Four concurrent fetches keep a slow 16-id read within 20s, under the phone's 30s timeout.
 const MAX_CONCURRENT_FETCHES = 4
 
 type ImageRepoIcon = Extract<RepoIcon, { type: 'image' }>
@@ -77,10 +77,22 @@ export class RepoIconDataUrls {
     return { icons: ids.map((id, index) => ({ id, dataUrl: dataUrls[index] })) }
   }
 
+  /** Each repo's icon id by `hostId|repoId`, which the feed publishes; repos without an image are absent. */
+  idsByRepo(): Record<string, string> {
+    return Object.fromEntries(
+      this.identifiedIcons().map(({ repo, id }) => [repoIconFeedKey(repo), id])
+    )
+  }
+
   private currentIcons(): Map<string, ImageRepoIcon> {
-    const icons = new Map<string, ImageRepoIcon>()
+    return new Map(this.identifiedIcons().map(({ icon, id }) => [id, icon]))
+  }
+
+  private identifiedIcons(): { repo: Repo; icon: ImageRepoIcon; id: string }[] {
+    const identified: { repo: Repo; icon: ImageRepoIcon; id: string }[] = []
     const idsBySrc = new Map<string, { source: string; id: string }>()
-    for (const { repoIcon } of this.options.repos()) {
+    for (const repo of this.options.repos()) {
+      const { repoIcon } = repo
       if (repoIcon?.type !== 'image') {
         continue
       }
@@ -90,11 +102,11 @@ export class RepoIconDataUrls {
       const id = known?.source === repoIcon.source ? known.id : repoIconId(repoIcon)
       if (id) {
         idsBySrc.set(repoIcon.src, { source: repoIcon.source, id })
-        icons.set(id, repoIcon)
+        identified.push({ repo, icon: repoIcon, id })
       }
     }
     this.idsBySrc = idsBySrc
-    return icons
+    return identified
   }
 
   private dataUrlFor(id: string, icon: ImageRepoIcon | undefined): Promise<string | null> {

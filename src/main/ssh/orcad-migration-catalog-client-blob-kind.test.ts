@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   OrcadMigrationBlobChunkRequest,
   OrcadMigrationBlobDescriptor
-} from '../../shared/orcad-migration-blob-transfer'
-import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration-manifest-validation'
-import type { OrcadMigrationManifest } from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
 import {
   ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY
@@ -13,7 +13,7 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 
 const sendRequest = vi.hoisted(() => vi.fn())
 const status = vi.hoisted((): { capabilities: string[] } => ({ capabilities: [] }))
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequestWithStatusPreflight: async (
     pairing: unknown,
     method: string,

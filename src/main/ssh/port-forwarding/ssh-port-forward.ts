@@ -1,4 +1,4 @@
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 import { Ssh2PortForwardProvider } from './ssh2-port-forward-provider'
 import { SystemSshPortForwardProvider } from './system-ssh-port-forward-provider'
 import type { PortForwardEntry } from '../../../shared/ssh-types'
@@ -8,8 +8,24 @@ import type {
   StartedPortForward
 } from './ssh-port-forward-provider'
 
-export type { PortForwardEntry }
-export type { PortForwardCloseReason }
+// Bound waiting for slow starts; their closed flag cleans up late results. Wait for closes because rebind needs the port.
+const TEARDOWN_START_WAIT_MS = 3_000
+
+/** Overtaken starts hold nothing; do not roll back an edit after connection teardown. */
+export class PortForwardTornDownError extends Error {
+  constructor() {
+    super('The SSH session closed while this port forward was starting.')
+    this.name = 'PortForwardTornDownError'
+  }
+}
+
+/** Track pending starts/closes until settled because either may still hold its port. */
+type ForwardInTransit = {
+  kind: 'starting' | 'closing'
+  connectionId: string
+  closed: boolean
+  settled: Promise<unknown>
+}
 
 type SshPortForwardManagerCallbacks = {
   onForwardClosed?: (entry: PortForwardEntry, reason: PortForwardCloseReason) => void
@@ -17,6 +33,7 @@ type SshPortForwardManagerCallbacks = {
 
 export class SshPortForwardManager {
   private forwards = new Map<string, StartedPortForward>()
+  private inTransit = new Set<ForwardInTransit>()
   private nextId = 1
   private providers: SshPortForwardProvider[]
   private callbacks: SshPortForwardManagerCallbacks
@@ -64,31 +81,56 @@ export class SshPortForwardManager {
     remotePort: number,
     label?: string
   ): Promise<PortForwardEntry> {
+    // Reject connections selected before teardown so late adds/edits cannot outlive disposal.
+    if (conn.isDisposed()) {
+      throw new PortForwardTornDownError()
+    }
     const provider = this.providers.find((candidate) => candidate.canHandle(conn))
     if (!provider) {
       throw new Error('SSH connection is not established')
     }
 
     let forward: StartedPortForward | null = null
-    forward = await provider.start(conn, {
-      id,
+    const starting: ForwardInTransit = {
+      kind: 'starting',
       connectionId,
-      localHost: '127.0.0.1',
-      localPort,
-      remoteHost,
-      remotePort,
-      label,
-      onUnexpectedClose: (entry, reason) => {
-        const active = this.forwards.get(id)
-        if (active !== forward) {
-          return
+      closed: false,
+      settled: Promise.resolve()
+    }
+    const settled = (async (): Promise<StartedPortForward> => {
+      const started = await provider.start(conn, {
+        id,
+        connectionId,
+        localHost: '127.0.0.1',
+        localPort,
+        remoteHost,
+        remotePort,
+        label,
+        onUnexpectedClose: (entry, reason) => {
+          const active = this.forwards.get(id)
+          if (active !== forward) {
+            return
+          }
+          this.forwards.delete(id)
+          this.callbacks.onForwardClosed?.(entry, reason)
         }
-        this.forwards.delete(id)
-        this.callbacks.onForwardClosed?.(entry, reason)
+      })
+      // Check during registration so teardown cannot miss this forward.
+      if (starting.closed || conn.isDisposed()) {
+        await started.close()
+        throw new PortForwardTornDownError()
       }
-    })
-    this.forwards.set(id, forward)
-    return forward.entry
+      forward = started
+      this.forwards.set(id, started)
+      return started
+    })()
+    starting.settled = settled
+    this.inTransit.add(starting)
+    try {
+      return (await settled).entry
+    } finally {
+      this.inTransit.delete(starting)
+    }
   }
 
   async updateForward(
@@ -105,9 +147,7 @@ export class SshPortForwardManager {
     }
     const oldEntry = { ...existing.entry }
 
-    // Why: use the async variant so the OS fully releases the port before
-    // we try to rebind. Without this, same-port edits (e.g. label change)
-    // fail with EADDRINUSE because server.close() is async.
+    // Await OS port release before same-port edits or rebind can fail EADDRINUSE.
     await this.removeForwardAsync(id)
 
     try {
@@ -121,8 +161,10 @@ export class SshPortForwardManager {
         label
       )
     } catch (err) {
-      // Why: use addForwardWithId to preserve the original ID so the
-      // renderer's references remain valid after a failed edit.
+      if (err instanceof PortForwardTornDownError) {
+        throw err
+      }
+      // Rollback with the original id so renderer references stay valid.
       try {
         await this.addForwardWithId(
           oldEntry.id,
@@ -133,9 +175,7 @@ export class SshPortForwardManager {
           oldEntry.remotePort,
           oldEntry.label
         )
-      } catch {
-        // best-effort rollback
-      }
+      } catch {}
       throw err
     }
   }
@@ -154,15 +194,21 @@ export class SshPortForwardManager {
     return this.removeForwardAsync(id)
   }
 
-  // Why: server.close()/process exit are async — callers that need to rebind
-  // the same port (update/reconnect) must wait until the owner fully releases it.
+  // Rebind callers must await async listener close or process exit.
   private removeForwardAsync(id: string): Promise<PortForwardEntry | null> {
     const forward = this.forwards.get(id)
     if (!forward) {
       return Promise.resolve(null)
     }
     this.forwards.delete(id)
-    return forward.close().then(() => forward.entry)
+    const closing: ForwardInTransit = {
+      kind: 'closing',
+      connectionId: forward.entry.connectionId,
+      closed: true,
+      settled: forward.close()
+    }
+    this.inTransit.add(closing)
+    return closing.settled.finally(() => this.inTransit.delete(closing)).then(() => forward.entry)
   }
 
   listForwards(connectionId?: string): PortForwardEntry[] {
@@ -176,13 +222,9 @@ export class SshPortForwardManager {
   }
 
   async removeAllForwards(connectionId: string): Promise<void> {
-    const toRemove = [...this.forwards.entries()]
-      .filter(([, { entry }]) => entry.connectionId === connectionId)
-      .map(([id]) => id)
-    await Promise.all(toRemove.map((id) => this.removeForwardAsync(id)))
+    await this.closeAndSettle(connectionId)
   }
 
-  /** Closes this connection's forwards that tunnel through a transport `conn` replaced. */
   async closeStaleForwards(connectionId: string, conn: SshConnection): Promise<void> {
     const stale = [...this.forwards.entries()]
       .filter(([, forward]) => forward.entry.connectionId === connectionId)
@@ -191,9 +233,34 @@ export class SshPortForwardManager {
     await Promise.all(stale.map((id) => this.removeForwardAsync(id)))
   }
 
-  /** Stops every forward and waits until each released its port; quit uses it. */
   async closeAll(): Promise<void> {
-    await Promise.all([...this.forwards.keys()].map((id) => this.removeForwardAsync(id)))
+    await this.closeAndSettle()
+  }
+
+  /** Wait for all owned starts/closes, including those underway before teardown, to release their ports. */
+  private async closeAndSettle(connectionId?: string): Promise<void> {
+    const owned = (owner: string): boolean => connectionId === undefined || owner === connectionId
+    const toRemove = [...this.forwards.entries()]
+      .filter(([, { entry }]) => owned(entry.connectionId))
+      .map(([id]) => id)
+    const inTransit = [...this.inTransit].filter((forward) => owned(forward.connectionId))
+    for (const forward of inTransit) {
+      forward.closed = true
+    }
+    const removals = toRemove.map((id) => this.removeForwardAsync(id))
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const startWait = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, TEARDOWN_START_WAIT_MS)
+    })
+    const settled = inTransit.map((forward) => {
+      const done = forward.settled.catch(() => undefined)
+      return forward.kind === 'starting' ? Promise.race([done, startWait]) : done
+    })
+    try {
+      await Promise.all([...removals, ...settled])
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   dispose(): void {

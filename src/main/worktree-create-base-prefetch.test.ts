@@ -33,7 +33,6 @@ function runtime() {
   }
 }
 
-/** Resolve only the named refs/objects; every other rev-parse answers "absent". */
 function resolveOnly(present: string[]): void {
   mocks.gitExecFileAsync.mockImplementation(async (args: string[]) => {
     const rev = args.at(-1)?.replace('^{commit}', '') ?? ''
@@ -73,7 +72,6 @@ describe('prefetchWorktreeCreateBase local git routing', () => {
       cwd: repo.path,
       ...WSL
     })
-    // A base that is already local needs no fetch.
     expect(mocks.fetchRemoteWithCache).not.toHaveBeenCalled()
   })
 
@@ -148,7 +146,6 @@ describe('prefetchWorktreeCreateBase local git routing', () => {
     for (const call of mocks.gitExecFileAsync.mock.calls) {
       expect(call[1]).toEqual({ cwd: repo.path })
     }
-    // Runtime calls keep their original arity so host repos stay on the runtime's own defaults.
     expect(mocks.resolveRemoteTrackingBase).toHaveBeenCalledWith(repo.path, 'feature/topic')
     expect(mocks.fetchRemoteWithCache).toHaveBeenCalledWith(repo.path, 'origin')
   })

@@ -6,21 +6,18 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { Repo } from '../../shared/repo-types'
 import { getFolderWorkspaceHostId } from '../../shared/folder-workspace-execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree/id'
 import { workspaceSessionPartitionHostId } from '../../shared/workspace-session-partition-owner'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { workspaceSessionListsTerminalTab } from '../../shared/workspace-session-terminal-tab-close'
 import type { RuntimeStore } from './runtime-store-contract'
 import { resolveTwinRepoSessionHostId, type CachedWorktreeHost } from './twin-repo-session-host'
 
-/**
- * Where a layout-owner build routes a folder: the rule the window stamps and saves its rows by, so
- * both sides pick one partition. It reads no repos, so a mixed-host folder never throws here;
- * terminal starts still refuse it.
- */
+/** Match window save routing without repo lookup; mixed-host folders may route here but still refuse terminal starts. */
 function layoutOwnerFolderHostId(workspace: FolderWorkspace, store: RuntimeStore): ExecutionHostId {
   return getFolderWorkspaceHostId(workspace, store.getProjectGroups?.() ?? [])
 }
@@ -48,12 +45,10 @@ export class RuntimeWorkspaceSessionController {
       if (!workspace) {
         return null
       }
-      // Switch point: a window-owned build keeps today's routing, which throws on a mixed-host folder.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         return layoutOwnerFolderHostId(workspace, store)
       }
-      // An explicit host is authoritative for folder workspaces. The connection
-      // id is only a legacy fallback for records written before host ids existed.
+      // Explicit folder host wins; connectionId is the fallback for records predating host ids.
       if (workspace.executionHostId != null) {
         const parsedHostId = parseExecutionHostId(workspace.executionHostId)?.id
         if (!parsedHostId) {
@@ -75,15 +70,22 @@ export class RuntimeWorkspaceSessionController {
       : LOCAL_EXECUTION_HOST_ID
   }
 
-  // Why: a twin repo's first row is arbitrary; the window saves to the host chosen here.
+  // A twin repo's first row is arbitrary; match the window's chosen save host.
   private getTwinRepoHostId(
     store: RuntimeStore,
     repoId: string,
-    worktreeId: string
+    worktreeId: string,
+    repos?: readonly Repo[]
   ): ExecutionHostId | null {
-    return ORCA_LAYOUT_OWNER_IS_MAIN
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN || !splitWorktreeId(worktreeId)) {
+      return null
+    }
+    // Only registered repos can have twins; avoid hydrating the inventory on every routing lookup.
+    const inventory = repos ?? (store.getRepo?.(repoId) ? store.getRepos?.() : undefined)
+    return inventory
       ? resolveTwinRepoSessionHostId(
           store,
+          inventory,
           repoId,
           worktreeId,
           this.deps.getCachedWorktrees?.() ?? null
@@ -99,9 +101,7 @@ export class RuntimeWorkspaceSessionController {
   ): ExecutionHostId {
     const hasPersistedTabs = (hostId: ExecutionHostId): boolean =>
       (getWorkspaceSession(hostId).tabsByWorktree[worktreeId]?.length ?? 0) > 0
-    // Why: only runtime environment ids rotate across relay restarts. An empty SSH or
-    // local partition is the truth, and `repoId::path` repeats across hosts, so a
-    // same-id workspace elsewhere must never be adopted as this one's owner.
+    // Only runtime ids rotate. Empty SSH/local partitions are authoritative; same-id workspaces on other hosts are never fallback owners.
     if (
       parseExecutionHostId(preferredHostId)?.kind !== 'runtime' ||
       hasPersistedTabs(preferredHostId)
@@ -140,11 +140,7 @@ export class RuntimeWorkspaceSessionController {
     return hostId
   }
 
-  /**
-   * The partitions holding this exact terminal tab, routed partition first; the routed one alone
-   * when none does, and none when the worktree is unroutable. Matches the tab id, never the
-   * worktree id: `repoId::path` repeats across hosts.
-   */
+  /** Find partitions owning this exact tab, routed first; fall back to the route only when none owns it. Worktree ids repeat across hosts. */
   getHostIdsForTab(worktreeId: string, tabId: string): ExecutionHostId[] {
     const routedHostId = this.tryGetHostId(worktreeId)
     if (!routedHostId) {
@@ -248,7 +244,7 @@ export class RuntimeWorkspaceSessionController {
         const catalogOwnerHostId =
           scope?.type === 'folder'
             ? (folderHostIdByWorkspaceId.get(scope.folderWorkspaceId) ?? null)
-            : (this.getTwinRepoHostId(store, repoId, rawWorktreeId) ??
+            : (this.getTwinRepoHostId(store, repoId, rawWorktreeId, repos) ??
               repoHostIdByRepoId.get(repoId) ??
               LOCAL_EXECUTION_HOST_ID)
         const ownerHostId = this.resolveHostId(

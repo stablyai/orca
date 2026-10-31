@@ -2,13 +2,17 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult,
   AgentSessionStatusSummary,
   AgentSessionSubscribeEvent
 } from '../../src/shared/agent-session-wire'
-import type { AgentJournalCursor } from '../../src/shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalCursor
+} from '../../src/shared/agent-session-journal-types'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
@@ -37,6 +41,7 @@ import { codexProviderHandle } from '../../src/shared/agent-session-provider-han
 
 const SESSION = 'cursor-body-regression'
 const target = { kind: 'local' } as const
+const effects = { getState: useAppStore.getState, subscribeRetryNow: () => () => {} }
 const journals = createTrackedJournalOpener()
 let root: string
 
@@ -65,7 +70,7 @@ async function fixture() {
     await journal.appendItem(
       { provider: 'orca', clientMessageId: `output-${index}` },
       { kind: 'status', text: `Tool output ${index}` },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
   for (let index = 1; index < 99; index += 1) {
@@ -133,12 +138,19 @@ describe('structured session cursor/body regression', () => {
             SESSION,
             {
               journal,
-              fence: 1,
-              params: { location: { workspaceId: 'folder-workspace' }, provider: 'codex' }
+              params: {
+                location: {
+                  executionHostId: 'local',
+                  wslDistro: null,
+                  workspaceId: 'folder-workspace',
+                  workspaceKind: 'folder'
+                },
+                provider: 'codex'
+              }
             }
           ]
         ]),
-        getRecord: () => null,
+        getConversation: () => null,
         now: () => 1_000,
         onStatusChanged: (summary) => {
           hostSummary = summary
@@ -185,7 +197,7 @@ describe('structured session cursor/body regression', () => {
       )
       const owner = getStructuredAgentSessionReadOwner(SESSION, target)
       const unlisten = owner.subscribe(() => {})
-      const deactivate = owner.activate()
+      const deactivate = owner.activate(effects)
       await vi.waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
       expect(owner.getSnapshot().state.cursor?.sequence).toBe(100)
       expect(owner.getSnapshot().state.items.at(-1)?.body).toMatchObject({ role: 'user' })
@@ -210,7 +222,7 @@ describe('structured session cursor/body regression', () => {
       // IPC/RPC copies values; the journal mutates its own submission records in place.
       expect(owner.getSnapshot().state.submissions[0]?.dispatchState).toBe('pending')
       warm = true
-      const stop = owner.activate()
+      const stop = owner.activate(effects)
 
       await vi.waitFor(() => expect(owner.getSnapshot().state.cursor).toEqual(journal.cursor()))
       const caughtUp = owner.getSnapshot().state
@@ -225,7 +237,7 @@ describe('structured session cursor/body regression', () => {
       await journal.appendItem(
         { provider: 'orca', clientMessageId: 'completed-turn' },
         { kind: 'turn', turnId: 'turn-1', state: 'completed' },
-        { fence: 1 }
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       subscribers.publish(SESSION, journal)
       await vi.waitFor(() => expect(owner.getSnapshot().state.cursor).toEqual(journal.cursor()))

@@ -1,7 +1,10 @@
 import { memo, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { MERMAID_DIAGRAM_CONFIG } from './mermaid-diagram-config'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { readableMermaidFlowchartSvg } from '../../../../src/shared/mermaid-flowchart-contrast'
+import { mermaidDiagramConfig } from './mermaid-diagram-config'
 import { loadPageMermaid } from './mermaid-page-engine'
 
 export type MermaidDiagramProps = {
@@ -9,52 +12,36 @@ export type MermaidDiagramProps = {
   base: number
 }
 
-/**
- * The same diagram, drawn by mermaid in this document.
- *
- * Mermaid is a browser library, so the engine is an `import()`, and there is no second content
- * process to sandbox in. The fence is mermaid's own `securityLevel: 'strict'`, which runs the
- * serialized SVG through DOMPurify before handing it back — a `<script>`, an `on*` attribute or a
- * `javascript:` href in a diagram label reaches this document as nothing at all. That is measured
- * in `config/scripts/mobile-web-app-mermaid-render.test.mjs`, in both engines, against a hostile
- * fixture. The source is a JS string argument, not text spliced into an inline `<script>`, so it
- * needs no escaping.
- *
- * The import is inside the effect, so a session with no diagram in it evaluates none of the engine
- * (ruling 28). It reaches the engine through `mermaid-page-engine.ts`, which loads one pre-bundled
- * artifact rather than the package: importing the package here emitted 103 scripts, all of them
- * already inside the generation the phone downloaded.
- */
+// Deferred pre-bundled engine stays unevaluated without diagrams; one artifact avoids 103 scripts against 256-asset shell cap (ruling 28).
+// No separate sandbox process: mermaid strict mode sanitizes serialized SVG via DOMPurify before insertion; hostile fixtures run on both engines in mobile-web-app-mermaid-render.test.mjs.
+// Source is a JS string argument, never inline-script interpolation.
 export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: MermaidDiagramProps) {
+  const colorScheme = useMobileColorScheme()
   const hostRef = useRef<View>(null)
-  // The source that failed, rather than a flag: a flag would need clearing from the effect that
-  // renders the next one, and a render the component has already failed is the only thing the
-  // fallback is about.
+  // Remember failing source, not flag, so next source need not clear failure through effect.
   const [failedSource, setFailedSource] = useState<string | null>(null)
-  // mermaid writes `#<id>` into the stylesheet it puts inside the SVG, so this has to be a CSS
-  // identifier. React spells its own `_R_0_`; the strip is for a React that changes that.
+  // Sanitize React id for CSS identifier because mermaid embeds #id rules; do not assume React’s current _R_0_ spelling.
   const suffix = useId().replace(/[^\w-]/g, '')
   const id = `orca-mermaid-${suffix}`
   const failed = failedSource === source
 
   useEffect(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: react-native-web renders View as a div and forwards the ref to it; this module only ever runs in that build.
-    const host = hostRef.current as unknown as HTMLElement | null
-    if (!host) {
+    // react-native-web renders View as a div and forwards the ref to it.
+    const host = hostRef.current
+    if (!(host instanceof HTMLElement)) {
       return
     }
     let disposed = false
     void (async () => {
       try {
         const mermaid = await loadPageMermaid()
-        mermaid.initialize(MERMAID_DIAGRAM_CONFIG)
+        mermaid.initialize(mermaidDiagramConfig(colorScheme))
         const { svg } = await mermaid.render(id, source)
         if (disposed) {
           return
         }
-        // Already sanitized: `securityLevel: 'strict'` is what makes this string safe to parse,
-        // and mermaid is the only thing that can sanitize its own serialization.
-        host.innerHTML = svg
+        // Only mermaid sanitizes its serialization; strict mode already made returned SVG safe to parse.
+        host.innerHTML = readableMermaidFlowchartSvg(svg, colors.textPrimary, colors.bgRaised)
       } catch {
         if (!disposed) {
           setFailedSource(source)
@@ -63,11 +50,10 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
     })()
     return () => {
       disposed = true
-      // React owns this element, not what mermaid put inside it, so nothing else clears the
-      // previous diagram when the source changes.
+      // React owns container, not mermaid contents; clear prior diagram on source change.
       host.replaceChildren()
     }
-  }, [id, source])
+  }, [colorScheme, id, source])
 
   if (failed) {
     return (
@@ -93,6 +79,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
 
 /** The frame and label, so a diagram and its fallback sit in the same box. */
 function MermaidFrame({ children }: { children: ReactNode }) {
+  useMobileColorScheme()
   return (
     <View style={styles.frame} testID="mermaid-diagram">
       <View style={styles.label}>
@@ -104,11 +91,11 @@ function MermaidFrame({ children }: { children: ReactNode }) {
 }
 
 // No rule reaches the SVG: mermaid emits it with `width="100%"` and its own natural `max-width`.
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   frame: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     marginBottom: spacing.sm,
     overflow: 'hidden',
     backgroundColor: colors.bgRaised
@@ -128,4 +115,4 @@ const styles = StyleSheet.create({
   host: { padding: spacing.sm },
   fallbackScroll: { padding: spacing.sm },
   fallbackText: { color: colors.textPrimary, fontFamily: typography.monoFamily }
-})
+}))

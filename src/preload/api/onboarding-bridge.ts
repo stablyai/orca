@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { NativeChatUpgradeTipVariant } from '../../shared/native-chat-upgrade-tip-audience'
+import type { ChatUiLaunchTipVariant } from '../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { OnboardingState } from '../../shared/onboarding-state-types'
 import type { PreloadApi } from '../api-types'
 
@@ -10,6 +10,6 @@ export const onboardingApi = {
       checklist?: Partial<OnboardingState['checklist']>
     }
   ): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:update', updates),
-  getNativeChatUpgradeTipVariant: (): Promise<NativeChatUpgradeTipVariant> =>
-    ipcRenderer.invoke('onboarding:getNativeChatUpgradeTipVariant')
+  getChatUiLaunchTipVariant: (): Promise<ChatUiLaunchTipVariant> =>
+    ipcRenderer.invoke('onboarding:getChatUiLaunchTipVariant')
 } satisfies PreloadApi['onboarding']

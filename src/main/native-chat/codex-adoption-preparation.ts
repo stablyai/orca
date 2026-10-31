@@ -10,7 +10,6 @@ import type { StructuredAgentSessionAdoption } from './structured-agent-session-
 import { admitTranscriptPath } from './transcript-path-admission'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 
-/** Use the existing host preparation before pinning credentials and importing history. */
 export async function prepareCodexAdoption(
   source: StructuredAgentSessionAdoption,
   providerSessionId: string,
@@ -21,13 +20,16 @@ export async function prepareCodexAdoption(
     return source
   }
   const nativeSystemHomePath = getSystemCodexHomePath()
-  const result = await prepare({
-    agent: 'codex',
-    sessionId: providerSessionId,
-    filePath: source.transcriptPath,
-    codexHome: source.accountHome.path,
-    executionHostId: 'local'
-  }, nativeSystemHomePath)
+  const result = await prepare(
+    {
+      agent: 'codex',
+      sessionId: providerSessionId,
+      filePath: source.transcriptPath,
+      codexHome: source.accountHome.path,
+      executionHostId: 'local'
+    },
+    nativeSystemHomePath
+  )
   const home = result.useRealCodexHome ? nativeSystemHomePath : result.substituteCodexHome
   if (
     !home ||
@@ -41,7 +43,8 @@ export async function prepareCodexAdoption(
     !recognizedHomes.some(
       (candidate) =>
         isLegacyAgentSessionAccountHome(candidate) &&
-        normalizeRuntimePathForComparison(candidate.path) === normalizeRuntimePathForComparison(home)
+        normalizeRuntimePathForComparison(candidate.path) ===
+          normalizeRuntimePathForComparison(home)
     )
   ) {
     throw new Error('The prepared conversation account is not recognized on this host.')

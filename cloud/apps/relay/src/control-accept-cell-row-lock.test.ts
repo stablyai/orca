@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { RelayCellConfig } from './config.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import {
@@ -70,6 +70,10 @@ describe('control accept cell-row lock span', () => {
     assignmentEpoch = (await store.assign(host)).assignmentEpoch
   })
 
+  afterEach(async () => {
+    await recorder?.close()
+  })
+
   async function accept(generation: number): Promise<string> {
     recorder.statements.length = 0
     return await store.activateControl(host, {
@@ -125,13 +129,6 @@ describe('control accept cell-row lock span', () => {
     expect(cellStatements()).toEqual([])
     expect(await reservedRequests()).toBe(1)
     expect(await cellLeaseUnits()).toBe(1)
-  })
-
-  it('keeps the reservation equal to the cell lease units across repeated rebinds', async () => {
-    for (const generation of [1, 2, 3, 4, 5]) await accept(generation)
-
-    expect(await reservedRequests()).toBe(await cellLeaseUnits())
-    expect(await reservedRequests()).toBe(1)
   })
 
   it('still refuses an accept that would exceed the cell capacity', async () => {

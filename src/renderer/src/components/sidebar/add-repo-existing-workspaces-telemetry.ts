@@ -77,14 +77,12 @@ export function buildAddRepoExistingWorkspacesDetectedEvent(
 export function shouldTrackAddRepoExistingWorkspacesDetected(
   payload: ExistingWorkspacesDetectedProps | null
 ): boolean {
-  // Track the import/discovery signal, not mere setup-modal exposure: the main
-  // checkout is always a worktree, but only non-main worktrees imply migration.
+  // Only non-main worktrees establish migration opportunity; every project already has a main checkout.
   if (!payload || payload.existing_linked_workspace_count === 0) {
     return false
   }
 
-  // Clone/create produce a new project during this flow, so their setup step is
-  // not evidence of a pre-existing workspace migration opportunity.
+  // Clone/create make new projects and cannot prove pre-existing workspace migration.
   return (
     payload.source === 'local_folder_picker' ||
     payload.source === 'runtime_server_path' ||

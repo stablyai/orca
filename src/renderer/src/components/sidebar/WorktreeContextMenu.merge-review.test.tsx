@@ -107,8 +107,11 @@ const defaultStoreState = {
   workspaceLineageByChildKey: {},
   updateWorktreeLineage: vi.fn(),
   tabsByWorktree: {},
+  unifiedTabsByWorktree: {},
   ptyIdsByTabId: {},
   browserTabsByWorktree: {},
+  agentStatusByPaneKey: {},
+  structuredChatSleptAtByPaneKey: {},
   worktreesByRepo: {},
   repos: []
 }
@@ -125,10 +128,15 @@ vi.mock('@/store/selectors', () => ({
   useRepoById: (repoId?: string) =>
     repoId ? { id: repoId, displayName: repoId, connectionId: null } : undefined,
   useRepoMap: () => new Map(),
-  useWorktreeMap: () => new Map()
+  useWorktreeMap: () => new Map(),
+  getAllWorktreesFromState: () => [mainWorktreeRow],
+  getRepoMapFromState: () => new Map(),
+  getWorktreeMapFromState: () => new Map()
 }))
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) }))
+vi.mock('@/lib/connection-context', () => ({
+  getConnectionId: vi.fn(() => null)
+}))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
   useOptionalShortcutLabel: () => null,
@@ -136,11 +144,19 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   formatOptionalShortcutLabel: () => null
 }))
 
-vi.mock('./ProjectGroupNameDialog', () => ({ ProjectGroupNameDialog: () => null }))
-vi.mock('./WorktreeParentPickerPopover', () => ({ WorktreeParentPickerPopover: () => null }))
-vi.mock('./WorktreeDeveloperMenu', () => ({ WorktreeDeveloperMenu: () => null }))
+vi.mock('./ProjectGroupNameDialog', () => ({
+  ProjectGroupNameDialog: () => null
+}))
+vi.mock('./WorktreeParentPickerPopover', () => ({
+  WorktreeParentPickerPopover: () => null
+}))
+vi.mock('./WorktreeDeveloperMenu', () => ({
+  WorktreeDeveloperMenu: () => null
+}))
 vi.mock('./WorktreeOpenInMenu', () => ({ WorktreeOpenInSubMenu: () => null }))
-vi.mock('./WorkspaceSleepMenuItems', () => ({ WorkspaceSleepMenuItems: () => null }))
+vi.mock('./WorkspaceSleepMenuItems', () => ({
+  WorkspaceSleepMenuItems: () => null
+}))
 
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
@@ -159,7 +175,12 @@ function renderAndOpen(worktree: Worktree): HTMLElement {
   const scope = container.querySelector('[data-worktree-context-menu-scope]')
   act(() => {
     scope?.dispatchEvent(
-      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 10,
+        clientY: 10
+      })
     )
   })
   return container
@@ -196,7 +217,9 @@ describe('WorktreeContextMenu merge review rows', () => {
     await act(async () => {})
 
     expect(itemLabels(container)).toContain('Merge into Main Worktree')
-    expect(stateMock).toHaveBeenCalledWith({ worktreePath: '/path/to/feature' })
+    expect(stateMock).toHaveBeenCalledWith({
+      worktreePath: '/path/to/feature'
+    })
   })
 
   it('sends the worktree connection id with the state probe', async () => {
@@ -212,7 +235,11 @@ describe('WorktreeContextMenu merge review rows', () => {
   })
 
   it('offers accept/reject on both cards once a review is pending', async () => {
-    stateMock.mockResolvedValue({ phase: 'pending', branch: 'feature', conflicts: [] })
+    stateMock.mockResolvedValue({
+      phase: 'pending',
+      branch: 'feature',
+      conflicts: []
+    })
 
     const taskContainer = renderAndOpen(makeWorktree({}))
     await act(async () => {})

@@ -1,6 +1,7 @@
 import type { AgentType, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { isNoiseMessage } from '../../shared/native-chat-noise'
+import { claudeBashInputAsTypedCommand } from '../../shared/claude-bash-input'
 import {
   asRecord,
   extractString,
@@ -62,7 +63,6 @@ export function decodeCodexTurnLifecycle(
   }
 }
 
-/** Claude stop reasons that end the lead generation (not mid-turn tool_use). */
 const CLAUDE_TERMINAL_STOP_REASONS = new Set(['end_turn', 'max_tokens', 'stop_sequence', 'refusal'])
 
 function isClaudeTerminalStopReason(value: unknown): boolean {
@@ -81,19 +81,12 @@ export function decodeClaudeTurnLifecycle(
   const timestamp = lifecycleTimestamp(record.timestamp)
   const interruptedMessageId = claudeInterruptedMessageId(record)
   if (interruptedMessageId) {
-    // Why: Claude stores its interrupt notice as an injected user row; it ends
-    // the active generation and must not be mistaken for the next user prompt.
+    // Injected interruption notices end the active generation; they never open a user turn.
     return { state: 'interrupted', turnId: interruptedMessageId, timestamp }
   }
   if (record.type === 'assistant') {
     const stopReason = message?.stop_reason
-    // Why: capable hosts rely on explicit terminals (prose is only a backup when
-    // the latest lifecycle is not mid-generation). Emit completed for every real
-    // end marker — including historical/OpenClaude rows that omit stop_reason —
-    // while tool_use stays non-terminal so mid-turn tool loops keep working. The
-    // no-stop_reason backup also excludes rows carrying a tool_use block: a
-    // pre-tool assistant row that omits stop_reason is mid-turn, not done, so it
-    // must not settle the spinner before the tool runs.
+    // Legacy rows may omit stop_reason; only complete prose without tool_use can supply that fallback.
     const isTerminal =
       isClaudeTerminalStopReason(stopReason) ||
       (stopReason == null &&
@@ -113,17 +106,26 @@ export function decodeClaudeTurnLifecycle(
   }
   const decoded = decodeClaudeTranscriptLine(line, fallbackId)
   if (decoded?.role !== 'user' || decoded.blocks.some((block) => block.type === 'tool-result')) {
-    // Why: Claude can attach text sidecars to tool-result user rows; those are
-    // continuations of the active turn, not a new user-authored generation.
+    // Tool-result sidecar text continues the turn instead of opening a user generation.
     return null
   }
-  // Why: harness noise (task-notification, system-reminder, …) is user-role in
-  // the JSONL but not a new generation. Treating it as working would overwrite
-  // a real terminal marker and re-stick the chat spinner after done/interrupt.
-  if (isNoiseMessage(decoded)) {
+  // Injected noise must not overwrite terminal markers and restart the spinner.
+  if (isNoiseMessage(decoded) || isClaudeBashInputRecord(record)) {
     return null
   }
   return { state: 'working', turnId: decoded.id, timestamp }
+}
+
+// ! commands are not prompts; without a reply terminal, a working mark would stick.
+function isClaudeBashInputRecord(record: Record<string, unknown>): boolean {
+  const content = asRecord(record.message)?.content
+  const texts =
+    typeof content === 'string'
+      ? [content]
+      : Array.isArray(content)
+        ? content.map((block) => extractString(asRecord(block)?.text))
+        : []
+  return texts.some((text) => text != null && claudeBashInputAsTypedCommand(text) !== null)
 }
 
 function lifecycleTimestamp(value: unknown): number | null {
@@ -158,8 +160,6 @@ function assistantHasRenderableContent(message: Record<string, unknown> | null):
   })
 }
 
-/** True when an assistant row contains a tool_use block — the turn continues to
- *  a tool call, so a missing stop_reason must not be read as completion. */
 function assistantHasToolUse(message: Record<string, unknown> | null): boolean {
   const content = message?.content
   if (!Array.isArray(content)) {

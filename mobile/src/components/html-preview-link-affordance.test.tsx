@@ -1,23 +1,6 @@
 // @vitest-environment happy-dom
-/**
- * What the preview mounts for each answer the shell gives, read off the element it renders.
- *
- * Its own file because of how the grant resolves here: this suite runs in a `node` environment whose
- * resolver has no `.web` precedence, so `MobileHtmlPreview.tsx`'s import of
- * `./use-html-preview-link-grant` lands on the native sibling, which answers yes unconditionally.
- * That is why `mobile-webview-editor-web-fallbacks.test.tsx` still measures the granted frame
- * without knowing a grant exists, and why the hidden path needs the module replaced to be reached
- * at all.
- *
- * The browser half is `config/scripts/mobile-web-app-html-preview-render.test.mjs`, which resolves
- * the real web sibling and measures what an engine paints and does. This file is the wiring between
- * the two: that the component asks, and that both the frame's sandbox and the document it is handed
- * follow the answer. It runs in the sharded `test` job, where the render rig is skipped for want of
- * the bundler's dependencies.
- *
- * happy-dom rather than the suite's `node` default, because the inerting pass the hidden arm takes
- * parses with the browser's own `DOMParser` and there is none in `node`.
- */
+// Assert component follows shell grant for both sandbox and inerted document; native test resolver needs explicit web-grant substitution.
+// happy-dom supplies DOMParser for hidden arm. Real browser rig uses actual web sibling; this wiring suite still runs when bundler-dependent rig skips.
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -54,15 +37,12 @@ const ARTIFACT =
 
 const renderers: ReactTestRenderer[] = []
 
-/** By tag name through `String`, not a literal comparison: `node.type` is `ElementType`, which
- *  overlaps a real intrinsic tag and not the host strings these mocks render, so `=== 'Pressable'`
- *  is a comparison `tsconfig.test.json` rejects as having no overlap. */
+// Match mock host tag through String: renderer ElementType rejects literal Pressable comparison without cast.
 function findHosts(renderer: ReactTestRenderer, tag: string) {
   return renderer.root.findAll((node) => String(node.type) === tag)
 }
 
-/** Mounted inside `act`, which is what `IS_REACT_ACT_ENVIRONMENT` makes mandatory: a `create`
- *  outside one commits nothing and the renderer reads as unmounted. */
+// Mount inside act as required by IS_REACT_ACT_ENVIRONMENT; otherwise create commits nothing.
 function mount(renderSource: () => React.ReactNode): ReactTestRenderer {
   let renderer: ReactTestRenderer | null = null
   act(() => {
@@ -110,8 +90,7 @@ describe('the frame the preview mounts for each answer the shell gives', () => {
   })
 
   it('seals the frame with a sandbox that grants nothing, rather than dropping the attribute', () => {
-    // An `iframe` with no `sandbox` attribute at all is a frame with every capability. Empty is the
-    // maximally restrictive value, and it must not become undefined by way of a falsy check.
+    // Require empty sandbox attribute: absent/undefined grants every capability, while empty grants none.
     expect(MOBILE_HTML_PREVIEW_SEALED_SANDBOX).toBe('')
     expect(frameOf(false)?.sandbox).toBe('')
     expect(MOBILE_HTML_PREVIEW_SANDBOX.split(' ')).toContain(
@@ -119,16 +98,7 @@ describe('the frame the preview mounts for each answer the shell gives', () => {
     )
   })
 
-  /**
-   * Source takes the frame away on either answer, which is the whole of what this can claim.
-   *
-   * The `html` a Source view shows is not the component's to get wrong: `renderSource` is called
-   * with no argument, so what it renders is the caller's own closure over the artifact
-   * (`MobileSessionFileReader` passes `() => renderSourceText(doc.content)`). Asserting that the
-   * rendered markup equals the artifact would be asserting that this file's own closure returned
-   * what this file put in it, which passes whatever the component does. What the component decides
-   * is whether the rewritten frame is still mounted underneath, and that is what is read here.
-   */
+  // Source toggle must unmount preview on either grant answer; caller’s renderSource closure owns original markup, so testing its own fixture echo would prove nothing.
   it('takes the frame away when Source is showing, on either answer', () => {
     for (const opensLinks of [true, false]) {
       shell.opensLinks = opensLinks

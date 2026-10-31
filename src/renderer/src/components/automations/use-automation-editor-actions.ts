@@ -12,6 +12,7 @@ import type { AutomationsPageDestinationState } from './use-automations-page-des
 import type { AutomationsPageDestinationFormState } from './use-automations-page-destination-form'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 /** Dialog open/edit actions, including host-captured re-reads and project changes. */
 export function useAutomationEditorActions({
@@ -34,13 +35,14 @@ export function useAutomationEditorActions({
     setEditingHostStableKey,
     setDraft,
     setDraftAtOpen,
+    setTargetEdited,
     setCreateOpen,
     draftRef,
     editingAutomationId,
     editingHostStableKey
   } = local
   const { getDefaultTarget, automationDispatchContext, rowRecoveryHost } = destination
-  const { destinationForProject, editHostResolution } = destinationForm
+  const { destinationForProject, editHostResolution, editDestinationControl } = destinationForm
 
   const openCreateDialog = (template?: AutomationTemplate): void => {
     editRequestRef.current += 1
@@ -83,6 +85,7 @@ export function useAutomationEditorActions({
       : baseDraft
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
+    setTargetEdited(false)
     setCreateOpen(true)
   }
 
@@ -116,11 +119,19 @@ export function useAutomationEditorActions({
     const nextDraft = buildAutomationEditDraft(latest)
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
+    setTargetEdited(false)
     setCreateOpen(true)
   }
 
   const handleProjectChange = useCallback(
     (projectId: string): void => {
+      setTargetEdited(true)
+      if (
+        editDestinationControl.recordedProject?.id === projectId &&
+        draftRef.current.projectId === projectId
+      ) {
+        return
+      }
       const currentWorktrees = worktreesByRepo[projectId] ?? []
       const currentDefaultWorktree = getDefaultWorktree(currentWorktrees)
       const selectedEditDestination =
@@ -152,7 +163,7 @@ export function useAutomationEditorActions({
         baseBranch: ''
       }))
       void fetchWorktrees(projectId, worktreeFetchOptions).then(() => {
-        const latestWorktrees = useAppStore.getState().worktreesByRepo[projectId] ?? []
+        const latestWorktrees = selectWorktreesByRepo(useAppStore.getState())[projectId] ?? []
         const latestWorktree = getDefaultWorktree(latestWorktrees)
         if (!latestWorktree) {
           return
@@ -166,6 +177,8 @@ export function useAutomationEditorActions({
     },
     [
       destinationForProject,
+      editDestinationControl.recordedProject,
+      draftRef,
       editingAutomationId,
       editingHostStableKey,
       editHostResolution,
@@ -173,6 +186,7 @@ export function useAutomationEditorActions({
       setEditingHostStableKey,
       setEditingDestination,
       setDraft,
+      setTargetEdited,
       worktreesByRepo
     ]
   )
@@ -184,8 +198,11 @@ export function useAutomationEditorActions({
       setDraft(next)
       if (
         editingAutomationId !== null &&
-        (next.projectId !== current.projectId || next.workspaceId !== current.workspaceId)
+        (next.projectId !== current.projectId ||
+          next.workspaceId !== current.workspaceId ||
+          next.workspaceMode !== current.workspaceMode)
       ) {
+        setTargetEdited(true)
         const target = destinationForProject(next.projectId, editingHostStableKey)
         setEditingDestination(target ? { projectId: next.projectId, destination: target } : null)
         if (target) {
@@ -199,6 +216,7 @@ export function useAutomationEditorActions({
       editingAutomationId,
       editingHostStableKey,
       setDraft,
+      setTargetEdited,
       setEditingDestination,
       setEditingHostStableKey
     ]

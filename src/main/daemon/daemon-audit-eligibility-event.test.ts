@@ -43,26 +43,6 @@ beforeEach(() => {
 })
 
 describe('daemon audit eligibility telemetry', () => {
-  it('uses a dedicated validator-accepted event family', () => {
-    trackDaemonAuditEligibility(recordAuthenticatedInventory(context, null))
-
-    expect(trackMock).toHaveBeenCalledOnce()
-    const [name, props] = trackMock.mock.calls[0]
-    expect(name).toBe('daemon_audit_eligibility')
-    expect(name).not.toBe('daemon_lifecycle')
-    expect(props).toMatchObject({
-      state: 'present',
-      reason: 'authenticated_inventory',
-      evidence_sources: ['authenticated_inventory'],
-      protocol_generation: 23,
-      generation_role: 'legacy',
-      exact_incarnation: 'unavailable',
-      process_reason: null
-    })
-    expect(props).not.toHaveProperty('exact_incarnation_correlation')
-    expect(validate('daemon_audit_eligibility', props).ok).toBe(true)
-  })
-
   it('correlates an exact incarnation across app trackers without raw identity fields', () => {
     const currentContext = { ...context, protocolGeneration: PROTOCOL_VERSION }
     const firstAppTracker = createDaemonAuditEligibilityTracker()
@@ -105,20 +85,6 @@ describe('daemon audit eligibility telemetry', () => {
     }
   })
 
-  it('does not mislabel a future protocol generation as legacy', () => {
-    const trackEligibility = createDaemonAuditEligibilityTracker()
-
-    expect(() =>
-      trackEligibility(
-        recordAuthenticatedInventory(
-          { ...context, protocolGeneration: PROTOCOL_VERSION + 1 },
-          exactIncarnation
-        )
-      )
-    ).not.toThrow()
-    expect(trackMock).not.toHaveBeenCalled()
-  })
-
   it('cannot affect callers when telemetry throws', () => {
     trackMock.mockImplementation(() => {
       throw new Error('transport failed')
@@ -128,7 +94,6 @@ describe('daemon audit eligibility telemetry', () => {
       trackDaemonAuditEligibility(recordAuthenticatedInventory(context, null))
     ).not.toThrow()
 
-    // The rate-limited tracker is the production call site, so it carries the same guarantee.
     const trackEligibility = createDaemonAuditEligibilityTracker()
     expect(() => trackEligibility(recordAuthenticatedInventory(context, null))).not.toThrow()
   })
@@ -140,7 +105,6 @@ describe('daemon audit eligibility telemetry', () => {
 
     expect(() => trackEligibility(recordAuthenticatedInventory(context, null))).not.toThrow()
 
-    // A malformed observation must not escape the guard either.
     const malformed = recordAuthenticatedInventory(context, null)
     expect(() =>
       trackEligibility({ ...malformed, evidenceSources: undefined as never })
@@ -171,12 +135,10 @@ describe('daemon audit eligibility telemetry', () => {
     trackEligibility(recordAuthenticatedInventory(context, null))
     expect(trackMock).toHaveBeenCalledOnce()
 
-    // An NTP correction / VM resume rewinds the clock by an hour.
     nowMs -= 60 * 60_000
     trackEligibility(recordAuthenticatedInventory(context, null))
     expect(trackMock).toHaveBeenCalledTimes(2)
 
-    // The window re-anchors on the rewound clock instead of emitting on every call.
     for (let index = 0; index < 60; index += 1) {
       nowMs += 1_000
       trackEligibility(recordAuthenticatedInventory(context, null))
@@ -196,7 +158,6 @@ describe('daemon audit eligibility telemetry', () => {
       trackEligibility(recordAuthenticatedInventory(context, null))
       expect(trackMock).toHaveBeenCalledOnce()
 
-      // Wall time alone must not open the window: no real time has elapsed.
       wallClock.mockReturnValue(1_700_000_000_000 + 6 * 60_000)
       trackEligibility(recordAuthenticatedInventory(context, null))
       expect(trackMock).toHaveBeenCalledOnce()

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   captureCodexSessionBackfillMarkerGeneration,
   hasCompletedCodexSessionBackfillMarker,
+  markCodexSessionBackfillMarkerNeedsFullScan,
   markCodexSessionBackfillMarkerPending,
   readCodexSessionBackfillBaseline,
   writeCodexSessionBackfillMarker
@@ -58,7 +59,6 @@ function writeFullBaseline(
   )
 }
 
-/** More dates than MAX_PENDING_SCAN_DATES, so the marker gives up on bounding. */
 function overflowingDates(): CodexSessionBackfillDate[] {
   return getCodexSessionBackfillDatesBetween(
     new Date(Date.UTC(2026, 6, 1)),
@@ -192,7 +192,6 @@ describe('codex session backfill marker', () => {
 
     writeFullBaseline(WINDOWS_ROOT)
 
-    // The walk looked at every date, so nothing is left to revisit.
     expect(readMarker()).toMatchObject({ pendingScanDates: [] })
   })
 
@@ -227,7 +226,6 @@ describe('codex session backfill marker', () => {
       coveredScanDates: []
     })
 
-    // The walk may have passed those dates before their rollouts existed.
     expect(readMarker()).toMatchObject({ needsFullScan: true })
   })
 
@@ -246,5 +244,25 @@ describe('codex session backfill marker', () => {
 
     expect(readMarker()).toMatchObject({ coverage: 'bounded', pendingScanDates: [TODAY] })
     expect(hasCompletedCodexSessionBackfillMarker(markerPath, WINDOWS_ROOT)).toBe(false)
+  })
+
+  it('a full-scan demand outlives later launches and only a full pass clears it', () => {
+    writeFullBaseline(WINDOWS_ROOT)
+    markCodexSessionBackfillMarkerNeedsFullScan(markerPath)
+
+    expect(readCodexSessionBackfillBaseline(markerPath, WINDOWS_ROOT)).toBeNull()
+    expect(markCodexSessionBackfillMarkerPending(markerPath, WINDOWS_ROOT, [LAUNCH_DATE])).toBe(
+      true
+    )
+    writeFullBaseline(WINDOWS_ROOT)
+    expect(readCodexSessionBackfillBaseline(markerPath, WINDOWS_ROOT)).toEqual({
+      pendingScanDates: []
+    })
+  })
+
+  it('a full-scan demand without a marker writes nothing', () => {
+    markCodexSessionBackfillMarkerNeedsFullScan(markerPath)
+
+    expect(() => readMarker()).toThrow()
   })
 })

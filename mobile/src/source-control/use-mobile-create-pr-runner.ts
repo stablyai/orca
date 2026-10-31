@@ -1,6 +1,7 @@
-import { useCallback, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError } from '../platform/haptics'
+import { translate } from '../i18n/mobile-i18n'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
 import {
@@ -31,6 +32,7 @@ type Params = {
   mountedRef: MutableRefObject<boolean>
   runGitWorkflow: RunGitWorkflow
   loadStatus: LoadStatus
+  cancelGenerateCommitMessage: () => void
   setActionError: (next: string | null) => void
   setCommitMessage: (next: string) => void
   setShowActionSheet: (next: boolean) => void
@@ -49,6 +51,7 @@ export function useMobileCreatePrRunner({
   mountedRef,
   runGitWorkflow,
   loadStatus,
+  cancelGenerateCommitMessage,
   setActionError,
   setCommitMessage,
   setShowActionSheet,
@@ -56,13 +59,22 @@ export function useMobileCreatePrRunner({
   setCreatedPrWarning,
   recordCommitFailure
 }: Params) {
+  const commitMessageRef = useRef(commitMessage)
+  useEffect(() => {
+    commitMessageRef.current = commitMessage
+  }, [commitMessage])
   return useCallback(
     async (pushFirst: boolean) => {
       setShowActionSheet(false)
       const branch = status?.branch
       if (!client || !branch) {
         triggerError()
-        setActionError('Check out a branch before creating a pull request.')
+        setActionError(
+          translate(
+            'sourceControl.useMobileCreatePrRunner.branchRequired',
+            'Check out a branch before creating a pull request.'
+          )
+        )
         return
       }
       const created: { current: MobileHostedReviewCreateIntentRunOutcome | null } = {
@@ -70,11 +82,14 @@ export function useMobileCreatePrRunner({
       }
       let progress: MobileHostedReviewCreateIntentProgress | null = null
       const ran = await runGitWorkflow(pushFirst ? 'push-create-pr' : 'create-pr', async () => {
+        // Committing the current message supersedes any generation still in flight.
+        cancelGenerateCommitMessage()
         created.current = await runMobileHostedReviewCreateIntent(client, worktreeId, {
           branch,
           title: branchLabel,
           status,
           commitMessage,
+          readCommitMessage: () => commitMessageRef.current,
           onProgress: (nextProgress: MobileHostedReviewCreateIntentProgress) => {
             progress = nextProgress
             setActionError(mobileHostedReviewCreateIntentProgressMessage(nextProgress))
@@ -112,6 +127,7 @@ export function useMobileCreatePrRunner({
     },
     [
       branchLabel,
+      cancelGenerateCommitMessage,
       client,
       commitMessage,
       loadStatus,

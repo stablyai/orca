@@ -1,6 +1,4 @@
-// Mode primitives for daemon-owned on-disk state. Terminal history persists verbatim screen and
-// scrollback (checkpoint.json holds snapshotAnsi + scrollbackAnsi) and the runtime dir holds the
-// daemon's auth token, so neither may be left at whatever umask applies to other local users.
+// History contains terminal content and runtime files contain auth tokens; pin modes instead of trusting umask.
 
 import { chmodSync, existsSync, mkdirSync } from 'node:fs'
 
@@ -12,7 +10,7 @@ export function supportsPosixFileModes(): boolean {
   return process.platform !== 'win32'
 }
 
-/** Best-effort repair for a path created before modes were pinned (or by an older daemon). */
+/** Repair paths created by older daemons without making writes depend on chmod. */
 export function tightenPathMode(path: string, mode: number): void {
   if (!supportsPosixFileModes()) {
     return
@@ -26,7 +24,7 @@ export function tightenPathMode(path: string, mode: number): void {
   }
 }
 
-/** mkdir with the private mode, plus a chmod repair for a directory that already existed. */
+// mkdir mode does not repair a directory that already exists.
 export function ensurePrivateDir(dir: string): void {
   mkdirSync(dir, { recursive: true, mode: PRIVATE_DIR_MODE })
   tightenPathMode(dir, PRIVATE_DIR_MODE)
