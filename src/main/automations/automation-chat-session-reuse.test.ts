@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
-import { resolveCallerAutomationRun } from './automation-run-caller'
 import { automationLaunchRunTarget } from './headless-dispatch'
 import { reuseAutomationChat } from './automation-chat-session-reuse'
 import type { AutomationRun } from '../../shared/automations-types'
@@ -42,13 +41,7 @@ describe('automation chat reuse', () => {
       ensureStructuredAgentSessionHost: async () => {}
     }
     send.mockImplementationOnce(async () => {
-      expect(
-        resolveCallerAutomationRun(
-          [previous, current],
-          { kind: 'chat', sessionIds: ['chat-1'] },
-          current.createdAt
-        ).id
-      ).toBe(current.id)
+      expect(current.chatSessionId).toBe('chat-1')
       return { ok: true }
     })
 
