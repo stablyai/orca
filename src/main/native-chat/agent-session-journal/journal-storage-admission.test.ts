@@ -7,7 +7,8 @@ import { z } from 'zod'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemIdentity,
-  type AgentSessionJournalIdentity
+  type AgentSessionJournalIdentity,
+  type AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import {
@@ -21,7 +22,7 @@ import {
 } from './journal-host-database-test-support'
 import { admitOutcomeFormat1 } from './journal-outcome-format-1'
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
-import type { storedFailureFact } from './journal-storage-schema'
+import type { storedFailureFact, storedProviderHandle } from './journal-storage-schema'
 import type { UndeclaredStorageKeys } from './journal-storage-strict'
 import { restoreJournal } from './journal-open'
 import type { JournalReducerState } from './journal-reducer'
@@ -259,5 +260,15 @@ it('compiles only when storage declares every key a persisted type holds, at any
   type Later = AgentSessionFailureFact & { retry?: { later?: number } }
   expect(declared<UndeclaredStorageKeys<AgentSessionFailureFact, Stored>>()).toBeUndefined()
   // @ts-expect-error `retry.later` is a key the stored failure fact does not declare
+  expect(declared<UndeclaredStorageKeys<Later, Stored>>()).toBeUndefined()
+})
+
+it('reads an open string such as an agent type as a value, and still refuses a key beside it', () => {
+  type Stored = z.output<typeof storedProviderHandle>
+  type Later = AgentSessionJournalProviderHandle & { host?: string }
+  expect(
+    declared<UndeclaredStorageKeys<AgentSessionJournalProviderHandle, Stored>>()
+  ).toBeUndefined()
+  // @ts-expect-error `host` is a key the stored provider handle does not declare
   expect(declared<UndeclaredStorageKeys<Later, Stored>>()).toBeUndefined()
 })
