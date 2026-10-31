@@ -18,7 +18,7 @@ import {
 } from './session-tabs-inventory'
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
-import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
+import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
 import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
@@ -173,7 +173,7 @@ export const SESSION_TAB_METHODS = [
         }
       }
       let currentSnapshot: Awaited<ReturnType<typeof runtime.listMobileSessionTabs>> | undefined
-      const withProofDelta = createSessionTabsRetirementProofDelta(clientCapabilities)
+      const withProofDelta = createSessionTabsStreamDelta(clientCapabilities)
       const tabDelta = createSessionTabsTabDeltaEncoder(clientCapabilities)
       const project = (
         snapshot: NonNullable<typeof currentSnapshot>,

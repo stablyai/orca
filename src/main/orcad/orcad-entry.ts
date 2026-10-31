@@ -306,6 +306,7 @@ async function startOrcadRuntime(
     webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
     ...orcadWsPortOptions(options.port)
   })
+  runtime.setAgentSenderPeerKey(() => rpc.getE2EEPublicKey())
   // Stop RPC before cleanup can tear down writers and runtime state.
   registerCleanup(() => rpc.stop())
   await timed('rpc', () => rpc.start())

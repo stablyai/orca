@@ -16,6 +16,9 @@ import {
 } from '../../../../shared/agent-session/agent-message-presentation'
 
 const EMPTY_VIEW: AgentMessageSenderView = Object.freeze({})
+let rowBuilds = 0
+/** Sidebar row sets the card sources built; a leased source reuses its rows across store writes. */
+export const agentMessageSenderRowBuildsForTest = () => rowBuilds
 export type SenderLocation = {
   host: string
   worktreeId: string
@@ -56,6 +59,7 @@ function createSource(worktreeId: string) {
           orchestration: selectRuntimeAgentOrchestrationForWorktree(state, worktreeId)
         })
         if (rows !== next) {
+          rowBuilds++
           rows = next
           const indexed = new Map<string, AgentMessageSenderView>()
           for (const row of next) {
@@ -105,24 +109,45 @@ function readSource(state: AppState, location: SenderLocation): Source {
   return source
 }
 
-/** Share the sidebar projection before notifying cards; only subscription leases retain a source. */
-export function useAgentMessageSenderSource(locate: LocateSender): AgentMessageSenderView {
+/** The sidebar row at a located sender, read through the same per-worktree projection cards share. */
+export function readAgentMessageSenderRow(
+  state: AppState,
+  location: SenderLocation
+): AgentMessageSenderView | undefined {
+  return readSource(state, location).read(state, location.paneKey)
+}
+
+/** Share the sidebar projection before notifying cards; only subscription leases retain a source.
+ *  `savedAgent`: the kind written on the message, drawn ahead of any live row's guess.
+ *  `leaseLocate`: the rows the card reads to decide, also where it then draws none. */
+export function useAgentMessageSenderSource(
+  locate: LocateSender,
+  savedAgent?: AgentMessageSenderView['agentType'],
+  leaseLocate: LocateSender = locate
+): AgentMessageSenderView {
   const selected = useMemo(() => {
     let previous = EMPTY_VIEW
     return (state: AppState) => {
       const location = locate(state)
-      const next = location
-        ? agentMessageSenderView(
-            readSource(state, location).read(state, location.paneKey),
-            location.agentType
-          )
-        : EMPTY_VIEW
+      const next = agentMessageSenderView(
+        location ? readSource(state, location).read(state, location.paneKey) : undefined,
+        savedAgent ?? location?.agentType
+      )
       if (!equalView(previous, next)) {
         previous = next
       }
       return previous
     }
-  }, [locate])
+  }, [locate, savedAgent])
+  return useLeasedSenderSelector(leaseLocate, selected)
+}
+
+/** A card selector that may read the located sender's sidebar row: it leases that row's source as
+ *  the avatar does, so a store write reuses the projection instead of rebuilding it per read. */
+export function useLeasedSenderSelector<T>(
+  locate: LocateSender,
+  select: (state: AppState) => T
+): T {
   const subscribe = useCallback(
     (notify: () => void) => {
       let lease: { key: string; source: Source } | undefined
@@ -147,7 +172,7 @@ export function useAgentMessageSenderSource(locate: LocateSender): AgentMessageS
             lease = { key, source }
           }
         }
-        return selected(state)
+        return select(state)
       }
       let value = update()
       const unsubscribe = useAppStore.subscribe(() => {
@@ -162,8 +187,8 @@ export function useAgentMessageSenderSource(locate: LocateSender): AgentMessageS
         release()
       }
     },
-    [locate, selected]
+    [locate, select]
   )
-  const getSnapshot = useCallback(() => selected(useAppStore.getState()), [selected])
+  const getSnapshot = useCallback(() => select(useAppStore.getState()), [select])
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }

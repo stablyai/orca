@@ -16,6 +16,21 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     ...args: Parameters<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
   ): ReturnType<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
 
+  /** The RPC server owns the pairing key clients authenticate this host by. */
+  setAgentSenderPeerKey(read: () => string | null): void {
+    this.agentProjections.setPeerKey(read)
+  }
+
+  /** Republish only worktrees whose sender scope differs from the one their last frame carried. */
+  refreshAgentSenderAssociations(): void {
+    const changed = this.agentProjections.senders.changedScopes(
+      this.mobileSessionTabsByWorktree.keys()
+    )
+    for (const worktreeId of changed) {
+      this.touchMobileSessionTabsForWorktree(worktreeId)
+    }
+  }
+
   /** Bump snapshotVersion before emitting (coalesced unless immediate); clients discard re-emits at the same version. */
   touchMobileSessionTabsForWorktree(
     worktreeId: string,

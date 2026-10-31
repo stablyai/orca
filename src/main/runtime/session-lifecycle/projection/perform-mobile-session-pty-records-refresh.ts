@@ -9,7 +9,10 @@ import { isAgentLaunchRunningIn } from '../../../agent-launch/agent-launch-pane-
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/runtime-types'
 import type { RuntimeMobileSessionTabActivationResult } from '../../../../shared/runtime-session-contracts'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { includeTargetResolvedWorktree } from '../../runtime-worktree-path-identity'
@@ -21,6 +24,10 @@ import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleep
 
 import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
 export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
+  protected abstract toMobileSessionTabsResult(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsResult
+
   protected abstract buildResolvedWorktreeFromId(
     ...args: Parameters<WorkspaceSelectors['buildResolvedWorktreeFromId']>
   ): ReturnType<WorkspaceSelectors['buildResolvedWorktreeFromId']>

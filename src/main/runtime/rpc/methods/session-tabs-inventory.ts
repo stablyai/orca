@@ -9,7 +9,7 @@ import type { RpcContext } from '../core'
 import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
 import { projectSessionTabFileHosts } from './session-tab-file-host-projection'
-import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
+import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { createSessionTabsTabDeltaEncoder } from '../../../../shared/session-tabs-tab-delta'
 
@@ -31,9 +31,15 @@ export function projectSessionTabsForClient(
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
 ): RuntimeMobileSessionTabsResult {
+  // Phones draw no agent message cards, so they never pay for sender identity.
+  const { agentSenderAssociations: _desktopOnly, ...phone } = snapshot
   return projectSessionTabBrowserPlacements(
     projectSessionTabFileHosts(
-      projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+      projectSessionTabAgentStatus(
+        clientKind === 'mobile' ? phone : snapshot,
+        clientKind,
+        clientCapabilities
+      ),
       clientKind
     ),
     clientCapabilities
@@ -87,7 +93,7 @@ export async function subscribeSessionTabsInventory(
   const deliveredChangeSequenceByWorktree = new Map<string, number>()
   let censusChangeSequence: number | undefined
   let censusInvalidated = false
-  const withProofDelta = createSessionTabsRetirementProofDelta(context.clientCapabilities)
+  const withProofDelta = createSessionTabsStreamDelta(context.clientCapabilities)
   const tabDelta = createSessionTabsTabDeltaEncoder(context.clientCapabilities)
   const canonicalSnapshotsByWorktree = new Map<string, SessionTabsChange>()
   const projectChange = (snapshot: SessionTabsChange): SessionTabsChange =>

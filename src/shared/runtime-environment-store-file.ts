@@ -151,4 +151,11 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
   }
   // Without fsync before the rename, a crash can publish the name over NUL-filled data (#18766).
   writeSecureFile(path, serialized, { durable: true })
+  environmentStoreWrites++
+}
+
+let environmentStoreWrites = 0
+/** Registry writes this process made; what is derived from pairings is stale only after one. */
+export function environmentStoreWriteCount(): number {
+  return environmentStoreWrites
 }

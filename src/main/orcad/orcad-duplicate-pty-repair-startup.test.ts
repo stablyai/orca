@@ -164,6 +164,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     }
     async closeNotificationDismissals() {}
     syncWindowGraph() {}
+    setAgentSenderPeerKey() {}
   }
 }))
 vi.mock('../runtime/runtime-rpc', () => ({

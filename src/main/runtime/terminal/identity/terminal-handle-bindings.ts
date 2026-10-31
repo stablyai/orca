@@ -6,6 +6,7 @@ import type {
 } from '../../runtime-terminal-state-records'
 import { randomUUID } from 'node:crypto'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { TerminalHandleAccess } from '../../runtime-agent-sender-associations'
 
 export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuildPtyTerminalSummary {
   protected abstract getLeafKey(tabId: string, leafId: string): string
@@ -95,6 +96,60 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     return preAllocated
   }
 
+  protected terminalHandleAccess(): TerminalHandleAccess {
+    return {
+      issueLeafHandle: (leaf) => this.issueHandle(leaf),
+      issuePtyHandle: (pty) => this.issuePtyHandle(pty),
+      readLeafHandle: (leaf) => this.peekLeafHandle(leaf),
+      readPtyHandles: () => this.peekPtyHandles()
+    }
+  }
+
+  /** The handle this leaf's terminal already holds, as issueHandle would return it, without
+   *  issuing, adopting or rebinding one: readers must never change terminal identity. */
+  protected peekLeafHandle(leaf: RuntimeLeafRecord): string | null {
+    const existing = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+    const record = existing ? this.handles.get(existing) : undefined
+    if (
+      existing &&
+      record?.rendererGraphEpoch === this.rendererGraphEpoch &&
+      record.ptyId === leaf.ptyId &&
+      record.ptyGeneration === leaf.ptyGeneration
+    ) {
+      return existing
+    }
+    if (!leaf.ptyId) {
+      return null
+    }
+    const preAllocated = this.handleByPtyId.get(leaf.ptyId)
+    if (preAllocated) {
+      return preAllocated
+    }
+    const retained = this.handleByPtyIncarnation.get(leaf.ptyId)
+    const incarnationId = this.ptysById.get(leaf.ptyId)?.incarnationId ?? null
+    return retained?.incarnationId === incarnationId ? retained.handle : null
+  }
+
+  /** For one read of many terminals: the handle each terminal with no leaf already holds, as
+   *  issuePtyHandle would return it, without issuing or restamping one. The record fallback is
+   *  indexed once per read, not scanned once per terminal. */
+  protected peekPtyHandles(): (pty: RuntimePtyWorktreeRecord) => string | null {
+    let records: Map<string, string> | undefined
+    return (pty) => {
+      const retained = this.handleByPtyIncarnation.get(pty.ptyId)
+      if (retained?.incarnationId === pty.incarnationId) {
+        return retained.handle
+      }
+      // Issuing reuses either one, record or not (a start-time handle outlives cleared records).
+      const direct = this.handleByPtyId.get(pty.ptyId)
+      if (direct) {
+        return direct
+      }
+      records ??= this.ptyRecordHandles()
+      return records.get(pty.ptyId) ?? null
+    }
+  }
+
   protected issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
     const handle = this.issuePtyHandleRecord(pty)
     // An unbound terminal retains its issued pane stamp for recovery, including after replacement.
@@ -142,6 +197,22 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     })
     this.setPtyHandle(pty.ptyId, handle)
     return handle
+  }
+
+  /** findHandleForPtyRecord for every terminal at once: each one's first matching record. */
+  private ptyRecordHandles(): Map<string, string> {
+    const handles = new Map<string, string>()
+    for (const [handle, record] of this.handles) {
+      if (
+        record.runtimeId === this.runtimeId &&
+        record.ptyId &&
+        record.tabId.startsWith('pty:') &&
+        !handles.has(record.ptyId)
+      ) {
+        handles.set(record.ptyId, handle)
+      }
+    }
+    return handles
   }
 
   protected findHandleForPtyRecord(ptyId: string): string | null {

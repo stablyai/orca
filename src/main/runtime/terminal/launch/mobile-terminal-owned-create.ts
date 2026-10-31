@@ -281,7 +281,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     }
     // Store adds retirement proofs; emit that snapshot because version-deduping subscribers would miss proofs from a pre-store frame.
     const stored = this.storeMobileSessionSnapshot(worktreeId, next)
-    const result = this.toMobileSessionTabsResult(stored)
+    const result = this.toMobileSessionTabsFrame(stored)
     const changeSequence = ++this.mobileSessionTabsChangeSequence
     for (const subscription of this.mobileSessionTabListeners) {
       subscription.listener(

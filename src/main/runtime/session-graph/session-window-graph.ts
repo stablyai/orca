@@ -323,6 +323,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       )
     return {
       ...this.getStatus(),
+      ...this.agentProjections.senders.buildForGraph(graph.agentSenderBase),
       ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
       ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {}),
       ...(mobileSessionResyncWorktrees.size > 0
