@@ -64,6 +64,7 @@ export function createBridgeClientShellSession(args: {
           ? { ...readShellSession(message), safeAreaInsets }
           : {
               ...update,
+              inboundMessageBytes: message.inboundMessageBytes,
               route: message.route ?? null,
               safeAreaInsets,
               keyboardInset,

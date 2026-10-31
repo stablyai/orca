@@ -8,7 +8,7 @@ afterEach(cleanup)
 
 it('opens an elicitation URL only on click, without answering the request', () => {
   const onChoose = vi.fn()
-  const onLinkClick = vi.fn()
+  const onOpenUrl = vi.fn()
   render(
     <NativeChatApprovalCard
       approval={{
@@ -22,12 +22,12 @@ it('opens an elicitation URL only on click, without answering the request', () =
         ]
       }}
       onChoose={onChoose}
-      onLinkClick={onLinkClick}
+      onOpenUrl={onOpenUrl}
     />
   )
-  expect(onLinkClick).not.toHaveBeenCalled()
+  expect(onOpenUrl).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Open link' }))
-  expect(onLinkClick).toHaveBeenCalledWith(expect.anything(), 'https://example.com/connect')
+  expect(onOpenUrl).toHaveBeenCalledWith('https://example.com/connect')
   expect(onChoose).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
   expect(onChoose).toHaveBeenCalledWith('accept')

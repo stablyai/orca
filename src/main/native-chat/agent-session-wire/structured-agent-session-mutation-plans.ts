@@ -291,6 +291,7 @@ export function promptPlan(
       itemId: params.itemId,
       expectedRevision: params.expectedRevision,
       optionId: params.optionId,
+      content: params.content,
       answers: params.answers
     },
     // Retain the resolved or previously recorded prompt answer in the receipt.

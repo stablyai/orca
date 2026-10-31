@@ -1,3 +1,5 @@
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { codexPromptIdentity } from './codex-structured-prompt-items'
 import {
   acquireReadyCodexForTest,
   THREAD_ID,
@@ -26,10 +28,10 @@ describe('CodexStructuredSessionAdapter prompts', () => {
     const adapter = await acquired(codex, {}, events)
 
     askApproval(codex)
-    adapter.bindPromptItemId('session-1', 'codex:thread-abc:turn-1:3', 'codex-item-1')
+    adapter.bindPromptItemId('session-1', promptId('codex-item-1'), 'codex-item-1')
     await adapter.answerPrompt({
       sessionId: 'session-1',
-      itemId: 'codex:thread-abc:turn-1:3',
+      itemId: promptId('codex-item-1'),
       kind: 'approval',
       response: { kind: 'option', optionId: 'accept' },
       fence: 7,
@@ -42,7 +44,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
     await expect(
       adapter.answerPrompt({
         sessionId: 'session-1',
-        itemId: 'codex:thread-abc:turn-1:3',
+        itemId: promptId('codex-item-1'),
         kind: 'approval',
         response: { kind: 'option', optionId: 'decline' },
         fence: 7,
@@ -161,11 +163,11 @@ describe('CodexStructuredSessionAdapter prompts', () => {
 
     ask(11, 'approval-a')
     ask(12, 'approval-b')
-    adapter.bindPromptItemId('session-1', 'journal-a', 'approval-a')
-    adapter.bindPromptItemId('session-1', 'journal-b', 'approval-b')
+    adapter.bindPromptItemId('session-1', promptId('approval-a'), 'approval-a')
+    adapter.bindPromptItemId('session-1', promptId('approval-b'), 'approval-b')
     for (const [itemId, optionId] of [
-      ['journal-b', 'decline'],
-      ['journal-a', 'accept']
+      [promptId('approval-b'), 'decline'],
+      [promptId('approval-a'), 'accept']
     ]) {
       await adapter.answerPrompt({
         sessionId: 'session-1',
@@ -273,11 +275,12 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       if (!event || event.type !== 'prompt') {
         throw new Error('MCP approval missing from journal')
       }
-      adapter.bindPromptItemId('session-1', 'journal-mcp', event.codexItemId)
+      const mcpItemId = promptId(event.promptKey)
+      adapter.bindPromptItemId('session-1', mcpItemId, event.promptKey)
       const commit = vi.fn(async () => undefined)
       const answer = {
         sessionId: 'session-1',
-        itemId: 'journal-mcp',
+        itemId: mcpItemId,
         kind: 'approval' as const,
         response: { kind: 'option' as const, optionId },
         fence: 7,
@@ -338,3 +341,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
     ).rejects.toThrow('no longer waiting on codex-item-gone')
   })
 })
+
+function promptId(promptKey: string): string {
+  return agentJournalItemKey(codexPromptIdentity({ threadId: THREAD_ID, promptKey }))
+}

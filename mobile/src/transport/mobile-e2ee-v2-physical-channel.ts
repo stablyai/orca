@@ -1,4 +1,8 @@
 import {
+  mobileE2eeOutboundMemory,
+  registerMobileE2eeSocket
+} from './mobile-e2ee-outbound-admission'
+import {
   createWsOutboundBackpressureQueue,
   type WsOutboundBackpressureQueue
 } from '../../../src/shared/ws-outbound-backpressure-queue'
@@ -23,9 +27,11 @@ export type MobileE2EEV2Socket = {
   readonly readyState: number
   readonly bufferedAmount: number
   send: (frame: string | Uint8Array) => void
+  addEventListener?: (type: 'close', listener: () => void, options?: { once: boolean }) => void
 }
 
 export class MobileE2EEV2PhysicalChannel {
+  private readonly socketMemory: ReturnType<typeof registerMobileE2eeSocket>
   private state: ChannelState = 'awaiting-ready'
   private generation = 0
   private readonly inbound: WsInboundMessageQueue
@@ -44,6 +50,7 @@ export class MobileE2EEV2PhysicalChannel {
       onError: (error: Error) => void
     }
   ) {
+    this.socketMemory = registerMobileE2eeSocket(args.socket)
     this.inbound = new WsInboundMessageQueue(
       (raw) => this.processMessage(raw, this.generation),
       (error) => args.onError(error instanceof Error ? error : new Error(String(error)))
@@ -59,9 +66,11 @@ export class MobileE2EEV2PhysicalChannel {
         )
       },
       byteLengthOf: (item) =>
-        (item.kind === 'text'
-          ? new TextEncoder().encode(item.plaintext).length
-          : item.plaintext.length) + 82,
+        item.kind === 'text'
+          ? 4 * Math.ceil((new TextEncoder().encode(item.plaintext).length + 82) / 3)
+          : item.plaintext.length + 82,
+      canSend: (bytes) => this.socketMemory.canSend(bytes),
+      claimQueuedBytes: (bytes) => mobileE2eeOutboundMemory.claimQueuedBytes(3 * bytes),
       getBufferedAmount: () => args.socket.bufferedAmount,
       isWritable: () => args.socket.readyState === args.socket.OPEN,
       onOverflow: () => args.onError(new Error('E2EE v2 outbound buffer overflow'))
@@ -88,6 +97,7 @@ export class MobileE2EEV2PhysicalChannel {
     this.generation++
     this.inbound.dispose()
     this.outboundQueue.dispose()
+    this.socketMemory.dispose()
   }
 
   private async processMessage(raw: unknown, generation: number): Promise<void> {
@@ -168,8 +178,7 @@ export class MobileE2EEV2PhysicalChannel {
     if (this.state !== 'ready') {
       return false
     }
-    this.outboundQueue.enqueue(item)
-    return true
+    return this.outboundQueue.enqueue(item)
   }
 }
 

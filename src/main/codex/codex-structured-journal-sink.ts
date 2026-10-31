@@ -159,6 +159,26 @@ export function admitCodexLifecycleItems(
   if (items.length === 0) {
     return { accepted: false, reason: 'untranslated' }
   }
+  if (sink.tryAppendTransition) {
+    const mutations = items.map((item) =>
+      journalLifecycleItemMutation(attribution, item.identity, item.body)
+    )
+    return criticalAdmission(
+      sink.tryAppendTransition({
+        steps: [
+          {
+            kind: 'settlement',
+            settlementId,
+            reservedBytes:
+              Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512,
+            resolve: () => mutations
+          }
+        ],
+        lifecycle: true,
+        publish: true
+      })
+    )
+  }
   if (sink.tryAppendLifecycleBatch) {
     const admission = criticalAdmission(
       sink.tryAppendLifecycleBatch(

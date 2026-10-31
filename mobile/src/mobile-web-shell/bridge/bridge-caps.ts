@@ -155,13 +155,17 @@ function inspectDocument(root: unknown): DocumentRefusal | null {
 
 // Share the receiver’s size predicate so senders refuse early instead of posting frames that get dropped without reply.
 // Code-unit length is a cheap safe rejection: each unit encodes to at least one UTF-8 byte; byte length decides the rest.
-export function isBridgeFrameWithinCap(raw: string): boolean {
-  return raw.length <= BRIDGE_MAX_MESSAGE_BYTES && utf8ByteLength(raw) <= BRIDGE_MAX_MESSAGE_BYTES
+export function isBridgeFrameWithinCap(raw: string, maxBytes = BRIDGE_MAX_MESSAGE_BYTES): boolean {
+  return raw.length <= maxBytes && utf8ByteLength(raw) <= maxBytes
 }
 
 // Require an explicit direction because only page-to-shell frames receive document limits.
-export function parseBridgeMessage(raw: string, direction: BridgeDirection): BridgeRead<unknown> {
-  if (!isBridgeFrameWithinCap(raw)) {
+export function parseBridgeMessage(
+  raw: string,
+  direction: BridgeDirection,
+  maxBytes = BRIDGE_MAX_MESSAGE_BYTES
+): BridgeRead<unknown> {
+  if (!isBridgeFrameWithinCap(raw, maxBytes)) {
     return { ok: false, refusal: 'oversized' }
   }
   let parsed: unknown

@@ -30,10 +30,24 @@ type ProcessRequestAdmission = {
 }
 
 const processRequestAdmissions = new Set<ProcessRequestAdmission>()
+let processRetainedBytes = 0
+const releaseListeners = new Set<() => void>()
+export function subscribeRemoteRuntimeAdmissionRelease(listener: () => void): () => void {
+  releaseListeners.add(listener)
+  return () => {
+    releaseListeners.delete(listener)
+  }
+}
+function admissionReleased(): void {
+  for (const listener of releaseListeners) {
+    queueMicrotask(listener)
+  }
+}
 
 export function prepareRemoteRuntimeRequest(
-  pendingRequests: ReadonlyMap<string, PendingPreparedRequest>,
-  serialize: () => string
+  pendingRequests: ReadonlyMap<unknown, PendingPreparedRequest>,
+  serialize: () => string,
+  retainedBytesOf: (serialized: string) => number = retainedRemoteRuntimeJsonStringBytes
 ): RemoteRuntimePreparedRequest {
   if (
     pendingRequests.size >= REMOTE_RUNTIME_MAX_PENDING_REQUESTS ||
@@ -42,7 +56,7 @@ export function prepareRemoteRuntimeRequest(
     throw remoteRuntimeRequestBusyError()
   }
   const serializedRequest = serialize()
-  const retainedBytes = retainedRemoteRuntimeJsonStringBytes(serializedRequest)
+  const retainedBytes = retainedBytesOf(serializedRequest)
   let alreadyRetainedBytes = 0
   for (const pending of pendingRequests.values()) {
     alreadyRetainedBytes += pending.preparedRequest?.retainedBytes ?? 0
@@ -82,11 +96,7 @@ export function getRemoteRuntimeRequestAdmissionEvidence(): {
   pendingRequestCount: number
   retainedBytes: number
 } {
-  let retainedBytes = 0
-  for (const admission of processRequestAdmissions) {
-    retainedBytes += admission.retainedBytes
-  }
-  return { pendingRequestCount: processRequestAdmissions.size, retainedBytes }
+  return { pendingRequestCount: processRequestAdmissions.size, retainedBytes: processRetainedBytes }
 }
 
 export function toRemoteRuntimeRequestError(error: unknown): Error {
@@ -103,21 +113,46 @@ function remoteRuntimeRequestBusyError(): RemoteRuntimeClientError {
   )
 }
 
-function reserveProcessRequestAdmission(retainedBytes: number): (() => void) | null {
-  let alreadyRetainedBytes = 0
-  for (const admission of processRequestAdmissions) {
-    alreadyRetainedBytes += admission.retainedBytes
-  }
+export function reserveRemoteRuntimeRetainedBytes(
+  retainedBytes: number
+): { resize: (bytes: number) => boolean; release: () => void } | null {
   if (
+    !Number.isSafeInteger(retainedBytes) ||
+    retainedBytes < 0 ||
     processRequestAdmissions.size >= REMOTE_RUNTIME_MAX_PROCESS_PENDING_REQUESTS ||
-    retainedBytes > REMOTE_RUNTIME_MAX_PROCESS_PENDING_RPC_BYTES - alreadyRetainedBytes
+    retainedBytes > REMOTE_RUNTIME_MAX_PROCESS_PENDING_RPC_BYTES - processRetainedBytes
   ) {
     return null
   }
   const admission = { retainedBytes }
   processRequestAdmissions.add(admission)
-  return () => {
-    admission.retainedBytes = 0
-    processRequestAdmissions.delete(admission)
+  processRetainedBytes += retainedBytes
+  return {
+    resize(bytes) {
+      if (!processRequestAdmissions.has(admission) || !Number.isSafeInteger(bytes) || bytes < 0) {
+        return false
+      }
+      const others = processRetainedBytes - admission.retainedBytes
+      if (bytes > REMOTE_RUNTIME_MAX_PROCESS_PENDING_RPC_BYTES - others) {
+        return false
+      }
+      const released = bytes < admission.retainedBytes
+      processRetainedBytes += bytes - admission.retainedBytes
+      admission.retainedBytes = bytes
+      if (released) {
+        admissionReleased()
+      }
+      return true
+    },
+    release() {
+      if (processRequestAdmissions.delete(admission)) {
+        processRetainedBytes -= admission.retainedBytes
+        admission.retainedBytes = 0
+        admissionReleased()
+      }
+    }
   }
+}
+function reserveProcessRequestAdmission(retainedBytes: number): (() => void) | null {
+  return reserveRemoteRuntimeRetainedBytes(retainedBytes)?.release ?? null
 }

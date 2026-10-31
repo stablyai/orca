@@ -1,3 +1,4 @@
+import type { MobilePermissionResponse } from './native-chat/input/mobile-native-chat-permission'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useCallback, useMemo } from 'react'
 import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat/input/native-chat-task-list-history'
@@ -139,7 +140,7 @@ type ChatViewProps = {
   onAnswerQuestion?: (text: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
   permission?: MobileChatPermission | null
   promptKey?: string | null
-  onRespondPermission?: (send: string) => Promise<boolean>
+  onRespondPermission?: MobilePermissionResponse
   onOpenFile?: (relativePath: string) => void
   keyboardInset?: number
 }

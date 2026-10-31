@@ -110,7 +110,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   function sendFrame(frame: BridgeClientMessage): 'sent' | 'oversized' | 'port-failed' {
     try {
       const json = JSON.stringify(frame)
-      if (!isBridgeFrameWithinCap(json)) {
+      if (!isBridgeFrameWithinCap(json, shellSession.current()?.inboundMessageBytes)) {
         // Count UTF-8 bytes like Swift utf8.count and Kotlin UTF_8 size; JS code units undercount non-ASCII requests.
         report({ kind: 'send-oversized', bytes: utf8ByteLength(json) })
         return 'oversized'
@@ -229,7 +229,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     return new Promise<RpcResponse>((resolve, reject) => {
       const frameOptions = readBridgeRequestFrameOptions(requestOptions, hasGrant)
       const id = nextId()
-      requests.open(id, { resolve, reject })
+      requests.open(id, { resolve, reject }, requestOptions?.timeoutMs ?? 30_000)
       const outcome = sendFrame({
         v: BRIDGE_PROTOCOL_VERSION,
         type: 'request',
@@ -315,6 +315,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     getLastInboundAt: () => snapshot().lastInboundAt,
     // Clients without migration generation use a constant zero; native screen readers still require a number.
     getGeneration: () => snapshot().generation ?? 0,
+    getRequestByteCapacity: () => shellSession.current()?.inboundMessageBytes ?? 655360,
     carriesRpcEnvelope: () => hasGrant(BRIDGE_RPC_ENVELOPE_GRANT),
     // Allow listener registration before init so providers can observe the first state change; it reads no unprimed value.
     onStateChange: (listener) => cache.onStateChange(listener),

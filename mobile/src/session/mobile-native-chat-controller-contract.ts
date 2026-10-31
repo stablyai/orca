@@ -1,3 +1,5 @@
+import type { AgentSessionSettledBodyOwner } from '../../../src/shared/agent-session-settled-body-reader'
+import type { MobilePermissionResponse } from './native-chat/input/mobile-native-chat-permission'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../src/shared/native-chat/input/native-chat-picker-items'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../storage/session-view-preferences'
@@ -42,6 +44,7 @@ export type MobileNativeChatController = {
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   nativeChatStructured: boolean
   nativeChatVisualSource: MobileNativeChatVisualSource | null
+  nativeChatSettledBodyOwner: AgentSessionSettledBodyOwner | null
   nativeChatItemSource: MobileNativeChatVisualSource | null
   /** Working or waiting on the reader: keeps the turn clock running. */
   nativeChatTurnActive: boolean
@@ -77,7 +80,7 @@ export type MobileNativeChatController = {
     itemId: string
     expectedRevision: number
   }) => Promise<boolean>
-  handleNativeChatRespondPermission: (text: string) => Promise<boolean>
+  handleNativeChatRespondPermission: MobilePermissionResponse
   handleNativeChatStop: () => void
   nativeChatQueued: MobileStructuredQueuedMessageControls
   nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null

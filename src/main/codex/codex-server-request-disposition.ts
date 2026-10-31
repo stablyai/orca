@@ -22,6 +22,7 @@ export const CODEX_LEGACY_EXEC_APPROVAL_METHOD = 'execCommandApproval'
 export type CodexServerRequestDisposition =
   | { kind: 'prompt'; prompt: CodexPendingPrompt }
   | { kind: 'responded'; method: string }
+  | { kind: 'admission-refused' | 'replay' }
 
 type ResponseConnection = Pick<CodexAppServerConnection, 'respond' | 'respondWithError'>
 
@@ -31,9 +32,13 @@ export function disposeCodexServerRequest(
   connection: ResponseConnection,
   request: CodexAppServerServerRequest
 ): CodexServerRequestDisposition {
-  const prompt = registry.register(request)
-  if (prompt) {
-    return { kind: 'prompt', prompt }
+  const admission = registry.admit(request)
+  if (admission.kind === 'admitted') {
+    return admission.replay ? { kind: 'replay' } : { kind: 'prompt', prompt: admission.prompt }
+  }
+  if (admission.kind === 'refused') {
+    connection.respondWithError(request.id, -32001, `Orca could not admit ${request.method} prompt`)
+    return { kind: 'admission-refused' }
   }
 
   switch (request.method) {

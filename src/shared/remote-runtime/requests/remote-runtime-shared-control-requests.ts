@@ -29,11 +29,13 @@ export function requestSharedControl<TResult>(args: {
   refreshTimeoutOnKeepalive?: boolean
   /** Runs once the socket is ready, just before sending; a throw rejects without sending. */
   beforeSend?: () => void
+  captureResponse?: () => (response: RuntimeRpcResponse<unknown>) => void
 }): Promise<RuntimeRpcResponse<TResult>> {
   const { ensureReady, pendingRequests, send } = args
   if (args.signal?.aborted) {
     return Promise.reject(abortSignalReason(args.signal))
   }
+  let observeResponse: ((response: RuntimeRpcResponse<unknown>) => void) | undefined
   const requestId = randomUUID()
   let preparedRequest: RemoteRuntimePreparedRequest
   try {
@@ -82,6 +84,7 @@ export function requestSharedControl<TResult>(args: {
       const rejectPending = pending.reject
       pending.resolve = (response) => {
         removeAbortListener()
+        observeResponse?.(response)
         resolvePending(response)
       }
       pending.reject = (error) => {
@@ -97,6 +100,7 @@ export function requestSharedControl<TResult>(args: {
       () => {
         try {
           args.beforeSend?.()
+          observeResponse = args.captureResponse?.()
         } catch (error) {
           rejectSharedControlPendingRequest(
             pendingRequests,

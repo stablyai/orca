@@ -33,6 +33,7 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   // Optional logical authority epoch for scoping cached work across migrateTo; physical clients need no counter.
   getGeneration?: () => number
   /** False when this transport would refuse an `envelope`; absent means it carries one. */
+  getRequestByteCapacity?: () => number
   carriesRpcEnvelope?: () => boolean
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void

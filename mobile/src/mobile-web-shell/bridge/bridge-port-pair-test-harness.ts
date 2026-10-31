@@ -63,6 +63,7 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   clientIdentity?: string | null
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   safeAreaInsets?: BridgeSafeAreaInsets
+  inboundMessageBytes?: number
   keyboardInset?: number
   ownsHostArea?: boolean
   onStorageWrite?: (key: string, value: string | null) => void
@@ -180,6 +181,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   })
   const host = createBridgeHost({
     client: rpc,
+    inboundMessageBytes: options.inboundMessageBytes,
     post: (json) => {
       toPage.push(json)
       return Promise.resolve()

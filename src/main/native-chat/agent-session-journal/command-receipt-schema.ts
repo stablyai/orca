@@ -1,3 +1,4 @@
+import { AgentSessionFormContentSchema } from '../../../shared/agent-session-form'
 import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
 import type Database from '../../sqlite/sync-database'
@@ -36,6 +37,7 @@ export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
     revision: z.int().positive(),
     resolution: z.strictObject({
       state: z.literal('resolved'),
+      formContent: AgentSessionFormContentSchema.optional(),
       selectedOptionId: z.string().nullable(),
       answers: z
         .array(

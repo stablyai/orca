@@ -55,6 +55,7 @@ export type BridgeHostOptions = {
   client: RpcClient
   // Resolution proves native handoff, never page receipt; reject when no view can accept it.
   post: (json: string) => Promise<void>
+  inboundMessageBytes?: number
   buildId: string
   sessionId: string
   // Required locally but optional on the wire for older shells that send no route.

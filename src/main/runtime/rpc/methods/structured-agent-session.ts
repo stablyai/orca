@@ -1,23 +1,15 @@
+import { STRUCTURED_AGENT_SESSION_HISTORY_METHODS } from './structured-agent-session-history'
+import { clientReadsSettledBodies } from './structured-agent-session-item'
 import { clientRequestsCommands } from './structured-agent-session-policy'
 import {
   clientReadsCurrentRequests,
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
 } from './structured-agent-session-current-requests'
-import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
 // Require structured.v1 from remote callers before exposing journals/mutations; legacy mobile may receive session-tab metadata placeholders.
 
-import {
-  projectBackgroundTaskEvent,
-  projectBackgroundTaskHistory
-} from './structured-agent-session-background-task-capability'
-import {
-  projectQueuedImageCardPublication,
-  projectQueuedImageCardHistory
-} from './structured-agent-session-queued-image-capability'
-import {
-  projectTurnItemEvent,
-  projectTurnItemHistory
-} from './structured-agent-session-turn-item-capability'
+import { projectBackgroundTaskEvent } from './structured-agent-session-background-task-capability'
+import { projectQueuedImageCardPublication } from './structured-agent-session-queued-image-capability'
+import { projectTurnItemEvent } from './structured-agent-session-turn-item-capability'
 import { defineMethod, defineStreamingMethod } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
@@ -58,7 +50,6 @@ import {
   ConversationCommandParams,
   CreateParams,
   CreateSupportParams,
-  HistoryParams,
   OptionsParams,
   RewindParams,
   SendParams,
@@ -218,29 +209,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     }
   }),
   ...STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS,
-  defineMethod({
-    name: 'agentSession.history',
-    permission: 'workspace',
-    params: HistoryParams,
-    handler: async (params, ctx) => {
-      const host = await requireInstalledHost(ctx, params.sessionId)
-      return projectTurnItemHistory(
-        projectQueuedImageCardHistory(
-          projectBackgroundTaskHistory(
-            await host.history(
-              params,
-              undefined,
-              clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
-            ),
-            ctx
-          ),
-          ctx
-        ),
-        ctx,
-        host.sessionAgent(params.sessionId)
-      )
-    }
-  }),
+  ...STRUCTURED_AGENT_SESSION_HISTORY_METHODS,
   defineStreamingMethod({
     name: 'agentSession.subscribe',
     permission: 'workspace',
@@ -258,6 +227,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       dispose = await host.subscribe({
         commandsOnRequest: clientRequestsCommands(ctx),
         readsCurrentRequests: clientReadsCurrentRequests(ctx),
+        readsSettledBodies: clientReadsSettledBodies(ctx),
         id: subscriptionId,
         sessionId: params.sessionId,
         projectQueuePublication: (publication) =>

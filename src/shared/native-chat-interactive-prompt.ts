@@ -1,3 +1,4 @@
+import type { AgentSessionForm } from './agent-session-form'
 import { parseNativeChatApprovalEnvelope } from './native-chat-approval-envelope'
 import type {
   AgentJournalApprovalItem,
@@ -16,6 +17,7 @@ export type ChatApproval = {
   blockedPath?: string
   subject?: AgentJournalApprovalSubject
   detail?: string
+  form?: AgentSessionForm
   url?: string
   options: { label: string; send: string }[]
 }
@@ -30,6 +32,7 @@ export function chatApprovalFromJournal(body: AgentJournalApprovalItem): ChatApp
     ...(body.blockedPath ? { blockedPath: body.blockedPath } : {}),
     ...(body.subject ? { subject: body.subject } : {}),
     ...(body.detail ? { detail: body.detail } : {}),
+    ...(body.form ? { form: body.form } : {}),
     ...(body.url ? { url: body.url } : {}),
     options: body.options.map((option) => ({ label: option.label, send: option.id }))
   }

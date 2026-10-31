@@ -1,3 +1,5 @@
+import { ActivityIndicator } from 'react-native'
+import { useMobileNativeChatSettledBody } from './mobile-native-chat-settled-body'
 import { StyleSheet, Text, View } from 'react-native'
 import {
   nativeChatReceiptAnswerHeading,
@@ -16,7 +18,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function MobileNativeChatResolutionReceipt({
-  body,
+  body: presentation,
   awaiting = true,
   fontScale
 }: {
@@ -25,6 +27,10 @@ export function MobileNativeChatResolutionReceipt({
   awaiting?: boolean
   fontScale: number
 }): React.JSX.Element | null {
+  const hydrated = useMobileNativeChatSettledBody(presentation)
+  const body =
+    presentation.deferredBody && hydrated.status === 'ready' ? hydrated.body : presentation
+  const incomplete = !!body.deferredBody
   useMobileColorScheme()
   const t = useMobileTranslation()
   const subject = nativeChatReceiptSubject(body)
@@ -42,7 +48,7 @@ export function MobileNativeChatResolutionReceipt({
   const { resolution } = body
   const copy = nativeChatReceiptCopy(t, resolution.resolvedBy ?? undefined)
   const cancelled = resolution.state === 'cancelled'
-  const answers = nativeChatReceiptAnswers(body)
+  const answers = incomplete ? [] : nativeChatReceiptAnswers(body)
   const outcome = [
     cancelled ? copy.cancelled : copy.resolved,
     resolution.resolvedBy ? (cancelled ? copy.cancelledBy : copy.resolver) : null
@@ -67,14 +73,29 @@ export function MobileNativeChatResolutionReceipt({
           {body.detail}
         </Text>
       ) : null}
+      {incomplete ? (
+        hydrated.status === 'loading' ? (
+          <ActivityIndicator size="small" />
+        ) : (
+          <Text style={text}>{copy.unavailable}</Text>
+        )
+      ) : null}
       {answers.map((answer, index) => {
         const heading = nativeChatReceiptAnswerHeading(subject, answer)
         return (
           <View
-            key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
+            key={
+              body.kind === 'question'
+                ? (body.questions?.[index]?.id ?? 'answer')
+                : `${index}:${answer.question ?? ''}`
+            }
           >
             {heading ? <Text style={text}>{heading}</Text> : null}
-            <Text selectable={INLINE_TEXT_SELECTION} style={text} numberOfLines={3}>
+            <Text
+              selectable={INLINE_TEXT_SELECTION}
+              style={text}
+              numberOfLines={body.kind === 'approval' && body.form ? undefined : 3}
+            >
               {answer.answer === '' ? copy.emptyAnswer : (answer.answer ?? copy.unavailable)}
             </Text>
           </View>

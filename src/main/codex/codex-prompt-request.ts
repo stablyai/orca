@@ -31,6 +31,8 @@ export type CodexPendingPrompt = {
   questionIdAliases: ReadonlyMap<string, string>
   optionAnswers: ReadonlyMap<string, { questionId: string; answer: string }>
   answers: Map<string, string>
+  journalRows: ReadonlyMap<string, string | null>
+  requestFingerprint: string
   /** Set when the request limits the decisions, so an unoffered one is refused. */
   offeredDecisions?: readonly (CodexMcpToolApprovalDecision | 'decline')[]
   elicitation?: CodexMcpElicitation
@@ -82,11 +84,7 @@ export function readCodexPendingPrompt(
     return null
   }
   const questionIds =
-    elicitation?.kind === 'form'
-      ? elicitation.fields.map((field) => field.name)
-      : request.method === CODEX_USER_INPUT_METHOD
-        ? readQuestionIds(request.params)
-        : []
+    request.method === CODEX_USER_INPUT_METHOD ? readQuestionIds(request.params) : []
   if (questionIds === null) {
     return null
   }
@@ -114,18 +112,22 @@ export function readCodexPendingPrompt(
     ...(isMcpElicitation
       ? {
           offeredDecisions: elicitation
-            ? (['accept', 'decline', 'cancel'] as const)
+            ? elicitation.kind === 'form'
+              ? (['decline', 'cancel'] as const)
+              : (['accept', 'decline', 'cancel'] as const)
             : codexMcpToolApprovalDecisions(request.params)
         }
       : {}),
     ...(elicitation ? { elicitation } : {}),
     questionIds,
     questionIdAliases:
-      request.method === CODEX_USER_INPUT_METHOD || elicitation?.kind === 'form'
+      request.method === CODEX_USER_INPUT_METHOD
         ? new Map(questionIds.map((id) => [codexJournalPromptIdPart(id), id]))
         : new Map(),
     optionAnswers,
-    answers: new Map()
+    answers: new Map(),
+    journalRows: new Map(),
+    requestFingerprint: ''
   }
   return prompt
 }

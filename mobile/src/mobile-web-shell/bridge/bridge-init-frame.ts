@@ -26,6 +26,7 @@ export const BRIDGE_NATIVE_GRANTS: readonly string[] = [
 
 export function createBridgeInitFrame(args: {
   sessionId: string
+  inboundMessageBytes?: number
   buildId: string
   connection: BridgeConnectionSnapshot
   route: BridgeInitRoute
@@ -48,6 +49,9 @@ export function createBridgeInitFrame(args: {
     type: 'init',
     sessionId: args.sessionId,
     buildId: args.buildId,
+    ...(args.inboundMessageBytes === undefined
+      ? {}
+      : { inboundMessageBytes: args.inboundMessageBytes }),
     connection: args.connection,
     grants: {
       rpc: {

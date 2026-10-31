@@ -1,6 +1,6 @@
+import { settledBodyPieceReader as makeBodyReader } from './agent-session-settled-body'
 import { continuationContextReader as contextReader } from './structured-agent-session-continuation-context'
 import { structuredAgentStartJournal } from './structured-agent-start-journal'
-import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
 import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
 // Serialize durable mutations per conversation; open at rest and start a child only when work needs it.
@@ -295,7 +295,7 @@ export class StructuredAgentSessionHost {
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
 
-  rewind = (caller: HostTypes.StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
+  rewind = (caller: HostTypes.StructuredAgentSessionCaller, params: HostTypes.RewindParams) =>
     rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)
 
   conversationCommand = this.conversationCommands.run
@@ -311,6 +311,8 @@ export class StructuredAgentSessionHost {
   readonly continuationContext: ReturnType<typeof contextReader>
 
   /** Full reduction: absence from a bounded page cannot prove a revised/tombstoned item is absent. */
+  settledBodyPiece = makeBodyReader((id) => this.lifetime.conversation(id))
+
   journalSnapshot = async (sessionId: string) =>
     (await this.lifetime.conversation(sessionId)).journal.snapshot()
 

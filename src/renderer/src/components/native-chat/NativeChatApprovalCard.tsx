@@ -1,3 +1,5 @@
+import { NativeChatForm } from './NativeChatForm'
+import type { AgentSessionFormContent } from '../../../../shared/agent-session-form'
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { useRef } from 'react'
 import { ShieldQuestion, X } from 'lucide-react'
@@ -25,10 +27,13 @@ export type NativeChatApprovalCardProps = {
   /** Without `onCancel`: fold the card to a strip and give the input back, writing nothing. */
   onCollapse?: () => void
   /** A choice is being delivered: the options wait for its answer. */
+  formSubmitEnabled?: boolean
   isSubmitting?: boolean
   shouldFocus?: boolean
   /** A plan body renders as markdown; these make its file paths clickable. */
   onLinkClick?: CommentMarkdownLinkClickHandler
+  onOpenUrl?: (url: string) => void
+  onSubmitForm?: (content: AgentSessionFormContent) => void
   allowFileUriLinks?: boolean
 }
 
@@ -36,8 +41,11 @@ export type NativeChatApprovalCardProps = {
 export function NativeChatApprovalCard({
   approval,
   onChoose,
+  onOpenUrl,
+  onSubmitForm,
   onCancel,
   onCollapse,
+  formSubmitEnabled = true,
   isSubmitting = false,
   shouldFocus = false,
   onLinkClick,
@@ -167,13 +175,21 @@ export function NativeChatApprovalCard({
                 ) : null}
               </div>
             ) : null}
+            {approval.form && onSubmitForm && !newerSubject ? (
+              <NativeChatForm
+                form={approval.form}
+                disabled={isSubmitting}
+                submitDisabled={!formSubmitEnabled}
+                onSubmit={onSubmitForm}
+              />
+            ) : null}
             <div data-native-chat-approval-actions="true" className="flex shrink-0 flex-wrap gap-2">
-              {approval.url && onLinkClick ? (
+              {approval.url && onOpenUrl ? (
                 <Button
                   type="button"
                   variant="outline"
                   disabled={isSubmitting}
-                  onClick={(event) => onLinkClick(event, approval.url)}
+                  onClick={() => approval.url && onOpenUrl(approval.url)}
                 >
                   {translate('components.native-chat.approval.openLink', 'Open link')}
                 </Button>
@@ -186,7 +202,7 @@ export function NativeChatApprovalCard({
                   onClick={() => onChoose(opt.send)}
                   className={cn(
                     'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
-                    i === 0
+                    i === 0 && !approval.form
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
                   )}

@@ -1,3 +1,4 @@
+import { canonicalAgentSessionFormContent } from '../../shared/agent-session-form'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
 import * as turnEnd from './codex-structured-turn-end-settlement'
@@ -192,7 +193,13 @@ export async function answerCodexStructuredPrompt(input: {
   }
   try {
     const prepared = prepareCodexAnswer(claim.prompt, request.response)
-    if (prepared.kind === 'answer' && !session.prompts.reserveAnswer(claim, prepared.answer)) {
+    const retainedAnswer =
+      prepared.kind === 'answer'
+        ? prepared.answer
+        : prepared.kind === 'form'
+          ? canonicalAgentSessionFormContent(prepared.content)
+          : null
+    if (retainedAnswer !== null && !session.prompts.reserveAnswer(claim, retainedAnswer)) {
       throw new AgentSessionPromptAnswerRejectedError(
         'Codex prompt answers exceed the supported size.'
       )
@@ -207,19 +214,7 @@ export async function answerCodexStructuredPrompt(input: {
     ) {
       throw new AgentSessionPromptUnavailableError(request.itemId)
     }
-    const settlement = session.translator?.resolvePrompt(
-      request.itemId,
-      claim.prompt.elicitation?.kind === 'form' && prepared.kind === 'decision'
-    )
-    if (settlement && !settlement.accepted) {
-      const error = new Error(
-        `Codex prompt siblings could not be durably settled (${settlement.reason})`
-      )
-      session.prompts.forget(claim.prompt)
-      session.connection.respondWithError(claim.prompt.requestId, -32001, error.message)
-      void session.forceCloseUnexpected?.(error)
-      throw error
-    }
+    session.translator?.resolvePrompt(request.itemId)
     answerCodexPrompt(session.prompts, session.connection, claim, prepared)
   } catch (error) {
     session.prompts.releaseClaim(claim)

@@ -1,3 +1,4 @@
+export type { AgentSessionRewindParams as RewindParams } from '../../../shared/agent-session-rewind'
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import type { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 import type {

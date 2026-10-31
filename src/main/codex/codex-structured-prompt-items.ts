@@ -15,9 +15,8 @@ import {
   encodeCodexJournalQuestionOptionId,
   type CodexApprovalDecision
 } from './codex-structured-prompt-replies'
-import { codexMcpToolApprovalDecisions } from './codex-mcp-tool-approval'
-import { isCodexMcpToolApproval } from './codex-mcp-tool-approval'
-import { codexMcpFieldQuestion, readCodexMcpElicitation } from './codex-mcp-elicitation'
+import { codexMcpToolApprovalDecisions, isCodexMcpToolApproval } from './codex-mcp-tool-approval'
+import { readCodexMcpElicitation } from './codex-mcp-elicitation'
 
 const APPROVAL_DECISION_LABELS: Record<CodexApprovalDecision, string> = {
   accept: 'Allow',
@@ -81,9 +80,11 @@ export function codexApprovalItem(input: {
           kind: 'approval',
           title: elicitation.message,
           detail: elicitation.kind === 'url' ? elicitation.url : null,
-          ...(elicitation.kind === 'url' ? { url: elicitation.url } : {}),
+          ...(elicitation.kind === 'url'
+            ? { url: elicitation.url }
+            : { form: { fields: elicitation.fields } }),
           options: [
-            { id: 'accept', label: elicitation.kind === 'url' ? 'Continue' : 'Submit response' },
+            ...(elicitation.kind === 'url' ? [{ id: 'accept', label: 'Continue' }] : []),
             { id: 'decline', label: 'Decline' },
             { id: 'cancel', label: 'Cancel' }
           ],
@@ -151,16 +152,6 @@ export function codexQuestionItems(input: {
   params: unknown
   method?: string
 }): CodexQuestionItem[] {
-  if (input.method === CODEX_MCP_ELICITATION_METHOD) {
-    const elicitation = readCodexMcpElicitation(input.params)
-    return elicitation?.kind === 'form'
-      ? elicitation.fields.map((field) => ({
-          questionId: field.name,
-          identity: codexPromptIdentity({ ...input, questionId: field.name }),
-          body: codexMcpFieldQuestion(field, elicitation.message)
-        }))
-      : []
-  }
   const questions = readParams(input.params).questions
   if (!Array.isArray(questions)) {
     return []

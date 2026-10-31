@@ -1,3 +1,7 @@
+import {
+  withPreparedMobileRpcRequest,
+  type PreparedMobileRpcRequests
+} from './prepared-mobile-rpc-request'
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import type { SendRequestOptions } from './rpc-client'
@@ -12,6 +16,13 @@ type PendingRequest = {
 }
 
 type RequestTrackerOptions = {
+  onResponse?: (
+    method: string,
+    response: RpcResponse,
+    current: boolean,
+    envelope?: RpcEnvelopeFields
+  ) => RpcResponse
+  getGeneration?: () => number
   nextId: () => string
   getState: () => ConnectionState
   waitForConnected: (timeoutMs?: number) => Promise<void>
@@ -19,6 +30,7 @@ type RequestTrackerOptions = {
 }
 
 export class RpcClientRequestTracker {
+  private readonly prepared: PreparedMobileRpcRequests = new Map()
   private readonly pending = new Map<string, PendingRequest>()
 
   constructor(private readonly options: RequestTrackerOptions) {}
@@ -34,19 +46,36 @@ export class RpcClientRequestTracker {
     if (requestOptions?.failWhenDisconnected && !wasConnected) {
       throw new Error(`Not connected: ${method}`)
     }
-    await this.options.waitForConnected(requestOptions?.timeoutMs)
-    if (!wasConnected) {
-      console.log('[net] sendRequest waited for connect', {
-        method,
-        waitedMs: Date.now() - waitStart
-      })
-    }
-
-    return this.sendConnectedRequest(
-      method,
-      params,
-      resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS),
-      requestOptions?.envelope
+    const generation = this.options.getGeneration?.()
+    return withPreparedMobileRpcRequest(
+      this.prepared,
+      { method, params, envelope: requestOptions?.envelope },
+      async (snapshot) => {
+        await this.options.waitForConnected(requestOptions?.timeoutMs)
+        if (wasConnected && generation !== this.options.getGeneration?.()) {
+          throw new Error('Connection changed')
+        }
+        if (!wasConnected) {
+          console.log('[net] sendRequest waited for connect', {
+            method,
+            waitedMs: Date.now() - waitStart
+          })
+        }
+        const response = await this.sendConnectedRequest(
+          snapshot.method,
+          snapshot.params,
+          resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS),
+          snapshot.envelope
+        )
+        return (
+          this.options.onResponse?.(
+            snapshot.method,
+            response,
+            generation === this.options.getGeneration?.(),
+            snapshot.envelope
+          ) ?? response
+        )
+      }
     )
   }
 

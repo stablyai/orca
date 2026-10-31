@@ -5,21 +5,15 @@ import {
   codexPromptIdentity,
   codexQuestionItems
 } from './codex-structured-prompt-items'
-import {
-  CODEX_MCP_ELICITATION_METHOD,
-  CODEX_USER_INPUT_METHOD
-} from './codex-structured-prompt-replies'
+import { CODEX_USER_INPUT_METHOD } from './codex-structured-prompt-replies'
 import type {
   CodexJournalTranslationAdmission,
   CodexJournalTranslatorDeps
 } from './codex-structured-journal-contracts'
 import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
-import { MAX_CODEX_PENDING_PROMPTS } from './codex-structured-journal-limits'
 import {
   admitCodexLifecycleItems,
-  appendCodexLifecycleItem,
-  appendCodexLifecycleMutations,
-  publishCodexLifecycle
+  appendCodexLifecycleMutations
 } from './codex-structured-journal-sink'
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import { readCodexTurnId } from './codex-structured-thread-facts'
@@ -48,7 +42,7 @@ export class CodexJournalPrompts {
   }): CodexJournalTranslationAdmission {
     const turnId = readCodexTurnId(event.params) ?? this.activeTurn(event.threadId)
     const questions =
-      event.method === CODEX_USER_INPUT_METHOD || event.method === CODEX_MCP_ELICITATION_METHOD
+      event.method === CODEX_USER_INPUT_METHOD
         ? codexQuestionItems({
             threadId: event.threadId,
             promptKey: event.promptKey,
@@ -56,7 +50,7 @@ export class CodexJournalPrompts {
             method: event.method
           })
         : []
-    if (event.method === CODEX_USER_INPUT_METHOD || questions.length > 0) {
+    if (event.method === CODEX_USER_INPUT_METHOD) {
       const promptItems = questions.map(({ identity, body }) => ({ identity, body }))
       const admission = this.admit(event, turnId, promptItems)
       if (!admission.accepted) {
@@ -71,10 +65,6 @@ export class CodexJournalPrompts {
           identity: question.identity,
           body: question.body
         })
-        const trimAdmission = this.trim()
-        if (!trimAdmission.accepted) {
-          return trimAdmission
-        }
         this.deps.bindPromptItemId?.(itemId, event.threadId, event.promptKey, turnId)
       }
       return CODEX_JOURNAL_ADMITTED
@@ -100,27 +90,12 @@ export class CodexJournalPrompts {
       identity,
       body
     })
-    const trimAdmission = this.trim()
-    if (!trimAdmission.accepted) {
-      return trimAdmission
-    }
     this.deps.bindPromptItemId?.(itemId, event.threadId, event.promptKey, turnId)
     return CODEX_JOURNAL_ADMITTED
   }
 
-  resolve(journalItemId: string, cancelRemaining = false): CodexJournalTranslationAdmission {
-    const selected = this.pending.get(journalItemId)
+  resolve(journalItemId: string): void {
     this.pending.delete(journalItemId)
-    const sibling =
-      cancelRemaining && selected
-        ? [...this.pending].find(
-            ([, prompt]) =>
-              prompt.threadId === selected.threadId &&
-              prompt.turnId === selected.turnId &&
-              prompt.promptKey === selected.promptKey
-          )
-        : undefined
-    return sibling ? this.cancel(sibling[0]) : CODEX_JOURNAL_ADMITTED
   }
 
   cancel(journalItemId: string): CodexJournalTranslationAdmission {
@@ -171,35 +146,5 @@ export class CodexJournalPrompts {
       items,
       this.deps.attributionFor(event.threadId, turnId)
     )
-  }
-
-  private trim(): CodexJournalTranslationAdmission {
-    while (this.pending.size > MAX_CODEX_PENDING_PROMPTS) {
-      const oldest = this.pending.keys().next().value
-      if (typeof oldest !== 'string') {
-        break
-      }
-      const evicted = this.pending.get(oldest)
-      if (evicted) {
-        const cancelled = cancelledJournalPromptBody(evicted.body)
-        if (cancelled) {
-          const admission = appendCodexLifecycleItem(
-            this.deps.sink,
-            evicted.identity,
-            cancelled,
-            this.deps.attributionFor(evicted.threadId, evicted.turnId)
-          )
-          if (!admission.accepted) {
-            return admission
-          }
-          const published = publishCodexLifecycle(this.deps.sink)
-          if (!published.accepted) {
-            return published
-          }
-        }
-      }
-      this.pending.delete(oldest)
-    }
-    return CODEX_JOURNAL_ADMITTED
   }
 }

@@ -9,6 +9,7 @@ import type { OrcadStdioBridge } from '../../ssh/orcad-stdio-bridge'
 import { ORCAD_STDIO_BRIDGE_MAX_CHANNELS } from './orcad-stdio-bridge-listener'
 import { OrcadStdioBridgePortForwardProvider } from './orcad-stdio-bridge-provider'
 import { spawnLocalBridgeChannel, startEchoServer } from './orcad-stdio-bridge-test-channel'
+import { ORCAD_STDIO_BRIDGE_FUNCTION } from './orcad-stdio-bridge-script'
 import { ORCAD_WINDOWS_HOST_SCRIPT } from '../host-state/orcad-windows-host-script'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
@@ -114,6 +115,31 @@ describe('the managed tunnel over the stdio bridge', () => {
     expect(await echoOf(second, 'second')).toBe('second')
     expect(openChannel).toHaveBeenCalledTimes(2)
   })
+
+  it.each(['raw', 'base64'] as const)(
+    'drains a complete sealed maximum ordinary message over %s under receiver backpressure, then closes its actual bridge',
+    async (mode) => {
+      const forward = await startProvider({
+        resolveBridge: async () => ({ ...bridge, mode }),
+        openChannel: async () =>
+          mode === 'base64'
+            ? localBridge()
+            : spawnLocalBridgeChannel(process.execPath, [
+                '-e',
+                `${ORCAD_STDIO_BRIDGE_FUNCTION}\norcadStdioBridge(${echo.port}, 'raw')`
+              ])
+      })
+      const socket = await dial(forward.entry.localPort)
+      const payload = 'A'.repeat(4 * Math.ceil((4 * 1024 * 1024 + 82) / 3))
+      const echoed = echoOf(socket, payload)
+      socket.pause()
+      await new Promise((resolve) => setTimeout(resolve, 25))
+      socket.resume()
+      expect(await echoed).toBe(payload)
+      await forward.close()
+      await closedOf(socket)
+    }
+  )
 
   it('refuses to start where the bridge cannot run, so a deploy never registers it', async () => {
     const failure = new OrcadStdioBridgeUnavailableError('exit 127')

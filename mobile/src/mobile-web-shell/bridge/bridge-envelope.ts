@@ -267,6 +267,10 @@ const BridgeHostMessageSchema = z.union([
       .optional(),
     // Send manifest grant pairs so local hops cannot run targets under insufficient opener grants. Older shells omit/older pages ignore this field; absent pairs retain the older handoff rule.
     pageRouteGrants: BridgePageRouteGrantsSchema.optional(),
+    inboundMessageBytes: salvagedOptional(
+      'inboundMessageBytes',
+      z.number().int().min(655360).max(4194304)
+    ).optional(),
     ownsHostArea: salvagedOptional('ownsHostArea', z.boolean()).optional()
   })
 ])
@@ -290,8 +294,11 @@ export function readRefusedBridgeFrameId(raw: string): string | null {
   return typeof id === 'string' && BRIDGE_ID_PATTERN.test(id) ? id : null
 }
 
-export function readBridgeClientMessage(raw: string): BridgeRead<BridgeClientMessage> {
-  return readMessage(raw, BridgeClientMessageSchema, 'page-to-shell')
+export function readBridgeClientMessage(
+  raw: string,
+  maxBytes?: number
+): BridgeRead<BridgeClientMessage> {
+  return readMessage(raw, BridgeClientMessageSchema, 'page-to-shell', maxBytes)
 }
 
 export function readBridgeHostMessage(raw: string): BridgeRead<BridgeHostMessage> {
@@ -301,9 +308,10 @@ export function readBridgeHostMessage(raw: string): BridgeRead<BridgeHostMessage
 function readMessage<TMessage>(
   raw: string,
   schema: z.ZodType<TMessage>,
-  direction: BridgeDirection
+  direction: BridgeDirection,
+  maxBytes?: number
 ): BridgeRead<TMessage> {
-  const framed = parseBridgeMessage(raw, direction)
+  const framed = parseBridgeMessage(raw, direction, maxBytes)
   if (!framed.ok) {
     return framed
   }

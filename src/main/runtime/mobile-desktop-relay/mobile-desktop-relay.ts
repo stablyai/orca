@@ -1,3 +1,5 @@
+import { reserveRemoteRuntimeRetainedBytes } from '../../../shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
+import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
@@ -50,7 +52,7 @@ class RelayLink {
 
 /** One socket per (phone connection, configured server), authenticated with memory-only delegated phone grants.
  * Forward execution-host methods only; old servers require an update, and revocation lasts until the next sync.
- * Replies stay opaque except stream-id renumbering; replace every upstream desktop-token occurrence. */
+ * Replies stay opaque except stream-id renumbering; map authenticated request identity positions. */
 export class MobileDesktopRelay {
   private readonly links = new Map<string, RelayLink>()
   private readonly grants: DelegatedPhoneGrantCache
@@ -93,35 +95,67 @@ export class MobileDesktopRelay {
     request: { id: string; method: string },
     frame: string
   ): void {
-    if (RELAYED_STREAM_CARRIERS.get(request.method) === 'phone-binary-frames') {
+    const { id, method } = request
+    if (RELAYED_STREAM_CARRIERS.get(method) === 'phone-binary-frames') {
       phone.reply(
         failure(
-          request.id,
+          id,
           'forbidden',
-          `Method '${request.method}' is driven by binary frames, which the desktop does not relay`
+          `Method '${method}' is driven by binary frames, which the desktop does not relay`
+        )
+      )
+      return
+    }
+    const lease = reserveRemoteRuntimeRetainedBytes(12 * frame.length + 64 * 1024)
+    if (!lease) {
+      phone.reply(
+        failure(
+          id,
+          'runtime_busy',
+          'The connection is busy. Try again after pending requests finish.'
         )
       )
       return
     }
     const link = this.linkFor(phone, environmentId)
-    link.replies.noteForwarded(request.id)
-    link.opened.then(
-      ({ socket, hostToken }) => {
-        // An opening link may already have ended and answered; never send its request late.
-        if (!this.isCurrent(link)) {
-          return
-        }
-        const outgoing = withRelayedLaunchChatDefault(
-          rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
-          request.method,
-          this.options.nativeChatDefault
-        )
-        if (!socket.send(outgoing)) {
-          this.endLink(link, unavailable('The server connection could not take the request.'))
-        }
-      },
-      () => {}
-    )
+    link.replies.noteForwarded(id, { method })
+    link.opened
+      .then(
+        ({ socket, hostToken }) => {
+          // An opening link may already have ended and answered; never send its request late.
+          if (!this.isCurrent(link)) {
+            return
+          }
+          const outgoing = withRelayedLaunchChatDefault(
+            rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
+            method,
+            this.options.nativeChatDefault
+          )
+          if (
+            Buffer.byteLength(outgoing) > REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES &&
+            !link.replies.supportsOrdinaryMessages()
+          ) {
+            // Answer through the same correlation map without sending an oversized frame to an old peer.
+            const refused = link.replies.text(
+              failure(
+                id,
+                'invalid_argument',
+                'This server connection cannot carry a request this large.'
+              )
+            )
+            if (refused !== null) {
+              phone.reply(refused)
+            }
+            return
+          }
+          if (!socket.send(outgoing)) {
+            this.endLink(link, unavailable('The server connection could not take the request.'))
+          }
+        },
+        () => {}
+      )
+      .catch((error) => this.endLink(link, unavailable(String(error))))
+      .finally(() => lease.release())
   }
 
   /** Mirrors a phone's capability update to every server socket that phone has open. */

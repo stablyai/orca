@@ -1,3 +1,8 @@
+import {
+  canonicalAgentSessionFormContent,
+  validateAgentSessionFormContent,
+  type AgentSessionFormContent
+} from '../../../shared/agent-session-form'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
@@ -36,6 +41,7 @@ export type AgentSessionPromptRequest = {
   /** Legacy clients pack question answers into optionId. */
   optionId?: string
   answers?: AgentSessionQuestionAnswer[]
+  content?: AgentSessionFormContent
 }
 
 function invalid(
@@ -48,7 +54,28 @@ function invalid(
 function readPromptChoice(
   prompt: AgentJournalApprovalItem | AgentJournalQuestionItem,
   input: AgentSessionPromptRequest
-): { response: AgentSessionPromptResponse; selectedOptionId: string } | null {
+): { response: AgentSessionPromptResponse; selectedOptionId: string | null } | null {
+  if (input.content !== undefined) {
+    if (
+      input.optionId !== undefined ||
+      input.answers !== undefined ||
+      prompt.kind !== 'approval' ||
+      !prompt.form
+    ) {
+      return null
+    }
+    try {
+      return {
+        response: {
+          kind: 'form',
+          content: validateAgentSessionFormContent(prompt.form, input.content)
+        },
+        selectedOptionId: null
+      }
+    } catch {
+      return null
+    }
+  }
   if (prompt.kind === 'approval') {
     const optionId = input.optionId
     return optionId !== undefined && prompt.options.some((option) => option.id === optionId)
@@ -82,7 +109,15 @@ function resolvedWithSameChoice(
   }
   const { item, prompt } = settled
   const choice = readPromptChoice(prompt, input)
-  return choice?.selectedOptionId === prompt.resolution.selectedOptionId
+  const same =
+    choice?.response.kind === 'form'
+      ? prompt.resolution.formContent !== undefined &&
+        canonicalAgentSessionFormContent(choice.response.content) ===
+          canonicalAgentSessionFormContent(prompt.resolution.formContent)
+      : choice !== null &&
+        prompt.resolution.formContent === undefined &&
+        choice.selectedOptionId === prompt.resolution.selectedOptionId
+  return same
     ? { itemId: item.itemId, revision: item.revision, resolution: prompt.resolution }
     : null
 }
@@ -124,6 +159,7 @@ export async function performPrompt(
   const resolution: AgentJournalResolution = {
     state: 'resolved',
     selectedOptionId: choice.selectedOptionId,
+    ...(response.kind === 'form' ? { formContent: response.content } : {}),
     ...(response.kind === 'answers' ? { answers: response.answers } : {}),
     resolvedBy: ctx.resolvedBy,
     resolvedAt: ctx.now()
@@ -187,7 +223,8 @@ export function promptRowAnswer(row: JournalRow | undefined): AgentSessionPrompt
 
 /** Capture replay data now so later revisions or rewind cannot change an accepted answer. */
 export function promptAnswerReceipt(answer: AgentSessionPromptResult): CommandReceiptResult {
-  const { state, selectedOptionId, answers, resolvedBy, resolvedAt } = answer.resolution
+  const { state, selectedOptionId, answers, formContent, resolvedBy, resolvedAt } =
+    answer.resolution
   if (state !== 'resolved') {
     throw new Error('an accepted prompt answer is resolved')
   }
@@ -198,6 +235,7 @@ export function promptAnswerReceipt(answer: AgentSessionPromptResult): CommandRe
     resolution: {
       state,
       selectedOptionId,
+      ...(formContent === undefined ? {} : { formContent: { ...formContent } }),
       ...(answers
         ? {
             answers: answers.map(({ questionId, optionIds, other }) => ({

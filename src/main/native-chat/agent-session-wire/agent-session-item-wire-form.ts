@@ -1,3 +1,4 @@
+import { settledBodyPresentation } from './agent-session-settled-body'
 // Send bounded tool/diff heads with shortened markers; agentSession.item retrieves full stored content.
 // Shorten other oversized content visibly while retaining row identity and full-content access.
 
@@ -55,6 +56,11 @@ export function shortenedAgentJournalItem(
   maxBytes: number,
   bytes = jsonBytes(item)
 ): AgentJournalRenderItem | null {
+  const presentation = settledBodyPresentation(item, item.settledBody !== undefined)
+  if (presentation !== item) {
+    item = presentation
+    bytes = jsonBytes(item)
+  }
   if (bytes <= maxBytes) {
     return item
   }
@@ -69,7 +75,8 @@ export function shortenedAgentJournalItem(
   return body === null ? null : { ...item, body, shortened: true }
 }
 
-function wireItem(item: AgentJournalRenderItem): HistoryItemForm {
+function wireItem(item: AgentJournalRenderItem, supported: boolean): HistoryItemForm {
+  item = settledBodyPresentation(item, supported)
   const body = wireBody(item.body)
   const sent = body === item.body ? item : { ...item, body, shortened: true as const }
   const bytes = jsonBytes(sent)
@@ -78,18 +85,30 @@ function wireItem(item: AgentJournalRenderItem): HistoryItemForm {
 }
 
 // Revision objects are immutable, so readers/subscribers may reuse wire forms.
-const sentForms = new WeakMap<AgentJournalRenderItem, HistoryItemForm>()
+const sentForms = [
+  new WeakMap<AgentJournalRenderItem, HistoryItemForm>(),
+  new WeakMap<AgentJournalRenderItem, HistoryItemForm>()
+]
 
-export function agentJournalItemForWire(item: AgentJournalRenderItem): HistoryItemForm {
-  let sent = sentForms.get(item)
+export function agentJournalItemForWire(
+  item: AgentJournalRenderItem,
+  supported = false
+): HistoryItemForm {
+  const cache = sentForms[supported ? 1 : 0]!
+  let sent = cache.get(item)
   if (sent === undefined) {
-    sent = wireItem(item)
-    sentForms.set(item, sent)
+    sent = wireItem(item, supported)
+    cache.set(item, sent)
   }
   return sent
 }
 
 export const CLIENT_HISTORY_READER: HistoryReader = {
   form: agentJournalItemForWire,
+  budgetBytes: HISTORY_PAGE_CONTENT_BUDGET_BYTES
+}
+
+export const SETTLED_BODY_HISTORY_READER: HistoryReader = {
+  form: (item) => agentJournalItemForWire(item, true),
   budgetBytes: HISTORY_PAGE_CONTENT_BUDGET_BYTES
 }

@@ -83,6 +83,59 @@ beforeEach(() => {
 })
 
 describe('a write pressed again', () => {
+  it('replays an unconfirmed complete form under its original operation, hash, revision and fence', async () => {
+    const stateRef = { current: { fence: 3 } }
+    const view = renderHook(() =>
+      useStructuredAgentSessionMutate({
+        sessionId: 'session-1',
+        target: { kind: 'local' },
+        stateRef
+      })
+    )
+    mocks.call
+      .mockRejectedValueOnce(LOST)
+      .mockRejectedValueOnce(new Error('still disconnected'))
+      .mockResolvedValue({ ok: true, value: 'saved' })
+    const answer = {
+      itemId: 'form-1',
+      expectedRevision: 1,
+      content: { empty: '', space: '  ', zero: 0, off: false }
+    }
+    const press = (content = answer.content) =>
+      view.result.current.write(
+        'agentSession.respondToApproval',
+        'agentSession.respondTo:approval',
+        { ...answer, content }
+      )
+    await act(async () => {
+      expect(await press()).toMatchObject({ failure: { kind: 'unconfirmed' } })
+    })
+    stateRef.current.fence = 4
+    await act(async () => {
+      expect(await press()).toMatchObject({ failure: { kind: 'unconfirmed' } })
+    })
+    await act(async () => {
+      expect(await press({ off: false, zero: 0, space: '  ', empty: '' })).toEqual({
+        kind: 'done',
+        value: 'saved'
+      })
+    })
+    const params = mocks.call.mock.calls.map(([, , value]) => value)
+    expect(params[1].envelope).toEqual(params[0].envelope)
+    expect(params[2].envelope).toEqual(params[0].envelope)
+    expect(params[2].envelope.expectedRuntimeFence).toBe(3)
+    expect(params.every((value) => value.expectedRevision === 1)).toBe(true)
+    expect(mocks.operations).toBe(1)
+    await act(async () => {
+      await press({ ...answer.content, space: ' changed ' })
+    })
+    expect(mocks.call.mock.calls[3][2].envelope).toMatchObject({
+      clientOperationId: 'operation-2',
+      expectedRuntimeFence: 4
+    })
+    view.unmount()
+  })
+
   it('applies an option picked again after a pick whose answer was lost', async () => {
     let option: unknown = null
     const host = ledgerHost((_method, params) => {

@@ -1,3 +1,5 @@
+import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../../../src/shared/runtime-ordinary-message-capability'
+import { AGENT_SESSION_SETTLED_BODY_CAPABILITY } from '../../../src/shared/agent-session-settled-body-wire'
 import {
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY
@@ -60,6 +62,8 @@ export type StructuredAgentSessionHostSupport = {
   /** The host applies each chat's permission mode; 1.4.225–1.4.226 do without advertising it. */
   permissionModes: boolean
   permissionOwn?: boolean
+  ordinaryMessages?: boolean
+  settledBodies?: boolean
   itemDetail: boolean
   phoneAttachments: boolean
 }
@@ -93,6 +97,8 @@ export function structuredAgentSessionHostSupport(
     conversationStop: capabilities.includes(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY),
     permissionOwn: capabilities.includes(AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY),
     permissionModes: capabilities.includes(AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY),
+    ordinaryMessages: capabilities.includes(RUNTIME_ORDINARY_MESSAGE_CAPABILITY),
+    settledBodies: capabilities.includes(AGENT_SESSION_SETTLED_BODY_CAPABILITY),
     itemDetail: capabilities.includes(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY),
     phoneAttachments: capabilities.includes(AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY)
   }

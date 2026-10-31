@@ -17,7 +17,7 @@ export type OrcaMobileWebShellViewProps = ViewProps & {
   // Bridge is off by default with nothing registered. Opt-in on Android below WEB_MESSAGE_LISTENER/Chromium 88 fails isolation-unavailable instead of loading unfenced.
   bridgeEnabled?: boolean
   onLoadState?: (event: NativeSyntheticEvent<MobileWebShellLoadStatePayload>) => void
-  // Raw JSON from window.orcaBridge; native silently rejects other origins/frames/WebViews and envelopes above 640 KiB (MobileWebShellBridge.maxMessageByteCount).
+  // Raw JSON from window.orcaBridge; native silently rejects other origins/frames/WebViews and envelopes above the installed inboundMessageBytes gate.
   onBridgeMessage?: (event: NativeSyntheticEvent<MobileWebShellBridgeMessagePayload>) => void
   // Offer only gesture-started main-frame navigations/downloads away from shell document; reject own-document taps/downloads, redirects, meta refresh and script navigation.
   // URL is unfiltered (native cap 4096 chars); handler must apply readBridgeExternalLinkUrl before opening so scheme policy can update over the air.
@@ -55,3 +55,16 @@ export {
   type MobileWebShellLoadState,
   type MobileWebShellLoadStatePayload
 } from './load-state'
+
+export function nativeBridgeInboundMessageBytes(): number | undefined {
+  try {
+    const report = requireNativeModule<{ inboundMessageBytes?: unknown }>(
+      'OrcaMobileWebShell'
+    ).inboundMessageBytes
+    return typeof report === 'number' && Number.isSafeInteger(report) && report > 0
+      ? report
+      : undefined
+  } catch {
+    return undefined
+  }
+}

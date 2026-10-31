@@ -1,5 +1,11 @@
+import { MobileNativeChatSettledBodyContext } from '../../mobile-native-chat-settled-body'
+import { createAgentSessionSettledBodyReader } from '../../../../../src/shared/agent-session-settled-body-reader'
+import { agentSessionJsonPiece } from '../../../../../src/shared/agent-session-json-pieces'
+import { AGENT_SESSION_SETTLED_BODY_CAPABILITY } from '../../../../../src/shared/agent-session-settled-body'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
+import { structuredQuestionTranscript } from '../../../../../src/shared/structured-agent-question-projection'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
-import { createElement } from 'react'
+import { createElement, useRef } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { Pressable, TextInput } from 'react-native'
 import { describe, expect, it, vi } from 'vitest'
@@ -7,9 +13,18 @@ import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dism
 import { nativeChatAskDismissKey } from '../../../../../src/shared/native-chat-ask-dismiss-key'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { openExternalLink } from '../../../platform/external-link'
+import { useMobileStructuredPromptResponses } from '../../use-mobile-structured-prompt-responses'
+import { MobileNativeChatResolutionReceipt } from '../../MobileNativeChatResolutionReceipt'
+import {
+  projectStructuredPermission,
+  type StructuredApprovalItem
+} from '../../mobile-structured-agent-prompts'
+import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../../src/shared/structured-agent-session-reducer'
+import type { StructuredAgentSessionMutate } from '../../mobile-structured-agent-session-rpc'
 vi.mock('../../../platform/external-link', () => ({ openExternalLink: vi.fn() }))
 
 vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -31,6 +46,252 @@ vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown
 const textInput = (root: ReactTestInstance) =>
   root.find((node) => node.props.placeholder === 'Type your answer')
 const ask = { questions: [{ question: 'Pick?', options: [{ label: 'East' }], multiSelect: false }] }
+
+it('automatically hydrates a projected saved phone receipt and displays exact selected enum and complete text', async () => {
+  const red = 'a'.repeat(4000) + 'r'.repeat(4000),
+    blue = 'a'.repeat(4000) + 'b'.repeat(4000)
+  const text = '  first\n' + 'x'.repeat(60000) + '\nlast  '
+  const exact: NativeChatResolvedPrompt = {
+    kind: 'approval',
+    title: 'Saved full form',
+    detail: null,
+    options: [],
+    form: {
+      fields: [
+        {
+          name: 'color',
+          required: true,
+          schema: { type: 'string', enum: [red, blue], enumNames: ['Red label', 'Blue label'] }
+        },
+        { name: 'text', required: true, schema: { type: 'string' } }
+      ]
+    },
+    resolution: {
+      state: 'resolved',
+      selectedOptionId: null,
+      resolvedBy: null,
+      resolvedAt: null,
+      formContent: { color: blue, text }
+    }
+  }
+  const descriptor = {
+    contract: AGENT_SESSION_SETTLED_BODY_CAPABILITY,
+    version: 'approval-json.v1' as const,
+    state: 'resolved' as const
+  }
+  const source = {
+    ...descriptor,
+    sessionId: 'session-alpha',
+    epoch: 'epoch-1',
+    itemId: 'item-1',
+    revision: 2
+  }
+  const receipt = structuredQuestionTranscript([
+    {
+      itemId: source.itemId,
+      revision: 2,
+      sequence: 1,
+      observedAt: 1,
+      body: {
+        ...exact,
+        form: undefined,
+        resolution: { ...exact.resolution, formContent: undefined }
+      },
+      settledBody: descriptor
+    }
+  ]).receipts.get(source.itemId)!
+  const read = vi.fn(
+    async (
+      request: import('../../../../../src/shared/agent-session-settled-body').AgentSessionSettledBodyRead
+    ) => ({ source, ...agentSessionJsonPiece(JSON.stringify(exact), request.cursor) })
+  )
+  const reader = createAgentSessionSettledBodyReader(read)
+  let mounted!: ReactTestRenderer
+  try {
+    await act(async () => {
+      mounted = create(
+        createElement(
+          MobileNativeChatSettledBodyContext.Provider,
+          { value: { reader, sessionId: source.sessionId, epoch: source.epoch } },
+          createElement(MobileNativeChatResolutionReceipt, { body: receipt, fontScale: 1 })
+        )
+      )
+    })
+    const nodes = mounted.root.findAll((node) => node.type === 'Text')
+    expect(nodes.map((node) => node.children.join(''))).toContain('Blue label')
+    expect(nodes.map((node) => node.children.join(''))).not.toContain('Red label')
+    const answer = nodes.find((node) => node.children.join('') === text)
+    expect(answer).toBeDefined()
+    expect(answer!.props.numberOfLines).toBeUndefined()
+    expect(read).toHaveBeenCalledTimes(Math.ceil(JSON.stringify(exact).length / 24576))
+  } finally {
+    await act(async () => mounted?.unmount())
+    reader.dispose()
+  }
+})
+
+it('renders saved whole-form receipt values on phone through the existing receipt component', async () => {
+  let mounted!: ReactTestRenderer
+  await act(async () => {
+    mounted = create(
+      createElement(MobileNativeChatResolutionReceipt, {
+        fontScale: 1,
+        body: {
+          kind: 'approval',
+          title: 'Configure report',
+          detail: null,
+          options: [],
+          form: {
+            fields: [
+              { name: 'count', required: true, schema: { type: 'integer' } },
+              { name: 'confirmed', required: true, schema: { type: 'boolean' } },
+              {
+                name: 'color',
+                required: true,
+                schema: {
+                  type: 'string',
+                  enum: ['red', 'blue'],
+                  enumNames: ['Red label', 'Blue label']
+                }
+              },
+              { name: 'space', required: true, schema: { type: 'string' } },
+              { name: 'empty', required: false, schema: { type: 'string' } },
+              {
+                name: 'omitted',
+                required: false,
+                schema: { type: 'string', default: 'Do not restore' }
+              }
+            ]
+          },
+          resolution: {
+            state: 'resolved',
+            selectedOptionId: null,
+            formContent: { count: 0, confirmed: false, color: 'red', space: '  ', empty: '' },
+            resolvedBy: 'Desktop',
+            resolvedAt: null
+          }
+        }
+      })
+    )
+  })
+  const text = mounted.root
+    .findAll((node) => node.type === 'Text')
+    .map((node) => node.children.join(''))
+  for (const value of [
+    'Configure report',
+    'count',
+    '0',
+    'confirmed',
+    'No',
+    'Red label',
+    '  ',
+    'Empty answer'
+  ]) {
+    expect(text).toContain(value)
+  }
+  expect(text).not.toContain('omitted')
+  expect(text).not.toContain('Selected answer unavailable')
+  await act(async () => mounted.unmount())
+})
+
+it('submits the actual mobile form through its hook with exact defaults, editable invalid values, option replacement and optional omission', async () => {
+  const prompt: StructuredApprovalItem = {
+    itemId: 'form-item',
+    revision: 1,
+    sequence: 1,
+    observedAt: 1,
+    body: {
+      kind: 'approval',
+      title: 'Enter values',
+      detail: null,
+      options: [
+        { id: 'decline', label: 'Decline' },
+        { id: 'cancel', label: 'Cancel' }
+      ],
+      form: {
+        fields: [
+          { name: 'count', required: true, schema: { type: 'integer', maximum: 10, default: 0 } },
+          { name: 'confirmed', required: true, schema: { type: 'boolean', default: false } },
+          {
+            name: 'color',
+            required: true,
+            schema: { type: 'string', enum: ['blue', 'red'], default: 'blue' }
+          },
+          { name: 'name', required: true, schema: { type: 'string', default: '  ' } },
+          { name: 'note', required: false, schema: { type: 'string', default: '' } }
+        ]
+      },
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    }
+  }
+  const sent: Record<string, unknown>[] = []
+  const mutate: StructuredAgentSessionMutate = async (method, fingerprint, fields) => {
+    expect(method).toBe('agentSession.respondToApproval')
+    expect(fingerprint).toBe('agentSession.respondTo:approval')
+    sent.push(fields)
+    return { status: 'rejected' }
+  }
+  function Form() {
+    const stateRef = useRef({
+      ...EMPTY_STRUCTURED_AGENT_SESSION,
+      status: 'ready' as const,
+      items: [prompt]
+    })
+    const actions = useMobileStructuredPromptResponses({
+      stateRef,
+      mutate,
+      formSubmitEnabled: true,
+      questionAnswersSupported: true,
+      onSendError: vi.fn()
+    })
+    return createElement(MobileNativeChatPromptCard, {
+      permission: projectStructuredPermission(prompt),
+      onRespondPermission: actions.respondPermission
+    })
+  }
+  let tree: ReactTestRenderer | undefined
+  try {
+    await act(async () => {
+      tree = create(createElement(Form))
+    })
+    const press = async (label: string) => {
+      await act(async () => {
+        await tree!.root.findByProps({ accessibilityLabel: label }).props.onPress()
+      })
+    }
+    const edit = (label: string, value: string) => {
+      act(() => tree!.root.findByProps({ accessibilityLabel: label }).props.onChangeText(value))
+    }
+    expect(sent).toEqual([])
+    await press('Submit')
+    expect(sent).toEqual([
+      {
+        itemId: 'form-item',
+        expectedRevision: 1,
+        content: { count: 0, confirmed: false, color: 'blue', name: '  ', note: '' }
+      }
+    ])
+    edit('count', '11')
+    await press('Submit')
+    expect(sent).toHaveLength(1)
+    expect(tree!.root.findByProps({ accessibilityRole: 'alert' }).children.join('')).toContain(
+      'at most 10'
+    )
+    edit('count', '0')
+    edit('name', '')
+    await press('confirmed: Yes')
+    await press('color: red')
+    await press('Clear note')
+    await press('Submit')
+    expect(sent[1]).toEqual({
+      itemId: 'form-item',
+      expectedRevision: 1,
+      content: { count: 0, confirmed: true, color: 'red', name: '' }
+    })
+  } finally {
+    await act(async () => tree?.unmount())
+  }
+})
 
 it('opens a structured sign-in link only on tap and answers separately', async () => {
   vi.mocked(openExternalLink).mockClear()

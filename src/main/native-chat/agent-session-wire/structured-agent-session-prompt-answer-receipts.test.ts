@@ -25,11 +25,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
-import {
-  codexApprovalItem,
-  codexPromptIdentity,
-  codexQuestionItems
-} from '../../codex/codex-structured-prompt-items'
+import { codexApprovalItem, codexPromptIdentity } from '../../codex/codex-structured-prompt-items'
 import {
   CodexPromptRegistry,
   applyCodexPromptAnswer,
@@ -42,7 +38,10 @@ const CONFLICT = {
   ok: false,
   refusal: { code: 'agent_session_operation_conflict', details: { reason: 'operationIdReused' } }
 }
-const UNKNOWN = { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
+const UNKNOWN = {
+  ok: false,
+  refusal: { code: 'agent_session_operation_unknown' }
+}
 const PROMPT = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
 
 let root: string
@@ -313,7 +312,11 @@ describe('a prompt answer', () => {
     await reviseFromProvider(prompt.itemId)
     expect(journal().item(prompt.itemId)?.revision).toBe(prompt.revision + 2)
     const replay = await host.respondToPrompt(CALLER, params)
-    expect(replay).toEqual({ ...first, replayed: true, cursor: expect.anything() })
+    expect(replay).toEqual({
+      ...first,
+      replayed: true,
+      cursor: expect.anything()
+    })
     expect(answerPrompt).toHaveBeenCalledOnce()
   })
 
@@ -325,7 +328,11 @@ describe('a prompt answer', () => {
     const first = await host.respondToPrompt(other, params)
     await reviseFromProvider(prompt.itemId)
     const replay = await host.respondToPrompt(other, params)
-    expect(replay).toEqual({ ...first, replayed: true, cursor: expect.anything() })
+    expect(replay).toEqual({
+      ...first,
+      replayed: true,
+      cursor: expect.anything()
+    })
     expect(replay).toMatchObject({
       value: { revision: prompt.revision + 1, resolution: { resolvedBy: CALLER.callerKey } }
     })
@@ -465,22 +472,14 @@ it.each(['form', 'url'] as const)(
     if (!pending) {
       throw new Error('Missing MCP request')
     }
-    const card =
-      mode === 'url'
-        ? {
-            identity: codexPromptIdentity({ threadId: THREAD, promptKey: pending.promptKey }),
-            body: codexApprovalItem({
-              method: request.method,
-              params: request.params,
-              detail: null
-            })
-          }
-        : codexQuestionItems({
-            threadId: THREAD,
-            promptKey: pending.promptKey,
-            params: request.params,
-            method: request.method
-          })[0]!
+    const card = {
+      identity: codexPromptIdentity({ threadId: THREAD, promptKey: pending.promptKey }),
+      body: codexApprovalItem({
+        method: request.method,
+        params: request.params,
+        detail: null
+      })
+    }
     acquire.mock.calls
       .at(-1)?.[0]
       .events?.appendItem(card.identity, card.body, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })

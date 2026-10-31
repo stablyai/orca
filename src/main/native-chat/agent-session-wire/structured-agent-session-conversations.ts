@@ -1,3 +1,4 @@
+import { invalidateSettledBodySerializations } from './agent-session-settled-body'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -32,12 +33,17 @@ export class StructuredAgentSessionConversations extends Map<
   }
 
   override set(sessionId: string, session: StructuredAgentSessionHostSession): this {
+    const previous = this.get(sessionId)
+    if (previous && previous !== session) {
+      invalidateSettledBodySerializations(previous.journal, true)
+    }
     const { journal } = session
     let queued = false
     journal.observeCommits((rows) => {
       if (this.get(sessionId)?.journal !== journal) {
         return
       }
+      invalidateSettledBodySerializations(journal)
       try {
         this.delivery.observe?.(sessionId, journal, rows)
       } catch (error) {
@@ -91,6 +97,10 @@ export class StructuredAgentSessionConversations extends Map<
   }
 
   override delete(sessionId: string): boolean {
+    const session = this.get(sessionId)
+    if (session) {
+      invalidateSettledBodySerializations(session.journal, true)
+    }
     this.delivery.forget?.(sessionId)
     this.activity.delete(sessionId)
     return super.delete(sessionId)

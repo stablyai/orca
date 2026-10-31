@@ -245,6 +245,7 @@ export function useMobileNativeChatController(args: {
     nativeChatSession,
     nativeChatStructured: activeChatStructured,
     nativeChatVisualSource: activeChatStructured ? structuredNativeChat.visualSource : null,
+    nativeChatSettledBodyOwner: activeChatStructured ? structuredNativeChat.settledBodyOwner : null,
     nativeChatItemSource:
       activeChatStructured && agentSessionHostSupport?.itemDetail === true
         ? structuredNativeChat.visualSource

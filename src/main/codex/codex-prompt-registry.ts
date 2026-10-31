@@ -1,3 +1,7 @@
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { codexPromptIdentity, codexQuestionItems } from './codex-structured-prompt-items'
+import { digestPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { MAX_CODEX_PENDING_PROMPTS } from './codex-structured-journal-limits'
 import { randomUUID } from 'node:crypto'
 import {
   MAX_CODEX_PROMPT_JOURNAL_BINDINGS,
@@ -53,32 +57,80 @@ export class CodexPromptRegistry {
     method: string
     params: unknown
   }): CodexPendingPrompt | null {
+    const admission = this.admit(request)
+    return admission.kind === 'admitted' ? admission.prompt : null
+  }
+
+  admit(request: {
+    id: number | string
+    method: string
+    params: unknown
+  }):
+    | { kind: 'admitted'; prompt: CodexPendingPrompt; replay: boolean }
+    | { kind: 'unsupported' | 'refused' } {
     const prompt = readCodexPendingPrompt(request, this.registryId)
     if (!prompt) {
-      return null
+      return { kind: 'unsupported' }
     }
-    const promptBytes = codexPromptRegistryEntryBytes(prompt)
-    if (promptBytes > MAX_CODEX_PROMPT_REGISTRY_BYTES) {
-      return null
-    }
-    while (
-      this.retainedPromptBytes() + promptBytes > MAX_CODEX_PROMPT_REGISTRY_BYTES &&
-      this.byAddress.size > 0
+    const rows =
+      prompt.method === CODEX_USER_INPUT_METHOD
+        ? codexQuestionItems({
+            threadId: prompt.threadId,
+            promptKey: prompt.promptKey,
+            params: request.params
+          })
+        : [{ identity: codexPromptIdentity(prompt), questionId: null }]
+    prompt.journalRows = new Map(
+      rows.map((row) => [agentJournalItemKey(row.identity), row.questionId])
+    )
+    prompt.requestFingerprint = digestPayload(JSON.stringify(request.params))
+    if (
+      rows.length === 0 ||
+      prompt.journalRows.size !== rows.length ||
+      (prompt.method === CODEX_USER_INPUT_METHOD &&
+        (rows.length !== prompt.questionIds.length ||
+          new Set(prompt.questionIds).size !== rows.length ||
+          rows.some(
+            (row) => row.questionId === null || !prompt.questionIds.includes(row.questionId)
+          )))
     ) {
-      const oldest = this.byAddress.values().next().value
-      if (!oldest) {
-        break
-      }
-      this.byAddress.delete(this.address(oldest.threadId, oldest.promptKey))
+      return { kind: 'refused' }
     }
-    if (this.retainedPromptBytes() + promptBytes > MAX_CODEX_PROMPT_REGISTRY_BYTES) {
-      return null
-    }
+    const retained = this.retainedPrompts()
     const address = this.address(prompt.threadId, prompt.promptKey)
-    this.byAddress.delete(address)
+    for (const prior of retained) {
+      if (prior.threadId === prompt.threadId && prior.requestId === prompt.requestId) {
+        return prior.method === prompt.method &&
+          prior.requestFingerprint === prompt.requestFingerprint
+          ? { kind: 'admitted', prompt: prior, replay: true }
+          : { kind: 'refused' }
+      }
+      if (
+        this.address(prior.threadId, prior.promptKey) === address ||
+        [...prompt.journalRows.keys()].some((id) => prior.journalRows.has(id))
+      ) {
+        return { kind: 'refused' }
+      }
+    }
+    const reserved = [...retained].reduce(
+      (total, prior) =>
+        total +
+        [...prior.journalRows.values()].filter((id) => id === null || !prior.answers.has(id))
+          .length,
+      0
+    )
+    if (
+      retained.size + 1 > MAX_CODEX_PROMPT_REGISTRY_ENTRIES ||
+      reserved + rows.length >
+        Math.min(MAX_CODEX_PENDING_PROMPTS, MAX_CODEX_PROMPT_JOURNAL_BINDINGS) ||
+      this.retainedPromptBytes() + codexPromptRegistryEntryBytes(prompt) >
+        MAX_CODEX_PROMPT_REGISTRY_BYTES
+    ) {
+      return { kind: 'refused' }
+    }
+    // Reserve the complete obligation before publication can reenter delivery.
     this.byAddress.set(address, prompt)
-    this.trim()
-    return prompt
+    return { kind: 'admitted', prompt, replay: false }
   }
 
   bindJournalItemId(
@@ -87,21 +139,20 @@ export class CodexPromptRegistry {
     promptKey: string,
     turnId?: string | null
   ): void {
-    if (this.journalItemIds.has(journalItemId)) {
-      this.boundPrompts.delete(journalItemId)
-    }
-    this.journalItemIds.delete(journalItemId)
     const address = this.address(threadId, promptKey)
     const prompt = this.byAddress.get(address)
-    if (!prompt) {
+    if (!prompt || !prompt.journalRows.has(journalItemId)) {
       return
+    }
+    const previous = this.boundPrompts.get(journalItemId)
+    if (previous && previous !== prompt) {
+      throw new Error('A live prompt binding cannot be replaced.')
     }
     if (prompt.turnId === null && prompt.turnIdDigest === undefined && turnId) {
       Object.assign(prompt, codexPromptTurnIdentity(turnId))
     }
     this.journalItemIds.set(journalItemId, address)
     this.boundPrompts.set(journalItemId, prompt)
-    this.trim()
   }
 
   find(journalItemId: string): CodexPendingPrompt | null {
@@ -199,10 +250,7 @@ export class CodexPromptRegistry {
   }
 
   private kind(prompt: CodexPendingPrompt): 'approval' | 'question' {
-    return prompt.method === CODEX_USER_INPUT_METHOD ||
-      (prompt.elicitation?.kind === 'form' && prompt.questionIds.length > 0)
-      ? 'question'
-      : 'approval'
+    return prompt.method === CODEX_USER_INPUT_METHOD ? 'question' : 'approval'
   }
 
   reserveAnswer(claim: CodexPromptClaim, answer: string): boolean {
@@ -218,12 +266,24 @@ export class CodexPromptRegistry {
     return true
   }
 
-  private retainedPromptBytes(): number {
-    const prompts = new Set([
+  completePartialAnswer(claim: CodexPromptClaim): void {
+    if (this.boundPrompts.get(claim.itemId) === claim.prompt) {
+      this.boundPrompts.delete(claim.itemId)
+      this.journalItemIds.delete(claim.itemId)
+    }
+    this.releaseClaim(claim)
+  }
+
+  private retainedPrompts(): Set<CodexPendingPrompt> {
+    return new Set([
       ...this.byAddress.values(),
       ...this.boundPrompts.values(),
       ...this.claims.keys()
     ])
+  }
+
+  private retainedPromptBytes(): number {
+    const prompts = this.retainedPrompts()
     const claimedBytes = [...this.claims.values()].reduce(
       (total, claim) => total + Buffer.byteLength(claim.answer ?? '', 'utf8'),
       0
@@ -232,23 +292,5 @@ export class CodexPromptRegistry {
       claimedBytes +
       [...prompts].reduce((total, prompt) => total + codexPromptRegistryEntryBytes(prompt), 0)
     )
-  }
-
-  private trim(): void {
-    while (this.byAddress.size > MAX_CODEX_PROMPT_REGISTRY_ENTRIES) {
-      const oldest = this.byAddress.values().next().value
-      if (!oldest) {
-        break
-      }
-      this.byAddress.delete(this.address(oldest.threadId, oldest.promptKey))
-    }
-    while (this.journalItemIds.size > MAX_CODEX_PROMPT_JOURNAL_BINDINGS) {
-      const oldest = this.journalItemIds.keys().next().value
-      if (!oldest) {
-        break
-      }
-      this.journalItemIds.delete(oldest)
-      this.boundPrompts.delete(oldest)
-    }
   }
 }

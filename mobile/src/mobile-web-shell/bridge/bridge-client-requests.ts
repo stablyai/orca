@@ -7,6 +7,7 @@ import { BridgeReplyAssembler } from './bridge-reply-chunking'
 export type PendingRequest = {
   resolve: (response: RpcResponse) => void
   reject: (error: unknown) => void
+  timeout?: ReturnType<typeof setTimeout>
 }
 
 // Discard assembler state whenever a request settles or is abandoned; a missing final part otherwise holds one of the 64 slots until page close.
@@ -22,13 +23,19 @@ export class BridgeClientRequests {
     return this.pending.has(id)
   }
 
-  open(id: string, request: PendingRequest): void {
+  open(id: string, request: PendingRequest, timeoutMs = 30_000): void {
+    request.timeout = setTimeout(
+      () => this.fail(id, markRpcDeliveryUnknown(new Error('Request timed out'))),
+      timeoutMs
+    )
     this.pending.set(id, request)
   }
 
   // A frame that never left has no assembler slot; settle it locally.
   abandon(id: string): void {
+    clearTimeout(this.pending.get(id)?.timeout)
     this.pending.delete(id)
+    this.assembler.discard(id)
   }
 
   acceptReply(message: BridgeReplyMessage): void {
@@ -51,6 +58,7 @@ export class BridgeClientRequests {
 
   fail(id: string, error: unknown): void {
     this.settle(id, (request) => {
+      clearTimeout(request.timeout)
       request.reject(error)
     })
   }
@@ -59,6 +67,7 @@ export class BridgeClientRequests {
   closeAll(reason: Error = new BridgeClientClosedError()): void {
     const error = markRpcDeliveryUnknown(reason)
     for (const request of this.pending.values()) {
+      clearTimeout(request.timeout)
       request.reject(error)
     }
     this.pending.clear()
@@ -72,6 +81,7 @@ export class BridgeClientRequests {
       return
     }
     this.pending.delete(id)
+    clearTimeout(request.timeout)
     settleWith(request)
   }
 }

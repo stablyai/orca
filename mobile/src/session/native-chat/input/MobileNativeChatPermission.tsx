@@ -1,3 +1,5 @@
+import { MobileNativeChatForm } from './MobileNativeChatForm'
+import type { MobilePermissionResponse } from './mobile-native-chat-permission'
 import { memo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
@@ -22,7 +24,7 @@ function MobileNativeChatPermissionImpl({
   onCollapse
 }: {
   permission: MobileChatPermission
-  onRespond: (send: string) => Promise<boolean>
+  onRespond: MobilePermissionResponse
   onCancel?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
   // Collapse writes nothing to the agent.
   onCollapse?: () => void
@@ -33,17 +35,18 @@ function MobileNativeChatPermissionImpl({
   const submittingRef = useRef(false)
   // Unknown newer-host subjects allow only cancellation; preserve their detail for the reader.
   const newerSubject = isNewerApprovalSubject(permission.subject)
-  const respond = async (send: string): Promise<void> => {
+  const respond = async (...args: Parameters<MobilePermissionResponse>): Promise<boolean> => {
     if (submittingRef.current) {
-      return
+      return false
     }
     submittingRef.current = true
     setSubmitting(true)
-    const accepted = await onRespond(send)
+    const accepted = await onRespond(...args)
     if (!accepted) {
       submittingRef.current = false
       setSubmitting(false)
     }
+    return accepted
   }
   return (
     <View testID="native-chat-approval-card" style={styles.card}>
@@ -65,6 +68,14 @@ function MobileNativeChatPermissionImpl({
         />
       </View>
       <MobileNativeChatPermissionContext permission={permission} newerSubject={newerSubject} />
+      {permission.form && !newerSubject ? (
+        <MobileNativeChatForm
+          form={permission.form}
+          disabled={submitting}
+          submitDisabled={permission.formSubmitEnabled === false}
+          onSubmit={(content) => respond('', content, permission.prompt)}
+        />
+      ) : null}
       <View testID="native-chat-approval-actions" style={styles.options}>
         {permission.url ? (
           <Pressable
@@ -77,7 +88,7 @@ function MobileNativeChatPermissionImpl({
           </Pressable>
         ) : null}
         {permission.options.map((option, index) => {
-          const isPrimary = index === 0
+          const isPrimary = index === 0 && !permission.form
           return (
             <Pressable
               key={`${option.send}:${option.label}`}

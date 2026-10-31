@@ -27,10 +27,15 @@ type CodexPromptRegistryEntryBounds = {
   answers: ReadonlyMap<string, string>
   offeredDecisions?: readonly string[]
   elicitation?: unknown
+  journalRows?: ReadonlyMap<string, string | null>
+  requestFingerprint?: string
 }
 
 export function codexPromptRegistryEntryBytes(prompt: CodexPromptRegistryEntryBounds): number {
-  let bytes = 0
+  let bytes = Buffer.byteLength(prompt.requestFingerprint ?? '', 'utf8')
+  for (const id of prompt.journalRows?.keys() ?? []) {
+    bytes += Buffer.byteLength(id, 'utf8')
+  }
   if (prompt.elicitation) {
     bytes += Buffer.byteLength(JSON.stringify(prompt.elicitation), 'utf8')
   }

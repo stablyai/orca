@@ -1,3 +1,5 @@
+import { useNativeChatSettledBody } from './native-chat-settled-body'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
@@ -10,7 +12,7 @@ import {
 } from '../../../../shared/native-chat-resolution-receipt'
 
 export function NativeChatResolutionReceipt({
-  body,
+  body: presentation,
   disclosureId,
   awaiting = true
 }: {
@@ -20,6 +22,10 @@ export function NativeChatResolutionReceipt({
   /** False once the prompting agent ends: report the pending question without implying anyone still waits. */
   awaiting?: boolean
 }): React.JSX.Element | null {
+  const hydrated = useNativeChatSettledBody(presentation)
+  const body =
+    presentation.deferredBody && hydrated.status === 'ready' ? hydrated.body : presentation
+  const incomplete = !!body.deferredBody
   const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`
   const subject = nativeChatReceiptSubject(body)
   if (body.resolution.state === 'pending') {
@@ -34,7 +40,7 @@ export function NativeChatResolutionReceipt({
   const { resolution } = body
   const title = body.kind === 'approval' ? (body.displayName ?? body.title) : body.question
   // Non-empty only once resolved, and then each question is listed with its answer.
-  const answers = nativeChatReceiptAnswers(body)
+  const answers = incomplete ? [] : nativeChatReceiptAnswers(body)
   return (
     <div
       className="space-y-1 border-l border-border pl-3 text-xs text-chat-foreground-faint"
@@ -53,14 +59,36 @@ export function NativeChatResolutionReceipt({
       {body.kind === 'approval' && body.detail ? (
         <p className="line-clamp-3 whitespace-pre-wrap break-words">{body.detail}</p>
       ) : null}
+      {incomplete ? (
+        hydrated.status === 'loading' ? (
+          <LoadingSpinner className="size-3" />
+        ) : (
+          <p>
+            {translate(
+              'components.native-chat.receipt.unavailable',
+              NATIVE_CHAT_RECEIPT_COPY.unavailable
+            )}
+          </p>
+        )
+      ) : null}
       {answers.map((answer, index) => {
         const heading = nativeChatReceiptAnswerHeading(subject, answer)
         return (
           <div
-            key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
+            key={
+              body.kind === 'question'
+                ? (body.questions?.[index]?.id ?? 'answer')
+                : `${index}:${answer.question ?? ''}`
+            }
           >
             {heading ? <p>{heading}</p> : null}
-            <p className="line-clamp-3 whitespace-pre-wrap break-words">
+            <p
+              className={
+                body.kind === 'approval' && body.form
+                  ? 'whitespace-pre-wrap break-words'
+                  : 'line-clamp-3 whitespace-pre-wrap break-words'
+              }
+            >
               {answer.answer === ''
                 ? translate(
                     'components.native-chat.receipt.emptyAnswer',

@@ -1,3 +1,4 @@
+import { reserveRemoteRuntimeRetainedBytes } from '../../../src/shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
@@ -15,7 +16,7 @@ type PendingRequest = { live: boolean }
 export type BridgeHostRequestDeps = {
   client: RpcClient
   isIdTaken: (id: string) => boolean
-  sendReply: (id: string, payload: RpcResponse) => void
+  sendReply: (id: string, payload: RpcResponse) => void | Promise<void>
   sendError: (id: string, error: unknown) => void
   capExceeded: (message: string) => Error
   serveNative: (id: string, method: string, params: unknown) => Promise<RpcResponse>
@@ -84,6 +85,12 @@ export class BridgeHostRequests {
       this.deps.sendError(id, this.deps.capExceeded(`over ${BRIDGE_MAX_PENDING_REQUESTS} requests`))
       return
     }
+    // Hold source/parsed/serialized copies until the underlying call and native reply handoff end.
+    const lease = reserveRemoteRuntimeRetainedBytes(8 * JSON.stringify(message).length + 64 * 1024)
+    if (!lease) {
+      this.deps.sendError(id, this.deps.capExceeded('request memory is busy'))
+      return
+    }
     const record: PendingRequest = { live: true }
     this.pending.set(id, record)
     let answer: Promise<RpcResponse>
@@ -91,24 +98,38 @@ export class BridgeHostRequests {
       answer = this.forward(message)
     } catch (error) {
       this.settle(id, record)
+      lease.release()
       this.deps.sendError(id, error)
       return
     }
     this.inFlight += 1
-    void answer.then(
-      (payload) => {
-        this.inFlight -= 1
-        if (this.settle(id, record)) {
-          this.deps.sendReply(id, payload)
+    void answer
+      .then(
+        async (payload) => {
+          if (!this.settle(id, record)) {
+            return
+          }
+          // The settled source is no longer live; own payload, JSON and framed copies through post.
+          if (!lease.resize(6 * JSON.stringify(payload).length + 2 * 640 * 1024)) {
+            this.deps.sendError(
+              id,
+              markRpcDeliveryUnknown(this.deps.capExceeded('reply memory is busy'))
+            )
+            return
+          }
+          await this.deps.sendReply(id, payload)
+        },
+        (error: unknown) => {
+          if (this.settle(id, record)) {
+            this.deps.sendError(id, error)
+          }
         }
-      },
-      (error: unknown) => {
+      )
+      .catch((error) => this.deps.sendError(id, markRpcDeliveryUnknown(error)))
+      .finally(() => {
         this.inFlight -= 1
-        if (this.settle(id, record)) {
-          this.deps.sendError(id, error)
-        }
-      }
-    )
+        lease.release()
+      })
   }
 
   closeAll(notify: boolean): void {

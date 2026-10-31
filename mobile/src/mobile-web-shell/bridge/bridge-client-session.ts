@@ -10,6 +10,7 @@ import { ZERO_SAFE_AREA_INSETS, type BridgeSafeAreaInsets } from './bridge-safe-
 
 export type BridgeShellSession = {
   sessionId: string
+  inboundMessageBytes?: number
   buildId: string
   grants: BridgeGrants
   route: BridgeInitRoute | null
@@ -36,6 +37,9 @@ export function readShellSession(
   return {
     sessionId: message.sessionId,
     buildId: message.buildId,
+    ...(message.inboundMessageBytes === undefined
+      ? {}
+      : { inboundMessageBytes: message.inboundMessageBytes }),
     grants: message.grants,
     route: message.route ?? null,
     pageRoutes: message.pageRoutes ?? [],

@@ -7,13 +7,18 @@ import type {
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import { boundedFrameItem } from './agent-session-bounded-frame-item'
+import { subscriberReadsSettledBodies } from './agent-session-settled-body-subscriber-field'
 import { boundedQueuePublication } from './agent-session-bounded-queue'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import {
   BOUNDED_FRAME_CONTENT_BUDGET_BYTES,
   type HistoryReader
 } from './agent-session-history-page-bounds'
-import { agentJournalItemForWire, CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
+import {
+  agentJournalItemForWire,
+  CLIENT_HISTORY_READER,
+  SETTLED_BODY_HISTORY_READER
+} from './agent-session-item-wire-form'
 import { jsonBytes, shortenJsonStringsToFit } from './json-string-shortening'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
 
@@ -22,8 +27,21 @@ const BOUNDED_FRAME_READER: HistoryReader = {
   budgetBytes: BOUNDED_FRAME_CONTENT_BUDGET_BYTES
 }
 
-export function subscriberHistoryReader(subscriber: { boundedFrames: boolean }): HistoryReader {
-  return subscriber.boundedFrames ? BOUNDED_FRAME_READER : CLIENT_HISTORY_READER
+const SETTLED_BODY_BOUNDED_READER: HistoryReader = {
+  form: (item) => boundedFrameItem(agentJournalItemForWire(item, true)),
+  budgetBytes: BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+}
+export function subscriberHistoryReader(subscriber: {
+  boundedFrames: boolean
+  emit?: (event: AgentSessionSubscribeEvent) => void
+}): HistoryReader {
+  return subscriberReadsSettledBodies(subscriber.emit)
+    ? subscriber.boundedFrames
+      ? SETTLED_BODY_BOUNDED_READER
+      : SETTLED_BODY_HISTORY_READER
+    : subscriber.boundedFrames
+      ? BOUNDED_FRAME_READER
+      : CLIENT_HISTORY_READER
 }
 
 /** Omit oversized metadata rather than exceeding the envelope; readers treat absence as unspecified. */

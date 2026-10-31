@@ -1,3 +1,4 @@
+import { nativeBridgeInboundMessageBytes } from '../../modules/orca-mobile-web-shell/src'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import type {
   MobileWebShellBridgeMessagePayload,
@@ -118,6 +119,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     const host = createBridgeHost({
       client,
       buildId,
+      inboundMessageBytes: nativeBridgeInboundMessageBytes(),
       sessionId,
       route: latest.route,
       safeAreaInsets: latest.safeAreaInsets,
