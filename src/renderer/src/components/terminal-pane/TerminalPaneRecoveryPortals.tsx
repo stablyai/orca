@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { PtyTransport } from './pty-transport-types'
 import { useWslHostUnavailableReason } from './use-wsl-host-unavailable-reason'
@@ -18,6 +18,8 @@ import { useRetryPanesWhenWslHostReturns } from './use-wsl-host-return-retry'
 import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
 import { useAppStore } from '@/store'
 import { paneShowsWslHostStoppedCard } from '@/lib/wsl-host-stopped-status'
+import { isWslHostStoppedErrorLine } from '../../../../shared/wsl-host-stopped-message'
+import { mapPaneTerminalErrors } from './terminal-error-accumulation'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 
 /** Reconnect pairs refused servers, signs in SSH hosts awaiting credentials, or otherwise retries the pane. */
@@ -55,6 +57,14 @@ export function createPaneRecoveryReconnect(
   }
 }
 
+function withoutWslHostStoppedLines(error: string): string | null {
+  const kept = error
+    .split('\n')
+    .filter((line) => !isWslHostStoppedErrorLine(line))
+    .join('\n')
+  return kept.length > 0 ? kept : null
+}
+
 export function TerminalPaneRecoveryPortals({
   controller
 }: {
@@ -70,7 +80,19 @@ export function TerminalPaneRecoveryPortals({
     ownerEnvironmentId ? state.wslHostStatuses[ownerEnvironmentId] : undefined
   )
   const stoppedWslDistro = ownerWslHost?.state === 'distro-stopped' ? ownerWslHost.distro : null
-  useRetryPanesWhenWslHostReturns(ownerEnvironmentId, ownerWslHost?.state, paneTransportsRef)
+  const { setTerminalError, setTerminalErrorsByPaneId } = controller
+  const clearStoppedHostErrors = useCallback(() => {
+    setTerminalError((current) => (current === null ? null : withoutWslHostStoppedLines(current)))
+    setTerminalErrorsByPaneId((current) =>
+      mapPaneTerminalErrors(current, withoutWslHostStoppedLines)
+    )
+  }, [setTerminalError, setTerminalErrorsByPaneId])
+  useRetryPanesWhenWslHostReturns(
+    ownerEnvironmentId,
+    ownerWslHost?.state,
+    paneTransportsRef,
+    clearStoppedHostErrors
+  )
   const retryingOutageEnvironmentId = useRetryingOutageEnvironmentId(controller.worktreeId)
   const isolated = controller.isolatedPaneKey !== null
   // Why: a pane waiting for SSH sign-in says so itself; "reconnecting" over it would be false.
