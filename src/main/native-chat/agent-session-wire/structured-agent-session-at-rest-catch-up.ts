@@ -62,7 +62,7 @@ export async function catchUpStructuredSessionAtRest(input: {
   stoppedTurnId?: string
   /** The saved prompt of the turn this switch stopped, for a transcript that never started it. */
   stoppedUserItemKey?: string
-  /** The CLI writer census passed and the structured owner is at rest. */
+  /** No CLI writer (admitted before the stop) and the structured owner at rest. */
   settleAbandoned?: boolean
   check?: () => void
 }): Promise<void> {

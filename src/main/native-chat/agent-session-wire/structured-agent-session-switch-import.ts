@@ -212,7 +212,7 @@ export async function catchUpSwitchedCliTranscript(input: {
   fence: number
   deadline: AgentSessionSwitchDeadline
   stopped?: SwitchStoppedCliTurn
-  /** The CLI writer census passed and the structured owner is at rest: an open turn is over. */
+  /** No CLI writer (admitted before the stop) and the structured owner at rest: an open turn is over. */
   settleAbandoned?: boolean
   check?: () => void
   resumeCursor?: string
