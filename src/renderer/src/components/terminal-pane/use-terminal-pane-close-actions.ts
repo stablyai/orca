@@ -144,7 +144,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       const transport = paneTransportsRef.current.get(paneId)
       const pending = capturePendingTerminalPaneClose(controller, paneId, useAppStore.getState)
       const ptyId = transport?.getPtyId() ?? pending?.ptyId
-      if (!ptyId) {
+      if (!ptyId || pending?.stopped) {
         executeClosePane(paneId)
         return
       }

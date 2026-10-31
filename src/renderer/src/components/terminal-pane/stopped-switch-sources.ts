@@ -237,6 +237,14 @@ export function readMirroredStoppedSwitchSource(
     : null
 }
 
+/** A switch stopped the process this leaf shows, with proof of exit: nothing runs to warn about. */
+export function isStoppedSwitchSource(tabId: string, leafId: string, ptyId: string): boolean {
+  return Boolean(
+    readStoppedSwitchSource(tabId, leafId, ptyId) ??
+    readMirroredStoppedSwitchSource(tabId, leafId, ptyId)
+  )
+}
+
 export function getStoppedSwitchSourceReconcileCountForTests(): number {
   return reconcileCount
 }

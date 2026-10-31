@@ -227,3 +227,26 @@ it.each(['probe', 'dialog'] as const)(
     expect(p.closed()).toBe(false)
   }
 )
+
+it('closes a split pane a switch stopped at once, with no running-process confirmation', async () => {
+  const p = await prepare()
+  const sources = await import('./stopped-switch-sources')
+  // A failed switch left this pane stopped, its leaf still bound to the stopped process.
+  sources.noteStoppedSwitchSource({
+    worktreeId: 'workspace',
+    tabId: p.tabId,
+    leafId: p.leafId,
+    ptyId: 'pty-restored',
+    switched: { agent: 'codex' }
+  })
+  try {
+    p.actions.handleRequestClosePane(1)
+    await flushPtySideEffects()
+    expect(p.probePtyRunningWork).not.toHaveBeenCalled()
+    expect(p.controller.setPendingCloseConfirmation).not.toHaveBeenCalled()
+    await p.settle()
+    expect(p.closed()).toBe(true)
+  } finally {
+    sources.resetStoppedSwitchSourcesForTests()
+  }
+})
