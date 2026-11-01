@@ -1,14 +1,26 @@
-import { materializeScenario } from './scenario-execution-mode'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../src/shared/github/work-item-target'
 import { resolve } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
 import {
   createBridgePortPair,
   disposeBridgePortPair,
   type BridgePortPair
 } from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import type { RpcClient } from '../../transport/rpc-client'
-import { BRIDGED_PARITY_FLAG, BRIDGED_PARITY_OFF } from '../bridged-parity/divergence-classes'
+import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
+import type { RpcResponse } from '../../transport/types'
+import {
+  bridgedParityMembershipDrift,
+  BRIDGED_PARITY_BASELINE,
+  BRIDGED_PARITY_EXCLUSIONS,
+  BRIDGED_PARITY_FLAG,
+  BRIDGED_PARITY_NAMEABLE,
+  BRIDGED_PARITY_OFF,
+  classifyBridgedParity,
+  type BridgedParityClass,
+  type BridgedParityEvidence
+} from '../bridged-parity/divergence-classes'
 import { C5_PAGE_CLOSURE } from '../bridged-parity/c5-page-closure'
 import { C6_BROWSER_CLOSURE_FAMILIES } from '../bridged-parity/c6-browser-closure-families'
 import { C2_PAGE_CLOSURE } from '../bridged-parity/c2-page-closure'
@@ -16,19 +28,40 @@ import { C3_PAGE_CLOSURE } from '../bridged-parity/c3-page-closure'
 import {
   pageClosureDrift,
   readPageClosure,
+  type BridgedParityVerdict,
   type PageClosureObservation
 } from '../bridged-parity/page-closure'
 import { strictReplayVerdict, type BridgedReplay } from '../bridged-parity/replay-verdict'
-import { isKeyedObject, withReplyMeta } from '../bridged-parity/divergence-evidence'
-import { familyGoldens, pilotGoldens } from './derived-goldens'
+import {
+  divergingFields,
+  isKeyedObject,
+  paramsMismatchEvidence,
+  refusalReleasedStream,
+  refusedFrames,
+  scriptsAbsentResultReply,
+  withReplyMeta
+} from '../bridged-parity/divergence-evidence'
+import {
+  CHANGED_PRODUCERS,
+  expectedUnchangedTally,
+  NATIVE_ONLY_CHANGED,
+  refusedReplyExpectation,
+  rows,
+  STRICT_OWN_UNDEFINED
+} from './changed-bridge-outcomes'
+import { familyGoldens, pilotGoldens, type DerivedGolden } from './derived-goldens'
 import { compareGolden, readGolden } from './golden-recording'
 import { pilotMountAdapters } from './pilot-mount-adapters'
-import type { Observation, Recording, RecordingScenario } from './recording-scenario'
-import type { AttemptObservation } from './recording-causality'
+import type { Recording, RecordingScenario } from './recording-scenario'
+import { RecordingParamsMismatch, RecordingStreamGuard } from './recording-mismatch'
 import { captureArguments, captureValue, type RecordedValue } from './recording-values'
 import { readScenarios } from './scenario-input'
 import { runRecording } from './run-recording'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
+import { attempts, comparison, response } from './bridged-replay-comparison'
+
+// Replay every producer through the actual page bridge. Unchanged members keep main's limited verdicts and
+// bounded tally; changed members and bridge-only probes earn direct outcomes; every producer is routed once.
 
 const root = resolve(import.meta.dirname, '../../../..')
 const input = readScenarios(
@@ -43,10 +76,33 @@ function afterCorpus(_id: string, check: () => void) {
   corpusChecks.push(check)
 }
 
+type Route = 'unchanged' | 'direct' | 'bridge-only'
+const accounted = new Map<string, Route[]>()
+function account(id: string, route: Route) {
+  accounted.set(id, [...(accounted.get(id) ?? []), route])
+}
+const counts: Record<BridgedParityClass, number> = {
+  'reply-meta-required': 0,
+  'result-absent-settlement': 0,
+  'result-absent-observation': 0,
+  'result-absent-stream-release': 0,
+  'params-undefined': 0,
+  'write-ordinal': 0,
+  unclassified: 0
+}
+let identical = 0
+const members = new Map<BridgedParityClass, string[]>()
+const samples = new Map<BridgedParityClass, string>()
+const changed = new Set(CHANGED_PRODUCERS)
+const strictOwnUndefined = new Set(STRICT_OWN_UNDEFINED)
+
+type PageMode = 'page-original' | 'page-reply-meta'
+
 async function replay(
   id: string,
   scenarios: readonly RecordingScenario[],
-  mode: 'native' | 'page-original' | 'page-reply-meta'
+  mode: PageMode,
+  keepClient?: (client: RpcClient) => RpcClient
 ): Promise<BridgedReplay> {
   const pairs: BridgePortPair<RpcClient>[] = []
   const checkpoints: Recording['checkpoints'] = []
@@ -56,26 +112,24 @@ async function replay(
         scenario,
         pilotMountAdapters(root, { device: scenario }).adapters[scenario.operation]!,
         vitestRecordingScheduler({ producer: id, scenario: scenario.id }),
-        mode === 'native'
-          ? undefined
-          : (rpc, observation) => {
-              const pair = createBridgePortPair({
-                rpc,
-                observation: observation.openBridge(),
-                sessionId: 'recording-session',
-                buildId: 'recording-build',
-                ...(mode === 'page-reply-meta' ? { rewriteToPage: withReplyMeta } : {})
-              })
-              pairs.push(pair)
-              observation.onDispose(() => disposeBridgePortPair(pair))
-              for (let round = 0; round < 4; round += 1) {
-                pair.drainNow()
-              }
-              if (pair.client.getShellSession() === null) {
-                throw new Error('The actual page did not receive init')
-              }
-              return pair.client
-            }
+        (rpc, observation) => {
+          const pair = createBridgePortPair({
+            rpc,
+            observation: observation.openBridge(),
+            sessionId: 'recording-session',
+            buildId: 'recording-build',
+            ...(mode === 'page-reply-meta' ? { rewriteToPage: withReplyMeta } : {})
+          })
+          pairs.push(pair)
+          observation.onDispose(() => disposeBridgePortPair(pair))
+          for (let round = 0; round < 4; round += 1) {
+            pair.drainNow()
+          }
+          if (pair.client.getShellSession() === null) {
+            throw new Error('The actual page did not receive init')
+          }
+          return keepClient ? keepClient(pair.client) : pair.client
+        }
       )
       checkpoints.push(
         ...recording.checkpoints.map((checkpoint) =>
@@ -91,360 +145,313 @@ async function replay(
   }
 }
 
-function rows(value: RecordedValue): Record<string, RecordedValue>[] {
-  if (!Array.isArray(value) || !value.every((row) => isKeyedObject(row))) {
-    throw new Error('Missing actual recorded rows')
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all rows were checked as non-array objects immediately above.
-  return value as Record<string, RecordedValue>[]
-}
-function attempts(observation: Observation): AttemptObservation[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runner clones the transport attempt array at this exact Recording boundary.
-  return observation.sender as unknown as AttemptObservation[]
-}
+const AFTER_PRELUDE_ACTION = 'bridge-only-after-prelude-action'
+const PRELUDE_TEARDOWN_MESSAGE = 'Connection closed'
+const PRELUDE_TEARDOWN_DELIVERY_UNKNOWN = true
 
-// Only known protocol response slots are translated. Result/user objects are never traversed.
-function response(
-  value: RecordedValue,
-  original: RecordedValue,
-  ids: ReadonlyMap<string, string>,
-  replyMeta: boolean
-): RecordedValue {
-  if (!isKeyedObject(value) || typeof value.id !== 'string' || typeof value.ok !== 'boolean') {
-    return value
-  }
-  const id = ids.get(value.id)
-  if (!id) {
-    throw new Error('Reply has no actual physical binding')
-  }
-  const translated: Record<string, RecordedValue> = { ...value, id }
+// Only a bare typed guard is evidence; capture, scheduler, transparent-call or added cleanup failures stay fatal.
+function admitThrown(run: BridgedReplay): void {
   if (
-    replyMeta &&
-    isKeyedObject(original) &&
-    !Object.hasOwn(original, '_meta') &&
-    Object.hasOwn(translated, '_meta')
+    run.didThrow &&
+    !(run.thrown instanceof RecordingParamsMismatch) &&
+    !(run.thrown instanceof RecordingStreamGuard)
   ) {
-    expect(translated._meta).toEqual({ runtimeId: 'counterfactual-runtime' })
-    delete translated._meta
+    throw run.thrown
   }
-  return translated
 }
 
-function comparison(
-  expected: Recording,
-  raw: Recording,
-  scenarios: readonly RecordingScenario[],
-  replyMeta: boolean
-): { expected: Recording; actual: Recording } {
-  expect(raw.scenario).toBe(expected.scenario)
-  expect(raw.checkpoints.map((checkpoint) => checkpoint.id)).toEqual(
-    expected.checkpoints.map((checkpoint) => checkpoint.id)
-  )
-  const project = (before: Observation, after: Observation, checkpoint: string) => {
-    const sources =
-      scenarios.length === 1
-        ? [...scenarios]
-        : scenarios.filter(
-            (scenario) =>
-              scenario.steps.some(
-                (step) => 'checkpoint' in step && `${scenario.id}:${step.checkpoint}` === checkpoint
-              ) || `${scenario.id}:cleanup` === checkpoint
-          )
-    if (sources.length !== 1) {
-      throw new Error('Missing or crossed checkpoint input occurrence')
-    }
-    const source = sources[0]!
-    const base = input.scenarios.find((candidate) => candidate.id === source.lineage?.baseScenario)
-    if (!base) {
-      throw new Error('Missing actual base input for probe declarations')
-    }
-    const declarations = (source.bridgeOperations ?? []).map((operation) => {
-      const step =
-        source.steps.find(
-          (step) => step.bridgeSite && 'complete' in step && step.complete === operation.probeSite
-        ) ??
-        materializeScenario(base, 'bridge').steps.find(
-          (step) => step.bridgeSite && 'complete' in step && step.complete === operation.probeSite
-        )
-      if (!step) {
-        throw new Error('Operation has no source-declared probe')
-      }
-      return step
-    })
-    const probeNames = new Set(
-      declarations.map((step) => {
-        if (!('complete' in step)) {
-          throw new Error('Declared probe is not a completion')
-        }
-        return step.complete
-      })
-    )
-    if (probeNames.size !== declarations.length) {
-      throw new Error('Duplicate declared probe')
-    }
-    const nativePayloads = rows(before.payloads)
-    const rawPayloads = rows(after.payloads)
-    const names = new Map<string, string>()
-    const probeIds = new Set<string>()
-    for (const sender of attempts(after)) {
-      const posts = sender.bridge?.posts
-      if (!posts) {
-        throw new Error('Missing actual page invocation')
-      }
-      if (posts.length === 0) {
-        expect(nativePayloads.filter((row) => row.name === sender.name)).toEqual([])
-        expect(sender.settlement.status).toBe('rejected')
-        expect(sender.bridge!.page!.afterArgs).toEqual(sender.args)
-        continue
-      }
-      if (posts.length !== 1) {
-        throw new Error('Duplicate actual page request')
-      }
-      const post = posts[0]!
-      const posted: unknown = JSON.parse(post.json)
-      if (
-        !isKeyedObject(posted) ||
-        posted.type !== 'request' ||
-        posted.id !== post.id ||
-        post.parent !== sender.name
-      ) {
-        throw new Error('Crossed actual page request')
-      }
-      const declared = post.children.filter((child) => probeNames.has(child.name))
-      const children = post.children.filter((child) => !probeNames.has(child.name))
-      const expectedOperation = sources[0]!.bridgeOperations?.find(
-        (entry) => entry.request === sender.name
-      )
-      expect(declared).toHaveLength(expectedOperation ? 1 : 0)
-      if (expectedOperation) {
-        expect(post.children.map((child) => child.method)).toEqual(
-          expectedOperation.methods.slice(0, post.children.length)
-        )
-      }
-      for (const probe of declared) {
-        const declaration = declarations.find(
-          (step) => 'complete' in step && step.complete === probe.name
-        )
-        if (
-          !declaration ||
-          !('complete' in declaration) ||
-          declaration.reject ||
-          !probe.frame ||
-          probe.method !== 'status.get'
-        ) {
-          throw new Error('Unexpected bridge-only probe')
-        }
-        expect(probe.args).toEqual(
-          captureArguments([
-            'status.get',
-            undefined,
-            {
-              timeoutMs: 30_000,
-              ...(isKeyedObject(posted.options) ? posted.options : {}),
-              beforeSend: () => {}
-            }
-          ])
-        )
-        if (probe.completion) {
-          expect(probe.completion.reply).toEqual(captureValue(declaration.reply))
-          expect(probe.settlement.status).toBe('fulfilled')
-        } else if (checkpoint === 'cleanup' || checkpoint === `${source.id}:cleanup`) {
-          expect(probe.settlement).toMatchObject({
-            status: 'rejected',
-            error: { message: 'Connection closed', isRpcDeliveryUnknown: true }
-          })
-          expect(sender.settlement).toMatchObject({
-            status: 'rejected',
-            error: { category: 'BridgeClientClosedError', message: 'the page bridge was closed' }
-          })
-        } else {
-          expect(probe.settlement.status).toBe('pending')
-        }
-        const payload = rawPayloads.find((row) => row.name === probe.name)
-        if (!payload || typeof payload.json !== 'string') {
-          throw new Error('Probe has no actual bytes')
-        }
-        expect(JSON.parse(payload.json)).toEqual({
-          id: probe.frame.id,
-          deviceToken: 'recording-device',
-          method: 'status.get'
-        })
-        probeIds.add(probe.frame.id)
-      }
-      if (!children.length && declared.length === 1 && !declared[0]!.completion) {
-        continue
-      }
-      if (children.length !== 1) {
-        throw new Error('Actual operation did not forward exactly once')
-      }
-      const child = children[0]!
-      if (
-        (child.frame || child.allocation) &&
-        (!child.frame || !child.allocation || child.frame.id !== child.allocation.id)
-      ) {
-        throw new Error('Missing actual operation allocation/frame')
-      }
-      expect(child.method).toBe(posted.method)
-      if (declared.length) {
-        expect(declared).toHaveLength(1)
-        expect(declared[0]!.completion!.ordinal).toBeLessThan(child.ordinal)
-      }
-      names.set(child.name, sender.name)
-    }
-    const kept = rawPayloads.filter((row) => {
-      if (typeof row.json !== 'string') {
-        throw new Error('Missing raw bytes')
-      }
-      return !probeIds.has(JSON.parse(row.json).id)
-    })
-    expect(kept).toHaveLength(nativePayloads.length)
-    const ids = new Map<string, string>()
-    for (const [index, row] of kept.entries()) {
-      const native = nativePayloads[index]!
-      if (typeof row.json !== 'string' || typeof native.json !== 'string') {
-        throw new Error('Missing request bytes')
-      }
-      const frame = JSON.parse(row.json),
-        original = JSON.parse(native.json)
-      expect(names.get(String(row.name)) ?? row.name).toBe(native.name)
-      expect({ ...frame, id: original.id }).toEqual(original)
-      if (ids.has(frame.id) || [...ids.values()].includes(original.id)) {
-        throw new Error('Non-bijective protocol IDs')
-      }
-      ids.set(frame.id, original.id)
-    }
-    const sender: RecordedValue[] = attempts(after).map((attempt, index) => {
-      const original = attempts(before)[index]
-      if (!original || original.name !== attempt.name) {
-        throw new Error('Changed actual caller sequence')
-      }
-      const { bridge: _bridge, ...value } = attempt
-      if (value.settlement.status === 'fulfilled') {
-        value.settlement = {
-          ...value.settlement,
-          value: response(
-            value.settlement.value,
-            original.settlement.status === 'fulfilled' ? original.settlement.value : null,
-            ids,
-            replyMeta
-          )
-        }
-      }
-      return value
-    })
-    const actual: Observation = {
-      ...after,
-      sender,
-      payloads: kept.map((row) => ({
-        ...row,
-        name: names.get(String(row.name)) ?? row.name,
-        json: JSON.stringify({
-          ...JSON.parse(String(row.json)),
-          id: ids.get(JSON.parse(String(row.json)).id)
-        })
-      }))
-    }
-    const rank = (observation: Observation): Observation => {
-      const events = [
-        ...rows(observation.sender),
-        ...rows(observation.payloads),
-        ...rows(observation.effects)
-      ]
-      const ordinals = events.map((entry) => entry.ordinal)
-      if (
-        !ordinals.every((value) => typeof value === 'number') ||
-        new Set(ordinals).size !== ordinals.length
-      ) {
-        throw new Error('Invalid retained TEST event order')
-      }
-      const map = (value: RecordedValue) =>
-        rows(value).map((entry) => ({
-          ...entry,
-          ordinal: ordinals.filter((ordinal) => Number(ordinal) < Number(entry.ordinal)).length + 1
-        }))
-      return {
-        ...observation,
-        sender: map(observation.sender),
-        payloads: map(observation.payloads),
-        effects: map(observation.effects)
-      }
-    }
-    return probeIds.size
-      ? { expected: rank(before), actual: rank(actual) }
-      : { expected: before, actual }
-  }
-  const views = expected.checkpoints.map((checkpoint, index) =>
-    project(checkpoint.observation, raw.checkpoints[index]!.observation, checkpoint.id)
-  )
+// Compare an unchanged producer as main did: the page-facing caller and the native frames, without the recorder's
+// bridge field, with child frames named by their actual parent invocation.
+function unchangedView(raw: Recording): Recording {
   return {
-    expected: {
-      ...expected,
-      checkpoints: expected.checkpoints.map((checkpoint, index) => ({
+    ...raw,
+    checkpoints: raw.checkpoints.map((checkpoint) => {
+      const parents = new Map<string, string>()
+      const sender = attempts(checkpoint.observation).map((attempt) => {
+        for (const post of attempt.bridge?.posts ?? []) {
+          for (const child of post.children) {
+            parents.set(child.name, attempt.name)
+          }
+        }
+        const { bridge: _bridge, ...value } = attempt
+        return value
+      })
+      return {
         ...checkpoint,
-        observation: views[index]!.expected
-      }))
-    },
-    actual: {
-      ...raw,
-      checkpoints: raw.checkpoints.map((checkpoint, index) => ({
-        ...checkpoint,
-        observation: views[index]!.actual
-      }))
-    }
+        observation: {
+          ...checkpoint.observation,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attempts without their bridge field are recorded values.
+          sender: sender as unknown as RecordedValue,
+          payloads: rows(checkpoint.observation.payloads).map((row) => ({
+            ...row,
+            name: parents.get(String(row.name)) ?? row.name
+          }))
+        }
+      }
+    })
   }
 }
 
-async function verdict(
+// Remove only the counterfactual envelope metadata the reply-meta run injected into a caller's reply; product
+// copies of it remain data.
+function withoutInjectedReplyMeta(view: Recording, expected: Recording): Recording {
+  return {
+    ...view,
+    checkpoints: view.checkpoints.map((checkpoint, index) => {
+      const before = expected.checkpoints[index]
+      const originals = before ? rows(before.observation.sender) : []
+      return {
+        ...checkpoint,
+        observation: {
+          ...checkpoint.observation,
+          sender: rows(checkpoint.observation.sender).map((attempt, at) => {
+            const settlement = attempt.settlement
+            const original = originals[at]?.settlement
+            if (
+              !isKeyedObject(settlement) ||
+              !isKeyedObject(settlement.value) ||
+              typeof settlement.value.ok !== 'boolean' ||
+              !isKeyedObject(settlement.value._meta) ||
+              Object.keys(settlement.value._meta).length !== 1 ||
+              settlement.value._meta.runtimeId !== 'counterfactual-runtime' ||
+              (isKeyedObject(original) &&
+                isKeyedObject(original.value) &&
+                Object.hasOwn(original.value, '_meta'))
+            ) {
+              return attempt
+            }
+            const { _meta: _injected, ...value } = settlement.value
+            return { ...attempt, settlement: { ...settlement, value } }
+          })
+        }
+      }
+    })
+  }
+}
+
+function explain(fields: readonly string[], run: BridgedReplay): string {
+  const refused = refusedFrames(run.pairs.flatMap((pair) => pair.toPage))
+  const [refusal] = refused
+  const read = refusal === undefined ? null : readBridgeHostMessage(refusal)
+  const kinds = run.pairs.flatMap((pair) => pair.diagnostics).map((diagnostic) => diagnostic.kind)
+  return [
+    `  fields    ${fields.slice(0, 4).join(', ') || '(none)'}`,
+    `  threw     ${run.thrown instanceof Error ? run.thrown.message : '(nothing)'}`,
+    `  refused   ${refused.length} frame(s)${
+      read !== null && !read.ok ? `, first "${read.refusal}" on ${refusal?.slice(0, 200)}` : ''
+    }`,
+    `  page saw  ${kinds.join(', ') || '(no diagnostics)'}`
+  ].join('\n')
+}
+
+function record(id: string, family: string, verdict: BridgedParityVerdict, route: Route) {
+  observed.set(id, {
+    family,
+    domain: route === 'bridge-only' ? 'bridge-only' : 'paired',
+    verdict
+  })
+  account(id, route)
+}
+
+function tally(
   id: string,
   family: string,
-  nativeScenarios: readonly RecordingScenario[],
-  scenarios: readonly RecordingScenario[]
+  name: BridgedParityClass,
+  fields: string[],
+  run: BridgedReplay
 ) {
-  const native = await replay(id, nativeScenarios, 'native')
-  const original = await replay(id, scenarios, 'page-original')
-  const counterfactual = await replay(id, scenarios, 'page-reply-meta')
-  for (const run of [native, original, counterfactual]) {
-    if (run.didThrow) {
-      throw run.thrown
-    }
-    if (!run.recording) {
-      throw new Error(`Missing actual recording: ${id}`)
-    }
+  counts[name] += 1
+  record(id, family, name, 'unchanged')
+  members.set(name, [...(members.get(name) ?? []), id])
+  if (!samples.has(name)) {
+    samples.set(name, `${id}\n${explain(fields, run)}`)
   }
-  const expected = readGolden(directory, id)
-  compareGolden(expected, { ...expected, recording: native.recording! })
-  const left = comparison(native.recording!, original.recording!, scenarios, false)
-  const right = comparison(native.recording!, counterfactual.recording!, scenarios, true)
-  const result = strictReplayVerdict(
-    left.expected,
-    scenarios,
-    { ...original, comparison: left.actual },
-    { ...counterfactual, comparison: right.actual }
-  )
-  expect(result.name, `${id}: ${JSON.stringify(result)}`).not.toBe('unclassified')
-  observed.set(id, { family, domain: 'paired', verdict: result.name })
 }
 
+const HISTORY = new Set([
+  ...Object.keys(C5_PAGE_CLOSURE['aiVault.history'] ?? {}),
+  ...Object.keys(C5_PAGE_CLOSURE['aiVault.history-screen'] ?? {})
+])
+
+// Main's decision order: identical earns identical; History keeps its strict certified path; every other
+// divergence is a legacy label read from the reply-meta counterfactual's evidence.
+async function unchangedVerdict(
+  id: string,
+  family: string,
+  scenarios: readonly RecordingScenario[]
+) {
+  const expected = readGolden(directory, id)
+  const run = await replay(id, scenarios, 'page-original')
+  admitThrown(run)
+  if (HISTORY.has(id)) {
+    const asIf = await replay(id, scenarios, 'page-reply-meta')
+    for (const replayed of [run, asIf]) {
+      if (replayed.didThrow) {
+        throw replayed.thrown
+      }
+    }
+    const left = comparison(input.scenarios, expected.recording, run.recording!, scenarios, false)
+    const right = comparison(input.scenarios, expected.recording, asIf.recording!, scenarios, true)
+    const result = strictReplayVerdict(
+      left.expected,
+      scenarios,
+      { ...run, comparison: left.actual },
+      { ...asIf, comparison: right.actual }
+    )
+    if (result.name === 'unclassified') {
+      throw new Error(
+        `Unclassified bridged divergence: ${id}\noriginal (${result.original.name}):\n${explain(result.original.fields, run)}\nwith \`_meta\` supplied (${result.replyMeta.name}):\n${explain(result.replyMeta.fields, asIf)}`
+      )
+    }
+    if (result.name === 'identical') {
+      identical += 1
+      record(id, family, 'identical', 'unchanged')
+      return
+    }
+    tally(id, family, result.name, result.original.fields, run)
+    return
+  }
+  const view = run.recording === null ? null : unchangedView(run.recording)
+  const fields = view === null ? [] : divergingFields(expected.recording, view)
+  if (view !== null && fields.length === 0) {
+    // Not redundant with the field walk: this one also pins the encoding.
+    compareGolden(expected, { ...expected, recording: view })
+    identical += 1
+    record(id, family, 'identical', 'unchanged')
+    return
+  }
+  const asIf = await replay(id, scenarios, 'page-reply-meta')
+  admitThrown(asIf)
+  const asIfView =
+    asIf.recording === null
+      ? null
+      : withoutInjectedReplyMeta(unchangedView(asIf.recording), expected.recording)
+  const asIfFields = asIfView === null ? [] : divergingFields(expected.recording, asIfView)
+  const scriptsAbsent = scenarios.some(scriptsAbsentResultReply)
+  const evidence: BridgedParityEvidence = {
+    fixedByReplyMeta: asIfView !== null && asIfFields.length === 0,
+    threwWhileRecording: asIf.recording === null,
+    divergingFields: asIfFields,
+    absentResultExplainsResiduals: false,
+    paramsMismatch: paramsMismatchEvidence(asIf.thrown),
+    refusalReleasedStream:
+      scriptsAbsent && asIf.pairs.some((pair) => refusalReleasedStream(pair.diagnostics)),
+    legacyBaseline: {
+      firstField:
+        asIfView === null ? undefined : divergingFields(expected.recording, asIfView, false)[0],
+      scriptsAbsentResultReply: scriptsAbsent
+    }
+  }
+  const name = classifyBridgedParity(evidence)
+  if (name === 'unclassified') {
+    throw new Error(
+      `Unclassified bridged divergence: ${id}\n${explain(fields, run)}\nwith \`_meta\` supplied:\n${explain(asIfFields, asIf)}`
+    )
+  }
+  tally(id, family, name, fields, run)
+}
+
+// A changed member's strict own-undefined stop: the typed guard, keys that differ only by an own undefined value,
+// and the identical bytes the page posted.
+function expectStrictOwnUndefinedStop(id: string, mode: PageMode, run: BridgedReplay) {
+  const context = `${id}/${mode}`
+  expect(run.thrown, context).toBeInstanceOf(RecordingParamsMismatch)
+  const mismatch = run.thrown
+  if (!(mismatch instanceof RecordingParamsMismatch)) {
+    throw new Error(`Missing actual strict params guard: ${context}`)
+  }
+  const evidence = paramsMismatchEvidence(mismatch)!
+  expect(evidence.differingKeys.length, context).toBeGreaterThan(0)
+  expect(
+    evidence.differingKeys.filter((key) => !evidence.undefinedValuedKeys.includes(key)),
+    context
+  ).toEqual([])
+  const bytes = JSON.stringify(mismatch.actual)
+  expect(JSON.stringify(mismatch.expected), context).toBe(bytes)
+  const posted = run.pairs
+    .flatMap((pair) => pair.toShell)
+    .map((json): unknown => JSON.parse(json))
+    .filter(
+      (frame) =>
+        isKeyedObject(frame) && frame.type === 'request' && frame.method === mismatch.method
+    )
+  expect(posted.length, context).toBeGreaterThan(0)
+  const last = posted.at(-1)
+  expect(isKeyedObject(last) ? JSON.stringify(last.params) : undefined, context).toBe(bytes)
+}
+
+// Changed members earn their own outcome in both page modes: the reviewed native golden, with the page's
+// refusal of the injected absent result applied where the product copies it, and nothing else may differ.
+async function directVerdict(id: string, family: string, scenarios: readonly RecordingScenario[]) {
+  const expected = readGolden(directory, id)
+  for (const mode of ['page-original', 'page-reply-meta'] as const) {
+    const run = await replay(id, scenarios, mode)
+    if (strictOwnUndefined.has(id)) {
+      expectStrictOwnUndefinedStop(id, mode, run)
+      continue
+    }
+    if (run.didThrow || !run.recording) {
+      throw run.thrown
+    }
+    const view = comparison(
+      expected.recording,
+      run.recording,
+      scenarios,
+      mode === 'page-reply-meta'
+    )
+    const want = refusedReplyExpectation(view.expected, scenarios)
+    const fields = divergingFields(want, view.actual)
+    if (fields.length) {
+      throw new Error(`Changed bridged outcome differs: ${id}/${mode}\n${explain(fields, run)}`)
+    }
+  }
+  record(id, family, { verdict: 'bridge-contract' }, 'direct')
+}
 async function bridgeOnlyVerdict(
   id: string,
   family: string,
   scenarios: readonly RecordingScenario[]
 ) {
-  for (const scenario of scenarios) {
-    const operation = scenario.bridgeOperations?.[0]
+  for (const source of scenarios) {
+    const operation = source.bridgeOperations?.[0]
     if (!operation) {
       throw new Error('Bridge-only input has no actual declared operation')
     }
-    const original = await replay(scenario.id, [scenario], 'page-original')
-    const counterfactual = await replay(scenario.id, [scenario], 'page-reply-meta')
-    for (const run of [original, counterfactual]) {
+    const prelude = source.lineage?.role === 'prelude'
+    // A prelude ends on the action whose probe is still pending; observe it after the whole tail.
+    const scenario: RecordingScenario = prelude
+      ? { ...source, steps: [...source.steps, { checkpoint: AFTER_PRELUDE_ACTION }] }
+      : source
+    const runs: { run: BridgedReplay; calls: Promise<RpcResponse>[] }[] = []
+    for (const mode of ['page-original', 'page-reply-meta'] as const) {
+      const calls: Promise<RpcResponse>[] = []
+      // Keep each actual page RPC promise, in invocation order, from the unchanged page client.
+      const run = await replay(scenario.id, [scenario], mode, (client) => ({
+        ...client,
+        sendRequest: (...args: Parameters<RpcClient['sendRequest']>) => {
+          const promise = client.sendRequest(...args)
+          calls.push(promise)
+          return promise
+        }
+      }))
+      runs.push({ run, calls })
+    }
+    const original = runs[0]!.run
+    const counterfactual = runs[1]!.run
+    for (const { run, calls } of runs) {
       if (run.didThrow) {
         throw run.thrown
       }
       if (!run.recording) {
         throw new Error('Missing actual bridge-only recording')
       }
-      const last = run.recording.checkpoints.at(-1)!.observation
+      const last = prelude
+        ? run.recording.checkpoints.find((checkpoint) => checkpoint.id === AFTER_PRELUDE_ACTION)
+            ?.observation
+        : run.recording.checkpoints.at(-1)?.observation
+      if (!last) {
+        throw new Error('Missing actual bridge-only observation')
+      }
       const parent = attempts(last).find((attempt) => attempt.name === operation.request)
       if (!parent || parent.bridge?.posts.length !== 1) {
         throw new Error('Missing actual bridge-only invocation')
@@ -474,18 +481,34 @@ async function bridgeOnlyVerdict(
       const completion = scenario.steps.find(
         (step) => 'complete' in step && step.complete === operation.probeSite
       )
-      if (scenario.lineage?.role === 'prelude') {
+      if (prelude) {
+        // After the action, before teardown: one bound post whose probe is still pending, and nothing forwarded.
         expect(completion).toBeUndefined()
         expect(post.children.map((child) => child.method)).toEqual(['status.get'])
         expect(probe.completion).toBeUndefined()
-        expect(probe.settlement).toMatchObject({
-          status: 'rejected',
-          error: { message: 'Connection closed', isRpcDeliveryUnknown: true }
-        })
-        expect(parent.settlement).toMatchObject({
-          status: 'rejected',
-          error: { category: 'BridgeClientClosedError', message: 'the page bridge was closed' }
-        })
+        expect(probe.settlement.status).toBe('pending')
+        expect(parent.settlement.status).toBe('pending')
+        expect(post.replies).toEqual([])
+        // Teardown closes the native connection first, so this caller gets its relayed rejection.
+        const call = calls[attempts(last).indexOf(parent)]
+        if (!call) {
+          throw new Error('Missing the actual page RPC promise')
+        }
+        const outcome = await call.then(
+          (value) => ({ value }),
+          (error: unknown) => ({ error })
+        )
+        if (!('error' in outcome)) {
+          throw new Error('The pending bridge-only invocation resolved at teardown')
+        }
+        expect(outcome.error).toMatchObject({ message: PRELUDE_TEARDOWN_MESSAGE })
+        expect(isRpcDeliveryUnknown(outcome.error)).toBe(PRELUDE_TEARDOWN_DELIVERY_UNKNOWN)
+        expect(
+          run.pairs
+            .flatMap((pair) => pair.toPage)
+            .map((json): unknown => JSON.parse(json))
+            .filter((frame) => isKeyedObject(frame) && frame.id === post.id)
+        ).toMatchObject([{ type: 'error', error: { message: PRELUDE_TEARDOWN_MESSAGE } }])
         continue
       }
       if (!completion || !('complete' in completion)) {
@@ -595,74 +618,124 @@ async function bridgeOnlyVerdict(
       }
     }
   }
-  observed.set(id, { family, domain: 'bridge-only', verdict: { verdict: 'bridge-contract' } })
+  record(id, family, { verdict: 'bridge-contract' }, 'bridge-only')
+}
+
+function total(record: Record<string, number>): number {
+  return Object.values(record).reduce((sum, count) => sum + count, 0)
+}
+
+function asClass(name: string): BridgedParityClass {
+  if (!(name in counts)) {
+    throw new Error(`Not a bridged parity class: ${name}`)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `name in counts` was just checked, and `counts` has exactly the union's keys.
+  return name as BridgedParityClass
+}
+
+function routeOf(golden: DerivedGolden): Route {
+  return golden.lineage.domain === 'bridge-only'
+    ? 'bridge-only'
+    : changed.has(golden.id)
+      ? 'direct'
+      : 'unchanged'
 }
 
 describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
   'native recordings through the actual page bridge',
   () => {
-    const native = new Map(
-      [...pilotGoldens(input.scenarios), ...familyGoldens(input.scenarios)].map((producer) => [
-        producer.id,
-        producer
-      ])
-    )
-    for (const pilot of pilotGoldens(input.scenarios, 'bridge')) {
-      it(`${pilot.id}: bridged parity`, async () => {
-        await verdict(pilot.id, pilot.family, native.get(pilot.id)!.scenarios(), [pilot.scenario])
-      })
-    }
-    for (const golden of familyGoldens(input.scenarios, 'bridge')) {
+    const producers: DerivedGolden[] = [
+      ...pilotGoldens(input.scenarios, 'bridge'),
+      ...familyGoldens(input.scenarios, 'bridge')
+    ]
+    for (const golden of producers) {
       it(
         `${golden.id}: bridged parity`,
         async () => {
-          await (golden.lineage.domain === 'bridge-only'
-            ? bridgeOnlyVerdict(golden.id, golden.family, golden.scenarios())
-            : verdict(
-                golden.id,
-                golden.family,
-                native.get(golden.id)!.scenarios(),
-                golden.scenarios()
-              ))
+          const route = routeOf(golden)
+          const scenarios = golden.scenarios()
+          await (route === 'bridge-only'
+            ? bridgeOnlyVerdict(golden.id, golden.family, scenarios)
+            : route === 'direct'
+              ? directVerdict(golden.id, golden.family, scenarios)
+              : unchangedVerdict(golden.id, golden.family, scenarios))
         },
-        // Replay every real native/page-original/page-reply-meta partition within the family's allowance.
+        // Replay every real page-original/page-reply-meta partition within the family's allowance.
         golden.timeoutMs
       )
     }
-    afterCorpus(
-      'gives every golden the C5 page closure records the verdict it is pinned to',
-      () => {
-        const paired = new Map([...observed].filter(([, run]) => run.domain !== 'bridge-only'))
-        process.stdout.write(readPageClosure('C5', C5_PAGE_CLOSURE, paired))
-        expect({ closure: pageClosureDrift(C5_PAGE_CLOSURE, paired) }).toEqual({ closure: [] })
-      }
-    )
-    afterCorpus(
-      'gives every golden the C2 page closure records the verdict it is pinned to',
-      () => {
-        const paired = new Map([...observed].filter(([, run]) => run.domain !== 'bridge-only'))
-        process.stdout.write(readPageClosure('C2', C2_PAGE_CLOSURE, paired))
-        expect({ closure: pageClosureDrift(C2_PAGE_CLOSURE, paired) }).toEqual({ closure: [] })
-      }
-    )
-    afterCorpus(
-      'gives every golden the C6 browser closure records the verdict it is pinned to',
-      () => {
-        const paired = new Map([...observed].filter(([, run]) => run.domain !== 'bridge-only'))
-        process.stdout.write(readPageClosure('C6', C6_BROWSER_CLOSURE_FAMILIES, paired))
-        expect({ closure: pageClosureDrift(C6_BROWSER_CLOSURE_FAMILIES, paired) }).toEqual({
-          closure: []
+    afterCorpus('routes every producer exactly once', () => {
+      const discovered = producers.map((golden) => golden.id)
+      const duplicated = discovered.filter((id, index) => discovered.indexOf(id) !== index)
+      const missing = discovered.filter((id) => !accounted.has(id))
+      const twice = [...accounted].filter(([, routes]) => routes.length !== 1).map(([id]) => id)
+      // Changed producers either replay here or are declared native-only sites with no page producer.
+      const unrouted = CHANGED_PRODUCERS.filter(
+        (id) => !discovered.includes(id) && !NATIVE_ONLY_CHANGED.includes(id)
+      )
+      const nativeOnlyReplayed = NATIVE_ONLY_CHANGED.filter((id) => discovered.includes(id))
+      expect({ duplicated, missing, twice, unrouted, nativeOnlyReplayed }).toEqual({
+        duplicated: [],
+        missing: [],
+        twice: [],
+        unrouted: [],
+        nativeOnlyReplayed: []
+      })
+    })
+    afterCorpus('keeps the unchanged corpus within its legacy labels and bounded tally', () => {
+      const table = [
+        `identical ${identical}`,
+        ...Object.entries(counts).map(([name, count]) => {
+          const named = members.get(asClass(name)) ?? []
+          return count > 0 && count <= BRIDGED_PARITY_NAMEABLE
+            ? `${name} ${count}: ${named.join(', ')}`
+            : `${name} ${count}`
         })
+      ].join('\n')
+      const excluded = Object.entries(counts).filter(
+        ([name]) => BRIDGED_PARITY_EXCLUSIONS[asClass(name)] !== undefined
+      )
+      const excludedCount = total(Object.fromEntries(excluded))
+      process.stdout.write(
+        `\nunchanged corpus over ${identical + total(counts)} goldens; labels are recorder limitations, not parity\n${table}\n`
+      )
+      for (const [name, sample] of samples) {
+        process.stdout.write(`\n${name} sample\n${sample}\n`)
       }
-    )
-    afterCorpus(
-      'gives every golden the C3 page closure records the verdict it is pinned to',
-      () => {
-        const paired = new Map([...observed].filter(([, run]) => run.domain !== 'bridge-only'))
-        process.stdout.write(readPageClosure('C3', C3_PAGE_CLOSURE, paired))
-        expect({ closure: pageClosureDrift(C3_PAGE_CLOSURE, paired) }).toEqual({ closure: [] })
-      }
-    )
+      expect(counts.unclassified).toBe(0)
+      // Pin membership: one real refusal can enter an excluded class while another leaves without changing totals.
+      expect({ membership: bridgedParityMembershipDrift(members) }).toEqual({ membership: [] })
+      expect({ divergedOutsideAnExcludedClass: total(counts) - excludedCount }).toEqual({
+        divergedOutsideAnExcludedClass: 0
+      })
+      // Branch-base totals less each named moved or removed member's own base class.
+      const { expected, pending } = expectedUnchangedTally(BRIDGED_PARITY_BASELINE)
+      const ran: Record<string, number> = { ...counts, identical }
+      const shortfall = Object.entries(expected).map(
+        ([name, count]) => [name, count - (ran[name] ?? 0)] as const
+      )
+      // Until each pending member's base class is known, the tally may differ only by those members.
+      expect({
+        tally: shortfall.filter(([, short]) => (pending.length ? short < 0 : short !== 0)),
+        pendingTotal: total(Object.fromEntries(shortfall))
+      }).toEqual({ tally: [], pendingTotal: pending.length })
+      expect({ oldClassPending: pending }).toEqual({ oldClassPending: [] })
+    })
+    for (const [name, pins] of [
+      ['C5', C5_PAGE_CLOSURE],
+      ['C2', C2_PAGE_CLOSURE],
+      ['C6', C6_BROWSER_CLOSURE_FAMILIES],
+      ['C3', C3_PAGE_CLOSURE]
+    ] as const) {
+      afterCorpus(
+        `gives every golden the ${name} closure records the verdict it is pinned to`,
+        () => {
+          const paired = new Map([...observed].filter(([, run]) => run.domain !== 'bridge-only'))
+          process.stdout.write(readPageClosure(name, pins, paired))
+          expect({ closure: pageClosureDrift(pins, paired) }).toEqual({ closure: [] })
+        }
+      )
+    }
   }
 )
 
@@ -679,6 +752,6 @@ afterAll(() => {
     throw errors[0]
   }
   if (errors.length) {
-    throw new AggregateError(errors, 'Page closure drift')
+    throw new AggregateError(errors, 'Bridged corpus guard failed')
   }
 })
