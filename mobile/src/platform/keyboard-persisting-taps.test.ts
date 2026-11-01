@@ -1,7 +1,14 @@
 // @vitest-environment happy-dom
 // RN Web ignores keyboardShouldPersistTaps; focusable Pressables take mousedown focus and close the IME.
-import { afterEach, describe, expect, it } from 'vitest'
+import { act, createElement } from 'react'
+import { createRoot } from 'react-dom/client'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { keepTextFocusThroughTaps } from './keyboard-persisting-taps'
+import { MobileSessionTitleBlock } from '../session/MobileSessionTitleBlock'
+import type { SessionTitleCard } from '../session/use-session-title-card'
+import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
+
+vi.mock('react-native', () => vi.importActual<typeof import('react-native')>('react-native-web'))
 
 function plant() {
   const container = document.createElement('div')
@@ -69,6 +76,48 @@ describe('keepTextFocusThroughTaps', () => {
     keepTextFocusThroughTaps(container, 'handled')
     liveInput.focus()
     expect(pressKeepsFocus(gap)).toBe(false)
+  })
+
+  it('keeps a focused field through a tap on the session title text, which opens the same card', () => {
+    const host = document.createElement('div')
+    const field = document.createElement('input')
+    document.body.append(host, field)
+    const details = mountFixture<SessionTitleCard>({
+      openerRef: { current: null },
+      titleRef: { current: null },
+      boundaryRefs: { current: [] },
+      titleActive: false,
+      titleRequestedOpen: false,
+      besideTabs: true,
+      onAnchorLayout: () => {},
+      toggle: () => {}
+    })
+    const root = createRoot(host)
+    act(() =>
+      root.render(
+        createElement(MobileSessionTitleBlock, {
+          title: 'workspace',
+          connState: 'connected',
+          details,
+          meta: '',
+          showConnectionRetry: false,
+          onRetry: () => {}
+        })
+      )
+    )
+    const opener = host.querySelector('[aria-expanded]')
+    const text = Array.from(opener?.querySelectorAll('*') ?? []).find(
+      (node) => node.textContent === 'workspace'
+    )
+    expect(details.openerRef.current).toBe(opener)
+    if (!text) {
+      throw new Error('Title text is missing')
+    }
+    expect(pressKeepsFocus(text)).toBe(false)
+    field.focus()
+    expect(pressKeepsFocus(text)).toBe(true)
+    expect(document.activeElement).toBe(field)
+    act(() => root.unmount())
   })
 
   it('stops when released', () => {

@@ -126,7 +126,7 @@ export function useDetailCardScope({
     document.addEventListener('keydown', isolate, { signal: listeners.signal })
     document.addEventListener('keyup', isolate, { signal: listeners.signal })
     document.addEventListener('focusin', focusin, capture)
-    // Why: tab taps keep a focused text field focused; taking focus here would close the soft keyboard.
+    // Why: tab and title taps keep a focused text field; taking focus here would close the soft keyboard.
     if (!isTextField(document.activeElement)) {
       content.focus()
     }

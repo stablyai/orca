@@ -1,11 +1,12 @@
-import { Fragment } from 'react'
+import { Fragment, useCallback } from 'react'
 import { DetailCardFocusBoundary } from '../components/detail-card-host'
-import { Platform, Pressable, StyleSheet, Text } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, type View } from 'react-native'
 import type { SessionTitleCard } from './use-session-title-card'
 import { StatusDot } from '../components/StatusDot'
 import type { ConnectionState } from '../transport/types'
 import { styles } from './mobile-session-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
 
 /** The session's title and status line. A tap opens a card with the full name, where it lives
  *  and its host, as desktop's tab card does, because a sideways phone cuts the title short. */
@@ -28,6 +29,17 @@ export function MobileSessionTitleBlock({
   onRetry: () => void
 }): React.JSX.Element {
   const t = useMobileTranslation()
+  // Why: the title opens the same card as a tab, so its tap must keep a focused field's keyboard
+  // too. 'always' because the whole block is one button; 'handled' would let its own text through.
+  const titleKeepsKeyboard = useKeyboardPersistingTaps('always')
+  const { openerRef } = details
+  const attachOpener = useCallback(
+    (view: View | null) => {
+      openerRef.current = view
+      titleKeepsKeyboard(view)
+    },
+    [openerRef, titleKeepsKeyboard]
+  )
   return (
     <>
       <DetailCardFocusBoundary refs={details.boundaryRefs} index={0} active={details.titleActive} />
@@ -38,7 +50,7 @@ export function MobileSessionTitleBlock({
               ? centeredStyles.block
               : [styles.sessionTitleBlock, details.besideTabs && styles.sessionTitleBlockBesideTabs]
           }
-          ref={details.openerRef}
+          ref={attachOpener}
           onLayout={details.onAnchorLayout}
           onPress={details.toggle}
           aria-expanded={details.titleRequestedOpen}
