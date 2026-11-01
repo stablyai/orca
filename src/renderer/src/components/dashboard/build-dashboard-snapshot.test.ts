@@ -551,7 +551,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].dotState).toBe('idle')
   })
 
-  it('routes retained done agents to the done bucket', () => {
+  it('routes an unread retained done agent to Needs You', () => {
     const donePaneKey = makePaneKey(TAB_ID, GONE_LEAF_ID)
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -569,7 +569,7 @@ describe('buildDashboardSnapshot', () => {
     )
     const done = snapshot.cards.find((c) => c.dotState === 'done')
     expect(done).toBeDefined()
-    expect(done?.bucket).toBe('done')
+    expect(done?.bucket).toBe('attention')
   })
 
   it('includes collapsed subagents and workspace status metadata on the parent card', () => {
