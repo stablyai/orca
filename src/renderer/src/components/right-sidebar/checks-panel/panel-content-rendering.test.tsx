@@ -322,6 +322,31 @@ describe('checks panel concrete content', () => {
     expect(screen.getByRole('alert').textContent).toContain('GitHub is unreachable right now')
   })
 
+  it('keeps Fix for a failed job under a passing GitLab parent pipeline', () => {
+    const model = {
+      ...activeModel,
+      activeReview: { ...activeModel.activeReview, provider: 'gitlab' as const },
+      checks: gitLabPipelineJobsToPRChecks([
+        { id: 7, name: 'lint', stage: 'test', status: 'failed', webUrl: '', duration: 3 }
+      ]),
+      gitLabPipelineCheck: gitLabPipelineToPRCheck({
+        id: 99,
+        status: 'success',
+        checkStatus: 'success',
+        webUrl: 'https://gitlab.com/g/p/-/pipelines/99'
+      }),
+      handleFixChecksWithAI: vi.fn(),
+      // The failed job auto-expands; keep its details load off the shared fixture mock.
+      handleLoadCheckDetails: vi.fn(async () => null),
+      sourceControlAiActionsVisible: true
+    }
+    render(<ChecksPanelActiveContent model={model} />, { wrapper: TooltipProvider })
+
+    expect(screen.getByText('1 failing check')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Fix' }))
+    expect(model.handleFixChecksWithAI).toHaveBeenCalledOnce()
+  })
+
   it('leads with a failed GitLab parent pipeline whose returned jobs all pass', async () => {
     const pipelineUrl = 'https://gitlab.com/g/p/-/pipelines/99'
     const model = {

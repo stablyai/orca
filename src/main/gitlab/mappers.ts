@@ -279,6 +279,7 @@ function classifyPipelineString(status: string): CheckStatus {
     s === 'created' ||
     s === 'pending' ||
     s === 'running' ||
+    s === 'waiting_for_callback' ||
     s === 'waiting_for_resource' ||
     s === 'preparing' ||
     s === 'scheduled'

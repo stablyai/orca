@@ -96,10 +96,11 @@ export function ChecksPanelActiveContent({
     return null
   }
   const reviewShortLabel = activeReview.provider === 'gitlab' ? 'MR' : 'PR'
-  // A GitLab parent pipeline's own status is the verdict; its job list can be partial.
+  // A failed GitLab parent leads even when its partial job list passes; failed jobs keep their Fix.
   const shouldShowReviewTriageStrip =
     activeConflictReview !== null ||
-    (gitLabPipelineCheck ? isBrokenCheck(gitLabPipelineCheck) : getBrokenChecks(checks).length > 0)
+    (gitLabPipelineCheck !== null && isBrokenCheck(gitLabPipelineCheck)) ||
+    getBrokenChecks(checks).length > 0
   const hostedReviewModifierHintDestination = resolveChecksPanelHostedReviewModifierDestination(
     settings,
     Boolean(activeWorktreeId)
