@@ -216,7 +216,11 @@ export async function preparePluginFrameGuest(
     console.warn(`[plugins] isolated frame session for ${pluginKey} is unavailable:`, error)
     return null
   }
-  return { partition: pluginFramePartition(frameKey), url }
+  return {
+    partition: pluginFramePartition(frameKey),
+    url,
+    ...(plugin.isDev ? { dev: true as const } : {})
+  }
 }
 
 function admitAttach(partition: string, src: string): boolean {

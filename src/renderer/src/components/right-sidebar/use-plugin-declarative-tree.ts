@@ -26,8 +26,11 @@ const MIN_RENDER_RETRY_MS = 100
 const systemNow = (): number => Date.now()
 
 type RenderedTree = { document: string; revision: number; tree: PluginDeclarativeNode | null }
-/** `plugin`: text the plugin reported. `orca`: Orca refused what the plugin sent. */
-export type PluginDeclarativeIssue = { source: 'plugin' | 'orca'; message: string }
+/**
+ * `plugin`: text the plugin reported. `orca`: Orca refused what the plugin sent. `load`: the guest
+ * failed before its first render (a broken dev save); any tree on screen is the last good one.
+ */
+export type PluginDeclarativeIssue = { source: 'plugin' | 'orca' | 'load'; message: string }
 
 function invalidTreeMessage(): string {
   return translate(
@@ -60,6 +63,11 @@ export function usePluginDeclarativeTree(
   const now = options.now ?? systemNow
   const [rendered, setRendered] = useState<RenderedTree | null>(null)
   const [issue, setIssue] = useState<PluginDeclarativeIssue | null>(null)
+  // Bumps when a new guest document replaces one that had rendered here (a hot reload).
+  const [reloads, setReloads] = useState(0)
+  // True from a guest document's start until its first shown tree; errors then are load errors.
+  const loadingRef = useRef(true)
+  const lastDocumentRef = useRef<string | null>(null)
   const pendingRef = useRef<{ payload: unknown } | null>(null)
   const frameRef = useRef<number | null>(null)
   // The guest document on screen and its revision; a new document (reload) starts over at 1.
@@ -123,6 +131,11 @@ export function usePluginDeclarativeTree(
         }
       }
       shownRef.current = { document: parsed.document, revision: parsed.revision }
+      loadingRef.current = false
+      if (lastDocumentRef.current !== null && lastDocumentRef.current !== parsed.document) {
+        setReloads((count) => count + 1)
+      }
+      lastDocumentRef.current = parsed.document
       controls.observe(parsed.tree, now())
       setRendered({ document: parsed.document, revision: parsed.revision, tree: parsed.tree })
       setIssue(null)
@@ -162,7 +175,10 @@ export function usePluginDeclarativeTree(
         const parsed = pluginDeclarativeErrorPayloadSchema.safeParse(payload)
         report(
           parsed.success
-            ? { source: 'plugin', message: clamp(parsed.data.message) }
+            ? {
+                source: loadingRef.current ? 'load' : 'plugin',
+                message: clamp(parsed.data.message)
+              }
             : { source: 'orca', message: invalidTreeMessage() }
         )
       }
@@ -201,6 +217,7 @@ export function usePluginDeclarativeTree(
       /** The guest navigated or reloaded: its fresh runtime counts revisions from 1 again. */
       resetDocument: (): void => {
         shownRef.current = { document: null, revision: -1 }
+        loadingRef.current = true
         warnedRef.current.clear()
         pressedAtRef.current = Number.NEGATIVE_INFINITY
       }
@@ -210,6 +227,8 @@ export function usePluginDeclarativeTree(
   return {
     rendered,
     issue,
+    reloads,
+    dismissIssue: () => setIssue(null),
     channel,
     gestures,
     admitPress: presses.admit,

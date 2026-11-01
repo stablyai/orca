@@ -16,6 +16,8 @@ import type {
 } from './declarative-runtime-types'
 import { evaluateOrcaTree, type OrcaCallback } from './declarative-evaluate'
 import { createPersistQueue } from './declarative-persist-queue'
+import { createMemoryRetention } from './declarative-memory-retention'
+import { describePluginError } from './declarative-error-location'
 import { readHostMessage } from './declarative-host-messages'
 import { createPanelContext } from './declarative-panel-context'
 
@@ -39,7 +41,7 @@ const MAX_RETAINED_RENDERS = 32
 const HYDRATION_TIMEOUT_MS = 3000
 
 function errorMessage(error: unknown): string {
-  return (error instanceof Error ? error.message : String(error)).slice(0, 4096)
+  return describePluginError(error).slice(0, 4096)
 }
 
 function defaultSchedule(flush: () => void, delayMs: number): void {
@@ -65,7 +67,10 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
   const now = options.now ?? (() => Date.now())
   const document = newDocumentId(now())
   const theme = hostAtom<OrcaTheme>({ colorScheme: options.colorScheme ?? 'dark' })
-  const panel = createPanelContext()
+  const retention = createMemoryRetention((entries) =>
+    post(PLUGIN_DECLARATIVE_MESSAGES.retain, { document, entries })
+  )
+  const panel = createPanelContext(retention.start)
   const { context } = panel
   let component: OrcaComponent | null = null
   let revision = 0
@@ -296,7 +301,9 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
         render()
       }
       flushPersist()
+      retention.flush()
     },
+    report,
     themeAtom: theme.atom,
     bridge,
     dispose() {
@@ -304,6 +311,7 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
         return
       }
       flushPersist()
+      retention.stop()
       disposed = true
       component = null
       scheduled = false

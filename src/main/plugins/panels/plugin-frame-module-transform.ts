@@ -18,9 +18,33 @@ export const PLUGIN_SOURCE_MODULE_MAX_BYTES = 1024 * 1024
 const CACHE_MAX_ENTRIES = 512
 const CACHE_MAX_CHARS = 64 * 1024 * 1024
 
-/** A module whose evaluation throws, so the error names the file in the guest and its logs. */
-export function pluginErrorModule(relativePath: string, message: string): string {
-  return `throw new Error(${JSON.stringify(`${relativePath}: ${message}`)})\n`
+/** A module whose evaluation throws, so the error names the file (and line) in the guest and logs. */
+export function pluginErrorModule(
+  relativePath: string,
+  message: string,
+  at?: { line: number; column: number }
+): string {
+  const where = at ? `${relativePath}:${at.line}:${at.column}` : relativePath
+  return `throw new Error(${JSON.stringify(`${where}: ${message}`)})\n`
+}
+
+/** Sucrase reports `Error transforming <file>: <reason> (<line>:<column>)`. */
+function transpileFailure(
+  relativePath: string,
+  message: string
+): { message: string; at?: { line: number; column: number } } {
+  const reason = message.replace(`Error transforming ${relativePath}: `, '')
+  const match = /^(.*) \((\d+):(\d+)\)$/s.exec(reason)
+  return match?.[1]
+    ? { message: match[1], at: { line: Number(match[2]), column: Number(match[3]) } }
+    : { message: reason }
+}
+
+/** 1-based line and column of `offset`; transpiling keeps lines, so the line is the source's. */
+function locate(code: string, offset: number): { line: number; column: number } {
+  const before = code.slice(0, offset)
+  const lineStart = before.lastIndexOf('\n') + 1
+  return { line: before.split('\n').length, column: offset - lineStart + 1 }
 }
 
 export type PluginSourceModuleCompiler = (input: {
@@ -87,14 +111,20 @@ export function createPluginSourceModuleCompiler(
     }
     const transpiled = await transpileCached(relativePath, Buffer.from(bytes).toString('utf8'))
     if (!transpiled.ok) {
-      return pluginErrorModule(relativePath, transpiled.message)
+      const failure = transpileFailure(relativePath, transpiled.message)
+      return pluginErrorModule(relativePath, failure.message, failure.at)
     }
     let code = transpiled.code
     // Back to front, so earlier offsets stay valid as specifiers change length.
     for (const entry of transpiled.imports.toReversed()) {
       const resolution = await resolvePluginModuleSpecifier(relativePath, entry.specifier, exists)
       if (resolution.kind === 'refuse') {
-        return pluginErrorModule(relativePath, resolution.reason)
+        // Located at the specifier's opening quote.
+        return pluginErrorModule(
+          relativePath,
+          resolution.reason,
+          locate(code, Math.max(0, entry.start - 1))
+        )
       }
       if (resolution.kind === 'rewrite') {
         const quoted = code[entry.start - 1] === '"' || code[entry.start - 1] === "'"

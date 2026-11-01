@@ -157,6 +157,19 @@ const SPECIFIC_PLUGIN_ROUTES = [
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
   ),
+  // Dev hot reload of components panels: memory atoms carried over, last good tree kept on errors.
+  pluginRoute(
+    'plugins.components-hot-reload',
+    ['plugin-components-hot-reload'],
+    [
+      'src\\/shared\\/plugins\\/declarative\\/(?:plugin-declarative-message|runtime\\/declarative-(?:atoms|memory-retention|error-location|panel-context|renderer))',
+      'src\\/shared\\/plugins\\/frames\\/plugin-(?:declarative-host-document|frame-bridge)',
+      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:PluginDeclarativePanel|PluginPanel\\.tsx$|use-plugin-declarative-(?:state|tree)|plugin-declarative-retained-memory)',
+      'src\\/main\\/plugins\\/(?:plugin-dev-|panels\\/plugin-frame-guest-sessions)',
+      'resources\\/plugins\\/declarative\\/'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke'
+  ),
   pluginRoute(
     'plugins.vm-recipes',
     ['plugin-marketplace-content'],

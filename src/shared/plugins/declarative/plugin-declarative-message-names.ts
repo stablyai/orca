@@ -14,12 +14,17 @@ export const PLUGIN_DECLARATIVE_MESSAGES = {
   ack: 'ui.ack',
   /** guest → host, `{ document }`: the runtime is up and waits for `ui.hydrate` to render. */
   ready: 'ui.ready',
-  /** host → guest, `{ panel?, visible?, plugin?, workspace? }`: persisted state and context. */
+  /**
+   * host → guest, `{ panel?, visible?, plugin?, workspace?, memory?, retain? }`: persisted state and
+   * context; `memory` hands keyed memory atoms to a dev hot reload, `retain` asks for `ui.retain`.
+   */
   hydrate: 'ui.hydrate',
   /** host → guest, `{ visible }` */
   visibility: 'ui.visibility',
   /** guest → host, `{ entries: [{ scope, key, version, value }] }`: persisted atoms changed. */
-  persist: 'ui.persist'
+  persist: 'ui.persist',
+  /** guest → host, `{ document, entries: [{ key, version, value? }] }`: keyed memory atoms changed. */
+  retain: 'ui.retain'
 } as const
 
 /** Grows with the component catalog, so plugins can feature-detect with `ui.catalog`. */

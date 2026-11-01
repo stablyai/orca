@@ -55,7 +55,8 @@ export default function Panel() {
 
 - `atom(initial)` holds state for this panel run.
 - `atom(key, initial, { persist, version, migrate })` is named, unique per plugin, and may persist:
-  `persist: 'memory'` (default), `'plugin'` (every run of the plugin) or `'workspace'` (per Orca
+  `persist: 'memory'` (default; this panel run, plus [hot reloads](#hot-reload) in development),
+  `'plugin'` (every run of the plugin) or `'workspace'` (per Orca
   workspace; switching workspaces swaps the values). Persisted values must be plain JSON, load before the
   first render, are saved shortly after they change, and live in the plugin's own data folder; no
   capability is needed. When the stored shape changes, bump `version`; `migrate(stored, fromVersion)` turns
@@ -107,10 +108,28 @@ The `orca` module has the same facade as frame panels:
 - `ui.catalog` is a number that grows with the component catalog; `ui.has(component, prop?)` says
   whether this Orca draws a component or accepts a prop on it.
 
+## Hot reload
+
+In a development folder, saving a file reloads the panel in place:
+
+- Keyed atoms carry over. Persisted ones reload as always; keyed `memory` atoms (`atom('draft', '')`)
+  are handed to the new module, so a half-typed draft or the open tab survives the save. An atom whose
+  `version` changed starts from `initial` (`migrate` is not called), and so does one holding something
+  other than plain JSON (a function, a `Map`). Unkeyed `atom(initial)` state, module variables and
+  `setup` start over; `setup`'s cleanup runs for the old module.
+- A brief **Reloaded** mark shows in the panel's corner.
+- A save that fails to load (a syntax error, an import Orca refuses, or a module that throws before
+  its first render) keeps the last version that loaded on screen, with an inline error naming
+  `file:line:column` and the message; the same line is in `orca plugin logs`. Until the next save
+  loads, that last tree does not respond to clicks. The next save that loads replaces it and clears
+  the error. Lines are your source's; a column can be off on a line that had types or JSX.
+
+Installed plugins remount from scratch on an update; only persisted atoms carry over.
+
 ## No build step
 
 Orca transpiles `.tsx`, `.ts`, `.jsx` and `.mts` files when the panel loads, so a plugin ships its
-source and no `dist/` folder: edit, save, and the panel reloads.
+source and no `dist/` folder: edit, save, and the panel [hot reloads](#hot-reload).
 
 - Types are stripped and JSX compiles for `orca` (automatic runtime). Lines are kept, so an error's
   `file:line` in `orca plugin logs` is the line in your source; an inline source map covers columns
