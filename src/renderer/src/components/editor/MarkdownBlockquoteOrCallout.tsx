@@ -2,10 +2,12 @@ import React from 'react'
 import { AlertCircle, AlertTriangle, Flame, Info, Lightbulb } from 'lucide-react'
 
 type CalloutKind = 'note' | 'tip' | 'important' | 'warning' | 'caution'
+type CalloutFold = 'open' | 'closed' | null
 
 type ParsedCallout = {
   kind: CalloutKind
   title: string
+  fold: CalloutFold
   content: React.ReactNode[]
 }
 
@@ -51,14 +53,17 @@ function getCalloutIcon(kind: CalloutKind): React.ReactElement {
 
 export function parseCallout(children: React.ReactNode): ParsedCallout | null {
   const childrenArray = React.Children.toArray(children)
-  if (childrenArray.length === 0) {
+  const firstChildIndex = childrenArray.findIndex(
+    (child) => !(typeof child === 'string' && child.trim() === '')
+  )
+  if (firstChildIndex === -1) {
     return null
   }
 
-  const firstChild = childrenArray[0]
+  const firstChild = childrenArray[firstChildIndex]
   if (
     !React.isValidElement<{ children?: React.ReactNode }>(firstChild) ||
-    firstChild.type !== 'p'
+    (firstChild.type !== 'p' && typeof firstChild.type !== 'function')
   ) {
     return null
   }
@@ -69,7 +74,7 @@ export function parseCallout(children: React.ReactNode): ParsedCallout | null {
   }
 
   const firstText = pChildren[0]
-  const match = firstText.match(/^\[!([a-zA-Z]+)\][ \t]*(.*)$/m)
+  const match = firstText.match(/^\[!([a-zA-Z]+)\]([+-])?(?:[ \t]+([^\r\n]*))?(?:\r?\n|$)/)
   if (!match) {
     return null
   }
@@ -80,7 +85,9 @@ export function parseCallout(children: React.ReactNode): ParsedCallout | null {
     return null
   }
 
-  const rawTitle = match[2].trim()
+  const foldModifier = match[2]
+  const fold: CalloutFold = foldModifier === '-' ? 'closed' : foldModifier === '+' ? 'open' : null
+  const rawTitle = (match[3] ?? '').trim()
   const title = rawTitle || DEFAULT_TITLES[kind]
 
   // Extract remaining body from the first paragraph
@@ -104,9 +111,9 @@ export function parseCallout(children: React.ReactNode): ParsedCallout | null {
       })
     )
   }
-  content.push(...childrenArray.slice(1))
+  content.push(...childrenArray.slice(firstChildIndex + 1))
 
-  return { kind, title, content }
+  return { kind, title, fold, content }
 }
 
 export function MarkdownBlockquoteOrCallout({
@@ -120,6 +127,22 @@ export function MarkdownBlockquoteOrCallout({
       <blockquote {...props} className={className}>
         {children}
       </blockquote>
+    )
+  }
+
+  if (parsed.fold !== null) {
+    return (
+      <details
+        open={parsed.fold === 'open'}
+        aria-label={parsed.title}
+        className={`markdown-callout markdown-callout-foldable markdown-callout-${parsed.kind} ${className ?? ''}`.trim()}
+      >
+        <summary className="markdown-callout-header">
+          {getCalloutIcon(parsed.kind)}
+          <span className="markdown-callout-title">{parsed.title}</span>
+        </summary>
+        <div className="markdown-callout-content">{parsed.content}</div>
+      </details>
     )
   }
 
