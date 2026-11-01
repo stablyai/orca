@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
@@ -51,7 +51,7 @@ vi.mock('../components/composer-input/composer-input-styles', () => ({ composerI
 vi.mock('../components/BottomDrawer', async () => {
   const { createElement: element } = await import('react')
   return {
-    BottomDrawer: ({ visible, children }: { visible: boolean; children: unknown }) =>
+    BottomDrawer: ({ visible, children }: { visible: boolean; children: ReactNode }) =>
       visible ? element('BottomDrawer', null, children) : null
   }
 })
