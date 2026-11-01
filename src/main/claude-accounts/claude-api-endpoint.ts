@@ -70,17 +70,25 @@ export function writeClaudeApiEndpoint(
   }
 }
 
-function readClaudeApiEndpointFile(home: string): ClaudeApiEndpointFile | null {
-  let raw: string
+/** The file's text, so a failed edit can put it back exactly as it was. */
+export function readClaudeApiEndpointRaw(home: string): string | null {
   try {
-    raw = readFileSync(join(home, CLAUDE_API_ENDPOINT_FILE), 'utf8')
+    return readFileSync(join(home, CLAUDE_API_ENDPOINT_FILE), 'utf8')
   } catch (error) {
     if (isDefinitiveAbsence(error)) {
       return null
     }
     throw error
   }
-  return endpointFile.parse(JSON.parse(raw))
+}
+
+export function restoreClaudeApiEndpointRaw(home: string, raw: string): void {
+  writeSecureFile(join(home, CLAUDE_API_ENDPOINT_FILE), raw)
+}
+
+function readClaudeApiEndpointFile(home: string): ClaudeApiEndpointFile | null {
+  const raw = readClaudeApiEndpointRaw(home)
+  return raw === null ? null : endpointFile.parse(JSON.parse(raw))
 }
 
 export function readClaudeApiEndpointToken(home: string): string | null {

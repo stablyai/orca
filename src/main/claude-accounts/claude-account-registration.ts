@@ -10,7 +10,9 @@ import type {
 } from '../../shared/managed-account-types'
 import {
   normalizeClaudeApiEndpointRequest,
+  readClaudeApiEndpointRaw,
   readClaudeApiEndpointToken,
+  restoreClaudeApiEndpointRaw,
   writeClaudeApiEndpoint
 } from './claude-api-endpoint'
 import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
@@ -121,6 +123,7 @@ export class ClaudeAccountRegistration {
     // Endpoint accounts run on the host; a WSL guest cannot read the host folder's token.
     const target = { runtime: 'host' } as const
     const folder = await runtimeAuth.prepareAccountFolder(id, target)
+    const previousFile = saved ? readClaudeApiEndpointRaw(folder.readPath) : null
     let apiEndpoint: ClaudeApiEndpointSummary
     try {
       apiEndpoint = writeClaudeApiEndpoint(folder.readPath, endpoint)
@@ -132,6 +135,14 @@ export class ClaudeAccountRegistration {
     } catch (error) {
       if (!saved) {
         await runtimeAuth.removeAccountFolder(id, target).catch(() => {})
+      } else if (previousFile !== null) {
+        // Launches read the folder, so it must keep matching the endpoint the account still shows.
+        try {
+          restoreClaudeApiEndpointRaw(folder.readPath, previousFile)
+          await runtimeAuth.prepareAccountFolder(id, target)
+        } catch {
+          // The caller needs the error that stopped the save, not this one.
+        }
       }
       throw error
     }

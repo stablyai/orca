@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -169,6 +177,42 @@ describe('ClaudeAccountService', () => {
       })
     ).rejects.toThrow('settings.json')
     expect(f.settings().claudeManagedAccounts.map((entry) => entry.id)).toEqual(['a'])
+  })
+
+  it('keeps the old endpoint in the folder when an edit fails', async () => {
+    const f = fixture([account('a')])
+    const endpoint = {
+      label: 'Sakana AI',
+      baseUrl: 'https://api.sakana.ai',
+      authToken: 'old-token',
+      model: 'fugu',
+      smallFastModel: 'fugu'
+    }
+    await f.service.saveApiEndpointAccount(endpoint)
+    const id = newId(f)
+    const setup = f.runtimeAuth.prepareAccountFolder.getMockImplementation()!
+    f.runtimeAuth.prepareAccountFolder
+      .mockImplementationOnce(setup)
+      .mockImplementationOnce(async (accountId: string) => {
+        // Setup fails after settings.json already took the new endpoint.
+        await setup(accountId)
+        throw new Error('setup failed')
+      })
+
+    await expect(
+      f.service.saveApiEndpointAccount(
+        { ...endpoint, baseUrl: 'https://elsewhere.example.test', authToken: 'new-token' },
+        id
+      )
+    ).rejects.toThrow('setup failed')
+
+    expect(readClaudeApiEndpointToken(f.home(id))).toBe('old-token')
+    const { env } = JSON.parse(readFileSync(join(f.home(id), 'settings.json'), 'utf8'))
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://api.sakana.ai')
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('old-token')
+    expect(
+      f.settings().claudeManagedAccounts.find((entry) => entry.id === id)?.apiEndpoint?.baseUrl
+    ).toBe('https://api.sakana.ai')
   })
 
   it("labels each row with its folder's login and asks a folder without one to sign in", () => {
