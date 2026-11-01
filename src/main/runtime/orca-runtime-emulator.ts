@@ -156,9 +156,6 @@ export class RuntimeEmulatorCommands {
         current: worktreeId ? bridge.getActiveForWorktree(worktreeId)?.deviceUdid : undefined,
         configured: settings.mobileEmulatorDefaultDeviceUdid ?? undefined
       }))
-    if (!device) {
-      throw new EmulatorError('emulator_device_not_found', emulatorFailureText('noDeviceSpecified'))
-    }
     if (worktreeId) {
       // Device switch retains slow-boot Android emulators for fast switch-back.
       await bridge.stopActiveForSwitch(worktreeId)

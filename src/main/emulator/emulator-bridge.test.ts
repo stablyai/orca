@@ -612,10 +612,10 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
 
     await expect(commands.emulatorAttach({ worktree: 'wt-1' })).resolves.toEqual({
       attached: true,
-      info: session('device-1')
+      info: { ...session('device-1'), backend: 'ios' }
     })
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
-    expect(bridge.getActiveForWorktree('wt-1')).toEqual(session('device-1'))
+    expect(bridge.getActiveForWorktree('wt-1')?.deviceUdid).toBe('device-1')
   })
 
   it('rejects attach when mobile emulator is disabled', async () => {

@@ -1,5 +1,7 @@
 import type { EmulatorBridge } from './emulator-bridge'
 import type { EmulatorDevice } from './backends/emulator-backend'
+import { EmulatorError } from './emulator-errors'
+import { emulatorFailureText } from '../../shared/emulator-failure-copy'
 
 const isIphone = (device: EmulatorDevice): boolean =>
   device.backend === 'ios' && /iPhone/i.test(device.name)
@@ -8,7 +10,7 @@ const isIphone = (device: EmulatorDevice): boolean =>
 export async function resolveDefaultAttachDevice(
   bridge: Pick<EmulatorBridge, 'listAllDevices'>,
   { current, configured }: { current?: string; configured?: string } = {}
-): Promise<string | undefined> {
+): Promise<string> {
   if (!current && configured) {
     return configured
   }
@@ -21,6 +23,10 @@ export async function resolveDefaultAttachDevice(
   if (configured) {
     return configured
   }
-  return (booted.find(isIphone) ?? booted[0] ?? available.find(isIphone) ?? available[0] ?? all[0])
-    ?.id
+  const device =
+    booted.find(isIphone) ?? booted[0] ?? available.find(isIphone) ?? available[0] ?? all[0]
+  if (!device) {
+    throw new EmulatorError('emulator_device_not_found', emulatorFailureText('noDeviceSpecified'))
+  }
+  return device.id
 }
