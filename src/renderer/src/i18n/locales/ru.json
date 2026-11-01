@@ -7680,6 +7680,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Не удалось сохранить расположение аккаунтов. Повторите попытку.",
           "c2d2751587": "Удалить учётную запись",
           "dbb9626ed1": "Отмена",
           "63843e37e2": "Удалить учётную запись Claude?",
@@ -23719,6 +23720,7 @@
       "serveSimUnavailable": "serve-sim недоступен.",
       "serveSimNoEndpoints": "serve-sim не вернул конечные точки потоковой передачи.",
       "serveSimEndpointUnreachable": "serve-sim запущен, но его конечная точка потоковой передачи недоступна.",
+      "deviceHubInputBlocked": "Device Hub из Xcode перехватил ввод для этого симулятора, поэтому касания и набор текста до него не доходят. Закройте Device Hub, затем снова подключите симулятор.",
       "androidSdkMissing": "Android SDK не найден. Установите Android Studio и задайте ANDROID_HOME.",
       "adbUnavailable": "adb недоступен.",
       "noAndroidDevices": "Устройства Android и AVD не найдены. Создайте устройство в Android Studio.",

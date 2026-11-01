@@ -564,7 +564,7 @@ describe('durable execution-host launch settings', () => {
   })
 })
 
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
 

@@ -18,7 +18,6 @@ import { getBrokenChecks } from '../../../src/shared/pr-checks-fix-prompt'
 import { resolveSourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control-primary-action-decision'
 import {
   resolveSourceControlNextStep,
-  type SourceControlNextStep,
   type SourceControlNextStepReview
 } from '../../../src/shared/source-control-next-step-decision'
 import { splitWorktreeIdForFilesystem } from '../../../src/shared/worktree/id'
@@ -47,16 +46,6 @@ type Params = {
   /** Opens the PR tab's Merge sheet, which picks the method, instead of confirming the default. */
   onMerge?: () => void
 }
-
-// Steps where the bar itself offers the PR's merge actions.
-// Agent steps leave Merge and auto-merge to the PR body.
-const REVIEW_STEPS: ReadonlySet<SourceControlNextStep['kind']> = new Set([
-  'merge_when_ready',
-  'auto_merge_on',
-  'merge',
-  'merge_blocked',
-  'merged'
-])
 
 export type MobileMergeConfirm = {
   title: string
@@ -264,11 +253,10 @@ export function useMobileSourceControlNextStep({
       : step.kind === 'resolve_conflicts'
         ? 'resolve-conflicts'
         : null
-  // On the PR tab the body's own AI button already shows this launcher's notice.
-  const agentNotice =
-    triageKey && !showWorkflowErrors
-      ? { ...triage.noticeFor(triageKey), availability: triage.availability }
-      : null
+  // The bar's agent button is the only one on either tab, so its launch notice shows under it.
+  const agentNotice = triageKey
+    ? { ...triage.noticeFor(triageKey), availability: triage.availability }
+    : null
   const workflowError = showWorkflowErrors
     ? (state.actionError ?? state.commitFailureRecovery?.error ?? null)
     : null
@@ -288,9 +276,7 @@ export function useMobileSourceControlNextStep({
         }
       : null
 
-  // While the bar is on a local step, the PR body keeps its own Merge so it stays reachable.
   return {
-    offersMerge: REVIEW_STEPS.has(step.kind),
     view,
     notice,
     agentNotice,

@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { Text, TextInput, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { GitMerge } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
@@ -17,6 +16,7 @@ import { PrCreateSheet } from './PrCreateSheet'
 import { PrReviewersSheet } from './PrReviewersSheet'
 import { livePrDetails, readyPrData, type MobilePrTab, type PrTabSheet } from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
+import { FieldTextInput } from '../composer-input/FieldTextInput'
 
 // Sheets for the PR tab's decisions; one Modal swaps between them so iOS never stacks presentations.
 export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
@@ -179,14 +179,12 @@ function PrEditTextSheet({ tab, field }: { tab: MobilePrTab; field: 'title' | 'b
         }}
       />
       <View style={sheetStyles.body}>
-        <TextInput
+        <FieldTextInput
           value={draft}
           onChangeText={setDraft}
           editable={!textAction.saving}
           autoFocus
           multiline={field === 'body'}
-          placeholderTextColor={colors.textMuted}
-          selectionColor={colors.accentBlue}
           style={[sheetStyles.field, field === 'body' && sheetStyles.multiline]}
         />
         {textAction.error ? <Text style={sheetStyles.error}>{textAction.error}</Text> : null}

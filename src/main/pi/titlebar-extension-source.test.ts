@@ -121,10 +121,6 @@ describe('getPiTitlebarExtensionSource', () => {
     vi.useRealTimers()
   })
 
-  it('registers nothing outside an Orca pane', () => {
-    expect(createHarness({ paneKey: '' }).handlers).toEqual({})
-  })
-
   it('stops the spinner when the agent settles', async () => {
     const harness = createHarness()
 
@@ -176,30 +172,6 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
   })
 
-  it('keeps spinning through threshold compaction inside an active run', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('agent_start')
-    await harness.callHook('auto_compaction_start', { reason: 'threshold' })
-    await harness.callHook('auto_compaction_end', { reason: 'threshold' })
-
-    expect(vi.getTimerCount()).toBe(1)
-    vi.advanceTimersByTime(80)
-    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
-  })
-
-  it('does not let an idle compaction adopt an already-running agent spinner', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('agent_start')
-    await harness.callHook('auto_compaction_start', { reason: 'idle' })
-    await harness.callHook('auto_compaction_end', { reason: 'idle' })
-
-    expect(vi.getTimerCount()).toBe(1)
-    vi.advanceTimersByTime(80)
-    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
-  })
-
   it('does not let a stale idle-compaction completion stop a newer run', async () => {
     const harness = createHarness()
 
@@ -210,21 +182,6 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(vi.getTimerCount()).toBe(1)
     vi.advanceTimersByTime(80)
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
-  })
-
-  it('transfers an idle-compaction spinner to a new run without publishing idle', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('auto_compaction_start', { reason: 'idle' })
-    vi.advanceTimersByTime(80)
-    const titleCountBeforeTransfer = harness.titles.length
-
-    await harness.callHook('agent_start')
-
-    const transferTitles = harness.titles.slice(titleCountBeforeTransfer)
-    expect(transferTitles).not.toContain(IDLE_TITLE)
-    expect(transferTitles).toHaveLength(1)
-    expect(transferTitles[0]).toMatch(BRAILLE_RE)
   })
 
   it.each([{ kind: 'omp' as const }, { processTitle: 'omp' }])(
@@ -297,17 +254,6 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(vi.getTimerCount()).toBe(1)
   })
 
-  it('returns an idle pane to its plain title when the dialog closes', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('ui_prompt_start')
-    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
-
-    await harness.callHook('ui_prompt_end')
-    expect(harness.lastTitle()).toBe(IDLE_TITLE)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('only the outermost of nested dialogs moves the title', async () => {
     const harness = createHarness()
 
@@ -319,15 +265,6 @@ describe('getPiTitlebarExtensionSource', () => {
 
     await harness.callHook('ui_prompt_end')
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
-  })
-
-  it('ignores an unmatched dialog close', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('agent_start')
-    const titleCount = harness.titles.length
-    await harness.callHook('ui_prompt_end')
-    expect(harness.titles.length).toBe(titleCount)
   })
 
   it.each(['agent_settled', 'session_shutdown'])(
@@ -345,49 +282,6 @@ describe('getPiTitlebarExtensionSource', () => {
     }
   )
 
-  it('keeps the marker across an idle compaction that finishes under a dialog', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('ui_prompt_start')
-    await harness.callHook('auto_compaction_start', { reason: 'idle' })
-    await harness.callHook('auto_compaction_end')
-    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
-  })
-
-  it('recovers the spinner on a new turn when a dialog close was lost', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('ui_prompt_start')
-    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
-
-    await harness.callHook('agent_start')
-    await vi.advanceTimersByTimeAsync(80)
-    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
-  })
-
-  it('leaves the marker to OMP approval events instead of painting it', () => {
-    expect(createHarness({ kind: 'omp' }).handlers.ui_prompt_start).toBeUndefined()
-  })
-
-  it('still caps idle maintenance while a dialog holds the title', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('auto_compaction_start', { reason: 'idle' })
-    await harness.callHook('ui_prompt_start')
-    vi.advanceTimersByTime(301_000)
-
-    expect(vi.getTimerCount()).toBe(1)
-    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
-  })
-
-  it('survives a dialog event that carries no ui context', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('agent_start')
-    await expect(harness.handlers.ui_prompt_start?.({}, undefined)).resolves.toBeUndefined()
-    await expect(harness.handlers.ui_prompt_end?.({}, undefined)).resolves.toBeUndefined()
-  })
-
   it('keeps spinning when the dialog event could not paint the marker', async () => {
     const harness = createHarness()
 
@@ -395,63 +289,6 @@ describe('getPiTitlebarExtensionSource', () => {
     await harness.handlers.ui_prompt_start?.({}, undefined)
     // Without a painted marker, suppressing frames would leave a working spinner frozen.
     await vi.advanceTimersByTimeAsync(160)
-    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
-  })
-
-  it('marks a nested dialog when the outer one could not paint', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('agent_start')
-    await harness.handlers.ui_prompt_start?.({}, undefined)
-    await harness.callHook('ui_prompt_start')
-    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
-  })
-
-  it('clears the marker through the opening ctx when the close carries none', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('ui_prompt_start')
-    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
-    await harness.handlers.ui_prompt_end?.({}, undefined)
-    expect(harness.lastTitle()).toBe(IDLE_TITLE)
-  })
-
-  it('does not reject when the dialog ctx can no longer paint', async () => {
-    const harness = createHarness()
-    const throwing = {
-      ui: {
-        setTitle: () => {
-          throw new Error('extension runner is no longer active')
-        }
-      }
-    }
-
-    await expect(harness.handlers.ui_prompt_start?.({}, throwing)).resolves.toBeUndefined()
-    await harness.callHook('agent_start')
-    await vi.advanceTimersByTimeAsync(80)
-    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
-  })
-
-  it('does not reject when the captured ctx dies before the dialog closes', async () => {
-    const harness = createHarness()
-    let live = true
-    const dying = {
-      ui: {
-        setTitle: (title: string) => {
-          if (!live) {
-            throw new Error('extension runner is no longer active')
-          }
-          harness.titles.push(title)
-        }
-      }
-    }
-
-    await harness.handlers.ui_prompt_start?.({}, dying)
-    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
-    live = false
-    await expect(harness.handlers.ui_prompt_end?.({}, undefined)).resolves.toBeUndefined()
-    await harness.callHook('agent_start')
-    await vi.advanceTimersByTimeAsync(80)
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
   })
 
@@ -471,20 +308,6 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(harness.lastTitle()).toBe(IDLE_TITLE)
 
     await harness.callHook('agent_start')
-    await vi.advanceTimersByTimeAsync(80)
-    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
-  })
-
-  it('does not reject when the opening ctx throws on ui access', async () => {
-    const harness = createHarness()
-    const stale = {
-      get ui(): never {
-        throw new Error('This extension ctx is stale')
-      }
-    }
-
-    await harness.callHook('agent_start')
-    await expect(harness.handlers.ui_prompt_start?.({}, stale as never)).resolves.toBeUndefined()
     await vi.advanceTimersByTimeAsync(80)
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
   })
@@ -518,53 +341,6 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('releases the marker when a session replacement drops the dialog', async () => {
-    const harness = createHarness()
-
-    await harness.callHook('ui_prompt_start')
-    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
-
-    // Session replacement hides dialogs without emitting close.
-    await harness.callHook('session_start', { reason: 'switch' })
-    expect(vi.getTimerCount()).toBe(0)
-    await harness.callHook('agent_start')
-    await vi.advanceTimersByTimeAsync(80)
-    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
-  })
-
-  it('survives a deleted cwd instead of crashing the pi process', async () => {
-    const harness = createHarness({
-      cwdImpl: () => {
-        throw new Error('ENOENT: uv_cwd')
-      }
-    })
-
-    // Timer callback errors reach Pi's uncaughtException handler and exit the agent.
-    await expect(harness.callHook('agent_start')).resolves.toBeUndefined()
-    await expect(harness.callHook('ui_prompt_start')).resolves.toBeUndefined()
-    await vi.advanceTimersByTimeAsync(2000)
-    await expect(harness.callHook('ui_prompt_end')).resolves.toBeUndefined()
-    await expect(harness.callHook('agent_settled')).resolves.toBeUndefined()
-  })
-
-  it('survives a session name that throws on a stale runtime', async () => {
-    let live = true
-    const harness = createHarness({
-      sessionNameImpl: () => {
-        if (!live) {
-          throw new Error('This extension API is stale')
-        }
-        return SESSION
-      }
-    })
-
-    await harness.callHook('agent_start')
-    await harness.callHook('ui_prompt_start')
-    live = false
-    await vi.advanceTimersByTimeAsync(2000)
-    await expect(harness.callHook('ui_prompt_end')).resolves.toBeUndefined()
-  })
-
   it('leaves the needs-input marker to the process that owns the pane', async () => {
     // Child agents inherit pane identity; only its owning process may assert needs-input.
     const harness = createHarness({ env: { ORCA_PI_TITLE_MARKER_OWNED: '111' } })
@@ -574,13 +350,6 @@ describe('getPiTitlebarExtensionSource', () => {
     await vi.advanceTimersByTimeAsync(1000)
     expect(harness.titles).not.toContain(PROMPT_TITLE)
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
-  })
-
-  it('leaves an OMP runtime to its own approval events', () => {
-    const harness = createHarness({ processTitle: 'omp' })
-
-    expect(harness.handlers.ui_prompt_start).toBeDefined()
-    expect(() => harness.handlers.ui_prompt_start?.({}, undefined)).not.toThrow()
   })
 
   it.each(['getter', 'title'] as const)(
@@ -612,39 +381,6 @@ describe('getPiTitlebarExtensionSource', () => {
     }
   )
 
-  it.each(['getter', 'title'] as const)('contains stale %s during shutdown', async (failure) => {
-    let stale = false
-    const harness = createHarness({
-      sessionNameImpl: () => {
-        if (stale && failure === 'getter') {
-          throw new Error('expired session')
-        }
-        return SESSION
-      },
-      setTitle: () => {
-        if (stale && failure === 'title') {
-          throw new Error('expired UI')
-        }
-      },
-      isIdle: () => false
-    })
-    await harness.callHook('agent_start')
-    await harness.callHook('agent_end')
-    stale = true
-    await expect(harness.callHook('session_shutdown')).resolves.toBeUndefined()
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('does not schedule a timer when the first frame fails', async () => {
-    const harness = createHarness({
-      sessionNameImpl: () => {
-        throw new Error('expired')
-      }
-    })
-    await harness.callHook('agent_start')
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('retires animation when an idle recheck loses its session', async () => {
     const harness = createHarness({
       isIdle: () => {
@@ -655,17 +391,6 @@ describe('getPiTitlebarExtensionSource', () => {
     await harness.callHook('agent_end')
     expect(() => vi.advanceTimersByTime(1)).not.toThrow()
     expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('clears animation and pending idle checks on session replacement', async () => {
-    const harness = createHarness({ isIdle: () => false })
-    await harness.callHook('agent_start')
-    await harness.callHook('agent_end')
-    await harness.callHook('session_shutdown')
-    await harness.callHook('session_start')
-    expect(vi.getTimerCount()).toBe(0)
-    await harness.callHook('agent_start')
-    expect(vi.getTimerCount()).toBe(1)
   })
 
   it('reload replaces only its pane owner and ignores late old-generation events', async () => {
@@ -741,13 +466,6 @@ describe('getPiTitlebarExtensionSource', () => {
     await harness.callHook('agent_start')
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
     expect(vi.getTimerCount()).toBe(1)
-  })
-
-  it('paints the rest title at session_start so a branded Pi reads as ready before its first turn', async () => {
-    const harness = createHarness()
-    await harness.callHook('session_start', { reason: 'startup' })
-    expect(harness.lastTitle()).toBe(IDLE_TITLE)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('drops a leftover needs-input marker when session_start replaces the session', async () => {

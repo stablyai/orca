@@ -139,6 +139,7 @@ function toSessionInfo(session: EmulatorSessionState): EmulatorSessionInfo {
     streamUrl: session.streamUrl,
     axUrl: session.axUrl,
     helperPid: session.pid,
-    streamCodec: session.streamCodec
+    streamCodec: session.streamCodec,
+    backend: session.backend
   }
 }

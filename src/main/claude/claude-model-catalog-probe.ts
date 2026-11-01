@@ -230,7 +230,7 @@ export function createClaudeModelCatalogProbe(
         if (models.length === 0) {
           throw new Error('claude listed no models')
         }
-        const fastModeSupport = claudeFastModeSupport(models, undefined)
+        const fastModeSupport = claudeFastModeSupport(models)
         return {
           models: wireClaudeModels(models),
           origin: 'probe',
