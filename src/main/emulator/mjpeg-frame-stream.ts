@@ -1,17 +1,15 @@
 import { request as httpRequest, type ClientRequest, type IncomingMessage } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { MjpegFrameAccumulator } from './mjpeg-frame-parser'
-import type { EmulatorStreamConfig } from '../../shared/emulator-stream-config'
 
 const RECONNECT_DELAY_MS = 1_000
 const REQUEST_TIMEOUT_MS = 10_000
 const MAX_FPS = 30
 const MIN_FRAME_INTERVAL_MS = Math.floor(1_000 / MAX_FPS)
-const CONFIG_POLL_INTERVAL_MS = 1_000
 
 export type MjpegFrameStreamCallbacks = {
   onError: (message: string) => void
-  onFrame: (frame: Buffer<ArrayBufferLike>, config?: EmulatorStreamConfig) => void
+  onFrame: (frame: Buffer<ArrayBufferLike>) => void
 }
 
 function normalizeStreamUrl(streamUrl: string, streamKey?: string): URL {
@@ -48,9 +46,6 @@ export class MjpegFrameStream {
   private request: ClientRequest | null = null
   private stopped = false
   private lastFrameAt = 0
-  private config: EmulatorStreamConfig | undefined
-  private configTimer: NodeJS.Timeout | null = null
-  private configRequest: ClientRequest | null = null
 
   private readonly streamUrl: URL
   private readonly callbacks: MjpegFrameStreamCallbacks
@@ -61,18 +56,11 @@ export class MjpegFrameStream {
   }
 
   start(): void {
-    this.pollConfig()
     this.openRequest()
   }
 
   stop(): void {
     this.stopped = true
-    if (this.configTimer) {
-      clearTimeout(this.configTimer)
-      this.configTimer = null
-    }
-    this.configRequest?.destroy()
-    this.configRequest = null
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -92,72 +80,6 @@ export class MjpegFrameStream {
     }, RECONNECT_DELAY_MS)
   }
 
-  private pollConfig(): void {
-    if (this.stopped) {
-      return
-    }
-    const url = new URL(this.streamUrl)
-    url.pathname = url.pathname.replace(/stream\.mjpeg$/, 'config')
-    const req = requestForUrl(url, (res) => {
-      let body = ''
-      res.setEncoding('utf8')
-      res.on('data', (chunk: string) => {
-        body += chunk
-        if (body.length > 16_384) {
-          req.destroy()
-        }
-      })
-      res.on('error', () => {})
-      res.on('end', () => {
-        if (this.stopped || res.statusCode !== 200) {
-          return
-        }
-        try {
-          const value: unknown = JSON.parse(body)
-          if (
-            typeof value !== 'object' ||
-            value === null ||
-            !('width' in value) ||
-            typeof value.width !== 'number' ||
-            !Number.isFinite(value.width) ||
-            value.width <= 0 ||
-            !('height' in value) ||
-            typeof value.height !== 'number' ||
-            !Number.isFinite(value.height) ||
-            value.height <= 0
-          ) {
-            return
-          }
-          const orientation = 'orientation' in value ? value.orientation : undefined
-          this.config = {
-            width: value.width,
-            height: value.height,
-            orientation:
-              orientation === 'portrait' ||
-              orientation === 'landscape_left' ||
-              orientation === 'landscape_right' ||
-              orientation === 'portrait_upside_down'
-                ? orientation
-                : undefined
-          }
-        } catch {}
-      })
-    })
-    this.configRequest = req
-    const deadline = setTimeout(() => req.destroy(), 2_000)
-    req.on('timeout', () => req.destroy())
-    req.on('error', () => {})
-    req.on('close', () => {
-      clearTimeout(deadline)
-      this.configRequest = null
-      if (!this.stopped) {
-        // Folding can change orientation without changing frame size; poll only while the stream is live.
-        this.configTimer = setTimeout(() => this.pollConfig(), CONFIG_POLL_INTERVAL_MS)
-      }
-    })
-    req.end()
-  }
-
   private openRequest(): void {
     if (this.stopped) {
       return
@@ -175,9 +97,6 @@ export class MjpegFrameStream {
       res.on('data', (chunk: Buffer) => this.handleChunk(chunk))
       res.on('end', () => this.scheduleReconnect())
       res.on('error', (error) => {
-        if (this.stopped) {
-          return
-        }
         this.callbacks.onError(error.message)
         this.scheduleReconnect()
       })
@@ -202,7 +121,7 @@ export class MjpegFrameStream {
         continue
       }
       this.lastFrameAt = now
-      this.callbacks.onFrame(frame, this.config)
+      this.callbacks.onFrame(frame)
     }
   }
 }

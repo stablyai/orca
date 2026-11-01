@@ -30,11 +30,7 @@ describe('MjpegFrameStream', () => {
   it('discards an unfinished frame when reconnecting to a new response', async () => {
     let attempts = 0
     const framePromise = new Promise<Buffer>((resolve, reject) => {
-      const httpServer = createServer((req, res) => {
-        if (req.url?.startsWith('/config')) {
-          res.writeHead(404).end()
-          return
-        }
+      const httpServer = createServer((_req, res) => {
         attempts += 1
         res.writeHead(200, { 'content-type': 'application/octet-stream' })
         res.end(attempts === 1 ? JPEG.subarray(0, 3) : JPEG)

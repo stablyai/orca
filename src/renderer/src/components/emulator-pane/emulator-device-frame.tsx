@@ -83,17 +83,16 @@ export function EmulatorDeviceFrame({
   const wheelGestureRef = useRef<PendingWheelGesture | null>(null)
   const [streamError, setStreamError] = useState(false)
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
-  const geometry = useMemo(
-    () => resolveVisualStreamGeometry(streamSize, visualOrientation),
-    [streamSize, visualOrientation]
-  )
-  const inputRotation = previewUrl?.startsWith('scrcpy://') ? 0 : geometry.streamRotation
   const canInteract = isLive && !loading && !streamError
-  const { cancelKeyboardFrames, sendKeyboardFrames, sendTouch } = useEmulatorControlStream(
-    wsUrl,
-    canInteract,
-    scrcpyDeviceIdFromStreamUrl(previewUrl)
+  const scrcpyDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
+  const { cancelKeyboardFrames, reportedOrientation, sendKeyboardFrames, sendTouch } =
+    useEmulatorControlStream(wsUrl, canInteract, scrcpyDeviceId)
+  const visualStreamGeometry = useMemo(
+    () => resolveVisualStreamGeometry(streamSize, visualOrientation, reportedOrientation),
+    [reportedOrientation, streamSize, visualOrientation]
   )
+  // serve-sim takes touches in raw panel coordinates, so input undoes the picture's turn.
+  const inputRotation = scrcpyDeviceId ? 0 : visualStreamGeometry.streamRotation
   const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
     useEmulatorScreenKeyboard({
       cancelKeyboardFrames,
@@ -111,10 +110,10 @@ export function EmulatorDeviceFrame({
       mapClientPointToSimulatorScreen(
         { clientX: event.clientX, clientY: event.clientY },
         event.currentTarget.getBoundingClientRect(),
-        geometry.size,
+        visualStreamGeometry.size,
         inputRotation
       ),
-    [inputRotation, geometry.size]
+    [inputRotation, visualStreamGeometry.size]
   )
 
   const sendGesturePoints = useCallback(
@@ -270,7 +269,7 @@ export function EmulatorDeviceFrame({
       const action = resolveEmulatorPointerAction(
         samples,
         event.currentTarget.getBoundingClientRect(),
-        geometry.size,
+        visualStreamGeometry.size,
         undefined,
         inputRotation
       )
@@ -290,7 +289,7 @@ export function EmulatorDeviceFrame({
       onTap,
       sendGesturePoints,
       sendTouch,
-      geometry
+      visualStreamGeometry
     ]
   )
 
@@ -308,7 +307,7 @@ export function EmulatorDeviceFrame({
           deltaY: event.deltaY
         },
         event.currentTarget.getBoundingClientRect(),
-        geometry.size,
+        visualStreamGeometry.size,
         undefined,
         inputRotation
       )
@@ -337,17 +336,13 @@ export function EmulatorDeviceFrame({
         timerId: window.setTimeout(flushWheelGesture, WHEEL_GESTURE_IDLE_MS)
       }
     },
-    [canInteract, flushWheelGesture, inputRotation, sendTouch, geometry]
+    [canInteract, flushWheelGesture, inputRotation, sendTouch, visualStreamGeometry]
   )
 
   const handleStreamSize = useCallback((size: NonNullable<StreamSize>) => {
     setStreamError(false)
     setStreamSize((current) =>
-      current?.width === size.width &&
-      current.height === size.height &&
-      current.orientation === size.orientation
-        ? current
-        : size
+      current?.width === size.width && current.height === size.height ? current : size
     )
   }, [])
 
@@ -360,7 +355,7 @@ export function EmulatorDeviceFrame({
   const showStream = isActive && isLive && windowVisibleForStream && Boolean(previewUrl)
   const streamAspectRatio = streamSize ? streamSize.width / streamSize.height : 9 / 19
   // Physical orientation follows successful rotate requests even if portrait-locked apps keep portrait pixels.
-  const screenAspectRatio = geometry.aspectRatio
+  const screenAspectRatio = visualStreamGeometry.aspectRatio
   const frameKind = useMemo(
     () => resolveDeviceFrameKind(deviceName, streamAspectRatio),
     [deviceName, streamAspectRatio]
@@ -415,7 +410,7 @@ export function EmulatorDeviceFrame({
             showStream={Boolean(showStream)}
             streamError={streamError}
             streamKey={streamKey}
-            streamRotation={geometry.streamRotation}
+            streamRotation={visualStreamGeometry.streamRotation}
           />
         </div>
       </div>
