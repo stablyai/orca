@@ -17,7 +17,7 @@ import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-conte
 import { unwrapClaudeBashInputBlock } from '../../shared/claude-bash-input'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
 import { claudeStopHookFeedbackRow } from '../claude/claude-stop-hook-feedback'
-import { structuredAgentSessionStatusBlock } from '../../shared/structured-agent-session-status-block'
+import { structuredAgentSessionStatusBlock } from '../../shared/agent-session/view/structured-agent-session-status-block'
 
 const MAX_EDIT_PATCH_HUNKS = 40
 const MAX_EDIT_PATCH_HUNK_LINES = 400

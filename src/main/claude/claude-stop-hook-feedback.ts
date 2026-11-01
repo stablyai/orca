@@ -4,7 +4,7 @@ import {
   claudeRecord,
   claudeText,
   type ClaudeMessageEnvelope
-} from './claude-structured-item-translation'
+} from './structured/journal/claude-structured-item-translation'
 
 // Claude injects a blocking Stop hook's reason as a meta user turn; exit-2 hooks prefix it with their command.
 const STOP_HOOK_FEEDBACK = /^Stop hook feedback:\n/
