@@ -2,6 +2,8 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import { aiVaultScanIssueText } from '../../../src/shared/ai-vault-scan-issue-copy'
+import { activateMobileUiLocale } from '../i18n/mobile-i18n'
+import es from '../i18n/locales/es.json'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -107,11 +109,12 @@ doubles.read = useRpcClientContext
 
 let tree: ReactTestRenderer | null = null
 
-afterEach(() => {
+afterEach(async () => {
   act(() => tree?.unmount())
   tree = null
   doubles.nativeRedial = undefined
   doubles.connection = { client: null, state: 'reconnecting' }
+  await activateMobileUiLocale('en')
 })
 
 const HOST_A_SESSION: AiVaultSession = {
@@ -264,16 +267,7 @@ it.each([
   }
 )
 
-it('counts a too-large transcript and shows its path and English reason on demand', async () => {
-  const pair = createFakeBridgePortPair()
-  await pair.flush()
-  const path = '/host-a/too-large.jsonl'
-  const issue = {
-    executionHostId: 'local',
-    agent: 'claude',
-    path,
-    ...aiVaultScanIssueText('transcriptTooLarge', { params: { label: 'Claude' } })
-  }
+async function mountReadyPanel(issues: unknown[]) {
   const host = new FakeSession('connected')
   host.sendRequest.mockImplementation(async (method) => ({
     id: 'history',
@@ -283,12 +277,35 @@ it('counts a too-large transcript and shows its path and English reason on deman
         ? { capabilities: ['aiVault.v1'], hostPlatform: 'darwin' }
         : method === 'worktree.ps'
           ? { worktrees: [{ worktreeId: 'wt-1', repoId: 'repo', path: '/host-a/workspace' }] }
-          : { sessions: [HOST_A_SESSION], issues: [issue] }
+          : { sessions: [HOST_A_SESSION], issues }
   }))
   doubles.connection = { client: host, state: 'connected' }
-  const rendered = await mountPanel(pair)
+  const rendered = await mountPanel()
   const texts = () =>
     rendered.root.findAll((node) => String(node.type) === 'Text').map((node) => node.props.children)
+  return { rendered, texts }
+}
+
+it('shows no skipped notice for a readable session without issues', async () => {
+  const { rendered, texts } = await mountReadyPanel([])
+
+  expect(rendered.root.findAll((node) => String(node.type) === 'SectionList')).toHaveLength(1)
+  expect(texts()).not.toContain('1 transcript skipped')
+  expect(texts()).not.toContain('Show details')
+})
+
+it('counts a too-large transcript and shows its path and English reason on demand', async () => {
+  const path = '/host-a/too-large.jsonl'
+  const reason =
+    'A Claude conversation is too large to load in Session History. Try resuming it in Claude directly.'
+  const { rendered, texts } = await mountReadyPanel([
+    {
+      executionHostId: 'local',
+      agent: 'claude',
+      path,
+      ...aiVaultScanIssueText('transcriptTooLarge', { params: { label: 'Claude' } })
+    }
+  ])
 
   expect(texts()).toContain('1 transcript skipped')
   expect(texts()).not.toContain(path)
@@ -299,10 +316,17 @@ it('counts a too-large transcript and shows its path and English reason on deman
     showDetails?.props.onPress()
   })
   // The phone shows the host's English message verbatim, not a translation by code.
+  expect(texts()).toEqual(expect.arrayContaining([path, reason]))
+
+  await act(async () => {
+    await activateMobileUiLocale('es')
+  })
   expect(texts()).toEqual(
     expect.arrayContaining([
+      es.agentHistory.panel.skipped_one.replace('{{count}}', '1'),
       path,
-      'A Claude conversation is too large to load in Session History. Try resuming it in Claude directly.'
+      reason
     ])
   )
+  expect(texts()).not.toContain('1 transcript skipped')
 })
