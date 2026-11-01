@@ -19655,7 +19655,8 @@
         "continue": "Continuar",
         "failed": "No se pudo continuar este chat. Inténtalo de nuevo o envía un mensaje.",
         "explanation": "Continúa y el agente comprobará primero si su último paso terminó.",
-        "unconfirmed": "No se pudo confirmar si {{agent}} recibió Continuar. Revisa el chat antes de volver a intentarlo."
+        "unconfirmed": "No se pudo confirmar si {{agent}} recibió Continuar. Revisa el chat antes de volver a intentarlo.",
+        "usageLimitExplanation": "Pide al agente que continúe donde lo dejó. Úsalo cuando se restablezca el límite."
       },
       "rewind": {
         "unsupported": "Este chat no puede volver a un mensaje anterior.",
@@ -19833,6 +19834,13 @@
         "effortPickerFailed": "No se pudo abrir el selector de esfuerzo.",
         "modelApplyFailed": "No se pudo aplicar el modelo {{value}}.",
         "effortApplyFailed": "No se pudo aplicar el esfuerzo {{value}}."
+      },
+      "usageLimitActions": {
+        "continueNow": "Continuar ahora",
+        "leadIn": "Continúa este chat sin esperar:",
+        "switchAccount": "Cambiar de cuenta",
+        "addAccount": "Añadir cuenta…",
+        "accountUnavailable": "Este chat no se puede mover a otra cuenta. Transfiérelo a otro agente."
       }
     },
     "tab": {

@@ -13,7 +13,11 @@ import {
   describeMobileE2EEAuthFailure,
   type DeviceKeyResolution
 } from './mobile-e2ee-auth-validation'
-import { isMobileE2EEOutboundItemWithinLimit } from './mobile-e2ee-outbound-admission'
+import {
+  isMobileE2EEOutboundItemWithinLimit,
+  trackMobileE2EEOutboundBudgetClose,
+  type MobileE2EEOutboundBudgetEmitter
+} from './mobile-e2ee-outbound-admission'
 import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime/requests/remote-runtime-request-frames'
 import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
@@ -24,11 +28,7 @@ import type {
   RpcBinarySendResult,
   RpcBinarySender
 } from './rpc-binary-sender'
-import type { EventProps } from '../../../shared/telemetry-events'
-import { track } from '../../telemetry/client'
 import type { DevicePrincipal } from '../device-principal'
-
-type OutboundBudgetEmitter = EventProps<'remote_outbound_budget_close'>['emitter']
 
 const HANDSHAKE_TIMEOUT_MS = 10_000
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
@@ -98,6 +98,7 @@ export class E2EEChannel {
       ws,
       () => Boolean(this.sharedKey),
       () => this.closeForOutboundBudget('queue'),
+      this.capabilitySource,
       options.outboundMemoryBudget
     )
 
@@ -310,12 +311,8 @@ export class E2EEChannel {
   }
 
   // Both budget closes kill the remote session: size identifies an oversized producer, queue a backed-up link.
-  private closeForOutboundBudget(emitter: OutboundBudgetEmitter): void {
-    try {
-      track('remote_outbound_budget_close', { emitter })
-    } catch {
-      // Telemetry is best-effort; closing the unsafe socket remains authoritative.
-    }
+  private closeForOutboundBudget(emitter: MobileE2EEOutboundBudgetEmitter): void {
+    trackMobileE2EEOutboundBudgetClose(emitter)
     this.onError(1013, 'Outbound reply buffer overflow')
   }
 
