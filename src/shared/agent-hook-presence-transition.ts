@@ -100,15 +100,27 @@ function transitionHookPresence(
   previous: AgentHookEventPayload | undefined
 ): AgentHookEventPayload | undefined {
   const recorded = previous?.agentPresence
-  const owner =
-    recorded &&
-    !recorded.ended &&
-    (!previous?.providerSessionOnly || hasSeparateHookSessionAdmission(recorded.agent))
-      ? recorded
-      : undefined
   const sender = incoming.agentPresence?.process
   // Only admitted process-ending SessionEnd or host-proved exits mark ended; other SessionEnd events update status.
   const exit = incoming.agentPresence?.ended === true
+  // Why: an owner recorded without a process (seen in the terminal before any hook, or from a hook
+  // that couldn't capture one) can't speak for liveness, so its agent's first hook that proves a
+  // process in the same session claims it. A nested agent's hooks carry another session.
+  const unprovenOwnerClaimed =
+    sender !== undefined &&
+    !exit &&
+    recorded !== undefined &&
+    !recorded.process &&
+    recorded.agent === incoming.agentPresence?.agent &&
+    (!recorded.session ||
+      recorded.session === (incoming.agentPresence?.session ?? incoming.providerSession?.id))
+  const owner =
+    recorded &&
+    !recorded.ended &&
+    !unprovenOwnerClaimed &&
+    (!previous?.providerSessionOnly || hasSeparateHookSessionAdmission(recorded.agent))
+      ? recorded
+      : undefined
   if (owner && (exit || !owner.suspended)) {
     if (exit) {
       const fromOwner = owner.process && sender && isSameAgentProcess(owner.process, sender)

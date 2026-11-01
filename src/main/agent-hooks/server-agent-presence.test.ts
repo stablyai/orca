@@ -388,6 +388,34 @@ describe('host-owned hook presence', () => {
     await hook(server, 'UserPromptSubmit', 'relaunch', undefined, 4002)
     expect(state(server)).toBe('working')
   })
+
+  it('records the process from the first hook after the terminal reported the agent first', async () => {
+    const server = await createServer()
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      connectionId: null,
+      payload: { state: 'working', prompt: '', agentType: 'claude' }
+    })
+    expect(server.hasVerifiableAgentProcess(PANE)).toBe(false)
+    await hook(server, 'SessionStart', 'resumed')
+    expect(server.hasVerifiableAgentProcess(PANE)).toBe(true)
+    // The recorded owner still refuses a nested process's hooks.
+    await hook(server, 'UserPromptSubmit', 'nested', undefined, 4002)
+    expect(
+      server.getStatusSnapshot().find((row) => row.paneKey === PANE)?.providerSession?.id
+    ).toBe('resumed')
+  })
+
+  it('records the process once the same session proves it after a hook without one', async () => {
+    const server = await createServer()
+    await hook(server, 'SessionStart', 'session-a', undefined, null)
+    await hook(server, 'UserPromptSubmit', 'nested', undefined, 4002)
+    expect(server.hasVerifiableAgentProcess(PANE)).toBe(false)
+    await hook(server, 'PostToolUse', 'session-a')
+    expect(server.hasVerifiableAgentProcess(PANE)).toBe(true)
+  })
 })
 
 describe('retained agent exit', () => {
