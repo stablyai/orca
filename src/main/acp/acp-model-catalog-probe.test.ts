@@ -156,6 +156,7 @@ function scriptedOpenCode2(canDelete: boolean): {
           initialize: () => runtime.initialize(),
           start: (options) => runtime.start(options),
           deleteSession: (sessionId) => runtime.deleteSession(sessionId),
+          subscribe: (listener) => runtime.subscribe(listener),
           close: async () => {
             closes += 1
             runtime.close()
@@ -294,6 +295,67 @@ describe('ACP model catalog probes', () => {
       ['opencode/big-pickle', 'Big Pickle'],
       ['opencode/exo-free', 'Exo Free']
     ])
+  })
+
+  it('lists the models OpenCode 2.x reports after starting, until its menu settles', async () => {
+    const { agent, deps } = scriptedOpenCode2(true)
+    const menu = (...values: string[]) => ({
+      sessionUpdate: 'config_option_update',
+      configOptions: [
+        {
+          id: 'model',
+          name: 'Model',
+          category: 'model',
+          type: 'select',
+          currentValue: 'opencode/exo-free',
+          options: values.map((value) => ({ value, name: value }))
+        }
+      ]
+    })
+    const update = (sessionId: string, ...values: string[]) =>
+      agent.notify('session/update', { sessionId, update: menu(...values) })
+    agent.on('session/new', (frame) => {
+      agent.reply(frame, {
+        sessionId: 'probe-session',
+        configOptions: menu('opencode/exo-free').configOptions
+      })
+      update('probe-session', 'opencode/exo-free', 'deepseek/deepseek-flash')
+      update('other-session', 'other/model')
+      setTimeout(
+        () =>
+          update(
+            'probe-session',
+            'opencode/exo-free',
+            'deepseek/deepseek-flash',
+            'lmstudio/gpt-oss-20b'
+          ),
+        1_000
+      )
+    })
+    agent.on('session/delete', (frame) => {
+      update('probe-session', 'after/delete')
+      agent.reply(frame, {})
+    })
+    const success = await createAcpModelCatalogProbe(OPENCODE, deps)(
+      { kind: 'opencode', locator: { kind: 'unmanaged' } },
+      { workspacePath: '/work/project' }
+    )
+    expect(success.models.map((model) => model.id)).toEqual([
+      'opencode/exo-free',
+      'deepseek/deepseek-flash',
+      'lmstudio/gpt-oss-20b'
+    ])
+  })
+
+  it('reads a menu OpenCode 2.x never updates after one quiet wait', async () => {
+    const { deps } = scriptedOpenCode2(true)
+    const started = Date.now()
+    const success = await createAcpModelCatalogProbe(OPENCODE, deps)(
+      { kind: 'opencode', locator: { kind: 'unmanaged' } },
+      { workspacePath: '/work/project' }
+    )
+    expect(success.models).toHaveLength(2)
+    expect(Date.now() - started).toBeLessThan(4_000)
   })
 
   it('opens no session on an OpenCode 2.x that cannot delete one', async () => {

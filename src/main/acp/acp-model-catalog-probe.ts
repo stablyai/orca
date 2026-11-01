@@ -4,6 +4,7 @@ import {
 } from '../native-chat/structured-agent-command-resolution'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
 import type {
   AgentModelCatalogProbe,
@@ -31,7 +32,8 @@ import {
   type AcpLaunchInvocationDeps
 } from './acp-structured-launch-resolution'
 import { AcpStructuredOptions } from './acp-structured-options'
-import type { InitializeResponse } from './generated/acp-protocol.generated'
+import type { AcpSessionEvent } from './acp-session-events'
+import type { InitializeResponse, SessionConfigOption } from './generated/acp-protocol.generated'
 
 /** Session-free capability boundary: no session methods are exposed. */
 export type AcpModelCatalogConnection = {
@@ -46,7 +48,12 @@ export type AcpModelCatalogSessionConnection = Omit<
 > & {
   start(options: AcpSessionStartOptions): Promise<AcpSessionStarted>
   deleteSession(sessionId: string): Promise<unknown>
+  subscribe(listener: (event: AcpSessionEvent) => void): () => void
 }
+
+// Read the menu once updates stop, within the listing's own deadline.
+const MENU_QUIET_MS = 2_000
+const MENU_SETTLE_LIMIT_MS = 8_000
 
 export type AcpModelCatalogProbeDeps = AcpLaunchInvocationDeps & {
   probeVersion?: AgentCliVersionReader
@@ -188,7 +195,40 @@ async function readSessionModels(
   if (!deletes && !listing.sessionFolderArgs) {
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
   }
-  const started = await connection.start({ cwd: workspace, mcpServers: [] })
+  const updates: { sessionId: string; configOptions: SessionConfigOption[] }[] = []
+  let heardAt = 0
+  // Subscribe before starting: an update can follow the reply at once.
+  const unsubscribe = spec.dialect.modelsArriveAfterStart
+    ? connection.subscribe((event) => {
+        if (
+          event.kind === 'known' &&
+          event.notification.update.sessionUpdate === 'config_option_update'
+        ) {
+          updates.push({
+            sessionId: event.notification.sessionId,
+            configOptions: event.notification.update.configOptions
+          })
+          heardAt = Date.now()
+        }
+      })
+    : undefined
+  let started: AcpSessionStarted
+  try {
+    started = await connection.start({ cwd: workspace, mcpServers: [] })
+    if (unsubscribe) {
+      const limit = Date.now() + MENU_SETTLE_LIMIT_MS
+      heardAt = Date.now()
+      for (
+        let wait = MENU_QUIET_MS;
+        wait > 0;
+        wait = Math.min(heardAt + MENU_QUIET_MS, limit) - Date.now()
+      ) {
+        await delay(wait, undefined, { signal: operation?.signal })
+      }
+    }
+  } finally {
+    unsubscribe?.()
+  }
   // A failed delete or interrupted create may leave an empty conversation.
   if (deletes) {
     await connection.deleteSession(started.sessionId).catch((error: unknown) => {
@@ -197,5 +237,10 @@ async function readSessionModels(
   }
   const options = new AcpStructuredOptions(spec.dialect)
   options.adoptSession(started.response, 'new')
+  for (const update of updates) {
+    if (update.sessionId === started.sessionId) {
+      options.adoptConfigOptions(update.configOptions)
+    }
+  }
   return options.read().models
 }

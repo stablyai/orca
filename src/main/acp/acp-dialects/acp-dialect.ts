@@ -72,6 +72,8 @@ export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string
 export type AcpDialect = {
   /** Effort replaces part of the native composite model selection. */
   effortChangesModel?: true
+  /** `session/new` answers before every provider lists its models; the rest arrive as updates. */
+  modelsArriveAfterStart?: true
   subagentStop?: {
     /** Probe without a target to establish support without cancelling a child. */
     probe: { method: string; params: unknown }
