@@ -119,11 +119,11 @@ describe('submodule diff routing', () => {
     const result = await getDiff(PARENT, 'flutter_mine/lib/main.dart', false)
 
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['cat-file', 'blob', '--', `${OLD_OID}:lib/main.dart`],
+      ['cat-file', '--textconv', '--', `${OLD_OID}:lib/main.dart`],
       { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
     )
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['cat-file', 'blob', '--', `${NEW_OID}:lib/main.dart`],
+      ['cat-file', '--textconv', '--', `${NEW_OID}:lib/main.dart`],
       { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
     )
     expect(result.kind).toBe('text')
@@ -163,11 +163,11 @@ describe('submodule diff routing', () => {
     const result = await getDiff(PARENT, 'flutter_mine/lib/main.dart', true)
 
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['cat-file', 'blob', '--', `${OLD_OID}:lib/main.dart`],
+      ['cat-file', '--textconv', '--', `${OLD_OID}:lib/main.dart`],
       { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
     )
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['cat-file', 'blob', '--', `${NEW_OID}:lib/main.dart`],
+      ['cat-file', '--textconv', '--', `${NEW_OID}:lib/main.dart`],
       { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
     )
     expect(result.kind).toBe('text')
@@ -196,7 +196,7 @@ describe('submodule diff routing', () => {
     const result = await getDiff(PARENT, 'flutter_mine/lib/main.dart', false)
 
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['cat-file', 'blob', '--', ':lib/main.dart'],
+      ['cat-file', '--textconv', '--', ':lib/main.dart'],
       {
         cwd: SUBMODULE,
         maxBuffer: 10 * 1024 * 1024,

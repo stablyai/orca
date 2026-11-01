@@ -101,7 +101,7 @@ describe('getDiff', () => {
     const result = await getDiff('/repo', 'src/file.ts', false)
 
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['cat-file', 'blob', '--', ':src/file.ts'],
+      ['cat-file', '--textconv', '--', ':src/file.ts'],
       {
         cwd: '/repo',
         maxBuffer: 10 * 1024 * 1024,
@@ -125,7 +125,7 @@ describe('getDiff', () => {
     await getDiff('/repo', 'src\\file.ts', false)
 
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['cat-file', 'blob', '--', ':src/file.ts'],
+      ['cat-file', '--textconv', '--', ':src/file.ts'],
       {
         cwd: '/repo',
         maxBuffer: 10 * 1024 * 1024,
@@ -149,7 +149,7 @@ describe('getDiff', () => {
 
     expect(gitExecFileAsyncBufferMock).toHaveBeenNthCalledWith(
       2,
-      ['cat-file', 'blob', '--', 'HEAD:src/file.ts'],
+      ['cat-file', '--textconv', '--', 'HEAD:src/file.ts'],
       {
         cwd: '/repo',
         maxBuffer: 10 * 1024 * 1024,
