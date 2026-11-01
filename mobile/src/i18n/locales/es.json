@@ -1047,6 +1047,12 @@
       "title": "Algo salió mal",
       "tryAgain": "Volver a intentar",
       "home": "Inicio"
+    },
+    "svgPreview": {
+      "drawFailed": "No se puede dibujar este SVG",
+      "label": "Dibujo {{title}}",
+      "previewDrawing": "Vista previa del dibujo",
+      "viewSource": "Ver código fuente SVG"
     }
   },
   "connection": {

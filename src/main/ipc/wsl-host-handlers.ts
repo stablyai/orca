@@ -1,12 +1,7 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { ipcMain } from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { noteWslHostUserAction } from '../wsl/wsl-host-user-actions'
-import {
-  WSL_HOST_STATUS_CHANNEL,
-  type WslHostAddResult,
-  type WslHostCapability,
-  type WslHostStatus
-} from '../../shared/wsl-host-types'
+import type { WslHostAddResult, WslHostCapability } from '../../shared/wsl-host-types'
 import type { Store } from '../persistence'
 import { createWslHostConnector } from '../wsl/wsl-host-connector'
 import { releaseUnwantedWslHolders, wslHolderKeepPolicy } from '../wsl/wsl-orphan-holder-release'
@@ -19,7 +14,11 @@ import { WslHostService } from '../wsl/wsl-host-service'
 import { WslHostVisibleWorkByWindow } from './wsl-host-visible-work-windows'
 import type { WslHostAutomationWake } from '../wsl/wsl-host-automation-wake'
 import { createWslHostAutomationWake } from './wsl-host-automation-wake-wiring'
-import { wslHostsGateOpen, wslHostsServing } from '../wsl/wsl-host-gate'
+import { wslHostsAcceptNewWork, wslHostsServing } from '../wsl/wsl-host-gate'
+import {
+  publishWslHostStatus,
+  pushWslHostCapabilityOnNewWorkChange
+} from './wsl-host-window-broadcast'
 import { wslHostAddRefusal } from '../wsl/wsl-host-add-admission'
 import {
   getWslHostService,
@@ -55,18 +54,6 @@ export const WSL_HOST_HANDLER_CHANNELS = [
   'wslHosts:focusHost',
   'wslHosts:getCapability'
 ] as const
-
-function publish(status: WslHostStatus): void {
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) {
-      try {
-        window.webContents.send(WSL_HOST_STATUS_CHANNEL, status)
-      } catch {
-        /* A renderer can close during publication. */
-      }
-    }
-  }
-}
 
 function wslHostRuntimeAccess(getUserDataPath: () => string): WslHostRuntimeAccess {
   return {
@@ -142,7 +129,7 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
   const created = new WslHostService({
     userDataPath: args.getUserDataPath,
     ...runGate,
-    publish,
+    publish: publishWslHostStatus,
     pairingChanged: (environmentId) => void args.invalidateTransport(environmentId),
     ready: (environmentId) => {
       void getRuntimeEnvironmentStatus(args.getUserDataPath(), environmentId, undefined, {
@@ -255,8 +242,8 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
       _event,
       request: { distro: string; startIfStopped?: boolean }
     ): Promise<WslHostAddResult> => {
-      // Serve-only keeps saved hosts working but admits none.
-      if (!wslHostsGateOpen()) {
+      // Serve-only, or a block learned this run, keeps saved hosts working but admits none.
+      if (!wslHostsAcceptNewWork()) {
         return wslHostAddRefusal('disabled', 'newWorkPaused')
       }
       const result = await wsl.add(request)
@@ -281,10 +268,12 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
       request: { environmentId: string; intent?: unknown; withdrawPendingRemoval?: unknown }
     ) => wsl.connect(request.environmentId, wslHostConnectOptions(request))
   )
-  ipcMain.handle('wslHosts:getCapability', (): WslHostCapability => ({
+  const capability = (): WslHostCapability => ({
     serverFiles: wsl.hasServerFiles(),
-    acceptsNewWork: wslHostsGateOpen()
-  }))
+    acceptsNewWork: wslHostsAcceptNewWork()
+  })
+  ipcMain.handle('wslHosts:getCapability', capability)
+  pushWslHostCapabilityOnNewWorkChange(capability)
   ipcMain.handle('wslHosts:getStatuses', () => wsl.getStatuses())
   const visibleWork = new WslHostVisibleWorkByWindow()
   ipcMain.handle('wslHosts:setVisibleWork', (event, request: { environmentIds: string[] }) => {

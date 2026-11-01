@@ -36,6 +36,8 @@ const host = vi.hoisted(() => {
     added: new Array<string>()
   }
 })
+// Runs inside the running-distro read, so a test can land a change mid-step.
+const runningRead = vi.hoisted((): { hook: (() => void) | null } => ({ hook: null }))
 const deployments = vi.hoisted(() => new Map<string, Record<string, unknown>>())
 vi.mock('../../shared/runtime-environment-wsl-host-store', () => ({
   findWslHostDeployment: (_userData: string, environmentId: string) =>
@@ -55,7 +57,10 @@ vi.mock('../wsl/wsl-orcad-deploy', () => ({
   defaultWslOrcadEnvironmentId: (distro: string) => `wsl:${distro}`
 }))
 vi.mock('../wsl-background-distro-gate', () => ({
-  readConfirmedRunningWslDistros: async () => host.running,
+  readConfirmedRunningWslDistros: async () => {
+    runningRead.hook?.()
+    return host.running
+  },
   // The user-act gate notes a woken distro when the act settles.
   noteWslDistroWoken: vi.fn(),
   noteWslDistroMayHaveStopped: vi.fn(),
@@ -195,6 +200,7 @@ beforeEach(() => {
   host.listeners.clear()
   host.running = { status: 'confirmed', distros: ['Ubuntu'] }
   host.added = []
+  runningRead.hook = null
   releases.listeners.length = 0
   hostFile.unreadable = false
   hostActions.listeners.length = 0
@@ -264,6 +270,52 @@ describe('WSL move orchestrator wiring', () => {
     await register()
     await answerWindow()
     expect(driver.previewWslMove).not.toHaveBeenCalled()
+  })
+
+  // A block published while Orca runs stops every new move at once: automatic, opened or Retry.
+  it('starts nothing after a live policy block, from readiness, a project open or Retry', async () => {
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
+    host.statuses = [
+      { distro: 'Ubuntu', state: 'connecting', environmentId: 'wsl:Ubuntu', detail: null }
+    ]
+    await register()
+    const { noteWslHostsLivePolicyBlock } = await import('../wsl/wsl-host-gate')
+    noteWslHostsLivePolicyBlock()
+    host.statuses = [
+      { distro: 'Ubuntu', state: 'ready', environmentId: 'wsl:Ubuntu', detail: null }
+    ]
+    for (const listener of host.listeners) {
+      listener()
+    }
+    await handlers.get('wslMoveOrchestrator:projectOpened')?.(
+      { sender: { id: MAIN_WINDOW_ID } },
+      'Ubuntu'
+    )
+    expect(
+      await handlers.get('wslMoveOrchestrator:userAction')?.(
+        { sender: { id: MAIN_WINDOW_ID } },
+        { distro: 'Ubuntu', action: 'retry' }
+      )
+    ).toBeNull()
+    await answerWindow()
+    expect(driver.previewWslMove).not.toHaveBeenCalled()
+    expect(driver.moveProjectsToWslHost).not.toHaveBeenCalled()
+    expect(host.added).toEqual([])
+  })
+
+  // A step already past its start gate must not add a host once a block lands mid-step.
+  it('adds no host when a live policy block lands while the step reads the running distros', async () => {
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
+    await register()
+    const { noteWslHostsLivePolicyBlock } = await import('../wsl/wsl-host-gate')
+    runningRead.hook = noteWslHostsLivePolicyBlock
+    await handlers.get('wslMoveOrchestrator:projectOpened')?.(
+      { sender: { id: MAIN_WINDOW_ID } },
+      'Ubuntu'
+    )
+    await answerWindow()
+    expect(host.added).toEqual([])
+    expect(driver.moveProjectsToWslHost).not.toHaveBeenCalled()
   })
 
   it('ignores a slept-pane answer from another window', async () => {

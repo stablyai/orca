@@ -2515,7 +2515,7 @@ const ORCHESTRATION_MARKDOWN = [
   "  turn.",
   "- `--worktree current` uses your workspace. Use a new one only when the user",
   "  asks or sharing would conflict:",
-  "  `--worktree new-top-level --repo id:<repoId>`",
+  "  `--worktree new-top-level --repo id:<repoId> --name <short-name>`",
   "  (`ORCA repo list --json` gives the id). A worker in a new workspace stays open",
   "  after it reports; if the user won't use that chat, run",
   "  `ORCA orchestration worker-release --dispatch <dispatch_id>` once it reports.",

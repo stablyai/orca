@@ -26,6 +26,8 @@ export type PreambleParams = {
   canDispatchSubWorkers?: boolean
   // Federated workers have no local Dispatch row to parent helpers.
   subWorkersInOwnRun?: boolean
+  // Mail already in the Dispatch's mailbox, which no wake will announce.
+  unreadMail?: boolean
 }
 
 /** A session address names a chat worker; any other handle is a terminal. */
@@ -70,7 +72,14 @@ Do only this task, yourself: no subagents or helper workers unless the task asks
 === CLI COMMANDS ===
 
 \`\`\`sh
-  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
+${
+  params.unreadMail
+    ? `  # Messages for this task are waiting; read them:
+  ${cli} orchestration check${chat ? '' : ` --terminal ${params.workerHandle}`}
+
+`
+    : ''
+}  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.
   ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>"
@@ -175,9 +184,10 @@ your coordinator's mail.
   ${cli} orchestration reply --from ${workerHandle} --id <message_id> --body "<answer>"
 \`\`\`
 
-Then end your turn; Orca wakes you with their mail. Send worker_done only after
-every helper has settled, and name any that failed. Nesting is capped; your
-helpers may not be able to start helpers of their own.
+Once your helpers have started, end your turn; Orca wakes you with their mail.
+Send worker_done once every helper has settled or failed to start, and name any
+that failed. Nesting is capped; your helpers may not be able to start
+helpers of their own.
 
 ---`
 }
@@ -194,9 +204,10 @@ If the task asks for sub-workers, create your own Run first, then:
   ${cli} orchestration worker-start --task <task_id> --worktree current --agent <agent> --json
 \`\`\`
 
-Then end your turn; Orca wakes you with their mail. Send worker_done only after
-every sub-worker has settled, and name any that failed. Nesting is capped; your
-sub-workers may not be able to dispatch further.
+Once your sub-workers have started, end your turn; Orca wakes you with their
+mail. Send worker_done once every sub-worker has settled or failed to start, and
+name any that failed. Nesting is capped; your sub-workers may not be able to
+dispatch further.
 
 ---`
 }

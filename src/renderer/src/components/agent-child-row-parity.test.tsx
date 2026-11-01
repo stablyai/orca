@@ -5,7 +5,7 @@ import {
   agentChildRowContextForParent,
   type AgentChildRowContext
 } from '../../../shared/agent-child-row-model'
-import type { AgentSessionBackgroundTask } from '../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTask } from '../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'

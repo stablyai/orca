@@ -91,5 +91,9 @@ export function admitWslHostDistro(args: {
   if (distro.state === 'stopped' && !args.startIfStopped) {
     return wslHostAddRefusal('distro-stopped', 'distroStopped', { distro: distro.name })
   }
+  // Adding may start it, so a distro WSL couldn't vouch for needs the same explicit start.
+  if (distro.state === 'unverifiable' && !args.startIfStopped) {
+    return wslHostAddRefusal('failed', 'distroUnverifiable', { distro: distro.name })
+  }
   return { distro }
 }

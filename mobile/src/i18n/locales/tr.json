@@ -1004,6 +1004,12 @@
       "title": "Bir sorun oluştu",
       "tryAgain": "Tekrar dene",
       "home": "Ana sayfa"
+    },
+    "svgPreview": {
+      "drawFailed": "Bu SVG çizilemiyor",
+      "label": "{{title}} çizimi",
+      "previewDrawing": "Çizimi önizle",
+      "viewSource": "SVG kaynağını görüntüle"
     }
   },
   "connection": {

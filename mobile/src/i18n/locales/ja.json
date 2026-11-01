@@ -1000,6 +1000,12 @@
       "title": "問題が発生しました",
       "tryAgain": "再試行",
       "home": "ホーム"
+    },
+    "svgPreview": {
+      "drawFailed": "この SVG を描画できません",
+      "label": "{{title}} の図",
+      "previewDrawing": "図をプレビュー",
+      "viewSource": "SVG ソースを表示"
     }
   },
   "connection": {
