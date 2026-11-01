@@ -192,17 +192,6 @@ export class ClaudeProfileRouter {
     return this.preparation()
   }
 
-  /** Prepare an observed receiving route without mutating selection or adopting a System-default alias. */
-  async prepareReceivingAccount(accountId: string): Promise<string> {
-    const profile = this.describe(accountId)
-    await prepareClaudeProfileForLaunch(
-      profile,
-      (value) => this.setUp(value),
-      this.args.refreshWaitMs
-    )
-    return profile.home
-  }
-
   accountHome(accountId: string): string {
     return this.describe(accountId).home
   }

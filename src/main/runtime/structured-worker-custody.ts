@@ -19,16 +19,9 @@ import {
   structuredWorkerRecordIsCurrent
 } from './structured-worker-identity'
 
-type SessionTabReader = Pick<
-  NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
-  'getPersistedVisibleSessionTabIndex'
->
-
 /** Judge ownership on the resolved successor session; absent host returns null because reading storage would install it. */
-export function structuredWorkerOwned(
-  running: RunningStructuredSession,
-  host: SessionTabReader | null = getStructuredAgentSessionHost()
-): boolean | null {
+export function structuredWorkerOwned(running: RunningStructuredSession): boolean | null {
+  const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
@@ -56,7 +49,10 @@ export function structuredSessionTabRetired(
 }
 
 /** Retirement is the tab index: every path that ends a chat for good hides its tab. */
-function structuredSessionTabListed(host: SessionTabReader, sessionId: string): boolean {
+function structuredSessionTabListed(
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  sessionId: string
+): boolean {
   try {
     return host.getPersistedVisibleSessionTabIndex?.().sessionIds.includes(sessionId) ?? false
   } catch {
@@ -83,10 +79,9 @@ function ownerState(
 export function structuredWorkerAddressable(
   db: OrchestrationDb | null | undefined,
   running: RunningStructuredSession,
-  row: CustodyRow | undefined,
-  host: SessionTabReader | null = getStructuredAgentSessionHost()
+  row: CustodyRow | undefined
 ): boolean | null {
-  const owned = structuredWorkerOwned(running, host)
+  const owned = structuredWorkerOwned(running)
   if (owned === null) {
     return null
   }

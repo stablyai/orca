@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import {
+  acquiredAgentSessionAccount,
+  withAcquiredAgentSessionAccount
+} from '../../shared/agent-session-acquired-account'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRewindRecord } from '../../shared/agent-session-rewind'
 import {
@@ -112,23 +116,22 @@ it('launches each acquisition under the current selection, not the account it wa
     ORCA_CLAUDE_INJECTED_CONFIG_DIR: home
   })
 
-  const receipt = routed.accountRecipe
-  expect(receipt).toEqual({ route: 'managed', accountId: 'a', home })
+  const ranOnA = { route: 'managed' as const, accountId: 'a', home }
+  expect(routed.accountRecipe).toEqual(ranOnA)
+  // The saved receipt of the account it last ran on never pins a later launch, after a restart included.
+  Object.assign(
+    record,
+    withAcquiredAgentSessionAccount(record, { generation: 'a', recipe: ranOnA })
+  )
+  expect(acquiredAgentSessionAccount(record)?.recipe).toEqual(ranOnA)
   settings.activeClaudeManagedAccountId = null
   expect((await resolve({ identity })).claudeConfigDir).toBe(resolvePath('/user/own'))
-  const prepareAccount = vi.spyOn(router, 'prepareReceivingAccount')
-  expect((await resolve({ identity, accountRecipe: receipt })).claudeConfigDir).toBe(home)
-  expect(prepareAccount).toHaveBeenCalledWith('a')
-  expect(settings.activeClaudeManagedAccountId).toBeNull()
-  prepareAccount.mockRestore()
   await expect(read()).resolves.toBe(resolvePath('/user/own'))
 
-  // A removed account receives nothing: its relaunch takes the selection instead of recreating it.
+  // Removing that account leaves nothing that prepares, and so recreates, its folder.
   rmSync(join(root, 'claude-profiles', 'a'), { recursive: true, force: true })
   settings.claudeManagedAccounts = []
-  expect((await resolve({ identity, accountRecipe: receipt })).claudeConfigDir).toBe(
-    resolvePath('/user/own')
-  )
+  expect((await resolve({ identity })).claudeConfigDir).toBe(resolvePath('/user/own'))
   expect(existsSync(join(root, 'claude-profiles', 'a'))).toBe(false)
 })
 

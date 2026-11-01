@@ -1,4 +1,4 @@
-import { structuredNativeWorkReaders } from '../structured-native-work-readers'
+import { structuredWorkerOwesWork } from '../structured-worker-custody'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
@@ -307,10 +307,9 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         now: () => Date.now()
       }),
       onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
-      ...structuredNativeWorkReaders(
-        () => this.getOrchestrationDbIfAvailable?.() ?? null,
-        () => this.getExistingOrchestrationDb()
-      )
+      // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
+      hasOpenDispatch: (record) =>
+        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
     })
   }
 }

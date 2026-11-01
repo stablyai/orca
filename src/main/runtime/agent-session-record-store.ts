@@ -1,5 +1,3 @@
-import { agentSessionRecordLineage } from './agent-session-record-lineage'
-import type Database from '../sqlite/sync-database'
 import { createAgentSessionOwnerProof } from './agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
@@ -91,8 +89,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   private constructor(
     transactions: AgentSessionStoreTransactions,
-    readonly hostId: string,
-    private readonly database: Database.Database
+    readonly hostId: string
   ) {
     super(transactions)
     this.founding = createAgentSessionFoundingStore(transactions, this.firstRecordListeners)
@@ -112,7 +109,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       args.hostId,
       args.legacySessionTabIds
     )
-    return new AgentSessionRecordStore(transactions, args.hostId, args.journalDatabase.db)
+    return new AgentSessionRecordStore(transactions, args.hostId)
   }
 
   private get state(): AgentSessionStoreState {
@@ -129,9 +126,6 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   getRecord = (sessionId: string): AgentSessionRecord | null =>
     this.state.records.get(sessionId) ?? null
-
-  lineageRecords = (record: AgentSessionRecord) =>
-    agentSessionRecordLineage(this.database, record, this.getRecord)
 
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)

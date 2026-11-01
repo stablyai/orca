@@ -1,34 +1,14 @@
-import { CLAUDE_INJECTED_CONFIG_DIR_ENV } from '../../shared/claude-profile-routing'
 import type { ClaudeAccountRecipe } from '../../shared/agent-session-acquired-account'
 import type { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
-import { claudeProfileMissing } from '../claude-accounts/claude-profile-launch-errors'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { resolveStructuredClaudeAccountHomePath } from '../runtime/structured-agent-account-home'
 
-/** Only actual preparation produces a receipt; selection is never backfilled as acquisition. */
-export async function prepareClaudeReceivingAccount(
+/** The account a launch runs under is the current selection; the receipt records what it used. */
+export async function prepareClaudeLaunchAccount(
   router: ClaudeProfileRouter | undefined,
   env: Record<string, string>,
-  recordHome: string,
-  receiving?: ClaudeAccountRecipe
+  recordHome: string
 ): Promise<ClaudeAccountRecipe> {
-  // A removed account receives nothing: preparing it would recreate its folder.
-  if (receiving?.route === 'managed' && (!router || router.savedAccount(receiving.accountId))) {
-    if (!router) {
-      throw claudeProfileMissing()
-    }
-    const home = await router.prepareReceivingAccount(receiving.accountId)
-    applyClaudeEnvPatch(env, { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home })
-    return { ...receiving, home }
-  }
-  if (receiving?.route === 'system') {
-    if (receiving.configDir === null) {
-      delete env.CLAUDE_CONFIG_DIR
-    } else {
-      env.CLAUDE_CONFIG_DIR = receiving.configDir
-    }
-    return receiving
-  }
   if (!router) {
     return { route: 'system', home: recordHome, configDir: env.CLAUDE_CONFIG_DIR ?? null }
   }
