@@ -13142,7 +13142,11 @@
         "AppearanceThemeControl": {
           "useTerminalTheme": "Use its terminal colors",
           "matchTerminal": "Match Terminal",
-          "dynamic": "dynamic"
+          "dynamic": "dynamic",
+          "browseThemes": "Browse themes",
+          "moreThemes": "More themes",
+          "moreThemesLoading": "Loading themes…",
+          "installingTheme": "Installing {{value0}}…"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
