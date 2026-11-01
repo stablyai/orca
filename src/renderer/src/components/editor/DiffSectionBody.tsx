@@ -26,6 +26,7 @@ import {
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { monacoTypographyOptions, type EditorTypography } from '@/lib/editor-typography'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -40,10 +41,9 @@ type DiffSectionBodyProps = {
   language: string
   modelPathBase: string
   isEditable: boolean
-  diffEditorFontSize: number
+  typography: EditorTypography
   diffWordWrap?: boolean
   diffShowWhitespace?: boolean
-  editorFontFamily?: string
   onRetrySection: (index: number) => void
   onLoadDeferredSection: (index: number) => void
   onSaveLimitedDiff: () => void
@@ -61,10 +61,9 @@ export function DiffSectionBody({
   language: coreLanguage,
   modelPathBase,
   isEditable,
-  diffEditorFontSize,
+  typography,
   diffWordWrap,
   diffShowWhitespace,
-  editorFontFamily,
   onRetrySection,
   onLoadDeferredSection,
   onSaveLimitedDiff,
@@ -243,8 +242,7 @@ export function DiffSectionBody({
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
-            fontSize: diffEditorFontSize,
-            fontFamily: editorFontFamily || 'monospace',
+            ...monacoTypographyOptions(typography),
             lineNumbers: 'on',
             ...buildDiffEditorWordWrapOptions(diffWordWrap),
             ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),

@@ -26,9 +26,10 @@ export function ProviderDetailsMenu({
   onOpenChange,
   children,
   asSubmenu = false,
-  triggerContent
+  triggerContent,
+  trigger
 }: {
-  provider: ProviderRateLimits
+  provider: ProviderRateLimits | null
   compact: boolean
   iconOnly: boolean
   ariaLabel: string
@@ -40,6 +41,7 @@ export function ProviderDetailsMenu({
   // Drill into this provider from UsageRosterPanel using a full-width trigger row.
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
+  trigger?: React.ReactElement
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const usagePercentageDisplay = normalizeUsagePercentageDisplay(
@@ -58,14 +60,16 @@ export function ProviderDetailsMenu({
   const panelBody = (
     <>
       {topContent}
-      <div className="p-2">
-        {/* Why: provider-specific action sections may render richer reset-credit UI. */}
-        <ProviderPanel
-          p={provider}
-          showResetCredits={!hidePanelResetCredits}
-          usagePercentageDisplay={usagePercentageDisplay}
-        />
-      </div>
+      {provider ? (
+        <div className="p-2">
+          {/* Why: provider-specific action sections may render richer reset-credit UI. */}
+          <ProviderPanel
+            p={provider}
+            showResetCredits={!hidePanelResetCredits}
+            usagePercentageDisplay={usagePercentageDisplay}
+          />
+        </div>
+      ) : null}
       {children ? (
         <>
           <DropdownMenuSeparator />
@@ -95,17 +99,19 @@ export function ProviderDetailsMenu({
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
-          aria-label={ariaLabel}
-        >
-          {iconOnly ? (
-            <ProviderLetterBadge p={provider} />
-          ) : (
-            <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
-          )}
-        </button>
+        {trigger ?? (
+          <button
+            type="button"
+            className="inline-flex items-center cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
+            aria-label={ariaLabel}
+          >
+            {!provider ? null : iconOnly ? (
+              <ProviderLetterBadge p={provider} />
+            ) : (
+              <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
+            )}
+          </button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent
         {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}

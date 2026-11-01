@@ -1,4 +1,4 @@
-import type { NativeChatSession } from '../../../../shared/native-chat-types'
+import type { NativeChatSession } from '../../../../shared/native-chat/native-chat-types'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
 
 /** Ready renders the transcript; isWorking adds live activity. Other variants replace the pane. */

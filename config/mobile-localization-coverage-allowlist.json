@@ -281,14 +281,14 @@
   },
   {
     "filePath": "mobile/src/settings/about-screen.tsx",
-    "kind": "jsx-text",
+    "kind": "jsx-attribute:title",
     "text": "@orca_build",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "mobile/src/settings/about-screen.tsx",
-    "kind": "jsx-text",
+    "kind": "jsx-attribute:title",
     "text": "onOrca.dev",
     "dynamic": false,
     "count": 1
@@ -302,7 +302,7 @@
   },
   {
     "filePath": "mobile/src/settings/about-screen.tsx",
-    "kind": "jsx-text",
+    "kind": "jsx-attribute:title",
     "text": "stablyai/orca",
     "dynamic": false,
     "count": 1

@@ -4,7 +4,7 @@ import {
   isSettledBackgroundTaskState,
   normalizeBackgroundTaskKind
 } from '../../../shared/native-chat/input/native-chat-background-task-row'
-import type { NativeChatBackgroundTaskBlock } from '../../../shared/native-chat-types'
+import type { NativeChatBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpBackgroundTaskUpdate, AcpDialectNotification } from './acp-dialect'
 

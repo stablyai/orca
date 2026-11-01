@@ -51,7 +51,7 @@ const KEEPABLE_RESOURCE_SQL = `ownership_state = 'owned' AND (release_state = 'n
 
 const KEPT_RESOURCE_SQL = `ownership_state = 'owned' AND ${USER_KEPT_WORKER_TERMINAL_SQL}`
 
-/** Keep open: neither Orca nor the coordinator closes or reuses the worker until the user allows auto-close. */
+/** Keep open: neither Orca nor the coordinator closes the worker until the user allows auto-close; follow-ups keep it kept. */
 export function keepWorkerTerminalOpen(this: OrchestrationDb, paneKey: string): number {
   this.db.exec('BEGIN IMMEDIATE')
   try {

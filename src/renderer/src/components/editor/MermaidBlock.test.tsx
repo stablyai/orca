@@ -6,12 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mermaid = vi.hoisted(() => ({
   initialize: vi.fn(),
   render: vi.fn<(id: string, content: string) => Promise<{ svg: string }>>(),
-  sanitize: vi.fn<(svg: string) => string>()
+  sanitize: vi.fn<(svg: string, config?: unknown) => string>()
 }))
 vi.mock('mermaid', () => ({ default: mermaid }))
 vi.mock('dompurify', () => ({ default: { sanitize: mermaid.sanitize } }))
 
 import MermaidBlock from './MermaidBlock'
+import { mermaidSvgSanitizeConfig } from './mermaid-sanitize'
 
 const partial = 'flowchart TD\n A["Sync with main '
 const complete = `${partial}once"]`
@@ -42,6 +43,8 @@ describe('MermaidBlock rendering', () => {
 
     await act(async () => pending.resolve({ svg: diagram }))
     const expand = screen.getByRole('button', { name: 'Expand diagram' })
+    // PDF/HTML export strips this marker; the export page has no Tailwind to hide the button.
+    expect(expand.hasAttribute('data-orca-export-hide')).toBe(true)
     fireEvent.click(container.querySelector('svg')!)
     expect(onExpand).toHaveBeenCalledWith({ svg: diagram, background: undefined })
     expect(document.activeElement).toBe(expand)
@@ -131,7 +134,7 @@ describe('MermaidBlock rendering', () => {
     mermaid.sanitize.mockReturnValueOnce('<svg><text>Safe diagram</text></svg>')
     const { container } = render(<MermaidBlock content={complete} isDark={false} />)
     await screen.findByText('Safe diagram')
-    expect(mermaid.sanitize).toHaveBeenCalledWith(unsafeSvg, { USE_PROFILES: { svg: true } })
+    expect(mermaid.sanitize).toHaveBeenCalledWith(unsafeSvg, mermaidSvgSanitizeConfig)
     expect(container.querySelector('script')).toBeNull()
     expect(container.querySelector('svg')).not.toHaveAttribute('onload')
   })

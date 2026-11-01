@@ -1,5 +1,5 @@
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { nativeChatWorkRunEntries } from '../../../src/shared/native-chat/native-chat-work-run'
 import { nativeChatAskRunBlocks } from '../../../src/shared/native-chat/input/native-chat-ask-row'

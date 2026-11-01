@@ -1,5 +1,5 @@
 import type { AgentJournalMessageItem } from './agent-session-journal-types'
-import type { AgentSessionExecutionOptions } from './agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from './agent-session/options/agent-session-execution-options'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionSlashCommand,

@@ -3,8 +3,8 @@ import type { AgentJournalRenderItem } from '../agent-session-journal-types'
 import { agentSessionFailureWords } from '../agent-session-failure-words'
 import { agentJournalSubmissionKey } from '../agent-session-journal-item-key'
 import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
-import { projectNativeChatTranscript } from '../native-chat-transcript-projection'
-import type { NativeChatMessage } from '../native-chat-types'
+import { projectNativeChatTranscript } from './transcript/native-chat-transcript-projection'
+import type { NativeChatMessage } from './native-chat-types'
 import { projectStructuredAgentSessionMessages } from '../structured-agent-session-message-projection'
 
 let sequence = 0

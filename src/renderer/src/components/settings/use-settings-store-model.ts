@@ -32,7 +32,7 @@ import {
   removeSettingsProjectFromAllHosts
 } from './settings-project-list'
 import { resolveSettingsHostScope } from './settings-host-scope'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { useSettingsHostNavigation } from './use-settings-host-navigation'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import {
   blockRemovalForUnsavedFiles,
@@ -161,7 +161,13 @@ export function useSettingsStoreModel() {
   const confirm = useConfirmationDialog()
   // Option-click unlocks hidden experiments for this session only.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
-  const [settingsHostChoice, setSettingsHostChoice] = useState<RuntimeClientTarget | null>(null)
+  const {
+    settingsHostChoice,
+    setSettingsHostChoice,
+    nativeAccounts,
+    releaseNativeAccounts,
+    consumeSettingsNavigation
+  } = useSettingsHostNavigation(settingsNavigationTarget)
   const defaultScope = defaultScopeHost(settings)
   const defaultRuntimeEnvironmentId =
     defaultScope.kind === 'environment' ? defaultScope.environmentId : null
@@ -263,6 +269,9 @@ export function useSettingsStoreModel() {
     setHiddenExperimentalUnlocked,
     runtimeEnvironments,
     settingsHostScope,
+    nativeAccounts,
+    releaseNativeAccounts,
+    consumeSettingsNavigation,
     setSettingsHostChoice
   }
 }

@@ -10,7 +10,7 @@ import {
   type NativeChatSubagentBlock,
   type NativeChatSubagentEntry,
   type NativeChatSubagentGroupBlock
-} from '../../native-chat-types'
+} from '../native-chat-types'
 
 /** Frozen fallback for older clients; Kicked off means no outcome recorded yet, never current liveness. */
 export function subagentFallbackText(block: NativeChatSubagentEntry): string {

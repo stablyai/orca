@@ -19,6 +19,7 @@ type LeftSidebarAppearanceSettings = Pick<
   | 'terminalCustomThemes'
   | 'terminalDividerColorLight'
   | 'terminalColorOverrides'
+  | 'terminalColorOverridesLight'
   | 'terminalBackgroundOpacity'
 >
 
@@ -69,9 +70,15 @@ function buildSurfaceVariables(args: {
     '--sidebar-accent': accent,
     '--sidebar-accent-foreground': foreground,
     '--sidebar-border': border,
-    '--sidebar-ring': ring
+    '--sidebar-ring': ring,
+    // Why `initial`: the chosen appearance owns this subtree, so a plugin theme's row colors yield
+    // to each consumer's built-in fallback derived from the tokens above.
+    '--worktree-sidebar-active': 'initial',
+    '--worktree-sidebar-active-border': 'initial'
   }
   if (overrideTextTokens) {
+    vars['--host-badge'] = 'initial'
+    vars['--host-badge-foreground'] = 'initial'
     vars['--background'] = background
     vars['--foreground'] = foreground
     vars.color = foreground
@@ -93,11 +100,10 @@ function resolveTerminalSurfaceVariables(
 ): LeftSidebarStyleVariables {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const background = applyAlpha(
-    settings.terminalColorOverrides?.background ?? appearance.theme?.background ?? '#000000',
+    appearance.theme?.background ?? '#000000',
     settings.terminalBackgroundOpacity
   )
-  const foreground =
-    settings.terminalColorOverrides?.foreground ?? appearance.theme?.foreground ?? '#fafafa'
+  const foreground = appearance.theme?.foreground ?? '#fafafa'
   return buildSurfaceVariables({ background, foreground, overrideTextTokens: true })
 }
 

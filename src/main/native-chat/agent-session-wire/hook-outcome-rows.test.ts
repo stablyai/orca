@@ -21,7 +21,7 @@ import {
   nativeChatTurnFold,
   nativeChatTurnFoldRow
 } from '../../../shared/native-chat/transcript/native-chat-turn-fold'
-import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import { selectStructuredAgentTurnBars } from '../../../shared/structured-agent-session-turn-timing'
 import { GROK_ACP_DIALECT } from '../../acp/acp-dialects/grok-dialect'

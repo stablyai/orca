@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { NativeChatTurnLifecycle } from '../../../../shared/native-chat-types'
+import type { NativeChatTurnLifecycle } from '../../../../shared/native-chat/native-chat-types'
 
 type TranscriptLifecycleState = {
   lifecycle?: NativeChatTurnLifecycle

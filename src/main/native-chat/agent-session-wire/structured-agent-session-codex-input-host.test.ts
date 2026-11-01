@@ -783,6 +783,13 @@ export function codexInputFinalizationFixture() {
     adapter,
     codex,
     config,
+    database: () => openTestJournalHostDatabase(root).db,
+    rewindTo: (itemId: string, expectedEpoch: string) =>
+      host.rewind(CALLER, {
+        envelope: envelope('agentSession.rewind', { itemId, expectedEpoch }),
+        itemId,
+        expectedEpoch
+      }),
     turns,
     permissionSend,
     began,

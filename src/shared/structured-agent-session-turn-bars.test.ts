@@ -4,13 +4,13 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from './agent-session-journal-types'
-import type { NativeChatMessage } from './native-chat-types'
-import { nativeChatTurnMembership } from './native-chat-turn-membership'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
+import { nativeChatTurnMembership } from './native-chat/transcript/native-chat-turn-membership'
 import {
   reduceNativeChatTurnTiming,
   selectNativeChatTurnStatuses,
   type NativeChatTurnTimingByTurn
-} from './native-chat-turn-status'
+} from './native-chat/transcript/native-chat-turn-status'
 import {
   selectStructuredAgentSettledTurns,
   selectStructuredAgentTurnBars,
