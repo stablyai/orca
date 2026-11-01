@@ -97,6 +97,8 @@ function setState(context: WorkspaceViewOptionContext, catalogHydrated = true): 
     setHideDetachedHeadWorkspaces: noop,
     hideWorkspacesFromOtherDevices: context.hideWorkspacesFromOtherDevices,
     setHideWorkspacesFromOtherDevices: noop,
+    hideWorkspaceFilterBadge: false,
+    setHideWorkspaceFilterBadge: noop,
     runtimeEnvironments: context.mayHaveServerHosts ? [{ id: 'server' }] : [],
     runtimeEnvironmentCatalogHydrated: catalogHydrated,
     settings: {
@@ -191,5 +193,49 @@ describe('Workspace options menu renders from the shared option list', () => {
     setState(BASE_CONTEXT, false)
     act(() => root.render(<WorkspaceOptionsMenuItems />))
     expect(renderedOptionKeys()).toContain('hideWorkspacesFromOtherDevices')
+  })
+})
+
+describe('Hide filter badge toggle interaction', () => {
+  /**
+   * The badge this switch suppresses lives on the workspace options button, so
+   * the switch must live in this same menu, at the end of the Filters section.
+   */
+  function hideFilterBadgeToggle(): Element {
+    const toggle = [...container.querySelectorAll('button[role="switch"]')].find((el) =>
+      el.textContent?.includes('Hide filter badge')
+    )
+    if (!toggle) {
+      throw new Error('"Hide filter badge" switch not rendered in the workspace options menu')
+    }
+    return toggle
+  }
+
+  it('sits at the end of the Filters section and forwards clicks to the preference', () => {
+    setState(BASE_CONTEXT)
+    const setHideWorkspaceFilterBadge = vi.fn()
+    mocks.state.setHideWorkspaceFilterBadge = setHideWorkspaceFilterBadge
+    act(() => root.render(<WorkspaceOptionsMenuItems />))
+
+    const text = container.textContent ?? ''
+    const toggleAt = text.indexOf('Hide filter badge')
+    expect(toggleAt).toBeGreaterThanOrEqual(0)
+    const lastFilterRowAt = text.lastIndexOf('Hide detached HEAD')
+    expect(toggleAt).toBeGreaterThan(lastFilterRowAt)
+
+    expect(hideFilterBadgeToggle().getAttribute('aria-checked')).toBe('false')
+    act(() => {
+      hideFilterBadgeToggle().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(setHideWorkspaceFilterBadge).toHaveBeenCalledTimes(1)
+    expect(setHideWorkspaceFilterBadge).toHaveBeenCalledWith(true)
+  })
+
+  it('reflects the persisted preference when the badge is already hidden', () => {
+    setState(BASE_CONTEXT)
+    mocks.state.hideWorkspaceFilterBadge = true
+    act(() => root.render(<WorkspaceOptionsMenuItems />))
+
+    expect(hideFilterBadgeToggle().getAttribute('aria-checked')).toBe('true')
   })
 })
