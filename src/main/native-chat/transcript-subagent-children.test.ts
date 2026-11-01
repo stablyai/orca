@@ -103,6 +103,46 @@ describe('subagent child transcripts', () => {
     expect(decodeGrokTranscriptLine).toBeTypeOf('function')
   })
 
+  it('loads a Grok child history named by its session id under another cwd', async () => {
+    const root = await tempRoot()
+    const childId = '01a19910-aaaa-7aaa-8aaa-aaaaaaaaaaaa'
+    const parentPath = join(
+      root,
+      'encoded-parent',
+      '01a19910-bbbb-7bbb-8bbb-bbbbbbbbbbbb',
+      'chat_history.jsonl'
+    )
+    await mkdir(join(root, 'encoded-parent', '01a19910-bbbb-7bbb-8bbb-bbbbbbbbbbbb'), {
+      recursive: true
+    })
+    await writeFile(parentPath, `${JSON.stringify({ type: 'user', content: 'parent' })}\n`)
+    const childDir = join(root, 'encoded-child', childId)
+    await mkdir(childDir, { recursive: true })
+    await writeFile(
+      join(childDir, 'chat_history.jsonl'),
+      `${JSON.stringify({
+        type: 'user',
+        content: [{ type: 'text', text: '<user_query>Say hello from Grok</user_query>' }]
+      })}\n${JSON.stringify({ type: 'assistant', content: 'Hello from the Grok subagent.' })}\n`
+    )
+
+    const loaded = await readMessages({
+      agent: 'grok',
+      sessionId: 'parent',
+      filePath: parentPath,
+      limit: 20,
+      subagentId: childId
+    })
+    expect('messages' in loaded).toBe(true)
+    if (!('messages' in loaded)) {
+      return
+    }
+    const body = loaded.messages.map(text).join('\n')
+    expect(body).toContain('Say hello from Grok')
+    expect(body).toContain('Hello from the Grok subagent.')
+    expect(loaded.messages.every((message) => message.agentId === childId)).toBe(true)
+  })
+
   it('loads a Claude child file as that agent, including its tool call and final text', async () => {
     const root = await tempRoot()
     const parentPath = join(root, 'session.jsonl')

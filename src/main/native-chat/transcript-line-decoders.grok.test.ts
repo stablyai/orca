@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import {
+  nativeChatListedSubagents,
+  nativeChatSubagentActivities
+} from '../../shared/native-chat/input/native-chat-activity'
 import { decodeGrokTranscriptLine } from './transcript-line-decoders'
 
 describe('decodeGrokTranscriptLine', () => {
@@ -27,7 +31,7 @@ describe('decodeGrokTranscriptLine', () => {
     expect(decodeGrokTranscriptLine(line, 'fb-2')).toEqual({
       id: 'fb-2:asst-1',
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name: 'grep', input: { pattern: 'foo' } }],
+      blocks: [{ type: 'tool-call', name: 'grep', callId: 'c1', input: { pattern: 'foo' } }],
       timestamp: null,
       source: 'transcript'
     })
@@ -219,5 +223,72 @@ describe('decodeGrokTranscriptLine', () => {
   it('skips system prompts', () => {
     const line = JSON.stringify({ type: 'system', content: 'You are Grok' })
     expect(decodeGrokTranscriptLine(line, 'fb-4')).toBeNull()
+  })
+
+  it('pairs an out-of-order spawn, hides it once finished, and lists a failed launch', () => {
+    const childId = '01a19910-cccc-7ccc-8ccc-cccccccccccc'
+    const lines = [
+      {
+        type: 'assistant',
+        id: 'a1',
+        content: '',
+        tool_calls: [
+          { id: 'call-shell', name: 'run_terminal_command', arguments: { command: 'true' } },
+          {
+            id: 'call-spawn',
+            name: 'spawn_subagent',
+            arguments: { description: 'Say hello', prompt: 'Reply with exactly: Hello from Grok' }
+          }
+        ]
+      },
+      {
+        type: 'tool_result',
+        tool_call_id: 'call-spawn',
+        content: `Subagent started in background.\nsubagent_id: ${childId}\ndescription: Say hello`
+      },
+      { type: 'tool_result', tool_call_id: 'call-shell', content: 'ok' },
+      {
+        type: 'assistant',
+        id: 'a2',
+        content: '',
+        tool_calls: [
+          {
+            id: 'call-bad',
+            name: 'spawn_subagent',
+            arguments: { description: 'Broken launch', prompt: 'nope' }
+          }
+        ]
+      },
+      {
+        type: 'tool_result',
+        tool_call_id: 'call-bad',
+        content: 'Tool `spawn_subagent` failed: cwd missing'
+      },
+      {
+        type: 'assistant',
+        id: 'a3',
+        content: '',
+        tool_calls: [{ id: 'call-wait', name: 'get_command_or_subagent_output', arguments: {} }]
+      },
+      {
+        type: 'tool_result',
+        tool_call_id: 'call-wait',
+        content: [
+          `--- Task ${childId} [completed] ---`,
+          'Command: [subagent:general-purpose] Say hello',
+          'Hello from Grok'
+        ].join('\n')
+      }
+    ]
+    const messages = lines.flatMap((row, index) => {
+      const message = decodeGrokTranscriptLine(JSON.stringify(row), `grok-${index}`)
+      return message ? [message] : []
+    })
+    const roster = nativeChatSubagentActivities(messages)
+    expect(roster).toEqual([
+      expect.objectContaining({ id: childId, label: 'Say hello', state: 'completed' }),
+      expect.objectContaining({ id: 'call-bad', label: 'Broken launch', state: 'failed' })
+    ])
+    expect(nativeChatListedSubagents(roster).map((agent) => agent.label)).toEqual(['Broken launch'])
   })
 })
