@@ -9,6 +9,7 @@ import {
   richMarkdownViewport,
   scrollRichMarkdownElementIntoView
 } from './rich-markdown-viewport'
+import { useRichMarkdownReviewRailController } from './useRichMarkdownReviewRailController'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
 import { useRichMarkdownViewport } from './useRichMarkdownViewport'
 
@@ -49,14 +50,17 @@ function fixture() {
     left: 0,
     right: 0
   }))
-  const native = editor.view.dom.focus.bind(editor.view.dom)
-  const focus = vi.spyOn(editor.view.dom, 'focus').mockImplementation((options) => {
-    if (!options?.preventScroll) {
+  // Spy on the prototype so the editor DOM has no own focus property before attach, as in production.
+  const native = HTMLElement.prototype.focus
+  const focus = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (
+    this: HTMLElement,
+    options
+  ) {
+    if (this === editor.view.dom && !options?.preventScroll) {
       container.scrollTop = 0
     }
-    native(options)
+    native.call(this, options)
   })
-  const original = Object.getOwnPropertyDescriptor(editor.view.dom, 'focus')
   const rootRef = { current: root }
   const containerRef = { current: container }
   const hook = renderHook(() =>
@@ -101,7 +105,6 @@ function fixture() {
     nativeReturn,
     scroll,
     focus,
-    original,
     retire
   }
 }
@@ -237,10 +240,54 @@ describe('rich Markdown live viewport', () => {
     }
   )
 
-  it('retires actual key/container ownership, restores its descriptor and cancels owned frames', () => {
+  it('passes routed writes through exactly while the owner is live and drops them once it is stale or retired', () => {
     const f = fixture()
+    const card = document.createElement('div')
+    card.dataset.richMarkdownReviewNoteId = 'note'
+    f.container.append(card)
+    const loose = document.createElement('div')
+    document.body.append(loose)
+    const reveal = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {})
+    const options: ScrollIntoViewOptions = { block: 'center', behavior: 'smooth' }
+    scrollRichMarkdownElementIntoView(card, options)
+    scrollRichMarkdownElementIntoView(loose, options)
+    expect(reveal.mock.contexts).toEqual([card, loose])
+    expect(reveal.mock.calls.map(([passed]) => passed === options)).toEqual([true, true])
+    loose.remove()
+    // An owner whose editor has left the container drops writes instead of scrolling for it.
+    f.root.append(f.editor.view.dom)
+    reveal.mockClear()
+    scrollRichMarkdownElementIntoView(card, options)
+    expect(reveal).not.toHaveBeenCalled()
+    f.container.prepend(f.editor.view.dom)
+
+    const rail = renderHook(() =>
+      useRichMarkdownReviewRailController({
+        canAnnotateRichMarkdown: true,
+        content: '',
+        editorRef: { current: f.editor },
+        markdownComments: [],
+        markdownSourceLineOffset: 0,
+        markdownSourceLineOffsetRef: { current: 0 },
+        scrollContainerRef: { current: f.container }
+      })
+    )
+    const writes = f.scroll.mock.calls.length
+    act(() => rail.result.current.scrollRichMarkdownReviewNoteCardIntoView('note'))
+    act(() => vi.advanceTimersByTime(40))
+    expect(f.scroll).toHaveBeenCalledTimes(writes + 1)
+    act(() => rail.result.current.scrollRichMarkdownReviewNoteCardIntoView('note'))
     f.retire()
-    expect(Object.getOwnPropertyDescriptor(f.editor.view.dom, 'focus')).toEqual(f.original)
+    act(() => vi.advanceTimersByTime(40))
+    expect(f.scroll).toHaveBeenCalledTimes(writes + 1)
+    rail.unmount()
+  })
+
+  it('retires actual key/container ownership, removes its focus wrapper and cancels owned frames', () => {
+    const f = fixture()
+    expect(Object.hasOwn(f.editor.view.dom, 'focus')).toBe(true)
+    f.retire()
+    expect(Object.hasOwn(f.editor.view.dom, 'focus')).toBe(false)
     const rootRef = { current: f.root }
     const containerRef = { current: f.container }
     const lifetime = renderHook(
@@ -261,7 +308,7 @@ describe('rich Markdown live viewport', () => {
     const current = richMarkdownViewport(f.container)
     act(() => lifetime.result.current.bindContainer(null))
     expect(current.current()).toBe(false)
-    expect(Object.getOwnPropertyDescriptor(f.editor.view.dom, 'focus')).toEqual(f.original)
+    expect(Object.hasOwn(f.editor.view.dom, 'focus')).toBe(false)
     const calls = f.scroll.mock.calls.length
     lease.scroll(() => f.container.scrollTo({ top: 1 }))
     expect(f.scroll).toHaveBeenCalledTimes(calls)
