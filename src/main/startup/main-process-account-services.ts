@@ -2,9 +2,13 @@ import { app } from 'electron'
 import { KeybindingService } from '../keybindings/keybinding-service'
 import { createProviderAccountServices } from '../provider-account-services'
 import { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
-import { startCodexSessionBackfillInBackground } from '../codex/codex-session-backfill'
+import {
+  resolveCodexSessionBackfillPaths,
+  startCodexSessionBackfillInBackground
+} from '../codex/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from '../codex/codex-session-index-heal'
 import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
+import { startCodexSessionLogRetentionSweepInBackground } from '../codex/codex-session-log-retention'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   hasOpenCodeGoApiKey,
@@ -62,6 +66,14 @@ export function initializeMainProcessAccountServices(): void {
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
+  // Why: prune unbounded rollout logs (#16776), but never a copy the migration hasn't published yet.
+  void startCodexSessionLogRetentionSweepInBackground(
+    getOrcaManagedCodexHomePath(),
+    state.codexRuntimeHome.isHostSystemDefaultSessionMigrationEligible()
+      ? resolveCodexSessionBackfillPaths(resolveHostCodexSessionSourceHome(store.getSettings()))
+          .systemSessionsRoot
+      : undefined
+  )
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
   store.onSettingsChanged((updates) => {
