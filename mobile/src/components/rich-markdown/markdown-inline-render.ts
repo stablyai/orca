@@ -2,13 +2,21 @@ import {
   createRawMarkdownCodeSpanScanner,
   type MarkdownCodeSpanScanner
 } from '../../../../src/shared/markdown-code-span-runs'
-import { escapeAttr, escapeHtml, escapeLiteralHtml, isSafeUrl } from './markdown-escaping'
+import {
+  decodeMarkdownEntities,
+  escapeAttr,
+  escapeHtml,
+  escapeLiteralHtml,
+  isSafeUrl
+} from './markdown-escaping'
 
 /** Holds a workspace image's markdown path; the page resolves it, so the host loads `src` instead. */
 export const WORKSPACE_IMAGE_PATH_ATTRIBUTE = 'data-workspace-path'
 
 function imageSourceAttribute(href: string): string {
-  const name = /^\s*(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(href) ? 'src' : WORKSPACE_IMAGE_PATH_ATTRIBUTE
+  const name = /^\s*(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(decodeMarkdownEntities(href))
+    ? 'src'
+    : WORKSPACE_IMAGE_PATH_ATTRIBUTE
   return `${name}="${escapeAttr(href)}"`
 }
 
