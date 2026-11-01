@@ -44,8 +44,14 @@ function setup(
   {
     files = [],
     activeSuggestion = 0,
-    loading = false
-  }: { files?: readonly string[]; activeSuggestion?: number; loading?: boolean } = {}
+    loading = false,
+    promptSuggestion = null
+  }: {
+    files?: readonly string[]
+    activeSuggestion?: number
+    loading?: boolean
+    promptSuggestion?: string | null
+  } = {}
 ) {
   const callbacks = {
     completeMention: vi.fn(),
@@ -64,6 +70,7 @@ function setup(
       mentionFiles: { files, loading, failed: false },
       activeSuggestion,
       draft,
+      promptSuggestion,
       isComposing: () => composing,
       ...callbacks
     })
@@ -182,6 +189,24 @@ describe('useNativeChatComposerKeyDown', () => {
       })
     }
   )
+
+  it('takes the prompt suggestion on Tab only from an empty composer', () => {
+    const none: ComposerAutocomplete = { mode: 'none' }
+    const options = { promptSuggestion: 'add a test for it' }
+    const empty = setup(none, false, '', options)
+    press(empty.handler, 'Tab')
+    expect(empty.callbacks.setDraft).toHaveBeenCalledWith('add a test for it')
+    expect(empty.callbacks.setCaret).toHaveBeenCalledWith('add a test for it'.length)
+
+    for (const [draft, shiftKey] of [
+      ['fix it', false],
+      ['', true]
+    ] as const) {
+      const other = setup(none, false, draft, options)
+      press(other.handler, 'Tab', shiftKey)
+      expect(other.callbacks.setDraft).not.toHaveBeenCalled()
+    }
+  })
 
   it('dismisses Escape without interrupting the agent', () => {
     const { handler, callbacks } = setup()

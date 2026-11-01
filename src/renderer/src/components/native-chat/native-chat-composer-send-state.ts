@@ -13,6 +13,8 @@ export type NativeChatComposerSendState = {
   sendButtonDisabled: boolean
   /** While the agent works: what Cmd/Ctrl+Enter would do instead of a plain send, when it differs. */
   alternateSend: NativeChatFollowUpBehavior | undefined
+  /** The provider's predicted next prompt, while a plain message could take it. */
+  promptSuggestion: string | null
 }
 
 /** What the composer's Send/Stop button offers now, and whether it can be pressed. */
@@ -54,6 +56,10 @@ export function nativeChatComposerSendState(input: {
         ? followUp.action === 'queue'
           ? 'steer'
           : 'queue'
-        : undefined
+        : undefined,
+    promptSuggestion:
+      input.messageDelivery && !input.editSession && !input.disabled
+        ? (transport?.promptSuggestion ?? null)
+        : null
   }
 }

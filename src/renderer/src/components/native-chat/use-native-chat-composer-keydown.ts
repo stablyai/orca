@@ -27,6 +27,8 @@ export type UseNativeChatComposerKeyDownArgs = {
   draft: string
   /** Image chips count as composer content, like typed text. */
   hasAttachments?: boolean
+  /** Shown in the empty composer; Tab takes it. */
+  promptSuggestion?: string | null
   recall?: NativeChatComposerRecall | undefined
   isComposing: () => boolean
   completePickerItem: (item: NativeChatPickerItem) => void
@@ -48,6 +50,7 @@ export function useNativeChatComposerKeyDown({
   activeSuggestion,
   draft,
   hasAttachments = false,
+  promptSuggestion = null,
   recall,
   isComposing,
   completePickerItem,
@@ -124,6 +127,12 @@ export function useNativeChatComposerKeyDown({
         interrupt()
         return
       }
+      if (event.key === 'Tab' && !event.shiftKey && draft === '' && promptSuggestion) {
+        event.preventDefault()
+        setDraft(promptSuggestion)
+        setCaret(promptSuggestion.length)
+        return
+      }
       const modified = event.key === 'Enter' && (isMacPlatform() ? event.metaKey : event.ctrlKey)
       // Why before Shift+Enter: that adds a newline, and this chord leaves the draft alone.
       if (modified && event.shiftKey) {
@@ -185,6 +194,7 @@ export function useNativeChatComposerKeyDown({
       interrupt,
       isComposing,
       mentionFiles,
+      promptSuggestion,
       send,
       steerHead,
       setActiveSuggestion,
