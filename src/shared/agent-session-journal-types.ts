@@ -23,7 +23,7 @@ import type {
   AgentMessageSender,
   AgentMessageSource
 } from './agent-session/agent-session-message-source'
-import type { AgentSessionExecutionOptions } from './agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from './agent-session/options/agent-session-execution-options'
 
 export { type AgentType }
 

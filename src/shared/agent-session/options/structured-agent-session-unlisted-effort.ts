@@ -1,7 +1,7 @@
-import type { AgentType } from './agent-status-types'
-import type { AgentSessionOptionCatalog } from './agent-session-option-catalog'
-import type { SessionOptionDescriptor } from './native-chat/input/native-chat-session-options'
-import type { TrackedNativeChatSessionOption } from './native-chat/input/native-chat-session-option-state'
+import type { AgentType } from '../../agent-status-types'
+import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-types'
+import type { SessionOptionDescriptor } from '../../native-chat/input/native-chat-session-options'
+import type { TrackedNativeChatSessionOption } from '../../native-chat/input/native-chat-session-option-state'
 
 /** Unlisted models expose current effort read-only and send it unchanged; no listing proves which alternatives they accept. */
 export function withUnlistedEffort(

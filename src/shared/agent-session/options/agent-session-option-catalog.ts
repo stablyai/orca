@@ -1,11 +1,10 @@
 import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
 import { CODEBUDDY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-codebuddy'
-import type { AgentType } from './agent-status-types'
+import type { AgentType } from '../../agent-status-types'
 import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
-  CODEX_SESSION_OPTION_CATALOG,
-  createClaudeCatalogOptions
+  CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
 import {
   CURSOR_SESSION_OPTION_CATALOG,
@@ -20,18 +19,7 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
-
-export type {
-  AgentSessionOptionCatalog,
-  CatalogAgentInteractionDetection,
-  CatalogCommandDelivery,
-  CatalogMidSessionApply,
-  CatalogModel,
-  CatalogOption,
-  CatalogOptionApply
-} from './agent-session-option-catalog-types'
-export { createClaudeCatalogOptions }
+import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 
 const CATALOGS: AgentSessionOptionCatalogMap = {
   antigravity: ANTIGRAVITY_SESSION_OPTION_CATALOG,

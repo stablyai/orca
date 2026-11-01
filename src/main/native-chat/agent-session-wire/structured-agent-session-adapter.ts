@@ -37,7 +37,7 @@ export type {
   StructuredAgentSessionStopCause
 } from './structured-agent-session-stop-cause'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type {
   StructuredAgentSessionStartupAttempt,

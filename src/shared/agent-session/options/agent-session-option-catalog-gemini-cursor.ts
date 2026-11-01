@@ -3,7 +3,7 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { agentChoiceCliApply } from './agent-choice-cli-apply'
+import { agentChoiceCliApply } from '../../agent-choice-cli-apply'
 
 export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   models: [

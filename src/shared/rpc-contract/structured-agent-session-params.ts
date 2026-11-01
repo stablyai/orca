@@ -1,4 +1,4 @@
-import { AgentSessionSelectionSchema } from '../agent-session-execution-options'
+import { AgentSessionSelectionSchema } from '../agent-session/options/agent-session-execution-options'
 import {
   SendBody,
   MAX_OPTION_LABEL,

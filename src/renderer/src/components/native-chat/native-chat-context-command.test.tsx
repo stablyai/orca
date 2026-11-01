@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
+import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat-pty-session-options'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'

@@ -1,6 +1,6 @@
-import { agentChoiceCliApply } from './agent-choice-cli-apply'
+import { agentChoiceCliApply } from '../../agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog-types'
-import { parseOmpModelList } from './omp-model-list-probe'
+import { parseOmpModelList } from '../../omp-model-list-probe'
 
 /** Private enrichment-gate parser with option-free rows; actual probes parse through agent-model-probe-spec.ts. */
 function parseOmpCatalogModels(stdout: string): CatalogModel[] {

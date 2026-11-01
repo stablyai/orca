@@ -1,4 +1,4 @@
-import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog'
+import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog-types'
 import { discoveredModel } from './structured-agent-session-discovered-model'
 import {
   createStructuredAgentSessionOptionRecord,
@@ -8,27 +8,21 @@ import {
 import {
   STRUCTURED_LAUNCH_OPTION_IDS,
   STRUCTURED_LAUNCH_SEED_OPTION_IDS
-} from './native-chat/input/native-chat-session-option-defaults'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
-import { usesInstalledAgentModelCatalog } from './agent-model-catalog-ownership'
+} from '../../native-chat/input/native-chat-session-option-defaults'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
+import { usesInstalledAgentModelCatalog } from '../../agent-model-catalog-ownership'
 import { structuredAgentSessionShownModel } from './structured-agent-session-option-snapshot'
-import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
-import type { AgentSessionAcceptedInputSources } from './agent-session-options-result'
-import { labelFromModelId } from './model-id-label'
+import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type {
-  AgentSessionModelCatalogResult,
+  AgentSessionAcceptedInputSources,
   AgentSessionOptionsResult
-} from './agent-session-wire'
+} from './agent-session-options-result'
+import { labelFromModelId } from '../../model-id-label'
+import type { AgentSessionModelCatalogResult } from '../../agent-session-wire'
 import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
 } from './structured-agent-session-option-codec'
-
-export {
-  canSetStructuredAgentSessionOption,
-  lockedStructuredAgentSessionOptionSnapshot,
-  structuredAgentSessionOptionSnapshot
-} from './structured-agent-session-option-snapshot'
 
 export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,

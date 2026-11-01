@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
-import type { AgentSessionOptionsResult } from './agent-session-wire'
-import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import { createStructuredAgentSessionOptionState } from './structured-agent-session-options'
+import type { AgentSessionOptionsResult } from './agent-session/options/agent-session-options-result'
+import { getAgentSessionOptionCatalog } from './agent-session/options/agent-session-option-catalog'
+import { createStructuredAgentSessionOptionState } from './agent-session/options/structured-agent-session-options'
 import { createStructuredSessionSelectionController } from './structured-agent-session-selection-operations'
 import { createStructuredAgentSessionOptionsReadOwner } from './structured-agent-session-options-read-owner'
 

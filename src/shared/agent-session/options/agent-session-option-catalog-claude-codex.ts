@@ -3,12 +3,12 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { agentChoiceCliApply } from './agent-choice-cli-apply'
+import { agentChoiceCliApply } from '../../agent-choice-cli-apply'
 import {
   CLAUDE_MODEL_LIST_ARGS,
   CLAUDE_MODEL_LIST_STDIN,
   parseClaudeModelList
-} from './claude-model-list-probe'
+} from '../../claude-model-list-probe'
 
 const STANDARD_EFFORT_CHOICES = [
   { value: 'low', label: 'Low' },

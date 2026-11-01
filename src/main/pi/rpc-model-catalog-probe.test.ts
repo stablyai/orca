@@ -6,11 +6,11 @@ import { readPiRpcSessionOptions, type PiRpcRequester } from './rpc-options'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import {
   applyStructuredAgentSessionModelCatalog,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
-} from '../../shared/structured-agent-session-options'
-import { structuredAgentSessionMessageSelection } from '../../shared/structured-agent-session-option-view'
-import { structuredAgentSessionSeedCatalog } from '../../shared/structured-agent-session-seed-catalog'
+  createStructuredAgentSessionOptionState
+} from '../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../shared/agent-session/options/structured-agent-session-option-snapshot'
+import { structuredAgentSessionMessageSelection } from '../../shared/agent-session/options/structured-agent-session-option-view'
+import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { agentModelCatalogFingerprintForRecord } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'

@@ -1,8 +1,6 @@
-import {
-  getAgentSessionOptionCatalog,
-  type AgentSessionOptionCatalog
-} from './agent-session-option-catalog'
-import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
+import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
+import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-types'
+import { isAgentSessionHandleProvider } from '../../agent-session-provider-handle'
 
 // Structured picks apply only via live reads/setOption, never terminal launch flags.
 const LIVE_ONLY_CATALOG: AgentSessionOptionCatalog = { models: [], modelApply: {} }

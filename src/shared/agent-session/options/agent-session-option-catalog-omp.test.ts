@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
-import { parseBuiltSessionOptionCommand } from './native-chat/input/native-chat-session-option-commands'
-import { parseOmpModelList } from './omp-model-list-probe'
+import { parseBuiltSessionOptionCommand } from '../../native-chat/input/native-chat-session-option-commands'
+import { parseOmpModelList } from '../../omp-model-list-probe'
 
 const LISTING = JSON.stringify({
   models: [

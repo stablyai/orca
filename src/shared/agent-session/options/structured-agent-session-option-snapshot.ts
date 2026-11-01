@@ -2,21 +2,21 @@ import type {
   AgentSessionOptionCatalog,
   CatalogModel,
   CatalogOption
-} from './agent-session-option-catalog'
+} from './agent-session-option-catalog-types'
 import {
   nativeChatSessionOptionDescriptors,
   withTrackedNativeChatModel,
   type NativeChatShownModel
-} from './native-chat/input/native-chat-session-option-snapshot'
+} from '../../native-chat/input/native-chat-session-option-snapshot'
 import type {
   SessionOptionDescriptor,
   SessionOptionValue
-} from './native-chat/input/native-chat-session-options'
-import type { TrackedNativeChatSessionOption } from './native-chat/input/native-chat-session-option-state'
+} from '../../native-chat/input/native-chat-session-options'
+import type { TrackedNativeChatSessionOption } from '../../native-chat/input/native-chat-session-option-state'
 import {
   catalogEffortLevels,
   effectiveAgentEffort
-} from './structured-agent-session-effective-effort'
+} from '../../structured-agent-session-effective-effort'
 import { effectiveServiceTier } from './structured-agent-session-effective-tier'
 import { serviceTierOption } from './structured-agent-session-discovered-model'
 import {

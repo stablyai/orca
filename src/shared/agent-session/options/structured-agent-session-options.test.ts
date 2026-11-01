@@ -5,18 +5,20 @@ import {
   CODEX_SESSION_OPTION_CATALOG,
   CLAUDE_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
-import { buildNativeChatSessionOptionSnapshot } from './native-chat/input/native-chat-session-option-snapshot'
-import { createNativeChatSessionOptionRecord } from './native-chat/input/native-chat-session-option-state'
+import { buildNativeChatSessionOptionSnapshot } from '../../native-chat/input/native-chat-session-option-snapshot'
+import { createNativeChatSessionOptionRecord } from '../../native-chat/input/native-chat-session-option-state'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
-  canSetStructuredAgentSessionOption,
   commitStructuredAgentSessionOption,
   createStructuredAgentSessionOptionState,
   settleStructuredAgentSessionBuiltinCatalog,
-  structuredAgentSessionOptionSnapshot,
   type StructuredAgentSessionOptionState
 } from './structured-agent-session-options'
+import {
+  canSetStructuredAgentSessionOption,
+  structuredAgentSessionOptionSnapshot
+} from './structured-agent-session-option-snapshot'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionMessageSelection

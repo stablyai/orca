@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionOptionsResult } from './agent-session-wire'
-import { sortNativeChatSessionOptions } from './native-chat/input/native-chat-session-option-snapshot'
+import type { AgentSessionOptionsResult } from './agent-session-options-result'
+import { sortNativeChatSessionOptions } from '../../native-chat/input/native-chat-session-option-snapshot'
 import {
   canSetStructuredAgentSessionOption,
+  structuredAgentSessionOptionSnapshot
+} from './structured-agent-session-option-snapshot'
+import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionPicks,
-  structuredAgentSessionOptionSnapshot
+  structuredAgentSessionOptionPicks
 } from './structured-agent-session-options'
 import { structuredAgentSessionOptionView } from './structured-agent-session-option-view'
 import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'

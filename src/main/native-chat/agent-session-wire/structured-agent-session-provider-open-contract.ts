@@ -1,5 +1,5 @@
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 
 export type StructuredAgentSessionProviderOpenInput = {

@@ -1,4 +1,4 @@
-import { agentChoiceCliApply } from './agent-choice-cli-apply'
+import { agentChoiceCliApply } from '../../agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-types'
 
 // Why: worker-start needs launch serialization without exposing a new Native Chat option surface.

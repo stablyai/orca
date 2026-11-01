@@ -1,5 +1,5 @@
-import { findOptionOccurrence } from './command-option-occurrence'
-import type { AgentType } from './agent-status-types'
+import { findOptionOccurrence } from '../../command-option-occurrence'
+import type { AgentType } from '../../agent-status-types'
 
 // Required values consume dash-leading text; boolean and optional-valued options are excluded.
 // Codex (clap) and OpenCode (yargs) never take a dash-leading value, so they have no entry.

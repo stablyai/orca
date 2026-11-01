@@ -1,42 +1,46 @@
-import { agentChoiceCliApply } from './agent-choice-cli-apply'
+import { agentChoiceCliApply } from '../../agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog, CatalogOption } from './agent-session-option-catalog-types'
 
-const ANTIGRAVITY_EFFORT: CatalogOption = {
+// `none` is omitted: native-chat-session-option-labels.ts has no translation for it.
+const MUSE_EFFORT: CatalogOption = {
   id: 'effort',
   label: 'Reasoning effort',
   category: 'thought_level',
   kind: {
     type: 'select',
     choices: [
+      { value: 'minimal', label: 'Minimal' },
       { value: 'low', label: 'Low' },
       { value: 'medium', label: 'Medium' },
-      { value: 'high', label: 'High' }
+      { value: 'high', label: 'High' },
+      { value: 'xhigh', label: 'Extra high' },
+      { value: 'max', label: 'Max' },
+      { value: 'ultra', label: 'Ultra' }
     ],
     defaultValue: 'high'
   },
   apply: {
     ...agentChoiceCliApply(
-      'antigravity',
+      'muse',
       [
         {
           kind: 'value',
-          names: ['--effort'],
+          names: ['--reasoning-effort'],
           lift: 'separate-and-long-equals'
         }
       ],
-      '--effort'
-    ),
-    midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
+      '--reasoning-effort'
+    )
   }
 }
 
-export const ANTIGRAVITY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
+export const MUSE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
-  // Model availability is account-scoped; worker-start accepts the slug reported by `agy models`.
+  // Muse has account-scoped IDs and no listing command: seed no picker; let worker-start pass the caller's --model.
   models: [],
   modelApply: {
     ...agentChoiceCliApply(
-      'antigravity',
+      'muse',
       [
         {
           kind: 'value',
@@ -45,8 +49,7 @@ export const ANTIGRAVITY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
         }
       ],
       '--model'
-    ),
-    midSession: { kind: 'agent-picker', command: '/model' }
+    )
   },
-  unknownModelOptions: [ANTIGRAVITY_EFFORT]
+  unknownModelOptions: [MUSE_EFFORT]
 }

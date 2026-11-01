@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { AgentJournalAnsweredTurnSchema } from './agent-session-answered-turn-schema'
 import { AgentSessionFailureFactSchema } from './agent-session-failure-fact-schema'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
-import { AgentSessionExecutionOptionsSchema } from './agent-session-execution-options'
+import { AgentSessionExecutionOptionsSchema } from './agent-session/options/agent-session-execution-options'
 
 // Every persisted field is listed, or a parse strips it: this schema drops unknown keys.
 export const AgentJournalSubmissionSchema = z.object({

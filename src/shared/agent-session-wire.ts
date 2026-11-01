@@ -13,7 +13,6 @@ import type {
   AgentSessionQueuePause
 } from './agent-session-queued-message-wire'
 
-export type { AgentSessionOptionsResult } from './agent-session-options-result'
 export * from './agent-session-wire-refusals'
 export * from './agent-session-queued-message-wire'
 export * from './agent-session-turn-completion-wire'

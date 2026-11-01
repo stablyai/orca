@@ -2,28 +2,27 @@ import {
   agentChoiceSettingsOccurrences,
   rewriteAgentChoiceSettings,
   readAgentChoiceSettings
-} from './agent-choice-settings'
-import { hasAgentModelOptionValues, yieldAgentChoicesToArgs } from './agent-choice-layers'
-import type { AgentType } from './agent-status-types'
+} from '../../agent-choice-settings'
+import { hasAgentModelOptionValues, yieldAgentChoicesToArgs } from '../../agent-choice-layers'
+import type { AgentType } from '../../agent-status-types'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
 } from './agent-session-option-catalog'
-export { getAgentSessionOptionLaunchCatalog } from './agent-session-option-catalog'
 import type {
   AgentSessionOptionCatalog,
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
-import { agentPermissionArgsForLaunch } from './agent-permission-args'
+import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
+import { agentPermissionArgsForLaunch } from '../../agent-permission-args'
 import {
   readLaunchPermissionChoice,
   agentPermissionHasTerminalChoice
-} from './tui-agent-permission-choice'
-import { isTuiAgent } from './tui-agent-config'
-import { quoteStartupArg, tokenizeStartupCommand } from './tui-agent-startup-shell'
+} from '../../tui-agent-permission-choice'
+import { isTuiAgent } from '../../tui-agent-config'
+import { quoteStartupArg, tokenizeStartupCommand } from '../../tui-agent-startup-shell'
 import { decodeCatalogOptionValue } from './structured-agent-session-option-codec'
 
 export type ResolvedSessionOptionLaunch = {

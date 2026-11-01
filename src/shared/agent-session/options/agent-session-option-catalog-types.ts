@@ -1,10 +1,10 @@
-import type { AgentChoiceCliForm } from './agent-launch-choices'
-import type { AgentType } from './agent-status-types'
+import type { AgentChoiceCliForm } from '../../agent-launch-choices'
+import type { AgentType } from '../../agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice,
   SessionOptionValue
-} from './native-chat/input/native-chat-session-options'
+} from '../../native-chat/input/native-chat-session-options'
 
 export type CatalogAgentInteractionDetection = 'claude-model-switch-confirmation'
 export type CatalogCommandDelivery = 'type'
