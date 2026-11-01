@@ -15,7 +15,16 @@ function settingsWithoutOrcaHooksOrModelSettings(value: Record<string, unknown>)
   const rest = { ...config }
   delete rest.modelSettings
   delete rest.effortLevel
+  delete rest.model
   return JSON.stringify(rest)
+}
+
+function hasProfileOwnedChoices(value: Record<string, unknown>): boolean {
+  return (
+    value.model !== undefined ||
+    value.modelSettings !== undefined ||
+    value.effortLevel !== undefined
+  )
 }
 
 function mergeProfileModelSettings(
@@ -23,6 +32,9 @@ function mergeProfileModelSettings(
   current: Record<string, unknown>
 ): Record<string, unknown> {
   const merged = { ...source }
+  if (current.model !== undefined) {
+    merged.model = current.model
+  }
   if (current.modelSettings !== undefined) {
     merged.modelSettings =
       isPlainRecord(source.modelSettings) && isPlainRecord(current.modelSettings)
@@ -68,6 +80,9 @@ export function copySettings(source: string, target: string): ClaudeProfileSurfa
   }
   const outcome = copyClaudeProfileFile(source, target, render)
   if (outcome === 'absent' && lstatIfPresent(target)?.isFile()) {
+    if (current.kind === 'present' && hasProfileOwnedChoices(current.value)) {
+      return 'unchanged'
+    }
     rmSync(target, { force: true })
     return 'synced'
   }

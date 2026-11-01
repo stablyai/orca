@@ -127,7 +127,7 @@ describe('Claude profile refresh from the default home', () => {
     const f = fixture()
     const settings = {
       futureFeature: true,
-      model: 'a',
+      theme: 'a',
       hooks: { Stop: [USER_HOOK, ORCA_HOOK], SessionStart: [ORCA_HOOK] },
       apiKeyHelper: 'helper',
       env: {
@@ -141,16 +141,16 @@ describe('Claude profile refresh from the default home', () => {
     f.json(join(f.source, 'settings.json'), settings)
     await provision(f)
     expect(f.read(join(f.profileHome, 'settings.json'))).toEqual(settings)
-    f.json(join(f.profileHome, 'settings.json'), { ...settings, model: 'private' })
-    f.json(join(f.source, 'settings.json'), { model: 'b' })
+    f.json(join(f.profileHome, 'settings.json'), { ...settings, editor: 'private' })
+    f.json(join(f.source, 'settings.json'), { editor: 'b' })
     expect((await provision(f)).surfaces['settings.json']).toBe('synced')
-    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ model: 'b' })
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ editor: 'b' })
     expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
     fs.rmSync(join(f.source, 'settings.json'))
     await provision(f)
     expect(fs.existsSync(join(f.profileHome, 'settings.json'))).toBe(false)
   })
-  it('preserves profile modelSettings and effortLevel when provisioning runs again', async () => {
+  it('preserves profile model, modelSettings and effortLevel when provisioning runs again', async () => {
     const f = fixture()
     const settings = {
       model: 'claude-sonnet-4-5',
@@ -162,6 +162,7 @@ describe('Claude profile refresh from the default home', () => {
     // User chooses Opus and high effort in this profile session (/model command)
     f.json(join(f.profileHome, 'settings.json'), {
       ...settings,
+      model: 'claude-opus-5-5',
       effortLevel: 'high',
       modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
     })
@@ -170,6 +171,7 @@ describe('Claude profile refresh from the default home', () => {
     expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
     expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
       ...settings,
+      model: 'claude-opus-5-5',
       effortLevel: 'high',
       modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
     })
@@ -185,8 +187,23 @@ describe('Claude profile refresh from the default home', () => {
     expect((await provision(f)).surfaces['settings.json']).toBe('synced')
     expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
       ...settings,
+      model: 'claude-opus-5-5',
       futureFeature: true,
       apiKeyHelper: 'new-helper',
+      effortLevel: 'high',
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
+    })
+  })
+  it('retains profile settings when global settings are absent but profile has model or effort choices', async () => {
+    const f = fixture()
+    f.json(join(f.profileHome, 'settings.json'), {
+      model: 'claude-opus-5-5',
+      effortLevel: 'high',
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
+    })
+    expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
+      model: 'claude-opus-5-5',
       effortLevel: 'high',
       modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
     })
@@ -195,11 +212,11 @@ describe('Claude profile refresh from the default home', () => {
     'restores settings the profile changed and leaves a linked settings file alone',
     async () => {
       const f = fixture()
-      f.json(join(f.source, 'settings.json'), { model: 'a', theme: 'x' })
+      f.json(join(f.source, 'settings.json'), { editor: 'a', theme: 'x' })
       await provision(f)
       f.json(join(f.profileHome, 'settings.json'), { theme: 'x' })
       await provision(f)
-      expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ model: 'a', theme: 'x' })
+      expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ editor: 'a', theme: 'x' })
       const elsewhere = join(f.root, 'elsewhere.json')
       f.json(elsewhere, { mine: true })
       fs.rmSync(join(f.profileHome, 'settings.json'))
