@@ -12,6 +12,7 @@ import {
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
 import { clearRemovedPluginSettings } from '../plugins/plugin-removal-settings'
 import { readApprovedPluginNewFileTemplate } from '../plugins/plugin-new-file-template'
+import { handlePluginPanelStateRequest } from '../plugins/panels/plugin-panel-state'
 import type { PluginService } from '../plugins/plugin-service'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
 import {
@@ -165,6 +166,19 @@ export function registerPluginHandlers(
       })
     }
   )
+
+  // Components panels' persisted atoms; desktop only, like the guests that write them.
+  ipcMain.handle('plugins:panelState', async (event, args: unknown) => {
+    await pluginService.whenReady()
+    const owner = rendererPanelOwner(event.sender.id)
+    return handlePluginPanelStateRequest(
+      {
+        pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
+        resolveComponentsPanel: (token) => pluginService.panels.componentsPanelPlugin(owner, token)
+      },
+      args
+    )
+  })
 
   ipcMain.handle('plugins:invokeCommand', async (_event, args: unknown) => {
     await pluginService.whenReady()

@@ -469,6 +469,36 @@
           "examples": [
             "database"
           ],
+          "x-orca-enum-since": {
+            "add": "1.4.246",
+            "remove": "1.4.246",
+            "delete": "1.4.246",
+            "edit": "1.4.246",
+            "refresh": "1.4.246",
+            "search": "1.4.246",
+            "settings": "1.4.246",
+            "check": "1.4.246",
+            "close": "1.4.246",
+            "info": "1.4.246",
+            "warning": "1.4.246",
+            "error": "1.4.246",
+            "open-external": "1.4.246",
+            "copy": "1.4.246",
+            "download": "1.4.246",
+            "upload": "1.4.246",
+            "play": "1.4.246",
+            "pause": "1.4.246",
+            "stop": "1.4.246",
+            "more": "1.4.246",
+            "expand": "1.4.246",
+            "collapse": "1.4.246",
+            "next": "1.4.246",
+            "filter": "1.4.246",
+            "branch": "1.4.246",
+            "file": "1.4.246",
+            "agent": "1.4.246",
+            "link": "1.4.246"
+          },
           "type": "string",
           "enum": [
             "activity",
@@ -497,7 +527,35 @@
             "star",
             "terminal",
             "wrench",
-            "zap"
+            "zap",
+            "add",
+            "remove",
+            "delete",
+            "edit",
+            "refresh",
+            "search",
+            "settings",
+            "check",
+            "close",
+            "info",
+            "warning",
+            "error",
+            "open-external",
+            "copy",
+            "download",
+            "upload",
+            "play",
+            "pause",
+            "stop",
+            "more",
+            "expand",
+            "collapse",
+            "next",
+            "filter",
+            "branch",
+            "file",
+            "agent",
+            "link"
           ]
         },
         "entry": {
@@ -505,10 +563,22 @@
           "minLength": 1,
           "maxLength": 1024,
           "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
-          "description": "HTML file, relative to the plugin root, rendered inside a panel frame. It is trusted code: install panels you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "description": "What the panel runs: an HTML page for `ui: \"html\"`, a `.js`/`.mjs` module for `ui: \"components\"`. It is trusted code: install panels you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
           "x-orca-since": "1.4.160",
           "examples": [
             "dist/panel.html"
+          ]
+        },
+        "ui": {
+          "description": "How the panel draws its UI. `html` (default) shows `entry` as a web page in an isolated frame; `components` runs `entry` as a hidden module and Orca draws the component tree it returns with its own controls.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            "components"
+          ],
+          "type": "string",
+          "enum": [
+            "html",
+            "components"
           ]
         }
       },

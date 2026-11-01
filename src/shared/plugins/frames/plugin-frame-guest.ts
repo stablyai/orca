@@ -15,6 +15,11 @@ export const PLUGIN_FRAME_IPC_CHANNEL = 'orca-plugin-frame'
 export const PLUGIN_FRAME_KEY_CHANNEL = 'orca-plugin-frame-key'
 /** One-shot main-world handoff from the guest preload to Orca's injected frame shell. */
 export const PLUGIN_FRAME_TRANSPORT_GLOBAL = '__orcaPluginFrameTransport'
+/** One-shot main-world hook letting Orca's declarative boot script post `ui.*` events. */
+export const PLUGIN_DECLARATIVE_POST_GLOBAL = '__orcaDeclarativePost'
+/** Orca-served files under the reserved prefix (plugin-frame-protocol.ts). */
+export const PLUGIN_DECLARATIVE_HOST_FILE = 'declarative-host.html'
+export const PLUGIN_DECLARATIVE_RUNTIME_FILE = 'orca-runtime.mjs'
 /** Paths under this prefix are reserved for files Orca ships; plugin files there are never served. */
 export const PLUGIN_FRAME_RESERVED_SEGMENT = '__orca'
 
@@ -120,4 +125,13 @@ export function isPluginFrameOriginUrl(url: string, frameKey: string): boolean {
   } catch {
     return false
   }
+}
+
+/** The hidden page that runs a declarative panel's module `entry` (a manifest path). */
+export function pluginDeclarativeHostUrl(frameKey: string, entry: string): string {
+  const host = pluginFrameUrl(
+    frameKey,
+    `${PLUGIN_FRAME_RESERVED_SEGMENT}/${PLUGIN_DECLARATIVE_HOST_FILE}`
+  )
+  return `${host}?entry=${encodeURIComponent(entry)}`
 }

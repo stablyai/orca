@@ -100,6 +100,20 @@ describe('buildPluginGuestShellHtml', () => {
     )
   })
 
+  it("hands Orca's declarative boot script a post hook only on its own page", () => {
+    expect(buildPluginGuestShellHtml('<main></main>')).not.toContain('__orcaDeclarativePost')
+    expect(buildPluginGuestShellHtml('<main></main>', 'panel', { declarative: true })).toContain(
+      '"declarativePost":"__orcaDeclarativePost"'
+    )
+  })
+
+  it("never puts shell or files on a components panel's hidden guest", () => {
+    expect(buildPluginGuestShellHtml('<main></main>')).toContain('"user":{')
+    expect(buildPluginGuestShellHtml('<main></main>', 'panel', { declarative: true })).toContain(
+      '"user":null'
+    )
+  })
+
   it('offers user-gesture methods to guests only, where Orca can verify the gesture', () => {
     const methods = (html: string) => html.match(/"methods":(\[[^\]]*\])/)?.[1] ?? ''
     expect(methods(buildPluginPanelShellHtml('<main></main>'))).not.toContain('shell.openExternal')

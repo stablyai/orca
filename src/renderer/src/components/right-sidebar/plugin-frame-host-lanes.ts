@@ -1,3 +1,5 @@
+import { PLUGIN_DECLARATIVE_RENDER_LANE } from '../../../../shared/plugins/declarative/plugin-declarative-limits'
+import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../shared/plugins/declarative/plugin-declarative-message-names'
 import type { PluginFrameHello } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { PLUGIN_FRAME_IPC_CHANNEL } from '../../../../shared/plugins/frames/plugin-frame-guest'
 import {
@@ -79,16 +81,20 @@ export function pluginFrameHello(
 /**
  * Whether a user-gesture method may run. A srcdoc iframe shares the host window, whose activation
  * any keystroke in Orca sets, so only a guest's isolated-world gesture serial counts, and each
- * serial admits one call: activation lasts seconds, a gesture is one click or key press.
+ * serial admits one call: activation lasts seconds, a gesture is one click or key press. A
+ * components panel's hidden guest has no gestures of its own: `consumeHostActivation` is the
+ * one-shot grant from a settled press on Orca's own controls, and the only thing that counts there.
  */
-export function createPluginFrameGestureGate(): (
-  method: string,
-  context: PluginFrameMessageContext
-) => boolean {
+export function createPluginFrameGestureGate(
+  consumeHostActivation?: () => boolean
+): (method: string, context: PluginFrameMessageContext) => boolean {
   let consumed = 0
   return (method, context) => {
     if (getPluginHostMethodSpec(method)?.userActivation !== true) {
       return true
+    }
+    if (consumeHostActivation) {
+      return consumeHostActivation()
     }
     const gesture = context.gesture ?? 0
     if (context.transport !== 'guest' || gesture <= consumed) {
@@ -100,16 +106,22 @@ export function createPluginFrameGestureGate(): (
 }
 
 const SAVE_AS_LIMITS = { maxBytes: PLUGIN_SAVE_AS_MAX_BYTES + 4096, maxMessages: 5, perMs: 10_000 }
+const { maxBytes, maxMessages, perMs, maxDepth, maxObjects } = PLUGIN_DECLARATIVE_RENDER_LANE
+const RENDER_LIMITS = { maxBytes, maxMessages, perMs }
+export const PLUGIN_FRAME_RENDER_WALK_LIMITS = { maxDepth, maxObjects }
 
-export type PluginFrameLanes = { save: PanelMessageBudget }
+export type PluginFrameLanes = { save: PanelMessageBudget; render: PanelMessageBudget }
 
 export function createPluginFrameLanes(
   overrides: Partial<PluginFrameLanes> = {}
 ): PluginFrameLanes {
-  return { save: overrides.save ?? createPanelMessageBudget(SAVE_AS_LIMITS) }
+  return {
+    save: overrides.save ?? createPanelMessageBudget(SAVE_AS_LIMITS),
+    render: overrides.render ?? createPanelMessageBudget(RENDER_LIMITS)
+  }
 }
 
-/** Saves carry whole files, so they ride their own lane, not the 64 KiB one. */
+/** Saves carry whole files and trees can be large, so each rides its own lane, not the 64 KiB one. */
 export function pluginFrameLaneFor(
   data: unknown,
   lanes: PluginFrameLanes,
@@ -120,6 +132,14 @@ export function pluginFrameLaneFor(
   }
   if (data.kind === 'req' && data.method === PLUGIN_FRAME_USER_METHODS.saveAs) {
     return lanes.save
+  }
+  // Persisted state rides with renders: values may exceed the 64 KiB general lane.
+  if (
+    data.kind === 'evt' &&
+    (data.event === PLUGIN_DECLARATIVE_MESSAGES.render ||
+      data.event === PLUGIN_DECLARATIVE_MESSAGES.persist)
+  ) {
+    return lanes.render
   }
   return shared
 }

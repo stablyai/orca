@@ -1,6 +1,7 @@
 # Isolated plugin frames
 
-Design contract for running plugin UI in isolated guests.
+Design contract for running plugin UI in isolated guests. Components (TSX) panels run in the same
+guests; see [plugin-declarative-ui.md](./plugin-declarative-ui.md).
 
 ## Why
 
@@ -74,7 +75,7 @@ Every plugin frame on desktop is an Electron `<webview>`:
   flips the constant `PLUGIN_ISOLATED_FRAMES_DEFAULT` in `src/main/plugins/panels/plugin-frame-isolation.ts`.
   `ORCA_PLUGIN_ISOLATED_FRAMES=1` (dev, e2e) turns guests on and `=0` off, overriding the
   `experimentalPluginIsolatedFrames` setting; all are main-process only. Off, frames use the `srcdoc` iframe
-  (never offered `orca.shell`/`orca.files`).
+  (never offered `orca.shell`/`orca.files`), and components panels say they are not available.
 - **Compatibility**: existing single-file plugins load unchanged. Browser clients (serve/web) have no
   `<webview>` and keep the `srcdoc` iframe; multi-file assets need the desktop app. With isolation on, a
   desktop guest that cannot be set up fails closed (the panel shows its load error and its session is
@@ -96,7 +97,9 @@ checks `navigator.userActivation` first; the frame host re-checks the activation
 message: only a guest's preload stamp counts. A srcdoc iframe shares the host window, whose activation any
 keystroke in Orca sets, so iframes (browser clients) are never offered these methods and get
 `not_permitted`. Main runs them only for calls from its own window over IPC, so a dialog or browser tab
-never opens on another machine.
+never opens on another machine. A components panel's hidden guest never has activation of its own; only a
+press on a stationary Orca-drawn control grants one call (see
+[User gestures](./plugin-declarative-ui.md#user-gestures)).
 
 - `orca.shell.openExternal(url)`: `http:`/`https:`/`mailto:` only, opened in the OS browser. Anything
   in the URL leaves the machine, so for an `http:`/`https:` host this plugin has not been allowed, Orca

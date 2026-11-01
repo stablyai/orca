@@ -220,3 +220,29 @@ describe('PluginPanelController user-gesture methods', () => {
     )
   })
 })
+
+describe('PluginPanelController declarative panels', () => {
+  it('marks the entry and never sends the module text as a page', async () => {
+    const plugin = await createPlugin()
+    await writeFile(join(plugin.rootDir, 'panel.js'), 'export default () => null // MODULE')
+    const declarative: ValidDiscoveredPlugin = {
+      ...plugin,
+      manifest: {
+        ...plugin.manifest,
+        contributes: {
+          ...plugin.manifest.contributes,
+          panels: [{ id: 'todos', title: 'Todos', entry: 'panel.js', ui: 'components' }]
+        }
+      }
+    }
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: () => declarative,
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: vi.fn(),
+      log: () => vi.fn()
+    })
+    const entry = await controller.open('renderer:1', plugin.pluginKey, 'todos')
+    expect(entry?.ui).toBe('components')
+    expect(entry?.html).not.toContain('MODULE')
+  })
+})

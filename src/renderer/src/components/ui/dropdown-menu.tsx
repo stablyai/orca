@@ -5,6 +5,7 @@ import * as DropdownMenuPrimitive from 'radix-ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
+import { useMenuPointerHighlight } from './menu-pointer-highlight'
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
@@ -28,6 +29,7 @@ function DropdownMenuContent({
   style,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  const pointerHighlight = useMenuPointerHighlight(props)
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -40,6 +42,7 @@ function DropdownMenuContent({
         // Disable native dragging: titlebar drag regions intercept menu clicks regardless of z-index.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        {...pointerHighlight}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </DropdownMenuPrimitive.Portal>
@@ -215,6 +218,7 @@ function DropdownMenuSubContent({
   alignOffset = -5,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+  const pointerHighlight = useMenuPointerHighlight(props)
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.SubContent
@@ -228,6 +232,7 @@ function DropdownMenuSubContent({
         // Disable native dragging where submenu content overlaps the titlebar.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        {...pointerHighlight}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </DropdownMenuPrimitive.Portal>

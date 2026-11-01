@@ -23,6 +23,12 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["testDir: './e2e'", "testMatch: '**/*.spec.ts'"]
   },
   {
+    name: 'component fixtures Playwright',
+    include: ['tests/component-fixtures/**/*.spec.ts'],
+    sources: ['tests/component-fixtures/playwright.config.ts'],
+    mirrors: ["testDir: '.'", "testMatch: '*.spec.ts'"]
+  },
+  {
     name: 'computer-use e2e',
     include: ['tests/e2e/computer-*.e2e.ts'],
     sources: ['tests/e2e/vitest.config.ts'],

@@ -10,7 +10,14 @@ export const PRELOAD_PLUGIN_FRAME_LANES = {
   /** `files.saveAs` carries a whole file (64 MiB plus envelope). */
   saveAs: { method: 'files.saveAs', maxBytes: 64 * 1024 * 1024 + 4096 },
   /** `editor.applyEdit` carries a whole document (64 MiB plus envelope). */
-  edit: { method: 'editor.applyEdit', maxBytes: 64 * 1024 * 1024 + 4096 }
+  edit: { method: 'editor.applyEdit', maxBytes: 64 * 1024 * 1024 + 4096 },
+  /** A components panel's tree and persisted state: the host's render lane and its walk caps. */
+  render: {
+    events: ['ui.render', 'ui.persist'],
+    maxBytes: 640 * 1024,
+    maxNodes: 5000 * 8 + 1024,
+    maxDepth: 64 * 2 + 24
+  }
 }
 
 export const PRELOAD_PLUGIN_FRAME_RATE = {
@@ -19,18 +26,21 @@ export const PRELOAD_PLUGIN_FRAME_RATE = {
   perMs: 10_000
 }
 
-const MAX_WALK_NODES = 10_000
-const MAX_WALK_DEPTH = 100
+const DEFAULT_WALK = { maxNodes: 10_000, maxDepth: 100 }
 const textEncoder = new TextEncoder()
 
 /** UTF-8 bytes of strings plus buffer bytes; stops (returning more than `stopAfter`) once over. */
-export function measurePluginFrameMessageBytes(message: unknown, stopAfter: number): number {
+export function measurePluginFrameMessageBytes(
+  message: unknown,
+  stopAfter: number,
+  walk: { maxNodes: number; maxDepth: number } = DEFAULT_WALK
+): number {
   let total = 0
   let nodes = 0
   const stack: { value: unknown; depth: number }[] = [{ value: message, depth: 0 }]
   for (let item = stack.pop(); item && total <= stopAfter; item = stack.pop()) {
     const { value, depth } = item
-    if (++nodes > MAX_WALK_NODES || depth > MAX_WALK_DEPTH) {
+    if (++nodes > walk.maxNodes || depth > walk.maxDepth) {
       return stopAfter + 1
     }
     if (typeof value === 'string') {
@@ -55,15 +65,23 @@ export function measurePluginFrameMessageBytes(message: unknown, stopAfter: numb
   return total
 }
 
-function laneCap(message: unknown): number {
+function laneCap(message: unknown): { maxBytes: number; walk?: typeof DEFAULT_WALK } {
   const method =
     typeof message === 'object' && message !== null && 'method' in message ? message.method : null
-  const { saveAs, edit, shared } = PRELOAD_PLUGIN_FRAME_LANES
-  return method === saveAs.method
-    ? saveAs.maxBytes
-    : method === edit.method
-      ? edit.maxBytes
-      : shared.maxBytes
+  const event =
+    typeof message === 'object' && message !== null && 'event' in message ? message.event : null
+  const { saveAs, edit, shared, render } = PRELOAD_PLUGIN_FRAME_LANES
+  if (typeof event === 'string' && render.events.includes(event)) {
+    return { maxBytes: render.maxBytes, walk: render }
+  }
+  return {
+    maxBytes:
+      method === saveAs.method
+        ? saveAs.maxBytes
+        : method === edit.method
+          ? edit.maxBytes
+          : shared.maxBytes
+  }
 }
 
 export type PluginFrameSendRefusal =
@@ -83,9 +101,9 @@ export function createPluginFrameSendBudget(
       sent.shift()
       windowBytes -= oldest.bytes
     }
-    const cap = laneCap(message)
-    const bytes = measurePluginFrameMessageBytes(message, cap)
-    if (bytes > cap) {
+    const lane = laneCap(message)
+    const bytes = measurePluginFrameMessageBytes(message, lane.maxBytes, lane.walk)
+    if (bytes > lane.maxBytes) {
       return { code: 'too_large' }
     }
     if (sent.length >= rate.maxMessages || windowBytes + bytes > rate.maxBytes) {

@@ -1,11 +1,13 @@
 import { app, session as electronSession, type Session, type WebContents } from 'electron'
 import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createServer, type Server, type Socket } from 'node:net'
 import {
   PLUGIN_FRAME_SCHEME,
   pluginFrameKey,
   pluginFramePartition,
+  pluginDeclarativeHostUrl,
   pluginFrameUrl,
   readPluginFramePartitionKey
 } from '../../../shared/plugins/frames/plugin-frame-guest'
@@ -128,7 +130,8 @@ async function configureSession(frameKey: string): Promise<Session> {
         {
           findApprovedPluginByFrameKey,
           currentTheme: currentPluginFrameThemeSnapshot,
-          log: (pluginKey, line) => console.warn(`[plugins] ${pluginKey}: ${line}`)
+          log: (pluginKey, line) => console.warn(`[plugins] ${pluginKey}: ${line}`),
+          readDeclarativeRuntime
         },
         frameKey
       )
@@ -153,7 +156,12 @@ function ensureSession(frameKey: string): Promise<Session> {
   return pending
 }
 
-/** The URL a contribution's guest loads: its HTML entry. */
+// Why the app path: resources/ ships inside app.asar, and dev and e2e run from the checkout.
+function readDeclarativeRuntime(): Promise<Uint8Array> {
+  return readFile(join(app.getAppPath(), 'resources', 'plugins', 'declarative', 'orca-runtime.mjs'))
+}
+
+/** The URL a contribution's guest loads: its HTML entry, or Orca's host page for a module. */
 function contributionUrl(
   plugin: ValidDiscoveredPlugin,
   frameKey: string,
@@ -167,7 +175,12 @@ function contributionUrl(
     return editor ? pluginFrameUrl(frameKey, editor.entry) : null
   }
   const panel = plugin.manifest.contributes.panels.find((entry) => entry.id === contributionId)
-  return panel ? pluginFrameUrl(frameKey, panel.entry) : null
+  if (!panel) {
+    return null
+  }
+  return panel.ui === 'components'
+    ? pluginDeclarativeHostUrl(frameKey, panel.entry)
+    : pluginFrameUrl(frameKey, panel.entry)
 }
 
 /** Part of the guest URL, so an update or a dev edit (even asset-only) remounts the guest, and

@@ -12,6 +12,7 @@ export type PluginFrameEntryState =
       sessionToken: string | null
       revision: number
       guest?: PluginFrameGuest
+      ui?: 'components'
     }
 
 /**
@@ -83,7 +84,8 @@ export function usePluginFrameEntry(
             html: result.html,
             sessionToken: result.sessionToken,
             revision,
-            ...(result.guest ? { guest: result.guest } : {})
+            ...(result.guest ? { guest: result.guest } : {}),
+            ...(result.ui === 'components' ? { ui: 'components' as const } : {})
           }
           // Why: a session rotation must not revive a frame the watchdog suspended.
           setEntry((previous) =>
