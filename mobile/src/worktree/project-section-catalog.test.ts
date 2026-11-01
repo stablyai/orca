@@ -71,5 +71,6 @@ describe('buildProjectSectionCatalog', () => {
         expect.objectContaining({ repoId: 'slides-benchmark', projectId: 'repo:slides-benchmark' })
       ])
     )
+    expect(catalog.repos.map((r) => r.id)).toEqual(['r1', 'slides-benchmark'])
   })
 })

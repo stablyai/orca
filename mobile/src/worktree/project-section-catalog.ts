@@ -46,7 +46,12 @@ export function buildProjectSectionCatalog(
     projects.push(...derived.projects)
   }
   return {
-    repos: shownRepos,
+    repos: [
+      ...shownRepos,
+      ...unrepresentedRepos.filter(
+        (repo) => !shownRepos.some((shown) => iconKey(shown) === iconKey(repo))
+      )
+    ],
     grouping: { projects, projectHostSetups: setups },
     // Why: served repos come in the sidebar's header order, cross-host manual order included.
     repoOrder: getLogicalRepoOrderRankById(served.repos.map((repo) => repo.id)),

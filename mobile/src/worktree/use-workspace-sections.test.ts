@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSectionCollapsed } from './use-workspace-sections'
+import { getSectionCollapsedKeys, isSectionCollapsed } from './use-workspace-sections'
 import type { Section } from './workspace-list-types'
 
 describe('isSectionCollapsed', () => {
@@ -48,5 +48,24 @@ describe('isSectionCollapsed', () => {
     }
     expect(isSectionCollapsed(section, new Set(['repo:slides-benchmark']))).toBe(true)
     expect(isSectionCollapsed(section, new Set(['project:repo:slides-benchmark']))).toBe(true)
+  })
+
+  it('returns all matching keys from collapsedGroups via getSectionCollapsedKeys', () => {
+    const section: Section = {
+      key: 'project:repo:slides-benchmark',
+      title: 'slides-benchmark',
+      repo: {
+        id: 'slides-benchmark',
+        displayName: 'slides-benchmark',
+        path: '/tmp/slides-benchmark'
+      },
+      data: []
+    }
+    expect(
+      getSectionCollapsedKeys(
+        section,
+        new Set(['repo:slides-benchmark', 'project:repo:slides-benchmark', 'unrelated'])
+      ).sort()
+    ).toEqual(['project:repo:slides-benchmark', 'repo:slides-benchmark'])
   })
 })
