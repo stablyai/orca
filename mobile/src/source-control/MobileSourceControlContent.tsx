@@ -68,8 +68,6 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
     commitFailureRecovery,
     commitFailureRecoveryAction,
     keyboardLift,
-    openingPath,
-    openingBranchPath,
     sections,
     hasVisibleChanges,
     status,
@@ -81,12 +79,11 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
     unstageAll,
     generateCommitMessage,
     cancelGenerateCommitMessage,
-    openFile,
-    openBranchDiff,
+    openDiffForFile,
     resolveConflict,
     runGitAction
   } = state
-  const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  const ioBusy = busyAction !== null
   // Commit runners keep busyAction set ('commit…') until the refreshed status has landed.
   const [listShown, setListShown] = useState(hasVisibleChanges)
   const [cleanedByCommit, setCleanedByCommit] = useState(false)
@@ -111,7 +108,7 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
         bottomInset={listBottomInset}
         state={{
           sections,
-          openFile,
+          openDiffForFile,
           resolveConflict,
           runGitAction,
           setDiscardTarget,
@@ -120,17 +117,14 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
           branchEntries: state.branchEntries,
           branchCompareState: state.branchCompareState,
           branchCompareResult: state.branchCompareResult,
-          busyAction,
-          openBranchDiff,
-          openingBranchPath,
-          openingPath
+          busyAction
         }}
       />
     ),
     [
       listBottomInset,
       sections,
-      openFile,
+      openDiffForFile,
       resolveConflict,
       runGitAction,
       setDiscardTarget,
@@ -139,10 +133,7 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
       state.branchEntries,
       state.branchCompareState,
       state.branchCompareResult,
-      busyAction,
-      openBranchDiff,
-      openingBranchPath,
-      openingPath
+      busyAction
     ]
   )
 

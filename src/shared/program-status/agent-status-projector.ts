@@ -4,7 +4,10 @@ import type { AgentSubagentSnapshot, AgentSubagentState } from '../agent-status-
 import { AGENT_SUBAGENT_ID_MAX_LENGTH } from '../agent-status-subagent-snapshot'
 import type { AgentTurnOutcome } from '../agent-turn-outcome'
 import { foldMainAgentWithRowChildWork } from '../agent-hook-row-child-work-fold'
-import { isAgentStatusHeldOpenByChildWork } from '../agent-lead-status-fold'
+import {
+  heldTurnCountsAsFinished,
+  isAgentStatusHeldOpenByChildWork
+} from '../agent-lead-status-fold'
 import { createProgramStatusOscScanner } from './osc-scanner'
 import {
   programStatusDisplayText,
@@ -210,13 +213,15 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
     const msg = programStatusDisplayText(root?.msg)
     const subagents = snapshotChildren()
     // Why: async children outlive a finished turn (pi-subagents); failed/idle children and boundaries hold nothing.
-    const state =
+    const held =
       projection.state === 'done' && projection.sessionBoundary !== true
         ? foldMainAgentWithRowChildWork('done', {
             payload: { subagents: subagents.filter(isRowHoldingChild) }
-          }).stateName
-        : projection.state
-    rootDoneHeldOpen ||= projection.state === 'done' && state !== 'done'
+          })
+        : null
+    const state = held?.stateName ?? projection.state
+    rootDoneHeldOpen ||=
+      held !== null && state !== 'done' && heldTurnCountsAsFinished(held, projection.outcome, false)
     const payload: ParsedAgentStatusPayload = {
       state,
       prompt: '',
@@ -228,7 +233,7 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
         : {}),
       ...(projection.sessionBoundary ? { sessionBoundary: true } : {}),
       ...(subagents.length > 0 ? { subagents } : {}),
-      // Hook rows announce a held turn's own done now; the all-clear restates it so it is not announced twice.
+      // A held turn that counts as finished is announced now; the all-clear restates it so it is not announced twice.
       ...(rootDoneHeldOpen ? { turnCompletedAt: rootStateStartedAt } : {}),
       mainAgent: {
         state: projection.state,

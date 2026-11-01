@@ -10,7 +10,7 @@ import {
   type WslMoveOrchestratorRecord,
   type WslMoveOrchestratorUserAction
 } from '../../shared/wsl-move/wsl-move-orchestrator-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { listWslMoveCutoverChain } from '../persistence/moving-wsl-projects/wsl-move-cutover-journal'
 import {
   moveProjectsToWslHost,

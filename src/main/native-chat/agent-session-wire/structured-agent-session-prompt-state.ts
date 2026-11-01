@@ -6,7 +6,7 @@ import {
   refuse,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionCancelResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionCancelResult } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 

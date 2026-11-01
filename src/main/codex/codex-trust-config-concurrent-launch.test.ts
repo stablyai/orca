@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   CodexHookTrustGrantRequest,
   CodexHookTrustGrantSessionResult
-} from './codex-app-server-client'
+} from './app-server/codex-app-server-client'
 import type { CodexManagedTrustGrantPlan } from './codex-hook-trust-grant'
 import type { CodexTrustEntry } from './config-toml-trust'
 
@@ -31,7 +31,7 @@ vi.mock(import('node:os'), async (importOriginal) => {
   return { ...actual, homedir: () => testState.fakeHomeDir }
 })
 
-const { CodexAppServerUnsupportedError } = await import('./codex-app-server-client')
+const { CodexAppServerUnsupportedError } = await import('./app-server/codex-app-server-session')
 const { codexAppServerCapabilityCache } =
   await import('./app-server/codex-app-server-capability-cache')
 const { _internals, grantManagedCodexHookTrust } = await import('./codex-hook-trust-grant')

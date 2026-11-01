@@ -1,10 +1,10 @@
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as HEALTH
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
 import { useDashboardPopoutBridge } from './useDashboardPopoutBridge'

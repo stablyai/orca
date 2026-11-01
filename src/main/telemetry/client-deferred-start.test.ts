@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type * as PostHogTransport from './posthog-transport'
 import {
   BASE_COMMON,

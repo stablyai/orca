@@ -1,4 +1,4 @@
-import { structuredAgentSessionTabId } from './structured-agent-session-projection'
+import { structuredAgentSessionTabId } from './agent-session/view/structured-agent-session-projection'
 
 const STRUCTURED_AGENT_SESSION_TAB_PREFIX = structuredAgentSessionTabId('')
 

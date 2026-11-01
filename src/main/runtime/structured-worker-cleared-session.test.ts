@@ -6,11 +6,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
@@ -39,11 +39,12 @@ const { listAddressableStructuredWorkers } =
 const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
   await import('./orchestration/structured-worker-journal-page')
 const { sealedChildEnv } = await import('./structured-session-child-env.test-support')
-const { foundAgentSessionRecord } = await import('./agent-session-record-founding')
+const { foundAgentSessionRecord } =
+  await import('./agent-session/records/agent-session-record-founding')
 const { applyAgentSessionRestartAdjudication } =
   await import('./agent-session/ownership/agent-session-restart-lease-transitions')
 const { openTestAgentSessionRecordStore } =
-  await import('./agent-session-record-store-test-harness')
+  await import('./agent-session/records/agent-session-record-store-test-harness')
 const { OrcaRuntimeService } = await import('./orca-runtime')
 const { OrchestrationDb } = await import('./orchestration/db')
 const { rpcRuntime } = await import('./structured-worker-rpc.test-support')

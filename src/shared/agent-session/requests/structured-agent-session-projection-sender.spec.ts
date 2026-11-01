@@ -4,7 +4,7 @@ import type {
   AgentJournalRenderItem
 } from '../journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../agent-session-message-source'
-import { projectStructuredItemToNativeChat } from '../../structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from '../view/structured-agent-session-projection'
 
 const FROM: AgentMessageSource = {
   kind: 'agent',

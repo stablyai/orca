@@ -1,6 +1,6 @@
 import type { AgentSessionFailureFact } from './failures/agent-session-failure'
 import type { AgentSessionFailureSentence } from './failures/agent-session-failure-words'
-import type { AgentSessionQueuedSendReceipt } from '../agent-session-wire'
+import type { AgentSessionQueuedSendReceipt } from './agent-session-wire'
 
 export type AgentSessionConversationCommand = 'clear' | 'compact'
 

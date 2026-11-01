@@ -43,14 +43,14 @@ import type {
 import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
-} from './codex-app-server-connection'
-import { CodexAppServerUnsupportedError } from './codex-app-server-session'
+} from './app-server/codex-app-server-connection'
+import { CodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import type {
   CodexStructuredSessionAdapterDeps,
   CodexStructuredSessionEvent
 } from './codex-structured-session-state'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 const USER_MESSAGE: AgentJournalMessageItem = {

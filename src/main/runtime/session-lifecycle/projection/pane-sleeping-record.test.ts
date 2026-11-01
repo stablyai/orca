@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { findPaneSleepingRecord } from './pane-sleeping-record'
 

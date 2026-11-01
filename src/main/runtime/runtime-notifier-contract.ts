@@ -4,7 +4,7 @@ import type {
 } from '../../shared/runtime-file-contracts'
 import type { ClaudeAccountSelectionChange } from '../../shared/managed-account-types'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   AgentLaunchTabPublished,

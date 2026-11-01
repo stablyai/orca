@@ -6,7 +6,7 @@ import {
   isAgentSessionRefusalError,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionCancelResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionCancelResult } from '../../../shared/agent-session/agent-session-wire'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import { isTuiAgent } from '../../../shared/tui-agent-config'

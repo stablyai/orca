@@ -33,7 +33,7 @@ import type {
 import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
 import type { OrchestrationDb } from './orchestration/db'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>

@@ -23,7 +23,7 @@ import {
   type CliConversationRowAgent
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import type { Tab } from '../../../../shared/tab-types'
-import { structuredLaunchConversationOwner } from '@/lib/structured-agent-session-launch-failure'
+import { structuredLaunchConversationOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import type { AiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
 

@@ -128,23 +128,21 @@
       "available_one": "{{count}} reset available",
       "available_other": "{{count}} resets available"
     },
+    "diffReviewBody": {
+      "unchangedLines_one": "{{count}} unchanged line",
+      "unchangedLines_other": "{{count}} unchanged lines"
+    },
     "diffReviewDrawers": {
-      "fileSummary_one": "{{fileCount}} file reviewed, {{count}} note",
-      "fileSummary_other": "{{fileCount}} file reviewed, {{count}} notes",
-      "filesSummary_one": "{{fileCount}} files reviewed, {{count}} note",
-      "filesSummary_other": "{{fileCount}} files reviewed, {{count}} notes",
-      "stageableFiles_one": "{{count}} reviewed unstaged files can be staged",
-      "stageableFiles_other": "{{count}} reviewed unstaged files can be staged",
+      "notes_one": "{{count}} note",
+      "notes_other": "{{count}} notes",
       "unsentNotes_one": "{{count}} unsent notes",
-      "unsentNotes_other": "{{count}} unsent notes"
+      "unsentNotes_other": "{{count}} unsent notes",
+      "viewedFiles_one": "{{count}} file viewed",
+      "viewedFiles_other": "{{count}} files viewed"
     },
     "diffReviewFileSummary": {
-      "notes_one": "{{count}} note",
-      "notes_other": "{{count}} notes"
-    },
-    "diffReviewHeader": {
-      "unsentNotes_one": "{{count}} unsent note",
-      "unsentNotes_other": "{{count}} unsent notes"
+      "threadsWhenInSync_one": "Its GitHub comment shows here once this branch matches the pull request.",
+      "threadsWhenInSync_other": "Its {{count}} GitHub comments show here once this branch matches the pull request."
     },
     "worktreeAgentList": {
       "hideChildAgents_one": "Hide {{count}} child agent",
@@ -245,6 +243,12 @@
       "stateWorkingCount_one": "{{value0}} working",
       "stateWorkingCount_other": "{{value0}} working"
     },
+    "diffReviewScreenModel": {
+      "commitFiles_one": "{{count}} file",
+      "commitFiles_other": "{{count}} files",
+      "uncommittedFiles_one": "{{count}} uncommitted",
+      "uncommittedFiles_other": "{{count}} uncommitted"
+    },
     "fileReader": {
       "reviewNotes_one": "{{count}} review note",
       "reviewNotes_other": "{{count}} review notes"
@@ -252,10 +256,6 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
-    },
-    "useDiffReviewGitActions": {
-      "reviewedFilesStaged_one": "{{count}} reviewed file staged",
-      "reviewedFilesStaged_other": "{{count}} reviewed files staged"
     }
   },
   "settings": {
@@ -284,6 +284,14 @@
       "commits_other": "{{count}} commits",
       "files_one": "{{count}} file",
       "files_other": "{{count}} files"
+    },
+    "commitDetail": {
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
+    },
+    "commits": {
+      "baseNewer_one": "1 newer commit",
+      "baseNewer_other": "{{count}} newer commits"
     },
     "dropdownCounts": {
       "fastForwardCount_one": "Fast-forward {{count}} commit",

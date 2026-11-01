@@ -2,7 +2,7 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session-journa
 import type { AgentJournalTurnItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-turn-outcome'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
+import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { claudeResultOutcome } from './claude-result-outcome'
 import type { ClaudeCommandTurn } from './claude-command-turn'

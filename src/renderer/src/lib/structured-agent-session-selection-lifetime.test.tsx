@@ -11,11 +11,11 @@ import { useStructuredAgentSessionOptionState } from '@/components/native-chat/u
 import { structuredAgentSessionSeedCatalog } from '../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import { structuredAgentSessionMessageSelection } from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import { structuredAgentSessionModelId } from '../../../shared/agent-session/options/structured-agent-session-option-state'
-import { startStructuredAgentLaunch } from './structured-agent-session-launch'
+import { startStructuredAgentLaunch } from './agent-session/launch/structured-agent-session-launch'
 import {
   holdStructuredAgentSessionLaunchOption,
   structuredLaunchSelectionController
-} from './structured-agent-session-launch-options'
+} from './agent-session/launch/structured-agent-session-launch-options'
 import {
   getStructuredLaunchStateBySessionId,
   resetStructuredAgentLaunchRegistryForTests
@@ -42,7 +42,7 @@ vi.mock('./launch-structured-agent-session', () => ({
   createStructuredAgentSessionLaunchIntent: transport.intent,
   abandonStructuredAgentSessionLaunchIntent: vi.fn()
 }))
-vi.mock('./structured-agent-session-launch-create-call', () => ({
+vi.mock('./agent-session/launch/structured-agent-session-launch-create-call', () => ({
   launchStructuredAgentSession: transport.create
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({

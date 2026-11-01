@@ -29,7 +29,7 @@ vi.mock('./structured-agent-session-client', () => ({
 }))
 import { useStructuredAgentSessionOptions } from '../components/native-chat/use-structured-agent-session-options'
 import { useAppStore } from '@/store'
-import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session-permission-modes-capability'
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-permission-modes-capability'
 import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import * as runtimeRpc from './runtime-rpc-client'

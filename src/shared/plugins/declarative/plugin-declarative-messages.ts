@@ -11,11 +11,21 @@ const revisionSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGE
 /** The guest document a message belongs to; renders, events and acks never cross a reload. */
 const documentSchema = z.string().min(1).max(64)
 
-export const pluginDeclarativeEventArgSchema = z.union([
+const eventScalarSchema = z.union([
   z.string().max(LIMITS.maxTextLength),
   z.number().refine(Number.isFinite),
   z.boolean(),
   z.null()
+])
+const eventListSchema = z.array(eventScalarSchema).max(LIMITS.maxEventArgItems)
+/** A scalar, a list of scalars (a Slider value, selected keys), or one flat object of either
+ *  (`{ keys }`, `{ column, direction }`): plain JSON a handler can read without checks. */
+export const pluginDeclarativeEventArgSchema = z.union([
+  eventScalarSchema,
+  eventListSchema,
+  z
+    .record(z.string().max(64), z.union([eventScalarSchema, eventListSchema]))
+    .refine((value) => Object.keys(value).length <= 16, 'too many fields')
 ])
 export type PluginDeclarativeEventArg = z.infer<typeof pluginDeclarativeEventArgSchema>
 
@@ -45,7 +55,9 @@ export const pluginDeclarativeErrorPayloadSchema = z
   .object({
     document: documentSchema.optional(),
     revision: revisionSchema,
-    message: z.string().max(LIMITS.maxLabelLength * 4)
+    message: z.string().max(LIMITS.maxLabelLength * 4),
+    /** Where it threw, for `orca plugin check` and tests; the host shows only `message`. */
+    stack: z.string().max(8192).optional()
   })
   .strict()
 export type PluginDeclarativeErrorPayload = z.infer<typeof pluginDeclarativeErrorPayloadSchema>
@@ -122,10 +134,41 @@ export const pluginDeclarativePersistPayloadSchema = z
   .strict()
 export type PluginDeclarativePersistPayload = z.infer<typeof pluginDeclarativePersistPayloadSchema>
 
+/**
+ * guest → host `ui.retain` (dev hot reload only): keyed memory atoms that changed. An entry without
+ * `value` held something that is not plain JSON, so the next guest starts that atom over.
+ */
+export const pluginDeclarativeRetainPayloadSchema = z
+  .object({
+    document: documentSchema,
+    entries: z
+      .array(
+        z
+          .object({
+            key: z.string().regex(PLUGIN_DECLARATIVE_STATE_KEY),
+            version: storedVersionSchema,
+            value: z.json().optional()
+          })
+          .strict()
+          .refine(
+            (entry) => JSON.stringify(entry.value ?? null).length <= PLUGIN_STORAGE_VALUE_MAX_BYTES,
+            'retained value is too large'
+          )
+      )
+      .min(1)
+      .max(64)
+  })
+  .strict()
+export type PluginDeclarativeRetainPayload = z.infer<typeof pluginDeclarativeRetainPayloadSchema>
+
 /** host → guest `ui.hydrate`; scopes are absent when the host has nothing new for them. */
 export type PluginDeclarativeHydratePayload = {
   panel?: { id: string }
   visible?: boolean
   plugin?: Record<string, PluginDeclarativeStoredValue>
   workspace?: Record<string, PluginDeclarativeStoredValue>
+  /** Keyed memory atoms of the guest a dev hot reload replaced. */
+  memory?: Record<string, PluginDeclarativeStoredValue>
+  /** Dev folders only: post `ui.retain` so the next hot reload can hand memory atoms over. */
+  retain?: true
 }

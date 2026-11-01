@@ -1,4 +1,4 @@
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { isWorktreeTerminalsSleepingError } from '../../../runtime/worktree-terminals-sleeping-error'
 import type { PtySpawnOutcome } from '../spawn-outcome'

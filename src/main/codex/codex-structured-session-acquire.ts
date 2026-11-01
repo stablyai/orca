@@ -1,8 +1,8 @@
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
   isAgentSessionProviderHandleInNamespace
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   launchPreparationFailure,
   type AgentSessionAcquisition,
@@ -15,7 +15,7 @@ import {
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexSessionJournalTranslator } from './codex-structured-session-journal'
-import { spawnCodexAppServerConnection } from './codex-app-server-connection'
+import { spawnCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { codexSpawnedProcessIdentity } from './codex-structured-owner-identity'
 import {
   closeCodexPublishedSession,

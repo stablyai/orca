@@ -3,7 +3,7 @@ import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GitHubIssueUpdate } from '../../shared/issue-mutation-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import { addIssueComment, listAssignableUsers, listLabels, updateIssue } from '../github/client'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   assertRegisteredGitHubRepo,
   getGitHubLocalGitOptionArgs,

@@ -3,7 +3,8 @@
  * to resources/plugins/declarative/orca-runtime.mjs by config/scripts/build-plugin-declarative-runtime.mjs.
  * Orca's host page installs the runtime, imports the panel module and boots it.
  */
-import { read } from './declarative-atoms'
+import { installPluginSourceMapHook } from './declarative-source-maps'
+import { read, resetAtoms } from './declarative-atoms'
 import type { OrcaComponent } from './declarative-elements'
 import {
   createOrcaDeclarativeRuntime,
@@ -13,6 +14,7 @@ import {
   type OrcaRuntimeOptions
 } from './declarative-renderer'
 import { createOrcaSdk } from './declarative-sdk'
+import { createOrcaDataSdk } from './declarative-data-sdk'
 
 export { atom, derived, read, set, update } from './declarative-atoms'
 export { Fragment, h, jsx, jsx as jsxs, jsx as jsxDEV } from './declarative-elements'
@@ -45,6 +47,9 @@ export function installOrcaDeclarativeRuntime(
   options: Pick<OrcaRuntimeOptions, 'post'> & Partial<OrcaRuntimeOptions>
 ): OrcaDeclarativeRuntime {
   runtime?.dispose()
+  resetAtoms()
+  // Before the panel module loads, so its prelude registers its source map.
+  installPluginSourceMapHook()
   const installed = createOrcaDeclarativeRuntime({
     bridge: globalBridge(),
     colorScheme: documentColorScheme(),
@@ -79,6 +84,9 @@ const sdk = createOrcaSdk({
 })
 
 export const { host, api, env, shell, files, on, ui } = sdk
+export const { plugin, storage, settings, secrets } = createOrcaDataSdk(
+  () => runtime?.bridge ?? globalBridge()
+)
 
 // Catalog tags: JSX `<Stack>` compiles to a reference, so authors import these by name.
 export const Stack = 'Stack'
@@ -100,3 +108,23 @@ export const Spinner = 'Spinner'
 export const EmptyState = 'EmptyState'
 export const Link = 'Link'
 export const Code = 'Code'
+// Catalog 2 (Orca 1.4.247).
+export const Textarea = 'Textarea'
+export const Checkbox = 'Checkbox'
+export const RadioGroup = 'RadioGroup'
+export const Slider = 'Slider'
+export const Field = 'Field'
+export const Tabs = 'Tabs'
+export const Tab = 'Tab'
+export const Collapsible = 'Collapsible'
+export const Toolbar = 'Toolbar'
+export const Grid = 'Grid'
+export const Table = 'Table'
+export const Tree = 'Tree'
+export const Markdown = 'Markdown'
+export const CodeView = 'CodeView'
+export const Image = 'Image'
+export const KeyValue = 'KeyValue'
+export const Callout = 'Callout'
+export const Skeleton = 'Skeleton'
+export const RelativeTime = 'RelativeTime'

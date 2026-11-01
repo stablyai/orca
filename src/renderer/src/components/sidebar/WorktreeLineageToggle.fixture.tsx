@@ -5,7 +5,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import WorktreeCard from './WorktreeCard'
 
 const repo: Repo = {

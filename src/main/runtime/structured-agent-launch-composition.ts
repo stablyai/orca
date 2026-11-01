@@ -3,7 +3,7 @@ import type { ClaudeAccountRecipe } from '../../shared/agent-session-acquired-ac
 
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { isNativeLocalLocation } from '../../shared/execution-host'
 import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
 import { agentDrivesSession } from '../native-chat/agent-session-wire/structured-agent-session-provider-support'
@@ -13,8 +13,8 @@ import {
   type NativeChatVisualsLaunch,
   type PrepareNativeChatVisuals
 } from '../native-chat/native-chat-visuals-delivery'
-import { resolveAgentSessionLaunchDirectory } from './agent-session-launch-directory'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { resolveAgentSessionLaunchDirectory } from './agent-session/agent-session-launch-directory'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registrations'
 import { sealStructuredSessionChild } from './structured-session-child-env'
 

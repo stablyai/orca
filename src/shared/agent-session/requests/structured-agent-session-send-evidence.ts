@@ -1,4 +1,4 @@
-import type { AgentSessionMutationResult, AgentSessionSendResult } from '../../agent-session-wire'
+import type { AgentSessionMutationResult, AgentSessionSendResult } from '../agent-session-wire'
 import {
   agentSessionRefusalFailure,
   agentSessionRpcErrorFailure,

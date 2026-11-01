@@ -3,7 +3,7 @@ import { hostTestAttachParams } from './structured-agent-session-host-test-data'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { withAcquiredAgentSessionAccount } from '../../../shared/agent-session-acquired-account'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -21,7 +21,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import {
   seedTestAgentSessionRecordStore,
   openTestAgentSessionRecordStore
-} from '../../runtime/agent-session-record-store-test-harness'
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { OrchestrationDb } from '../../runtime/orchestration/db'
 import { structuredNativeWorkReaders } from '../../runtime/structured-native-work-readers'
 import { structuredMailNotice } from '../../runtime/orchestration/structured-mail-source'

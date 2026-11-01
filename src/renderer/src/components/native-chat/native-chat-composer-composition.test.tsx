@@ -51,7 +51,7 @@ import {
   setNativeChatComposerDraftStorageForTests
 } from './native-chat-composer-draft-storage'
 import { promptSkillRefs } from './native-chat-prompt-document'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 
 afterEach(() => cleanup())
 

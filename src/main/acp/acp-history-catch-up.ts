@@ -7,10 +7,10 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { nativeChatRowRendersContent } from '../../shared/native-chat/transcript/native-chat-row-content'
 import { projectNativeChatTranscriptMessages } from '../../shared/native-chat/transcript/native-chat-transcript-projection'
-import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../shared/agent-session/view/structured-agent-session-message-projection'
 import { usableJournalHistoryOrigin } from '../native-chat/agent-session-journal/journal-history-origin'
 import {
   journalLifecycleItemMutation,

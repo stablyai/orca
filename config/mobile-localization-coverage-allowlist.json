@@ -308,13 +308,6 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/source-control/MobileBranchDiffPreviewDrawer.tsx",
-    "kind": "jsx-expression",
-    "text": "..HEAD",
-    "dynamic": true,
-    "count": 1
-  },
-  {
     "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
     "kind": "object-property:label",
     "text": "GitHub",

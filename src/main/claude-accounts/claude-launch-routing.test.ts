@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
-import { resolveClaudeStructuredInvocation } from '../claude/claude-structured-launch-resolution'
-import { resolveClaudeStructuredLaunchHome } from '../claude/claude-structured-launch-home'
+import { resolveClaudeStructuredInvocation } from '../claude/structured/launch/claude-structured-launch-resolution'
+import { resolveClaudeStructuredLaunchHome } from '../claude/structured/launch/claude-structured-launch-home'
 import { resolveStructuredClaudeAccountHomePath } from '../runtime/structured-agent-account-home'
 import {
   installClaudeProfileRouter,
