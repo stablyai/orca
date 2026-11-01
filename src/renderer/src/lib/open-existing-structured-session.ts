@@ -181,7 +181,7 @@ async function executeDesktopStructuredSession(
             callRuntimeRpc<OrchestrationPartyLocationResult>(
               owner,
               'orchestration.partyLocation',
-              { address, ...(messageIds.length ? { messageIds } : {}) },
+              { address, ...(messageIds.length ? { messageIds } : {}), openClosedWorker: true },
               { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
             )
           )

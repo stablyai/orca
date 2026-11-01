@@ -2,9 +2,12 @@ import { isAntigravityReferenceSession } from '../../../../shared/antigravity-se
 // Native resume requires provider conversation lookup, unlike terminal resume's PTY-hosting gate.
 
 import { isWslStoredAiVaultSessionFile } from '../../../../shared/ai-vault-resume-target'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { parseRoutableExecutionHostId } from '../../../../shared/execution-host'
-import { adoptsCliConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import {
+  adoptsCliConversations,
+  cliConversationCwdMatchesWorkspace,
+  cliConversationNeedsRecordingCwd
+} from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultSession
@@ -20,35 +23,6 @@ export type AiVaultResumeInChatBlockedReason =
 export type AiVaultResumeInChatEligibility =
   | { available: true; workspaceId: string }
   | { available: false; reason: AiVaultResumeInChatBlockedReason }
-
-/** Codex can resume anywhere; other providers require the original cwd or silently miss/refuse/fork the conversation. */
-export function aiVaultSessionResumeInChatWorkspaceMatters(
-  agent: AiVaultSession['agent']
-): boolean {
-  return (
-    agent === 'claude' ||
-    agent === 'grok' ||
-    agent === 'omp' ||
-    agent === 'opencode' ||
-    agent === 'opencode2' ||
-    agent === 'pi'
-  )
-}
-
-/** Compare with shared runtime rules; POSIX case folding would conflate distinct directories. */
-export function aiVaultSessionCwdMatchesWorkspace(
-  cwd: string | null | undefined,
-  workspacePath: string | null | undefined,
-  cwdAliases: readonly string[] = []
-): boolean {
-  if (!cwd || !workspacePath) {
-    return false
-  }
-  const workspace = normalizeRuntimePathForComparison(workspacePath.trim())
-  return [cwd, ...cwdAliases].some(
-    (path) => normalizeRuntimePathForComparison(path.trim()) === workspace
-  )
-}
 
 export function resolveAiVaultSessionResumeInChatEligibility(args: {
   session: Pick<
@@ -89,8 +63,8 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
     return { available: false, reason: 'workspace' }
   }
   if (
-    aiVaultSessionResumeInChatWorkspaceMatters(session.agent) &&
-    !aiVaultSessionCwdMatchesWorkspace(session.cwd, args.targetWorkspacePath, session.cwdAliases)
+    cliConversationNeedsRecordingCwd(session.agent) &&
+    !cliConversationCwdMatchesWorkspace(session.cwd, args.targetWorkspacePath, session.cwdAliases)
   ) {
     return { available: false, reason: 'workspace' }
   }

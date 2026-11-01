@@ -71,7 +71,11 @@ export async function openMobileStructuredSession(args: {
       const reply = await stage((options) =>
         structuredOpenLocation.request(
           args.client,
-          { address, ...(messageIds.length ? { messageIds: [...messageIds] } : {}) },
+          {
+            address,
+            ...(messageIds.length ? { messageIds: [...messageIds] } : {}),
+            openClosedWorker: true
+          },
           options
         )
       )

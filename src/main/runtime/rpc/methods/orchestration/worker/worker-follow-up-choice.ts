@@ -25,6 +25,12 @@ import {
   type WorkerFollowUp
 } from './worker-follow-up-placement'
 import { inspectWorkerTerminal } from './worker-observation'
+import { chatHoldingWorkerConversation } from './closed-worker-chat'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../../../shared/orca-session-address'
+import { canonicalOrcaSessionId } from '../../../../orchestration/canonical-orca-session-id'
 import { completeWorkerTerminalRelease } from './worker-release-completion'
 
 const RELEASE_SETTLE_WAIT_MS = 15_000
@@ -89,6 +95,10 @@ export async function chooseWorkerFollowUpPlacement(
   // Read after any close above, which saves the conversation the pane last reported.
   const session = readWorkerResumeSession(resource && db.getWorkerTerminalResource(resource.id))
   if (session && isResumableTuiAgent(session.agent)) {
+    const chat = await chatHoldingSession(runtime, session)
+    if (chat) {
+      return { delivery: 'follow_up', worktreeId: chat.workspaceId, terminal: chat.address }
+    }
     const userTab = await userTabHoldingSession(runtime, session)
     return userTab
       ? { delivery: 'follow_up', worktreeId, terminal: userTab }
@@ -185,6 +195,20 @@ function chatTabOpen(db: OrchestrationDb, resource: WorkerTerminalResourceRow): 
   const identity = resolveStructuredWorkerIdentity(resource.terminal_handle, db)
   const host = getStructuredAgentSessionHost()
   return !released(resource) && !!identity && !!host?.isSessionTabVisible(identity.sessionId)
+}
+
+/** A chat took the conversation over, as opening the closed worker does: the follow-up goes there, never to a second terminal on it. */
+async function chatHoldingSession(
+  runtime: OrcaRuntimeService,
+  session: WorkerResumeSession
+): Promise<{ address: string; workspaceId: string } | null> {
+  const held = await chatHoldingWorkerConversation(runtime, session)
+  return held && isOrcaSessionId(held.sessionId)
+    ? {
+        address: formatOrcaSessionAddress(canonicalOrcaSessionId(held.sessionId)),
+        workspaceId: held.workspaceId
+      }
+    : null
 }
 
 /** The user resumed the conversation in a tab of their own: the follow-up goes there and the tab stays theirs. */

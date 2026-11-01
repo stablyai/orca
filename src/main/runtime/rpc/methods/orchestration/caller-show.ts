@@ -17,7 +17,11 @@ import { resolveOrcaSessionParty } from '../../../orchestration/orchestration-pa
 import { locateOrchestrationParty } from '../../../orchestration/orchestration-party-location'
 import { readAgentSessionRecordStore } from '../../../orchestration/structured-session-lineage'
 import { defineMethod } from '../../core'
-import { ensureStructuredHostInstalled } from '../structured-agent-session-gate'
+import {
+  ensureStructuredHostInstalled,
+  structuredCallerFor
+} from '../structured-agent-session-gate'
+import { openClosedWorkerChat } from './worker/closed-worker-chat'
 
 export const ORCHESTRATION_CALLER_METHODS = [
   defineMethod({
@@ -62,13 +66,22 @@ export const ORCHESTRATION_CALLER_METHODS = [
         // Terminal routing remains usable when chat records cannot be installed.
       }
       const { runtime } = ctx
+      const db = runtime.getOrchestrationDb()
       return locateOrchestrationParty(
         params.address,
         {
-          db: runtime.getOrchestrationDb(),
+          db,
           records,
           terminalPaneKey: (handle) => runtime.getTerminalPaneKey(handle),
-          terminalHandleForPaneKey: (paneKey) => runtime.getTerminalHandleForPaneKey(paneKey)
+          terminalHandleForPaneKey: (paneKey) => runtime.getTerminalHandleForPaneKey(paneKey),
+          ...(params.openClosedWorker && db && records
+            ? {
+                openClosedWorker: (handle: string) =>
+                  openClosedWorkerChat(runtime, db, handle, structuredCallerFor(ctx)).catch(
+                    () => null
+                  )
+              }
+            : {})
         },
         params.messageIds
       )

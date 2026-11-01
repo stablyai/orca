@@ -107,7 +107,7 @@ it('uses the receiving host and only this sender’s mail, then focuses the actu
   expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith(
     host,
     'orchestration.partyLocation',
-    { address: 'term_worker', messageIds: ['m1'] },
+    { address: 'term_worker', messageIds: ['m1'], openClosedWorker: true },
     { timeoutMs: 5000 }
   )
   expect(mocks.focus).toHaveBeenCalledWith('current', 'remote-2')
@@ -236,7 +236,7 @@ it.each([
     expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith(
       host,
       'orchestration.partyLocation',
-      { address: 'term_worker', messageIds: ['m1'] },
+      { address: 'term_worker', messageIds: ['m1'], openClosedWorker: true },
       { timeoutMs: 5000 }
     )
     expect(mocks.focus).toHaveBeenCalledExactlyOnceWith('current', 'remote-2')
