@@ -1,20 +1,9 @@
 import { MessageSquare, SquareTerminal } from 'lucide-react-native'
-<<<<<<< HEAD:mobile/src/session/native-chat/mobile-native-chat-toggle-action.ts
 import type { ActionSheetAction } from '../../components/ActionSheetModal'
 import { translate } from '../../i18n/mobile-i18n'
 import { formatAgentTypeLabel } from '../../../../src/shared/agent-type-label'
 import { isNativeChatSupportedAgent } from '../../../../src/shared/native-chat-agent-support'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
-=======
-import type { ActionSheetAction } from '../components/ActionSheetModal'
-import { translate } from '../i18n/mobile-i18n'
-import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
-import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/native-chat-agent-support'
-import {
-  resolveMobileNativeChat,
-  type MobileNativeChatTab
-} from './native-chat/mobile-native-chat-eligibility'
->>>>>>> 1e0c318233c (fix(hermes): name a chat with Hermes and follow the moved import):mobile/src/session/mobile-native-chat-toggle-action.ts
 
 type ToggleTab = MobileNativeChatTab & {
   id: string
