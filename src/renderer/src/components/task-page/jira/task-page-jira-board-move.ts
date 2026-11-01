@@ -3,14 +3,17 @@ import type {
   JiraIssueUpdate,
   JiraMutationResult,
   JiraTransition
-} from '../../../shared/jira/jira-types'
+} from '../../../../../shared/jira/jira-types'
 import type { TaskPageJiraBoardSection } from './task-page-jira-board-sections'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import {
   findJiraBoardSectionTransitions,
   loadTaskPageJiraIssueTransitions
 } from './task-page-jira-board-transitions'
-import { jiraGetIssueForTarget, jiraUpdateIssueForTarget } from '@/runtime/runtime-jira-client'
+import {
+  jiraGetIssueForTarget,
+  jiraUpdateIssueForTarget
+} from '@/runtime/runtime-jira-detail-client'
 
 export async function getJiraBoardMoveTransitions(
   target: RuntimeClientTarget,

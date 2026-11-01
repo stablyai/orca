@@ -1,16 +1,16 @@
-import { useTaskPageJiraQuickFilters } from './task-page/jira/use-task-page-jira-quick-filters'
-import type { JiraStatusCatalogItem } from './task-page/jira/task-page-jira-status-catalog'
+import { useTaskPageJiraQuickFilters } from './use-task-page-jira-quick-filters'
+import type { JiraStatusCatalogItem } from './task-page-jira-status-catalog'
 import { useTaskPageJiraSavedFilters } from './use-task-page-jira-saved-filters'
 import { useTaskPageJiraFavouriteFilters } from './use-task-page-jira-favourite-filters'
-import type { JiraFavouriteFilter } from '../../../shared/jira/jira-favourite-filters'
-import type { JiraSavedFilter } from '../../../shared/jira/jira-saved-filters'
-import type { TaskPageLinearViewStateModel } from './task-page/linear/use-task-page-linear-view-state'
+import type { JiraFavouriteFilter } from '../../../../../shared/jira/jira-favourite-filters'
+import type { JiraSavedFilter } from '../../../../../shared/jira/jira-saved-filters'
+import type { TaskPageLinearViewStateModel } from '../linear/use-task-page-linear-view-state'
 import { useState, useMemo, useEffect, useCallback, type SetStateAction } from 'react'
 import type {
   JiraIssue,
   JiraProjectStatusOrder,
   JiraPriority
-} from '../../../shared/jira/jira-types'
+} from '../../../../../shared/jira/jira-types'
 import type { TaskPageJiraLoadError } from '@/components/task-page/jira/task-page-jira-load-state'
 import type { TaskPageJiraJqlRejection } from '@/components/task-page/jira/task-page-jira-search'
 import type { JiraPresetId } from '@/components/task-page/task-page-localized-options'
@@ -18,23 +18,23 @@ import type {
   JiraIssueSortColumn,
   JiraIssueSortDirection,
   JiraPrioritiesBySite
-} from './jira-issue-sorter'
-import { jiraListPrioritiesForTarget } from '@/runtime/runtime-jira-client'
-import { loadJiraLinkedView, saveJiraLinkedView } from './jira-linked-view-storage'
-import { loadJiraViewMode, saveJiraViewMode, type JiraViewMode } from './jira-view-mode-storage'
+} from '../../jira-issue-sorter'
+import { jiraListPrioritiesForTarget } from '@/runtime/runtime-jira-detail-client'
+import { loadJiraLinkedView, saveJiraLinkedView } from '../../jira-linked-view-storage'
+import { loadJiraViewMode, saveJiraViewMode, type JiraViewMode } from '../../jira-view-mode-storage'
 import {
   fallbackJiraSortColumn,
   loadJiraListColumnIds,
   saveJiraListColumnIds,
   visibleJiraListColumns,
   type JiraListColumnId
-} from './jira-list-columns'
+} from '../../jira-list-columns'
 import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
 } from '@/runtime/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
 import { useTaskPageJiraProjectScope } from './use-task-page-jira-project-scope'
 const EMPTY_JIRA_PRIORITIES: JiraPrioritiesBySite = new Map()
 

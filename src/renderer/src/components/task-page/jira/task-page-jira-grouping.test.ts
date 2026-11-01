@@ -1,4 +1,4 @@
-import { defaultJiraListColumnIds, visibleJiraListColumns } from './jira-list-columns'
+import { defaultJiraListColumnIds, visibleJiraListColumns } from '../../jira-list-columns'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -12,7 +12,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 
 import { TaskPageJiraIssueList } from './task-page-jira-issue-list'
 
-import type { JiraIssue } from '../../../shared/jira/jira-types'
+import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 
 const { jiraGetProjectStatusOrderMock } = vi.hoisted(() => ({
   jiraGetProjectStatusOrderMock: vi.fn()

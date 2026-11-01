@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { UNRESOLVED_OWNER_HOST_ID } from '../../../shared/execution-host'
+import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
 import {
   favouriteTransport as transport,
   favourite,
@@ -10,7 +10,7 @@ import {
   resetFavouriteTransport,
   useFavouriteTaskPage,
   type FavouriteFixtureProps
-} from './__mocks__/task-page-jira-favourite-fixture'
+} from '../../__mocks__/task-page-jira-favourite-fixture'
 
 afterEach(cleanup)
 beforeEach(() => {

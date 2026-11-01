@@ -15,8 +15,8 @@ import {
   getJiraListColumnLabel,
   jiraListColumnVisibility,
   type JiraListColumn
-} from './jira-list-columns'
-import type { JiraIssueSortColumn, JiraIssueSortDirection } from './jira-issue-sorter'
+} from '../../jira-list-columns'
+import type { JiraIssueSortColumn, JiraIssueSortDirection } from '../../jira-issue-sorter'
 
 type TaskPageJiraSortControlsProps = {
   columns: readonly JiraListColumn[]

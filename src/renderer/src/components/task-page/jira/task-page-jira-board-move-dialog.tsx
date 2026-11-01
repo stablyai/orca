@@ -8,9 +8,13 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import { JiraTransitionFieldsForm } from './jira-transition-fields-form'
-import { classifyTransitionRequirements } from '../../../shared/jira/jira-transition-fields'
-import type { JiraIssue, JiraIssueUpdate, JiraTransition } from '../../../shared/jira/jira-types'
+import { JiraTransitionFieldsForm } from '../../jira-transition-fields-form'
+import { classifyTransitionRequirements } from '../../../../../shared/jira/jira-transition-fields'
+import type {
+  JiraIssue,
+  JiraIssueUpdate,
+  JiraTransition
+} from '../../../../../shared/jira/jira-types'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export type JiraBoardMovePrompt = {

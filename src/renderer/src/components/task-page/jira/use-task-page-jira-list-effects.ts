@@ -1,11 +1,11 @@
 import { translate } from '@/i18n/i18n'
 import { isRuntimeProviderSearchQueryWithinLimit } from '@/runtime/runtime-provider-search-bounds'
-import { withCurrentSprintClause } from '../../../shared/jira/jira-jql-predicate'
+import { withCurrentSprintClause } from '../../../../../shared/jira/jira-jql-predicate'
 import {
   buildJiraStatusCatalog,
   getJiraStatusCatalogScopeKey
-} from './task-page/jira/task-page-jira-status-catalog'
-import type { TaskPageLinearCollectionEffectsModel } from './task-page/linear/use-task-page-linear-collection-effects'
+} from './task-page-jira-status-catalog'
+import type { TaskPageLinearCollectionEffectsModel } from '../linear/use-task-page-linear-collection-effects'
 import { useEffect, useMemo, useRef } from 'react'
 import {
   getSingleJiraProjectScope,
@@ -15,12 +15,12 @@ import {
 } from '@/components/task-page/jira/task-page-jira-status-order'
 import { createTaskPageJiraLoadFailureState } from '@/components/task-page/jira/task-page-jira-load-state'
 import { searchTaskPageJiraIssues } from '@/components/task-page/jira/task-page-jira-search'
-import { JIRA_ITEM_LIMIT } from './task-page/task-page-source-context'
-import { useTaskSearchDebouncedApply } from './task-page/use-task-search-debounced-apply'
-import { readLinkedJiraIssues } from './task-page/jira/task-page-jira-linked-issues'
+import { JIRA_ITEM_LIMIT } from '../task-page-source-context'
+import { useTaskSearchDebouncedApply } from '../use-task-search-debounced-apply'
+import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import { buildJiraPresetJql } from '../../../shared/jira/jira-preset-jql'
-import { restrictJiraQueryToProject } from '../../../shared/jira/jira-project-reference'
+import { buildJiraPresetJql } from '../../../../../shared/jira/jira-preset-jql'
+import { restrictJiraQueryToProject } from '../../../../../shared/jira/jira-project-reference'
 export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffectsModel) {
   const {
     accountBackedTaskSourceHostId,

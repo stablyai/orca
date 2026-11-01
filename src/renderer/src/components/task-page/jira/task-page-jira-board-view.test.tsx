@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssue, JiraTransition } from '../../../shared/jira/jira-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { JiraIssue, JiraTransition } from '../../../../../shared/jira/jira-types'
+import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import {
   bumpProviderRuntimeSessionGeneration,
   getEnvironmentRuntimeContextKey
@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn()
 }))
 
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: (selector: (state: { patchJiraIssue: typeof mocks.patch }) => unknown) =>
     selector({ patchJiraIssue: mocks.patch })
 }))
@@ -27,7 +27,7 @@ vi.mock('./task-page-jira-board-move', () => ({
 
 import { TaskPageJiraBoardView } from './task-page-jira-board-view'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { enqueueJiraIssueMutation, jiraIssueRequestScope } from './jira-issue-mutation-queue'
+import { enqueueJiraIssueMutation, jiraIssueRequestScope } from '../../jira-issue-mutation-queue'
 
 const source: TaskSourceContext = {
   kind: 'task-source',

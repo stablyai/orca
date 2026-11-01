@@ -3,7 +3,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
-import type { JiraViewMode } from './jira-view-mode-storage'
+import type { JiraViewMode } from '../../jira-view-mode-storage'
 
 type Props = {
   mode: JiraViewMode

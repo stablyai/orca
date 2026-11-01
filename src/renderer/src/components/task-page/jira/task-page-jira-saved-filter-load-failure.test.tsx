@@ -2,13 +2,13 @@
 import { useCallback, useRef, useState } from 'react'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { JiraIssue } from '../../../shared/jira/jira-types'
-import type { JiraSavedFilterState } from '../../../shared/jira/jira-saved-filters'
-import type { TaskPageLinearCollectionEffectsModel } from './task-page/linear/use-task-page-linear-collection-effects'
+import type { JiraIssue } from '../../../../../shared/jira/jira-types'
+import type { JiraSavedFilterState } from '../../../../../shared/jira/jira-saved-filters'
+import type { TaskPageLinearCollectionEffectsModel } from '../linear/use-task-page-linear-collection-effects'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { useTaskPageJiraSavedFilters } from './use-task-page-jira-saved-filters'
 import { useTaskPageJiraListEffects } from './use-task-page-jira-list-effects'
-import type { JiraStatusCatalogItem } from './task-page/jira/task-page-jira-status-catalog'
+import type { JiraStatusCatalogItem } from './task-page-jira-status-catalog'
 
 const runtime = vi.hoisted(() => ({
   capability: vi.fn(),

@@ -7,7 +7,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   UNRESOLVED_OWNER_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../../../shared/execution-host'
 const { read, mutate } = vi.hoisted(() => ({ read: vi.fn(), mutate: vi.fn() }))
 vi.mock('@/runtime/runtime-jira-saved-filter-state', () => ({
   readJiraSavedFilterState: read,

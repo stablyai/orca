@@ -6,12 +6,12 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { JiraIssueRowCopyMenu } from './JiraIssueRowCopyMenu'
-import { JiraLinkedWorkspaceAction } from './JiraLinkedWorkspaceAction'
-import type { Worktree } from '../../../shared/worktree/types'
-import { jiraListColumnVisibility, type JiraListColumn } from './jira-list-columns'
+import { JiraIssueRowCopyMenu } from '../../JiraIssueRowCopyMenu'
+import { JiraLinkedWorkspaceAction } from '../../JiraLinkedWorkspaceAction'
+import type { Worktree } from '../../../../../shared/worktree/types'
+import { jiraListColumnVisibility, type JiraListColumn } from '../../jira-list-columns'
 import { JiraIssueCell, JiraPriorityText, unassignedLabel } from './task-page-jira-issue-cells'
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira/jira-types'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../../../shared/jira/jira-types'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export type TaskPageJiraIssueSection = {

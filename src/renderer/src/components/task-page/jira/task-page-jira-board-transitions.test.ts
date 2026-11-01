@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssue, JiraStatus, JiraTransition } from '../../../shared/jira/jira-types'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { JiraIssue, JiraStatus, JiraTransition } from '../../../../../shared/jira/jira-types'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 const mocks = vi.hoisted(() => ({
   jiraListTransitionsForTarget: vi.fn()
 }))
 
 vi.mock('@/runtime/runtime-jira-client', () => ({
+  jiraListTransitionsForTarget: mocks.jiraListTransitionsForTarget
+}))
+vi.mock('@/runtime/runtime-jira-detail-client', () => ({
   jiraListTransitionsForTarget: mocks.jiraListTransitionsForTarget
 }))
 

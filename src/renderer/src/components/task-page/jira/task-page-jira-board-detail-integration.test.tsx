@@ -9,15 +9,15 @@ import type {
   JiraMutationResult,
   JiraProjectStatusOrder,
   JiraTransition
-} from '../../../shared/jira/jira-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+} from '../../../../../shared/jira/jira-types'
+import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { AppState } from '@/store/types'
 import type * as I18n from '@/i18n/i18n'
 import type { JiraIssueMetadataBar } from '@/components/jira-issue-workspace-chrome'
 import type { JiraIssueWorkspaceContent } from '@/components/jira-issue-workspace-content'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
-import { TaskPageJiraBoardView } from '@/components/task-page-jira-board-view'
+import { TaskPageJiraBoardView } from '@/components/task-page/jira/task-page-jira-board-view'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 type MetadataProps = ComponentProps<typeof JiraIssueMetadataBar>
@@ -43,7 +43,8 @@ const store = vi.hoisted((): JiraStoreBoundary & { statusPatches: string[] } => 
 }))
 
 vi.mock('@/runtime/runtime-jira-client', () => runtime)
-vi.mock('@/store', () => ({
+vi.mock('@/runtime/runtime-jira-detail-client', () => runtime)
+vi.mock('@/store/index', () => ({
   useAppStore: (select: (state: JiraStoreBoundary) => unknown) => select(store)
 }))
 vi.mock('@/i18n/i18n', async (importOriginal) => ({
