@@ -141,6 +141,36 @@ describe('notifications:dismiss by acknowledged subject', () => {
     expect(dismissMobileNotification).toHaveBeenCalledWith('agent:phone-only')
   })
 
+  // Reads rebuild ids for turns that never alerted; each forwarded one was a silent push and a store slot.
+  it('clears on the phone only alerts that reached it, including ones sent before a restart', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-clear-delivered-'))
+    const original = new RuntimeMobileNotificationController()
+    const restarted = new RuntimeMobileNotificationController()
+    try {
+      original.configureDismissalStore(directory)
+      original.dispatch({
+        type: 'notification',
+        source: 'agent-task-complete',
+        title: 'Done',
+        body: '',
+        notificationId: 'agent:sent'
+      })
+      await original.closeDismissals()
+      restarted.configureDismissalStore(directory)
+      const events: MobileNotificationEvent[] = []
+      restarted.onDispatched((event) => events.push(event))
+      register({ suppressWhenFocused: false }, restarted)
+      getDismissHandler()({}, ['agent:never-sent', 'agent:sent'], [PANE])
+      getDismissHandler()({}, ['agent:sent'], [PANE])
+      expect(events.map((event) => [event.type, event.notificationId])).toEqual([
+        ['dismiss', 'agent:sent']
+      ])
+    } finally {
+      await restarted.closeDismissals()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   it('records nothing for a request neither the desktop nor the phone announced', async () => {
     const { dismissMobileNotification } = register({ suppressWhenFocused: false })
     const dispatch = getDispatchHandler()
