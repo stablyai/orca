@@ -20,7 +20,10 @@ type ZoomStep = (zoom: number, fitScale: number) => number
 /** Movement under this many pixels still counts as a click. */
 const CLICK_SLOP = 4
 
-type PointerGesture = { start: PanZoomPoint; last: PanZoomPoint; pan: boolean }
+type PointerGesture = { start: PanZoomPoint; last: PanZoomPoint; pan: boolean; alt: boolean }
+
+// Pinch zoom back to the fit lands near, not on, 1.
+const FIT_ZOOM_EPSILON = 1e-3
 
 export type PanZoomCursor = 'zoom-in' | 'zoom-out' | 'grab' | 'grabbing'
 
@@ -219,7 +222,7 @@ export function usePanZoomViewport({
   }, [])
 
   // Like Chromium's image view: a click flips between the fit and actual size at the cursor.
-  const atFit = !view || view.zoom === 1
+  const atFit = !view || Math.abs(view.zoom - 1) < FIT_ZOOM_EPSILON
   const toggleZoomAt = useCallback(
     (anchor: PanZoomPoint) => {
       if (!geometry) {
@@ -232,10 +235,11 @@ export function usePanZoomViewport({
       if (geometry.fitScale === 1) {
         return
       }
-      setManualView(
+      // From the current view: an uncontained fit may already be panned.
+      setManualView((current) =>
         zoomViewAt({
           ...geometry,
-          view: getFittedPanZoomView(geometry.content),
+          view: current ? settleView(current, geometry) : getFittedPanZoomView(geometry.content),
           nextZoom: 1 / geometry.fitScale,
           anchor
         })
@@ -258,7 +262,7 @@ export function usePanZoomViewport({
         const point = { x: event.clientX, y: event.clientY }
         // Touch and pen have no Alt key, so they keep dragging to pan.
         const pan = event.altKey || event.pointerType === 'touch' || event.pointerType === 'pen'
-        gestureRef.current = { start: point, last: point, pan }
+        gestureRef.current = { start: point, last: point, pan, alt: event.altKey }
         setDragging(pan)
       },
       onPointerMove: (event) => {
@@ -287,7 +291,7 @@ export function usePanZoomViewport({
       onPointerUp: (event) => {
         const gesture = gestureRef.current
         endDrag()
-        if (!gesture || (gesture.pan && event.altKey)) {
+        if (!gesture || gesture.alt) {
           return
         }
         const moved = Math.hypot(event.clientX - gesture.start.x, event.clientY - gesture.start.y)
