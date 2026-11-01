@@ -9,7 +9,7 @@ import {
   buildCodexAccountRestartStartup,
   buildPaneAccountRestartStartup
 } from '@/lib/agent-account-restart-startup'
-import { isClaudePaneMidTurn } from '@/lib/claude-session-account-move'
+import { isClaudePaneBusyForRestart } from '@/lib/claude-session-account-move'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -81,7 +81,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     if (
       state.pendingPaneAccountRestarts[ptyId] === 'claude' &&
       located.leafId &&
-      isClaudePaneMidTurn(state, makePaneKey(located.tab.id, located.leafId))
+      isClaudePaneBusyForRestart(state, makePaneKey(located.tab.id, located.leafId))
     ) {
       return
     }
