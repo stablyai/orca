@@ -169,6 +169,8 @@ export function openFileInBrowserTab(
   params: FileBrowserLinkTarget & {
     targetGroupId?: string
     clientLocal?: boolean
+    /** false opens the preview without selecting it; defaults to true. */
+    activate?: boolean
     linkContext?: BrowserLinkOpenContext
     onLinkOutcome?: (outcome: BrowserOpenOutcome) => void
   }
@@ -200,15 +202,16 @@ export function openFileInBrowserTab(
     }).then((outcome) => params.onLinkOutcome?.(outcome))
     return plan
   }
+  const activate = params.activate ?? true
   if (plan.status === 'doc-preview') {
-    openDocPreviewTab(state, { ...params, activate: true }, { targetGroupId: params.targetGroupId })
+    openDocPreviewTab(state, { ...params, activate }, { targetGroupId: params.targetGroupId })
     return plan
   }
 
   state.createBrowserTab(params.worktreeId, plan.url, {
     title: plan.title,
     ...(params.targetGroupId ? { targetGroupId: params.targetGroupId } : {}),
-    activate: true,
+    activate,
     ...(params.clientLocal ? { browserRuntimeEnvironmentId: null } : {})
   })
   return plan

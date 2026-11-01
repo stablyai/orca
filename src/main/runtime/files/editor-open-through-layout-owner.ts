@@ -5,6 +5,7 @@ import { detectLanguage } from '../../../shared/editor-language/editor-language-
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type {
   RuntimeEditorFileOpen,
+  RuntimeFileOpenPosition,
   RuntimeEditorTabReveal
 } from '../../../shared/runtime-file-contracts'
 import type { WindowLayoutCommand } from '../runtime-layout-apply'
@@ -28,13 +29,30 @@ export function createRuntimeEditorFileOpener(
     getNotifier(): RuntimeNotifier | null | undefined
   }
 ): RuntimeFileCommandHost['openFile'] {
-  return async (worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position) => {
+  return async (
+    worktreeId,
+    filePath,
+    relativePath,
+    runtimeEnvironmentId,
+    navigation,
+    position,
+    preview
+  ) => {
     if (isChatScratchWorktreeId(worktreeId)) {
       throw new Error('chat_scratch_not_openable')
     }
     const notifier = host.getNotifier()
-    const open = { worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position }
-    if (ORCA_LAYOUT_OWNER_IS_MAIN || !notifier?.openFile) {
+    const open = {
+      worktreeId,
+      filePath,
+      relativePath,
+      runtimeEnvironmentId,
+      navigation,
+      position,
+      ...(preview ? { preview } : {})
+    }
+    // Previews are browser tabs or view modes only the window can create; headless opens source.
+    if (!notifier?.openFile || (ORCA_LAYOUT_OWNER_IS_MAIN && !preview)) {
       await openEditorFileThroughLayoutOwner(
         {
           ...host,
@@ -97,12 +115,17 @@ export function openEditorFileInWindow(
   if (!notifier?.openFile) {
     throw new Error('renderer_unavailable')
   }
+  const trailing: [RuntimeFileOpenPosition?, boolean?] = open.preview
+    ? [open.position, true]
+    : open.position
+      ? [open.position]
+      : []
   notifier.openFile(
     open.worktreeId,
     open.filePath,
     open.relativePath,
     open.runtimeEnvironmentId,
     open.navigation,
-    ...(open.position ? [open.position] : [])
+    ...trailing
   )
 }

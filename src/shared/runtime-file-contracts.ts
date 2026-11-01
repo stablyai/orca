@@ -36,6 +36,8 @@ export type RuntimeEditorFileOpen = {
   runtimeEnvironmentId?: string | null
   navigation?: RuntimeNavigationTarget
   position?: RuntimeFileOpenPosition
+  /** Show the rendered HTML/Markdown instead of source; the window falls back to source. */
+  preview?: boolean
 }
 
 /** `frameSeq`: the layout stream position whose frame draws the tab. */

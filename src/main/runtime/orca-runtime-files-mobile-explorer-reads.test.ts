@@ -140,6 +140,21 @@ describe('RuntimeFileCommands', () => {
     })
   })
 
+  it.each([
+    ['site/index.html', true],
+    ['docs/readme.md', true],
+    ['src/a.ts', undefined]
+  ])('forwards preview for %s only when it has one', async (relativePath, preview) => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+    resolveAuthorizedPathMock.mockResolvedValue(`/repo/${relativePath}`)
+    statMock.mockResolvedValue({ isDirectory: () => false })
+
+    await commands.openMobileFile('id:wt-1', relativePath, 'caller', undefined, true)
+
+    expect(openFile.mock.calls[0]?.[6]).toBe(preview)
+  })
+
   it('opens previewable images through the renderer host as an image tab', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })

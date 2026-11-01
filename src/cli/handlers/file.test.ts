@@ -106,6 +106,17 @@ describe('orca file CLI handlers', () => {
     })
   })
 
+  it('asks for a preview only when --preview is passed', async () => {
+    const opened = { worktree: 'wt-1', relativePath: 'a.html', kind: 'text', opened: true }
+    queueFixtures(callMock, okFixture('open', opened), okFixture('open', opened))
+    await main(['file', 'open', 'a.html', '--preview', '--worktree', 'id:wt-1'], '/tmp/repo')
+    await main(['file', 'open', 'a.html', '--worktree', 'id:wt-1'], '/tmp/repo')
+    expect(callMock.mock.calls.map(([, params]) => params)).toEqual([
+      { worktree: 'id:wt-1', relativePath: 'a.html', navigation: 'caller', preview: true },
+      { worktree: 'id:wt-1', relativePath: 'a.html', navigation: 'caller' }
+    ])
+  })
+
   it.each([
     ['--column', '7'],
     ['--line', '0'],

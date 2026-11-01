@@ -55,7 +55,9 @@ const FileOpenTarget = FileOpen.extend({
 
 export const FileOpenTab = FileOpenTarget.extend({
   line: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
-  column: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional()
+  column: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  // Optional: older hosts strip it and open the source, which is the documented fallback.
+  preview: z.boolean().optional()
 }).refine((params) => params.column === undefined || params.line !== undefined, {
   message: 'column requires line',
   path: ['column']
