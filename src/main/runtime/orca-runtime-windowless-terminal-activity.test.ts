@@ -54,6 +54,7 @@ describe('terminal activity with no window attached', () => {
     const { runtime, activityWrites } = createRuntime('headless')
 
     await runtime.createTerminal(`path:${WORKTREE_PATH}`, { reopensPane: true })
+    await runtime.createTerminal(`path:${WORKTREE_PATH}`, { spawnIntent: 'automatic-restore' })
     expect(activityWrites()).toEqual([])
 
     const closed = await runtime.createTerminal(`path:${WORKTREE_PATH}`)

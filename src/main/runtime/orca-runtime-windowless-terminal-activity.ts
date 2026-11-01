@@ -12,6 +12,7 @@ import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { readWorkspaceRecord, writeWorkspaceRecord } from './sidebar-inputs/sort-stamp-records'
 import { createKeyedTrailingEdgeCoalescer } from './keyed-trailing-edge-coalescer'
+import { isRestoreSpawnIntent } from '../../shared/host-spawn-admission'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
@@ -32,8 +33,9 @@ export abstract class OrcaRuntimeWithWindowlessTerminalActivity extends OrcaRunt
     ...args: Parameters<Runtime['createTerminal']>
   ): ReturnType<Runtime['createTerminal']> {
     const created = await super.createTerminal(...args)
-    // A reattach, or a pane started again, is no new work in the workspace.
-    if (!created.isReattach && !args[1]?.reopensPane) {
+    const opts = args[1]
+    // A reattach, a saved session's resume, or a pane started again is no new work in the workspace.
+    if (!created.isReattach && !isRestoreSpawnIntent(opts?.spawnIntent) && !opts?.reopensPane) {
       this.stampWindowlessTerminalActivity(created.worktreeId, created.executionHostId)
     }
     return created
