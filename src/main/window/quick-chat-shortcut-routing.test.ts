@@ -18,6 +18,69 @@ import {
 } from '../../shared/keybindings'
 
 const chord = { code: 'KeyN', key: 'n', meta: true, control: false, alt: true, shift: false }
+it.each([
+  { label: 'recorded C3 lowercase', key: 'n', modifierSequence: false },
+  { label: 'C5 Playwright sequence inferred from source', key: 'N', modifierSequence: true },
+  { label: 'Mac Option Dead contract probe', key: 'Dead', modifierSequence: false },
+  { label: 'Mac Option composed contract probe', key: '˜', modifierSequence: false }
+])('forwards the default guest chord once for $label', ({ key, modifierSequence }) => {
+  const originalPlatform = process.platform
+  Object.defineProperty(process, 'platform', { value: 'darwin' })
+  const renderer = new BrowserWindow().webContents
+  const guest = new BrowserWindow().webContents
+  const cleanup = setupGuestShortcutForwarding({
+    browserTabId: 'guest',
+    guest,
+    resolveRenderer: () => renderer
+  })
+  const input: Electron.Input = {
+    ...chord,
+    key,
+    type: 'keyDown',
+    isAutoRepeat: false,
+    isComposing: false,
+    location: 0,
+    modifiers: ['meta', 'alt']
+  }
+  const emit = (overrides: Partial<Electron.Input> = {}) => {
+    const event = { preventDefault: vi.fn(), defaultPrevented: false }
+    guest.emit('before-input-event', event, { ...input, ...overrides })
+    return event.preventDefault
+  }
+  const send = vi.mocked(renderer.send)
+  try {
+    if (modifierSequence) {
+      expect(
+        emit({ key: 'Meta', code: 'MetaLeft', alt: false, modifiers: ['meta'] })
+      ).not.toHaveBeenCalled()
+      expect(emit({ key: 'Alt', code: 'AltLeft' })).not.toHaveBeenCalled()
+      expect(send).not.toHaveBeenCalled()
+    }
+    expect(emit()).toHaveBeenCalledOnce()
+    expect(send.mock.calls).toEqual([['ui:quickStartChat']])
+    expect(emit({ type: 'keyUp' })).not.toHaveBeenCalled()
+    if (modifierSequence) {
+      expect(
+        emit({ type: 'keyUp', key: 'Alt', code: 'AltLeft', alt: false, modifiers: ['meta'] })
+      ).not.toHaveBeenCalled()
+      expect(
+        emit({
+          type: 'keyUp',
+          key: 'Meta',
+          code: 'MetaLeft',
+          meta: false,
+          alt: false,
+          modifiers: []
+        })
+      ).not.toHaveBeenCalled()
+    }
+    expect(send.mock.calls).toEqual([['ui:quickStartChat']])
+  } finally {
+    cleanup()
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
+  }
+})
+
 it('keeps the Mac-only default and allows effective bindings on every platform', () => {
   expect(resolveWindowShortcutAction(chord, 'darwin')).toEqual({ type: 'quickStartChat' })
   for (const platform of ['win32', 'linux'] as const) {
