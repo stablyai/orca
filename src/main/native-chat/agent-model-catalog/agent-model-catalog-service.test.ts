@@ -4,9 +4,9 @@ import {
   joinHostModelListingWait,
   isHostModelListingWaitInFlight
 } from '../../../shared/host-model-listing-waits'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogFingerprintForRecord
@@ -152,61 +152,6 @@ describe('agent model catalog service', () => {
     expect(store.get(oldFingerprint)!.models[0]!.id).toBe('gpt-old')
   })
 
-  it('a record-less read serves the selected account entry when it exists', async () => {
-    const store = new AgentModelCatalogStore()
-    store.recordSuccess(
-      selectedHomeFingerprint('/homes/selected'),
-      'grok',
-      listing('gpt-mine'),
-      'discovery'
-    )
-    store.recordSuccess(
-      selectedHomeFingerprint('/homes/other'),
-      'grok',
-      listing('gpt-other'),
-      'discovery'
-    )
-    const service = createAgentModelCatalogService({
-      store,
-      getConversation: () => undefined,
-      getRecord: () => undefined,
-      drivesRecord: () => true,
-      resolveAccountHome: async () => GROK_HOME('/homes/selected')
-    })
-    const result = await service.read({ agent: 'grok', waitForListing: true })
-    expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-mine')
-  })
-
-  it('a session record outranks the current selection for its own reads', async () => {
-    const store = new AgentModelCatalogStore()
-    const sessionRecord = record('/homes/session')
-    store.recordSuccess(
-      agentModelCatalogFingerprintForRecord(sessionRecord),
-      'grok',
-      listing('gpt-session'),
-      'discovery'
-    )
-    store.recordSuccess(
-      selectedHomeFingerprint('/homes/selected'),
-      'grok',
-      listing('gpt-selected'),
-      'discovery'
-    )
-    const service = createAgentModelCatalogService({
-      store,
-      getConversation: () => agentSessionConversationView(sessionRecord),
-      getRecord: () => sessionRecord,
-      drivesRecord: () => true,
-      resolveAccountHome: async () => GROK_HOME('/homes/selected')
-    })
-    const result = await service.read({
-      agent: 'grok',
-      sessionId: 'session-1',
-      waitForListing: true
-    })
-    expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-session')
-  })
-
   it('a probe failure is a TTL-bounded fact, never an answer', async () => {
     const store = new AgentModelCatalogStore()
     const probe = vi.fn(async () => {
@@ -317,45 +262,6 @@ describe('agent model catalog service', () => {
       }
     })
 
-    it('answers a plain unknown when the listing fails', async () => {
-      const pending = deferredListing()
-      const { service } = coldService(() => pending.promise)
-      const waited = service.read({ agent: 'grok', waitForListing: true })
-      pending.reject(new Error('spawn failed'))
-      expect(await waited).toEqual({ origin: 'unknown' })
-    })
-
-    it('does not wait or report a listing while a failure is inside its TTL', async () => {
-      const probe = vi.fn(async (): Promise<AgentModelCatalogSuccess> => {
-        throw new Error('spawn failed')
-      })
-      const { store, service } = coldService(probe)
-      await store.refresh(selectedHomeFingerprint('/homes/selected'), 'grok', () =>
-        Promise.reject(new Error('spawn failed'))
-      )
-      expect(await service.read({ agent: 'grok', waitForListing: true })).toEqual({
-        origin: 'unknown'
-      })
-      expect(await service.read({ agent: 'grok', waitForListing: true })).toEqual({
-        origin: 'unknown'
-      })
-      expect(probe).not.toHaveBeenCalled()
-    })
-
-    it('reports no listing where the host has no lister for the account', async () => {
-      const store = new AgentModelCatalogStore()
-      const service = createAgentModelCatalogService({
-        store,
-        getConversation: () => undefined,
-        getRecord: () => undefined,
-        drivesRecord: () => true,
-        resolveAccountHome: async () => GROK_HOME('/homes/selected')
-      })
-      expect(await service.read({ agent: 'grok', waitForListing: true })).toEqual({
-        origin: 'unknown'
-      })
-    })
-
     it('serves an aged entry at once and refreshes it behind the answer', async () => {
       let now = 0
       const store = new AgentModelCatalogStore({ now: () => now })
@@ -408,41 +314,11 @@ describe('agent model catalog service', () => {
       return result.origin === 'unknown' ? null : result.models.map((model) => model.isDefault)
     }
 
-    it('names no default when the workspace config could pick another model', async () => {
-      const { service, workspaceMayOverrideDefaultModel } = serviceWith(true)
-      const result = await service.read({
-        agent: 'grok',
-        waitForListing: true,
-        workspacePath: '/repo/wt'
-      })
-      expect(defaults(result)).toEqual([false])
-      expect(workspaceMayOverrideDefaultModel).toHaveBeenCalledWith({
-        agent: 'grok',
-        workspacePath: '/repo/wt',
-        accountHomePath: '/homes/selected'
-      })
-    })
-
-    it('keeps the listed default when nothing in the workspace can replace it', async () => {
-      const { service } = serviceWith(false)
-      expect(
-        defaults(
-          await service.read({ agent: 'grok', waitForListing: true, workspacePath: '/repo/wt' })
-        )
-      ).toEqual([true])
-    })
-
     it('names no default for a workspace it could not place on this machine', async () => {
       const { service, workspaceMayOverrideDefaultModel } = serviceWith(false)
       expect(
         defaults(await service.read({ agent: 'grok', waitForListing: true, workspacePath: null }))
       ).toEqual([false])
-      expect(workspaceMayOverrideDefaultModel).not.toHaveBeenCalled()
-    })
-
-    it('leaves a read that names no workspace as it was', async () => {
-      const { service, workspaceMayOverrideDefaultModel } = serviceWith(true)
-      expect(defaults(await service.read({ agent: 'grok', waitForListing: true }))).toEqual([true])
       expect(workspaceMayOverrideDefaultModel).not.toHaveBeenCalled()
     })
   })

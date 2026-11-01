@@ -1,10 +1,11 @@
 import { useRef, type ReactNode } from 'react'
-import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
-import { Check, Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { ActivityIndicator, View, Text } from 'react-native'
+import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
+import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
+import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListGroup, ListRow } from './list/ListGroup'
 
 export type ActionSheetAction = {
   id?: string
@@ -66,56 +67,41 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
 
       {children}
 
-      <View style={styles.actionGroup}>
-        {actions.map((action, i) => {
+      <ListGroup separatorInset={LIST_LEADING_INSET}>
+        {actions.map((action) => {
           const Icon = iconForAction(action.label, action.destructive, action.icon)
-          const customIcon = action.renderIcon?.()
           return (
-            <View key={action.id ?? action.label}>
-              {i > 0 && <View style={styles.separator} />}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.action,
-                  action.disabled && styles.actionDisabled,
-                  pressed && !action.disabled && !action.loading && styles.actionPressed
-                ]}
-                disabled={action.disabled || action.loading}
-                accessibilityState={action.checked ? { checked: true } : undefined}
-                onPress={() => {
-                  action.onPress()
-                  if (!action.skipAutoClose && onClose) {
-                    onClose()
-                  }
-                }}
-              >
-                {customIcon ?? (
+            <ListRow
+              key={action.id ?? action.label}
+              title={action.label}
+              subtitle={action.hint}
+              leading={
+                action.renderIcon?.() ?? (
                   <Icon
                     size={16}
                     color={action.destructive ? colors.statusRed : colors.textSecondary}
                   />
-                )}
-                <View style={styles.actionTextBlock}>
-                  <Text
-                    style={[
-                      styles.actionText,
-                      action.destructive && styles.actionTextDestructive,
-                      action.disabled && styles.actionTextDisabled
-                    ]}
-                  >
-                    {action.label}
-                  </Text>
-                  {action.hint ? <Text style={styles.actionHint}>{action.hint}</Text> : null}
-                </View>
-                {action.loading ? (
+                )
+              }
+              accessory={
+                action.loading ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : action.checked ? (
-                  <Check size={18} color={colors.textPrimary} />
-                ) : null}
-              </Pressable>
-            </View>
+                ) : undefined
+              }
+              selected={action.checked ? true : undefined}
+              destructive={action.destructive}
+              disabled={action.disabled}
+              busy={action.loading}
+              onPress={() => {
+                action.onPress()
+                if (!action.skipAutoClose && onClose) {
+                  onClose()
+                }
+              }}
+            />
           )
         })}
-      </View>
+      </ListGroup>
     </>
   )
 }
@@ -157,60 +143,17 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
 
 const styles = themedStyleSheet(() => ({
   header: {
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: LIST_ROW_PADDING,
     paddingBottom: spacing.sm
   },
   title: {
     fontSize: 13,
     fontWeight: '500',
-    color: colors.textMuted
-  },
-  message: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  actionGroup: {
-    backgroundColor: colors.sheetGroup,
-    borderRadius: radii.surface,
-    overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  actionDisabled: {
-    opacity: 0.58
-  },
-  actionPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  actionTextBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  actionText: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  actionTextDisabled: {
     color: colors.textSecondary
   },
-  actionTextDestructive: {
-    color: colors.statusRed
-  },
-  actionHint: {
-    marginTop: 2,
+  message: {
     fontSize: typography.metaSize,
-    color: colors.textMuted
+    color: colors.textMuted,
+    marginTop: 2
   }
 }))

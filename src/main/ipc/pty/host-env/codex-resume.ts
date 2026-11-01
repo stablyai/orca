@@ -2,7 +2,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
 import { dropAgentResumeArgvFromCommand } from '../../../../shared/agent-resume-argv-drop'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'

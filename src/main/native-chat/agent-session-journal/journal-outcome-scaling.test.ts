@@ -2,13 +2,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { SqliteStatement } from '../../sqlite/sqlite-statement'
 import {
   closeTestJournalHostDatabases,
@@ -681,7 +681,7 @@ it('admits each row and record an existing chat reads or writes once, at N and 1
     parses.mockRestore()
     const open = { ...admission, parsed, entries: entries.records, read: watched.take().read }
     admission.rows = 0
-    const page = readJournalRowsAfterCursor(database.db, sessionId, epoch, 0, 100)
+    const { rows: page } = readJournalRowsAfterCursor(database.db, sessionId, epoch, 0, 100)
     const paged = { walks: admission.rows, rows: page.filter((row) => row.kind !== 'outcome') }
     admission.rows = 0
     admission.records = 0
@@ -713,6 +713,7 @@ it('runs a sweep pass with nothing to retire without reading history at N and 10
   const measure = async (size: number) => {
     const { database } = outcomeChat(size, `idle-${size}`)
     const sweeper = new JournalOutcomeSweeper({ database: () => database, delay: async () => {} })
+    await sweeper.pass()
     const watched = watch(database)
     await sweeper.pass()
     sweeper.stop()

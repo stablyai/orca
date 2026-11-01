@@ -2,13 +2,13 @@
 // Provider uncertainty becomes a note; retries answer the receipt without retargeting.
 
 import { agentChildWorkStopTargets } from '../../../shared/agent-child-work-stop-targets'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionCancelResult } from '../../../shared/agent-session-wire'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionCancelResult } from '../../../shared/agent-session/agent-session-wire'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 import { acceptStopTarget } from './structured-agent-session-stop-acceptance'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   noteStructuredAgentSessionStopUnconfirmed,
   writeStructuredAgentSessionStopNote

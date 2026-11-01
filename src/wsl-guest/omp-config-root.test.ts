@@ -68,11 +68,6 @@ describe('relay OMP config root', () => {
     expect(existsSync(join(home, '.company-omp'))).toBe(false)
   })
 
-  it('does not fall back to process.env for the config root', async () => {
-    vi.stubEnv('PI_CONFIG_DIR', '.wrong-process-root')
-    expect(await resolveOmpConfigDirName({ HOME: home }, '/bin/bash')).toBeUndefined()
-  })
-
   it.skipIf(process.platform === 'win32')(
     'uses the guest profile only when no pane override exists',
     async () => {

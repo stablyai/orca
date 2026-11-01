@@ -18,7 +18,7 @@ import type { Repo } from '../../shared/repo-types'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { getOrcadSshDeployment } from '../../shared/runtime-environments'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
 import {
   orcadSourceFolderWorkspaceIds,

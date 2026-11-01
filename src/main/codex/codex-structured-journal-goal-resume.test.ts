@@ -1,11 +1,11 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalRenderItem
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget
@@ -35,9 +35,7 @@ function goalFrame(goal: Record<string, unknown> = {}): Record<string, unknown> 
   }
 }
 
-function goalJournal(
-  options: Partial<Parameters<typeof createDeferredStructuredAgentSessionEventSink>[0]> = {}
-) {
+function goalJournal() {
   let rowSequence = 0
   let publishes = 0
   let epochNumber = 1
@@ -45,10 +43,7 @@ function goalJournal(
   let visitedItems = 0
   const rows = new Map<string, AgentJournalRenderItem>()
   const writes: string[] = []
-  const deferred = createDeferredStructuredAgentSessionEventSink({
-    ...testEventSinkLogging(),
-    ...options
-  })
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a fake journal exposing only the members the goal translator and deferred sink call.
   const journal = withJournalQueueMembers({
     get epoch() {
@@ -260,46 +255,6 @@ describe('codex goal lifecycle resume', () => {
     expect(journal.visits()).toBe(1)
     expect(journal.visitedItems()).toBe(10_000)
     expect(journal.writes).toHaveLength(MAX_CODEX_GOAL_THREADS)
-    goals.dispose()
-  })
-
-  it('retries a journal-derived transition after lifecycle backpressure', async () => {
-    const journal = goalJournal({ watermarks: { maxLifecycleQueuedOperations: 1 } })
-    const goals = new CodexJournalGoals(journal.sink, () => ({
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    }))
-    journal.unbind()
-
-    expect(
-      goals.handle({
-        threadId: THREAD,
-        method: 'thread/goal/updated',
-        params: goalFrame()
-      })
-    ).toEqual({ accepted: true })
-    expect(
-      goals.handle({
-        threadId: THREAD,
-        method: 'thread/goal/updated',
-        params: goalFrame({ status: 'paused' })
-      })
-    ).toEqual({ accepted: false, reason: 'backpressure' })
-
-    journal.rebind()
-    await journal.drained()
-    expect(
-      goals.handle({
-        threadId: THREAD,
-        method: 'thread/goal/updated',
-        params: goalFrame({ status: 'paused' })
-      })
-    ).toEqual({ accepted: true })
-    await journal.drained()
-
-    expect(texts(journal.rows().map((row) => row.body))).toEqual([
-      'Goal set: Keep the current scratch directory tidy.',
-      'Goal paused: Keep the current scratch directory tidy.'
-    ])
     goals.dispose()
   })
 

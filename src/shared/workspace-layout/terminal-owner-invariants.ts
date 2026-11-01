@@ -58,7 +58,7 @@ export function collectTerminalLeafOwners({
 }
 
 /** Relay ids like `pty-1` repeat across relay restarts, so without an incarnation they prove nothing. */
-function isRepeatingRelayPtyId(ptyId: string): boolean {
+export function isRepeatingRelayPtyId(ptyId: string): boolean {
   const relayPtyId = parseAppSshPtyId(ptyId)?.relayPtyId
   return relayPtyId !== undefined && /^pty-\d+$/.test(relayPtyId)
 }

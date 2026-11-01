@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en-US',
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     fallback.replace('{{value0}}', values?.value0 ?? '')
 }))

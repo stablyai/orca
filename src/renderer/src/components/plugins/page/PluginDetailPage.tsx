@@ -13,6 +13,7 @@ import type { usePluginInstallAction } from '../state/use-plugin-install-action'
 import { PluginDetailInfo, PluginReleaseNotes } from './PluginDetailInfo'
 import { PluginAddsSection } from './PluginAddsSection'
 import { PluginAccessSection, PluginLogsSection } from './PluginDetailSections'
+import { PluginSettingsSection } from './PluginSettingsSection'
 import { installedPluginControls, type InstalledRowHandlers } from '../list/PluginManagerRows'
 import { PluginChips } from '../list/PluginChips'
 import type { PluginPagePreview } from '../state/use-plugin-catalog'
@@ -296,6 +297,12 @@ export function PluginDetailPage({
           {/* Why installed only: before install, and while it waits for review, the consent above says this. */}
           {plugin && controls?.kind !== 'review' ? (
             <PluginAccessSection capabilities={plugin.capabilities} trust={model.trust} />
+          ) : null}
+          {plugin ? (
+            <PluginSettingsSection
+              pluginKey={plugin.pluginKey}
+              revision={`${plugin.version}:${plugin.consentFingerprint ?? ''}`}
+            />
           ) : null}
           <PluginReleaseNotes entry={entry} />
           {plugin?.hasWorker ? <PluginLogsSection state={logsState} /> : null}

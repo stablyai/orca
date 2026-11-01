@@ -144,8 +144,8 @@ describe('pickAdjacentEditorOpenGroupId', () => {
     expect(pick(layout, 'A', { withFile: ['C', 'D'] })).toBe('C')
   })
 
-  it('opens a second view beside the source when only the source has the file', () => {
-    expect(pick(columns(leaf('A'), leaf('B')), 'A', { withFile: ['A'] })).toBe('B')
+  it('reuses the source view when only the source has the file', () => {
+    expect(pick(columns(leaf('A'), leaf('B')), 'A', { withFile: ['A'] })).toBe('A')
   })
 
   it('keeps a single group in place', () => {

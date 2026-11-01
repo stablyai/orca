@@ -1,11 +1,11 @@
 import type { ComponentProps, ReactElement } from 'react'
 import { FlatList, Platform } from 'react-native'
 import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
-import { MobileNativeChatPageList } from '../../MobileNativeChatPageList'
+import { MobileNativeChatPageList } from './MobileNativeChatPageList'
 import {
   mobileNativeChatRowAnchor,
   type MobileNativeChatTailFollow
-} from '../../use-mobile-native-chat-tail-follow'
+} from './use-mobile-native-chat-tail-follow'
 
 type PageProps = ComponentProps<typeof MobileNativeChatPageList>
 

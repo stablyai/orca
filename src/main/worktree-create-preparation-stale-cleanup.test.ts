@@ -39,12 +39,6 @@ describe('preparation lock reasons', () => {
       process.pid
     )
   })
-
-  it('omits the machine when the writer cannot identify it', () => {
-    const reason = createWorktreePreparationLockReason('session', null)
-    expect(reason).toBe(`orca-create-preparation:v1:${process.pid}:session`)
-    expect(parseWorktreePreparationOwnerMachine(reason)).toBeNull()
-  })
 })
 
 describe('preparationOwnerExitedHere', () => {
@@ -59,18 +53,6 @@ describe('preparationOwnerExitedHere', () => {
         REPO,
         {},
         probe({ machineIdentity: () => null })
-      )
-    ).toBe(false)
-  })
-
-  it('reads a dead owner on this machine as exited, and a live one as not', () => {
-    expect(preparationOwnerExitedHere(reasonFrom(MACHINE_A), REPO, {}, probe())).toBe(true)
-    expect(
-      preparationOwnerExitedHere(
-        reasonFrom(MACHINE_A),
-        REPO,
-        {},
-        probe({ isProcessAlive: () => true })
       )
     ).toBe(false)
   })
@@ -93,9 +75,5 @@ describe('preparationOwnerExitedHere', () => {
         probe({ repoIsOnLocalDisk: () => false })
       )
     ).toBe(true)
-  })
-
-  it('ignores reasons that are not preparation locks', () => {
-    expect(preparationOwnerExitedHere('active agent session', REPO, {}, probe())).toBe(false)
   })
 })

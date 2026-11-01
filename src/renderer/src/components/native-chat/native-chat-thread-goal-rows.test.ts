@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
 
 const PAYLOAD = { head: '{}', byteLength: 2, digest: 'd'.repeat(64), truncated: false }

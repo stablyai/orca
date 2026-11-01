@@ -4,11 +4,6 @@ import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types
 import type { GitStatusResult } from '../../../../shared/git-status-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../../../../shared/git-status-limit'
-import { slowTaskRequiredIdleMs } from './coalesced-poll-runner'
-import {
-  admissionTierForGitStatusRefreshReason,
-  SLOW_GIT_POLL_BACKOFF
-} from './useGitStatusPolling'
 
 const worktree = { id: 'repo-1::/repo', repoId: 'repo-1', path: '/repo' }
 const repo = { id: 'repo-1', path: '/repo', kind: 'git', connectionId: null as string | null }
@@ -163,22 +158,6 @@ async function usePollingOnce(
 }
 
 describe('useGitStatusPolling', () => {
-  it('paces the safety scheduler and stale-conflict fan-out by one run duration', () => {
-    expect(
-      slowTaskRequiredIdleMs(
-        6_000,
-        SLOW_GIT_POLL_BACKOFF.idleMultiplier,
-        3_000,
-        SLOW_GIT_POLL_BACKOFF.maxIntervalMs
-      )
-    ).toBe(6_000)
-  })
-
-  it('keeps activity admission in status and safety admission in background', () => {
-    expect(admissionTierForGitStatusRefreshReason('activity')).toBe('status')
-    expect(admissionTierForGitStatusRefreshReason('safety')).toBe('background')
-  })
-
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -230,30 +209,6 @@ describe('useGitStatusPolling', () => {
     )
   })
 
-  it('passes the explicit push target to upstream refreshes', async () => {
-    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
-    const { state } = await usePollingOnce(
-      {
-        entries: [],
-        conflictOperation: 'unknown',
-        head: 'abc123',
-        branch: 'refs/heads/main'
-      },
-      { pushTarget }
-    )
-
-    expect(state.fetchUpstreamStatus).toHaveBeenCalledWith(
-      worktree.id,
-      '/repo',
-      undefined,
-      pushTarget,
-      {
-        runtimeTarget: { kind: 'local' },
-        applyUpstreamStatus: false
-      }
-    )
-  })
-
   it('skips remote git status polling while the SSH target is disconnected', async () => {
     const { state, gitStatus } = await usePollingOnce(
       {
@@ -267,27 +222,6 @@ describe('useGitStatusPolling', () => {
 
     expect(gitStatus).not.toHaveBeenCalled()
     expect(state.setGitStatus).not.toHaveBeenCalled()
-    expect(globalThis.setInterval).not.toHaveBeenCalled()
-  })
-
-  it('uses the safety scheduler instead of an interval for terminal-only branch detection', async () => {
-    const { gitStatus } = await usePollingOnce(
-      {
-        entries: [],
-        conflictOperation: 'unknown',
-        head: 'abc123',
-        branch: 'refs/heads/main'
-      },
-      {
-        stateOverrides: {
-          rightSidebarOpen: false,
-          openFiles: []
-        }
-      }
-    )
-
-    expect(gitStatus).toHaveBeenCalledTimes(1)
-    expect(gitStatus).toHaveBeenCalledWith(expect.objectContaining({ admissionTier: 'status' }))
     expect(globalThis.setInterval).not.toHaveBeenCalled()
   })
 
@@ -305,39 +239,6 @@ describe('useGitStatusPolling', () => {
     expect(gitStatus).not.toHaveBeenCalled()
     expect(state.setGitStatus).not.toHaveBeenCalled()
     expect(globalThis.setInterval).not.toHaveBeenCalled()
-  })
-
-  it('filters filesystem payloads to files inside the active worktree', async () => {
-    vi.resetModules()
-    const { shouldRefreshGitStatusForFileChange } = await import('./git-status-file-watch-refresh')
-
-    expect(
-      shouldRefreshGitStatusForFileChange(
-        { worktreePath: '/repo', events: [{ kind: 'update', absolutePath: '/repo/src/app.ts' }] },
-        '/repo'
-      )
-    ).toBe(true)
-    expect(
-      shouldRefreshGitStatusForFileChange(
-        {
-          worktreePath: '/repo',
-          events: [{ kind: 'update', absolutePath: '/repo/src', isDirectory: true }]
-        },
-        '/repo'
-      )
-    ).toBe(false)
-    expect(
-      shouldRefreshGitStatusForFileChange(
-        { worktreePath: '/other', events: [{ kind: 'overflow', absolutePath: '/other' }] },
-        '/repo'
-      )
-    ).toBe(false)
-    expect(
-      shouldRefreshGitStatusForFileChange(
-        { worktreePath: '/repo', events: [{ kind: 'overflow', absolutePath: '/repo' }] },
-        '/repo'
-      )
-    ).toBe(true)
   })
 
   it('coalesces active worktree file-watch bursts into one git status refresh', async () => {

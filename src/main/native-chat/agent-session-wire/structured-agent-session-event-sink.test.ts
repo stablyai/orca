@@ -1,14 +1,14 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   JournalItemAppendOptions,
@@ -27,7 +27,7 @@ import {
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const BODY: AgentJournalItemBody = {
   kind: 'message',
@@ -275,35 +275,25 @@ describe('deferred structured agent-session event sink', () => {
     expect(log).toEqual([{ call: 'appendItem', fence: 2, ordinal: 1 }])
   })
 
-  it('exposes operation watermarks and resumes below the low watermark', async () => {
+  it('pauses reading at the operation watermark but still admits received output', async () => {
     const log: Recorded[] = []
     const changes: boolean[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const deferred = createDeferredStructuredAgentSessionEventSink({
       ...testEventSinkLogging(),
-      watermarks: {
-        maxQueuedBytes: 1_000_000,
-        lowQueuedBytes: 0,
-        maxQueuedOperations: 2,
-        lowQueuedOperations: 0
-      },
+      watermarks: { lowQueuedBytes: 0, pauseQueuedOperations: 2, lowQueuedOperations: 0 },
       readingControl,
       onBackpressureChange: (paused) => changes.push(paused)
     })
 
-    expect(
-      deferred.sink.tryAppendItem?.(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({ accepted: true })
-    expect(
-      deferred.sink.tryAppendItem?.(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({ accepted: true })
-    expect(
-      deferred.sink.tryAppendItem?.(identity(2), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({
-      accepted: false,
-      reason: 'backpressure'
-    })
-    expect(deferred.state()).toMatchObject({ backpressured: true, queuedOperations: 2 })
+    for (const ordinal of [0, 1, 2]) {
+      expect(
+        deferred.sink.tryAppendItem?.(identity(ordinal), BODY, {
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+      ).toEqual({ accepted: true })
+    }
+    expect(deferred.state()).toMatchObject({ backpressured: true, queuedOperations: 3 })
 
     deferred.bind(target(5, log))
     await deferred.drained()
@@ -311,59 +301,16 @@ describe('deferred structured agent-session event sink', () => {
     expect(changes).toEqual([true, false])
     expect(readingControl.pauseReading).toHaveBeenCalledOnce()
     expect(readingControl.resumeReading).toHaveBeenCalledOnce()
-    expect(log).toHaveLength(2)
+    expect(log.map((entry) => entry.ordinal)).toEqual([0, 1, 2])
   })
 
-  it('admits a resolved append and publication as one bounded operation', async () => {
-    const log: Recorded[] = []
-    const deferred = createDeferredStructuredAgentSessionEventSink({
-      ...testEventSinkLogging(),
-      watermarks: {
-        pauseQueuedOperations: 1,
-        maxQueuedOperations: 2,
-        lowQueuedOperations: 0,
-        maxQueuedBytes: 1_000_000
-      }
-    })
-
-    expect(
-      deferred.sink.tryAppendItem?.(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({ accepted: true })
-    expect(
-      deferred.sink.tryAppendResolvedItemAndPublish?.(identity(1), BODY, () => identity(1), {
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
-      })
-    ).toEqual({ accepted: true })
-    expect(
-      deferred.sink.tryAppendItem?.(identity(2), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({
-      accepted: false,
-      reason: 'backpressure'
-    })
-
-    deferred.bind(target(5, log))
-    await deferred.drained()
-    expect(log).toEqual([
-      { call: 'appendItem', fence: 5, ordinal: 0 },
-      { call: 'appendItem', fence: 5, ordinal: 1 },
-      { call: 'publish', fence: 5 }
-    ])
-  })
-
-  it('pauses provider reading at the soft byte watermark before rejecting writes', async () => {
+  it('pauses provider reading at the byte watermark', async () => {
     const log: Recorded[] = []
     const changes: boolean[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const deferred = createDeferredStructuredAgentSessionEventSink({
       ...testEventSinkLogging(),
-      watermarks: {
-        pauseQueuedBytes: 1,
-        maxQueuedBytes: 1_000_000,
-        lowQueuedBytes: 0,
-        pauseQueuedOperations: 1_000,
-        maxQueuedOperations: 1_000,
-        lowQueuedOperations: 0
-      },
+      watermarks: { pauseQueuedBytes: 1, lowQueuedBytes: 0, lowQueuedOperations: 0 },
       readingControl,
       onBackpressureChange: (paused) => changes.push(paused)
     })
@@ -382,55 +329,13 @@ describe('deferred structured agent-session event sink', () => {
     expect(log).toEqual([{ call: 'appendItem', fence: 8, ordinal: 0 }])
   })
 
-  it('backpressures lifecycle publication at the hard operation watermark', async () => {
-    const log: Recorded[] = []
-    const errors: unknown[] = []
-    const deferred = createDeferredStructuredAgentSessionEventSink({
-      ...testEventSinkLogging(),
-      onFailed: (error) => errors.push(error),
-      watermarks: {
-        pauseQueuedBytes: 1,
-        maxQueuedBytes: 1,
-        lowQueuedBytes: 0,
-        pauseQueuedOperations: 1,
-        maxQueuedOperations: 0,
-        lowQueuedOperations: 0,
-        maxLifecycleQueuedOperations: 1
-      }
-    })
-
-    deferred.sink.appendLifecycleBatch?.(
-      'settlement-1',
-      [{ kind: 'item', identity: identity(0), body: BODY, turnScope: AGENT_JOURNAL_THREAD_SCOPE }],
-      { lifecycle: true }
-    )
-    expect(deferred.sink.tryPublish?.({ lifecycle: true })).toEqual({
-      accepted: false,
-      reason: 'backpressure'
-    })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 1, backpressured: true })
-    expect(errors).toHaveLength(0)
-
-    deferred.bind(target(8, log))
-    await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
-
-    expect(log).toEqual([{ call: 'appendLifecycleBatch', fence: 8, settlementId: 'settlement-1' }])
-  })
-
   it('ignores stale reading-control cleanup after a newer provider stream binds', async () => {
     const log: Recorded[] = []
     const firstControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const secondControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const deferred = createDeferredStructuredAgentSessionEventSink({
       ...testEventSinkLogging(),
-      watermarks: {
-        pauseQueuedBytes: 1,
-        maxQueuedBytes: 1_000_000,
-        lowQueuedBytes: 0,
-        pauseQueuedOperations: 1_000,
-        maxQueuedOperations: 1_000,
-        lowQueuedOperations: 0
-      }
+      watermarks: { pauseQueuedBytes: 1, lowQueuedBytes: 0, lowQueuedOperations: 0 }
     })
     const releaseFirst = deferred.sink.bindReadingControl?.(firstControl)
 

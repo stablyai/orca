@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { isRootAgentJournalItem } from '../../shared/agent-session-journal-producer'
+import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import { encodeClaudeProjectPaths } from '../ai-vault/claude-project-dir-encoding'
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'

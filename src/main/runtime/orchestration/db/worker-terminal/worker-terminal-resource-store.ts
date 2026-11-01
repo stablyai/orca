@@ -2,10 +2,7 @@ import type {
   WorkerTerminalResourceRow,
   WorkerTerminalOwnershipState
 } from '../../worker-terminal-ownership'
-import {
-  USER_KEPT_WORKER_TERMINAL_SQL,
-  WORKER_SETTLED_STATES
-} from '../../worker-terminal-ownership'
+import { WORKER_SETTLED_STATES } from '../../worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -169,6 +166,9 @@ export function recordWorkerTerminalRecoveryAttempt(
   return this.getWorkerTerminalResource(resourceId)
 }
 
+const KEPT_OPEN_SQL =
+  "release_state = 'retained' AND retained_reason IN ('user_kept', 'user_requested')"
+
 // Transfer an exact settled resource and fence the prior owner; caller owns the transaction.
 export function transferWorkerTerminalResourceStatement(
   this: OrchestrationDb,
@@ -192,14 +192,14 @@ export function transferWorkerTerminalResourceStatement(
   }
   const priorOwners = JSON.parse(resource.prior_owner_dispatch_ids) as string[]
   priorOwners.push(resource.owner_dispatch_id)
-  // A coordinator's retain belongs to its Dispatch; the user's Keep open belongs to the worker.
+  // Keep open, from the user or the coordinator, belongs to the worker until it is released.
   this.db
     .prepare(
       `UPDATE worker_terminal_resources
        SET owner_dispatch_id = ?, prior_owner_dispatch_ids = ?,
-           release_state = CASE WHEN ${USER_KEPT_WORKER_TERMINAL_SQL}
+           release_state = CASE WHEN ${KEPT_OPEN_SQL}
              THEN release_state ELSE 'not_requested' END,
-           retained_reason = CASE WHEN ${USER_KEPT_WORKER_TERMINAL_SQL}
+           retained_reason = CASE WHEN ${KEPT_OPEN_SQL}
              THEN retained_reason END,
            release_requested_at = NULL, release_completed_at = NULL,
            release_error = NULL, auto_release_at = NULL, auto_release_dispatch_id = NULL,

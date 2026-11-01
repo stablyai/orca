@@ -1,12 +1,14 @@
 import type { MountAdapter, MountContext } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as MobileWebBundleOperations from '../../../transport/web-bundle/mobile-web-bundle-operations'
+import type * as MobileWebBundleFetch from '../../../transport/web-bundle/mobile-web-bundle-fetch'
 
-const OPERATIONS_MODULE = 'mobile/src/transport/mobile-web-bundle-operations.ts'
-const FETCH_MODULE = 'mobile/src/transport/mobile-web-bundle-fetch.ts'
+const OPERATIONS_MODULE = 'mobile/src/transport/web-bundle/mobile-web-bundle-operations.ts'
+const FETCH_MODULE = 'mobile/src/transport/web-bundle/mobile-web-bundle-fetch.ts'
 const RPC_OPERATION_MODULE = 'mobile/src/transport/rpc-operation.ts'
 
-type OperationsModule = typeof import('../../../transport/mobile-web-bundle-operations')
-type FetchModule = typeof import('../../../transport/mobile-web-bundle-fetch')
+type OperationsModule = typeof MobileWebBundleOperations
+type FetchModule = typeof MobileWebBundleFetch
 type RpcOperationModule = typeof import('../../../transport/rpc-operation')
 
 function describeFailure(operations: OperationsModule, error: unknown): string {

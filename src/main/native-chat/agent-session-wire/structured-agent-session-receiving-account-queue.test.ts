@@ -1,6 +1,6 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { StructuredNativeResponses } from './structured-agent-session-native-responses'
 import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
 import {

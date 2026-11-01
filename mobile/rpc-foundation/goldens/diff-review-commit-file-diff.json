@@ -1,0 +1,301 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.diff-review-load",
+  "family": "session.diff-review",
+  "namedDeltas": [],
+  "values": {
+    "5dc9494ad121": {
+      "name": "git.commitDiff#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.commitDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"commitOid\":\"c0ffee0123456789abcdef0123456789abcdef01\",\"parentOid\":\"beef0123456789abcdef0123456789abcdef0123\"}}"
+    },
+    "61b51593919d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [],
+        "commit": {
+          "commitOid": "c0ffee0123456789abcdef0123456789abcdef01",
+          "entries": [
+            {
+              "added": 2,
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            }
+          ],
+          "parentOid": "beef0123456789abcdef0123456789abcdef0123"
+        },
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "conflictOperation": "unknown",
+          "entries": []
+        }
+      }
+    },
+    "731c50dc5312": {
+      "branchCompare": "unloaded",
+      "diff": {
+        "itemKey": "commit:src/app.ts",
+        "kind": "ready",
+        "lines": [
+          {
+            "highlighted": true,
+            "kind": "context",
+            "newLineNumber": 1,
+            "oldLineNumber": 1,
+            "segments": [
+              {
+                "kind": "plain",
+                "text": "a"
+              }
+            ],
+            "text": "a"
+          },
+          {
+            "highlighted": true,
+            "kind": "add",
+            "newLineNumber": 2,
+            "segments": [
+              {
+                "kind": "plain",
+                "text": "b"
+              }
+            ],
+            "text": "b"
+          }
+        ],
+        "truncated": false
+      },
+      "snapshot": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [],
+        "commit": {
+          "commitOid": "c0ffee0123456789abcdef0123456789abcdef01",
+          "entries": [
+            {
+              "added": 2,
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            }
+          ],
+          "parentOid": "beef0123456789abcdef0123456789abcdef0123"
+        },
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "conflictOperation": "unknown",
+          "entries": []
+        }
+      }
+    },
+    "73a10d522a32": {
+      "branchCompare": "unloaded",
+      "diff": "unloaded",
+      "snapshot": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [],
+        "commit": {
+          "commitOid": "c0ffee0123456789abcdef0123456789abcdef01",
+          "entries": [
+            {
+              "added": 2,
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            }
+          ],
+          "parentOid": "beef0123456789abcdef0123456789abcdef0123"
+        },
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "conflictOperation": "unknown",
+          "entries": []
+        }
+      }
+    },
+    "78129084c077": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "itemKey": "commit:src/app.ts",
+        "kind": "ready",
+        "lines": [
+          {
+            "highlighted": true,
+            "kind": "context",
+            "newLineNumber": 1,
+            "oldLineNumber": 1,
+            "segments": [
+              {
+                "kind": "plain",
+                "text": "a"
+              }
+            ],
+            "text": "a"
+          },
+          {
+            "highlighted": true,
+            "kind": "add",
+            "newLineNumber": 2,
+            "segments": [
+              {
+                "kind": "plain",
+                "text": "b"
+              }
+            ],
+            "text": "b"
+          }
+        ],
+        "truncated": false
+      }
+    },
+    "8c562385dc94": {
+      "name": "git.commitDiff#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commitDiff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "commitOid": "c0ffee0123456789abcdef0123456789abcdef01",
+            "filePath": "src/app.ts",
+            "parentOid": "beef0123456789abcdef0123456789abcdef0123",
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "kind": "text",
+            "modifiedContent": "a\nb\n",
+            "modifiedIsBinary": false,
+            "originalContent": "a\n",
+            "originalIsBinary": false
+          }
+        }
+      }
+    },
+    "9d48143d94db": {
+      "name": "git.commitCompare#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.commitCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"commitId\":\"c0ffee0123456789abcdef0123456789abcdef01\"}}"
+    },
+    "f9d60d9b8a69": {
+      "name": "git.commitCompare#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commitCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "commitId": "c0ffee0123456789abcdef0123456789abcdef01",
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "entries": [
+              {
+                "added": 2,
+                "path": "src/app.ts",
+                "removed": 1,
+                "status": "modified"
+              }
+            ],
+            "summary": {
+              "baseRef": "beef012",
+              "changedFiles": 1,
+              "commitOid": "c0ffee0123456789abcdef0123456789abcdef01",
+              "compareRef": "c0ffee0",
+              "parentOid": "beef0123456789abcdef0123456789abcdef0123",
+              "status": "ready"
+            }
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "diff-review-commit-file-diff",
+    "checkpoints": [
+      {
+        "id": "commit",
+        "observation": {
+          "sender": ["f9d60d9b8a69"],
+          "payloads": ["9d48143d94db"],
+          "settlements": {
+            "commit": "61b51593919d"
+          },
+          "state": "73a10d522a32",
+          "effects": []
+        }
+      },
+      {
+        "id": "commit-file",
+        "observation": {
+          "sender": ["f9d60d9b8a69", "8c562385dc94"],
+          "payloads": ["9d48143d94db", "5dc9494ad121"],
+          "settlements": {
+            "commit": "61b51593919d",
+            "commit-file": "78129084c077"
+          },
+          "state": "731c50dc5312",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

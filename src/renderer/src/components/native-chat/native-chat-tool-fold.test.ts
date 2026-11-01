@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { stripNoiseMessages } from '../../../../shared/native-chat/native-chat-noise'
 import {
   foldToolMessages,

@@ -407,6 +407,8 @@
       "claudeRemoveFolder": "Orca 会从此计算机删除此账户的 Claude 文件夹及其登录信息。与系统默认共享的聊天记录会保留。如果此账户被选中，您下次启动的 Claude 将使用系统默认。"
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "其他工作区正在运行 Git 操作",
+      "remoteOperationInAnotherWorkspace": "其他工作区正在运行 Git 操作（例如推、拉或强力推）。请等待其完成后再使用此操作，以免操作重叠。",
       "actionModel": {
         "on": "开启",
         "off": "关闭",
@@ -1320,7 +1322,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "工作区之外的文件尚无法在配对服务器上预览。",
           "webClientUnavailable": "文档预览在 Web 客户端中不可用。"
         }
       },
@@ -5888,7 +5889,9 @@
           "9a5381eb09": "无法打开工作区文件夹。",
           "0bed8727db": "它可能已被手机或删除。刷新工作区或将其从 Orca 中删除。",
           "3921d3d9a5": "找不到工作区文件夹。",
+          "pathNotFound": "未找到文件或文件夹。它可能已被移动或删除。",
           "f387af445b": "工作区路径不是有效的本地路径。",
+          "pathInvalid": "路径不是有效的本地路径。",
           "localOnly": "Local only",
           "remoteSsh": "Remote SSH",
           "remoteRuntimeUnsupported": "无法在本地应用中打开此路径。",
@@ -5903,8 +5906,8 @@
           "remoteEditorUnsupportedDetail": "请选择 VS Code、Cursor 或 Zed，或在本地使用该应用。",
           "remotePathInvalid": "路径对此 SSH 主机无效。",
           "remotePathInvalidDetail": "请先刷新工作区，再重试。",
-          "remoteLaunchFailed": "无法在编辑器中打开此路径。",
-          "remoteLaunchFailedDetail": "请检查此计算机上配置的编辑器命令。",
+          "pathLaunchFailed": "无法在编辑器中打开此路径。",
+          "pathLaunchFailedDetail": "请检查此计算机上配置的编辑器命令。",
           "wsl": "WSL",
           "remoteEditorHint": "只有 VS Code、Cursor 和 Zed 可以打开 SSH 主机上的文件夹。",
           "remoteRuntimeEditorHint": "只有当 Orca 通过 SSH 连接到此服务器时，本机应用才能打开服务器上的文件。"
@@ -6688,6 +6691,7 @@
       },
       "settings": {
         "AccountsPane": {
+          "locationSaveFailed": "无法保存账户位置。请重试。",
           "c2d2751587": "删除账户",
           "dbb9626ed1": "取消",
           "63843e37e2": "删除 Claude 账户？",
@@ -6932,14 +6936,13 @@
           "932ff1fbff": "主题",
           "leftSidebarAppearance": {
             "title": "左侧边栏外观",
-            "rowDescription": "让左侧边栏匹配终端、保持默认，或使用色调。",
             "default": "默认",
-            "matchTerminal": "匹配终端",
             "tinted": "色调",
             "tintColor": "边栏色调",
             "tintColorDescription": "混入左侧边栏表面的颜色。",
             "tintOpacity": "色调强度",
-            "tintOpacityDescription": "控制色调混入边栏的强度。"
+            "tintOpacityDescription": "控制色调混入边栏的强度。",
+            "tintDescription": "保持左侧边栏默认或为其着色。要跟随终端，请将浅色或深色主题设为“匹配终端”。"
           },
           "2edf606c46": "关闭时最小化到托盘",
           "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。",
@@ -8645,10 +8648,7 @@
           "1afcc1d973": "垂直内边距",
           "25e2f8e8e1": "终端网格周围的水平填充（以像素为单位）。",
           "36b8402015": "水平内边距",
-          "53ce336e15": "重新启动 Orca 以应用窗口模糊更改。",
           "c65bb9ce63": "需要重新启动",
-          "97950bb087": "将背景模糊应用到终端窗口。需要重新启动。",
-          "2b82242f43": "窗口模糊",
           "809f37738d": "控制终端背景的透明度。 1 是完全不透明，0 是完全透明。",
           "ea7b1a158e": "背景不透明度",
           "03acb60aa0": "控制终端背景的透明度。",
@@ -9075,11 +9075,10 @@
             },
             "leftSidebarAppearance": {
               "title": "左侧边栏外观",
-              "description": "让左侧边栏匹配终端、保持默认，或使用色调。",
               "project": "项目",
-              "terminal": "终端",
               "background": "背景",
-              "tint": "着色"
+              "tint": "着色",
+              "tintDescription": "保持左侧边栏默认或为其着色。要跟随终端，请将浅色或深色主题设为“匹配终端”。"
             },
             "workspaceCardLayout": {
               "title": "工作区卡片布局",
@@ -9134,7 +9133,8 @@
             "zcodeUsageDescription": "在状态栏中显示 ZCode 编码计划配额使用情况。",
             "zcode": "零码",
             "zai": "在",
-            "glm": "格鲁姆"
+            "glm": "格鲁姆",
+            "matchTerminal": "匹配终端"
           }
         },
         "auto": {
@@ -10310,8 +10310,6 @@
             "f6dd9ff606": "背景",
             "71eb45e293": "模糊",
             "0838b3717b": "窗口",
-            "bc2054657a": "将背景模糊应用到终端窗口。需要重新启动。",
-            "72d0482137": "窗口模糊",
             "7db59c4738": "阿尔法",
             "46d99ef4bb": "不透明度",
             "4c643695aa": "控制终端背景的透明度。",
@@ -12431,7 +12429,9 @@
           "searchLabel": "搜索构建"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "使用其终端配色"
+          "useTerminalTheme": "使用其终端配色",
+          "matchTerminal": "匹配终端",
+          "dynamic": "动态"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -18991,6 +18991,8 @@
         "unnamedSender": "一个智能体",
         "messageFromCoordinator": "来自协调者的消息",
         "startedWorker": "已启动工作者",
+        "handedOffToAgent": "已移交给智能体",
+        "startedAgent": "已启动智能体",
         "taskFromCoordinator": "来自协调者的任务",
         "updateFromWorker": "来自工作者的更新"
       },
@@ -20217,8 +20219,7 @@
       "quitDuringMoveConfirm": "仍要退出"
     },
     "startupWorktreeRefresh": {
-      "loading": "正在发现工作区…",
-      "description": "本地和远程项目加载期间，可能会显示更多工作区。"
+      "loading": "正在发现工作区…"
     },
     "createProject": {
       "errors": {
@@ -20306,7 +20307,8 @@
     "wslHostOffer": {
       "title": "将 {{distro}} 作为主机运行（推荐）",
       "why": "Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
-      "accept": "作为主机运行"
+      "accept": "作为主机运行",
+      "projectNotFound": "找不到要移动的已添加项目。请在侧边栏的项目上使用“移到 {{distro}} 主机…”。"
     }
   },
   "editor": {
@@ -22688,12 +22690,14 @@
       "serveSimUnavailable": "serve-sim 不可用。",
       "serveSimNoEndpoints": "serve-sim 未返回流端点。",
       "serveSimEndpointUnreachable": "serve-sim 已启动，但无法访问其流端点。",
+      "deviceHubInputBlocked": "Xcode 的 Device Hub 已接管此模拟器的输入，因此点按和输入都无法送达。请退出 Device Hub，然后重新连接模拟器。",
       "androidSdkMissing": "未找到 Android SDK。请安装 Android Studio 并设置 ANDROID_HOME。",
       "adbUnavailable": "adb 不可用。",
       "noAndroidDevices": "未找到 Android 设备或 AVD。请在 Android Studio 中创建一个。",
       "androidDeviceNotRunning": "Android 设备“{{device}}”未运行。请先启动它。",
       "unknownDeviceOrAvd": "“{{device}}”不是正在运行的设备，也不是已知的 AVD。",
       "avdBootTimeout": "AVD “{{avdName}}”未能及时完成启动。",
+      "avdExitedBeforeBoot": "AVD “{{avdName}}”在完成启动前已停止：{{detail}}",
       "scrcpyDownloadFailed": "无法下载 scrcpy 服务器：{{detail}}",
       "scrcpyServerInvalid": "下载的 scrcpy 服务器无效或不完整。"
     },

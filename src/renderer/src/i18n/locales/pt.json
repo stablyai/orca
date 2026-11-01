@@ -432,8 +432,7 @@
       "cancel": "Manter filtros"
     },
     "startupWorktreeRefresh": {
-      "loading": "Descobrindo espaços de trabalho…",
-      "description": "Mais espaços de trabalho podem aparecer enquanto os projetos locais e remotos são carregados."
+      "loading": "Descobrindo espaços de trabalho…"
     },
     "wslMoved": {
       "movedToHost": "Movido para o host {{distro}}",
@@ -594,7 +593,8 @@
     "wslHostOffer": {
       "title": "Executar {{distro}} como host (recomendado)",
       "why": "Git, arquivos e terminais passam a rodar nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
-      "accept": "Executar como host"
+      "accept": "Executar como host",
+      "projectNotFound": "Não foi possível encontrar o projeto adicionado para mover. Use \"Mover para o host {{distro}}…\" no projeto na barra lateral."
     }
   },
   "tray": {
@@ -1596,6 +1596,8 @@
       "claudeRemoveFolder": "O Orca exclui deste computador a pasta do Claude desta conta e seu login. O histórico de chat compartilhado com Padrão do sistema é mantido. Se esta conta estiver selecionada, o próximo Claude que você iniciar usará Padrão do sistema."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Operação do Git em outro lugar",
+      "remoteOperationInAnotherWorkspace": "Outro espaço de trabalho está executando uma operação do Git, como push, pull ou force push. Aguarde a conclusão antes de usar esta ação para que as operações não se sobreponham.",
       "actionModel": {
         "on": "Ativado",
         "off": "Desativado",
@@ -2685,7 +2687,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Arquivos fora do espaço de trabalho ainda não podem ser pré-visualizados em um servidor pareado.",
           "webClientUnavailable": "Prévias de documentos não estão disponíveis no cliente web."
         }
       },
@@ -3620,8 +3621,6 @@
             "f6dd9ff606": "fundo",
             "71eb45e293": "desfoque",
             "0838b3717b": "janela",
-            "bc2054657a": "Aplica desfoque de fundo à janela do terminal. Requer reinicialização.",
-            "72d0482137": "Desfoque da Janela",
             "7db59c4738": "alfa",
             "46d99ef4bb": "opacidade",
             "4c643695aa": "Controla a transparência do fundo do terminal.",
@@ -4012,6 +4011,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Não foi possível salvar o local das contas. Tente novamente.",
           "c2d2751587": "Remover Conta",
           "dbb9626ed1": "Cancelar",
           "63843e37e2": "Remover Conta do Claude?",
@@ -4279,11 +4279,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Aparência da Barra Lateral Esquerda",
-              "description": "Faça a barra lateral esquerda combinar com seu terminal, manter o padrão ou usar uma tonalidade.",
               "project": "projeto",
-              "terminal": "terminal",
               "background": "fundo",
-              "tint": "tonalidade"
+              "tint": "tonalidade",
+              "tintDescription": "Mantenha a barra lateral esquerda padrão ou aplique uma tonalidade. Para seguir o terminal, escolha Combinar com o Terminal como tema claro ou escuro."
             },
             "workspaceCardLayout": {
               "title": "Layout do Cartão de Espaço de Trabalho",
@@ -4336,7 +4335,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "Combinar com o Terminal"
           }
         },
         "repository": {
@@ -5186,10 +5186,7 @@
           "1afcc1d973": "Espaçamento Interno Vertical",
           "25e2f8e8e1": "Espaçamento interno horizontal em volta da grade do terminal, em pixels.",
           "36b8402015": "Espaçamento Interno Horizontal",
-          "53ce336e15": "Reinicie o Orca para aplicar a alteração de desfoque da janela.",
           "c65bb9ce63": "Reinicialização necessária",
-          "97950bb087": "Aplica desfoque de fundo à janela do terminal. Requer reinicialização.",
-          "2b82242f43": "Desfoque da Janela",
           "809f37738d": "Controla a transparência do fundo do terminal. 1 é totalmente opaco, 0 é totalmente transparente.",
           "ea7b1a158e": "Opacidade do Fundo",
           "03acb60aa0": "Controla a transparência do fundo do terminal.",
@@ -5495,14 +5492,13 @@
           "932ff1fbff": "Tema",
           "leftSidebarAppearance": {
             "title": "Aparência da Barra Lateral Esquerda",
-            "rowDescription": "Faça a barra lateral esquerda combinar com seu terminal, manter o padrão ou usar uma tonalidade.",
             "default": "Padrão",
-            "matchTerminal": "Combinar com o Terminal",
             "tinted": "Tonalizado",
             "tintColor": "Tonalidade da Barra Lateral",
             "tintColorDescription": "A cor misturada na superfície da barra lateral esquerda.",
             "tintOpacity": "Intensidade da Tonalidade",
-            "tintOpacityDescription": "Controla com que intensidade a tonalidade é misturada na barra lateral."
+            "tintOpacityDescription": "Controla com que intensidade a tonalidade é misturada na barra lateral.",
+            "tintDescription": "Mantenha a barra lateral esquerda padrão ou aplique uma tonalidade. Para seguir o terminal, escolha Combinar com o Terminal como tema claro ou escuro."
           },
           "interfaceDefaultFont": "Fonte padrão",
           "terminalDefaultFont": "Fonte padrão",
@@ -9624,6 +9620,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "Criar"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "Combinar com o Terminal",
+          "dynamic": "dinâmico"
         }
       },
       "right": {
@@ -11585,15 +11585,17 @@
           "remoteEditorUnsupportedDetail": "Escolha VS Code, Cursor ou Zed, ou use o app localmente.",
           "remotePathInvalid": "O caminho não é válido para o host SSH.",
           "remotePathInvalidDetail": "Atualize o espaço de trabalho antes de tentar novamente.",
-          "remoteLaunchFailed": "Não foi possível abrir o caminho no editor.",
-          "remoteLaunchFailedDetail": "Verifique o comando do editor configurado nesta máquina.",
+          "pathLaunchFailed": "Não foi possível abrir o caminho no editor.",
+          "pathLaunchFailedDetail": "Verifique o comando do editor configurado nesta máquina.",
           "1417fd8380": "Personalizar aplicativos...",
           "8009ab69a6": "Abrir em",
           "bd0e8159f8": "Verifique a configuração do comando do editor ou do gerenciador de arquivos nesta máquina.",
           "9a5381eb09": "Não foi possível abrir a pasta do espaço de trabalho.",
           "0bed8727db": "Ela pode ter sido movida ou excluída. Atualize os espaços de trabalho ou remova-a do Orca.",
           "3921d3d9a5": "A pasta do espaço de trabalho não foi encontrada.",
+          "pathNotFound": "Arquivo ou pasta não encontrado. Ele pode ter sido movido ou excluído.",
           "f387af445b": "O caminho do espaço de trabalho não é um caminho local válido.",
+          "pathInvalid": "O caminho não é um caminho local válido.",
           "remoteEditorHint": "Somente VS Code, Cursor e Zed podem abrir pastas em um host SSH.",
           "remoteRuntimeEditorHint": "Os aplicativos deste computador só podem abrir arquivos deste servidor quando o Orca se conecta a ele por SSH.",
           "wsl": "WSL"
@@ -20702,6 +20704,8 @@
         "unnamedSender": "um agente",
         "messageFromCoordinator": "Mensagem do coordenador",
         "startedWorker": "Worker iniciado",
+        "handedOffToAgent": "Entregue a um agente",
+        "startedAgent": "Agente iniciado",
         "taskFromCoordinator": "Tarefa do coordenador",
         "updateFromWorker": "Atualização do worker"
       },
@@ -23360,12 +23364,14 @@
       "serveSimUnavailable": "serve-sim não está disponível.",
       "serveSimNoEndpoints": "serve-sim não retornou endpoints de streaming.",
       "serveSimEndpointUnreachable": "serve-sim foi iniciado, mas seu endpoint de streaming não está acessível.",
+      "deviceHubInputBlocked": "O Device Hub do Xcode assumiu a entrada deste simulador, então toques e digitação não chegarão até ele. Feche o Device Hub e conecte o simulador novamente.",
       "androidSdkMissing": "Android SDK não encontrado. Instale o Android Studio e defina ANDROID_HOME.",
       "adbUnavailable": "adb não está disponível.",
       "noAndroidDevices": "Nenhum dispositivo Android ou AVD encontrado. Crie um no Android Studio.",
       "androidDeviceNotRunning": "O dispositivo Android \"{{device}}\" não está em execução. Inicie-o primeiro.",
       "unknownDeviceOrAvd": "\"{{device}}\" não é um dispositivo em execução nem um AVD conhecido.",
       "avdBootTimeout": "O AVD \"{{avdName}}\" não terminou de inicializar a tempo.",
+      "avdExitedBeforeBoot": "O AVD \"{{avdName}}\" parou antes de terminar de inicializar: {{detail}}",
       "scrcpyDownloadFailed": "Não foi possível baixar o servidor scrcpy: {{detail}}",
       "scrcpyServerInvalid": "O servidor scrcpy baixado era inválido ou estava incompleto."
     },

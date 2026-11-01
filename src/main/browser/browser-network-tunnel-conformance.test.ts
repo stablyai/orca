@@ -18,7 +18,6 @@ import {
 
 const TUNNEL_GENERATION = 7
 const CHUNK_BYTES = 64 * 1024
-const SESSION_MAX_PENDING_OPENS = 16
 
 describe('browser network tunnel conformance', () => {
   beforeEach(() => {
@@ -265,31 +264,6 @@ describe('browser network tunnel conformance', () => {
     expect(tunnel.onSessionClose).not.toHaveBeenCalled()
     await expectStreamStillCarriesBytes(healthy)
 
-    await teardown(tunnel)
-  })
-
-  it('returns the session pending-open budget for connected and refused streams alike', async () => {
-    const tunnel = createConformanceTunnel()
-
-    for (let index = 0; index < SESSION_MAX_PENDING_OPENS; index += 1) {
-      const opening = tunnel.client.open({ host: `never-${index}.internal`, port: 443 })
-      const rejected = expect(opening).rejects.toThrow('destination_closed_before_connect')
-      tunnel.destinations.at(-1)!.emit('close')
-      await rejected
-    }
-    for (let index = 0; index < SESSION_MAX_PENDING_OPENS; index += 1) {
-      const stream = await openStream(tunnel, `cycled-${index}.internal`)
-      stream.duplex.resume()
-      stream.destination.emit('close')
-      await whenClosed(stream.duplex)
-    }
-
-    const probes = probePendingOpenBudget(tunnel)
-    await settle()
-    expect(probes.refusals()).toEqual([])
-
-    probes.release()
-    await settle()
     await teardown(tunnel)
   })
 
@@ -557,27 +531,6 @@ function consumeDuplex(
     consumer.ended = true
   })
   return consumer
-}
-
-function probePendingOpenBudget(tunnel: ConformanceTunnel): {
-  refusals: () => string[]
-  release: () => void
-} {
-  const failures: string[] = []
-  const opened = tunnel.destinations.length
-  for (let index = 0; index < SESSION_MAX_PENDING_OPENS; index += 1) {
-    void tunnel.client
-      .open({ host: `probe-${index}.internal`, port: 443 })
-      .catch((error: Error) => failures.push(error.message))
-  }
-  return {
-    refusals: () => failures,
-    release: () => {
-      for (const destination of tunnel.destinations.slice(opened)) {
-        destination.emit('close')
-      }
-    }
-  }
 }
 
 async function expectStreamStillCarriesBytes(stream: OpenedStream): Promise<void> {

@@ -1,4 +1,4 @@
-import * as optionCatalog from './agent-session-option-catalog'
+import * as optionCatalog from './agent-session/options/agent-session-option-catalog'
 import { describe, expect, it, vi } from 'vitest'
 import {
   resolveAgentStartupPlanInputs,
@@ -7,7 +7,7 @@ import {
 import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import { resolveAgentChoiceLayers } from './agent-choice-layers'
-import { getAgentSessionOptionLaunchCatalog } from './agent-session-option-catalog'
+import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 
 function words(command: string, shell: AgentStartupShell = 'posix') {

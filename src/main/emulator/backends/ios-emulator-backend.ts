@@ -27,6 +27,7 @@ import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emula
 import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
 import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
 import { hideNativeSimulatorApp } from '../simulator-app-visibility'
+import { assertSimulatorInputNotShadowedByDeviceHub } from '../simulator-device-hub-input'
 import type {
   BackendAvailability,
   EmulatorBackend,
@@ -88,10 +89,6 @@ export class IosEmulatorBackend implements EmulatorBackend {
     return listSimulatorDevices()
   }
 
-  async listRunningHelpers(): Promise<unknown> {
-    return this.execServeSim(['--list', '-q'], { json: true })
-  }
-
   async checkServeSimAvailable(): Promise<void> {
     await this.execServeSim(['--help'], { timeoutMs: 10_000 })
   }
@@ -131,11 +128,12 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   async tap(deviceId: string, x: number, y: number): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
+    await assertSimulatorInputNotShadowedByDeviceHub(udid)
     await this.execServeSim(['tap', x.toString(), y.toString(), '-d', udid])
   }
 
   async gesture(
-    _deviceId: string,
+    deviceId: string,
     points: EmulatorGesturePoint[],
     wsUrl: string | null
   ): Promise<void> {
@@ -145,11 +143,13 @@ export class IosEmulatorBackend implements EmulatorBackend {
     if (!wsUrl) {
       throw new EmulatorError('emulator_no_active', 'No active emulator stream for gesture input')
     }
+    await assertSimulatorInputNotShadowedByDeviceHub(deviceId)
     await sendEmulatorGestureSequence(wsUrl, points)
   }
 
   async type(deviceId: string, text: string): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
+    await assertSimulatorInputNotShadowedByDeviceHub(udid)
     await this.execServeSim(['type', text, '-d', udid])
   }
 
@@ -270,11 +270,16 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   private async hasHelperForSession(info: EmulatorSessionInfo): Promise<boolean> {
-    const helpers = await listServeSimHelperProcessesForDevice(info.deviceUdid, {
-      helperPid: info.helperPid,
-      includeOrphaned: true
-    }).catch(() => [])
-    return helpers.length > 0
+    try {
+      const helpers = await listServeSimHelperProcessesForDevice(info.deviceUdid, {
+        helperPid: info.helperPid,
+        includeOrphaned: info.helperPid === undefined
+      })
+      return helpers.length > 0
+    } catch {
+      // Endpoint readiness already proves the helper is serving; never recycle it on a failed ps read.
+      return true
+    }
   }
 
   private async execServeSim(

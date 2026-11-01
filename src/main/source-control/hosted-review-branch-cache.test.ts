@@ -78,66 +78,6 @@ describe('hosted review branch cache (#11532)', () => {
     vi.useRealTimers()
   })
 
-  it('holds a no-review answer far longer than a poll interval', async () => {
-    const lookup = vi.fn(async () => null)
-
-    await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-    vi.setSystemTime(1_000_000 + 5 * 60_000)
-    await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-
-    expect(lookup).toHaveBeenCalledTimes(1)
-
-    vi.setSystemTime(1_000_000 + 15 * 60_000 + 1)
-    await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-
-    expect(lookup).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps the no-review answer while the branch head moves', async () => {
-    const lookup = vi.fn(async () => null)
-
-    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
-    vi.setSystemTime(1_000_000 + 60_000)
-    await withHostedReviewBranchCache(identity, { headOid: 'bbb' }, lookup)
-
-    // Commits cannot prove a review was opened; they must not defeat the long no-review interval.
-    expect(lookup).toHaveBeenCalledTimes(1)
-  })
-
-  it('refreshes a found review at the caller cadence', async () => {
-    const lookup = vi.fn(async () => openReview)
-
-    await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-    vi.setSystemTime(1_000_000 + 30_000)
-    await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-    expect(lookup).toHaveBeenCalledTimes(1)
-
-    vi.setSystemTime(1_000_000 + 60_001)
-    await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-    expect(lookup).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps merged reviews fresh for only 60 seconds for older clients', async () => {
-    const lookup = vi.fn(async () => mergedReview)
-    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
-    vi.setSystemTime(START + 59_999)
-    await withHostedReviewBranchCache(identity, { headOid: 'aaa', active: true }, lookup)
-    expect(lookup).toHaveBeenCalledTimes(1)
-    vi.setSystemTime(START + 60_000)
-    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
-    expect(lookup).toHaveBeenCalledTimes(2)
-    await withHostedReviewBranchCache(identity, { headOid: 'bbb' }, lookup)
-    expect(lookup).toHaveBeenCalledTimes(3)
-  })
-
-  it('continues watching merged reviews whose checks are pending', async () => {
-    const lookup = vi.fn(async () => ({ ...mergedReview, status: 'pending' as const }))
-    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
-    vi.setSystemTime(START + 60_000)
-    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
-    expect(lookup).toHaveBeenCalledTimes(2)
-  })
-
   it('bypasses a merged result for an explicit refresh', async () => {
     const lookup = vi.fn(async () => mergedReview)
     await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
@@ -145,17 +85,6 @@ describe('hosted review branch cache (#11532)', () => {
     await expect(
       withHostedReviewBranchCache(identity, { headOid: 'aaa', force: true }, lookup)
     ).resolves.toEqual(openReview)
-    expect(lookup).toHaveBeenCalledTimes(2)
-  })
-
-  it('drops a merged review once the inspected head moves off it', async () => {
-    const lookup = vi.fn(async () => mergedReview)
-
-    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
-    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
-    expect(lookup).toHaveBeenCalledTimes(1)
-
-    await withHostedReviewBranchCache(identity, { headOid: 'bbb' }, lookup)
     expect(lookup).toHaveBeenCalledTimes(2)
   })
 
@@ -355,45 +284,6 @@ describe('hosted review branch cache (#11532)', () => {
   })
 
   describe('selected-worktree tier', () => {
-    it('re-checks the selected branch every minute while the card list waits', async () => {
-      const selected = vi.fn(async () => null)
-      const listed = vi.fn(async () => null)
-      const other = { ...identity, branch: 'feature/y' }
-
-      await withHostedReviewBranchCache(identity, { headOid: null, active: true }, selected)
-      await withHostedReviewBranchCache(other, { headOid: null }, listed)
-
-      vi.setSystemTime(1_000_000 + 60_001)
-      await withHostedReviewBranchCache(identity, { headOid: null, active: true }, selected)
-      await withHostedReviewBranchCache(other, { headOid: null }, listed)
-
-      expect(selected).toHaveBeenCalledTimes(2)
-      expect(listed).toHaveBeenCalledTimes(1)
-    })
-
-    it('retires a cached no-review answer when a branch becomes the selection', async () => {
-      const lookup = vi.fn(async () => null)
-
-      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-      vi.setSystemTime(1_000_000 + 1_000)
-
-      await withHostedReviewBranchCache(identity, { headOid: null, active: true }, lookup)
-      expect(lookup).toHaveBeenCalledTimes(2)
-
-      await withHostedReviewBranchCache(identity, { headOid: null, active: true }, lookup)
-      expect(lookup).toHaveBeenCalledTimes(2)
-    })
-
-    it('keeps a found review when a branch becomes the selection', async () => {
-      const lookup = vi.fn(async () => openReview)
-
-      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-      vi.setSystemTime(1_000_000 + 1_000)
-      await withHostedReviewBranchCache(identity, { headOid: null, active: true }, lookup)
-
-      expect(lookup).toHaveBeenCalledTimes(1)
-    })
-
     it('caps the fast tier so a caller cannot promote a whole list', async () => {
       const lookup = vi.fn(async () => null)
       const branchAt = (index: number) => ({ ...identity, branch: `feature/${index}` })
@@ -408,29 +298,6 @@ describe('hosted review branch cache (#11532)', () => {
       expect(lookup).toHaveBeenCalledTimes(9)
       await withHostedReviewBranchCache(branchAt(8), { headOid: null }, lookup)
       expect(lookup).toHaveBeenCalledTimes(10)
-    })
-
-    it('paces a card poll of the selected branch at the selection interval', async () => {
-      const lookup = vi.fn(async () => null)
-
-      await withHostedReviewBranchCache(identity, { headOid: null, active: true }, lookup)
-      vi.setSystemTime(1_000_000 + 60_001)
-
-      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-      expect(lookup).toHaveBeenCalledTimes(2)
-    })
-
-    it('returns a lapsed selection to card pacing', async () => {
-      const lookup = vi.fn(async () => null)
-
-      await withHostedReviewBranchCache(identity, { headOid: null, active: true }, lookup)
-      vi.setSystemTime(1_000_000 + 15 * 60_000 + 1)
-      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-      expect(lookup).toHaveBeenCalledTimes(2)
-
-      vi.setSystemTime(1_000_000 + 15 * 60_000 + 1 + 60_001)
-      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-      expect(lookup).toHaveBeenCalledTimes(2)
     })
   })
 

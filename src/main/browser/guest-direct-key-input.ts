@@ -10,7 +10,7 @@ import { sendFrameSessionInput } from './guest-frame-input-sessions'
 import { planCdpKeyEvent, planInsertText, type GuestEditCommand } from './guest-key-event-plan'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 import { acquireElectronDebugger } from './electron-debugger-lease'
-import { normalizeCdpPointerButton } from './agent-browser-bridge-mouse'
+import { normalizeCdpPointerButton } from './agent-browser/agent-browser-bridge-mouse'
 import { cdpPointerStateFor, releaseCdpPointerButton } from './cdp-pointer-input'
 import {
   assertRemoteCliPageAccess,

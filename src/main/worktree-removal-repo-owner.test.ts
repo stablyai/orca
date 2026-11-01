@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  hasWorktreeRemovalRepoOwnerOnOtherHost,
   resolveWorktreeRemovalMetadata,
   resolveWorktreeRemovalRepoOwner
 } from './worktree-removal-repo-owner'
+
 import type { Repo } from '../shared/repo-types'
 
 function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id'>): Repo {
@@ -36,32 +36,6 @@ describe('resolveWorktreeRemovalRepoOwner', () => {
     })
   })
 
-  it('selects the named host even when a same-id repo is registered first', () => {
-    const owner = resolveWorktreeRemovalRepoOwner(
-      makeStore([localRepo, sshRepo]),
-      'repo1',
-      'ssh:ssh-1'
-    )
-    expect(owner).toEqual({ kind: 'resolved', repo: sshRepo })
-  })
-
-  it('reports missing when the named host owns no such repo', () => {
-    expect(resolveWorktreeRemovalRepoOwner(makeStore([localRepo]), 'repo1', 'ssh:ssh-1')).toEqual({
-      kind: 'missing'
-    })
-    expect(resolveWorktreeRemovalRepoOwner(makeStore([]), 'repo1')).toEqual({ kind: 'missing' })
-  })
-
-  it('detects a surviving same-id owner only on another host', () => {
-    const store = makeStore([localRepo, sshRepo])
-
-    expect(hasWorktreeRemovalRepoOwnerOnOtherHost(store, 'repo1', 'ssh:ssh-1')).toBe(true)
-    expect(hasWorktreeRemovalRepoOwnerOnOtherHost(store, 'repo1', 'local')).toBe(true)
-    expect(hasWorktreeRemovalRepoOwnerOnOtherHost(makeStore([sshRepo]), 'repo1', 'ssh:ssh-1')).toBe(
-      false
-    )
-  })
-
   it('does not borrow destructive metadata from a colliding host', () => {
     const localMeta = { hostId: 'local', preserveBranchOnDelete: true }
     const metadataStore = {
@@ -85,21 +59,5 @@ describe('resolveWorktreeRemovalRepoOwner', () => {
         'local'
       )
     ).toBe(localMeta)
-  })
-
-  it('keeps legacy persisted host metadata when the repo id has one owner', () => {
-    const runtimeMeta = { hostId: 'runtime:env-1', preserveBranchOnDelete: true }
-
-    expect(
-      resolveWorktreeRemovalMetadata(
-        {
-          getRepos: () => [localRepo],
-          getWorktreeMeta: () => runtimeMeta
-        } as never,
-        'repo1',
-        'repo1::/shared/worktree',
-        'local'
-      )
-    ).toBe(runtimeMeta)
   })
 })

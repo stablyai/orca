@@ -123,39 +123,47 @@ describe('createProgramStatusProjector', () => {
     expect(cleared.subagents).toBeUndefined()
   })
 
-  it("keeps a finished turn working while a child runs, stamping the turn's own end for both rows", () => {
+  it('keeps a finished turn working while a child runs, leaving it to the all-clear to announce', () => {
     const { feed, tick } = projector()
     feed(osc('state=working:app=pi') + osc('state=working:id=subagents/run1:app=pi-subagents'))
     tick(10)
-    expect(feed(osc('state=done:app=pi'))).toMatchObject([
-      {
-        state: 'working',
-        turnCompletedAt: 1010,
-        mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 1010 },
-        subagents: [{ id: 'subagents/run1', state: 'working' }]
-      }
-    ])
+    const [held] = feed(osc('state=done:app=pi'))
+    expect(held).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 1010 },
+      subagents: [{ id: 'subagents/run1', state: 'working' }]
+    })
+    expect(held.turnCompletedAt).toBeUndefined()
     tick(10)
     const [settled] = feed(osc('state=done:id=subagents/run1:app=pi-subagents'))
     expect(settled).toMatchObject({
       state: 'done',
-      turnCompletedAt: 1010,
       mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 1010 }
     })
+    expect(settled.turnCompletedAt).toBeUndefined()
     expect(settled.subagents).toBeUndefined()
   })
 
-  it("lapses a hold no child refreshed to the lead's done, keeping its completion stamp", () => {
+  it("stamps a failed turn's own end while a child still runs, for both rows", () => {
+    const { feed, tick } = projector()
+    feed(osc('state=working:app=pi') + osc('state=working:id=subagents/run1:app=pi-subagents'))
+    tick(10)
+    expect(feed(osc('state=error:app=pi'))).toMatchObject([
+      { state: 'working', turnCompletedAt: 1010, mainAgent: { state: 'done', outcome: 'failure' } }
+    ])
+    tick(10)
+    expect(feed(osc('state=done:id=subagents/run1:app=pi-subagents'))).toMatchObject([
+      { state: 'done', turnCompletedAt: 1010 }
+    ])
+  })
+
+  it("lapses a hold no child refreshed to the lead's done, keeping its verdict", () => {
     const { feed } = projector()
     feed(osc('state=working:app=pi') + osc('state=working:id=subagents/run1'))
     const [held] = feed(osc('state=done:app=pi'))
     expect(lapsedProgramStatusChildHold(held, 0, 999, 1000)).toBeNull()
     const lapsed = lapsedProgramStatusChildHold(held, 0, 1000, 1000)
-    expect(lapsed).toMatchObject({
-      state: 'done',
-      turnCompletedAt: held.turnCompletedAt,
-      mainAgent: held.mainAgent
-    })
+    expect(lapsed).toMatchObject({ state: 'done', mainAgent: held.mainAgent })
     expect(lapsed?.subagents).toBeUndefined()
     const [settled] = feed(osc('state=done:id=subagents/run1'))
     expect(lapsedProgramStatusChildHold(settled, 0, 1000, 1000)).toBeNull()

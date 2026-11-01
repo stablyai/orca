@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../agent-session-journal-types'
-import { projectNativeChatTranscriptMessages } from '../native-chat-transcript-projection'
-import { projectStructuredAgentSessionMessages } from '../structured-agent-session-message-projection'
+import type { AgentJournalRenderItem } from './journal/agent-session-journal-types'
+import { projectNativeChatTranscriptMessages } from '../native-chat/transcript/native-chat-transcript-projection'
+import { projectStructuredAgentSessionMessages } from './view/structured-agent-session-message-projection'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../structured-agent-session-reducer'
-import type { AgentSessionSubscribeEvent } from '../agent-session-wire'
+} from './structured-agent-session-reducer'
+import type { AgentSessionSubscribeEvent } from './agent-session-wire'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS,
   createStructuredAgentSessionEventCoalescer
