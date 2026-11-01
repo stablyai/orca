@@ -1,17 +1,17 @@
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
-import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { DeviceEntry } from '../runtime/device-registry'
-import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
 import {
-  getDefaultPairingAddress,
+  requestMobilePairingOffer,
+  requestRuntimePairingOffer
+} from '../runtime/pairing-offer-requests'
+import {
   getPairingNetworkInterfaces,
   type DefaultRouteInterfaceLookup,
   type NetworkInterface
 } from '../runtime/pairing-network-interfaces'
-import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
@@ -22,15 +22,6 @@ import {
   repairWindowsMobileFirewall,
   type WindowsMobileFirewallEnvironment
 } from '../runtime/windows-mobile-firewall'
-
-// Only explicit this-computer intent plus a loopback address avoids widening; custom tunnel endpoints still need remote reach.
-function servesThisComputerOnly(reach: RuntimePairingReach | undefined, address: string): boolean {
-  if (reach !== 'this-computer') {
-    return false
-  }
-  const hostname = resolveAdvertisedPairingHostname(address)
-  return hostname !== null && classifyRemotePairingHostname(hostname) === 'loopback'
-}
 
 function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
   return {
@@ -82,30 +73,15 @@ export function registerMobileHandlers(
         rotate?: boolean
       }
     ) => {
-      // Explicit interfaces support overlay networks unreachable through the default LAN candidate.
-      const ip =
-        args?.address ??
-        (await getDefaultPairingAddress(
-          rpcServer.getNetworkExposureBindHost(),
-          getDefaultRouteInterfaceNames
-        ))
-      // Relay works without a direct candidate; LAN-only must refuse when none is usable.
-      if (!ip && args?.connectionMode === 'local-only') {
-        return {
-          available: false as const,
-          reason: 'invalid_advertised_endpoint',
-          guidance:
-            'No reachable network address is available for pairing. Connect to Wi‑Fi or Tailscale, or pick an address manually.'
-        }
-      }
-
-      // Reuse never-scanned tokens until explicit rotation; authenticated entries remain independent.
-      const offer = await rpcServer.createMobilePairingOffer({
-        address: ip,
-        connectionMode: args?.connectionMode,
-        rotate: args?.rotate,
-        name: `Mobile ${new Date().toLocaleDateString()}`
-      })
+      const offer = await requestMobilePairingOffer(
+        rpcServer,
+        {
+          address: args?.address,
+          connectionMode: args?.connectionMode,
+          rotate: args?.rotate
+        },
+        getDefaultRouteInterfaceNames
+      )
       if (!offer.available) {
         // Preserve relay mint failures instead of silently presenting a LAN offer under the Relay label.
         return {
@@ -124,8 +100,7 @@ export function registerMobileHandlers(
         qrSize: qr.ok ? qr.qrSize : null,
         ...(!qr.ok ? { qrError: qr.reason } : {}),
         pairingUrl: offer.pairingUrl,
-        // Unadvertised loopback fallback points at the scanning device; omit it from UI endpoints.
-        endpoint: ip ? offer.endpoint : null,
+        endpoint: offer.endpoint,
         deviceId: offer.deviceId,
         connectionMode: offer.connectionMode
       }
@@ -135,46 +110,16 @@ export function registerMobileHandlers(
   ipcMain.handle(
     'mobile:getRuntimePairingUrl',
     async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
-      const ip =
-        args?.address ??
-        (await getDefaultPairingAddress(
-          rpcServer.getNetworkExposureBindHost(),
-          getDefaultRouteInterfaceNames
-        ))
-      if (!ip) {
-        return { available: false as const }
-      }
-
-      // Widen before advertising remote reach; this-computer intent must not trigger the irreversible widening (STA-2370).
-      const thisComputerOnly = servesThisComputerOnly(args?.reach, ip)
-      if (!thisComputerOnly) {
-        try {
-          await rpcServer.ensureNetworkExposure()
-        } catch (error) {
-          console.error(
-            '[mobile] Network exposure failed while creating a runtime pairing offer:',
-            error
-          )
-          // Preserve actionable widening failure guidance rather than generic unavailability.
-          return {
-            available: false as const,
-            reason: 'network_exposure_failed' as const,
-            guidance: NETWORK_EXPOSURE_FAILED_GUIDANCE
-          }
-        }
-      }
-
-      // Web/desktop runtime clients need full access instead of the phone allow-list.
-      const offer = rpcServer.createPairingOffer({
-        address: ip,
-        rotate: args?.rotate,
-        name: `Runtime ${new Date().toLocaleDateString()}`,
-        scope: 'runtime',
-        // Persist local reach so local authentication cannot expose the next launch to the LAN.
-        reach: thisComputerOnly ? 'this-computer' : 'network'
-      })
+      const offer = await requestRuntimePairingOffer(
+        rpcServer,
+        { address: args?.address, rotate: args?.rotate, reach: args?.reach },
+        getDefaultRouteInterfaceNames
+      )
       if (!offer.available) {
-        return { available: false as const }
+        // Preserve actionable widening failure guidance rather than generic unavailability.
+        return offer.reason === 'network_exposure_failed'
+          ? { available: false as const, reason: offer.reason, guidance: offer.guidance }
+          : { available: false as const }
       }
 
       return {

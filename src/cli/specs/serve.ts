@@ -27,7 +27,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'With --port, serve exits with an error when that port is already in use. Without it, serve uses 6768 and moves to another port when 6768 is taken.',
       '--pairing-address changes only the client-advertised address; use a reachable LAN, Tailscale, SSH-forward, or reverse-proxy endpoint.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
-      'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
+      'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link. To pair later without restarting, run `orca pair`.',
+      'On a packaged macOS app serve runs Electron, which needs a desktop login; over SSH with nobody logged in, set ORCA_SERVE_RUNTIME=orcad to run the Node server instead (it has no in-app updater).',
       "A paired client cannot drive this machine's desktop (orca computer) unless the offer was created with --grant-desktop-control.",
       'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.',
       'Exits with code 3, without starting anything, when another Orca already serves this profile or cannot be shown to have stopped.',
@@ -66,7 +67,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'port', 'pairing-address', 'command', 'dry-run'],
     notes: [
       'macOS writes a LaunchAgent; Linux writes a systemd user unit. Both run `orca serve --supervise --no-pairing` for this profile, so the server restarts with growing delays and gives up after repeated failures instead of looping.',
-      'The service never prints a pairing link to its log. Pair clients from the desktop app, or with `orca serve` in a terminal while the service is stopped.',
+      'The service never prints a pairing link to its log. Pair clients with `orca pair` while it runs, or from the desktop app.',
       'On Linux the service stops at logout unless lingering is on (`loginctl enable-linger`); install reports it.',
       "Reinstalling replaces the unit and clears a previous give-up. --command defaults to the installed Orca app's `orca` command on PATH (`orca-ide` on Linux) and must not be a launcher tied to one Orca version. --dry-run prints the unit without installing it.",
       "Needs the Orca app installed on this machine. The `orca` command in an Orca terminal on an SSH host belongs to that connection's server and cannot install a service.",
