@@ -17151,6 +17151,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
@@ -17189,6 +17190,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
@@ -17227,6 +17229,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
@@ -17257,6 +17260,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
