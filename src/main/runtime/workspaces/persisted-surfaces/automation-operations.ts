@@ -1,14 +1,7 @@
-import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
-import {
-  readCrewRuntimeInputs,
-  watchCrewRuntimeSources
-} from '../../orchestration/crew/crew-runtime-watch'
-import { CrewReadModel } from '../../orchestration/crew/crew-read-model'
-import { getPublishedHostDescriptor } from '../../host-descriptor'
 import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/worker-terminal-auto-release-scheduler'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { OrcaRuntimeWithOrchestrationDatabaseBinding } from './orchestration-database-binding'
+import { OrcaRuntimeWithCrewOperations } from './crew-operations'
 import type {
   AutomationOwnerPrecondition,
   AutomationDestination,
@@ -35,9 +28,7 @@ import type { LegacyWorkerTerminalRecoveryResult } from '../../runtime-legacy-wo
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
-export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
-  abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
-
+export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithCrewOperations {
   abstract notifyAutomationsChanged(payload?: AutomationsChangedPayload): void
   abstract ensureOrchestrationFederationRelay(runId?: string): void
   protected abstract scheduleRestoredMessageRepoints(): void
@@ -192,41 +183,6 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     this.scheduleRestoredMessageRepoints()
     this.bindWorkerTerminalAutoRelease(db)
   }
-
-  private unwatchCrewDb: (() => void) | undefined
-
-  private bindCrewChanges(db: OrchestrationDb): void {
-    this.unwatchCrewDb?.()
-    this.unwatchCrewDb = db.crewChanges.subscribe(this.crewChanges.notify)
-    this.crewChanges.notify()
-  }
-
-  private readonly crewReadModel = new CrewReadModel(
-    (previous) =>
-      readCrewRuntimeInputs(
-        this.crewRuntimeReaders(),
-        this._orchestrationDb,
-        existsSync(this.orchestrationDbPath()),
-        getPublishedHostDescriptor(this.runtimeId)?.installationId ?? this.runtimeId,
-        previous
-      ),
-    (wake) =>
-      watchCrewRuntimeSources(
-        {
-          store: this.store,
-          watchChanges: this.crewChanges.subscribe,
-          watchTransitions: (listener) => this.agentTransitions.subscribe(listener),
-          watchClient: (listener) => this.onClientEvent(listener)
-        },
-        wake
-      )
-  )
-
-  getOrchestrationCrewSnapshot(party: string) {
-    return this.crewReadModel.read(party)
-  }
-
-  watchOrchestrationCrew = (wake: () => void) => this.crewReadModel.subscribe(wake)
 
   private bindMailHandBack(db: OrchestrationDb): void {
     db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)
