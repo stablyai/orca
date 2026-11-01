@@ -105,6 +105,20 @@ describe('orca cli worktree awareness', () => {
     )
   })
 
+  it('shows the workspace the calling Orca terminal belongs to for `worktree current`', async () => {
+    process.env.ORCA_WORKTREE_ID = 'folder:folder-1'
+    queueFixtures(
+      callMock,
+      okFixture('req_1', { worktree: { id: 'folder:folder-1', branch: '', path: '/tmp/ticket' } })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['worktree', 'current', '--json'], '/tmp/ticket/pos_frontend')
+
+    expect(callMock).toHaveBeenCalledOnce()
+    expect(callMock).toHaveBeenCalledWith('worktree.show', { worktree: 'folder:folder-1' })
+  })
+
   it('resolves the invocation cwd from ORCA_CLI_CWD when no cwd is passed', async () => {
     // ORCA_CLI_CWD carries the remote shell's cwd when the bridge executes the CLI on the host.
     process.env.ORCA_CLI_CWD = '/tmp/repo/feature/src'

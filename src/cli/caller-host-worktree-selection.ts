@@ -23,7 +23,10 @@ export function getCallerExecutionHostId(
 }
 
 // Paths may exist on multiple hosts; runtime:* and unstamped rows belong to this runtime.
-function isOnCallerHost(row: CatalogRow, callerHostId: ExecutionHostId): boolean {
+export function isOnCallerHost(
+  row: Pick<CatalogRow, 'hostId'>,
+  callerHostId: ExecutionHostId
+): boolean {
   const rowHostId = row.hostId ?? LOCAL_EXECUTION_HOST_ID
   return parseExecutionHostId(callerHostId)?.kind === 'ssh'
     ? rowHostId === callerHostId
