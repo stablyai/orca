@@ -14,6 +14,7 @@ import {
   readUnstagedLeftBlob,
   readWorkingTreeFile
 } from './git-blob-read'
+import { workingTreeMatchesTextconv } from './working-tree-textconv'
 import {
   findContainingSubmodule,
   listSubmodulePaths,
@@ -167,17 +168,18 @@ async function loadDiff(
       // The index-to-HEAD fallback is sequential internally, but independent of the working-tree read.
       // WSL Git can use a Linux cwd while Node needs its Win32 spelling.
       const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
+      const hostFilePath = hostWorktreePath ? path.join(hostWorktreePath, filePath) : undefined
       const [leftBlob, workingTreeBlob] = await Promise.all([
-        compareAgainstHead
-          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
-          : readUnstagedLeftBlob(worktreePath, filePath, options),
-        hostWorktreePath
-          ? readWorkingTreeFile(
-              path.join(hostWorktreePath, filePath),
-              worktreePath,
-              filePath,
-              options
-            )
+        (hostFilePath
+          ? workingTreeMatchesTextconv(worktreePath, filePath, hostFilePath, options)
+          : Promise.resolve(false)
+        ).then((textconv) =>
+          compareAgainstHead
+            ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, textconv)
+            : readUnstagedLeftBlob(worktreePath, filePath, options, textconv)
+        ),
+        hostFilePath
+          ? readWorkingTreeFile(hostFilePath)
           : Promise.resolve(UNSPELLABLE_WORKING_TREE_READ)
       ])
       originalContent = leftBlob.content

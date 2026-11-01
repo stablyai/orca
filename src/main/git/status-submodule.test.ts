@@ -196,7 +196,7 @@ describe('submodule diff routing', () => {
     const result = await getDiff(PARENT, 'flutter_mine/lib/main.dart', false)
 
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['cat-file', '--textconv', '--', ':lib/main.dart'],
+      ['cat-file', 'blob', '--', ':lib/main.dart'],
       {
         cwd: SUBMODULE,
         maxBuffer: 10 * 1024 * 1024,

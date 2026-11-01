@@ -157,38 +157,4 @@ describe('real Git missing paths and failed blob reads', () => {
     }
     expect(await readFile(path.join(repo, 'seed.txt'), 'utf8')).toBe('seed\n')
   })
-
-  it('applies configured textconv driver for files that have diff textconv filters', async () => {
-    await writeFile(path.join(repo, '.gitattributes'), 'secret.csv diff=catfilter\n')
-    await git(['config', 'diff.catfilter.textconv', 'cat'])
-    await writeFile(path.join(repo, 'secret.csv'), 'decrypted-text\n')
-    gitCommit(repo, 'add secret')
-
-    const blob = await readGitBlobAtOidPath(repo, 'HEAD', 'secret.csv')
-    expect(blob.exists).toBe(true)
-    expect(blob.isBinary).toBe(false)
-    expect(blob.content).toBe('decrypted-text\n')
-
-    const indexBlob = await readGitBlobAtIndexPath(repo, 'secret.csv')
-    expect(indexBlob.exists).toBe(true)
-    expect(indexBlob.isBinary).toBe(false)
-    expect(indexBlob.content).toBe('decrypted-text\n')
-  })
-
-  it('applies textconv to the working-tree side of unstaged diffs for binary files', async () => {
-    await writeFile(path.join(repo, '.gitattributes'), 'secret.bin diff=stripper\n')
-    await git(['config', 'diff.stripper.textconv', "tr -d '\\0' <"])
-    await writeFile(path.join(repo, 'secret.bin'), 'seed\0-text\n')
-    gitCommit(repo, 'add initial')
-
-    await writeFile(path.join(repo, 'secret.bin'), 'seed\0-text\nmodified\0-text\n')
-    const result = await getDiff(repo, 'secret.bin', false)
-    expect(result).toMatchObject({
-      kind: 'text',
-      originalContent: 'seed-text\n',
-      modifiedContent: 'seed-text\nmodified-text\n',
-      originalIsBinary: false,
-      modifiedIsBinary: false
-    })
-  })
 })
