@@ -14,12 +14,17 @@ export type StatusPorcelainRecord =
   | { type: 'entry'; entry: GitStatusEntry }
   | { type: 'unmerged'; line: string }
 
+// Why: every automatic refresh now asks for ignored rows; past this many, stop Git before the byte backstop fails the whole read.
+export const MAX_IGNORED_PATHS = 10_000
+
 export class StatusPorcelainParser {
   private carry = ''
   private count = 0
 
   readonly entries: GitStatusEntry[] = []
   readonly ignoredPaths: string[] = []
+  /** True once ignored records passed MAX_IGNORED_PATHS; the collected set is then incomplete. */
+  ignoredOverflow = false
   /** Raw `u ` lines for the caller to resolve asynchronously. */
   readonly unmergedLines: string[] = []
   /** Changed records in Git's output order, including deferred unmerged rows. */
@@ -47,7 +52,7 @@ export class StatusPorcelainParser {
       }
       this.parseLine(text.slice(start, end))
       start = nl + 1
-      if (limit !== 0 && this.count > limit) {
+      if (this.ignoredOverflow || (limit !== 0 && this.count > limit)) {
         this.carry = ''
         return true
       }
@@ -106,6 +111,11 @@ export class StatusPorcelainParser {
       return
     }
     if (line.startsWith('! ')) {
+      // Why: Git prints ignored rows last, so stopping here loses no changed or untracked entry.
+      if (this.ignoredPaths.length >= MAX_IGNORED_PATHS) {
+        this.ignoredOverflow = true
+        return
+      }
       this.ignoredPaths.push(decodeGitCQuotedPath(line.slice(2)))
       return
     }

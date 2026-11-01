@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
+import { MAX_IGNORED_PATHS, StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
 
 describe('StatusPorcelainParser', () => {
   it('parses branch headers and changed/untracked/ignored records', () => {
@@ -91,6 +91,15 @@ describe('StatusPorcelainParser', () => {
     expect(stopped).toBe(true)
     expect(parser.entries.length).toBe(4)
     expect(parser.statusLength).toBe(4)
+  })
+
+  it('stops Git and drops the ignored set once ignored records pass their cap', () => {
+    const parser = new StatusPorcelainParser()
+    const ignored = Array.from({ length: MAX_IGNORED_PATHS + 1 }, (_, i) => `! build/f${i}.o`)
+    const stopped = parser.update(`? new.txt\n${ignored.join('\n')}\n`, 0)
+    expect(stopped).toBe(true)
+    expect(parser.ignoredOverflow).toBe(true)
+    expect(parser.entries).toEqual([{ path: 'new.txt', status: 'untracked', area: 'untracked' }])
   })
 
   it('counts unmerged records toward the stop limit', () => {

@@ -40,6 +40,12 @@ describe('shouldRefreshGitStatusForFileChange with gitignored paths', () => {
     expect(refreshes({ kind: 'update', absolutePath: '/repo/.gitignore' }, ignored)).toBe(true)
   })
 
+  it('keeps a literal backslash in a POSIX ignored name instead of reading it as a separator', () => {
+    expect(refreshes({ kind: 'update', absolutePath: '/repo/foo/bar/x.ts' }, ['foo\\bar/'])).toBe(
+      true
+    )
+  })
+
   it('fails open when the ignored set is unknown', () => {
     expect(refreshes({ kind: 'update', absolutePath: '/repo/A/obj/Debug/app.dll' })).toBe(true)
   })
