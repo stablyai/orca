@@ -64,7 +64,7 @@ export function NativeChatQuestionCard({
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance()
   const [index, setIndex] = useState(0)
-  useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
+  useNativeChatPromptCardFocus(cardRef, shouldFocus, index, { revealStart: true })
   // Use indices because labels can repeat and the agent commits numbered rows.
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() =>

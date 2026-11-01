@@ -393,12 +393,15 @@ describe('NativeChatQuestionCard', () => {
     vi.useFakeTimers()
     const onAnswer = vi.fn()
     render(indentThenFruits, onAnswer)
+    const card = container.querySelector<HTMLElement>('[role="group"]')!
+    card.scrollTop = 100
 
     clickOption('Spaces')
     expect(optionPressed('Spaces')).toBe('true')
     expect(cardTitle()).toBe('Do you prefer tabs or spaces?')
     passAutoAdvanceBeat()
     expect(cardTitle()).toBe('Which fruit?')
+    expect(card.scrollTop).toBe(0)
     expect(onAnswer).not.toHaveBeenCalled()
     clickOption('Apple')
     passAutoAdvanceBeat()

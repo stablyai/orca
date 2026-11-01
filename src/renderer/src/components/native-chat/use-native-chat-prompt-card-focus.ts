@@ -35,7 +35,8 @@ export function isInNativeChatPaneOf(card: HTMLElement | null, element: Element 
 export function useNativeChatPromptCardFocus(
   cardRef: RefObject<HTMLElement | null>,
   shouldFocus: boolean,
-  step?: number
+  step?: number,
+  { revealStart = false }: { revealStart?: boolean } = {}
 ): void {
   const previousStepRef = useRef(step)
   useLayoutEffect(() => {
@@ -43,6 +44,9 @@ export function useNativeChatPromptCardFocus(
     previousStepRef.current = step
     const card = cardRef.current
     const active = document.activeElement
+    if (card && revealStart && stepChanged) {
+      card.scrollTop = 0
+    }
     // Arriving cards must not steal keys from find or queued-message edits.
     if (
       card &&
@@ -52,6 +56,9 @@ export function useNativeChatPromptCardFocus(
       !active?.closest('[data-native-chat-find-bar], [data-queued-message-editor]')
     ) {
       focusPromptCard(card)
+      if (revealStart) {
+        card.scrollTop = 0
+      }
     }
-  }, [cardRef, shouldFocus, step])
+  }, [cardRef, shouldFocus, step, revealStart])
 }

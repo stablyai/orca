@@ -52,7 +52,7 @@ export const invertedAccent = defineFixture({
 })
 
 const multilineQuestion = 'Choose a target:\n\n- Keep changes local\n- Use the remote host'
-const multilineDescription = 'Uses this computer.\nKeeps the current workspace.'
+const multilineDescription = 'Uses this computer.\n\nKeeps the current workspace.'
 
 export const multiline = defineFixture({
   width: 560,
@@ -115,27 +115,33 @@ export const shortPane = defineFixture({
   render: () => (
     <div
       data-short-question-pane
+      data-native-chat-root="true"
       className="native-chat-appearance flex h-64 min-h-0 flex-col bg-chat-canvas"
       style={nativeChatAppearanceStyle({})}
     >
       <div className="h-8 shrink-0">Session header</div>
       <div className="min-h-0 flex-1" />
       <NativeChatQuestionCard
+        shouldFocus
         prompt={{
-          questions: [
-            {
-              question: Array.from({ length: 24 }, (_, i) => `Question line ${i + 1}`).join('\n'),
-              multiSelect: true,
-              options: [{ label: 'Local', description: multilineDescription }]
-            }
-          ]
+          questions: Array.from({ length: 2 }, (_, step) => ({
+            question: Array.from(
+              { length: 24 },
+              (_, i) => `Question ${step + 1} line ${i + 1}`
+            ).join('\n'),
+            multiSelect: true,
+            options: Array.from({ length: 12 }, (_, option) => ({
+              label: `Target ${step + 1}.${option + 1}`,
+              description: multilineDescription
+            }))
+          }))
         }}
         onAnswer={() => {}}
         onCancel={() => {}}
       />
     </div>
   ),
-  interact: (frame) => {
+  interact: async (frame) => {
     const pane = frame.querySelector<HTMLElement>('[data-short-question-pane]')
     const card = frame.querySelector<HTMLElement>('[role="group"]')
     const input = frame.querySelector<HTMLInputElement>('[data-native-chat-answer-field]')
@@ -146,6 +152,18 @@ export const shortPane = defineFixture({
     const cardBounds = card.getBoundingClientRect()
     if (cardBounds.top < paneBounds.top || cardBounds.bottom > paneBounds.bottom + 1) {
       throw new Error('Question card overflows the short pane')
+    }
+    const firstOption = card.querySelector('button[aria-pressed]')
+    if (document.activeElement !== firstOption || card.scrollTop !== 0) {
+      throw new Error('Initial focus hides the start of the question')
+    }
+    const optionList = firstOption?.parentElement
+    if (!optionList) {
+      throw new Error('Missing question option list')
+    }
+    optionList.scrollTop = optionList.scrollHeight
+    if (optionList.scrollTop === 0) {
+      throw new Error('Option list does not exercise nested scrolling')
     }
     card.scrollTop = card.scrollHeight
     if (card.scrollTop === 0) {
@@ -168,6 +186,22 @@ export const shortPane = defineFixture({
       ) {
         throw new Error('Answer control is clipped or covered')
       }
+    }
+    submit.focus()
+    submit.click()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    const title = card.querySelector('[data-testid="native-chat-question-card-title"]')
+    if (!title?.textContent?.startsWith('Question 2 line 1')) {
+      throw new Error('Question did not advance')
+    }
+    if (optionList.scrollTop !== 0) {
+      throw new Error('First option remains hidden in the scrolled option list')
+    }
+    if (
+      card.scrollTop !== 0 ||
+      document.activeElement !== card.querySelector('button[aria-pressed]')
+    ) {
+      throw new Error('Question step retained stale scroll or lost option focus')
     }
   }
 })
