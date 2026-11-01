@@ -25,7 +25,7 @@ export function TerminalTabHoverCard({
   alert?: ComponentProps<typeof TabHoverCard>['alert']
   children: ReactNode
 }): React.JSX.Element {
-  const { label: accountLabel, onTooltipOpenChange } = useClaudeTabAccountLabel(tab)
+  const { label: accountLabel, pinned, onTooltipOpenChange } = useClaudeTabAccountLabel(tab)
   const programName = agent
     ? [getAgentLabel(agent), accountLabel].filter(Boolean).join(' · ')
     : shell
@@ -37,6 +37,7 @@ export function TerminalTabHoverCard({
       programName={programName}
       icon={icon}
       alert={alert}
+      showWhenTitleFits={pinned}
       onOpenChange={onTooltipOpenChange}
     >
       {children}

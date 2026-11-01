@@ -445,7 +445,7 @@ vi.mock('../native-chat', () => ({
 }))
 
 import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { recordStructuredAgentSessionHostInstallRefusal } from '../../runtime/structured-agent-session-host-refusal'
+import { recordStructuredAgentSessionHostInstallRefusal } from '../../runtime/agent-session/structured-agent-session-host-refusal'
 import { registerCoreHandlers } from './register-core-handlers'
 
 let registeredAiVaultOptions: {

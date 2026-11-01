@@ -10,7 +10,7 @@ import {
 import {
   useMobileNativeChatConversationState,
   type MobileNativeChatConversation
-} from '../../use-mobile-native-chat-conversation-state'
+} from '../use-mobile-native-chat-conversation-state'
 import type { MobileNativeChatImageSource } from '../visual/mobile-native-chat-image-preview'
 
 export function MobileNativeChatRowOverlaysHost({

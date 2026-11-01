@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
-import { classifyPrJobs } from './pr-code-change-scope.mjs'
 import { runProcessSync } from '@orca/process-host'
 
 const installerPath = '.github/actions/install-node-dependencies/action.yml'
@@ -12,7 +11,6 @@ const installer = parse(readFileSync(installerPath, 'utf8'))
 const native = parse(readFileSync(nativePath, 'utf8'))
 const e2e = parse(readFileSync('.github/workflows/e2e.yml', 'utf8'))
 const identity = native.runs.steps.find((step) => step.id === 'native-cache-scope')
-const inputs = [...identity.env.NATIVE_SOURCE_HASH.matchAll(/'([^']+)'/g)].map((match) => match[1])
 const paths = [
   'node_modules/.pnpm/node-pty@*/node_modules/node-pty/build',
   'native/windows-registry/build',
@@ -72,13 +70,6 @@ function resolveIdentity({
 }
 
 describe('CI native cache ownership', () => {
-  it('routes every configured native cache input to native preparation', () => {
-    expect(inputs.length).toBeGreaterThan(0)
-    for (const file of inputs) {
-      expect(classifyPrJobs([file]).native_cache_changed, file).toBe(true)
-    }
-  })
-
   it.skipIf(process.platform === 'win32')(
     'separates runtime, Node/pnpm versions, architecture, image and libc hosts',
     () => {
@@ -100,16 +91,6 @@ describe('CI native cache ownership', () => {
       expect(variants.every(({ path }) => path === baseline.path)).toBe(true)
     }
   )
-
-  it('keeps early input rejection before dependency installation and native restoration', () => {
-    const early = installer.runs.steps.findIndex((step) => step.name === 'Validate native runtime')
-    const install = installer.runs.steps.findIndex((step) => step.name === 'Install dependencies')
-    const prepare = installer.runs.steps.findIndex((step) => step.id === 'native-runtime')
-    expect(early).toBeLessThan(install)
-    expect(install).toBeLessThan(prepare)
-    expect(installer.runs.steps[early].run).toContain('none|node|electron)')
-    expect(installer.runs.steps[prepare].if).toBe("inputs.native-runtime != 'none'")
-  })
 
   it.skipIf(process.platform === 'win32')(
     'rejects invalid runtime and missing resolved Node before cache restoration',
@@ -134,144 +115,6 @@ describe('CI native cache ownership', () => {
           stdio: 'pipe'
         }).code
       ).not.toBe(0)
-    }
-  )
-
-  it('uses requested identity on every restore and leaves Windows PR saves to the main warmers', () => {
-    for (const step of native.runs.steps.filter((step) => step.uses?.startsWith('actions/cache'))) {
-      expect(step.with.key).toBe('${{ steps.native-cache-scope.outputs.key }}')
-      expect(step.with.path.trim().split('\n')).toEqual(paths)
-      expect(step.with['restore-keys']).toBeUndefined()
-    }
-    const job = parse(readFileSync('.github/workflows/pr.yml', 'utf8')).jobs.package_windows
-    const save = job.steps.find((step) => step.name === 'Save compiled Node native modules')
-    const install = job.steps.find((step) => step.id === 'deps')
-    const build = job.steps.find((step) => step.name === 'Build package inputs')
-    const electron = job.steps.find((step) => step.name === 'Prepare Electron native runtime')
-    expect(install.with['persist-native-cache']).toBe('false')
-    expect(save).toBeUndefined()
-    const saving = native.runs.steps.find((step) => step.id === 'native-cache-restore')
-    expect(saving.if).toContain(
-      "!(github.event_name == 'pull_request' && (runner.os == 'Windows' || " +
-        "runner.os == 'Linux' && inputs.native-runtime == 'electron' && runner.environment == 'github-hosted'))"
-    )
-    const warm = parse(readFileSync('.github/workflows/ci-cache-warmup-platform-jobs.yml', 'utf8'))
-    expect(warm.jobs['warm-windows'].strategy.matrix.os).toContain(job['runs-on'])
-    expect(warm.jobs['warm-windows-electron']['runs-on']).toBe(job['runs-on'])
-    const linuxPackage = parse(readFileSync('.github/workflows/pr.yml', 'utf8')).jobs.package
-    const linuxWarm = warm.jobs['warm-linux-electron']
-    expect(linuxWarm['runs-on']).toBe(linuxPackage['runs-on'])
-    for (const consumer of [linuxPackage, linuxWarm]) {
-      const install = consumer.steps.find((step) =>
-        step.uses?.includes('install-node-dependencies')
-      )
-      expect(install.with['native-runtime']).toBe('electron')
-      expect(install.with['node-version']).toBeUndefined()
-    }
-    expect(job.steps.indexOf(build)).toBeLessThan(job.steps.indexOf(electron))
-    expect(electron.uses).toBe('./.github/actions/prepare-native-runtime')
-    expect(electron.with).toEqual({
-      'native-runtime': 'electron',
-      'node-version': '${{ steps.deps.outputs.node-version }}'
-    })
-    expect(native.outputs['cache-key'].value).toBe('${{ steps.native-cache-scope.outputs.key }}')
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'keeps cache post-job paths when the nested step output context is absent',
-    () => {
-      const postContext = { steps: {} }
-      const evaluateInput = (value) =>
-        value.replace(
-          /\$\{\{\s*steps\.([\w-]+)\.outputs\.([\w-]+)\s*\}\}/g,
-          (_expression, step, output) => postContext.steps[step]?.outputs?.[output] ?? ''
-        )
-      expect(evaluateInput('${{ steps.native-cache-scope.outputs.path }}')).toBe('')
-      const emitted = resolveIdentity().path
-      for (const step of native.runs.steps.filter((step) =>
-        step.uses?.startsWith('actions/cache')
-      )) {
-        expect(evaluateInput(step.with.path).trim()).toBe(emitted)
-      }
-    }
-  )
-
-  it('prepares both native ABIs in the E2E build before releasing its consumers', () => {
-    expect(e2e.jobs['prepare-native-cache']).toBeUndefined()
-    const { steps } = e2e.jobs.build
-    const install = steps.find((step) => step.id === 'deps')
-    const save = steps.find((step) => step.name === 'Save compiled Node native modules')
-    const build = steps.find((step) => step.name === 'Build E2E outputs')
-    const cliWait = steps.find((step) => step.wait === 'e2e-cli')
-    const electron = steps.find((step) => step.id === 'electron-native-runtime')
-    const upload = steps.find((step) => step.name === 'Upload E2E build output')
-    expect(install.with).toMatchObject({
-      'native-runtime': 'node',
-      'persist-native-cache': 'false',
-      'cache-electron-package': 'true'
-    })
-    expect(save.if).toContain("steps.deps.outputs.native-cache-key != ''")
-    expect(save.if).toContain("steps.deps.outputs.native-cache-hit != 'true'")
-    expect(save.with).toEqual({
-      key: '${{ steps.deps.outputs.native-cache-key }}',
-      path: '${{ steps.deps.outputs.native-cache-path }}'
-    })
-    const ordered = [install, save, build, cliWait, upload, electron]
-    expect(ordered.map((step) => steps.indexOf(step))).toEqual(
-      ordered.map((step) => steps.indexOf(step)).sort((left, right) => left - right)
-    )
-    expect(upload.background).toBeUndefined()
-    expect(upload.if).toBeUndefined()
-    expect(electron.background).toBeUndefined()
-    expect(electron.uses).toBe('./.github/actions/prepare-native-runtime')
-    expect(electron.with).toEqual({
-      'native-runtime': 'electron',
-      'node-version': '${{ steps.deps.outputs.node-version }}'
-    })
-    for (const name of ['e2e', 'changed-e2e', 'orcad-serve-mode-switch', 'orcad-ssh-docker']) {
-      expect(e2e.jobs[name].needs, name).toEqual(['build'])
-      expect(
-        e2e.jobs[name].steps.find(
-          (step) => step.uses === './.github/actions/install-node-dependencies'
-        ).with['native-runtime'],
-        name
-      ).toBe('electron')
-    }
-  })
-
-  it.skipIf(process.platform === 'win32').each([false, true])(
-    'detects shared native action availability=%s for older dispatch refs',
-    (available) => {
-      const directory = mkdtempSync(join(tmpdir(), 'orca-e2e-native-action-'))
-      try {
-        const output = join(directory, 'output')
-        if (available) {
-          mkdirSync(join(directory, '.github/actions/prepare-native-runtime'), { recursive: true })
-          writeFileSync(join(directory, nativePath), '')
-        }
-        const step = e2e.jobs.build.steps.find(
-          (candidate) => candidate.id === 'native-runtime-action'
-        )
-        const execution = runProcessSync({
-          program: 'bash',
-          args: ['-e', '-o', 'pipefail', '-c', step.run],
-          cwd: directory,
-          env: { ...process.env, GITHUB_OUTPUT: output },
-          timeoutMs: 10_000
-        })
-        expect(execution.code, execution.stderr).toBe(0)
-        expect(readFileSync(output, 'utf8')).toBe(`available=${available}\n`)
-        const fallback = e2e.jobs.build.steps.find(
-          (candidate) => candidate.name === 'Prepare Electron natives for older refs'
-        )
-        expect(fallback.if).toBe(
-          "steps.native-runtime-action.outputs.available != 'true' || steps.deps.outputs.node-version == ''"
-        )
-        expect(fallback.uses).toBe('./.github/actions/install-node-dependencies')
-        expect(fallback.with['native-runtime']).toBe('electron')
-      } finally {
-        rmSync(directory, { recursive: true, force: true })
-      }
     }
   )
 

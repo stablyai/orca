@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { nativeChatTurnStatusCopy } from './native-chat-turn-status-copy'
 import { translate, type Translate } from '../../i18n/mobile-i18n'
-import type { MobileNativeChatInputLockReason } from '../MobileNativeChatView'
+import type { MobileNativeChatInputLockReason } from './MobileNativeChatView'
 
 export function useMobileNativeChatInputLease(args: {
   activeHandle: string | null

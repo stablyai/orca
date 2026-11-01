@@ -21,7 +21,7 @@ vi.mock(
     enqueueSessionOptionSettingsWrite: vi.fn()
   })
 )
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', () => ({
   holdStructuredAgentSessionLaunchOption: vi.fn(),
   getStructuredAgentSessionLaunchSelection: () => null
 }))

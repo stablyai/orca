@@ -3,7 +3,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { useMobileNativeChatPermissionSend } from './native-chat/input/mobile-native-chat-permission-send'
 import { useMobileNativeChatAnswerSend } from './native-chat/input/use-mobile-native-chat-answer-send'
 import { useMobileNativeChatCancelAsk } from './native-chat/input/use-mobile-native-chat-cancel-ask'
-import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
+import { useMobileNativeChatStop } from './native-chat/use-mobile-native-chat-stop'
 import type { MobileNativeChatAnswerSend } from './native-chat/input/use-mobile-native-chat-answer-send'
 
 // Share the bridge write gate and cancel pending answer groups before interrupting; structured prompts use RPC instead.

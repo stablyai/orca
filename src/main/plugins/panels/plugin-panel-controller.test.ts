@@ -76,7 +76,7 @@ describe('PluginPanelController identity binding', () => {
       'notifications.show',
       { title: 'Hello' },
       'panel',
-      undefined
+      { panel: { id: expect.any(String), surface: 'panel', contributionId: 'dashboard' } }
     )
     await expect(
       controller.execute('runtime:other', {
@@ -216,7 +216,10 @@ describe('PluginPanelController user-gesture methods', () => {
       'files.saveAs',
       call.params,
       'panel',
-      { webContentsId: 7 }
+      expect.objectContaining({
+        webContentsId: 7,
+        panel: expect.objectContaining({ surface: 'panel' })
+      })
     )
   })
 })

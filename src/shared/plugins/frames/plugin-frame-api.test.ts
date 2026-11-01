@@ -19,6 +19,8 @@ type FrameOrca = {
   }
   on: (event: string, handler: (payload: unknown) => unknown) => { dispose: () => void }
   locale: string
+  plugin: object
+  storage: object
   shell?: { openExternal: (url: string) => Promise<unknown> }
   files?: {
     saveAs: (options: {
@@ -90,12 +92,15 @@ describe('window.orca', () => {
     expect(Object.isFrozen(orca)).toBe(true)
     expect(Object.isFrozen(orca.host)).toBe(true)
     expect(posted()).toEqual([{ orca: 1, kind: 'evt', event: 'ready', payload: { protocol: 1 } }])
-    expect(orca.api).toEqual({ major: 1, minor: 0 })
+    expect(orca.api).toEqual({ major: 1, minor: 2 })
     expect(orca.shell).toBeUndefined()
     expect(orca.files).toBeUndefined()
     expect(orca.host.has('shell.openExternal')).toBe(false)
     expect(orca.host.has('workspace.readContext')).toBe(true)
     expect(orca.host.has('terminal.sendText')).toBe(false)
+    expect(orca.host.has('plugin.request')).toBe(true)
+    expect(Object.isFrozen(orca.plugin)).toBe(true)
+    expect(Object.isFrozen(orca.storage)).toBe(true)
     expect(orca.document).toBeUndefined()
   })
 

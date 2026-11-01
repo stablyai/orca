@@ -25,7 +25,9 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../agent-hooks/managed-agent-hook-controls': {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
   },
-  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime },
+  '../runtime/agent-session/structured-agent-session-runtime': {
+    stopStructuredAgentSessionRuntime
+  },
   '../runtime/agent-session/structured-agent-session-runtime-teardown': {
     setStructuredAgentSessionTeardownTrigger: idle()
   },

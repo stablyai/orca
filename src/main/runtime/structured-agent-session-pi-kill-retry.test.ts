@@ -15,7 +15,7 @@ import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-pr
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 
 const os = vi.hoisted(() => ({
   capture: vi.fn(),

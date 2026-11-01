@@ -31,7 +31,7 @@ import {
   type StructuredAgentLaunchHooks,
   type StructuredAgentLaunchSettlement
 } from '@/lib/structured-agent-launch-settlement'
-import type { StructuredAgentLaunchOptions } from '@/lib/structured-agent-session-launch'
+import type { StructuredAgentLaunchOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'

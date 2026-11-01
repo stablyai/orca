@@ -3796,7 +3796,8 @@
           },
           "PendingNativeChatCreation": {
             "sendBlockedFailed": "Retry creating the worktree to send",
-            "sendBlockedHeld": "Sends when the worktree is ready"
+            "sendBlockedHeld": "Sends when the worktree is ready",
+            "openingChat": "Opening chat…"
           },
           "WorktreeSetupSteps": {
             "prepare": "Prepare workspace",
@@ -8511,7 +8512,9 @@
           "98d70fb261": "Custom notification sound could not be played",
           "c83b05a055": "Notifications are not supported on this system",
           "6e6df3a09a": "Choose Custom File",
-          "76e02467b8": "Change Custom File"
+          "76e02467b8": "Change Custom File",
+          "63fc5ec9d2": "Agent Needs Input",
+          "e1b1724793": "A coding agent asks for permission or has a question."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",
@@ -10789,7 +10792,12 @@
             "host": "host",
             "remote": "remote",
             "ssh": "ssh",
-            "mute": "mute"
+            "mute": "mute",
+            "d46216d768": "Agent Needs Input",
+            "c9b2b656e0": "Notify when a coding agent asks for permission or has a question.",
+            "b8bf5471d1": "permission",
+            "5b9dafd570": "question",
+            "009548060d": "input"
           }
         },
         "orchestration": {
@@ -13441,7 +13449,8 @@
           "worktreeCreated": "When a workspace is created",
           "worktreeRemoved": "When a workspace is removed",
           "agentStatusChanged": "When an agent’s status changes",
-          "detail": "Background code runs"
+          "detail": "Background code runs",
+          "workspaceChanged": "When you switch workspace or its terminals change"
         },
         "pluginInstallAction": {
           "installed": "{{value0}} installed",
@@ -13573,6 +13582,10 @@
           "smoothingKw": "smoothing",
           "antialiasingKw": "antialiasing",
           "thinKw": "thin text"
+        },
+        "PluginSettingsSection": {
+          "reset": "Reset",
+          "title": "Settings"
         }
       },
       "right": {
@@ -19140,6 +19153,21 @@
         "declarative": {
           "PluginDeclarativeView": {
             "unsupported": "{{value0}} is not available in this version of Orca"
+          },
+          "KeyValue": {
+            "yes": "Yes",
+            "no": "No"
+          },
+          "Skeleton": {
+            "loading": "Loading"
+          },
+          "Table": {
+            "yes": "Yes",
+            "empty": "No rows",
+            "loading": "Loading more…"
+          },
+          "Tree": {
+            "loading": "Loading…"
           }
         }
       }

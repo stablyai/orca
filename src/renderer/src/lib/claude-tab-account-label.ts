@@ -13,6 +13,15 @@ export type ClaudeTabAccountSource = {
 export function claudeTabAccountLabel(
   source: ClaudeTabAccountSource,
   accounts: ClaudeManagedAccountSummary[],
+  options: { pinningUnsupported: boolean }
+): string | null {
+  const accountId = pinnedClaudeTabAccountId(source, options)
+  return accountId ? (accounts.find((account) => account.id === accountId)?.email ?? null) : null
+}
+
+/** The account a Claude tab is pinned to, known before the account roster is fetched. */
+export function pinnedClaudeTabAccountId(
+  source: ClaudeTabAccountSource,
   { pinningUnsupported }: { pinningUnsupported: boolean }
 ): string | null {
   // Why: SSH and WSL launches may carry a claudeAccountId but never actually pin it.
@@ -20,8 +29,5 @@ export function claudeTabAccountLabel(
     return null
   }
   const accountId = source.statusAccountId ?? source.launchConfig?.claudeAccountId
-  if (!isPinnableClaudeAccountId(accountId)) {
-    return null
-  }
-  return accounts.find((account) => account.id === accountId)?.email ?? null
+  return isPinnableClaudeAccountId(accountId) ? accountId : null
 }

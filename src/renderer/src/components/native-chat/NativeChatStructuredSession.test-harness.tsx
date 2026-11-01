@@ -23,7 +23,7 @@ import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import { createStructuredSessionComposerMock } from './NativeChatStructuredSession.test-composer'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import type { StructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
-import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
+import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type {
   SessionOptionSetResult,
   SessionOptionValue

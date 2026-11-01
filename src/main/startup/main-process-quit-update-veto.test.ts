@@ -11,7 +11,10 @@ const dependencyExports: [string, string[]][] = [
   ['../agent-hooks/server', ['agentHookServer']],
   ['../agent-hooks/wsl-hook-relay-manager', ['wslHookRelayManager']],
   ['../agent-hooks/managed-agent-hook-controls', ['removeManagedAgentHooksAsync']],
-  ['../runtime/structured-agent-session-runtime', ['stopStructuredAgentSessionRuntime']],
+  [
+    '../runtime/agent-session/structured-agent-session-runtime',
+    ['stopStructuredAgentSessionRuntime']
+  ],
   [
     '../runtime/agent-session/structured-agent-session-runtime-teardown',
     ['setStructuredAgentSessionTeardownTrigger']

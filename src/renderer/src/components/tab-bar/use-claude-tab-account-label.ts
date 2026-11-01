@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-account-types'
-import { claudeTabAccountLabel } from '@/lib/claude-tab-account-label'
+import { claudeTabAccountLabel, pinnedClaudeTabAccountId } from '@/lib/claude-tab-account-label'
 import { claudeAccountsTargetForRepo, findLaunchRepo } from '@/lib/claude-launch-account'
 import { fetchProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
 import { claudeAccountPinningUnsupportedReasonInState } from '@/components/settings/repository-claude-account'
@@ -15,6 +15,7 @@ import { useAppStore } from '../../store'
  */
 export function useClaudeTabAccountLabel(tab: Pick<TerminalTab, 'id' | 'worktreeId'>): {
   label: string | null
+  pinned: boolean
   onTooltipOpenChange: (open: boolean) => void
 } {
   const paneKey = useAppStore((s) => {
@@ -50,10 +51,10 @@ export function useClaudeTabAccountLabel(tab: Pick<TerminalTab, 'id' | 'worktree
     [repo]
   )
 
+  const source = { statusAccountId, launchConfig }
   return {
-    label: claudeTabAccountLabel({ statusAccountId, launchConfig }, accounts, {
-      pinningUnsupported
-    }),
+    label: claudeTabAccountLabel(source, accounts, { pinningUnsupported }),
+    pinned: pinnedClaudeTabAccountId(source, { pinningUnsupported }) !== null,
     onTooltipOpenChange
   }
 }

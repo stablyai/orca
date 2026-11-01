@@ -16,8 +16,8 @@ import { getOrcaProfileStateDatabaseFile } from '../orca-profiles/profile-storag
 import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
 import { importProfileStateJson } from '../persistence/profile-state/profile-state-documents'
 import Database from '../sqlite/sync-database'
-import { loadAgentSessionStoreRows } from '../runtime/agent-session-record-rows'
-import { getAgentSessionConversation } from '../runtime/agent-session-store-state'
+import { loadAgentSessionStoreRows } from '../runtime/agent-session/records/agent-session-record-rows'
+import { getAgentSessionConversation } from '../runtime/agent-session/records/agent-session-store-state'
 import { hashWorktreeId } from '../terminal-history-id'
 import type * as Journal from './wsl-drive-unc-conversion-journal'
 import {

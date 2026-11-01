@@ -7,7 +7,7 @@ import {
   identityFor,
   PROVIDER_SESSION_ID,
   USER_MESSAGE
-} from './claude-structured-session-test-support'
+} from './structured/claude-structured-session-test-support'
 import { assistantFrame, frame, setup, userFrame } from './claude-context-usage-test-support'
 
 // Seconds, as Claude sends them; two hours out so no reset passes mid-test.
