@@ -32,7 +32,7 @@ type UseFileExplorerHandlersParams = {
       suppressActiveRuntimeFallback?: boolean
       focusEditor?: boolean
     }
-  ) => void
+  ) => string
   makePreviewFilePermanent: (filePath: string) => void
   openFileInChosenApp?: (filePath: string, click: ChosenAppClick) => boolean
   toggleDir: (worktreeId: string, dirPath: string) => void
@@ -68,8 +68,8 @@ export async function activateFileExplorerNode(args: {
   node: TreeNode
   activeWorktreeId: string | null
   runtimeEnvironmentId?: string | null
-  openFile: (params: OpenFileParams, options?: OpenFileOptions) => void
-  openFileInChosenApp?: (filePath: string, openInOrca: () => void) => boolean
+  openFile: (params: OpenFileParams, options?: OpenFileOptions) => string
+  openFileInChosenApp?: (filePath: string, openInOrca: () => string) => boolean
   toggleDir: (worktreeId: string, dirPath: string) => void
   canToggleDirectories?: boolean
   loadDir: UseFileExplorerHandlersParams['loadDir']
@@ -141,7 +141,7 @@ export async function activateFileExplorerNode(args: {
     toast.error(getFileExplorerOwnerUnresolvedMessage())
     return
   }
-  const openInOrca = (): void =>
+  const openInOrca = (): string =>
     openFile(
       {
         filePath: node.path,
@@ -195,7 +195,7 @@ export function useFileExplorerHandlers({
         // Only a row click opens in the chosen app; "View File" and the keyboard keep the Orca editor.
         openFileInChosenApp:
           rowClick && openFileInChosenApp
-            ? (filePath: string, openInOrca: () => void) =>
+            ? (filePath: string, openInOrca: () => string) =>
                 openFileInChosenApp(filePath, { repeated: rowClick.repeated, openInOrca })
             : undefined,
         toggleDir,

@@ -11,8 +11,8 @@ import {
 export type ChosenAppClick = {
   /** The second click of a double-click, which the first one already launched for. */
   repeated: boolean
-  /** Runs when the launch fails, so the click still opens the file. */
-  openInOrca: () => void
+  /** Runs when the launch fails, so the click still opens the file; returns the opened file's ID. */
+  openInOrca: () => string
 }
 
 /**
@@ -20,7 +20,7 @@ export type ChosenAppClick = {
  * (no app chosen, or the app can't reach this workspace) leaves the file to the Orca editor.
  * A repeated click of a double-click is taken without relaunching, since the first one launched.
  * If the launch fails, `openInOrca` opens the file in the Orca editor so the click is never lost,
- * and pins it when a double-click already tried to before the file was open.
+ * and pins that tab when a double-click already tried to before the file was open.
  */
 export function useFileExplorerOpenInApp(
   activeWorktreeId: string | null,
@@ -63,9 +63,9 @@ export function useFileExplorerOpenInApp(
           launches.current.delete(path)
         }
         if (!opened) {
-          openInOrca()
+          const openedFileId = openInOrca()
           if (launch.pinOnFallback) {
-            makePreviewFilePermanent(path)
+            makePreviewFilePermanent(openedFileId)
           }
         }
       })

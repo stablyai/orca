@@ -13,7 +13,8 @@ import {
 import { useFileExplorerOpenInApp } from './use-file-explorer-open-in-app'
 
 const openInExternalEditor = vi.fn()
-const openInOrca = vi.fn()
+const openedFileId = 'wt-2::/repo/a.ts'
+const openInOrca = vi.fn(() => openedFileId)
 const makePreviewFilePermanent = vi.fn()
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
@@ -61,7 +62,7 @@ function renderHook(owner: LocalPathOpenOwner): OpenInChosenApp {
 beforeEach(() => {
   openInExternalEditor.mockReset()
   openInExternalEditor.mockResolvedValue({ ok: true })
-  openInOrca.mockReset()
+  openInOrca.mockClear()
   makePreviewFilePermanent.mockReset()
   useAppStore.setState({ makePreviewFilePermanent })
   Object.defineProperty(window, 'api', {
@@ -121,7 +122,7 @@ describe('useFileExplorerOpenInApp', () => {
     await act(async () => settleLaunch[0]({ ok: false, reason: 'launch-failed' }))
 
     expect(openInOrca).toHaveBeenCalledTimes(1)
-    expect(makePreviewFilePermanent).toHaveBeenCalledWith('/repo/a.ts')
+    expect(makePreviewFilePermanent).toHaveBeenCalledWith(openedFileId)
   })
 
   it('leaves pinning to the double-click handler when the launch failed before the repeated click', async () => {
