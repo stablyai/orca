@@ -13,6 +13,8 @@ import { TitlebarLeftControls } from './TitlebarLeftControls'
 import { RightSidebarToggle, TitlebarMainStrip } from './TitlebarMainStrip'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
+import { isPluginPanelTabKey } from '../../../shared/plugins/frames/plugin-tab-key'
+import { PluginMainPage } from '../components/plugins/page/PluginMainPage'
 
 // Skips the shell render each workspace switch causes; its props only change on toggle.
 const MemoFloatingTerminalToggleButton = memo(FloatingTerminalToggleButton)
@@ -84,10 +86,12 @@ function PendingCreationSurface(props: {
   return opensChat ? <PendingNativeChatCreation {...props} /> : <WorktreeCreationPanel {...props} />
 }
 
+/** Plugin routes own a main page while the existing workspace shell remains mounted. */
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const { activeView, hasActiveWorktree, activePendingCreationId, creationLayoutActive } = layout
   return (
     <>
+      {isPluginPanelTabKey(activeView) ? <PluginMainPage tabKey={activeView} /> : null}
       {activeView === 'settings' ? <Settings /> : null}
       {activeView === 'skills' ? <SkillsPage /> : null}
       {activeView === 'artifacts' ? <ArtifactsPage /> : null}

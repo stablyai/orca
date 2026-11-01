@@ -6,6 +6,7 @@ import { PLUGIN_SCHEMA_NEWEST_SINCE, pluginHostVersion } from '../installation/p
 import { parseHostPluginManifest, parsePluginManifest } from './plugin-manifest'
 import {
   PLUGIN_DERIVED_PUBLISHER_SINCE,
+  PLUGIN_PANEL_PLACEMENT_SINCE,
   PLUGIN_MANIFEST_V2_SINCE
 } from './plugin-schema-field-docs'
 import { PLUGIN_RESERVED_CONTRIBUTION_POINTS } from '../contributions/plugin-contribution-points'
@@ -110,6 +111,33 @@ describe('manifest format 2 rules', () => {
       ok: false,
       error: `engines.orca: must be at least >=${PLUGIN_MANIFEST_V2_SINCE}, because manifestVersion needs Orca ${PLUGIN_MANIFEST_V2_SINCE}`
     })
+  })
+
+  it('validates panel placement and gates even an explicit right-sidebar placement', () => {
+    const panel = { id: 'p', title: 'P', entry: 'panel/index.html' }
+    const withPanels = (placement?: string, version = PLUGIN_MANIFEST_V2_SINCE) =>
+      v2({
+        execution: 'sandboxed-ui',
+        engines: { orca: `>=${version}` },
+        contributes: { panels: [{ ...panel, ...(placement === undefined ? {} : { placement }) }] }
+      })
+
+    expect(parsePluginManifest(withPanels())).toMatchObject({ ok: true })
+    expect(parsePluginManifest(withPanels('right-sidebar'))).toEqual({
+      ok: false,
+      error: `engines.orca: must be at least >=${PLUGIN_PANEL_PLACEMENT_SINCE}, because contributes.panels[0].placement needs Orca ${PLUGIN_PANEL_PLACEMENT_SINCE}`
+    })
+    expect(parsePluginManifest(withPanels('left-navigation'))).toMatchObject({ ok: false })
+    expect(
+      parsePluginManifest(withPanels('left-navigation', PLUGIN_PANEL_PLACEMENT_SINCE))
+    ).toMatchObject({
+      ok: true,
+      manifest: { contributes: { panels: [{ ...panel, placement: 'left-navigation' }] } }
+    })
+    expect(
+      parsePluginManifest(withPanels('somewhere-else', PLUGIN_PANEL_PLACEMENT_SINCE))
+    ).toMatchObject({ ok: false })
+    expect(parseHostPluginManifest(withPanels('left-navigation'))).toMatchObject({ ok: true })
   })
 
   it('skips only the engines floor when reading a manifest at runtime', () => {
