@@ -4,7 +4,7 @@ import type {
   OrchestrationChildConversation,
   OrchestrationSessionChildren
 } from '../../../shared/orchestration-session-children'
-import type { NativeChatSubagentState } from '../../../shared/native-chat-types'
+import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
 import { canonicalOrcaSessionId } from './canonical-orca-session-id'
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow, FederatedDispatchRow } from './types'

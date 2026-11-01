@@ -1,4 +1,5 @@
-import type { AgentType, NativeChatSubagentState } from './native-chat-types'
+import type { AgentType } from './agent-status-types'
+import type { NativeChatSubagentState } from './native-chat/native-chat-types'
 
 export const ORCHESTRATION_SESSION_CHILDREN_CAPABILITY =
   'orchestration.session-children.v1' as const

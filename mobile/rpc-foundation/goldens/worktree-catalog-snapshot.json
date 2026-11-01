@@ -8,34 +8,7 @@
       "admitted": "unadmitted",
       "fetched": "unfetched"
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "9948855e8b8d": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "kind": "response",
-        "pending": {
-          "admission": {
-            "kind": "full",
-            "snapshotId": "snapshot-1",
-            "worktrees": [
-              {
-                "displayName": "One",
-                "repo": "Repo",
-                "worktreeId": "w-1"
-              }
-            ]
-          },
-          "client": "logical-client",
-          "hostId": "host-1"
-        }
-      }
-    },
-    "9c5a8d7d6c68": {
+    "34fb08d01b03": {
       "name": "worktree.ps#1",
       "ordinal": 1,
       "args": [
@@ -46,6 +19,7 @@
         {
           "name": "params",
           "value": {
+            "acceptRowDelta": true,
             "afterSnapshotId": {
               "$rpc": "null"
             },
@@ -64,39 +38,16 @@
         "startedAt": 0
       }
     },
-    "ab1a9ba6301c": {
-      "admitted": [
-        {
-          "displayName": "One",
-          "repo": "Repo",
-          "worktreeId": "w-1"
-        }
-      ],
-      "fetched": {
-        "kind": "response",
-        "pending": {
-          "admission": {
-            "kind": "full",
-            "snapshotId": "snapshot-1",
-            "worktrees": [
-              {
-                "displayName": "One",
-                "repo": "Repo",
-                "worktreeId": "w-1"
-              }
-            ]
-          },
-          "client": "logical-client",
-          "hostId": "host-1"
-        }
-      }
-    },
-    "b63e233c7e15": {
+    "922cb68379ac": {
       "name": "worktree.ps#1",
       "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"afterSnapshotId\":null,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"afterSnapshotId\":null,\"acceptRowDelta\":true,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
     },
-    "f47f57400b0a": {
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "976f56339476": {
       "name": "worktree.ps#1",
       "ordinal": 1,
       "args": [
@@ -107,6 +58,7 @@
         {
           "name": "params",
           "value": {
+            "acceptRowDelta": true,
             "afterSnapshotId": {
               "$rpc": "null"
             },
@@ -139,6 +91,56 @@
           }
         }
       }
+    },
+    "9948855e8b8d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "response",
+        "pending": {
+          "admission": {
+            "kind": "full",
+            "snapshotId": "snapshot-1",
+            "worktrees": [
+              {
+                "displayName": "One",
+                "repo": "Repo",
+                "worktreeId": "w-1"
+              }
+            ]
+          },
+          "client": "logical-client",
+          "hostId": "host-1"
+        }
+      }
+    },
+    "ab1a9ba6301c": {
+      "admitted": [
+        {
+          "displayName": "One",
+          "repo": "Repo",
+          "worktreeId": "w-1"
+        }
+      ],
+      "fetched": {
+        "kind": "response",
+        "pending": {
+          "admission": {
+            "kind": "full",
+            "snapshotId": "snapshot-1",
+            "worktrees": [
+              {
+                "displayName": "One",
+                "repo": "Repo",
+                "worktreeId": "w-1"
+              }
+            ]
+          },
+          "client": "logical-client",
+          "hostId": "host-1"
+        }
+      }
     }
   },
   "recording": {
@@ -147,8 +149,8 @@
       {
         "id": "catalog-pending",
         "observation": {
-          "sender": ["9c5a8d7d6c68"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["34fb08d01b03"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "9270aeb7d9c6"
           },
@@ -159,8 +161,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["f47f57400b0a"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["976f56339476"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "9948855e8b8d"
           },

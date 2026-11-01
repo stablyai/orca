@@ -15,7 +15,7 @@ import {
 } from './native-chat-composer-autocomplete'
 import { sessionSlashCommandSuggestions } from './native-chat/input/native-chat-slash-commands'
 import type { DiscoveredSkill } from './skills'
-import { getNativeChatAgentProfile } from './native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from './native-chat/native-chat-agent-profiles'
 import { pickedSkillsInText } from './structured-agent-session-send-mutation'
 
 const COMMANDS: SlashCommandSuggestion[] = [

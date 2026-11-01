@@ -27,20 +27,20 @@ import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import { getDefaultSettings } from '../../../src/shared/constants'
 import type {
   AgentSessionMutationResult,
-  AgentSessionOptionResult,
-  AgentSessionOptionsResult
+  AgentSessionOptionResult
 } from '../../../src/shared/agent-session-wire'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../src/shared/agent-session-option-catalog-claude-codex'
+import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../src/shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionPicks,
-  structuredAgentSessionOptionSnapshot
-} from '../../../src/shared/structured-agent-session-options'
+  structuredAgentSessionOptionPicks
+} from '../../../src/shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection
-} from '../../../src/shared/structured-agent-session-option-view'
+} from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
 import { runtimeStub } from './structured-agent-session-surface-execution'
 import { enqueueSessionOptionSettingsWrite } from '../../../src/renderer/src/components/native-chat/native-chat-session-option-settings-write'
 import { clearRuntimeCompatibilityCacheForTests } from '../../../src/renderer/src/runtime/runtime-rpc-client'

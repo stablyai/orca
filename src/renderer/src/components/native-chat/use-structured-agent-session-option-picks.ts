@@ -4,7 +4,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import {
   structuredAgentSessionOptionPicks,
   type StructuredAgentSessionOptionState
-} from '../../../../shared/structured-agent-session-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-options'
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 
 export function useRememberSessionOptionPicks(target: RuntimeClientTarget, agent: AgentType) {

@@ -569,7 +569,7 @@ describe('getStatus', () => {
         'diff',
         '-z',
         '--numstat',
-        '-M'
+        '--no-renames'
       ],
       expect.objectContaining({
         cwd: '/repo',

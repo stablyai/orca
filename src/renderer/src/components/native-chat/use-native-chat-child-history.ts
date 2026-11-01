@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { hasRecordedNativeChatChildAssignment } from '../../../../shared/native-chat-child-inputs'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import { nativeChatChildAgentId } from './native-chat-child-agent-id'
 

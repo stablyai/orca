@@ -51,7 +51,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 {
   const THREAD: AgentJournalTurnScope = { kind: 'thread' }

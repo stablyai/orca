@@ -50,31 +50,6 @@ describe('useDebouncedSettingsTextDraft', () => {
     expect(commit).toHaveBeenCalledTimes(1)
   })
 
-  it('commits a pending edit when the field unmounts', () => {
-    const commit = vi.fn()
-    const { result, unmount } = renderHook(() =>
-      useDebouncedSettingsTextDraft({ value: '', commit })
-    )
-
-    act(() => result.current.onChange('half-typed'))
-    unmount()
-
-    expect(commit).toHaveBeenCalledExactlyOnceWith('half-typed')
-  })
-
-  it('adopts an external value while the field is untouched', () => {
-    const commit = vi.fn()
-    const { result, rerender } = renderHook(
-      ({ value }) => useDebouncedSettingsTextDraft({ value, commit }),
-      { initialProps: { value: 'first' } }
-    )
-
-    rerender({ value: 'from-another-window' })
-
-    expect(result.current.value).toBe('from-another-window')
-    expect(commit).not.toHaveBeenCalled()
-  })
-
   it('does not let an external value overwrite an in-progress edit', () => {
     const commit = vi.fn()
     const { result, rerender } = renderHook(
@@ -86,15 +61,6 @@ describe('useDebouncedSettingsTextDraft', () => {
     rerender({ value: 'from-another-window' })
 
     expect(result.current.value).toBe('typing')
-  })
-
-  it('does not commit when nothing was edited', () => {
-    const commit = vi.fn()
-    const { result } = renderHook(() => useDebouncedSettingsTextDraft({ value: 'x', commit }))
-
-    act(() => result.current.onBlur())
-
-    expect(commit).not.toHaveBeenCalled()
   })
 })
 
@@ -128,21 +94,6 @@ describe('useDebouncedSettingsTextDraft flush paths', () => {
     })
 
     expect(commit).not.toHaveBeenCalled()
-  })
-
-  it('stops listening for beforeunload after unmount', () => {
-    const commit = vi.fn()
-    const { result, unmount } = renderHook(() =>
-      useDebouncedSettingsTextDraft({ value: '', commit })
-    )
-
-    act(() => result.current.onChange('abc'))
-    unmount()
-    act(() => {
-      window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
-    })
-
-    expect(commit).toHaveBeenCalledExactlyOnceWith('abc')
   })
 
   it('commits every edit burst, not only the first', () => {

@@ -179,7 +179,7 @@ export function MarkdownTableOfContentsPanel({
           )}
         />
       ) : (
-        <div className="markdown-toc-list">
+        <div className="markdown-toc-list scrollbar-editor">
           {items.length > 0 ? (
             items.map((item) => (
               <MarkdownTocRow

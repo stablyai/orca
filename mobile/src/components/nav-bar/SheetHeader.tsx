@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { NavBarButton } from './NavBarButton'
@@ -113,11 +113,12 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.control,
     justifyContent: 'center'
   },
+  // bgRaised is the light sheet's own color; the translucent fill reads on both themes.
   actionPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.translucentFill
   },
   actionDisabled: {
-    opacity: 0.4
+    opacity: feedback.disabledOpacity
   },
   actionLabel: {
     color: colors.textPrimary,

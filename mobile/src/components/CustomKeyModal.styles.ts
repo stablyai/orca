@@ -1,4 +1,3 @@
-import { StyleSheet } from 'react-native'
 import { colors, getMobileColorScheme, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
@@ -46,28 +45,6 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
     overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  row: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    marginBottom: 1
-  },
-  rowHint: {
-    fontSize: 12,
-    color: colors.textMuted
   },
   shortcutForm: {
     paddingTop: spacing.sm

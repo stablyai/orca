@@ -1,6 +1,7 @@
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { useMemo } from 'react'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
-import type { AgentType } from '../../../../shared/native-chat-types'
+
 import {
   deriveNativeChatStreamingText,
   nativeChatStreamingMessage

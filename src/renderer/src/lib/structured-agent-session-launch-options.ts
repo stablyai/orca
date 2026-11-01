@@ -12,7 +12,7 @@ import type {
 import {
   structuredAgentSessionOptionPicks,
   type StructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult

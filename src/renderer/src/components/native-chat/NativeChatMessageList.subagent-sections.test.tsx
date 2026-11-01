@@ -36,7 +36,7 @@ import type {
 import type {
   NativeChatSubagentState,
   NativeChatMessage
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 

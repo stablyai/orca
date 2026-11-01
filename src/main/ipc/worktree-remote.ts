@@ -1701,7 +1701,7 @@ async function performLocalWorktreeCreate(
     if (setupScript && shouldLaunchSetup) {
       try {
         // Main generates setup scripts without executing them; generation failure leaves the created workspace usable.
-        setup = createSetupRunnerScript(
+        setup = await createSetupRunnerScript(
           repo,
           worktreePath,
           setupScript,

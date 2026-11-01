@@ -4,7 +4,7 @@ import {
   isToolCallBlock,
   type NativeChatMessage,
   type NativeChatBlock
-} from './native-chat-types'
+} from './native-chat/native-chat-types'
 
 export const RECORDED_PARENT_MESSAGE_SOURCE = {
   kind: 'agent',

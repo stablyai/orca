@@ -1,5 +1,6 @@
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import type { AgentType } from '../../../../shared/native-chat-types'
+
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { nativeChatChildAgentId } from './native-chat-child-agent-id'
 

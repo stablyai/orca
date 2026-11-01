@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { structuredSessionBackgroundTasksView } from '../../shared/structured-session-background-tasks-view'
-import { isSubagentBlock } from '../../shared/native-chat-types'
+import { isSubagentBlock } from '../../shared/native-chat/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'

@@ -1,4 +1,4 @@
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 
 /** Modern readers use record position; legacy readers retain their historical backward-clock clamp. */
 export function inTranscriptFileOrder(

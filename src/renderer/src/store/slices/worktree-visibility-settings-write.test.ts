@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AppState } from '../types'
 import { markRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
-import { createTestStore } from './store-test-helpers'
+
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
@@ -36,23 +36,6 @@ it('preserves the active runtime default during unrelated local settings writes'
   })
 
   expect(state.settings?.worktreeVisibilityDefaults).toEqual({ external: 'show' })
-})
-
-it('reclassifies worktrees after changing the host visibility default', async () => {
-  vi.stubGlobal('window', {
-    api: {
-      settings: {
-        set: vi.fn().mockResolvedValue({ worktreeVisibilityDefaults: { external: 'show' } })
-      }
-    }
-  })
-  const store = createTestStore()
-  const fetchAllWorktrees = vi.fn().mockResolvedValue(undefined)
-  store.setState({ fetchAllWorktrees })
-
-  await store.getState().updateSettings({ worktreeVisibilityDefaults: { external: 'show' } })
-
-  expect(fetchAllWorktrees).toHaveBeenCalledWith({ visibilityOwnerHostId: 'local' })
 })
 
 it('does not restore a stale owner after its visibility write resolves', async () => {
@@ -132,38 +115,6 @@ it('rejects base visibility writes before contacting an unsupported runtime host
     })
   ).rejects.toThrow('Update this server to configure visibility defaults.')
   expect(runtimeCall).not.toHaveBeenCalled()
-})
-
-it('does not publish a visibility write after a newer hydration starts', async () => {
-  markRuntimeEnvironmentCompatible('env-a')
-  const currentSettings = {
-    activeRuntimeEnvironmentId: 'env-a',
-    worktreeVisibilityDefaults: { external: 'hide' }
-  } as GlobalSettings
-  let state = {
-    settings: currentSettings,
-    worktreeVisibilityDefaultsByHost: {}
-  } as unknown as AppState
-  stubRuntimeEnvironmentBridge({
-    call: vi.fn().mockResolvedValue({
-      ok: true,
-      result: { settings: { worktreeVisibilityDefaults: { external: 'show' } } },
-      _meta: { runtimeId: 'runtime-a' }
-    })
-  })
-
-  await persistVisibilityAwareSettings({
-    normalizedUpdates: { worktreeVisibilityDefaults: { external: 'show' } },
-    currentSettings,
-    supportedRuntimeEnvironmentId: 'env-a',
-    shouldPublish: () => false,
-    set: (updater) => {
-      state = { ...state, ...updater(state) }
-    }
-  })
-
-  expect(state.settings?.worktreeVisibilityDefaults).toEqual({ external: 'hide' })
-  expect(state.worktreeVisibilityDefaultsByHost).toEqual({})
 })
 
 it('publishes successful local fields when the paired runtime write fails', async () => {

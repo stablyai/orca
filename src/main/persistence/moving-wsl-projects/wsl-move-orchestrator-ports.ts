@@ -17,6 +17,8 @@ export type WslMoveOrchestratorPorts = {
   appVersion: string
   /** Kill switches for automatic starts (env, rollout); explicit user actions still run. */
   autoMoveEnabled: () => boolean
+  /** Stage 2: wakes may start a move of the user's bridge projects. Stage 1: only their own act. */
+  autoMovesBridgeProjects: () => boolean
   /**
    * Readies the distro's host for an automatic step, only if the distro is confirmed running:
    * connects or adds its host then, and never boots it (A1). A failed running-distro read is

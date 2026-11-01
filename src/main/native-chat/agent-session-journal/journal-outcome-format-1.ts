@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { AgentJournalTurnScopeSchema } from '../../../shared/agent-session-journal-schemas'
-import { AgentSessionExecutionOptionsSchema } from '../../../shared/agent-session-execution-options'
+import { AgentSessionExecutionOptionsSchema } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalHistoryOrigin } from './journal-history-origin'

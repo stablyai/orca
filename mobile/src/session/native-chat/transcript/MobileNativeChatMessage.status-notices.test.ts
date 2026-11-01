@@ -7,7 +7,7 @@ import { projectStructuredItemToNativeChat } from '../../../../../src/shared/str
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatMessage
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   agentSessionFailureFact,
   readProviderRetry

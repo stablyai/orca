@@ -1,6 +1,7 @@
+import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
+
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { structuredSessionBackgroundTasksView } from '../../../shared/structured-session-background-tasks-view'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'

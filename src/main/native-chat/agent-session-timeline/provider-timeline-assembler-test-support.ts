@@ -17,7 +17,7 @@ import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/na
 import {
   isBackgroundTaskBlock,
   type NativeChatBackgroundTaskBlock
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,

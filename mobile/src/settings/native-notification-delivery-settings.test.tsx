@@ -10,6 +10,14 @@ const mocks = vi.hoisted(() => ({
   support: { resolved: true, supported: false },
   appState: null as null | ((state: string) => void)
 }))
+vi.mock(
+  './settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('react-native', () => ({
   Text: 'Text',
   AppState: {

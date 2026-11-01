@@ -2,7 +2,7 @@ import {
   nativeChatRecordedChildInputs,
   RECORDED_PARENT_MESSAGE_SOURCE
 } from '../../../../shared/native-chat-child-inputs'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatChildAgentId } from './native-chat-child-agent-id'
 
 export function nativeChatChildTranscript(

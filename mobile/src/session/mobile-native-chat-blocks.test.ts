@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { foldToolMessages } from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { pairToolBlocks } from '../../../src/shared/native-chat/tools/native-chat-tool-pairs'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 
 function msg(
   role: NativeChatMessage['role'],

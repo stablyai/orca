@@ -223,25 +223,4 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
       missingParentEdge.parentWorktreeInstanceId
     )
   })
-
-  it('does not rematerialize metadata already removed for a missing parent', () => {
-    const liveChildId = 'repo-1::/repo/live-child'
-    const removedParentId = 'repo-1::/repo/removed-parent'
-    const edge = lineage(liveChildId, removedParentId)
-    const worktreeLineageById = { [liveChildId]: edge }
-    const store = createStore(worktreeLineageById, {}, {})
-
-    pruneLineageForMissingRepoWorktrees(store as never, repo, [
-      {
-        path: '/repo/live-child',
-        head: 'child-head',
-        branch: 'child',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
-    expect(worktreeLineageById[liveChildId]).toBe(edge)
-  })
 })

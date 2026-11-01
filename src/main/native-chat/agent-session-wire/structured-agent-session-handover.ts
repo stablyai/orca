@@ -8,7 +8,7 @@ import {
   agentSessionFailureFact,
   providerDiagnosticOf
 } from '../../../shared/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import { isAbortSignalReason } from '../../../shared/abort-signal-reason'
 import { isAgentSessionOptionRejectedError } from './structured-agent-session-option-error'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'

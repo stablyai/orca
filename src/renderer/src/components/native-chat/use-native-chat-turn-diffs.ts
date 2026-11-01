@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { NativeChatSubagentRow } from '../../../../shared/native-chat-transcript-projection'
+import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatRowsInTranscriptOrder } from './native-chat-subagent-sections'
 import { nativeChatTurnDiffs, type NativeChatTurnDiff } from './native-chat-turn-diffs'
 import type { NativeChatTurnRows } from './use-native-chat-turn-membership'

@@ -28,7 +28,7 @@ import type { OrchestrationSessionChild } from '../../../../shared/orchestration
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
 import type { NativeChatLiveSession } from './native-chat-live-session-contract'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'

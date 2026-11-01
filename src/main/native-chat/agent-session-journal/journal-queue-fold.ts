@@ -6,7 +6,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/structured-agent-session-command-turn-identity'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'

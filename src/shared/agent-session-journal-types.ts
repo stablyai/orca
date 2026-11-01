@@ -18,12 +18,12 @@ import type { AgentSessionQuestionAnswer } from './agent-session-question-answer
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat/tools/native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
-import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
+import type { NativeChatBlock, NativeChatRole } from './native-chat/native-chat-types'
 import type {
   AgentMessageSender,
   AgentMessageSource
 } from './agent-session/agent-session-message-source'
-import type { AgentSessionExecutionOptions } from './agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from './agent-session/options/agent-session-execution-options'
 
 export { type AgentType }
 

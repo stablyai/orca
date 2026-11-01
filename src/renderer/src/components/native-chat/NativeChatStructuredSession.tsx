@@ -301,6 +301,8 @@ export function NativeChatStructuredSession(
               <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
             ) : (
               <NativeChatStructuredTranscript
+                pane={props}
+                directory={fileLinkContext}
                 controller={controller}
                 continuation={continuation.view}
                 claudeSignIn={claudeSignIn}

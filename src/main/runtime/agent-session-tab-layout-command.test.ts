@@ -128,7 +128,9 @@ describe("a host's chat tab change as main's layout command", () => {
   })
 
   it('closes the tab that shows the chat, under its saved id, forced', () => {
-    expect(commandOn(session([chatTab('a', 'saved-tab')]), { close: 'a' })).toEqual({
+    expect(
+      commandOn(session([chatTab('a', 'saved-tab')]), { close: 'a', tabId: 'saved-tab' })
+    ).toEqual({
       type: 'closeTabs',
       workspace: WT,
       tabIds: ['saved-tab'],

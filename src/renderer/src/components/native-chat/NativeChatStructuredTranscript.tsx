@@ -1,7 +1,7 @@
+import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
 import type { ComponentProps, Ref } from 'react'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
-import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
 import { NativeChatClaudeSignInContext } from './native-chat-claude-sign-in'
 import type { useNativeChatClaudeSignIn } from './native-chat-claude-sign-in'
 import type { useNativeChatInterruptedContinuation } from './NativeChatInterruptedContinue'
@@ -9,6 +9,8 @@ import type { useStructuredAgentSession } from './use-structured-agent-session'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 
 export function NativeChatStructuredTranscript({
+  pane,
+  directory,
   controller,
   continuation,
   claudeSignIn,
@@ -29,6 +31,8 @@ export function NativeChatStructuredTranscript({
   | 'settledTurns'
   | 'turnActivity'
 > & {
+  pane: ComponentProps<typeof NativeChatUsageLimitActionsProvider>['pane']
+  directory: ComponentProps<typeof NativeChatUsageLimitActionsProvider>['directory']
   controller: ReturnType<typeof useStructuredAgentSession>
   continuation: ReturnType<typeof useNativeChatInterruptedContinuation>['view']
   claudeSignIn: ReturnType<typeof useNativeChatClaudeSignIn>
@@ -36,7 +40,13 @@ export function NativeChatStructuredTranscript({
 }): React.JSX.Element {
   return (
     <NativeChatRewindContext.Provider value={controller.rewind.surface}>
-      <NativeChatOrcaStopContext.Provider value={continuation}>
+      <NativeChatUsageLimitActionsProvider
+        recovery={controller}
+        pane={pane}
+        directory={directory}
+        messages={controller.messages}
+        view={continuation}
+      >
         <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
           <NativeChatMessageList
             {...props}
@@ -55,7 +65,7 @@ export function NativeChatStructuredTranscript({
             turnActivity={controller.turnActivity}
           />
         </NativeChatClaudeSignInContext.Provider>
-      </NativeChatOrcaStopContext.Provider>
+      </NativeChatUsageLimitActionsProvider>
     </NativeChatRewindContext.Provider>
   )
 }

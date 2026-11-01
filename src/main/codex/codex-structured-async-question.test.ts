@@ -5,7 +5,7 @@ import {
   asyncQuestionOccurrenceId
 } from '../../shared/native-chat/input/native-chat-ask'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   codexItemBody,
   codexItemIdentity,

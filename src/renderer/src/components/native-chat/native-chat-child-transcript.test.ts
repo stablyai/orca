@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { stripNoiseMessages } from '../../../../shared/native-chat-noise'
-import { projectNativeChatTranscriptMessages } from '../../../../shared/native-chat-transcript-projection'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { stripNoiseMessages } from '../../../../shared/native-chat/native-chat-noise'
+import { projectNativeChatTranscriptMessages } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatChildTranscript } from './native-chat-child-transcript'
 
 function message(id: string, agentId?: string, parentAgentId?: string): NativeChatMessage {
