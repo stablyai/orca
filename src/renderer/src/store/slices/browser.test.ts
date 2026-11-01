@@ -450,6 +450,41 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().browserUrlHistory).toBe(revisited)
   })
 
+  it('clears only history attributed to the selected partition, retaining shared visits and documents', () => {
+    const store = createTestStore()
+    const s = store.getState()
+    s.addBrowserHistoryEntry('https://legacy.example', 'Legacy')
+    s.addBrowserHistoryEntry('https://one.example', 'One', undefined, 'persist:one')
+    s.addBrowserHistoryEntry('https://two.example', 'Two', undefined, 'persist:two')
+    s.addBrowserHistoryEntry('https://shared.example', 'Shared', undefined, 'persist:one')
+    s.addBrowserHistoryEntry('https://shared.example', 'Shared', undefined, 'persist:two')
+    s.recordWorkspaceDocVisit(
+      { kind: 'workspace-doc', worktreeId: 'wt', filePath: '/a.html' },
+      'Doc'
+    )
+    s.addBrowserHistoryEntry('https://legacy.example', 'Legacy', undefined, 'persist:one')
+    const docs = store.getState().workspaceDocHistory
+    const removed = store.getState().clearBrowserHistory(undefined, 'persist:one')
+    expect(removed.browserUrlHistory.map((e) => e.title).sort()).toEqual([
+      'Legacy',
+      'One',
+      'Shared'
+    ])
+    expect(removed.workspaceDocHistory).toEqual([])
+    expect(
+      store
+        .getState()
+        .browserUrlHistory.map((e) => e.title)
+        .sort()
+    ).toEqual(['Legacy', 'Shared', 'Two'])
+    expect(
+      store.getState().browserUrlHistory.find((e) => e.title === 'Shared')?.partitions
+    ).toEqual(['persist:two'])
+    expect(store.getState().workspaceDocHistory).toBe(docs)
+    store.getState().clearBrowserHistory(undefined, 'persist:two')
+    expect(store.getState().browserUrlHistory.map((e) => e.title)).toEqual(['Legacy'])
+  })
+
   it('clears pages and documents visited since a time, and Undo puts back exactly those', () => {
     vi.useFakeTimers()
     try {

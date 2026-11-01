@@ -80,7 +80,7 @@ export function createBrowserHistoryActions(
       })
     },
 
-    addBrowserHistoryEntry: (url, title, faviconUrl) => {
+    addBrowserHistoryEntry: (url, title, faviconUrl, partition) => {
       const safeUrl = redactKagiSessionToken(url)
       if (safeUrl === ORCA_BROWSER_BLANK_URL || safeUrl === 'about:blank' || !safeUrl) {
         return
@@ -93,6 +93,12 @@ export function createBrowserHistoryActions(
               entry === existing
                 ? {
                     ...entry,
+                    ...(partition
+                      ? {
+                          partitions: [...new Set([...(entry.partitions ?? []), partition])],
+                          ...(!entry.partitions ? { hasUnscopedVisits: true } : {})
+                        }
+                      : { hasUnscopedVisits: true }),
                     title,
                     ...(faviconUrl !== undefined ? { faviconUrl } : {}),
                     lastVisitedAt: Date.now(),
@@ -102,6 +108,7 @@ export function createBrowserHistoryActions(
             )
           : [
               {
+                ...(partition ? { partitions: [partition] } : {}),
                 url: safeUrl,
                 normalizedUrl: normalized,
                 title,
@@ -162,7 +169,22 @@ export function createBrowserHistoryActions(
     },
 
     // One clear for both sources: the dropdown presents them as one history.
-    clearBrowserHistory: (since = -Infinity) => {
+    clearBrowserHistory: (since = -Infinity, partition) => {
+      if (partition) {
+        const removed = get().browserUrlHistory.filter(
+          (entry) => entry.lastVisitedAt >= since && entry.partitions?.includes(partition)
+        )
+        set((s) => ({
+          browserUrlHistory: s.browserUrlHistory.flatMap((entry) => {
+            if (!removed.includes(entry)) {
+              return [entry]
+            }
+            const partitions = entry.partitions?.filter((value) => value !== partition) ?? []
+            return partitions.length || entry.hasUnscopedVisits ? [{ ...entry, partitions }] : []
+          })
+        }))
+        return { browserUrlHistory: removed, workspaceDocHistory: [] }
+      }
       const { browserUrlHistory, workspaceDocHistory } = get()
       const removed: RemovedBrowserHistory = {
         browserUrlHistory: browserUrlHistory.filter((entry) => entry.lastVisitedAt >= since),

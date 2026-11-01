@@ -460,6 +460,17 @@
         "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
         "failed": "Cookie import failed: {{reason}}"
       }
+    },
+    "clearData": {
+      "title": "Clear browsing data",
+      "scope": "Clear all time for the browser profile used by this page. Cookies and site data are shared by pages in this profile. Clearing them signs you out of sites.",
+      "cookies": "Cookies and site data",
+      "cache": "Cached images and files",
+      "history": "Browsing history",
+      "legacyHistory": "History recorded before profile tracking stays in the shared history list. Use Clear browsing history to manage those entries.",
+      "error": "Could not finish clearing data. Some data may already be cleared. Reopen the browser page and try again. This action requires a local desktop browser guest.",
+      "clearing": "Clearing…",
+      "clear": "Clear data"
     }
   },
   "editor": {

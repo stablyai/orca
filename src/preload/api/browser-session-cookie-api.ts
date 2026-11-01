@@ -5,6 +5,12 @@ import type {
 import type { BrowserCookieImportResult } from '../../shared/browser-workspace-types'
 
 export type BrowserSessionCookieApi = {
+  clearBrowsingData: (args: {
+    browserPageId: string
+    partition: string
+    cookies: boolean
+    cache: boolean
+  }) => Promise<string>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionImportCookiesForClientHost: (args: {
     environmentId: string

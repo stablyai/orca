@@ -277,7 +277,12 @@ export type BrowserSlice = {
   ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
-  addBrowserHistoryEntry: (url: string, title: string, faviconUrl?: string | null) => void
+  addBrowserHistoryEntry: (
+    url: string,
+    title: string,
+    faviconUrl?: string | null,
+    partition?: string
+  ) => void
   /** Returns the removed entry so an Undo can put it back with its visit count. */
   removeBrowserHistoryEntry: (normalizedUrl: string) => BrowserHistoryEntry | null
   /** Puts removed or cleared entries back, except ones a revisit has already re-created. */
@@ -290,8 +295,8 @@ export type BrowserSlice = {
     title: string | null,
     options?: { bump?: boolean }
   ) => void
-  /** Clears pages and documents last visited at or after `since` (everything when omitted). */
-  clearBrowserHistory: (since?: number) => RemovedBrowserHistory
+  /** With a partition, clears only attributed browser visits; otherwise clears the shared history. */
+  clearBrowserHistory: (since?: number, partition?: string) => RemovedBrowserHistory
   /** The page whose history view is open; it opens what you pick in that page. */
   browserHistoryPageId: string | null
   setBrowserHistoryPageId: (pageId: string | null) => void

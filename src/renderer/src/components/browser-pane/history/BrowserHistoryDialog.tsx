@@ -1,6 +1,7 @@
 import { useDeferredValue, useMemo, useRef, useState } from 'react'
 import { FileText, Trash2 } from 'lucide-react'
 import { BrowserFavicon } from '@/components/browser-favicon'
+import { ClearBrowsingDataForm } from './ClearBrowsingDataForm'
 import { Button } from '@/components/ui/button'
 import {
   CommandDialog,
@@ -104,6 +105,7 @@ function BrowserHistoryDialogContent({
   const restoreBrowserHistory = useAppStore((s) => s.restoreBrowserHistory)
   const removeHistoryRow = useRemoveHistoryRow()
   const [query, setQuery] = useState('')
+  const [clearDataOpen, setClearDataOpen] = useState(false)
   // Why in the footer and not a toast: the modal overlay covers the app's toaster.
   const [cleared, setCleared] = useState<RemovedBrowserHistory | null>(null)
   const deferredQuery = useDeferredValue(query)
@@ -172,13 +174,22 @@ function BrowserHistoryDialogContent({
         }
       }}
     >
+      {clearDataOpen && (
+        <ClearBrowsingDataForm
+          pageId={pageId}
+          onClose={() => setClearDataOpen(false)}
+          onClearHistory={(partition) => {
+            clearBrowserHistory(undefined, partition)
+          }}
+        />
+      )}
       <CommandInput
         placeholder={translate('browser.history.search', 'Search history')}
         value={query}
         onValueChange={setQuery}
         className="h-11 min-w-0 flex-1"
       />
-      <CommandList className="max-h-[min(560px,calc(100vh-14rem))]">
+      <CommandList className={clearDataOpen ? 'max-h-32' : 'max-h-[min(560px,calc(100vh-14rem))]'}>
         <CommandEmpty>
           {hasHistory
             ? translate('browser.history.noMatches', 'No pages match your search')
@@ -264,6 +275,9 @@ function BrowserHistoryDialogContent({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+        <Button variant="ghost" size="xs" onClick={() => setClearDataOpen(true)}>
+          {translate('browser.clearData.title', 'Clear browsing data')}
+        </Button>
         <div className="flex items-center gap-2">
           <FooterKey>{translate('browser.history.enterKey', 'Enter')}</FooterKey>
           <span>{translate('browser.history.open', 'Open')}</span>

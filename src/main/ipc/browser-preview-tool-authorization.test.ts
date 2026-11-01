@@ -123,6 +123,7 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:respondPagePrompt',
   'browser:proceedCertificate',
   'browser:activeTabChanged',
+  'browser:clearBrowsingData',
   'browser:openDevTools',
   'browser:closeDevTools',
   'browser:setDevToolsDockBounds',

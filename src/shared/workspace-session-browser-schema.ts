@@ -92,6 +92,8 @@ export const browserPageSchema = z.object({
 })
 
 const browserHistoryEntrySchema = z.object({
+  partitions: z.array(z.string()).optional(),
+  hasUnscopedVisits: z.boolean().optional(),
   url: z.string(),
   normalizedUrl: z.string(),
   title: z.string(),
