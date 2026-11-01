@@ -8529,7 +8529,10 @@
           "810ef39b56": "cursor",
           "3ebe650f74": "App name",
           "3743ed080c": "Set command",
-          "f79084947b": "New app"
+          "f79084947b": "New app",
+          "fileExplorerClick": "Open files from File Explorer in",
+          "fileExplorerClickDescription": "Choose where a click on a file opens it. Workspaces the app cannot reach open in the Orca editor.",
+          "orcaEditor": "Orca editor"
         },
         "OrchestrationPane": {
           "52e0634e2c": "Ask a coordinator agent to use orchestration for handoffs, worktree handovers, and sequential or parallel child agents.",

@@ -1,5 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
+import React, { useCallback } from 'react'
 import { ExternalLink, FolderOpen } from 'lucide-react'
 import {
   ContextMenuItem,
@@ -9,17 +8,15 @@ import {
   ContextMenuSubTrigger
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store'
-import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
-import { getWorkspaceEditorSshHost } from '@/lib/workspace-editor-ssh-target'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { openOpenInAppsSettings, openWorktreePath } from '@/components/sidebar/WorktreeOpenInMenu'
 import {
-  getOpenInEntryAvailability,
-  openOpenInAppsSettings,
-  openWorktreePath
-} from '@/components/sidebar/WorktreeOpenInMenu'
+  getOpenInApplicationAvailability,
+  useOpenInPathRoute
+} from '@/components/sidebar/use-open-in-path-route'
 
 type OpenInContextSubmenuProps = {
   path?: string
@@ -35,9 +32,7 @@ export function OpenInContextSubmenu({
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
-  const openInRoute = useMemo(() => getRouteForLocalPathOpenOwner(owner), [owner])
-  const workspace = useMemo(() => (workspaceId ? { workspaceId } : null), [workspaceId])
-  const runtimeSshHost = useAppStore(useShallow((s) => getWorkspaceEditorSshHost(s, workspace)))
+  const { route: openInRoute, workspace, runtimeSshHost } = useOpenInPathRoute(workspaceId, owner)
 
   const handleOpen = useCallback(
     (command: string) => {
@@ -64,11 +59,9 @@ export function OpenInContextSubmenu({
       </ContextMenuSubTrigger>
       <ContextMenuSubContent className="w-52">
         {openInApplications.map((application) => {
-          const availability = getOpenInEntryAvailability(
-            { ...application, target: 'external-editor' },
-            openInRoute.connectionId,
-            openInRoute.runtimeEnvironmentId,
-            openInRoute.ownerUnresolved,
+          const availability = getOpenInApplicationAvailability(
+            application,
+            openInRoute,
             runtimeSshHost
           )
           return (

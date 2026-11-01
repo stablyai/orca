@@ -24,9 +24,11 @@ import {
 } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { FileExplorerOpenInAppSetting } from './FileExplorerOpenInAppSetting'
 
 type OpenInMenuSettingProps = {
   applications: OpenInApplication[] | undefined
+  fileExplorerApplicationId?: string | null
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
@@ -235,6 +237,7 @@ function OpenInMenuRow({
 
 export function OpenInMenuSetting({
   applications,
+  fileExplorerApplicationId,
   updateSettings
 }: OpenInMenuSettingProps): React.JSX.Element {
   const [draftState, setDraftState] = useState(() =>
@@ -254,7 +257,14 @@ export function OpenInMenuSetting({
     if (!shouldCommitOpenInApplicationsDraft(nextDraft)) {
       return
     }
-    updateSettings({ openInApplications: nextDraft })
+    // A removed app must not silently come back when the same preset is added again.
+    const chosenAppRemoved =
+      !!fileExplorerApplicationId &&
+      !nextDraft.some((application) => application.id === fileExplorerApplicationId)
+    updateSettings({
+      openInApplications: nextDraft,
+      ...(chosenAppRemoved ? { fileExplorerOpenInApplicationId: null } : {})
+    })
   }
 
   const updateDraft = (nextDraft: OpenInApplication[]): void => {
@@ -387,6 +397,12 @@ export function OpenInMenuSetting({
           })}
         </div>
       )}
+
+      <FileExplorerOpenInAppSetting
+        applications={applications ?? []}
+        selectedApplicationId={fileExplorerApplicationId}
+        updateSettings={updateSettings}
+      />
     </div>
   )
 }

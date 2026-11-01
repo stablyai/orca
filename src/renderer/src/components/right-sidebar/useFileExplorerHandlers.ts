@@ -33,6 +33,7 @@ type UseFileExplorerHandlersParams = {
     }
   ) => void
   makePreviewFilePermanent: (filePath: string) => void
+  openFileInChosenApp?: (filePath: string) => boolean
   toggleDir: (worktreeId: string, dirPath: string) => void
   canToggleDirectories?: boolean
   loadDir: (
@@ -47,7 +48,7 @@ type UseFileExplorerHandlersParams = {
 }
 
 type UseFileExplorerHandlersReturn = {
-  handleClick: (node: TreeNode, dirToggle?: DirToggleTiming) => void
+  handleClick: (node: TreeNode, dirToggle?: DirToggleTiming, openInChosenApp?: boolean) => void
   handleDoubleClick: (node: TreeNode) => void
   handleWheelCapture: (e: React.WheelEvent<HTMLDivElement>) => void
 }
@@ -60,6 +61,7 @@ export async function activateFileExplorerNode(args: {
   activeWorktreeId: string | null
   runtimeEnvironmentId?: string | null
   openFile: (params: OpenFileParams, options?: OpenFileOptions) => void
+  openFileInChosenApp?: (filePath: string) => boolean
   toggleDir: (worktreeId: string, dirPath: string) => void
   canToggleDirectories?: boolean
   loadDir: UseFileExplorerHandlersParams['loadDir']
@@ -71,6 +73,7 @@ export async function activateFileExplorerNode(args: {
     node,
     activeWorktreeId,
     openFile,
+    openFileInChosenApp,
     toggleDir,
     canToggleDirectories = true,
     loadDir,
@@ -130,6 +133,9 @@ export async function activateFileExplorerNode(args: {
     toast.error(getFileExplorerOwnerUnresolvedMessage())
     return
   }
+  if (openFileInChosenApp?.(node.path)) {
+    return
+  }
   openFile(
     {
       filePath: node.path,
@@ -155,6 +161,7 @@ export function useFileExplorerHandlers({
   runtimeEnvironmentId,
   openFile,
   makePreviewFilePermanent,
+  openFileInChosenApp,
   toggleDir,
   canToggleDirectories = true,
   loadDir,
@@ -164,7 +171,7 @@ export function useFileExplorerHandlers({
   scrollRef
 }: UseFileExplorerHandlersParams): UseFileExplorerHandlersReturn {
   const handleClick = useCallback(
-    (node: TreeNode, dirToggle: DirToggleTiming = 'immediate') => {
+    (node: TreeNode, dirToggle: DirToggleTiming = 'immediate', openInChosenApp = false) => {
       if (dirToggle === 'skip' && (node.isDirectory || node.isSymlink)) {
         // Rename owns this click; symlinks remain file-shaped until activation, so isDirectory alone would retoggle.
         setSelectedPath(node.path)
@@ -175,6 +182,8 @@ export function useFileExplorerHandlers({
         activeWorktreeId,
         runtimeEnvironmentId,
         openFile,
+        // Only a row click opens in the chosen app; "View File" and the keyboard keep the Orca editor.
+        openFileInChosenApp: openInChosenApp ? openFileInChosenApp : undefined,
         toggleDir,
         canToggleDirectories,
         loadDir,
@@ -190,6 +199,7 @@ export function useFileExplorerHandlers({
       loadDir,
       markPathAsDirectory,
       openFile,
+      openFileInChosenApp,
       statPath,
       toggleDir,
       setSelectedPath

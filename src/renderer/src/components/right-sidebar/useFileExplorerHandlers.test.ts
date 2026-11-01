@@ -166,6 +166,70 @@ describe('activateFileExplorerNode', () => {
     )
   })
 
+  describe('with an app chosen for File Explorer clicks', () => {
+    const fileNode: TreeNode = {
+      name: 'main.ts',
+      path: '/repo/main.ts',
+      relativePath: 'main.ts',
+      isDirectory: false,
+      depth: 0,
+      operationOwner: { kind: 'local' }
+    }
+
+    async function activate(
+      node: TreeNode,
+      openFileInChosenApp: (path: string) => boolean
+    ): Promise<{ openFile: ReturnType<typeof vi.fn>; toggleDir: ReturnType<typeof vi.fn> }> {
+      const openFile = vi.fn()
+      const toggleDir = vi.fn()
+      useAppStore.setState({
+        worktreesByRepo: {
+          'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' } as never]
+        }
+      })
+      await activateFileExplorerNode({
+        node,
+        activeWorktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        openFile,
+        openFileInChosenApp,
+        toggleDir,
+        loadDir: vi.fn(),
+        statPath: vi.fn(),
+        markPathAsDirectory: vi.fn(),
+        setSelectedPath: vi.fn()
+      })
+      return { openFile, toggleDir }
+    }
+
+    it('skips the Orca editor once the app takes the file', async () => {
+      const openFileInChosenApp = vi.fn().mockReturnValue(true)
+
+      const { openFile } = await activate(fileNode, openFileInChosenApp)
+
+      expect(openFileInChosenApp).toHaveBeenCalledWith('/repo/main.ts')
+      expect(openFile).not.toHaveBeenCalled()
+    })
+
+    it('opens the Orca editor when the app cannot take the file', async () => {
+      const { openFile } = await activate(fileNode, vi.fn().mockReturnValue(false))
+
+      expect(openFile).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: '/repo/main.ts' }),
+        expect.anything()
+      )
+    })
+
+    it('still expands folders in the explorer', async () => {
+      const openFileInChosenApp = vi.fn().mockReturnValue(true)
+
+      const { toggleDir } = await activate(directoryNode, openFileInChosenApp)
+
+      expect(toggleDir).toHaveBeenCalledWith('wt-1', '/repo/src')
+      expect(openFileInChosenApp).not.toHaveBeenCalled()
+    })
+  })
+
   it('opens a symlink as a file when target stat fails', async () => {
     const openFile = vi.fn()
     useAppStore.setState({

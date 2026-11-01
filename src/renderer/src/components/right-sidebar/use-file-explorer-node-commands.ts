@@ -42,7 +42,7 @@ type UseFileExplorerNodeCommandsParams = {
   requestDelete: (node: TreeNode) => void
   requestDeleteAll: (nodes: TreeNode[]) => void
   refreshDir: (dirPath: string) => Promise<void>
-  handleClick: (node: TreeNode, dirToggle?: DirToggleTiming) => void
+  handleClick: (node: TreeNode, dirToggle?: DirToggleTiming, openInChosenApp?: boolean) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   scrollToIndex: (index: number) => void
   pathOwner: LocalPathOpenOwner
@@ -134,7 +134,10 @@ export function useFileExplorerNodeCommands({
         fromRenameHotspot: isRenameHotspotTarget(event.target),
         clickCount: event.detail
       })
-      selectRowWithModifiers(node, event, (target) => handleClick(target, dirToggle))
+      // The second click of a double-click must not launch the app again.
+      selectRowWithModifiers(node, event, (target) =>
+        handleClick(target, dirToggle, event.detail < 2)
+      )
     },
     [handleClick, selectRowWithModifiers]
   )
