@@ -73,6 +73,7 @@ it('does not enqueue auto-reveal for an editor file outside scope', () => {
   renderHook(() =>
     useFileExplorerAutoReveal({
       ...args,
+      followActiveFile: true,
       pendingExplorerReveal: null,
       activeFileId: 'readme',
       openFiles: [

@@ -101,6 +101,35 @@ export function GeneralWorkspaceSettingsSection({
         />
       </SearchableSetting>
 
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.133d3339d1',
+          'Follow Active File in Explorer'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.dd0b764c3f',
+          'Select and scroll to the active editor file in the file explorer. Turn off to keep your place when switching or closing tabs.'
+        )}
+        keywords={['explorer', 'reveal', 'follow', 'active', 'tab', 'selection', 'scroll']}
+      >
+        <SettingsSwitchRow
+          label={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.133d3339d1',
+            'Follow Active File in Explorer'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.dd0b764c3f',
+            'Select and scroll to the active editor file in the file explorer. Turn off to keep your place when switching or closing tabs.'
+          )}
+          checked={settings.fileExplorerFollowsActiveFile}
+          onChange={() =>
+            updateSettings({
+              fileExplorerFollowsActiveFile: !settings.fileExplorerFollowsActiveFile
+            })
+          }
+        />
+      </SearchableSetting>
+
       {/* Keep this ID stable: the delete-worktree Don’t ask again toast deep-links here. */}
       <div id="general-skip-delete-worktree-confirm" className="scroll-mt-6">
         <SearchableSetting
