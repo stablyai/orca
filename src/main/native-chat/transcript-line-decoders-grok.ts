@@ -1,4 +1,4 @@
-import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   asRecord,
   extractString,

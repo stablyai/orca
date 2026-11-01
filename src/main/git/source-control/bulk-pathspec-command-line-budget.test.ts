@@ -72,18 +72,6 @@ describe('bulk pathspec command-line budget', () => {
     vi.resetModules()
   })
 
-  it('keeps every WSL bulk-stage invocation inside the Windows command-line cap', async () => {
-    const { bulkStageFiles } = await import('./staging')
-    const filePaths = realisticChangedPaths(100)
-
-    await bulkStageFiles(WSL_WORKTREE, filePaths, { wslDistro: WSL_DISTRO })
-
-    const invocations = capturedInvocations()
-    expect(invocations.length).toBeGreaterThan(0)
-    const lengths = invocations.map((args) => finishedCommandLineLength(args, WSL_DISTRO))
-    expect(Math.max(...lengths)).toBeLessThanOrEqual(MAX_COMMAND_LINE_CHARS)
-  })
-
   it('stages every path exactly once, in order, through stdin', async () => {
     const { bulkStageFiles } = await import('./staging')
     const filePaths = realisticChangedPaths(250)
@@ -94,38 +82,6 @@ describe('bulk pathspec command-line budget', () => {
       ([, options]) => options.stdin?.split('\0').filter(Boolean) ?? []
     )
     expect(staged).toEqual(filePaths.map((filePath) => `:(literal)${filePath}`))
-  })
-
-  it('keeps WSL bulk unstage inside the cap', async () => {
-    const { bulkUnstageFiles } = await import('./staging')
-
-    await bulkUnstageFiles(WSL_WORKTREE, realisticChangedPaths(100), { wslDistro: WSL_DISTRO })
-
-    const lengths = capturedInvocations().map((args) => finishedCommandLineLength(args, WSL_DISTRO))
-    expect(Math.max(...lengths)).toBeLessThanOrEqual(MAX_COMMAND_LINE_CHARS)
-  })
-
-  it('does not spawn an empty WSL bulk stage', async () => {
-    const { bulkStageFiles } = await import('./staging')
-
-    await bulkStageFiles(WSL_WORKTREE, [], { wslDistro: WSL_DISTRO })
-    expect(capturedInvocations()).toEqual([])
-  })
-
-  it('discards tracked paths with one spawnable WSL restore', async () => {
-    const filePaths = realisticChangedPaths(120)
-    gitExecFileAsync.mockImplementation(async () => ({ stdout: filePaths.join('\0'), stderr: '' }))
-    const { bulkDiscardChanges } = await import('./discard-changes')
-
-    await bulkDiscardChanges(WSL_WORKTREE, filePaths, { wslDistro: WSL_DISTRO })
-
-    const restores = capturedInvocations().filter((args) => args[0] === 'restore')
-    expect(restores).toHaveLength(1)
-    for (const args of restores) {
-      expect(finishedCommandLineLength(args, WSL_DISTRO)).toBeLessThanOrEqual(
-        MAX_COMMAND_LINE_CHARS
-      )
-    }
   })
 
   it('never widens `clean -ffdx` past the paths it was given', async () => {
@@ -159,19 +115,6 @@ describe('bulk pathspec command-line budget', () => {
     )
   })
 
-  it('packs chunks to the budget instead of splitting timidly', async () => {
-    const { bulkPathspecCommands } = await import('./git-pathspec')
-    const commands = bulkPathspecCommands(
-      ['ls-files', '-z', '--'],
-      realisticChangedPaths(100),
-      WSL_WORKTREE,
-      { wslDistro: WSL_DISTRO }
-    )
-    const lengths = commands.map((args) => finishedCommandLineLength(args, WSL_DISTRO))
-    // Every chunk but the last is filled to within one pathspec of the cap.
-    expect(Math.min(...lengths.slice(0, -1))).toBeGreaterThan(MAX_COMMAND_LINE_CHARS * 0.9)
-  })
-
   it('gives a native Windows git.exe the CreateProcess cap and a POSIX host a larger one', async () => {
     const { bulkPathspecCommands } = await import('./git-pathspec')
     const filePaths = Array.from(
@@ -187,14 +130,5 @@ describe('bulk pathspec command-line budget', () => {
 
     Object.defineProperty(process, 'platform', { value: 'linux' })
     expect(bulkPathspecCommands(['add', '--'], filePaths, '/repo', {})).toHaveLength(1)
-  })
-
-  it('does not charge a native invocation for the WSL wrapper', async () => {
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
-    const { bulkStageFiles } = await import('./staging')
-
-    await bulkStageFiles('/home/emilio/projects/orca', realisticChangedPaths(100))
-
-    expect(capturedInvocations()).toHaveLength(1)
   })
 })

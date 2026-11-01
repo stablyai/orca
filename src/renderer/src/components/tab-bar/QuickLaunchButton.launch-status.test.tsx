@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { ReactNode } from 'react'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   act,
   cleanup,
@@ -392,7 +393,7 @@ it('gives static/search no agent actions while loading, retaining settings and g
       onNewBrowserTab: vi.fn()
     })
   )
-  expect(controller.result.current.agentLaunchOptions).toEqual([])
+  expect(controller.result.current.agentPickerInventory.getSnapshot()).toEqual([])
   expect(
     controller.result.current.createMenuOptions.some((option) => option.kind === 'new-terminal')
   ).toBe(true)
@@ -478,6 +479,8 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   beforeEach(() => {
     localStorage.clear()
     resetStructuredAgentLaunchRegistryForTests()
+    // A host without chats lists every agent as a terminal.
+    setLocalRuntimeCapabilitiesForTests([])
   })
 
   it('keeps every agent launchable while chats start, fail or retry', () => {

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../../shared/agent-session-wire'
 import {
   CreateIntentParams,
@@ -57,6 +57,7 @@ vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
       runtimeEnvironmentCatalogHydrated: true,
+      runtimeStatusByEnvironmentId: new Map(),
       settings: mocks.settings,
       unifiedTabsByWorktree: {},
       groupsByWorktree: {},

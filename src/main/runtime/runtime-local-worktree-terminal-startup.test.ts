@@ -56,8 +56,20 @@ const LEAF_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
 
 async function startupTerminalOptions(startupPaneKey?: string) {
   const { createTerminal, ports } = createPorts()
+  const observe = vi.fn()
+  const followup = { agent: 'codex' as const, prompt: 'task' }
+  const terminal = {
+    handle: 'term-1',
+    worktreeId: worktree.id,
+    title: null,
+    ptyId: 'pty-startup',
+    incarnationId: 'inc-startup',
+    isReattach: true as const
+  }
+  createTerminal.mockResolvedValueOnce(terminal)
   await startRuntimeLocalWorktreeTerminals({
     request: {
+      onStartupTerminalCreated: observe,
       repoSelector: `id:${repo.id}`,
       name: worktree.displayName,
       ...(startupPaneKey ? { startupPaneKey } : {})
@@ -66,8 +78,11 @@ async function startupTerminalOptions(startupPaneKey?: string) {
     worktree,
     createdWithAgent: 'codex',
     startup: { command: 'codex' },
+    startupFollowup: followup,
     ports
   })
+  expect(observe).toHaveBeenCalledExactlyOnceWith(terminal)
+  expect(ports.sendFollowup).toHaveBeenCalledExactlyOnceWith(terminal.handle, followup, terminal)
   return createTerminal.mock.calls[0]?.[1] ?? {}
 }
 

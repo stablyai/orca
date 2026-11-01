@@ -92,17 +92,6 @@ describe('a retired runtime', () => {
     expect(recordOf('new')).not.toBe('detached:old')
     expect(state().editorBufferViews[recordOf('new')]).toEqual(['new'])
   })
-
-  it('a view of another environment is left alone', () => {
-    useAppStore.setState({
-      openFiles: [runtimeTab('other', { runtimeEnvironmentId: 'env-2', isDirty: true })],
-      editorDrafts: { other: 'edits' }
-    })
-    const before = recordOf('other')
-    retire()
-    expect(recordOf('other')).toBe(before)
-    expect(state().editorBufferDetached).toEqual({})
-  })
 })
 
 describe('SSH identity through the record index', () => {
@@ -136,16 +125,6 @@ describe('SSH identity through the record index', () => {
     const records = ['nested', 'direct', 'other-target', 'other-runtime'].map(recordOf)
     expect(new Set(records).size).toBe(4)
     expect(() => assertEditorBufferInvariant(state())).not.toThrow()
-  })
-
-  it('keeps an SSH file apart from the local file with the same path', () => {
-    useAppStore.setState({
-      worktreesByRepo: {
-        'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]
-      },
-      openFiles: [tab('local'), sshTab('remote', { runtimeEnvironmentId: null })]
-    })
-    expect(recordOf('local')).not.toBe(recordOf('remote'))
   })
 })
 

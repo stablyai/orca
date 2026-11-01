@@ -79,6 +79,7 @@ describeOnWindows('native windows-security addon against a real filesystem', () 
     expect(() => addon.readFileWithDacl(root, 100)).toThrow()
   })
 
+  // Covers two cold Python starts, each allowed 30s on a fresh hosted Windows runner.
   it('preserves disposable-item metadata, counted UTF-8/subarrays, and the native cap', () => {
     const target = `orca-sta11846-test:${randomUUID()}`
     expect(target).not.toBe('gemini:antigravity')
@@ -105,7 +106,8 @@ describeOnWindows('native windows-security addon against a real filesystem', () 
       const result = runProcessSync({
         program: 'python',
         args: ['-c', fixture, phase, target],
-        timeoutMs: 5000
+        // A cold Python start on a fresh hosted Windows runner can exceed 5s.
+        timeoutMs: 30_000
       })
       expect(result.code, processDetails(phase, result)).toBe(0)
     }
@@ -163,7 +165,7 @@ describeOnWindows('native windows-security addon against a real filesystem', () 
         ? errors[0]
         : new AggregateError(errors, 'Disposable credential body/cleanup failures')
     }
-  })
+  }, 90_000)
 
   it('marks a native read failure with its syscall origin', () => {
     const invalidTarget = `orca-sta11846-invalid:${'x'.repeat(32768)}`

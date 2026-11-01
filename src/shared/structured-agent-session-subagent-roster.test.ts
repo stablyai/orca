@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
-import type { NativeChatSubagentState } from './native-chat-types'
+import type { AgentJournalRenderItem } from './agent-session/journal/agent-session-journal-types'
+import type { NativeChatSubagentState } from './native-chat/native-chat-types'
 import {
   foldStructuredAgentSubagentRoster,
   NO_STRUCTURED_AGENT_SUBAGENT_ROSTER

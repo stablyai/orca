@@ -3,6 +3,7 @@ import type { TerminalViewAttributes } from '../../shared/terminal-view-attribut
 import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
 import type { RuntimePaneCreateClaim } from '../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
+import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type {
   AutomaticWorkResumeOutcome,
@@ -13,7 +14,7 @@ import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
-import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
@@ -67,6 +68,7 @@ export type RuntimePtyController = {
     materialized?: true
   } | null>
   spawn?(opts: {
+    resolvedWorkspace?: TerminalWorkspaceLaunchScope
     cols: number
     rows: number
     cwd?: string

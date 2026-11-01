@@ -7,14 +7,14 @@ import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE
-} from '../../../shared/agent-session-restart-continuation'
+} from '../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
 import { StructuredAgentSessionResumeAdmission } from './structured-agent-session-restart-resume-runner'
 import {
   interruptedRestart,
   QUIT_CUT_NOTICE,
   readerNotes,
   statusNotes,
-  continuationCannotFold
+  continuationUnanswered
 } from './structured-agent-session-restart-interruption-test-harness'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
 import {
@@ -99,10 +99,11 @@ it("keeps the quit's notice through a continuation that carries the chat on", as
 })
 
 it('keeps an unconfirmed failure while the agent the continuation started keeps running', async () => {
-  const { host } = await interruptedRestart()
+  const state = await interruptedRestart()
+  const { host } = state
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   await host.restartResume.list()
-  continuationCannotFold()
+  continuationUnanswered(state)
 
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
 

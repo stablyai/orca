@@ -65,7 +65,8 @@ vi.mock('./wsl-orcad-active-probe', async (importOriginal) => ({
 }))
 vi.mock('../managed-server/lifecycle/orcad-managed-version-gc', () => ({
   provenLiveDaemonVersion: () => null,
-  pruneManagedOrcadVersions: mocks.prune
+  pruneManagedOrcadVersions: mocks.prune,
+  pruneSupersededOrcadCandidates: async () => {}
 }))
 vi.mock('../managed-server/lifecycle/orcad-managed-wake', () => ({
   wakeStoppedManagedOrcad: mocks.wake

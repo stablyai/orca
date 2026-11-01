@@ -14,6 +14,8 @@ export type PluginWorkerSpawnSpec = {
   manifestRevision?: string
   /** Tree identity the user approved, so changed bytes count as a new revision. */
   reviewedContentHash?: string | null
+  /** Dev tree hash; reviewed content is null for dev trees, so code edits need their own revision. */
+  devRevision?: string | null
   grantedCapabilities: readonly PluginCapabilityKind[]
 }
 

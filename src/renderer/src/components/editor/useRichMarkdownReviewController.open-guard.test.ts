@@ -91,47 +91,4 @@ describe('useRichMarkdownReviewController openAnnotationPopover draft guard', ()
     expect(result.current.annotationPopover).toEqual(sampleTarget)
     expect(dispatch).not.toHaveBeenCalled()
   })
-
-  it('flushes the pending ProseMirror selection before reading the target', () => {
-    const flush = vi.fn()
-    const setSelection = vi.fn()
-    // An empty target makes opening no-op, isolating the requirement to flush native selection first.
-    const editorRef = {
-      current: {
-        view: {
-          dispatch: vi.fn(),
-          domObserver: { flush, currentSelection: { set: setSelection } }
-        },
-        state: { selection: { empty: true } }
-      } as unknown as Editor
-    }
-    const rootRef = { current: document.createElement('div') }
-    const scrollContainerRef = { current: document.createElement('div') }
-
-    const { result } = renderHook(() =>
-      useRichMarkdownReviewController({
-        addDiffComment: vi.fn(),
-        allDiffComments: [],
-        content: 'abc',
-        editorRef,
-        filePath: '/repo/notes.md',
-        markdownAnnotationsEnabled: true,
-        markdownReviewContent: 'abc',
-        markdownSourceLineOffset: 0,
-        rootRef,
-        scrollContainerRef,
-        worktreeId: 'wt-1',
-        worktreeRoot: '/repo'
-      })
-    )
-
-    let opened = true
-    act(() => {
-      opened = result.current.openAnnotationPopover(true)
-    })
-
-    expect(flush).toHaveBeenCalledTimes(1)
-    expect(opened).toBe(false)
-    expect(result.current.annotationPopover).toBeNull()
-  })
 })

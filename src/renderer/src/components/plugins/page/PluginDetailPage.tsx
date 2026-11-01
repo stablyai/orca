@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { BadgeCheck, ChevronLeft } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { pluginOfficialLabel } from '../presentation/plugin-official-label'
 import { Button } from '../../ui/button'
 import { needsNewerOrca, type PluginListEntry } from '../list/plugin-list-entries'
 import { PluginDetailAlert as Alert } from './PluginDetailAlert'
@@ -226,10 +227,7 @@ export function PluginDetailPage({
               <BadgeCheck
                 className="plugin-security-chrome size-4 text-muted-foreground"
                 role="img"
-                aria-label={translate(
-                  'auto.components.pluginCatalog.PluginListRow.official',
-                  'Official'
-                )}
+                aria-label={pluginOfficialLabel()}
               />
             ) : null}
             <PluginChips entry={entry} />

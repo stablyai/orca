@@ -83,6 +83,9 @@ jobs:
             /config/scripts/pr-e2e-source-routing.mjs
             /config/scripts/pr-browser-e2e-source-routes.mjs
             /config/scripts/pr-editor-preview-e2e-source-routes.mjs
+            /config/scripts/pr-feature-area-e2e-source-routes.mjs
+            /config/scripts/pr-plugin-e2e-source-routes.mjs
+            /config/scripts/pr-wsl-e2e-source-routes.mjs
             /config/scripts/ci-e2e-job-selection.mjs
             /config/scripts/pr-ready-check-reuse.mjs
           sparse-checkout-cone-mode: false
@@ -829,7 +832,6 @@ jobs:
             src/main/daemon/shell-ready.test.ts \
             src/main/daemon/node-pty-fd-leak.test.ts \
             src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
-            src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             src/main/pty/codex-shell-launch-preflight.test.ts \
             src/main/pty/codex-shell-no-daemon.test.ts \
             src/main/pty/omp-shell-wrapper-alias-safety.test.ts \

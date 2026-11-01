@@ -23,10 +23,26 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
     const { store, local, destinationForm, destination } = context
     const { settings } = store
     const { draft, editingAutomationId, setIsSaving, setEditorNotice } = local
+    const { draftAtOpen } = local
+    const targetEdited = editingAutomationId === null || local.targetEdited
+    const scheduleEdited =
+      editingAutomationId === null ||
+      !draftAtOpen ||
+      (['preset', 'time', 'dayOfWeek', 'customSchedule'] as const).some(
+        (key) => draft[key] !== draftAtOpen[key]
+      )
+    const extrasEdited =
+      editingAutomationId === null ||
+      !draftAtOpen ||
+      draft.surface !== draftAtOpen.surface ||
+      draft.extraAgentArgs !== draftAtOpen.extraAgentArgs ||
+      draft.agentId !== draftAtOpen.agentId ||
+      draft.reuseSession !== draftAtOpen.reuseSession ||
+      draft.workspaceMode !== draftAtOpen.workspaceMode
     const { hour, minute } = parseDraftTime(draft.time)
     if (
-      !draft.projectId ||
-      (draft.workspaceMode === 'existing' && !draft.workspaceId) ||
+      (targetEdited &&
+        (!draft.projectId || (draft.workspaceMode === 'existing' && !draft.workspaceId))) ||
       !draft.prompt.trim()
     ) {
       toast.error(
@@ -37,7 +53,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       )
       return
     }
-    if (draft.scheduleWarning) {
+    if (scheduleEdited && draft.scheduleWarning) {
       toast.error(
         translate(
           'auto.components.automations.AutomationsPage.64bdb2304f',
@@ -47,6 +63,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       return
     }
     if (
+      scheduleEdited &&
       draft.preset === 'custom' &&
       !acceptsAutomationDraftSchedule({
         customSchedule: draft.customSchedule,
@@ -94,16 +111,25 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
           'Extra arguments require a fresh session for every run.'
         )
       : getDraftExtraAgentArgsError(effectiveDraft)
-    if (extrasError) {
+    if (extrasEdited && extrasError) {
       toast.error(extrasError)
       return
     }
+    setEditorNotice(null)
     setIsSaving(true)
     try {
+      if (editingAutomationId === null) {
+        const checked = destination.createDestination.check(draft.projectId)
+        if (!checked.ok) {
+          setEditorNotice(checked.notice)
+          return
+        }
+      }
       const selectedWorkspaceExists =
+        destinationForm.recordedTargetSelected ||
         draft.workspaceMode !== 'existing' ||
         destinationForm.dialogWorktrees.some((worktree) => worktree.id === draft.workspaceId)
-      if (!selectedWorkspaceExists) {
+      if (targetEdited && !selectedWorkspaceExists) {
         toast.error(
           translate(
             'auto.components.automations.AutomationsPage.32534e7c9c',
@@ -111,13 +137,6 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
           )
         )
         return
-      }
-      if (editingAutomationId === null) {
-        const checked = destination.createDestination.check(draft.projectId)
-        if (!checked.ok) {
-          setEditorNotice(checked.notice)
-          return
-        }
       }
       await saveOrcaAutomation(context, { hour, minute, now, surface })
     } catch (error) {

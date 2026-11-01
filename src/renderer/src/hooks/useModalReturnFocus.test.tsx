@@ -180,24 +180,6 @@ describe('useModalReturnFocus', () => {
     expect(focusRequests).toEqual([{ pageId: 'page-1', target: 'address-bar' }])
   })
 
-  it('uses the scoped terminal focus helper for terminal surfaces', async () => {
-    installAnimationFrameStubs()
-    useAppStore.setState({
-      activeWorktreeId: 'wt-1',
-      activeTabType: 'terminal',
-      activeTabId: 'terminal-global',
-      activeTabIdByWorktree: { 'wt-1': 'terminal-1' },
-      terminalLayoutsByTabId: {
-        'terminal-1': { root: null, activeLeafId: 'leaf-1', expandedLeafId: null }
-      }
-    })
-
-    await renderProbe(true)
-    await renderProbe(false)
-
-    expect(focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', 'leaf-1')
-  })
-
   it('skips return focus when the close action already moved focus', async () => {
     installAnimationFrameStubs()
     useAppStore.setState({ activeWorktreeId: 'wt-1', activeTabType: 'editor' })

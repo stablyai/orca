@@ -9,7 +9,7 @@ import {
 } from '../../../shared/agent-session-last-turn'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StatusPublication } from './structured-agent-session-status-feed-deps'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary

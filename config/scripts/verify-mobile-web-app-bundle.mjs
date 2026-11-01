@@ -63,25 +63,26 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
   return manifest.totalBytes - font.byteLength
 }
 
-// Measure sorted route prefixes with routes.slice(0,n): distinct importer sets determine chunks, not route count.
+// Measure sorted route prefixes with routes.slice(0,n), excluding locale catalogs: distinct importer sets determine chunks, not route count.
 // Re-measure table when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
-  ['./_layout.tsx', 3],
-  ['./h/[hostId]/[...page].tsx', 7],
-  ['./h/[hostId]/accounts.tsx', 11],
-  ['./h/[hostId]/agent-history/[worktreeId].tsx', 16],
-  ['./h/[hostId]/edit.tsx', 21],
-  ['./h/[hostId]/files/[worktreeId].tsx', 25],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 32],
-  ['./h/[hostId]/history/[worktreeId].tsx', 35],
-  ['./h/[hostId]/index.tsx', 42],
-  ['./h/[hostId]/new-workspace.tsx', 51],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 52],
-  ['./h/[hostId]/review/[worktreeId].tsx', 60],
-  ['./h/[hostId]/session/[worktreeId].tsx', 72],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 77],
-  ['./h/[hostId]/tasks.tsx', 91],
-  ['./h/_layout.tsx', 95]
+  ['./_layout.tsx', 4],
+  ['./h/[hostId]/[...page].tsx', 8],
+  ['./h/[hostId]/accounts.tsx', 12],
+  ['./h/[hostId]/agent-history/[worktreeId].tsx', 17],
+  ['./h/[hostId]/automations.tsx', 24],
+  ['./h/[hostId]/edit.tsx', 30],
+  ['./h/[hostId]/files/[worktreeId].tsx', 35],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 42],
+  ['./h/[hostId]/history/[worktreeId].tsx', 45],
+  ['./h/[hostId]/index.tsx', 53],
+  ['./h/[hostId]/new-workspace.tsx', 63],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 64],
+  ['./h/[hostId]/review/[worktreeId].tsx', 77],
+  ['./h/[hostId]/session/[worktreeId].tsx', 92],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 100],
+  ['./h/[hostId]/tasks.tsx', 114],
+  ['./h/_layout.tsx', 118]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)

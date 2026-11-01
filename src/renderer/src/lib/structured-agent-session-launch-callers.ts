@@ -21,6 +21,8 @@ export type StructuredAgentLaunchOptions = {
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
   promptKeptByCaller?: true
+  /** An unsent composer draft that moves into this chat once its session exists. */
+  draftFromScope?: string
   // Conversation adoption is launch identity, not a preference; see launchIdentity.
   resumeFrom?: StructuredAgentSessionResumeSource
   /** The host the route decided on; read only by the caller that starts the launch. */

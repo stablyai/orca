@@ -11,7 +11,7 @@ import { closeStructuredAgentSessionHandovers } from './structured-agent-session
 import {
   AgentSessionRefusalError,
   agentSessionRefusalError
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { createJournalOpenReadRefusals } from '../agent-session-journal/journal-open-failure'
 import { releaseLeaseOfEndedStructuredAgentSessionChild } from './structured-agent-session-child-close'
 import {

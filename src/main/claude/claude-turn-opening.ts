@@ -4,7 +4,7 @@ import {
   claudeText,
   type ClaudeMessageEnvelope
 } from './claude-structured-item-translation'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { ClaudeStartedSend } from './structured/claude-structured-session-state'
 import {
   claudeProviderResumedTurnTimingAnchor,

@@ -24,7 +24,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type {
   AgentSessionExecutionClaim,
@@ -33,6 +33,7 @@ import type {
 import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
+import type { TerminalWorkspaceLaunchScope } from '../../../runtime/runtime-legacy-worker-terminal-recovery-types'
 
 export type RuntimePtySpawnState = {
   deps: PtyRuntimeControllerDeps
@@ -111,6 +112,7 @@ export type RuntimePtySpawnState = {
 }
 
 export type RuntimePtySpawnArgs = {
+  resolvedWorkspace?: TerminalWorkspaceLaunchScope
   cols: number
   rows: number
   cwd?: string

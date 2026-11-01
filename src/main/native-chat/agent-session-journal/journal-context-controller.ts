@@ -1,4 +1,4 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session-provider-context'
 import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session-context-clear'
 import { appendJournalContextClear } from './journal-context-clear'

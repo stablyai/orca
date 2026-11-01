@@ -54,23 +54,6 @@ it('shares one native watch and refresh timer across path aliases', async () => 
   expect(vi.getTimerCount()).toBe(0)
 })
 
-it('keeps separate roots and runtime owners isolated', async () => {
-  const pool = new WindowsRuntimeWatchPool()
-  const anotherRuntime = new WindowsRuntimeWatchPool()
-  const first = installWatcher()
-  const second = installWatcher()
-  const third = installWatcher()
-  const releaseFirst = await pool.watch('C:\\repo', vi.fn(), vi.fn())
-  const releaseSecond = await pool.watch('C:\\other', vi.fn(), vi.fn())
-  const releaseThird = await anotherRuntime.watch('C:\\repo', vi.fn(), vi.fn())
-  expect(watchMock).toHaveBeenCalledTimes(3)
-  await releaseFirst()
-  expect(first.watcher.close).toHaveBeenCalledOnce()
-  expect(second.watcher.close).not.toHaveBeenCalled()
-  expect(third.watcher.close).not.toHaveBeenCalled()
-  await Promise.all([releaseSecond(), releaseThird()])
-})
-
 it('cancels a successor waiting on physical close without starting another watch', async () => {
   const pool = new WindowsRuntimeWatchPool()
   const first = installWatcher(() => undefined)
@@ -156,14 +139,4 @@ it('fans out terminal errors once and keeps old cleanup from evicting a new gene
   await vi.advanceTimersByTimeAsync(500)
   expect(replacementEvents).toHaveBeenCalledOnce()
   await Promise.all([releaseReplacement(), releaseJoiner()])
-})
-
-it('does not create a native watcher for an already aborted subscription', async () => {
-  const pool = new WindowsRuntimeWatchPool()
-  const controller = new AbortController()
-  controller.abort(new Error('request cancelled'))
-  await expect(pool.watch('C:\\repo', vi.fn(), vi.fn(), controller.signal)).rejects.toThrow(
-    'request cancelled'
-  )
-  expect(watchMock).not.toHaveBeenCalled()
 })

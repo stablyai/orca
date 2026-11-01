@@ -114,7 +114,12 @@ describe('withAiVaultHistoryPreviews', () => {
 
 describe('aiVaultSearchHitToSession', () => {
   it('uses the selected execution host and only host-provided source fields', () => {
-    const hit = { ...searchHit(), executionHostId: 'local' }
+    const hit = {
+      ...searchHit(),
+      executionHostId: 'local',
+      accountHome: { variable: 'CODEX_HOME', path: '/accounts/recorded' },
+      accountWslDistro: 'Ubuntu'
+    }
     const session = aiVaultSearchHitToSession(hit, 'ssh:paired-host')
 
     expect(session.executionHostId).toBe('ssh:paired-host')
@@ -122,6 +127,8 @@ describe('aiVaultSearchHitToSession', () => {
     expect(session.filePath).toBe('/host/transcript.jsonl')
     expect(session.resumeCommand).toBe('host-resume-command')
     expect(session.previewMessages).toEqual([])
+    expect(session.accountHome).toEqual(hit.accountHome)
+    expect(session.accountWslDistro).toBe('Ubuntu')
   })
 
   it('does not invent a path or resume command when transport withholds them', () => {

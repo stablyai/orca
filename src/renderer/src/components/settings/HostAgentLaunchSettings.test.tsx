@@ -30,14 +30,16 @@ const transport = vi.hoisted(() => ({
   detection: vi.fn(),
   auto: vi.fn(),
   native: vi.fn(),
-  own: vi.fn()
+  own: vi.fn(),
+  choices: vi.fn()
 }))
 vi.mock('./agent-launch-settings-transport', () => ({
   readHostAgentLaunchSettings: transport.read,
   mutateHostAgentLaunchSettings: transport.mutate,
   hostSupportsAutoPermissions: transport.auto,
   hostSupportsNativeChatPermissions: transport.native,
-  hostSupportsOwnChatPermissions: transport.own
+  hostSupportsOwnChatPermissions: transport.own,
+  hostSupportsLaunchChoices: transport.choices
 }))
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: (target: unknown) => {
@@ -84,9 +86,40 @@ beforeEach(() => {
   transport.auto.mockReset().mockResolvedValue(true)
   transport.native.mockReset().mockResolvedValue(true)
   transport.own.mockReset().mockResolvedValue(false)
+  transport.choices.mockReset().mockResolvedValue(false)
 })
 
 describe('host launch settings form', () => {
+  it('edits the capable selected host defaults and sends one atomic badge removal', async () => {
+    transport.choices.mockResolvedValue(true)
+    const settings = projectAgentLaunchSettings({
+      agentPermissionDefault: 'own',
+      agentDefaultArgs: { claude: '--host-marker' },
+      agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'high' } } }
+    })
+    transport.read.mockResolvedValue(settings)
+    transport.mutate.mockResolvedValue(settings)
+    render(pane(17))
+    await screen.findByDisplayValue('--host-marker')
+    expect(screen.getByRole('button', { name: 'Model: Opus' })).toBeDefined()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+      target: { value: '--model sonnet --host-marker' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove --model opus' }))
+    await waitFor(() =>
+      expect(transport.mutate).toHaveBeenCalledExactlyOnceWith(
+        { environmentId: 'ssh-host', pairingRevision: 17 },
+        {
+          type: 'launch-choices',
+          agent: 'claude',
+          patch: { model: null },
+          userArgs: '--model sonnet --host-marker'
+        },
+        expect.any(AbortSignal)
+      )
+    )
+  })
+
   it.each([false, true])(
     'describes Own for the selected host capability: %s',
     async (supported) => {

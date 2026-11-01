@@ -16,6 +16,15 @@ import { getDevicePushToken } from './push-token'
 import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => ({ storage: new Map<string, string>(), replace: vi.fn() }))
+vi.mock(
+  '../settings/settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(async (key: string) => mocks.storage.get(key) ?? null),

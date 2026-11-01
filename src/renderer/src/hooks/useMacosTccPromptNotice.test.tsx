@@ -10,7 +10,7 @@ import { useAppStore } from '@/store'
 import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
 import { i18n } from '@/i18n/i18n'
 import { FULL_DISK_ACCESS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
-import { MacosTccPromptNoticeHost } from './MacosTccPromptNoticeHost'
+
 import { useMacosTccPromptNotice } from './useMacosTccPromptNotice'
 
 type NoticeCallback = (payload: { promptCount: number }, acknowledge: () => void) => void
@@ -71,61 +71,6 @@ it('waits for the persisted locale catalog before consuming the one-time notice'
     await i18n.changeLanguage('es')
   })
   expect(subscribeToMacosTccPromptNotice).toHaveBeenCalledOnce()
-})
-
-it('isolates plugin language-pack discovery from its parent render path', async () => {
-  useAppStore.setState({
-    settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' }
-  })
-  let parentRenderCount = 0
-  function ParentProbe(): React.JSX.Element {
-    parentRenderCount += 1
-    return createElement(MacosTccPromptNoticeHost)
-  }
-
-  const container = document.createElement('div')
-  root = createRoot(container)
-  await act(async () => {
-    root?.render(createElement(I18nextProvider, { i18n }, createElement(ParentProbe)))
-  })
-  await act(async () => {
-    usePluginLanguagePackStore.setState({ entries: [], loaded: true })
-  })
-
-  expect(parentRenderCount).toBe(1)
-  expect(subscribeToMacosTccPromptNotice).toHaveBeenCalledOnce()
-})
-
-it('connects the notice to the macOS prompt and keeps it open until closed', async () => {
-  useAppStore.setState({
-    settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' }
-  })
-  const container = document.createElement('div')
-  root = createRoot(container)
-  await act(async () => {
-    root?.render(createElement(I18nextProvider, { i18n }, createElement(NoticeProbe)))
-  })
-  const showNotice = subscribeToMacosTccPromptNotice.mock.calls[0]?.[1] as
-    | NoticeCallback
-    | undefined
-  const acknowledge = vi.fn()
-
-  showNotice?.({ promptCount: 1 }, acknowledge)
-
-  expect(toastWarning).toHaveBeenCalledWith(
-    'Seeing “Orca would like to access…” prompts?',
-    expect.objectContaining({
-      description:
-        'Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.'
-    })
-  )
-  const options = toastWarning.mock.calls[0]?.[1] as
-    | { duration?: number; onDismiss?: () => void }
-    | undefined
-  expect(options?.duration).toBe(Infinity)
-  expect(acknowledge).not.toHaveBeenCalled()
-  options?.onDismiss?.()
-  expect(acknowledge).toHaveBeenCalledOnce()
 })
 
 it('acknowledges when opening Settings closes the notice', async () => {

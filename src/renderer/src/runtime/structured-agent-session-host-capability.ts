@@ -1,8 +1,9 @@
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session-permission-modes-capability'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../shared/structured-agent-session-host-capability'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
+import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../shared/agent-session/lifecycle/agent-session-stop-capabilities'
 import {
-  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
@@ -29,8 +30,7 @@ export function structuredAgentSessionHostKey(target: RuntimeClientTarget): stri
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
-/** Unknown before verification or after revocation; a contact outage retains the known build. */
-export type StructuredAgentSessionHostCapabilityState = 'unknown' | 'supported' | 'unsupported'
+export type { StructuredAgentSessionHostCapabilityState }
 
 /** Displays the existing host status; connection lifecycle owns probing. */
 export function useStructuredAgentSessionOwnPermissionState(

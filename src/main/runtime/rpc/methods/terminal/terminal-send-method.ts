@@ -226,6 +226,7 @@ export const TERMINAL_SEND_METHODS = [
                 // Why: a wire write carries no provenance beyond a client's own query reply.
                 inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',
                 ...(params.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}),
+                ...(params.enter === true ? { waitForLaunchComposer: true as const } : {}),
                 ...(reserveWrite ? { reserveWrite } : {}),
                 ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                   ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }

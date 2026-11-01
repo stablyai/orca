@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { usageLimitResetsAt } from '../../../shared/agent-session-usage-limit'
+import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import type { AcpAgentError } from '../acp-errors'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'

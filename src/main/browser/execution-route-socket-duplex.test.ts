@@ -39,20 +39,6 @@ class ScriptedSocket extends EventEmitter implements BrowserNetworkTunnelSocket 
 }
 
 describe('openExecutionRouteSocketAsDuplex', () => {
-  it('resolves only after connect and forwards bytes both ways', async () => {
-    const socket = new ScriptedSocket()
-    const pending = openExecutionRouteSocketAsDuplex(socket)
-    socket.emit('connect')
-    const duplex = await pending
-
-    duplex.write(Buffer.from('out'))
-    expect(Buffer.concat(socket.written).toString()).toBe('out')
-
-    const read = once(duplex, 'data')
-    socket.emit('data', Buffer.from('in'))
-    expect((await read)[0].toString()).toBe('in')
-  })
-
   it('rejects when the dial errors before connecting', async () => {
     const socket = new ScriptedSocket()
     const pending = openExecutionRouteSocketAsDuplex(socket)

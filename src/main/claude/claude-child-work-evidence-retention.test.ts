@@ -1,9 +1,7 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { claudeChildOperation, drainClaudeChildWork } from './claude-child-work-evidence'

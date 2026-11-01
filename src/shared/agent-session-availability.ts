@@ -1,4 +1,4 @@
-import { agentSessionSignInFor } from './agent-session-sign-in'
+import { agentSessionSignInFor } from './agent-session/lifecycle/agent-session-sign-in'
 
 export type AgentSessionAccountKind = 'managed' | 'system'
 

@@ -53,7 +53,8 @@ export class RuntimeRepositoryRegistrationController {
     const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
     if (gitInfo && !gitInfo.isRepo) {
       throw new Error(
-        (await describeWslUncAccessDenied(path)) ?? `Not a valid git repository: ${path}`
+        (await describeWslUncAccessDenied(path, store.getSettings())) ??
+          `Not a valid git repository: ${path}`
       )
     }
     // Store Git's resolved toplevel; symlink aliases/subfolders hide the main checkout as external.

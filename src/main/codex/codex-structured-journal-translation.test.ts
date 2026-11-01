@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { projectStructuredAgentSessionStatus } from '../../shared/structured-agent-session-projection'
 import {
   createDeferredStructuredAgentSessionEventSink,
@@ -14,7 +12,7 @@ import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import { deferredTarget } from './codex-deferred-sink-target-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 

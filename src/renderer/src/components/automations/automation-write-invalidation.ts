@@ -31,8 +31,9 @@ export function automationRowCatalogRef(
   if (!captured.selector) {
     return null
   }
-  const stable = stableAutomationAuthorityRef(authority)
-  // Rebuild selector variants so kind stays discriminated while dropping generation/orphan-issue details.
+  const stable = stableAutomationAuthorityRef(captured.authority ?? authority)
+  // Rebuilt per variant rather than spread: the stable ref drops the generation and the
+  // orphan issue, and a widened `kind` would not discriminate.
   switch (captured.selector.kind) {
     case 'ssh':
       return {

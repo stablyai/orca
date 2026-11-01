@@ -17,7 +17,7 @@ import {
   TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS
 } from '../terminal/terminal-accessory-repeat'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TerminalDirectionPad, type TerminalDirectionPadHandle } from './terminal-direction-pad'
@@ -349,15 +349,15 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xs,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   keyActive: { backgroundColor: colors.textPrimary },
   keyHeld: { borderWidth: 1, borderColor: colors.textPrimary },
-  keyDisabled: { opacity: 0.45 },
+  keyDisabled: { opacity: feedback.disabledOpacity },
   keyboardGlyph: { alignItems: 'center' },
   keyPressed: {
-    backgroundColor: colors.borderSubtle
+    backgroundColor: colors.translucentFill
   },
   keyText: {
     color: colors.textSecondary,

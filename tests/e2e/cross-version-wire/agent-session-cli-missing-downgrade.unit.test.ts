@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 // Pin a release predating cliMissing so unknown failure kinds must fall back to the host’s own sentence.

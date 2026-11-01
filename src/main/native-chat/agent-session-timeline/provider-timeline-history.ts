@@ -1,6 +1,6 @@
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 
 type ItemReader = (itemId: string) => AgentJournalRenderItem | null
 

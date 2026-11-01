@@ -46,6 +46,8 @@ describe('peekRuntimeEnvironmentCapability', () => {
     runtimeEnvironmentCall.mockResolvedValue(statusReply([]))
     await expect(runtimeEnvironmentSupportsCapability('env-old', CAPABILITY)).resolves.toBe(false)
     expect(peekRuntimeEnvironmentCapability('env-old', CAPABILITY)).toBe(false)
+    expect(peekRuntimeEnvironmentCapability('env-old', CAPABILITY, 'replacement')).toBeUndefined()
+    expect(peekRuntimeEnvironmentCapability('env-old', CAPABILITY, 'remote-runtime')).toBe(false)
     vi.setSystemTime(new Date(59_999))
     expect(peekRuntimeEnvironmentCapability('env-old', CAPABILITY)).toBe(false)
     expect(runtimeEnvironmentCall).toHaveBeenCalledOnce()

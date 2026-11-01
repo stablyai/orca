@@ -1,8 +1,30 @@
-import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
 import { cn } from '../../../lib/utils'
 import { translate } from '@/i18n/i18n'
 
+type AgentIndicator = 'waiting' | 'done' | 'working' | 'idle'
+
+type JumpBackInRowProps = {
+  indicator: AgentIndicator
+  name: string
+  status: string
+  desktop: string
+  time: string
+}
+
+const AGENT_DOT: Record<Exclude<AgentIndicator, 'working'>, string> = {
+  waiting: 'is-red',
+  done: 'is-green',
+  idle: 'is-muted'
+}
+
+// Waiting and done ask something of the user, so only they tint the status word (mobile parity).
+const STATUS_TONE: Partial<Record<AgentIndicator, string>> = {
+  waiting: 'is-waiting',
+  done: 'is-done'
+}
+
 export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element {
+  const macbookPro = translate('auto.components.mobile.slides.HomeSlide.19c212e25e', 'MacBook Pro')
   return (
     <div className="mp-device-screen">
       <div className="mp-app-topbar">
@@ -22,226 +44,129 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
       </div>
 
       <div className="mp-scroll-region">
-        <div className="mp-greeting">
-          <div className="mp-greeting-title">
-            {translate('auto.components.mobile.slides.HomeSlide.c0e2e9dcd9', 'Welcome back')}
-          </div>
+        <div className="mp-home-heading is-first">
+          {translate('auto.components.mobile.slides.HomeSlide.dc1f3f5535', 'Jump back in')}
         </div>
-
-        <div className="mp-stat-row">
-          <Stat
-            value="1,284"
-            label={translate(
-              'auto.components.mobile.slides.HomeSlide.00a6903322',
-              'Agents spawned'
+        <div className="mp-home-group">
+          <JumpBackInRow
+            indicator="waiting"
+            name="fix-auth-redirect"
+            status={translate(
+              'auto.components.mobile.slides.HomeSlide.c2a0215163',
+              'Waiting for input'
             )}
+            desktop={macbookPro}
+            time={translate('auto.components.mobile.slides.HomeSlide.0c14dac908', '2m')}
           />
-          <Stat
-            value="142h"
-            label={translate('auto.components.mobile.slides.HomeSlide.4a40af029b', 'Agent time')}
+          <JumpBackInRow
+            indicator="done"
+            name="tasks-sheet-polish"
+            status={translate('auto.components.mobile.slides.HomeSlide.77c0dae863', 'Done')}
+            desktop={translate('auto.components.mobile.slides.HomeSlide.b5308d5e2c', 'M1 Mini')}
+            time={translate('auto.components.mobile.slides.HomeSlide.3166f865af', '14m')}
           />
-          <Stat
-            value="96"
-            label={translate('auto.components.mobile.slides.HomeSlide.156db8a68a', 'PRs created')}
+          <JumpBackInRow
+            indicator="working"
+            name="relay-reconnect-backoff"
+            status={translate('auto.components.mobile.slides.HomeSlide.609517273b', 'Working')}
+            desktop={macbookPro}
+            time={translate('auto.components.mobile.slides.HomeSlide.005afbad3d', 'now')}
+          />
+          <JumpBackInRow
+            indicator="idle"
+            name="feat/mobile-page"
+            status={translate('auto.components.mobile.slides.HomeSlide.e986b282af', 'Last opened')}
+            desktop={macbookPro}
+            time={translate('auto.components.mobile.slides.HomeSlide.8a3ebdbdac', '1h')}
           />
         </div>
 
-        <div className="mp-section-label">
+        <div className="mp-home-heading">
           {translate('auto.components.mobile.slides.HomeSlide.2f1a1d10c4', 'Desktops')}
         </div>
-        <div className={cn('mp-host-card', tapping && 'is-tapping')}>
-          <div className="mp-host-icon">
-            <DesktopIcon />
-          </div>
-          <div className="mp-host-main">
-            <div className="mp-host-name">
-              {translate('auto.components.mobile.slides.HomeSlide.19c212e25e', 'MacBook Pro')}
-            </div>
-            <div className="mp-host-meta">
+        <div className="mp-home-group">
+          {/* The carousel's next slide is this desktop's worktree list, so the tap lands here. */}
+          <div className={cn('mp-home-row', tapping && 'is-tapping')}>
+            <div className="mp-home-status">
               <span className="mp-status-dot is-green" />
-              <span>
+            </div>
+            <div className="mp-home-text">
+              <div className="mp-home-title">{macbookPro}</div>
+              <div className="mp-home-subtitle">
                 {translate(
-                  'auto.components.mobile.slides.HomeSlide.0bc1881bc4',
-                  'Connected · 40 worktrees · 5 active'
+                  'auto.components.mobile.slides.HomeSlide.04a94cadee',
+                  '40 worktrees · 5 active'
                 )}
-              </span>
+              </div>
+            </div>
+            <div className="mp-home-trailing">
+              <ChevronIcon />
             </div>
           </div>
-          <div className="mp-chevron-right">
-            <ChevronIcon />
-          </div>
-        </div>
-        <div className="mp-host-card">
-          <div className="mp-host-icon is-dim">
-            <DesktopIcon />
-          </div>
-          <div className="mp-host-main">
-            <div className="mp-host-name is-dim">
-              {translate('auto.components.mobile.slides.HomeSlide.091355da3d', 'M1 Mini · home')}
-            </div>
-            <div className="mp-host-meta">
+          <div className="mp-home-row">
+            <div className="mp-home-status">
               <span className="mp-status-dot is-muted" />
-              <span>
+            </div>
+            <div className="mp-home-text">
+              <div className="mp-home-title">
+                {translate('auto.components.mobile.slides.HomeSlide.b5308d5e2c', 'M1 Mini')}
+              </div>
+              <div className="mp-home-subtitle">
                 {translate('auto.components.mobile.slides.HomeSlide.cf3f98fa3f', 'Disconnected')}
-              </span>
+              </div>
+            </div>
+            <div className="mp-home-trailing">
+              <ChevronIcon />
             </div>
           </div>
-          <div className="mp-chevron-right">
-            <ChevronIcon />
+          <div className="mp-home-action-row">
+            <PlusIcon />
+            {translate('auto.components.mobile.slides.HomeSlide.aefd110ea5', 'Pair a desktop')}
           </div>
         </div>
+      </div>
 
-        <div className="mp-section-label" style={{ marginTop: 14 }}>
-          {translate('auto.components.mobile.slides.HomeSlide.c791677f2f', 'Resume')}
+      <div className="mp-home-bottom-bar">
+        <div className="mp-home-bar-button is-secondary">
+          <ListTodoIcon />
+          <span>{translate('auto.components.mobile.slides.HomeSlide.a4c3f7b7aa', 'Tasks')}</span>
         </div>
-        <div className="mp-resume-card">
-          <div className="mp-resume-icon">
-            <ResumeIcon />
-          </div>
-          <div className="mp-host-main">
-            <div className="mp-resume-title">
-              {translate('auto.components.mobile.slides.HomeSlide.25d6e8a491', 'feat/mobile-page')}
-            </div>
-            <div className="mp-resume-sub">
-              <span className="mp-repo-dot" style={{ background: '#3b82f6' }} />
-              <span>
-                {translate(
-                  'auto.components.mobile.slides.HomeSlide.d33d7a9c29',
-                  // Why: plain spaces (not &nbsp;) — React text nodes render HTML entities literally.
-                  'orca  ·  feat/mobile-page'
-                )}
-              </span>
-            </div>
-          </div>
-          <div className="mp-chevron-right">
-            <ChevronIcon />
-          </div>
-        </div>
-
-        <div className="mp-section-label" style={{ marginTop: 10 }}>
-          {translate('auto.components.mobile.slides.HomeSlide.a4c3f7b7aa', 'Tasks')}
-        </div>
-        <div className="mp-task-home-card">
-          <div className="mp-task-home-icon">
-            <ListTodoIcon />
-          </div>
-          <div className="mp-host-main">
-            <div className="mp-task-home-title">
-              {translate('auto.components.mobile.slides.HomeSlide.a4c3f7b7aa', 'Tasks')}
-            </div>
-            <div className="mp-task-home-subtitle">
-              {translate('auto.components.mobile.slides.HomeSlide.d047197480', 'GitHub · Linear')}
-            </div>
-          </div>
-          <div
-            className="mp-task-home-providers"
-            aria-label={translate(
-              'auto.components.mobile.slides.HomeSlide.0bad5b07c8',
-              'GitHub and Linear'
-            )}
-          >
-            <div className="mp-task-home-provider-button">
-              <GithubIcon />
-            </div>
-            <div className="mp-task-home-provider-button">
-              <LinearIcon />
-            </div>
-          </div>
-          <div className="mp-chevron-right">
-            <ChevronIcon />
-          </div>
-        </div>
-
-        <div className="mp-section-label" style={{ marginTop: 14 }}>
-          {translate('auto.components.mobile.slides.HomeSlide.0b00c98506', 'Quick Actions')}
-        </div>
-        <div className="mp-quick-actions">
-          <div className="mp-quick-action">
-            <div className="mp-quick-action-icon">
-              <QrSmallIcon />
-            </div>
-            <div className="mp-quick-action-label">
-              {translate('auto.components.mobile.slides.HomeSlide.4405f3c440', 'Pair Desktop')}
-            </div>
-          </div>
-          <div className="mp-quick-action">
-            <div className="mp-quick-action-icon">
-              <PlusIcon />
-            </div>
-            <div className="mp-quick-action-label">
-              {translate('auto.components.mobile.slides.HomeSlide.e27fdaee51', 'New Workspace')}
-            </div>
-          </div>
-        </div>
-
-        <div className="mp-section-label" style={{ marginTop: 14 }}>
-          {translate('auto.components.mobile.slides.HomeSlide.8a350a4784', 'Account usage')}
-        </div>
-        <div className="mp-accounts-card">
-          <AccountRow
-            icon={<ClaudeIcon size={18} />}
-            email="claude@stably.ai"
-            sessionPct={42}
-            weekPct={18}
-          />
-          <AccountRow
-            icon={<OpenAIIcon size={18} />}
-            email="codex@stably.ai"
-            sessionPct={67}
-            weekPct={31}
-          />
+        <div className="mp-home-bar-button is-primary">
+          <PlusIcon />
+          <span>
+            {translate('auto.components.mobile.slides.HomeSlide.d08ee9c466', 'New workspace')}
+          </span>
         </div>
       </div>
     </div>
   )
 }
 
-function Stat({ value, label }: { value: string; label: string }): React.JSX.Element {
+function JumpBackInRow({
+  indicator,
+  name,
+  status,
+  desktop,
+  time
+}: JumpBackInRowProps): React.JSX.Element {
   return (
-    <div className="mp-stat-card">
-      <div className="mp-stat-value">{value}</div>
-      <div className="mp-stat-label">{label}</div>
-    </div>
-  )
-}
-
-function AccountRow({
-  icon,
-  email,
-  sessionPct,
-  weekPct
-}: {
-  icon: React.ReactNode
-  email: string
-  sessionPct: number
-  weekPct: number
-}): React.JSX.Element {
-  return (
-    <div className="mp-accounts-row">
-      <div className="mp-accounts-icon">{icon}</div>
-      <div className="mp-accounts-info">
-        <div className="mp-accounts-email">{email}</div>
-        <div className="mp-accounts-bars">
-          <UsageBar
-            label={translate('auto.components.mobile.slides.HomeSlide.a3d5476811', '5h')}
-            pct={sessionPct}
-          />
-          <UsageBar
-            label={translate('auto.components.mobile.slides.HomeSlide.a7d9e2c44d', '7d')}
-            pct={weekPct}
-          />
+    <div className="mp-home-row">
+      <div className="mp-home-status">
+        {indicator === 'working' ? (
+          <div className="mp-wl-spinner" />
+        ) : (
+          <div className={cn('mp-wl-dot', AGENT_DOT[indicator])} />
+        )}
+      </div>
+      <div className="mp-home-text">
+        <div className="mp-home-title">{name}</div>
+        <div className="mp-home-subtitle">
+          <span className={STATUS_TONE[indicator]}>{status}</span> · {desktop}
         </div>
       </div>
-    </div>
-  )
-}
-
-function UsageBar({ label, pct }: { label: string; pct: number }): React.JSX.Element {
-  return (
-    <div className="mp-usage-bar">
-      <div className="mp-usage-bar-label">{label}</div>
-      <div className="mp-usage-bar-track">
-        <div className="mp-usage-bar-fill" style={{ width: `${pct}%` }} />
+      <div className="mp-home-trailing">
+        {time}
+        <ChevronIcon />
       </div>
     </div>
   )
@@ -266,29 +191,10 @@ function SettingsIcon(): React.JSX.Element {
   )
 }
 
-function DesktopIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <rect x="2" y="3" width="20" height="14" rx="2" />
-      <path d="M8 21h8" />
-      <path d="M12 17v4" />
-    </svg>
-  )
-}
-
 function ChevronIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
       <path d="m9 18 6-6-6-6" />
-    </svg>
-  )
-}
-
-function ResumeIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path d="m4 17 6-6-6-6" />
-      <path d="M12 19h8" />
     </svg>
   )
 }
@@ -301,37 +207,6 @@ function ListTodoIcon(): React.JSX.Element {
       <path d="M13 6h8" />
       <path d="M13 12h8" />
       <path d="M13 18h8" />
-    </svg>
-  )
-}
-
-function GithubIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
-      <path d="M9 18c-4.51 2-5-2-7-2" />
-    </svg>
-  )
-}
-
-function LinearIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 100 100" fill="currentColor" aria-hidden>
-      <path d="M1.225 61.523c-.187-.738.708-1.235 1.246-.697l36.703 36.703c.538.538.041 1.433-.697 1.246C20.6 94.16 5.84 79.4 1.225 61.523ZM.002 46.811a.997.997 0 0 0 .291.749l52.147 52.147a.998.998 0 0 0 .749.291 50.328 50.328 0 0 0 9.235-1.119c.667-.149.904-.972.422-1.454L1.575 37.154c-.482-.482-1.305-.245-1.454.422A50.328 50.328 0 0 0 .002 46.81Zm4.528-18.34a.998.998 0 0 0 .195 1.144l64.66 64.66a.998.998 0 0 0 1.144.195 50.45 50.45 0 0 0 5.913-3.46.999.999 0 0 0 .14-1.518L9.51 22.418a.999.999 0 0 0-1.518.14 50.45 50.45 0 0 0-3.46 5.913Zm10.435-13.075a.999.999 0 0 0 .002 1.41l68.226 68.226a.999.999 0 0 0 1.41.002c19.292-19.477 19.234-50.97-.176-70.378-19.410-19.410-50.901-19.468-70.378-.176-1.061 1.044.916 1.916.916 1.916Z" />
-    </svg>
-  )
-}
-
-function QrSmallIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="3" height="3" />
-      <rect x="18" y="14" width="3" height="3" />
-      <rect x="14" y="18" width="3" height="3" />
-      <rect x="18" y="18" width="3" height="3" />
     </svg>
   )
 }

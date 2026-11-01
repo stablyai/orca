@@ -1,5 +1,5 @@
 import { expect } from 'vitest'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-current-requests-capability'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../src/shared/agent-session/requests/agent-session-current-requests-capability'
 
 export const SESSION = 'session-alpha'
 export const WORKSPACE = 'workspace-1'

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { KeyboardAvoidingView, Pressable, Text, View } from 'react-native'
-import { Check, Copy, FileText, Plus, Send, Trash2, X } from 'lucide-react-native'
+import { Check, Copy, Plus, Send, Trash2, X } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -18,7 +18,6 @@ import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-st
 import { MessageBox } from './composer-input/MessageBox'
 import { composerInputStyles } from './composer-input/composer-input-styles'
 import { hostOs } from '../platform/host-os'
-import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
@@ -40,8 +39,6 @@ export function MobileDiffReviewDrawers({ controller }: Props) {
 function ReviewSheetContent({ controller, sheet }: Props & { sheet: ReviewSheet }) {
   const t = useMobileTranslation()
   switch (sheet.kind) {
-    case 'actions':
-      return <ReviewActionsContent controller={controller} />
     case 'send':
       return <SendNotesContent controller={controller} load={sheet.load} />
     case 'discard':
@@ -67,34 +64,6 @@ function ReviewSheetContent({ controller, sheet }: Props & { sheet: ReviewSheet 
     case 'completion':
       return <CompletionContent controller={controller} />
   }
-}
-
-function ReviewActionsContent({ controller }: Props) {
-  const t = useMobileTranslation()
-  const overflowActions = useOverflowActions(controller)
-  const count = controller.reviewedUnstagedCount
-  return (
-    <ActionSheetContent
-      title={t('components.diffReviewDrawers.actionsTitle', 'Review Actions')}
-      message={
-        count > 0
-          ? count === 1
-            ? t(
-                'components.diffReviewDrawers.stageableFiles_one',
-                '{{count}} reviewed unstaged files can be staged',
-                { count }
-              )
-            : t(
-                'components.diffReviewDrawers.stageableFiles_other',
-                '{{count}} reviewed unstaged files can be staged',
-                { count }
-              )
-          : undefined
-      }
-      actions={overflowActions}
-      onClose={() => controller.closeSheet('actions')}
-    />
-  )
 }
 
 function SendNotesContent({ controller, load }: Props & { load: SendSheetState }) {
@@ -163,71 +132,6 @@ function useSendActions(
       }
     ]
   }, [controller, load, t])
-}
-
-function useOverflowActions(controller: ReturnType<typeof useMobileDiffReviewController>) {
-  const t = useMobileTranslation()
-  const sessionTabsAvailable = useWorkspaceOnPairedHost()
-  return useMemo<ActionSheetAction[]>(
-    () => [
-      {
-        id: 'copyNotes',
-        label: t('components.diffReviewDrawers.copyNotes', 'Copy Notes'),
-        icon: Copy,
-        disabled:
-          controller.screenState.kind !== 'ready' || controller.screenState.comments.length === 0,
-        onPress: () => void controller.copyNotes()
-      },
-      {
-        id: 'sendUnsentNotes',
-        label: t('components.diffReviewDrawers.sendUnsentNotes', 'Send Unsent Notes'),
-        icon: Send,
-        disabled: controller.unsentComments.length === 0,
-        onPress: () => void controller.openSendSheet()
-      },
-      {
-        id: 'clearSentNotes',
-        label: t('components.diffReviewDrawers.clearSentNotes', 'Clear Sent Notes'),
-        icon: Trash2,
-        disabled:
-          controller.screenState.kind !== 'ready' ||
-          controller.screenState.comments.every((comment) => comment.sentAt === undefined),
-        skipAutoClose: true,
-        onPress: () => void controller.clearSentNotes()
-      },
-      {
-        id: 'stageReviewedFiles',
-        label: t('components.diffReviewDrawers.stageReviewedFiles', 'Stage Reviewed Files'),
-        icon: Check,
-        disabled: controller.reviewedUnstagedCount === 0 || controller.busyAction !== null,
-        skipAutoClose: true,
-        onPress: () => void controller.stageReviewedFiles()
-      },
-      {
-        id: 'markUnreviewed',
-        label: t('components.diffReviewDrawers.markUnreviewed', 'Mark Unreviewed'),
-        icon: X,
-        disabled:
-          controller.screenState.kind !== 'ready' ||
-          !controller.currentItem ||
-          !controller.currentItem.isReviewed,
-        skipAutoClose: true,
-        onPress: () => void controller.markUnreviewed()
-      },
-      ...(sessionTabsAvailable
-        ? [
-            {
-              id: 'openInSession',
-              label: t('components.diffReviewDrawers.openInSession', 'Open in Session'),
-              icon: FileText,
-              disabled: !controller.currentItem || controller.currentItem.scope === 'branch',
-              onPress: () => void controller.openInSession()
-            }
-          ]
-        : [])
-    ],
-    [controller, sessionTabsAvailable, t]
-  )
 }
 
 function NoteComposerContent({ controller, composer }: Props & { composer: ComposerState }) {
@@ -347,7 +251,11 @@ function CompletionContent({ controller }: Props) {
       </Text>
       <View style={styles.drawerButtonRow}>
         <Pressable
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            styles.sheetSecondaryButton,
+            pressed && styles.buttonPressed
+          ]}
           disabled={controller.reviewedUnstagedCount === 0}
           onPress={() => void controller.stageReviewedFiles()}
           accessibilityRole="button"

@@ -12,7 +12,12 @@ import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketp
 import { PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN } from '../plugins/catalog/plugin-marketplace-store'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
-import type { PluginAutoUpdateState } from '../../shared/plugins/catalog/plugin-update-policy'
+import type { PluginInstallStatsService } from '../plugins/catalog/plugin-install-stats-service'
+import type { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
+import type {
+  PluginAutoUpdateState,
+  PluginUpdateReviewNotice
+} from '../../shared/plugins/catalog/plugin-update-policy'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { pluginFileTypeSchema } from '../../shared/plugins/contributions/plugin-file-type'
 import { findPluginFileTypeSuggestion } from '../plugins/catalog/plugin-file-type-suggestion'
@@ -21,14 +26,12 @@ export type PluginMarketplaceHandlerServices = {
   marketplace: PluginMarketplaceService
   installer: PluginMarketplaceInstaller
   autoUpdater?: Pick<PluginAutoUpdater, 'getState'>
+  reviewNotices?: Pick<PluginUpdateReviewNotices, 'take'>
+  installStats?: Pick<PluginInstallStatsService, 'getInstallCounts'>
 }
 
 /** The consent write path (applyPluginConsent), bound to the store by the caller. */
-export type PluginApproveConsent = (
-  pluginKey: string,
-  reviewedFingerprint: string,
-  originWebContentsId: number
-) => Promise<void>
+export type PluginApproveConsent = (pluginKey: string, reviewedFingerprint: string) => Promise<void>
 
 const sourceIdSchema = z.string().regex(PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN)
 const removeMarketplaceSchema = z.strictObject({ sourceId: sourceIdSchema })
@@ -108,7 +111,7 @@ export function registerPluginMarketplaceHandlers(
     const parsed = marketplacePluginSchema.parse(args)
     return services.installer.preview(parsed.marketplaceSourceId, parsed.pluginKey)
   })
-  ipcMain.handle('plugins:installMarketplacePlugin', async (event, args: unknown) => {
+  ipcMain.handle('plugins:installMarketplacePlugin', async (_event, args: unknown) => {
     const { enableIfData, expectedFingerprint, fromInstallLink, ...identity } =
       installMarketplacePluginSchema.parse(args)
     return installCatalogReleaseWithApproval({
@@ -118,8 +121,7 @@ export function registerPluginMarketplaceHandlers(
         services.installer.install(identity, {
           trigger: fromInstallLink ? 'deep_link' : 'catalog'
         }),
-      approve: (pluginKey, reviewedFingerprint) =>
-        approveConsent(pluginKey, reviewedFingerprint, event.sender.id),
+      approve: approveConsent,
       ...(enableIfData ? { enableIfData: { expectedFingerprint } } : {})
     })
   })
@@ -136,6 +138,16 @@ export function registerPluginMarketplaceHandlers(
     'plugins:getAutoUpdateState',
     (): PluginAutoUpdateState =>
       services.autoUpdater?.getState() ?? { updated: {}, needsReview: {} }
+  )
+  ipcMain.handle(
+    'plugins:takeUpdateReviewNotices',
+    (): Promise<PluginUpdateReviewNotice[]> => services.reviewNotices?.take() ?? Promise.resolve([])
+  )
+  // Why never rejects: counts are decoration; a failure just hides them.
+  ipcMain.handle(
+    'plugins:getInstallCounts',
+    (): Promise<Record<string, number>> =>
+      services.installStats?.getInstallCounts().catch(() => ({})) ?? Promise.resolve({})
   )
   ipcMain.handle('plugins:getRollbackVersion', (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)

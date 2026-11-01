@@ -1,4 +1,7 @@
-import type { AgentJournalFreeTextInput, AgentJournalQuestion } from './agent-session-journal-types'
+import type {
+  AgentJournalFreeTextInput,
+  AgentJournalQuestion
+} from './agent-session/journal/agent-session-journal-types'
 import type { AgentSessionQuestionAnswer } from './agent-session-question-answer'
 import type { AskAnswerSelection } from './native-chat-ask-answer'
 import type { AskPrompt } from './native-chat/input/native-chat-ask-types'

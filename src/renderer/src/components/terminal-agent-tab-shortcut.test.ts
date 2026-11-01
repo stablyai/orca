@@ -77,7 +77,7 @@ describe('effective agent menu shortcuts', () => {
       settings: {
         ...store.current.getState().settings!,
         defaultTuiAgent: 'blank',
-        experimentalNativeChat: false
+        nativeChatProviders: {}
       }
     })
   })

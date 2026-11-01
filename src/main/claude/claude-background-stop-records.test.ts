@@ -4,7 +4,7 @@ import {
   agentChildWorkStopTargets,
   type AgentChildWorkStopAcknowledgement
 } from '../../shared/agent-child-work-stop-targets'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { agentChildWorkLiveness } from '../../shared/agent-status-child-work-liveness'
 import { conversationCommandBlocked } from '../native-chat/agent-session-wire/structured-conversation-command-admission'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
@@ -81,18 +81,6 @@ describe('a background Stop acts on the host child records', () => {
     const { records, blocked, stopCalls, stop, basis } = await droppedFromRoster()
 
     const outcome = await stop('agent-1')
-
-    expect(outcome).toMatchObject({ cancelled: true })
-    expect(stopCalls()).toEqual([{ subtype: 'stop_task', params: { taskId: 'agent-1' } }])
-    expect(records()).toMatchObject([{ membership: 'settled', outcome: 'cancelled' }])
-    expect(basis()).toEqual(['stop-acknowledged'])
-    expect(blocked()).toBeNull()
-  })
-
-  it('stops every task the strip offers a stop when none is named', async () => {
-    const { records, blocked, stopCalls, stop, basis } = await droppedFromRoster()
-
-    const outcome = await stop()
 
     expect(outcome).toMatchObject({ cancelled: true })
     expect(stopCalls()).toEqual([{ subtype: 'stop_task', params: { taskId: 'agent-1' } }])

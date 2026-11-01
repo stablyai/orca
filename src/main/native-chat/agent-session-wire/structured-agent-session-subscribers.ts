@@ -4,7 +4,7 @@ import type { CurrentRequestsSubscriber } from './agent-session-current-requests
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type {
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent,

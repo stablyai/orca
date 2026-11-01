@@ -98,8 +98,10 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         )
       }
 
-      const dispatchAuthority = chatAssignee ? null : runtime.getOrchestrationDispatchAuthority(to)
-      const assigneePaneKey = chatAssignee
+      // A structured worker's chat keeps the pane and process its custody is held under.
+      const sessionOnly = assigneeParty?.terminalHandle === null
+      const dispatchAuthority = sessionOnly ? null : runtime.getOrchestrationDispatchAuthority(to)
+      const assigneePaneKey = sessionOnly
         ? undefined
         : (dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined)
       const processIncarnation =
@@ -140,7 +142,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         }
       }
 
-      if (params.inject && !chatAssignee && (!assigneePaneKey || !processIncarnation)) {
+      if (params.inject && !sessionOnly && (!assigneePaneKey || !processIncarnation)) {
         throw new OrchestrationError(
           'stable_pane_required',
           `Terminal ${to} has no stable pane/process incarnation for lifecycle authority.`
@@ -154,6 +156,9 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         assigneePaneKey,
         launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
         processIncarnation,
+        hostScope: dispatchAuthority?.hostScope
+          ? JSON.stringify(dispatchAuthority.hostScope)
+          : null,
         creator: resolveDispatchCreator(runtime, params.from, orchestrationCaller),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
@@ -179,8 +184,8 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
               db,
               dispatch: ctx,
               from: params.from,
-              senderName: (party, reported) =>
-                runtime.orchestrationSenderNames.nameOf(party, reported)
+              senderSnapshot: (party, reported) =>
+                runtime.orchestrationSenderNames.snapshotOf(party, reported)
             })
             await sendChatTask({ db, dispatch: ctx, from, preamble })
           } else {

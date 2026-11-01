@@ -19,5 +19,16 @@
     "@types/node": "^24.19.2",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./assignment-invariants": {
+      "types": "./dist/assignment-invariants.d.ts",
+      "default": "./dist/assignment-invariants.js"
+    },
+    "./package.json": "./package.json"
   }
 }

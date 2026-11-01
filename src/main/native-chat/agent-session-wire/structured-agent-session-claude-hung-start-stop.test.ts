@@ -4,8 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
@@ -44,7 +44,7 @@ let answerInitialize: () => void = () => {}
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-hung-start-stop-'))
   resetHostTestOperationIds()
-  claude = fakeClaude({ initProof: 'none', replayUuid: null })
+  claude = fakeClaude({ initProof: 'none', replayUuid: null, holdInit: true })
   const openConnection = claude.openConnection
   adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -67,13 +67,8 @@ beforeEach(async () => {
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     openConnection: async (...args) => {
       const connection = await openConnection(...args)
-      const fake = claude.connections.at(-1)
-      connection.initializationResult = () => {
-        fake?.calls.push({ subtype: 'initialize' })
-        return new Promise((resolve) => {
-          answerInitialize = () => resolve({ models: [] })
-        })
-      }
+      const fake = claude.connections.find((candidate) => candidate === connection)
+      answerInitialize = () => fake?.initialization.resolve({ models: [] })
       return connection
     },
     readProcessStartTime: async () => 1_700_000_000_000,
@@ -100,6 +95,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  host.stopDelivery()
+  claude.dispose()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
   await closeTestJournalHostDatabases()

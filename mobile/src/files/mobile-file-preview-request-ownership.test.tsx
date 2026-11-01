@@ -14,6 +14,7 @@ vi.mock('../transport/host-client-hooks', () => ({
 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   BackHandler: { addEventListener: () => ({ remove() {} }) },
   Alert: { alert() {} },
   Image: 'Image',
@@ -39,6 +40,7 @@ vi.mock('./MobileFileMediaPreview', () => ({ MobileFileMediaPreview: () => null 
 vi.mock('./MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
 }))
+vi.mock('../components/MobileSourceCopyButton', () => ({ MobileSourceCopyButton: () => null }))
 vi.mock('./MobileFilePreviewSourceText', () => ({
   MobileFilePreviewSourceText: 'MobileFilePreviewSourceText'
 }))

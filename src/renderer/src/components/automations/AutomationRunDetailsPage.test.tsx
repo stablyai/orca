@@ -5,6 +5,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
+import { getAutomationRunContent } from '../../../../shared/automation-run-content'
+import { getAutomationRunContent as getDesktopRunContent } from './automation-run-content'
+import { automationRunFailure } from '../../../../shared/automation-run-failure-copy'
+import es from '@/i18n/locales/es.json'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { getAutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunViewState } from './automation-run-view-state'
@@ -40,11 +44,11 @@ const run: AutomationRun = {
   createdAt: 1
 }
 
-function renderPage(viewState: AutomationRunViewState): void {
+function renderPage(viewState: AutomationRunViewState, selectedRun: AutomationRun = run): void {
   render(
     <AutomationRunDetailsPage
       automation={null}
-      run={run}
+      run={selectedRun}
       relativeNow={1}
       workspaceDisplay={null}
       viewState={viewState}
@@ -130,5 +134,53 @@ describe('AutomationRunDetailsPage', () => {
     })
     expect(screen.queryByRole('button', { name: 'View run' })).not.toBeInTheDocument()
     expect(screen.getByText('Precheck exited with code 1.')).toBeInTheDocument()
+  })
+
+  it('localizes coded failures without replacing saved output or legacy error text', async () => {
+    const originalLanguage = i18n.language
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage('es')
+    try {
+      const codedRun: AutomationRun = { ...run, ...automationRunFailure('targetMissing') }
+      expect(getDesktopRunContent(codedRun)).toBe(es.automations.runFailures.targetMissing)
+      expect(getDesktopRunContent({ ...codedRun, errorCode: 'futureCode' })).toBe(codedRun.error)
+      expect(
+        getDesktopRunContent({
+          ...codedRun,
+          outputSnapshot: {
+            format: 'plain_text',
+            content: ' saved output ',
+            capturedAt: 1,
+            truncated: false
+          }
+        })
+      ).toBe(' saved output ')
+    } finally {
+      await i18n.changeLanguage(originalLanguage)
+    }
+  })
+
+  it('localizes empty desktop output while the shared mobile default remains available', async () => {
+    const emptyRun: AutomationRun = { ...run, error: null }
+    expect(getAutomationRunContent(emptyRun)).toBe('No output content available.')
+    const originalLanguage = i18n.language
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage('es')
+    try {
+      renderPage(
+        {
+          availability: 'metadata',
+          actionLabel: 'View run',
+          statusLabel: 'Run is complete',
+          canOpen: false
+        },
+        emptyRun
+      )
+      expect(
+        screen.getByText(es.auto.components.automations.runContent.noOutput)
+      ).toBeInTheDocument()
+    } finally {
+      await i18n.changeLanguage(originalLanguage)
+    }
   })
 })

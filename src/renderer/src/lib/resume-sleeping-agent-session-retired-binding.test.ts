@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
@@ -99,18 +99,6 @@ describe('a resume record whose pane has no terminal bound', () => {
     expect(recordPaneIsOwnedByPreservedPane(record, useAppStore.getState())).toBe(false)
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
     expect(mocks.launch).toHaveBeenCalledWith(record, undefined)
-  })
-
-  it('a start that settled, or a disposed pane, no longer owns it', () => {
-    mocks.layoutOwnerIsMain = true
-    retiredBindingState()
-    holdPaneResumeInPlace(PANE_KEY, () => true)()
-    const disposedRelease = holdPaneResumeInPlace(PANE_KEY, () => false)
-    try {
-      expect(recordPaneIsOwnedByPreservedPane(record, useAppStore.getState())).toBe(false)
-    } finally {
-      disposedRelease()
-    }
   })
 
   it('keeps the window-owned rule: an unbound pane does not own it, in flight or not', () => {

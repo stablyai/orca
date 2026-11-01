@@ -1,5 +1,5 @@
 import { isPlanApprovalSubject } from './agent-session-approval-subject'
-import type { AgentJournalApprovalSubject } from './agent-session-journal-types'
+import type { AgentJournalApprovalSubject } from './agent-session/journal/agent-session-journal-types'
 
 export type ApprovalCardText = {
   blockedPath?: string

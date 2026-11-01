@@ -11,6 +11,8 @@ import { registerPtyHandlers } from './register-handlers'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import { setLocalPtyProvider } from './provider/registry'
 import { isCurrentPtyExit, restorePtyIncarnation } from './provider/ownership-state'
+import { formatTerminalStartFailure } from '../../../shared/terminal-start-failure'
+import { agentSessionOwners } from './pane/agent-session-owners'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -66,50 +68,205 @@ describe('registerPtyHandlers', () => {
     registerAgentClaimController
   } = setupPtyIpcSuite()
 
-  it('rejects renderer persistence when a local PTY exits before spawn settles', async () => {
-    const ptyId = 'pty-renderer-early-exit'
-    const incarnationId = 'incarnation-renderer-early-exit'
-    const runtime = new OrcaRuntimeService()
-    const registerRuntimePty = vi.spyOn(runtime, 'registerPty')
-    const provider = createAgentClaimProvider({
-      spawn: vi.fn(async () => {
-        runtime.onPtySpawned(ptyId, incarnationId)
-        runtime.onPtyExit(ptyId, 0, incarnationId)
-        return { id: ptyId, incarnationId, exitedBeforeSpawnReply: true }
-      }),
-      authoritativeOwnerListings: false
-    })
-    const store = { persistPtyBinding: vi.fn() }
-    setLocalPtyProvider(provider as never)
-    registerPtyHandlers(
-      mainWindow as never,
-      runtime,
-      undefined,
-      undefined,
-      undefined,
-      store as never
-    )
-    const leafId = '44444444-4444-4444-8444-444444444444'
-
-    await expect(
-      handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp/worktree',
-        worktreeId: 'repo::/tmp/worktree',
-        tabId: 'tab-renderer-early-exit',
-        leafId
+  it.each(['generic-fresh', 'capacity-fresh', 'capacity-reattach', 'capacity-adopted'] as const)(
+    'rejects renderer persistence when a local PTY exits before spawn settles (%s)',
+    async (context) => {
+      const ptyId = 'pty-renderer-early-exit'
+      const incarnationId = 'incarnation-renderer-early-exit'
+      const runtime = new OrcaRuntimeService()
+      const registerRuntimePty = vi.spyOn(runtime, 'registerPty')
+      const provider = createAgentClaimProvider({
+        spawn: vi.fn(async () => {
+          runtime.onPtySpawned(ptyId, incarnationId)
+          const exitCause =
+            context === 'generic-fresh'
+              ? { kind: 'exited' as const, exitCode: 0 }
+              : {
+                  kind: 'exited' as const,
+                  exitCode: 256,
+                  initialOutputDiagnostic: 'git-bash-console-capacity' as const
+                }
+          runtime.onPtyExit(ptyId, exitCause.exitCode, incarnationId, {
+            providerExitObserved: true,
+            cause: exitCause
+          })
+          return {
+            id: ptyId,
+            incarnationId,
+            exitedBeforeSpawnReply: true,
+            exitCause,
+            ...(context === 'capacity-reattach' ? { isReattach: true } : {}),
+            ...(context === 'capacity-adopted'
+              ? {
+                  agentSessionEnsure: {
+                    disposition: 'adopted' as const,
+                    owner: {
+                      claim: recoveredAgentClaim,
+                      generation: 'g1',
+                      phase: 'live' as const,
+                      ptyId,
+                      surface: recoveredAgentSurface
+                    }
+                  }
+                }
+              : {})
+          }
+        }),
+        authoritativeOwnerListings: false
       })
-    ).rejects.toThrow('agent_session_exited_during_start')
+      const store = { persistPtyBinding: vi.fn() }
+      setLocalPtyProvider(provider as never)
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const leafId = '44444444-4444-4444-8444-444444444444'
 
-    expect(store.persistPtyBinding).not.toHaveBeenCalled()
-    expect(registerRuntimePty).not.toHaveBeenCalled()
-    const internals = runtime as unknown as {
-      pendingPtyRegistrationIncarnations: Map<string, string | null>
+      await expect(
+        handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp/worktree',
+          worktreeId: 'repo::/tmp/worktree',
+          tabId: 'tab-renderer-early-exit',
+          leafId
+        })
+      ).rejects.toThrow(
+        context === 'capacity-fresh'
+          ? 'Close some Git Bash terminals'
+          : 'agent_session_exited_during_start'
+      )
+
+      expect(store.persistPtyBinding).not.toHaveBeenCalled()
+      expect(registerRuntimePty).not.toHaveBeenCalled()
+      const internals = runtime as unknown as {
+        pendingPtyRegistrationIncarnations: Map<string, string | null>
+      }
+      expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
+      clearProviderPtyState(ptyId)
     }
-    expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
-    clearProviderPtyState(ptyId)
-  })
+  )
+  it.each(
+    (['fresh', 'reattach', 'adopted'] as const).flatMap((context) =>
+      (['early-reply', 'registration-fence'] as const).map((boundary) => ({ context, boundary }))
+    )
+  )(
+    'finalizes claimed $context failure before sharing ($boundary)',
+    async ({ context, boundary }) => {
+      const ptyId = 'creator-request'
+      const incarnationId = 'incarnation-claimed-exit'
+      const providerEntered = Promise.withResolvers<void>()
+      const releaseProvider = Promise.withResolvers<void>()
+      const joinReached = Promise.withResolvers<void>()
+      const runtime = new OrcaRuntimeService()
+      const begin = vi.spyOn(runtime, 'beginPtyRegistration')
+      const cancel = vi.spyOn(runtime, 'cancelPendingPtyRegistration')
+      const registerPty = vi.fn()
+      const cause = {
+        kind: 'exited',
+        exitCode: 256,
+        initialOutputDiagnostic: 'git-bash-console-capacity'
+      } as const
+      const provider = createAgentClaimProvider({
+        spawn: vi.fn(async () => {
+          providerEntered.resolve()
+          await releaseProvider.promise
+          if (boundary === 'registration-fence') {
+            runtime.onPtySpawned(ptyId, incarnationId)
+            runtime.onPtyExit(ptyId, 256, incarnationId, { providerExitObserved: true, cause })
+          }
+          return {
+            id: ptyId,
+            incarnationId,
+            exitCause: cause,
+            exitedBeforeSpawnReply: boundary === 'early-reply',
+            ...(context === 'reattach' ? { isReattach: true } : {}),
+            ...(context === 'adopted'
+              ? {
+                  agentSessionEnsure: {
+                    disposition: 'adopted' as const,
+                    owner: {
+                      claim: recoveredAgentClaim,
+                      generation: 'claimed-owner-generation',
+                      phase: 'live' as const,
+                      ptyId,
+                      surface: recoveredAgentSurface
+                    }
+                  }
+                }
+              : {})
+          }
+        }),
+        authoritativeOwnerListings: false
+      })
+      setLocalPtyProvider(provider as never)
+      const controller = registerAgentClaimController({
+        beginPtyRegistration: runtime.beginPtyRegistration.bind(runtime),
+        cancelPendingPtyRegistration: runtime.cancelPendingPtyRegistration.bind(runtime),
+        assertPtyRegistrationAllowed: runtime.assertPtyRegistrationAllowed.bind(runtime),
+        registerPty
+      })
+      const originalEnsure = agentSessionOwners.ensure.bind(agentSessionOwners)
+      const ensure = vi.spyOn(agentSessionOwners, 'ensure').mockImplementation((args) =>
+        originalEnsure({
+          ...args,
+          onJoin: (creation) => {
+            args.onJoin?.(creation)
+            joinReached.resolve()
+          }
+        })
+      )
+      const settled: boolean[] = []
+      const run = (sessionId: string) =>
+        controller
+          .spawn({
+            cols: 80,
+            rows: 24,
+            sessionId,
+            agentSessionEnsure: { claim: recoveredAgentClaim, surface: recoveredAgentSurface }
+          })
+          .catch((error: unknown) => {
+            settled.push(formatTerminalStartFailure(error) !== undefined)
+            return error
+          })
+      try {
+        const creator = run(ptyId)
+        await providerEntered.promise
+        const joiner = run('joiner-request')
+        await joinReached.promise
+        expect(provider.spawn).toHaveBeenCalledOnce()
+        releaseProvider.resolve()
+        const errors = await Promise.all([creator, joiner])
+        expect(settled).toEqual([context === 'fresh', context === 'fresh'])
+        for (const error of errors) {
+          expect(error).toMatchObject({
+            message: 'agent_session_exited_during_start',
+            terminalExitIncarnationId: incarnationId
+          })
+          if (boundary === 'early-reply') {
+            expect(error).toMatchObject({ agentSessionOperationOutcome: 'unknown' })
+          }
+          expect(formatTerminalStartFailure(error) !== undefined).toBe(context === 'fresh')
+        }
+        expect(provider.spawn).toHaveBeenCalledOnce()
+        expect(registerPty).not.toHaveBeenCalled()
+        expect(begin).toHaveBeenCalledTimes(2)
+        expect(cancel.mock.calls).toEqual([
+          [ptyId, incarnationId, begin.mock.results[0]?.value],
+          ['joiner-request', undefined, begin.mock.results[1]?.value]
+        ])
+        expect(agentSessionOwners.find(recoveredAgentClaim)).toBeNull()
+      } finally {
+        releaseProvider.resolve()
+        ensure.mockRestore()
+        clearProviderPtyState(ptyId)
+      }
+    }
+  )
   it('adopts a live controller-owned local fallback when listings cannot serialize claims', async () => {
     const sessions: {
       id: string

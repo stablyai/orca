@@ -3,7 +3,7 @@ import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-s
 import {
   getNativeChatAgentProfile,
   type NativeChatAgentProfile
-} from '../../../../../src/shared/native-chat-agent-profiles'
+} from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
 import { nativeChatPickerScannedSkills } from '../../../../../src/shared/native-chat-composer-autocomplete'
 import {
   buildNativeChatPickerItems,

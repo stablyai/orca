@@ -237,9 +237,10 @@ export async function deleteAutomationForOwner(
 export async function updateOrphanAutomation(
   authority: AutomationAuthorityRef,
   id: string,
-  updates: AutomationUpdateInput
+  updates: AutomationUpdateInput,
+  destination?: AutomationDestination
 ): Promise<Automation> {
-  return await updateFenced(authority, id, updates, ORPHAN_OWNER_PRECONDITION)
+  return await updateFenced(authority, id, updates, ORPHAN_OWNER_PRECONDITION, destination)
 }
 
 export async function deleteOrphanAutomation(

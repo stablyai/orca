@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { isAdmissibleAgentJournalItemBody } from '../../shared/agent-session-journal-schemas'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isAdmissibleAgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-schemas'
 import { selectStructuredAgentContextUsage } from '../../shared/structured-agent-session-context-usage'
 import { claudeContextReportFromControl } from './claude-context-usage'
 import {

@@ -8,7 +8,7 @@ import {
   isToolResultBlock,
   type NativeChatBlock,
   type NativeChatToolResultBlock
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import {
   NativeChatCommandMetadata,
   NativeChatSearchResults,

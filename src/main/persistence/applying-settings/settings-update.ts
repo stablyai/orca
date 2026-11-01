@@ -4,13 +4,17 @@ import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
-import { normalizeNativeChatProviderChoices } from '../../../shared/native-chat/native-chat-providers'
+import {
+  normalizeAgentDefaultSurface,
+  normalizeNativeChatProviderChoices
+} from '../../../shared/native-chat/native-chat-providers'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
 import { sanitizeAgentLaunchProfileUpdates } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
 import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../shared/plugins/capabilities/plugin-owned-settings'
+import { legacyMatchTerminalSidebarWrite } from '../../../shared/plugin-theme-settings'
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal-scrollback-policy'
@@ -63,6 +67,11 @@ export function updateSettings(
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.
     sanitizedUpdates.terminalLinkActionPopoverEnabled = linkBehavior === 'actions'
   }
+  const windowMaterial = updates.windowMaterial
+  if (windowMaterial === 'off' || windowMaterial === 'translucent' || windowMaterial === 'blur') {
+    // Every writer (settings, Ghostty import) mirrors the legacy switch an older Orca reads after rollback.
+    sanitizedUpdates.windowBackgroundBlur = windowMaterial !== 'off'
+  }
   // Normalize at the store boundary so every writer rejects truthy non-booleans.
   if ('minimizeToTrayOnClose' in updates) {
     sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
@@ -88,6 +97,9 @@ export function updateSettings(
   }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+  }
+  if ('agentDefaultSurface' in updates) {
+    sanitizedUpdates.agentDefaultSurface = normalizeAgentDefaultSurface(updates.agentDefaultSurface)
   }
   if ('nativeChatProviders' in updates) {
     sanitizedUpdates.nativeChatProviders = normalizeNativeChatProviderChoices(
@@ -125,6 +137,10 @@ export function updateSettings(
     )
   }
   Object.assign(sanitizedUpdates, normalizePluginOwnedSettings(updates))
+  Object.assign(
+    sanitizedUpdates,
+    legacyMatchTerminalSidebarWrite(operations.state.settings, sanitizedUpdates)
+  )
   if ('terminalCursorStyle' in updates) {
     Object.assign(
       sanitizedUpdates,

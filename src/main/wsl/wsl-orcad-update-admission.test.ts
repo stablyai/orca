@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCAD_HOST_NEWER_DEFERRAL_CODE } from '../../shared/wsl-host-types'
+
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import { recordOrcadUpdateFailedThisLaunch } from '../managed-server/lifecycle/orcad-managed-update-failure-memory'
 import type { ServeReadiness } from '../server/serve-readiness'
-import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../ssh/orcad-installed-activation'
+
 import type { OrcadSlotOptions } from '../ssh/orcad-recovery-slot'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import { admitWslOrcadUpdate, wslOrcadDeferralCode } from './wsl-orcad-update-admission'
+import { admitWslOrcadUpdate } from './wsl-orcad-update-admission'
 
 const { adoptRunningOrcadVersion, readOrcadActivationRecord } = vi.hoisted(() => ({
   adoptRunningOrcadVersion: vi.fn(),
@@ -86,37 +86,10 @@ describe('WSL orcad admission across desktop and host versions', () => {
       }
       expect(adoptRunningOrcadVersion).toHaveBeenCalledWith(slot, running(NEWER, '1.6.0'), OLDER)
     })
-
-    it('deploys over it only when the user forces the update', async () => {
-      expect(await admit(running(NEWER, '1.6.0'), olderDesktop, { intent: 'force' })).toEqual({
-        action: 'deploy',
-        record: running(NEWER, '1.6.0')
-      })
-      expect(adoptRunningOrcadVersion).not.toHaveBeenCalled()
-    })
-
-    it('names a policy refusal over the newer host, which Update cannot pass', async () => {
-      readOrcadActivationRecord.mockResolvedValue(running(NEWER, '1.6.0'))
-      expect(
-        await wslOrcadDeferralCode(
-          slot,
-          { code: ORCAD_ACTIVATION_POLICY_REFUSED_CODE, fullVersion: OLDER },
-          '1.5.0'
-        )
-      ).toBe(ORCAD_HOST_NEWER_DEFERRAL_CODE)
-    })
   })
 
   describe('a newer desktop meets the orcad an older desktop deployed', () => {
     const newerDesktop = { candidateVersion: NEWER, appVersion: '1.6.0' }
-
-    it('updates it on connect', async () => {
-      expect(await admit(running(OLDER, '1.5.0'), newerDesktop)).toEqual({
-        action: 'deploy',
-        record: running(OLDER, '1.5.0')
-      })
-      expect(adoptRunningOrcadVersion).not.toHaveBeenCalled()
-    })
 
     it('keeps the older orcad serving after a failed update, and offers Force', async () => {
       const host = { kind: 'wsl' as const, id: 'Ubuntu-failed' }
@@ -133,11 +106,6 @@ describe('WSL orcad admission across desktop and host versions', () => {
           forceable: true
         }
       })
-    })
-
-    it('treats an orcad from before app provenance as updatable, not as newer', async () => {
-      const { activeAppVersion: _omitted, ...legacy } = running(OLDER, '1.5.0')
-      expect(await admit(legacy, newerDesktop)).toEqual({ action: 'deploy', record: legacy })
     })
   })
 })

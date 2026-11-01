@@ -1,7 +1,7 @@
 // Host-detected startup faults must not be attributed as self-exits without observed CLI exit.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'

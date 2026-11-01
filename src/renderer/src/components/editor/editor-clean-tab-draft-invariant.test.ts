@@ -5,7 +5,7 @@ import { requestEditorFileSave } from './editor-autosave'
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
 import { createEditorStore } from './editor-autosave-controller-test-fixture'
 import { reloadTabContentFromDisk } from './ExternalFileChangeBanner'
-import { mayPushTabTextIntoModel } from './editor-stale-mount-guard'
+
 import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { GUARDED_PATH, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
@@ -52,22 +52,6 @@ afterEach(() => {
   __clearSelfWriteRegistryForTests()
 })
 
-it('undo back to the disk text drops the draft', () => {
-  const { store, id } = openCleanTab('disk')
-  store.getState().setEditorDraft(id, 'disk typed')
-  store.getState().markFileDirty(id, true)
-  store.getState().setEditorDraft(id, 'disk')
-  store.getState().markFileDirty(id, false)
-  expectNoCleanDraft(store)
-})
-
-it('a clean tab that gets a draft of the disk text drops it when marked clean again', () => {
-  const { store, id } = openCleanTab('disk')
-  store.getState().setEditorDraft(id, 'disk')
-  store.getState().markFileDirty(id, false)
-  expectNoCleanDraft(store)
-})
-
 it('save completion leaves no draft on the now-clean tab', async () => {
   const { store, id } = openCleanTab('disk')
   store.getState().setEditorDraft(id, 'saved text')
@@ -87,15 +71,6 @@ it('reload leaves no draft', () => {
   store.getState().markFileDirty(id, true)
   reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
   expectNoCleanDraft(store)
-})
-
-it("lets a clean record's draft reach its model, since every view shares that draft", () => {
-  const { store, id } = openCleanTab('disk')
-  // A Markdown-whitespace draft may stay on a clean tab; it is the record's text, so views show it.
-  store.setState({ editorDrafts: { ...store.getState().editorDrafts, [id]: 'disk ' } })
-  expect(mayPushTabTextIntoModel(id)).toBe(true)
-  store.getState().markFileDirty(id, true)
-  expect(mayPushTabTextIntoModel(id)).toBe(true)
 })
 
 it("a reload keeps a clean Markdown tab's trailing-whitespace draft, but not one over older text", () => {

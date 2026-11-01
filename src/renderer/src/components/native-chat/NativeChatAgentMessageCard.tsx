@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import {
   agentMessageHeading,

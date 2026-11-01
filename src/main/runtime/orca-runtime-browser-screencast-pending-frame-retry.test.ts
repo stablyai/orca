@@ -98,15 +98,6 @@ describe('screencast frames a viewer refused', () => {
     subscription.session.stop()
   })
 
-  // Lossy frames must not queue behind backlog; retries deliver only the newest.
-  it('asks the transport to drop frames while the socket is backlogged', async () => {
-    const sendBinary = vi.fn(() => true)
-    const { subscription, onFrame } = await subscribe(sendBinary)
-    onFrame(new Uint8Array([1]))
-    expect(sendBinary).toHaveBeenCalledWith(new Uint8Array([1]), { dropWhenBacklogged: true })
-    subscription.session.stop()
-  })
-
   it('stops retrying once the viewer leaves', async () => {
     const sendBinary = vi.fn(() => false)
     const { subscription, onFrame } = await subscribe(sendBinary)

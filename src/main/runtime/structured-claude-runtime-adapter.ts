@@ -1,5 +1,5 @@
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { ClaudeEnvDeps } from '../claude/claude-structured-child-env'
 import { ClaudeStructuredSessionAdapter } from '../claude/claude-structured-session-adapter'
 import type {
@@ -28,6 +28,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveAccountHome?: ClaudeAtRestCommandsDeps['resolveAccountHome']
   resolveLaunch: ClaudeStructuredSessionAdapterDeps['resolveLaunch']
+  namingInputs?: ClaudeStructuredSessionAdapterDeps['namingInputs']
   /** The binary and env the startup version prewarm asks, as a launch would. */
   resolveClaudeCommand?: ClaudeEnvDeps['resolveCommand']
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
@@ -98,6 +99,12 @@ export function createStructuredClaudeRuntimeAdapter(
       ...(deps.atRestCommandProbe ? { probe: deps.atRestCommandProbe } : {})
     }),
     resolveLaunch: deps.resolveLaunch,
+    ...(deps.namingInputs
+      ? {
+          namingInputs: deps.namingInputs,
+          namingRecord: (sessionId: string) => store.getRecord(sessionId)
+        }
+      : {}),
     persistHandle: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
       const currentFence = store.getRecord(sessionId)?.lease.runtimeFence ?? fence
       const observedAt = Date.now()

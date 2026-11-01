@@ -1,5 +1,7 @@
+import { abbreviateOrchestrationText } from '../../../shared/orchestration-task-summary'
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
+import { printOrchestrationResult } from './agent-view'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -16,6 +18,8 @@ import {
   olderRuntimeUnboundRunNext
 } from './older-runtime-run-binding'
 
+const RUN_LIST_DEFAULT_LIMIT = 10
+
 export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
   'orchestration run-create': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
@@ -29,6 +33,12 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     })
     if (unboundRunId && unboundRunId !== result.result.run.id) {
       result.result.next = olderRuntimeUnboundRunNext(unboundRunId)
+    }
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (r) => ({ ...runFields(r.run), next: r.next })
+      })
+      return
     }
     printResult(result, json, (r) =>
       withReceiptNext(`Run ${r.run.id} created and bound: ${r.run.objective}`, r)
@@ -44,6 +54,10 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       from,
       ...(flags.has('takeover-legacy') ? { takeoverLegacy: true } : {})
     })
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, { fields: (r) => runFields(r.run) })
+      return
+    }
     printResult(result, json, (r) => `Using Run ${r.run.id}: ${r.run.objective}`)
   },
 
@@ -52,6 +66,12 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{
       run: { id: string; objective: string } | null
     }>('orchestration.runCurrent', { from })
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (r) => (r.run ? runFields(r.run) : { runId: null })
+      })
+      return
+    }
     printResult(result, json, (r) =>
       r.run
         ? `${r.run.id} ${r.run.objective}`
@@ -64,9 +84,25 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       runs: { id: string; objective: string; legacy: number }[]
       nextCursor: string | null
     }>('orchestration.runList', {
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit') ?? ORCHESTRATION_RUN_PAGE_LIMIT,
+      // A 100-Run first page costs an agent thousands of tokens; --full keeps today's page.
+      limit:
+        getOptionalPositiveIntegerFlag(flags, 'limit') ??
+        (flags.has('full') ? ORCHESTRATION_RUN_PAGE_LIMIT : RUN_LIST_DEFAULT_LIMIT),
       cursor: getOptionalStringFlag(flags, 'cursor')
     })
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (r) => ({
+          runs: r.runs.map((run) => {
+            const { runId, ...rest } = runFields(run)
+            // Objectives are caller-written and unbounded; --full prints them whole.
+            return { id: runId, ...rest, objective: abbreviateOrchestrationText(run.objective) }
+          }),
+          nextCursor: r.nextCursor ?? undefined
+        })
+      })
+      return
+    }
     printResult(result, json, (r) => {
       const rows =
         r.runs.length === 0
@@ -97,6 +133,16 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       ...(removed ? { removed: true } : {}),
       ...(cursor ? { cursor } : {})
     })
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (r) => ({ ...runFields(r.run), removedWork: r.removedWork }),
+        text: (_, r) =>
+          removed
+            ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
+            : `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}${formatRunRemovedWorkLine(r.run.id, r.removedWork)}`
+      })
+      return
+    }
     printResult(result, json, (r) =>
       removed
         ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
@@ -105,4 +151,8 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
           `${formatRunRemovedWorkLine(r.run.id, r.removedWork)}`
     )
   }
+}
+
+function runFields(run: { id: string; objective: string; legacy?: number }) {
+  return { runId: run.id, objective: run.objective, legacy: run.legacy ? true : undefined }
 }

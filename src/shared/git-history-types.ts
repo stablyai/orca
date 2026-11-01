@@ -52,11 +52,26 @@ export type GitHistoryItem = {
   timestamp?: number
   statistics?: GitHistoryItemStatistics
   references?: GitHistoryItemRef[]
+  /** Set only for branch-only pages: whether the upstream already has this commit. */
+  pushed?: boolean
 }
 
 export type GitHistoryOptions = {
   limit?: number
   baseRef?: string | null
+  /** List only commits on HEAD that baseRef lacks, with statistics and pushed state. */
+  branchOnly?: boolean
+  skip?: number
+}
+
+export type GitHistoryBranchRange = {
+  baseRef: GitHistoryItemRef
+  /** Commits on HEAD that the base lacks. */
+  ahead: number
+  /** Commits on the base that HEAD lacks. */
+  behind: number
+  /** Commits among `ahead` that the upstream lacks; all of them when there is no upstream. */
+  unpushed: number
 }
 
 export type GitHistoryResult = {
@@ -69,6 +84,10 @@ export type GitHistoryResult = {
   hasOutgoingChanges: boolean
   hasMore: boolean
   limit: number
+  /** Present only when the page honoured branchOnly; older hosts omit it. */
+  branch?: GitHistoryBranchRange
+  /** Echoes a requested skip so clients can tell paging hosts from older ones. */
+  skip?: number
 }
 
 export type GitHistoryExecutor = (

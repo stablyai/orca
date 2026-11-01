@@ -1,9 +1,9 @@
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice,
-  AgentSessionOptionsResult,
   AgentSessionSlashCommand
 } from '../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import {
@@ -178,7 +178,10 @@ export class AcpStructuredOptions {
         // Fall back to the running session's menu when the advertised menu is empty.
         ...(advertised && (advertised.efforts.length > 0 || model.id !== currentModel)
           ? advertised
-          : sessionMenu)
+          : sessionMenu),
+        ...(advertised?.declaredDefaultEffort !== undefined
+          ? { declaredDefaultEffort: advertised.declaredDefaultEffort }
+          : {})
       }
     })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]

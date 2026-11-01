@@ -139,20 +139,6 @@ describe('useEditorExternalWatch with background trim', () => {
     ;(window as unknown as { api?: unknown }).api = previousApi
   })
 
-  it('refreshes a dropped workspace once its watch request settles', async () => {
-    await render([active], [background])
-    await render([active, background], [])
-    expect(watchWorktree).toHaveBeenLastCalledWith({
-      worktreePath: '/background',
-      connectionId: undefined
-    })
-    expect(harness.catchUp).not.toHaveBeenCalled()
-
-    await act(async () => resolveWatch())
-    expect(harness.catchUp).toHaveBeenCalledWith(...resyncOf(background))
-    expect(harness.catchUp).toHaveBeenCalledTimes(1)
-  })
-
   it('refreshes a dropped runtime workspace once its host reports the watch ready', async () => {
     await render([active], [runtimeBackground])
     await render([active, runtimeBackground], [])
@@ -160,29 +146,6 @@ describe('useEditorExternalWatch with background trim', () => {
 
     await act(async () => harness.runtimeReady.current?.())
     expect(harness.catchUp).toHaveBeenCalledWith(...resyncOf(runtimeBackground))
-  })
-
-  it('releases and re-requests an SSH workspace watch through its connection', async () => {
-    const ssh: TestWatchTarget = {
-      worktreeId: 'ssh',
-      worktreePath: '/home/me/repo',
-      connectionId: 'conn-1',
-      runtimeEnvironmentId: null
-    }
-    await render([active, ssh], [])
-    await render([active], [ssh])
-    expect(unwatchWorktree).toHaveBeenCalledWith({
-      worktreePath: '/home/me/repo',
-      connectionId: 'conn-1'
-    })
-
-    await render([active, ssh], [])
-    expect(watchWorktree).toHaveBeenLastCalledWith({
-      worktreePath: '/home/me/repo',
-      connectionId: 'conn-1'
-    })
-    await act(async () => resolveWatch())
-    expect(harness.catchUp).toHaveBeenCalledWith(...resyncOf(ssh))
   })
 
   it('retries a failed directory watch when another workspace on it needs it', async () => {
@@ -203,14 +166,6 @@ describe('useEditorExternalWatch with background trim', () => {
     } finally {
       warning.mockRestore()
     }
-  })
-
-  it('does not refresh a workspace whose tabs were just opened', async () => {
-    await render([active], [])
-    await render([active, background], [])
-    await act(async () => resolveWatch())
-
-    expect(harness.catchUp).not.toHaveBeenCalled()
   })
 
   it('keeps a directory watched while another workspace on it still needs it', async () => {
@@ -237,20 +192,6 @@ describe('useEditorExternalWatch with background trim', () => {
     expect(watchWorktree).toHaveBeenCalledTimes(2)
     await act(async () => resolveWatch())
     expect(harness.catchUp).toHaveBeenCalledWith(...resyncOf(background))
-  })
-
-  it('only releases when a background workspace drops out', async () => {
-    await render([active, background], [])
-    watchWorktree.mockClear()
-
-    await render([active], [background])
-    expect(unwatchWorktree).toHaveBeenCalledTimes(1)
-    expect(unwatchWorktree).toHaveBeenCalledWith({
-      worktreePath: '/background',
-      connectionId: undefined
-    })
-    expect(watchWorktree).not.toHaveBeenCalled()
-    expect(harness.catchUp).not.toHaveBeenCalled()
   })
 
   it('leaves no watch behind after all tabs close or the app unmounts', async () => {

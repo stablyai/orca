@@ -35,6 +35,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'index-status',
   'interactive',
   'interrupt',
+  'keep-open',
   'json',
   'latest-json',
   'local',
