@@ -20,14 +20,17 @@ export function commitProjectHeaderDragDrop(args: {
   onCommitRepoOrder: (orderedIds: string[]) => void
   onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order: number) => void
 }): void {
-  const draggedRepo = args.liveRepos.find((repo) => isSameRepoRow(repo, args.session.repo))
+  // Why: a header drawn in a group through another host's row reorders that row on its own host.
+  const placedBy = args.session.projectGroupRepo ?? args.session.repo
+  const draggedRepo = args.liveRepos.find((repo) => isSameRepoRow(repo, placedBy))
   // Why: a group change mid-drag (another window or client) moved the row out of this bucket.
   if (!draggedRepo || getProjectHeaderDragBucketKey(draggedRepo) !== args.session.bucketKey) {
     return
   }
 
+  const headerId = args.session.repo.id
   const sidebarRepoHeaderIds = args.session.sidebarRepoHeaderIds
-  const sourceIndex = sidebarRepoHeaderIds.indexOf(draggedRepo.id)
+  const sourceIndex = sidebarRepoHeaderIds.indexOf(headerId)
   // Both slots beside the dragged header are no-ops; do not compact paired-host occurrences.
   if (
     sourceIndex === -1 ||
@@ -39,7 +42,7 @@ export function commitProjectHeaderDragDrop(args: {
 
   if (args.usesProjectGroupOrdering) {
     const siblings = sidebarRepoHeaderIds
-      .filter((repoId) => repoId !== draggedRepo.id)
+      .filter((repoId) => repoId !== headerId)
       .map((repoId) => args.repoById.get(repoId))
       .filter((repo): repo is Repo => repo !== undefined)
     const siblingDropIndex = mapSidebarProjectHeaderDropIndexToSiblingInsertIndex({
@@ -67,7 +70,7 @@ export function commitProjectHeaderDragDrop(args: {
     sidebarRepoHeaderIds,
     args.orderedRepoIds
   )
-  const next = applyAllRepoInsertAt(args.orderedRepoIds, draggedRepo.id, insertAt)
+  const next = applyAllRepoInsertAt(args.orderedRepoIds, headerId, insertAt)
   if (!next) {
     return
   }
