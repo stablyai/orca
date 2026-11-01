@@ -29,15 +29,10 @@ vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'SafeAreaView',
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
-vi.mock('lucide-react-native', () => ({
-  Check: () => null,
-  ChevronDown: () => null,
-  ChevronRight: () => null,
-  RotateCw: () => null,
-  Search: () => null,
-  UserPlus: () => null,
-  X: () => null
-}))
+// Panel modules read icons at import time; render every one as nothing.
+vi.mock('lucide-react-native', async (importOriginal) =>
+  Object.fromEntries(Object.keys(await importOriginal<object>()).map((name) => [name, () => null]))
+)
 // Thin native adapters: the real composer, picker and search own their state; these forward it.
 vi.mock('../components/composer-input/MessageBox', async () => {
   const { createElement: element } = await import('react')
