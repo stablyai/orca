@@ -71,6 +71,15 @@ export function submitOrchestrationMailboxPointer(
         finalizeReservation = false
         return
       }
+      if (input.confirmEnter && input.flight.deferredUntilIdle) {
+        // A cold park went working during the reread; Enter waits for idle and rereads then.
+        input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
+        deferredUntilIdle = true
+        if (input.flight.idleObservedWhileDeferred) {
+          deps.state.takeDeferredEnter(input.ptyId)?.()
+        }
+        return
+      }
       const target = deps.resolveSubmitTarget(input.ptyId)
       const terminal =
         target?.terminal.handle === input.expectedTarget.terminal.handle &&
