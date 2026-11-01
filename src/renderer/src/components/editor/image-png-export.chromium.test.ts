@@ -6,6 +6,10 @@ import * as esbuild from 'esbuild'
 import { afterAll, describe, expect, it } from 'vitest'
 import type { renderImagePngDataUrl as RenderPng } from './image-png-export'
 
+declare global {
+  var pngExport: { renderImagePngDataUrl: typeof RenderPng } | undefined
+}
+
 const browser: Browser | null = await chromium.launch({ headless: true }).catch(() => null)
 
 afterAll(async () => {
@@ -26,17 +30,18 @@ describe.skipIf(!browser)('renderImagePngDataUrl in Chromium', () => {
       globalName: 'pngExport',
       write: false
     })
-    const page = await browser!.newPage()
+    if (!browser) {
+      throw new Error('Chromium is unavailable')
+    }
+    const page = await browser.newPage()
     try {
       await page.setContent('<!doctype html><html><body></body></html>')
       await page.addScriptTag({ content: bundle.outputFiles[0].text })
       const result = await page.evaluate(async (svg) => {
-        // SAFETY: the bundle above defines this IIFE global.
-        const { renderImagePngDataUrl } = (
-          window as unknown as {
-            pngExport: { renderImagePngDataUrl: typeof RenderPng }
-          }
-        ).pngExport
+        if (!globalThis.pngExport) {
+          throw new Error('Export bundle not loaded')
+        }
+        const { renderImagePngDataUrl } = globalThis.pngExport
         const src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
         return renderImagePngDataUrl(src, { width: 120, height: 40 }, '#ffffff').then(
           (png) => png.slice(0, 22),
