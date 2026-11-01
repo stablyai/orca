@@ -30,6 +30,7 @@ import { readLocalWebUIState } from './web-preferences-store'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
+import { webShortcutCommandSubscriptions } from './web-shortcut-command-subscriptions'
 
 /** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
@@ -221,22 +222,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenCrashReport: () => noopUnsubscribe,
     // No desktop main process to push state changes; the web client re-reads via ui.get on interaction.
     onStateChanged: () => noopUnsubscribe,
-    onToggleLeftSidebar: () => noopUnsubscribe,
-    onToggleRightSidebar: () => noopUnsubscribe,
-    onToggleWorktreePalette: () => noopUnsubscribe,
-    onToggleFloatingTerminal: () => noopUnsubscribe,
-    onTerminalShortcutCaptured: () => noopUnsubscribe,
-    onOpenQuickOpen: () => noopUnsubscribe,
-    onToggleQuickCommandsMenu: () => noopUnsubscribe,
-    onOpenTasks: () => noopUnsubscribe,
-    onOpenNewWorkspace: () => noopUnsubscribe,
-    onDeleteCurrentWorkspace: () => noopUnsubscribe,
-    onOpenWorkspaceBoard: () => noopUnsubscribe,
-    onToggleAgentDashboard: () => noopUnsubscribe,
-    onJumpToNextAttention: () => noopUnsubscribe,
-    onJumpToWorktreeIndex: () => noopUnsubscribe,
-    onJumpToTabIndex: () => noopUnsubscribe,
-    onWorktreeHistoryNavigate: () => noopUnsubscribe,
+    ...webShortcutCommandSubscriptions,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
     browserTabRequestsReady: () => {},
