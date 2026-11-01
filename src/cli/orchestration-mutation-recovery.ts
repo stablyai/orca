@@ -31,7 +31,6 @@ export function orchestrationMutationRecoveryError(
   const retryCommand = originalCommand
     ? [...originalCommand, '--retry-request', requestId]
     : undefined
-  const knownUnsent = unsent && retryCommand !== undefined
   const executable = originalCommand?.[0] ?? resolveOrchestrationCliExecutable()
   // Without a dispatch id, query by request id to inspect the outcome before retrying a mutation.
   const queryCommand = dispatchId
@@ -43,7 +42,7 @@ export function orchestrationMutationRecoveryError(
     queryCommand,
     ...(retryCommand ? { retryCommand } : {}),
     recoveryBlocked: !retryCommand,
-    disposition: knownUnsent ? 'not_sent' : 'outcome_unknown',
+    disposition: unsent ? 'not_sent' : 'outcome_unknown',
     workerDeathInferred: false
   }
   const retryStep = retryCommand
@@ -55,16 +54,16 @@ export function orchestrationMutationRecoveryError(
     (arg, i) => arg === '-' && /^--[\w-]+-file$/.test(retryCommand[i - 1] ?? '')
   )
   const nextSteps = [
-    ...(knownUnsent
+    ...(unsent
       ? [
-          `Once Orca responds, run ${renderCommand(retryCommand)} from this same terminal. --retry-request keeps the same operation identity, so the rerun cannot apply it twice.`
+          `Once Orca responds, run ${retryCommand ? renderCommand(retryCommand) : `the same original command with --retry-request ${requestId}`} from this same terminal. --retry-request keeps the same operation identity, so the rerun cannot apply it twice.`
         ]
       : [`Run ${renderCommand(queryCommand)} before retrying.`, retryStep]),
     ...(readsStdin ? ['Pipe the same input into the retry again; it reads stdin.'] : [])
   ]
   const message = [
     stripUnsafeRetryAdvice(error.message, requestId),
-    knownUnsent
+    unsent
       ? 'Nothing was sent: Orca did not answer the check that runs before the orchestration mutation, so the mutation did not run.'
       : 'The orchestration mutation may already have taken effect; do not assume it failed.',
     ...nextSteps,

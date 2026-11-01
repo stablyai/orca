@@ -250,16 +250,22 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
   )
 
   // Windows cannot use this temporary Unix socket path.
+  const RETRY_ID = '11111111-2222-4333-8444-555555555555'
   it.skipIf(process.platform === 'win32').each([
     ['a fresh worker_done says nothing was sent', [], /Nothing was sent/],
     [
       'a --retry-request rerun keeps the outcome uncertain',
-      ['--retry-request', '11111111-2222-4333-8444-555555555555'],
+      ['--retry-request', RETRY_ID],
       /may already have taken effect/
+    ],
+    [
+      'a credential-bearing worker_done says nothing was sent without printing it',
+      ['--dispatch-capability', 'cap-secret'],
+      /^(?![\s\S]*(cap-secret|request-show))[\s\S]*Nothing was sent[\s\S]*the same original command with --retry-request [0-9a-f-]{36}/
     ]
   ])(
     'when a frozen runtime times out the contract probe, %s',
-    async (_case, retryArgs, outcomeText) => {
+    async (_case, extraArgs, outcomeText) => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-worker-done-frozen-'))
       tempDirs.add(userDataPath)
       const endpoint = join(userDataPath, 'runtime.sock')
@@ -287,10 +293,11 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
       const argv = ['orchestration', 'send', '--type', 'worker_done', '--subject', 'done']
       const client = new RuntimeClient(userDataPath, 60_000, null, null, 'orca', [
         ...argv,
-        ...retryArgs
+        ...extraArgs
       ])
+      const retryRequest = extraArgs[0] === '--retry-request' ? extraArgs[1] : undefined
       const flags = new Map<string, string | boolean>(
-        retryArgs.length > 0 ? [['retry-request', retryArgs[1]]] : []
+        retryRequest ? [['retry-request', retryRequest]] : []
       )
       const error = await callOrchestrationMutation(
         client,
@@ -305,14 +312,16 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
         code: 'runtime_timeout',
         message: expect.stringMatching(outcomeText),
         data: {
-          recovery: {
-            retryCommand: [
-              'orca',
-              ...argv,
-              '--retry-request',
-              retryArgs[1] ?? expect.stringMatching(/^[0-9a-f-]{36}$/)
-            ]
-          }
+          recovery: extraArgs.includes('--dispatch-capability')
+            ? { recoveryBlocked: true, disposition: 'not_sent' }
+            : {
+                retryCommand: [
+                  'orca',
+                  ...argv,
+                  '--retry-request',
+                  retryRequest ?? expect.stringMatching(/^[0-9a-f-]{36}$/)
+                ]
+              }
         }
       })
     },
