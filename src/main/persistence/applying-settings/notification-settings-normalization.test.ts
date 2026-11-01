@@ -62,3 +62,17 @@ describe('agent needs-input notifications', () => {
     ).toBe(true)
   })
 })
+
+describe('hidden phone notification details', () => {
+  it('keeps a saved choice and shows details for anything else', () => {
+    expect(
+      normalizeNotificationSettings({ hidePhoneNotificationDetails: true })
+        .hidePhoneNotificationDetails
+    ).toBe(true)
+    expect(normalizeNotificationSettings({}).hidePhoneNotificationDetails).toBe(false)
+    expect(
+      normalizeNotificationSettings({ hidePhoneNotificationDetails: 'true' })
+        .hidePhoneNotificationDetails
+    ).toBe(false)
+  })
+})

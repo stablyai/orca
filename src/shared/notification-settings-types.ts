@@ -31,6 +31,8 @@ export type NotificationSettings = {
   mutedNotificationSourceIds: NotificationSourceId[]
   /** Off silences every notification from a workspace the sidebar's Filters switches hide. Local only. */
   notifyHiddenWorkspaces: boolean
+  /** Phone pushes name only the alert kind; the push gateway and Apple or Google can read push text. */
+  hidePhoneNotificationDetails: boolean
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'

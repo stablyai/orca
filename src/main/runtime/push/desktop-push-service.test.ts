@@ -73,6 +73,7 @@ function createService(
     runtime: runtime as never,
     runtimeRpc: runtimeRpc as never,
     gatewayUrl: 'https://push.onorca.dev',
+    readNotificationSettings: () => undefined,
     client: client as never,
     scheduleRetry: (run, delayMs) => {
       retries.push({ run, delayMs })

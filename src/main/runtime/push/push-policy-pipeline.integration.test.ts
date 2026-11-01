@@ -9,7 +9,10 @@ import { setRuntimeDesktopSurface } from '../runtime-desktop-surface'
 import { RuntimeSubscriptionRegistry } from '../runtime-subscription-registry'
 import { reportDesktopPresence } from '../rpc/methods/notifications'
 import { DESKTOP_PRESENCE_TTL_MS } from '../../../shared/desktop-client-presence'
+import { getDefaultNotificationSettings } from '../../../shared/notification-settings-defaults'
+import type { NotificationSettings } from '../../../shared/notification-settings-types'
 import { DesktopPushService } from './desktop-push-service'
+import type { PushGatewayClient } from './push-gateway-client'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
 import { createPushHostKeypair } from './push-host-challenge-fixtures'
 
@@ -27,7 +30,9 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-async function pipeline() {
+async function pipeline(
+  readNotificationSettings: () => NotificationSettings | undefined = () => undefined
+) {
   const path = mkdtempSync(join(tmpdir(), 'orca-push-policy-'))
   paths.push(path)
   const registry = new DeviceRegistry(path)
@@ -36,7 +41,10 @@ async function pipeline() {
   const client = {
     registerDevice: vi.fn(async () => ({ ok: true, registrationId: 'policy-registration' })),
     deleteDevice: vi.fn(async () => true),
-    send: vi.fn(async () => ({ ok: true, results: [] }))
+    send: vi.fn(async (_request: Parameters<PushGatewayClient['send']>[0]) => ({
+      ok: true,
+      results: []
+    }))
   }
   const service = DesktopPushService.create({
     runtime: {
@@ -50,6 +58,7 @@ async function pipeline() {
       setOnPushUnregisterQueued: () => {}
     } as never,
     gatewayUrl: 'https://push.onorca.dev',
+    readNotificationSettings,
     client: client as never
   })!
   services.push(service)
@@ -104,6 +113,42 @@ it('carries the native idle boundary through replay and push dispatch', async ()
   expect(replay.map((event) => (event.type === 'notification' ? event.desktopAway : null))).toEqual(
     [false, true, false]
   )
+})
+
+it('keeps alert details off the push gateway while the paired socket still carries them', async () => {
+  setRuntimeDesktopSurface({
+    translateNotification: (key, fallback) =>
+      key === 'notifications.withoutDetails.agentFinished' ? 'Agent terminé' : fallback,
+    isAwayForMobileNotifications: () => true,
+    showNotification: () => false,
+    findWindowById: () => null,
+    onIpc: () => {},
+    removeIpcListener: () => {}
+  })
+  const settings = { ...getDefaultNotificationSettings(), hidePhoneNotificationDetails: true }
+  const h = await pipeline(() => settings)
+  h.dispatch()
+  await flush()
+  settings.hidePhoneNotificationDetails = false
+  h.dispatch()
+  await flush()
+  expect(
+    h.client.send.mock.calls.map(([request]) => [
+      request.notification.title,
+      request.notification.body
+    ])
+  ).toEqual([
+    ['Agent terminé', ''],
+    ['Policy test', 'Policy test']
+  ])
+  expect(
+    h.controller
+      .getMissedSince(0)
+      .map((event) => (event.type === 'notification' ? [event.title, event.body] : null))
+  ).toEqual([
+    ['Policy test', 'Policy test'],
+    ['Policy test', 'Policy test']
+  ])
 })
 
 it('decides headless away from attached desktops, so the away-only filter holds on orca serve', async () => {

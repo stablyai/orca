@@ -313,7 +313,8 @@ async function startOrcadRuntime(
   const pushService = DesktopPushService.create({
     runtime,
     runtimeRpc: rpc,
-    gatewayUrl: resolvePushGatewayOrigin(process.env, getAppEnvironment().isPackaged())
+    gatewayUrl: resolvePushGatewayOrigin(process.env, getAppEnvironment().isPackaged()),
+    readNotificationSettings: () => profileStore.getSettings().notifications
   })
   pushService?.start()
   getAppEnvironment().onWillQuit(() => pushService?.stop())

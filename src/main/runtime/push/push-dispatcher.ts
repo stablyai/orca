@@ -1,7 +1,12 @@
 import { reserveNotificationCooldown } from '../../../shared/notification-burst-cooldown'
 // Send background push after socket fan-out without making sockets wait or fail on gateway results.
-import type { MobilePushRegistration } from '../../../shared/mobile-push-contract'
+import type {
+  MobilePushAgentState,
+  MobilePushRegistration,
+  MobilePushSource
+} from '../../../shared/mobile-push-contract'
 import { allowsMobilePushDelivery, mobilePushAlertContent } from '../../../shared/mobile-push-alert'
+import type { NotificationSettings } from '../../../shared/notification-settings-types'
 import type { MobileNotificationEvent } from '../runtime-mobile-notification-controller'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
 import { PushOutcomeCounters } from './push-outcome-counters'
@@ -18,6 +23,8 @@ export type PushDispatcherRegistry = {
 type PushDispatcherOptions = {
   client: PushGatewayClient
   registry: PushDispatcherRegistry
+  readNotificationSettings: () => NotificationSettings | undefined
+  translate: (key: string, fallback: string) => string
   /** Test seam: lets a suite drive the single retry without real time. */
   scheduleRetry?: (run: () => void, delayMs: number) => void
 }
@@ -30,11 +37,15 @@ export class PushDispatcher {
   private stopped = false
   private readonly client: PushGatewayClient
   private readonly registry: PushDispatcherRegistry
+  private readonly readNotificationSettings: () => NotificationSettings | undefined
+  private readonly translate: (key: string, fallback: string) => string
   private readonly scheduleRetry: (run: () => void, delayMs: number) => void
 
   constructor(options: PushDispatcherOptions) {
     this.client = options.client
     this.registry = options.registry
+    this.readNotificationSettings = options.readNotificationSettings
+    this.translate = options.translate
     this.scheduleRetry =
       options.scheduleRetry ??
       ((run, delayMs) => {
@@ -142,11 +153,32 @@ export class PushDispatcher {
         expiresAt: Date.now() + 300_000,
         ...(event.notificationId ? { notificationId: event.notificationId } : {}),
         ...content,
+        ...(this.readNotificationSettings()?.hidePhoneNotificationDetails
+          ? { title: this.titleWithoutDetails(content), body: '' }
+          : {}),
         ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
         ...(event.paneKey ? { paneKey: event.paneKey } : {}),
         ...(event.executionHost ? { executionHost: event.executionHost } : {})
       }
     }
+  }
+
+  private titleWithoutDetails({
+    source,
+    agentState
+  }: {
+    source: MobilePushSource
+    agentState: MobilePushAgentState | null
+  }): string {
+    if (source === 'terminal-bell') {
+      return this.translate('notifications.withoutDetails.terminalBell', 'Terminal bell')
+    }
+    if (source === 'plugin') {
+      return this.translate('notifications.withoutDetails.plugin', 'Plugin notification')
+    }
+    return agentState === 'needs-input'
+      ? this.translate('notifications.withoutDetails.agentNeedsInput', 'Agent needs input')
+      : this.translate('notifications.withoutDetails.agentFinished', 'Agent finished')
   }
 
   private async deliver(

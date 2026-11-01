@@ -46,6 +46,7 @@ function harness() {
   }
   const service = DesktopPushService.create({
     gatewayUrl: 'https://push.example.test',
+    readNotificationSettings: () => undefined,
     client: client as never,
     scheduleRetry: (run, delayMs) => retries.push({ run, delayMs }),
     runtime: {
@@ -146,7 +147,13 @@ it('does not clear a replacement with the same ID and timestamp after a stale de
         finish = resolve
       })
   )
-  const dispatcher = new PushDispatcher({ registry: h.registry, client: h.client as never })
+  const dispatcher = new PushDispatcher({
+    registry: h.registry,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher calls only send, which the harness client defines.
+    client: h.client as never,
+    readNotificationSettings: () => undefined,
+    translate: (_key, fallback) => fallback
+  })
   dispatcher.enqueue({
     type: 'notification',
     source: 'plugin',

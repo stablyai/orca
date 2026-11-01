@@ -72,6 +72,7 @@ function harness(
       customSoundVolume: 1,
       mutedNotificationSourceIds: [],
       notifyHiddenWorkspaces: true,
+      hidePhoneNotificationDetails: false,
       ...options.settings
     }),
     readWorkspaceLabels: () => ({ repoLabel: 'orca', worktreeLabel: 'feature' }),
@@ -329,7 +330,8 @@ describe('TerminalAgentPhonePush', () => {
         customSoundPath: null,
         customSoundVolume: 1,
         mutedNotificationSourceIds: [],
-        notifyHiddenWorkspaces: true
+        notifyHiddenWorkspaces: true,
+        hidePhoneNotificationDetails: false
       }),
       findActiveWindow: () => null,
       isWindowVisible: () => false,

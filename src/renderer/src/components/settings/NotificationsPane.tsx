@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
-import { BellRing, Bot, EyeOff, MessageCircleQuestion, Siren } from 'lucide-react'
+import { BellRing, Bot, EyeOff, MessageCircleQuestion, Siren, Smartphone } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   MacNotificationPermissionCard,
@@ -215,6 +215,24 @@ export function NotificationsPane({
         onToggle={() =>
           void updateNotificationSettings({
             notifyHiddenWorkspaces: !notificationSettings.notifyHiddenWorkspaces
+          })
+        }
+      />
+
+      <NotificationSettingToggle
+        icon={<Smartphone className="size-4" />}
+        label={translate(
+          'auto.components.settings.NotificationsPane.2992a43817',
+          'Hide Phone Notification Details'
+        )}
+        description={translate(
+          'auto.components.settings.NotificationsPane.0aee2f67e4',
+          "Phone notifications pass through Orca's push service and Apple or Google. When on, they say only what happened, such as “Agent needs input”, without workspace names or agent messages."
+        )}
+        checked={notificationSettings.hidePhoneNotificationDetails}
+        onToggle={() =>
+          void updateNotificationSettings({
+            hidePhoneNotificationDetails: !notificationSettings.hidePhoneNotificationDetails
           })
         }
       />

@@ -36,6 +36,7 @@ describe('mobile revoke when the registry write fails', () => {
       runtime,
       runtimeRpc: server,
       gatewayUrl: 'https://push.onorca.dev',
+      readNotificationSettings: () => undefined,
       client: client as never
     })!
     service.start()
