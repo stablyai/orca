@@ -21,6 +21,7 @@ import {
 } from './main-window-close-lifecycle'
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
 import { mainWindowLoadErrorCode } from './main-window-load-error-code'
+import { resolveMainWindowTitle } from './main-window-title'
 import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
@@ -109,13 +110,14 @@ export function createMainWindow(
   )
 
   const pumpHiddenFrames = shouldPumpHiddenWindowFrames(process.env, process.platform)
+  const baseTitle = opts?.title ?? 'Orca'
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? defaultBounds.width,
     height: savedBounds?.height ?? defaultBounds.height,
     ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
-    title: opts?.title ?? 'Orca',
+    title: baseTitle,
     show: false,
     // Deliver the app-activating click on macOS instead of requiring a second click.
     acceptFirstMouse: true,
@@ -159,6 +161,13 @@ export function createMainWindow(
     }
   })
   rememberWindowMaterial(mainWindow, windowMaterial)
+  // Own the native title so oversized or control-laden renderer titles never reach the OS, while renderer updates still flow through.
+  mainWindow.on('page-title-updated', (event, pageTitle) => {
+    event.preventDefault()
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.setTitle(resolveMainWindowTitle(pageTitle, baseTitle))
+    }
+  })
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
   // Native paste fallback is privileged; trust only the top-level renderer.

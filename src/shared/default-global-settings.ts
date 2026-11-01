@@ -10,6 +10,10 @@ import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
 import {
+  DEFAULT_WINDOW_TITLE_SEPARATOR,
+  DEFAULT_WINDOW_TITLE_TEMPLATE
+} from './window-title-format'
+import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
@@ -242,6 +246,9 @@ export function buildDefaultSettings(args: {
     codexTerminalServerIsolation: true,
     codexSharedServerWarning: true,
     tabAutoGenerateTitle: false,
+    windowTitleShowWorkspace: false,
+    windowTitleTemplate: DEFAULT_WINDOW_TITLE_TEMPLATE,
+    windowTitleSeparator: DEFAULT_WINDOW_TITLE_SEPARATOR,
     confirmClosePinnedTab: true,
     editorPreviewTabsEnabled: true,
     keepComputerAwakeWhileAgentsRun: false,

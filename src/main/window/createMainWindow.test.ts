@@ -97,6 +97,53 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
   })
 
+  it('owns the native title: keeps the dev identity, passes composed titles, and sanitizes them', () => {
+    let titleHandler: (event: { preventDefault: () => void }, title: string) => void = () => {}
+    const browserWindowInstance = {
+      webContents: {
+        on: vi.fn(),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        setWebRTCIPHandlingPolicy: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn()
+      },
+      on: vi.fn((event: string, handler: typeof titleHandler) => {
+        if (event === 'page-title-updated') {
+          titleHandler = handler
+        }
+      }),
+      setTitle: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, { deferLoad: true, title: 'Orca: feat-x' })
+    expect(browserWindowMock.mock.calls[0]?.[0].title).toBe('Orca: feat-x')
+
+    const preventDefault = vi.fn()
+    titleHandler({ preventDefault }, 'Orca')
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(browserWindowInstance.setTitle).toHaveBeenLastCalledWith('Orca: feat-x')
+
+    titleHandler({ preventDefault }, 'orca — main — Shell 1 — Orca')
+    expect(browserWindowInstance.setTitle).toHaveBeenLastCalledWith(
+      'orca — main — Shell 1 — Orca: feat-x'
+    )
+
+    titleHandler({ preventDefault }, `Tasks\u0007\n${'x'.repeat(400)}`)
+    const sanitized = browserWindowInstance.setTitle.mock.lastCall?.[0] as string
+    expect(sanitized.startsWith('Tasks x')).toBe(true)
+    expect(sanitized.length).toBeLessThanOrEqual(200)
+  })
+
   it('enables renderer sandboxing and opens external links safely', () => {
     // Retain all will-navigate listeners; one slot per event lets registration order hide a missing guard.
     const windowHandlers: Record<string, ((...args: any[]) => void)[]> = {}
