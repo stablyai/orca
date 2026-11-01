@@ -154,7 +154,10 @@
         "antigravityToggleDescription": "显示当前工作区的 Antigravity 订阅使用情况。",
         "grokToggleDescription": "通过 Grok CLI 登录后显示 Grok 订阅额度使用情况。",
         "cursorToggleDescription": "通过 cursor-agent 或 Cursor IDE 登录后显示 Cursor 套餐用量。",
-        "zcodeToggleDescription": "显示 ZCode 编码计划配额使用情况。"
+        "zcodeToggleDescription": "显示 ZCode 编码计划配额使用情况。",
+        "museTitle": "Muse 使用量",
+        "museDescription": "在状态栏中显示 Meta Muse 订阅配额。",
+        "museToggleDescription": "显示从 Muse CLI 获取的订阅配额。"
       },
       "menuBarIcon": {
         "title": "显示菜单栏图标",

@@ -41,7 +41,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
-      antigravityResultPromise
+      antigravityResultPromise,
+      museResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -192,12 +193,14 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
-    ])
+    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled, museSettled] =
+      await Promise.all([
+        grokResultPromise,
+        cursorResultPromise,
+        zcodeResultPromise,
+        antigravityResultPromise,
+        museResultPromise
+      ])
     if (signal.aborted) {
       return
     }
@@ -217,6 +220,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
     const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
+    const muse = settleSiblingProviderResult('muse', museSettled)
     // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
     const previousCursorAccount = previousState.cursor?.usageMetadata?.authProvenance
     const cursorAccount = cursor.usageMetadata?.authProvenance
@@ -238,6 +242,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyAntigravity) {
       this.trackActiveFailureStreak('antigravity', antigravity)
     }
+    this.trackActiveFailureStreak('muse', muse)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
@@ -251,7 +256,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             : this.applyStalePolicy(zcode, previousState.zcode),
       antigravity: shouldApplyAntigravity
         ? this.applyStalePolicy(antigravity, previousState.antigravity)
-        : this.state.antigravity
+        : this.state.antigravity,
+      muse: this.applyStalePolicy(muse, previousState.muse)
     })
   }
 }

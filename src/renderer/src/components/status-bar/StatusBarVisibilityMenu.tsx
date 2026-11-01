@@ -15,7 +15,16 @@ import type { StatusBarController } from './use-status-bar-controller'
 export function StatusBarVisibilityMenu({
   controller
 }: {
-  controller: StatusBarController
+  controller: Pick<
+    StatusBarController,
+    | 'detectedAgentIds'
+    | 'menuOpen'
+    | 'menuPoint'
+    | 'recordFeatureInteraction'
+    | 'setMenuOpen'
+    | 'statusBarItems'
+    | 'toggleStatusBarItem'
+  >
 }): React.JSX.Element {
   const {
     detectedAgentIds,
@@ -143,6 +152,18 @@ export function StatusBarVisibilityMenu({
           >
             <AgentIcon agent="zcode" size={14} />
             {translate('auto.components.status.bar.StatusBar.zcodeUsageMenu', 'ZCode Usage')}
+          </DropdownMenuCheckboxItem>
+        )}
+        {isStatusBarItemAvailable('muse', detectedAgentIds) && (
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('muse')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('muse')
+            }}
+          >
+            <AgentIcon agent="muse" size={14} />
+            {translate('settings.appearance.statusBar.museTitle', 'Muse Usage')}
           </DropdownMenuCheckboxItem>
         )}
         <DropdownMenuCheckboxItem

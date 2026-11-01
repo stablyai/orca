@@ -29,6 +29,37 @@ function provider(
 }
 
 describe('isProviderConfigured', () => {
+  it('keeps unavailable Muse allowance visible without inventing a usage window', () => {
+    const muse = provider('unavailable', {
+      provider: 'muse',
+      error: 'Muse did not report a usage allowance.',
+      usageMetadata: { source: 'cli', failureKind: 'usage-unavailable' }
+    })
+    expect(getVisibleUsageProvider('muse', muse, usageSettings())).toBe(muse)
+    expect(muse.session).toBeNull()
+    expect(muse.weekly).toBeNull()
+    expect(isUsageEmptyState(createEmptyRateLimitState({ muse }), usageSettings())).toBe(false)
+    expect(
+      getVisibleUsageProvider(
+        'muse',
+        { ...muse, usageMetadata: { source: 'cli', failureKind: 'cli-unavailable' } },
+        usageSettings()
+      )
+    ).toBeNull()
+  })
+
+  it('keeps real zero-percent Muse quota and detected CLI loading states visible', () => {
+    const muse = provider('ok', {
+      provider: 'muse',
+      session: { usedPercent: 0, windowMinutes: 300, resetsAt: null, resetDescription: null }
+    })
+    expect(getVisibleUsageProvider('muse', muse, usageSettings())?.session?.usedPercent).toBe(0)
+    expect(
+      getVisibleUsageProvider('muse', null, usageSettings({ museUsageConfigured: true }))?.status
+    ).toBe('fetching')
+    expect(getVisibleUsageProvider('muse', null, usageSettings())).toBeNull()
+  })
+
   it('hides a provider whose state has not loaded yet', () => {
     expect(isProviderConfigured(null)).toBe(false)
     expect(isProviderConfigured(undefined)).toBe(false)

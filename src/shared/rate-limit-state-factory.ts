@@ -9,6 +9,7 @@ export function createEmptyRateLimitState(overrides: Partial<RateLimitState> = {
     opencodeGo: null,
     kimi: null,
     antigravity: null,
+    muse: null,
     minimax: null,
     grok: null,
     cursor: null,

@@ -75,13 +75,17 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       minimax: this.state.minimax,
       grok: this.state.grok,
       antigravity: this.state.antigravity,
+      muse: this.state.muse,
       cursor: this.state.cursor,
       zcode: this.state.zcode
     }
-    return Object.entries(byProvider).map(([provider, limits]) => ({
-      provider: provider as ActiveRateLimitProvider,
-      limits
-    }))
+    return Object.entries(byProvider)
+      .filter(([provider]) => provider !== 'muse' || (this.museUsageEnabledResolver?.() ?? true))
+      .map(([provider, limits]) => ({
+        // SAFETY: Entries come from the exhaustive provider Record above.
+        provider: provider as ActiveRateLimitProvider,
+        limits
+      }))
   }
 
   protected getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {

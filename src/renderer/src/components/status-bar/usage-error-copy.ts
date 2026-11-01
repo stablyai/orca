@@ -27,6 +27,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'grok') {
     return 'Grok'
   }
+  if (provider === 'muse') {
+    return 'Muse'
+  }
   if (provider === 'zcode') {
     return 'ZCode'
   }
@@ -160,6 +163,9 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   }
   if (isUsageRateLimitError(p)) {
     return translate('auto.components.status.bar.tooltip.7ad719c4bf', 'Limited')
+  }
+  if (p.provider === 'muse' && p.status === 'unavailable') {
+    return translate('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')
   }
   return translate('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed')
 }

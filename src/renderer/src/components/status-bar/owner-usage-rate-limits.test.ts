@@ -25,6 +25,7 @@ const local = createEmptyRateLimitState({
   claude: provider('claude', 11),
   codex: provider('codex', 22),
   grok: provider('grok', 33),
+  muse: provider('muse', 44),
   grokAuthConfigured: true
 })
 
@@ -48,12 +49,14 @@ describe('resolveOwnerUsageRateLimits', () => {
     // The viewer's Grok login is not the host's.
     expect(resolved.grok).toBeNull()
     expect(resolved.grokAuthConfigured).toBe(false)
+    expect(resolved.muse).toBeNull()
   })
 
   it('treats providers and flags an older host omits as not configured there', () => {
     const {
       cursor: _cursor,
       zcode: _zcode,
+      muse: _muse,
       cursorAuthConfigured: _flag,
       ...older
     } = createEmptyRateLimitState({ claude: provider('claude', 5) })
@@ -65,13 +68,14 @@ describe('resolveOwnerUsageRateLimits', () => {
     )
     expect(resolved.cursor).toBeNull()
     expect(resolved.zcode).toBeNull()
+    expect(resolved.muse).toBeNull()
     expect(resolved.cursorAuthConfigured).toBe(false)
     expect(resolved.claude?.session?.usedPercent).toBe(5)
   })
 
   it('never renders local percentages while the first remote snapshot is in flight', () => {
     const resolved = resolveOwnerUsageRateLimits(local, { kind: 'remote-pending' })
-    for (const key of ['claude', 'codex', 'grok'] as const) {
+    for (const key of ['claude', 'codex', 'grok', 'muse'] as const) {
       expect(resolved[key]?.status).toBe('fetching')
       expect(resolved[key]?.session).toBeNull()
     }
@@ -146,6 +150,25 @@ describe('resolveOwnerUsageRateLimits', () => {
   })
 
   describe('providers set up here but not on the remote owner', () => {
+    it('keeps unavailable Muse allowance distinct from absent host setup', () => {
+      for (const failureKind of ['usage-unavailable', null] as const) {
+        const muse = unavailable('muse', failureKind)
+        const resolved = resolveOwnerUsageRateLimits(
+          local,
+          remoteOwner(createEmptyRateLimitState({ muse }))
+        )
+        expect(resolved.muse?.session).toBeNull()
+        expect(resolved.muse?.status).toBe('unavailable')
+        expect(isOwnerNotSetUpPlaceholder(resolved.muse!)).toBe(false)
+      }
+      const absent = resolveOwnerUsageRateLimits(
+        local,
+        remoteOwner(createEmptyRateLimitState({ muse: unavailable('muse', 'cli-unavailable') }))
+      )
+      expect(isOwnerNotSetUpPlaceholder(absent.muse!)).toBe(true)
+      expect(absent.muse?.session).toBeNull()
+    })
+
     const remoteOwner = (rateLimits: RateLimitState) =>
       ({ kind: 'remote', ownerLabel: 'devbox', rateLimits }) as const
     // A host that finished a fetch reports every provider it lacks as `unavailable`.
