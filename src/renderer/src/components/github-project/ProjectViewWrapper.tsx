@@ -164,7 +164,11 @@ function ProjectViewBody({
       onEditAssignees={(row, add, remove) => void rowActions.editAssignees(row, add, remove)}
       onEditLabels={(row, add, remove) => void rowActions.editLabels(row, add, remove)}
       onEditIssueType={(row, issueType) => void rowActions.editIssueType(row, issueType)}
-      onOpenInBrowser={rowActions.openInBrowser}
+      onOpenInBrowser={(row) => {
+        if (row.content.url) {
+          openAppHttpLink(row.content.url)
+        }
+      }}
       onStartWork={rowActions.startWork}
       sourceTarget={tableState.sourceTarget}
     />

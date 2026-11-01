@@ -68,8 +68,9 @@ export function filterProjectTableRowsBySelectedRepos(
   selectedRepoIds: ReadonlySet<string>
 ): GitHubProjectTable {
   const rows = table.rows.filter((row) => {
-    // Drafts and restricted items belong to the Project without a repository.
-    if (!row.content.repository) {
+    // Drafts and restricted items belong to the Project, not a repository.
+    // Keyed on kind so an older host's content-less Issue/PR rows stay hidden.
+    if (row.itemType === 'DRAFT_ISSUE' || row.itemType === 'REDACTED') {
       return true
     }
     const resolution = resolveSelectedProjectRowRepo({

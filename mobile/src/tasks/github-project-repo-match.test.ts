@@ -77,9 +77,10 @@ describe('GitHub project repo matching', () => {
 
   it('keeps draft and restricted items while filtering repository-backed rows', () => {
     const rows = [
-      { id: 'row-1', content: { repository: 'stablyai/orca' } },
-      { id: 'row-2', content: { repository: 'other/missing' } },
+      { id: 'row-1', itemType: 'ISSUE', content: { repository: 'stablyai/orca' } },
+      { id: 'row-2', itemType: 'ISSUE', content: { repository: 'other/missing' } },
       { id: 'row-3', itemType: 'REDACTED', content: { repository: null } },
+      { id: 'row-4', itemType: 'ISSUE', content: { repository: null } },
       ...Array.from({ length: 67 }, (_, index) => ({
         id: `draft-${index}`,
         itemType: 'DRAFT_ISSUE',

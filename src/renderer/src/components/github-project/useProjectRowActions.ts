@@ -154,24 +154,13 @@ export function useProjectRowActions({
     [openUrlWithMessage]
   )
 
-  const openInBrowser = useCallback(
-    (row: GitHubProjectRow) => {
-      const url =
-        row.itemType === 'DRAFT_ISSUE' && table
-          ? `${table.project.url}/views/${table.selectedView.number}`
-          : row.content.url
-      if (url) {
-        openAppHttpLink(url)
-      }
-    },
-    [table]
-  )
-
   const openDialog = useCallback(
     (row: GitHubProjectRow) => {
       const origin = buildOrigin(row)
       if (!origin) {
-        openInBrowser(row)
+        if (row.content.url) {
+          openAppHttpLink(row.content.url)
+        }
         return
       }
       const resolution = resolveRow(row)
@@ -192,7 +181,7 @@ export function useProjectRowActions({
         }
       }
     },
-    [buildOrigin, messageForResolution, openInBrowser, resolveRow, table]
+    [buildOrigin, messageForResolution, resolveRow, table]
   )
 
   const startWork = useCallback(
@@ -242,7 +231,6 @@ export function useProjectRowActions({
     setSlugDialog,
     setRepoNotInOrca,
     openDialog,
-    openInBrowser,
     startWork,
     ...rowMutations
   }

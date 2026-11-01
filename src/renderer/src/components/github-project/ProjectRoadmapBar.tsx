@@ -31,7 +31,7 @@ export default function ProjectRoadmapBar({
   onOpen
 }: Props): React.JSX.Element {
   const colors = chipColor ? singleSelectChipColors(chipColor) : labelChipColors('')
-  const interactive = row.itemType !== 'REDACTED'
+  const interactive = row.itemType !== 'REDACTED' && row.itemType !== 'DRAFT_ISSUE'
   const dates = formatRoadmapSpan(span, locale)
   // Share the restricted-item fallback across visible text and accessible labels.
   const title =

@@ -33,6 +33,9 @@ export function ProjectTitleCell({
       <span className="truncate text-sm font-medium">{row.content.title}</span>
     </div>
   )
+  if (row.itemType === 'DRAFT_ISSUE') {
+    return <div className="flex items-center gap-2">{content}</div>
+  }
   return (
     <button
       type="button"

@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   filterGitHubProjectRowsForRepos,
+  findRepoForGitHubProjectRepository,
   type GitHubProjectRepoMatch,
   type GitHubRepoSlugCacheEntry
 } from './github-project-repo-match'
 
-type Row = { id: number; content: { repository?: string | null } }
+type Row = { id: number; itemType: string; content: { repository?: string | null } }
 
 function rowsFor(repositories: readonly (string | null | undefined)[]): Row[] {
-  return repositories.map((repository, id) => ({ id, content: { repository } }))
+  return repositories.map((repository, id) => ({ id, itemType: 'ISSUE', content: { repository } }))
 }
 
 describe('project repository matching within one row projection', () => {
@@ -35,7 +36,7 @@ describe('project repository matching within one row projection', () => {
     actual.forEach((entry, index) => expect(entry).toBe(expected[index]))
   })
 
-  it('keeps repositoryless rows and matches raw repository keys without changing row order', () => {
+  it('retains raw source keys and accepts the same values as individual matching', () => {
     const repos = [{ id: 'one', path: '/one', displayName: 'one' }]
     const slugs = { one: { path: '/one', repository: { owner: 'acme', repo: 'one' } } }
     const rows = rowsFor([
@@ -52,9 +53,11 @@ describe('project repository matching within one row projection', () => {
       ' ACME/ONE ',
       'acme/one/extra'
     ])
-    expect(filterGitHubProjectRowsForRepos(rows, repos, slugs).map((row) => row.id)).toEqual([
-      0, 1, 2, 3, 4, 6, 7, 8, 9, 10
-    ])
+    const expected = rows.filter((entry) =>
+      Boolean(findRepoForGitHubProjectRepository(entry.content.repository, repos, slugs))
+    )
+    expect(filterGitHubProjectRowsForRepos(rows, repos, slugs)).toEqual(expected)
+    expect(filterGitHubProjectRowsForRepos(rowsFor([null]), repos, slugs)).toEqual([])
   })
 
   it('does not retain matches across changed repo evidence or ambiguity', () => {

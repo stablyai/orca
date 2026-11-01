@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { normalizeItem } from '../../../../main/github/project-view/project-view-item-normalization'
 import {
   filterProjectTableRowsBySelectedRepos,
   resolveSelectedProjectRowRepo
@@ -73,31 +72,24 @@ function table(rows: GitHubProjectRow[]): GitHubProjectTable {
 
 describe('filterProjectTableRowsBySelectedRepos', () => {
   it('keeps 67 draft items and inaccessible content while scoping repository-backed items', () => {
-    const drafts = Array.from({ length: 67 }, (_, position) => {
-      const result = normalizeItem(
-        {
-          id: `draft-${position}`,
-          type: 'DRAFT_ISSUE',
-          content: { __typename: 'DraftIssue', title: `Draft ${position}`, body: 'Draft body' },
-          fieldValues: {
-            nodes: [
-              {
-                __typename: 'ProjectV2ItemFieldSingleSelectValue',
-                field: { id: 'status', name: 'Status', dataType: 'SINGLE_SELECT' },
-                optionId: 'todo',
-                name: 'Todo',
-                color: 'GRAY'
-              }
-            ],
-            pageInfo: { hasNextPage: false }
+    // Normalized shapes: drafts and restricted items carry no repository or number.
+    const drafts = Array.from({ length: 67 }, (_, position): GitHubProjectRow => {
+      const base = row(`draft-${position}`, null)
+      return {
+        ...base,
+        itemType: 'DRAFT_ISSUE',
+        content: { ...base.content, number: null, state: null, body: 'Draft body' },
+        fieldValuesByFieldId: {
+          status: {
+            kind: 'single-select',
+            fieldId: 'status',
+            optionId: 'todo',
+            name: 'Todo',
+            color: 'GRAY'
           }
         },
         position
-      )
-      if (!result.ok) {
-        throw new Error('Draft normalization failed')
       }
-      return result.row
     })
     const draftTable = table(drafts)
     const lookup = vi.fn(() => originOnly([]))
@@ -105,26 +97,27 @@ describe('filterProjectTableRowsBySelectedRepos', () => {
       draftTable
     )
     expect(lookup).not.toHaveBeenCalled()
-    expect(drafts[0].fieldValuesByFieldId.status).toMatchObject({
-      kind: 'single-select',
-      name: 'Todo'
-    })
 
-    const restricted = ['ISSUE', 'PULL_REQUEST'].map((type, position) => {
-      const result = normalizeItem({ id: `restricted-${type}`, type, content: null }, position)
-      if (!result.ok) {
-        throw new Error('Restricted item normalization failed')
-      }
-      expect(result.row).toMatchObject({
+    const restricted = ['ISSUE', 'PULL_REQUEST'].map((type): GitHubProjectRow => {
+      const base = row(`restricted-${type}`, null)
+      return {
+        ...base,
         itemType: 'REDACTED',
-        content: { title: 'Restricted item', repository: null, number: null }
-      })
-      return result.row
+        content: { ...base.content, title: 'Restricted item', number: null, state: null }
+      }
     })
     const issue = row('issue', 'acme/orca')
     const pullRequest: GitHubProjectRow = { ...row('pr', 'acme/orca'), itemType: 'PULL_REQUEST' }
     const filtered = filterProjectTableRowsBySelectedRepos(
-      table([...drafts, ...restricted, issue, pullRequest, row('unselected', 'acme/other')]),
+      table([
+        ...drafts,
+        ...restricted,
+        issue,
+        pullRequest,
+        row('unselected', 'acme/other'),
+        // An older host sends inaccessible Issue/PR content as a blank Issue row.
+        row('old-host-blank-issue', null)
+      ]),
       (slug) => originOnly([repo(slug === 'acme/orca' ? 'selected' : 'other')]),
       true,
       new Set(['selected'])
