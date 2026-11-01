@@ -1,7 +1,6 @@
 import { themedStyleSheet } from '../theme/themed-styles'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { inputEdge, inputFocusRing } from '../components/composer-input/composer-input-styles'
 
 export const automationStyles = themedStyleSheet(() => ({
   screen: { flex: 1, backgroundColor: colors.bgBase },
@@ -33,14 +32,10 @@ export const automationStyles = themedStyleSheet(() => ({
   error: { color: colors.statusRed, fontSize: typography.bodySize, lineHeight: 21 },
   field: { gap: spacing.sm },
   input: {
-    ...inputEdge(),
-    borderRadius: radii.control,
-    color: colors.textPrimary,
     padding: spacing.md,
     fontSize: TEXT_INPUT_FONT_SIZE,
     minHeight: 44
   },
-  inputFocused: inputFocusRing(),
   multiline: { minHeight: 120, textAlignVertical: 'top' },
   button: {
     minHeight: 44,

@@ -42,21 +42,15 @@ const surface = () =>
   }) as const
 
 /** A field with no controls of its own is told apart by its edge alone, so the edge carries the 3:1. */
-export const inputEdge = () =>
+const inputEdge = () =>
   ({
     borderWidth: 1,
     borderColor: colors.inputBorder,
     backgroundColor: colors.composerSurface
   }) as const
 
-/** The focused field: the edge thickens to a 2pt accent ring, drawn as an outline so nothing moves. */
-export const inputFocusRing = () =>
-  ({
-    borderColor: colors.accentBlue,
-    outlineColor: colors.accentBlue,
-    outlineStyle: 'solid',
-    outlineWidth: 1
-  }) as const
+// The box owns the focus ring, so the browser's own ring on the text inside is dropped.
+const noOwnRing = { outlineWidth: 0 } as const
 
 // The chat composer's look, shared by every text input so they cannot drift apart; plain fields add the edge.
 export const composerInputStyles = themedStyleSheet(() => ({
@@ -69,7 +63,18 @@ export const composerInputStyles = themedStyleSheet(() => ({
     ...inputEdge(),
     borderRadius: radii.surface
   },
-  focused: inputFocusRing(),
+  // The edge thickens to a 2pt accent ring, drawn as an outline so nothing moves.
+  focused: {
+    borderColor: colors.accentBlue,
+    outlineColor: colors.accentBlue,
+    outlineStyle: 'solid',
+    outlineWidth: 1
+  },
+  fieldInput: {
+    ...inputEdge(),
+    borderRadius: radii.control,
+    color: colors.textPrimary
+  },
   inlineBox: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -87,6 +92,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     marginTop: 0
   },
   formText: {
+    ...noOwnRing,
     minHeight: FORM_MESSAGE_MIN_HEIGHT
   },
   messageText: {
@@ -147,6 +153,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md
   },
   fieldText: {
+    ...noOwnRing,
     flex: 1,
     minWidth: 0,
     alignSelf: 'stretch',

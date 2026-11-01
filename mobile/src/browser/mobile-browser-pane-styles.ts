@@ -2,7 +2,6 @@ import { StyleSheet } from 'react-native'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { inputEdge, inputFocusRing } from '../components/composer-input/composer-input-styles'
 
 export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
   root: {
@@ -156,18 +155,14 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     paddingBottom: spacing.xs + 2
   },
   keyboardInput: {
-    ...inputEdge(),
     flex: 1,
     height: 34,
-    color: colors.textPrimary,
-    borderRadius: radii.control,
     paddingHorizontal: spacing.md,
     // Use text-input seam: native keeps body size; web floor 16px prevents focus zoom that keyboard seam mistakes for no keyboard.
     fontSize: TEXT_INPUT_FONT_SIZE,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
   },
-  keyboardInputFocused: inputFocusRing(),
   sendButton: {
     width: 34,
     height: 34,
