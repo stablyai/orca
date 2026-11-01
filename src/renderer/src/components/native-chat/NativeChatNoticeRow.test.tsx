@@ -1,18 +1,20 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session-journal-schemas'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { useAppStore } from '@/store'
 import { i18n } from '@/i18n/i18n'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import {
+  type AgentSessionFailureFact,
+  agentSessionFailureFact
+} from '../../../../shared/agent-session/failures/agent-session-failure'
 import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView
@@ -230,46 +232,35 @@ describe('the row a usage limit leaves', () => {
     failure: { kind: 'usageLimitReached', usageLimit: { window: 'session', resetsAt } }
   } as const
 
-  it.each([
-    ['future', resetsAt],
-    ['past', new Date(2026, 9, 18, 10, 0).getTime()],
-    ['unknown', undefined]
-  ] as const)('shows a %s reset without a continuation action or instruction', (_state, reset) => {
-    vi.useFakeTimers({ now: new Date(2026, 9, 18, 12, 30), toFake: ['Date'] })
-    try {
-      renderStatus(
-        {
-          kind: 'status',
-          tone: 'warning',
-          ...agentSessionFailureWords(
-            agentSessionFailureFact('usageLimitReached', {
-              usageLimit: { window: 'session', ...(reset === undefined ? {} : { resetsAt: reset }) }
-            }),
-            { agentName: 'Claude', surface: 'row' }
-          )
-        },
-        null,
-        false,
-        false,
-        'Claude',
-        { ...NO_OFFER, usageLimitTurnItemId: 'cut-turn', continueUsageLimit: vi.fn() }
-      )
-      const clock =
-        reset === undefined
-          ? null
-          : new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(reset)
-      expect(
-        screen.getByText(
-          clock === null
-            ? 'Claude hit its session limit.'
-            : `Claude hit its session limit. It resets at ${clock}.`
-        )
-      ).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
-      expect(screen.queryByText(/Send a message once it resets/)).toBeNull()
-    } finally {
-      vi.useRealTimers()
+  it('says when the limit resets in this clock, and offers Continue Now only once it has', () => {
+    if (!isAdmissibleAgentJournalItemBody(row) || row.kind !== 'status') {
+      throw new Error('Historical status fixture was not admitted')
     }
+    vi.useFakeTimers({
+      now: new Date(2026, 9, 18, 12, 30),
+      toFake: ['Date', 'setTimeout', 'clearTimeout']
+    })
+    const continueUsageLimit = vi.fn()
+    renderStatus(row, null, false, false, 'Claude', {
+      ...NO_OFFER,
+      usageLimitTurnItemId: 'cut-turn',
+      continueUsageLimit
+    })
+    const clock = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(
+      resetsAt
+    )
+    expect(
+      screen.getByText(`Claude hit its session limit. It resets at ${clock}.`)
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Continue Now' })).toBeNull()
+    act(() => {
+      vi.advanceTimersByTime(resetsAt - Date.now() - 1)
+    })
+    expect(screen.queryByRole('button', { name: 'Continue Now' })).toBeNull()
+    act(() => vi.advanceTimersByTime(1))
+    vi.useRealTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue Now' }))
+    expect(continueUsageLimit).toHaveBeenCalledTimes(1)
   })
 
   it.each(['typed', 'text-only', 'unknown'] as const)(
@@ -306,6 +297,127 @@ describe('the row a usage limit leaves', () => {
       expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
     }
   )
+})
+
+describe('usage-limit reset clock changes', () => {
+  const start = new Date(2026, 9, 18, 12).getTime()
+  const hour = 60 * 60 * 1000
+  const continueUsageLimit = vi.fn()
+
+  beforeEach(() => {
+    vi.useFakeTimers({ now: start, toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    continueUsageLimit.mockClear()
+  })
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  function notice(resetsAt?: number, count = 1) {
+    const view = orcaStopView(null, false, false, {
+      ...NO_OFFER,
+      usageLimitTurnItemId: 'cut-turn',
+      continueUsageLimit
+    })
+    return (
+      <TooltipProvider>
+        <NativeChatOrcaStopContext.Provider value={view}>
+          {Array.from({ length: count }, (_, index) => (
+            <NativeChatNoticeRow
+              key={`chat-${index}`}
+              agentName="Claude"
+              block={{
+                type: 'text',
+                tone: 'warning',
+                text: 'Claude hit its usage limit.',
+                usageLimitTurnItemId: 'cut-turn',
+                failure: { kind: 'usageLimitReached', usageLimit: { window: 'session', resetsAt } }
+              }}
+            />
+          ))}
+        </NativeChatOrcaStopContext.Provider>
+      </TooltipProvider>
+    )
+  }
+
+  it('keeps unknown resets hidden and uses replacement resets immediately, including on remount', () => {
+    const row = render(notice())
+    expect(screen.queryByRole('button', { name: 'Continue Now' })).toBeNull()
+    expect(vi.getTimerCount()).toBe(0)
+    row.rerender(notice(start + 6 * hour))
+    vi.setSystemTime(start + 3 * hour)
+    row.rerender(notice(start + 4 * hour))
+    act(() => vi.advanceTimersByTime(hour))
+    expect(screen.getByRole('button', { name: 'Continue Now' })).toBeInTheDocument()
+    row.rerender(notice(start + 6 * hour))
+    expect(screen.queryByRole('button', { name: 'Continue Now' })).toBeNull()
+    row.rerender(notice(start + 2 * hour))
+    expect(screen.getByRole('button', { name: 'Continue Now' })).toBeInTheDocument()
+    row.rerender(notice())
+    expect(screen.queryByRole('button', { name: 'Continue Now' })).toBeNull()
+    expect(vi.getTimerCount()).toBe(0)
+    row.unmount()
+    render(notice(start + 2 * hour))
+    expect(screen.getByRole('button', { name: 'Continue Now' })).toBeInTheDocument()
+    expect(continueUsageLimit).not.toHaveBeenCalled()
+  })
+
+  it.each(['rerender', 'focus', 'visibilitychange'] as const)(
+    'rechecks forward and backward clock corrections on %s',
+    (signal) => {
+      const row = render(notice(start + hour))
+      const refresh = () => {
+        if (signal === 'rerender') {
+          row.rerender(notice(start + hour))
+        } else if (signal === 'focus') {
+          fireEvent(window, new Event('focus'))
+        } else {
+          fireEvent(document, new Event('visibilitychange'))
+        }
+      }
+      vi.setSystemTime(start + 2 * hour)
+      refresh()
+      expect(screen.getByRole('button', { name: 'Continue Now' })).toBeInTheDocument()
+      vi.setSystemTime(start)
+      refresh()
+      expect(screen.queryByRole('button', { name: 'Continue Now' })).toBeNull()
+      act(() => vi.advanceTimersByTime(hour))
+      expect(screen.getByRole('button', { name: 'Continue Now' })).toBeInTheDocument()
+      expect(continueUsageLimit).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([1, 10])('bounds 30-day reset work for %i mounted chats and cleans up', (count) => {
+    const duration = 30 * 24 * hour
+    const maxDelay = 2_147_483_647
+    const schedule = vi.spyOn(globalThis, 'setTimeout')
+    const row = render(notice(start + duration, count))
+    expect(schedule).toHaveBeenCalledTimes(count)
+    expect(vi.getTimerCount()).toBe(count)
+    act(() => vi.advanceTimersByTime(maxDelay))
+    expect(screen.queryAllByRole('button', { name: 'Continue Now' })).toHaveLength(0)
+    expect(schedule).toHaveBeenCalledTimes(2 * count)
+    expect(vi.getTimerCount()).toBe(count)
+    act(() => vi.advanceTimersByTime(duration - maxDelay - 1))
+    expect(screen.queryAllByRole('button', { name: 'Continue Now' })).toHaveLength(0)
+    expect(schedule).toHaveBeenCalledTimes(2 * count)
+    act(() => vi.advanceTimersByTime(1))
+    expect(screen.getAllByRole('button', { name: 'Continue Now' })).toHaveLength(count)
+    expect(schedule).toHaveBeenCalledTimes(2 * count)
+    expect(schedule.mock.calls.every(([, delay]) => delay !== undefined && delay <= maxDelay)).toBe(
+      true
+    )
+    expect(continueUsageLimit).not.toHaveBeenCalled()
+    row.rerender(notice(start + 2 * duration, count))
+    expect(vi.getTimerCount()).toBe(count)
+    row.unmount()
+    expect(vi.getTimerCount()).toBe(0)
+    const scheduledBeforeCleanup = schedule.mock.calls.length
+    fireEvent(window, new Event('focus'))
+    fireEvent(document, new Event('visibilitychange'))
+    expect(schedule).toHaveBeenCalledTimes(scheduledBeforeCleanup)
+  })
 })
 
 describe('notice rows', () => {

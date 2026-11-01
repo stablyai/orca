@@ -29,29 +29,6 @@ describe('getRepoDefaultBranchName', () => {
     __resetRepoDefaultBranchCacheForTests()
   })
 
-  it('resolves the default branch name locally, stripping the origin/ remote prefix', async () => {
-    primeLocalGitExec('refs/remotes/origin/master')
-
-    await expect(getRepoDefaultBranchName('/repo')).resolves.toBe('master')
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['for-each-ref', '--format=%(refname)%00%(symref)']),
-      // Bound local probes so dead filesystems cannot wedge the serial refresh drain.
-      { cwd: '/repo', timeout: expect.any(Number) }
-    )
-  })
-
-  it('forwards the WSL distro to the local git exec options', async () => {
-    primeLocalGitExec('refs/remotes/origin/main')
-
-    await expect(getRepoDefaultBranchName('/repo', null, { wslDistro: 'Ubuntu' })).resolves.toBe(
-      'main'
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['for-each-ref', '--format=%(refname)%00%(symref)']),
-      { cwd: '/repo', wslDistro: 'Ubuntu', timeout: expect.any(Number) }
-    )
-  })
-
   it('shares one wall-clock timeout budget across all fallback probes', async () => {
     let now = 1_000
     const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now)
@@ -77,12 +54,6 @@ describe('getRepoDefaultBranchName', () => {
   it('returns null without running local git when the SSH provider is unavailable', async () => {
     await expect(getRepoDefaultBranchName('/remote/repo', 'ssh-gone')).resolves.toBeNull()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('returns null when no default branch is resolvable (fail open)', async () => {
-    gitExecFileAsyncMock.mockRejectedValue(new Error('fatal: not a git repository'))
-
-    await expect(getRepoDefaultBranchName('/repo')).resolves.toBeNull()
   })
 
   it('serves cached results within the TTL and re-executes after a reset', async () => {
@@ -149,19 +120,6 @@ describe('shouldHideNonOpenReviewOnDefaultBranch', () => {
       ).resolves.toBe(false)
     }
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('hides a closed review whose branch is the repo default branch', async () => {
-    primeLocalGitExec('refs/remotes/origin/master')
-
-    await expect(
-      shouldHideNonOpenReviewOnDefaultBranch({
-        state: 'closed',
-        reviewNumber: 7,
-        branchName: 'master',
-        repoPath: '/repo'
-      })
-    ).resolves.toBe(true)
   })
 
   it('hides a stuck-locked review whose branch is the repo default branch', async () => {

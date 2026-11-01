@@ -288,8 +288,10 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
   )
 })
 
+// The right inset matches the nav bar's, so the + lines up with the ⋯ above it.
 const newTabStyles = StyleSheet.create({
   slot: {
-    paddingHorizontal: spacing.sm
+    paddingLeft: spacing.sm,
+    paddingRight: spacing.md
   }
 })

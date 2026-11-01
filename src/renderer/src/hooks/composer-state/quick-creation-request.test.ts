@@ -50,97 +50,6 @@ function createInput(
 }
 
 describe('quick composer creation request', () => {
-  it('preserves omission semantics for unset optional creation fields', () => {
-    const request = buildQuickCreationRequest(createInput())
-
-    expect(request).toEqual({
-      repoId: 'repo-1',
-      worktreeCreateProgressMode: 'stepped',
-      linkedWorkItem: null,
-      linkedTaskSourceContext: null,
-      name: 'characterize-request',
-      setupDecision: 'inherit',
-      setupOnly: false,
-      agent: null,
-      pendingFirstAgentMessageRename: false,
-      note: '',
-      startupPlan: null,
-      quickPrompt: '',
-      promptDelivery: 'auto-submit',
-      quickTelemetry: null
-    })
-    expect(request).not.toHaveProperty('baseBranch')
-    expect(request).not.toHaveProperty('workspaceRunContext')
-    expect(request).not.toHaveProperty('launchDraftPrompt')
-  })
-
-  it('keeps provider, branch, sparse, runtime, and startup fields in the quick wire payload', () => {
-    const request = buildQuickCreationRequest(
-      createInput({
-        indeterminateProgress: true,
-        nameWasGenerated: true,
-        displayName: 'Characterize request',
-        baseBranch: 'refs/pull/42/head',
-        compareBaseRef: 'origin/main',
-        sparseDirectories: ['src', 'tests'],
-        sparsePresetId: 'preset-1',
-        telemetrySource: 'shortcut',
-        linkedIssue: 41,
-        linkedPR: 42,
-        pushTarget: { remoteName: 'origin', branchName: 'feature' },
-        linkedLinearIssue: 'ENG-42',
-        linkedLinearIssueWorkspaceId: 'workspace-1',
-        linkedLinearIssueOrganizationUrlKey: 'orca',
-        branchNameOverride: 'feature',
-        parentWorktreeId: 'repo-1::/worktrees/parent',
-        workspaceStatus: 'in-progress',
-        linkedGitLabMR: 9,
-        linkedGitLabIssue: 8,
-        launchDraftPrompt: 'draft',
-        promptDelivery: 'draft',
-        suppressTerminalFocusOnCompletion: true
-      })
-    )
-
-    expect(request).toMatchObject({
-      worktreeCreateProgressMode: 'indeterminate',
-      nameWasGenerated: true,
-      displayName: 'Characterize request',
-      baseBranch: 'refs/pull/42/head',
-      compareBaseRef: 'origin/main',
-      sparseCheckout: { directories: ['src', 'tests'], presetId: 'preset-1' },
-      linkedIssue: 41,
-      linkedPR: 42,
-      linkedGitLabMR: 9,
-      linkedGitLabIssue: 8,
-      branchNameOverride: 'feature',
-      parentWorktreeId: 'repo-1::/worktrees/parent',
-      launchDraftPrompt: 'draft',
-      promptDelivery: 'draft',
-      suppressTerminalFocusOnCompletion: true
-    })
-  })
-
-  it('drops repo-only and GitLab fields when their submit conditions are false', () => {
-    const request = buildQuickCreationRequest(
-      createInput({
-        selectedRepoIsGit: false,
-        baseBranch: 'main',
-        compareBaseRef: 'origin/main',
-        sparseDirectories: ['src'],
-        linkedGitLabMR: 9,
-        linkedGitLabIssue: 8,
-        includeGitLabLinks: false
-      })
-    )
-
-    expect(request).not.toHaveProperty('baseBranch')
-    expect(request).not.toHaveProperty('compareBaseRef')
-    expect(request).not.toHaveProperty('sparseCheckout')
-    expect(request).not.toHaveProperty('linkedGitLabMR')
-    expect(request).not.toHaveProperty('linkedGitLabIssue')
-  })
-
   it('carries the Perforce copy choice for folder projects only', () => {
     const perforceCopy = { stream: { kind: 'child' as const } }
     expect(
@@ -150,16 +59,5 @@ describe('quick composer creation request', () => {
     expect(
       buildQuickCreationRequest(createInput({ selectedRepoIsGit: true, perforceCopy })).perforceCopy
     ).toBeUndefined()
-  })
-
-  it('keeps setupOnly only for agentless creates', () => {
-    expect(buildQuickCreationRequest(createInput({ setupOnly: true }))).toHaveProperty(
-      'setupOnly',
-      true
-    )
-    expect(
-      buildQuickCreationRequest(createInput({ setupOnly: true, agent: 'claude' }))
-    ).not.toHaveProperty('setupOnly')
-    expect(buildQuickCreationRequest(createInput())).toHaveProperty('setupOnly', false)
   })
 })

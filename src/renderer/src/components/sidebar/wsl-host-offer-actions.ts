@@ -14,11 +14,13 @@ export type WslHostOfferDeps = {
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
   addWslHost: (args: { distro: string; startIfStopped: boolean }) => Promise<WslHostAddResult>
   addLocalPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
+  /** Moves the project just added onto the host, and only it: Stage 1 never moves the others. */
+  moveAddedProject: (offer: WslHostOffer) => void
 }
 
 /**
- * Turns WSL hosts on, adds the distro, then adds the project as before: opening it is what lets
- * the existing automatic move carry it onto the new host. Returns the refusal when the add fails.
+ * Turns WSL hosts on, adds the distro, adds the project as before, then moves that one project
+ * onto the host. The distro's other bridge projects stay put. Returns the refusal when the add fails.
  */
 export async function acceptWslHostOffer(
   offer: WslHostOffer,
@@ -41,6 +43,7 @@ export async function acceptWslHostOffer(
     return result
   }
   await deps.addLocalPath(offer.path, offer.source)
+  deps.moveAddedProject(offer)
   return null
 }
 

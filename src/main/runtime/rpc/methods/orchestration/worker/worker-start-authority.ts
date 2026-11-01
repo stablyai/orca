@@ -9,6 +9,8 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { createBoundRun } from '../runs/runs'
 import { ROOT_DISPATCH_DEPTH } from '../../../../../../shared/nested-worker-depth'
+import { previousCustodianLookup } from '../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
+import type { WorkerFollowUp } from './worker-follow-up-placement'
 
 export type WorkerStartRunBinding = { run: RunRow; created: boolean }
 
@@ -84,7 +86,11 @@ export function resolveWorkerStartRun(
 export function assertHelperStartScope(
   db: OrchestrationDb,
   creator: DispatchContextRow,
-  args: { task: TaskRow | undefined; params: { on?: string; terminal?: string } }
+  args: {
+    task: TaskRow | undefined
+    params: { on?: string; terminal?: string }
+    followUp?: Pick<WorkerFollowUp, 'of' | 'addressed' | 'custodian'>
+  }
 ): void {
   if (args.params.on || args.params.terminal) {
     // Remote reports reach the Run home mailbox, so a helper there could not report to its creator.
@@ -100,6 +106,71 @@ export function assertHelperStartScope(
       `Task ${args.task.id} was not last run by a helper of Dispatch ${creator.id}; start new helper work with --spec.`
     )
   }
+  if (args.followUp) {
+    const { of, addressed, custodian } = args.followUp
+    const holder = custodian
+      ? db.getDispatchContextById(custodian)
+      : creationRoot(db, of, creator.run_id)
+    const owner = holder?.run_id === creator.run_id ? holder.creator_dispatch_id : null
+    if (!owner || !continuesDispatch(db, creator, owner)) {
+      const target =
+        of === addressed
+          ? `Dispatch ${addressed}`
+          : `Dispatch ${addressed}'s latest work, Dispatch ${of},`
+      throw new OrchestrationError(
+        'task_not_found',
+        `${target} is not a helper of Dispatch ${creator.id}, so only the coordinator or the worker that started it can give it more work; to hand this to a helper, start new helper work with worker-start --spec. No effects were applied.`,
+        { effectsApplied: false }
+      )
+    }
+  }
+}
+
+/** With no agent ever placed in the lineage, the helper is still its requester's: the first Dispatch of its follow-up chain. */
+function creationRoot(
+  db: OrchestrationDb,
+  latestId: string,
+  runId: string
+): DispatchContextRow | undefined {
+  const seen = new Set<string>()
+  let row = db.getDispatchContextById(latestId)
+  while (row && row.run_id === runId && !seen.has(row.id)) {
+    if (!row.follow_up_of_dispatch_id) {
+      return row
+    }
+    seen.add(row.id)
+    row = db.getDispatchContextById(row.follow_up_of_dispatch_id)
+  }
+  return undefined
+}
+
+/** Whether `ancestorId` is `from` or an earlier Dispatch of the same worker in its Run: one it continued with a
+ *  follow-up, or whose exact process it took over in saved custody. Each hop is read, so another Run in between ends
+ *  the walk. */
+function continuesDispatch(
+  db: OrchestrationDb,
+  from: DispatchContextRow,
+  ancestorId: string
+): boolean {
+  const seen = new Set<string>()
+  const previousCustodian = previousCustodianLookup(db)
+  const pending: (DispatchContextRow | undefined)[] = [from]
+  while (pending.length > 0) {
+    const row = pending.pop()
+    if (!row || row.run_id !== from.run_id || seen.has(row.id)) {
+      continue
+    }
+    if (row.id === ancestorId) {
+      return true
+    }
+    seen.add(row.id)
+    for (const id of new Set([row.follow_up_of_dispatch_id, previousCustodian(row)])) {
+      if (id && !seen.has(id)) {
+        pending.push(db.getDispatchContextById(id))
+      }
+    }
+  }
+  return false
 }
 
 function fenced(message: string): OrchestrationError {

@@ -39,8 +39,11 @@ function shouldProbeVisibleScreen(
 
 type RuntimeTerminalWaitDependencies = TuiIdleEvidenceSource & {
   defaultTimeoutMs: number
-  /** The terminal a handle names; throws `terminal_handle_stale` when it names none. */
-  getTerminalPty(handle: string): { pty: RuntimePtyWorktreeRecord }
+  /** The terminal a handle names for this wait; throws `terminal_handle_stale` when it names none. */
+  getTerminalPty(
+    handle: string,
+    condition: RuntimeTerminalWaitCondition
+  ): { pty: RuntimePtyWorktreeRecord }
   /** A disconnected terminal that may still run, so an exit wait keeps waiting for its end. */
   exitUnsettled(pty: RuntimePtyWorktreeRecord): boolean
   startVisibleReadProbe(
@@ -73,7 +76,7 @@ export class RuntimeTerminalWait {
     }
   ): Promise<RuntimeTerminalWaitResult> {
     const condition = options?.condition ?? 'exit'
-    const { pty } = this.deps.getTerminalPty(handle)
+    const { pty } = this.deps.getTerminalPty(handle, condition)
     if (condition === 'exit' && !pty.connected && !this.deps.exitUnsettled(pty)) {
       return buildPtyTerminalWaitResult(handle, condition, pty)
     }

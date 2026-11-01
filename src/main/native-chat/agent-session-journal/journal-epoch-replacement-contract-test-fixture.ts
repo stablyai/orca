@@ -5,9 +5,9 @@ import { join, dirname } from 'node:path'
 import { afterEach, beforeEach } from 'vitest'
 import type {
   AgentJournalItemIdentity,
-  AgentJournalMessageItem,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
 import { replaceJournalEpoch } from './journal-epoch-replacement'
 import type { JournalLoad } from './journal-open'
@@ -15,9 +15,9 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { formatNativeChatFileReference } from '../../../shared/agent-image-paste'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import * as attachmentReferences from '../agent-session-attachments/agent-session-attachment-references'
 
 export function createFixture() {

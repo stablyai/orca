@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session-provider-handle'
-import { isPersistedAgentSessionRecord } from '../../../../shared/agent-session-record'
-import { encodeAgentSessionRecord } from '../../../../shared/agent-session-record-stored-form'
-import { activeProviderContext } from '../../../../shared/agent-session-provider-context'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { isPersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
 import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint
@@ -14,7 +14,7 @@ import {
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../../shared/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 function resumedLink(fence: number): AgentSessionProviderHandleLink {
   return {

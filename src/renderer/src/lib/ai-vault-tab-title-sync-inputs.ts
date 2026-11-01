@@ -1,4 +1,4 @@
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'

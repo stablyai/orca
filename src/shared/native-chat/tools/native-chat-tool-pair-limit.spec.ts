@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { pairToolBlocks } from './native-chat-tool-pairs'
-import type { NativeChatBlock } from '../../native-chat-types'
+import type { NativeChatBlock } from '../native-chat-types'
 
 const call: NativeChatBlock = { type: 'tool-call', name: 'read', input: {} }
 const result: NativeChatBlock = { type: 'tool-result', output: 'done' }

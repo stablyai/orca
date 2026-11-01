@@ -4,7 +4,7 @@ import {
   attentionOriginWasRead,
   type StructuredAttentionOrigin,
   type StructuredAttentionRead
-} from '../../shared/agent-session-attention'
+} from '../../shared/agent-session/agent-session-attention'
 const DEFAULT_MAX_SUBJECTS = 256
 const DEFAULT_MAX_IDS_PER_SUBJECT = 20
 

@@ -18,7 +18,6 @@ import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 import { useWorkspaceRevealBodyRedirect } from './use-workspace-reveal-body-redirect'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { usePerforceCopySync } from '../perforce-copies/use-perforce-copy-sync'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
@@ -103,11 +102,7 @@ function Sidebar({
   const activeModal = useAppStore((s) => s.activeModal)
   usePerforceCopySync()
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
-  const systemPrefersDark = useSystemPrefersDark()
-  const leftSidebarStyle = useMemo(
-    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
-    [settings, systemPrefersDark]
-  ) as React.CSSProperties | undefined
+  const leftSidebarStyle = useMemo(() => resolveLeftSidebarStyleVariables(settings), [settings])
   const { dropOwnerRef, dropHandlers, affordance } = useSidebarProjectDrop()
   const {
     workspaceBoardOpen,

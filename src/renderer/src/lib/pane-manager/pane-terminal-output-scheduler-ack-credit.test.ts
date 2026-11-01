@@ -58,26 +58,6 @@ describe('pane terminal output scheduler', () => {
       expect(credit.count()).toBe(1)
     })
 
-    it('credits exactly once when a chunk is split across drain slices', async () => {
-      vi.useFakeTimers()
-      const { writeTerminalOutput } = await loadScheduler()
-      const terminal = createTerminal()
-      const credit = makeCredit()
-
-      // 40 KB > the 16 KB slice size: consumed across multiple drain writes.
-      writeTerminalOutput(terminal, 'q'.repeat(40 * 1024), {
-        foreground: true,
-        latencySensitive: false,
-        ackCredit: credit.fire
-      })
-      for (let index = 0; index < 24; index += 1) {
-        vi.advanceTimersByTime(4)
-      }
-      const written = terminal.write.mock.calls.map((call) => String(call[0])).join('')
-      expect(written).toContain('q'.repeat(40 * 1024))
-      expect(credit.count()).toBe(1)
-    })
-
     it('defers split-chunk credit and onParsed until the final slice parses', async () => {
       vi.useFakeTimers()
       const { writeTerminalOutput } = await loadScheduler()

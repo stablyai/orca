@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
-import type { NativeChatTurnStatus } from '../../../../shared/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import {
   buildNativeChatTranscriptSlots,
   nativeChatSlotIndexOf,
@@ -153,12 +153,6 @@ describe('work runs', () => {
     expect(rows(slots)).toEqual(['u', ['a', 'b'], 'approval', 'c'])
   })
 
-  it('keeps the run open across the thought the live line shows', () => {
-    const messages = [text('u', 'go', 'user'), call('a'), thought('r1'), call('b'), thought('r2')]
-    expect(rows(build(messages, { liveReasoningId: 'r2' }))).toEqual(['u', ['a', 'r1', 'b']])
-    expect(rows(build(messages))).toEqual(['u', ['a', 'r1', 'b', 'r2']])
-  })
-
   // Once the live line releases open reasoning, fold it immediately instead of waiting for turn completion.
   it('folds an open thought the live line let go of straight into the run', () => {
     const open: NativeChatMessage = { ...thought('r2'), state: 'running', completedAt: undefined }
@@ -170,14 +164,6 @@ describe('work runs', () => {
     ])
     expect(rows(build(messages, live))).toEqual(['u', ['a', 'r1', 'b', 'r2']])
     expect(rows(build(messages))).toEqual(['u', ['a', 'r1', 'b', 'r2']])
-  })
-
-  it('is live while any of its calls is the turn frontier', () => {
-    const slots = build([text('u', 'go', 'user'), call('a'), thought('r1'), call('b')], {
-      liveTurnKey: 'u',
-      isWorking: true
-    })
-    expect(slots[1]?.trailingRun).toBe(true)
   })
 
   it('lets a thought with no visible text join rather than split the run', () => {

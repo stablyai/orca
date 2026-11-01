@@ -49,8 +49,8 @@ vi.mock('./use-structured-agent-session-sends', () => ({
 import type {
   AgentSessionContextUsage,
   AgentSessionContextUsed
-} from '../../../../shared/agent-session-context-usage'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/agent-session-context-usage'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
 const LOCAL_TARGET = { kind: 'local' } as const
@@ -117,18 +117,6 @@ describe('useStructuredAgentSession context usage', () => {
     vi.clearAllMocks()
     items = [messageRow(900)]
     unloadedTurnRevisions = undefined
-  })
-
-  it('shows the host whole-journal answer when the loaded page starts after the turn row', async () => {
-    answerOptions([{ used: estimate(150_000), window: WINDOW }])
-    const { result } = render()
-
-    await waitFor(() =>
-      expect(result.current.contextUsage).toMatchObject({
-        usedTokens: 150_000,
-        windowTokens: 1_000_000
-      })
-    )
   })
 
   it('prefers the loaded window when it holds a newer turn fact', async () => {

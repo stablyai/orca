@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { UserPlus, X } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -89,7 +89,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
 
   const addButton = (
     <Pressable
-      style={styles.iconButton}
+      style={({ pressed }) => [styles.iconButton, pressed && pressedStyle]}
       onPress={() => setPickerOpen(true)}
       accessibilityRole="button"
       accessibilityLabel={t('pullRequest.reviewersSection.addOrRemove', 'Add or remove reviewers')}
@@ -133,7 +133,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
                 {row.stateLabel}
               </Text>
               <Pressable
-                style={styles.rowTrailing}
+                style={({ pressed }) => [styles.rowTrailing, pressed && pressedStyle]}
                 onPress={() => actions.removeReviewer(row.login)}
                 disabled={busy}
                 accessibilityRole="button"

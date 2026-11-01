@@ -1,22 +1,22 @@
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentTurnVerdict } from '../../../shared/agent-turn-outcome'
-import { isAgentSessionContextClear } from '../../../shared/agent-session-context-clear'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   isStructuredAgentSessionCommandTurn,
   isStructuredAgentSessionCommandEntry
-} from '../../../shared/structured-agent-session-command-entry'
-import { classifyDispatchRejection } from '../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../shared/agent-session/structured-agent-session-command-entry'
+import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
 export type StructuredAgentSessionRequestFailure = {
   sessionId: string

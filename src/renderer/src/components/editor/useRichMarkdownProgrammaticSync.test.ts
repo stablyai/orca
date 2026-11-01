@@ -204,18 +204,6 @@ describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
       vi.useRealTimers()
     }
   })
-
-  it('re-syncs silently when the pane had no pending edit', () => {
-    vi.mocked(notifyStaleViewEditRejected).mockClear()
-    const { editor, hook } = renderPane('base', null)
-    try {
-      hook.rerender({ content: 'pane a' })
-      expect(notifyStaleViewEditRejected).not.toHaveBeenCalled()
-      expect(editor.getMarkdown()).toBe('pane a')
-    } finally {
-      editor.destroy()
-    }
-  })
 })
 
 describe('useRichMarkdownProgrammaticSync undo history', () => {

@@ -1,7 +1,5 @@
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export type StructuredAgentSessionLifecycleJournal = Pick<

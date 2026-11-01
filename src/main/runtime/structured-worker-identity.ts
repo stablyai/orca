@@ -3,12 +3,12 @@ import type { AgentSessionConversationView } from '../../shared/agent-session-co
  * Random handles and leaves prevent session ids exposed in tab ids from yielding caller-supplied keys that read/consume worker mail. */
 
 import { randomUUID } from 'node:crypto'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
 import type { TuiAgent } from '../../shared/tui-agent'

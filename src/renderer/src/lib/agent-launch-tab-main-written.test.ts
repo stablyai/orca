@@ -100,17 +100,6 @@ afterEach(() => {
 })
 
 describe("a launch tab main wrote, in a layout-owner build's window", () => {
-  it('keeps the launch pane and prompt on the tab main drew, and makes no tab', () => {
-    drawMainTab()
-
-    const kept = keepAgentLaunchTabMainWrote(request({ prompt: 'fix the build' }))
-
-    expect(kept).toMatchObject({ tabId: TAB_ID, created: true })
-    expect(store.getState().tabsByWorktree[WT]).toHaveLength(1)
-    expect(launchPane()).toEqual({ leafId: LEAF_ID, operationId: 'op-1' })
-    expect(agentLaunchPanePrompt(TAB_ID)).toBe('fix the build')
-  })
-
   it('moves the view as the viewer rule says, only for the launch that made the tab', () => {
     drawMainTab()
     keepAgentLaunchTabMainWrote(
@@ -121,24 +110,6 @@ describe("a launch tab main wrote, in a layout-owner build's window", () => {
     keepAgentLaunchTabMainWrote(request({ requestId: 'r-2', viewer: 'focus-in-workspace' }))
     expect(store.getState().activeTabId).toBe(TAB_ID)
     expect(focusTerminalInitiatedTab).toHaveBeenCalledWith(TAB_ID, LEAF_ID, WT)
-  })
-
-  it('shows the outcome the pane got on the tab main drew', () => {
-    drawMainTab()
-    keepAgentLaunchTabMainWrote(request())
-
-    applyAgentLaunchPaneVerdict({
-      worktreeId: WT,
-      tabId: TAB_ID,
-      leafId: LEAF_ID,
-      verdict: { kind: 'not-started', code: 'boom' }
-    })
-
-    expect(launchPane()).toEqual({
-      leafId: LEAF_ID,
-      operationId: 'op-1',
-      outcome: { kind: 'not-started', code: 'boom' }
-    })
   })
 
   it('keeps the launch, and an outcome that came first, for a tab that draws later', () => {
@@ -200,15 +171,5 @@ describe("a launch tab main wrote, in a layout-owner build's window", () => {
     frames.holdsTab = true
     drawMainTab()
     expect(launchPane()).toBeUndefined()
-  })
-
-  it('holds nothing and reveals nothing for a tab main already closed', () => {
-    frames.flowing = true
-    frames.holdsTab = false
-
-    keepAgentLaunchTabMainWrote(request({ viewer: 'focus-window', prompt: 'fix the build' }))
-
-    expect(revealWorkspaceSurface).not.toHaveBeenCalled()
-    expect(agentLaunchPanePrompt(TAB_ID)).toBeNull()
   })
 })

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { View } from 'react-native'
+import { GitBranch } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { colors } from '../theme/mobile-theme'
+import {
+  MobileLoadErrorState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/MobileStateView'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { connectionRetryAction } from '../transport/connection-retry-action'
@@ -14,12 +19,16 @@ import {
   resolveMobileSourceControlReviewInputs
 } from './mobile-source-control-primary-action'
 import { MobileSourceControlModals } from './MobileSourceControlModals'
-import { MobileSourceControlSegments } from './MobileSourceControlSegments'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { MobileSourceControlBranchCard } from './MobileSourceControlBranchCard'
 import { MobileGitHistoryList } from './MobileGitHistoryList'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
-import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
+import {
+  SOURCE_CONTROL_HUB_TABS,
+  SOURCE_CONTROL_HUB_TAB_LABELS,
+  type SourceControlHubTab
+} from './mobile-source-control-hub-tab'
 import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
 import { MOBILE_COMPLETE_MERGE_ACTION_ID } from './mobile-source-control-conflict-actions'
 import { isMobileConflictAborting } from './mobile-source-control-conflict-abort'
@@ -248,6 +257,19 @@ export function MobileSourceControlPanel({
       onRefresh={onRefresh}
       onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
       prNumber={prWebNumber}
+      accessory={
+        <MobileSegmentedControl
+          segments={SOURCE_CONTROL_HUB_TABS.map((tab) => ({
+            value: tab,
+            label: SOURCE_CONTROL_HUB_TAB_LABELS[tab]
+          }))}
+          selected={activeTab}
+          onSelect={selectTab}
+          fill
+          tabs
+          style={hubStyles.segments}
+        />
+      }
     />
   )
 
@@ -260,23 +282,17 @@ export function MobileSourceControlPanel({
   })
   const statusGate =
     screenState.kind === 'loading' ? (
-      <View style={styles.state}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    ) : screenState.kind === 'error' || screenState.kind === 'unavailable' ? (
-      <View style={styles.state}>
-        <Text style={styles.stateTitle}>
-          {screenState.kind === 'unavailable'
-            ? t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')
-            : t('sourceControl.panel.loadFailedTitle', 'Unable to Load')}
-        </Text>
-        <Text style={styles.stateText}>{screenState.message}</Text>
-        {screenState.kind === 'error' && statusRetry ? (
-          <Pressable style={styles.retryButton} onPress={statusRetry}>
-            <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <MobileStateView loading title={t('sourceControl.panel.loading', 'Loading changes…')} />
+    ) : screenState.kind === 'unavailable' ? (
+      <MobileStateView
+        icon={GitBranch}
+        title={t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')}
+        message={screenState.message}
+      />
+    ) : screenState.kind === 'error' && connState !== 'connected' ? (
+      <MobileOfflineState onReconnect={statusRetry} />
+    ) : screenState.kind === 'error' ? (
+      <MobileLoadErrorState error={screenState.message} onRetry={statusRetry} />
     ) : null
 
   // History needs only RPC; Changes and PR also need branch/file status.
@@ -297,8 +313,6 @@ export function MobileSourceControlPanel({
           {header}
         </SafeAreaView>
       )}
-
-      <MobileSourceControlSegments active={activeTab} onSelect={selectTab} />
 
       {/* Ready PRs duplicate the branch card; retain it only when needed to abort a conflict. */}
       {ready && (activeTab !== 'pr' || hasActiveConflict) ? (

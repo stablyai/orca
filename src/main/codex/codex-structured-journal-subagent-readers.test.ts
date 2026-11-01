@@ -2,14 +2,14 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import type { AgentSessionTurnActivity } from '../../shared/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionTurnActivity } from '../../shared/agent-session/agent-session-wire'
 import { selectStructuredAgentTurnActivity } from '../../shared/native-chat/transcript/native-chat-turn-activity'
-import { latestStructuredAgentSessionAssistantMessage } from '../../shared/structured-agent-session-latest-request'
+import { latestStructuredAgentSessionAssistantMessage } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
 import {
   isStructuredAgentSessionThinking,
   statusStructuredAgentSessionToolCall
-} from '../../shared/structured-agent-session-live-turn'
+} from '../../shared/agent-session/view/structured-agent-session-live-turn'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -20,7 +20,7 @@ import {
   openTestJournalHostDatabase
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-codex-children'
 const PARENT = 'thread-parent'

@@ -23,7 +23,7 @@ import {
   lastWslDriveUncConversionOutcomes,
   type WslDriveUncConversionOutcome
 } from '../wsl/wsl-drive-unc-conversion-startup'
-import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
+import { wslHostsGateOpen, wslHostsOptedIn } from '../wsl/wsl-host-gate'
 import { createWslMoveDriverDeps } from './wsl-move-driver-wiring'
 import { getTrustedUIRendererWebContents } from './ui'
 import {
@@ -53,7 +53,10 @@ export function registerWslDriveUncConversionHandlers(
   ipcMain.handle(
     'wslDriveUnc:convert',
     async (event: IpcMainInvokeEvent, args: unknown): Promise<WslDriveUncConversionResult> => {
-      assertAvailable()
+      // Opt-in, so the setting off or a block learned this run stops a conversion before it starts.
+      if (!isAvailable() || !wslHostsOptedIn(store.getSettings())) {
+        throw new Error('wsl_drive_unc_unavailable')
+      }
       const request = parseRequest(args)
       const userDataPath = app.getPath('userData')
       const { activeProfileId } = getOrcaProfileListState()
@@ -125,12 +128,6 @@ export function registerWslDriveUncConversionHandlers(
 
 function isAvailable(): boolean {
   return process.platform === 'win32' && wslHostsGateOpen()
-}
-
-function assertAvailable(): void {
-  if (!isAvailable()) {
-    throw new Error('wsl_drive_unc_unavailable')
-  }
 }
 
 function parseRequest(value: unknown): WslDriveUncConversionRequest {

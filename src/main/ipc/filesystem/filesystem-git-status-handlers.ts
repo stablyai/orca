@@ -198,7 +198,12 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         wakeWslDistro?: boolean
       } & GitHistoryOptions
     ): Promise<GitHistoryResult> => {
-      const options: GitHistoryOptions = { limit: args.limit, baseRef: args.baseRef }
+      const options: GitHistoryOptions = {
+        limit: args.limit,
+        baseRef: args.baseRef,
+        branchOnly: args.branchOnly,
+        skip: args.skip
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       return readWorktreeGitUnlessWslStopped(
         store,

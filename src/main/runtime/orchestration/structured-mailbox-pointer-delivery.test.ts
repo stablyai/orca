@@ -9,6 +9,8 @@ import {
 import type { StructuredWorkerIdentity } from '../structured-worker-identity'
 import { RuntimeMessageWaiters } from '../runtime-message-waiters'
 
+import { verifyHeldLocalWorkerDone } from './structured-mailbox-held-worker-report.test-fixture'
+
 const IDENTITY: StructuredWorkerIdentity = {
   handle: 'structworker_1',
   sessionId: 'session-1',
@@ -108,7 +110,10 @@ function harness(options: {
     resolveStructuredTarget: (mailboxHandle) =>
       mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
     getCliCommand: () => 'orca-dev',
-    senderName: (party) => (party.address === 'term_coord' ? 'Coordinator' : null),
+    senderSnapshot: (party) => ({
+      name: party.address === 'term_coord' ? 'Coordinator' : null,
+      agent: null
+    }),
     host: {
       readSessionFacts: async () => {
         await journalRead
@@ -598,7 +603,7 @@ describe('forgetting one settled worker', () => {
           : null
       },
       getCliCommand: () => 'orca',
-      senderName: () => null,
+      senderSnapshot: () => ({ name: null, agent: null }),
       host: {
         readSessionFacts: async () => (attached ? { submissions: [] } : null),
         hasActionablePromptNow: () => false,
@@ -698,7 +703,7 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
       getMessageWaiters: () => undefined,
       resolveStructuredTarget: () => ({ sessionId: target, dispatchId: 'd1' }),
       getCliCommand: () => 'orca-dev',
-      senderName: () => null,
+      senderSnapshot: () => ({ name: null, agent: null }),
       host: {
         readSessionFacts: async () => ({ submissions: [] }),
         hasActionablePromptNow: () => false,
@@ -774,3 +779,8 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
     expect(send).toHaveBeenCalledTimes(1)
   })
 })
+
+it.each(['gone', 'live-other-kind', 'metadata-read-fails'])(
+  'delivers held local worker_done with exact durable identity after terminal loss (%s)',
+  verifyHeldLocalWorkerDone
+)

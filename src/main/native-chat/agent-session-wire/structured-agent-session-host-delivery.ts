@@ -1,7 +1,8 @@
+import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
 import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
 // Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { holdClosedStructuredAgentSessionSends } from './structured-agent-session-host-lifetime'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -234,9 +235,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   })
   const adoptOpened = async (
     sessionId: string,
-    opened: OpenedStructuredAgentSessionConversation
+    { session }: OpenedStructuredAgentSessionConversation
   ): Promise<void> => {
-    const { session } = opened
     sessions.set(sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
     await settleInterruptedStructuredAgentSessionCommands(deps, sessionId, session)
@@ -247,13 +247,13 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   }
   const wakesQueued = new Set<string>()
   const afterCommit = (sessionId: string, journal: AgentSessionJournal): void => {
-    input.deliveryOrder.reconcile(sessionId, journal.submissions())
+    input.deliveryOrder.reconcile(sessionId, journal)
     const work = hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId)
     if (
       wakesQueued.has(sessionId) ||
       !work ||
       structuredAgentSessionCommandRunning(work) ||
-      !journal.submissions().some(isQueuedAgentJournalSubmission)
+      !selectableStructuredSubmission(journal, work)
     ) {
       return
     }

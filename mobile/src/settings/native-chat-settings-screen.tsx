@@ -1,144 +1,50 @@
-import { View, Text, Pressable, ScrollView } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { ListRow } from '../components/list/ListGroup'
 import { MobileSwitch } from '../components/MobileSwitch'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { SettingsScreen, SettingsSection } from './settings-screen-frame'
 
 export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => void }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const router = useRouter()
-  const insets = useSafeAreaInsets()
 
   const { defaultView, setDefaultView } = useMobileDefaultSessionViewPreference()
   const chatDefault = defaultView === 'chat'
+  const label = t('settings.nativeChatSettingsScreen.openInChatUi', 'Open sessions in Chat UI')
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', 'Back')}
-          style={styles.backButton}
-          onPress={onBack ?? (() => router.back())}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>
-          {t('settings.nativeChatSettingsScreen.title', 'Chat UI')}
-        </Text>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
-        showsVerticalScrollIndicator={false}
+    <SettingsScreen
+      title={t('settings.nativeChatSettingsScreen.title', 'Chat UI')}
+      onBack={onBack ?? (() => router.back())}
+    >
+      <SettingsSection
+        first
+        title={t('settings.nativeChatSettingsScreen.defaultViewHeading', 'DEFAULT VIEW')}
+        footer={t(
+          'settings.nativeChatSettingsScreen.defaultViewDescription',
+          'Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop app. You can still switch any individual session from its long-press menu.'
+        )}
       >
-        <Text style={styles.groupHeading}>
-          {t('settings.nativeChatSettingsScreen.defaultViewHeading', 'DEFAULT VIEW')}
-        </Text>
-        <Text style={styles.groupDescription}>
-          {t(
-            'settings.nativeChatSettingsScreen.defaultViewDescription',
-            'Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop app. You can still switch any individual session from its long-press menu.'
-          )}
-        </Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <View style={styles.row}>
-            <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>
-                {t('settings.nativeChatSettingsScreen.openInChatUi', 'Open sessions in Chat UI')}
-              </Text>
-              <Text style={styles.rowSublabel}>
-                {chatDefault
-                  ? t('settings.nativeChatSettingsScreen.on', 'On')
-                  : t('settings.nativeChatSettingsScreen.off', 'Off')}
-              </Text>
-            </View>
+        <ListRow
+          key="chatDefault"
+          title={label}
+          subtitle={
+            chatDefault
+              ? t('settings.nativeChatSettingsScreen.on', 'On')
+              : t('settings.nativeChatSettingsScreen.off', 'Off')
+          }
+          accessory={
             <MobileSwitch
-              accessibilityLabel={t(
-                'settings.nativeChatSettingsScreen.openInChatUi',
-                'Open sessions in Chat UI'
-              )}
+              accessibilityLabel={label}
               value={chatDefault}
               onValueChange={(next) => setDefaultView(next ? 'chat' : 'terminal')}
             />
-          </View>
-        </View>
-      </ScrollView>
-    </View>
+          }
+        />
+      </SettingsSection>
+    </SettingsScreen>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  groupHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  groupDescription: {
-    fontSize: typography.bodySize - 1,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    paddingHorizontal: spacing.xs
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.surface,
-    overflow: 'hidden'
-  },
-  sectionTopGap: {
-    marginTop: spacing.sm
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowContent: {
-    flex: 1
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowSublabel: {
-    fontSize: typography.bodySize - 2,
-    color: colors.textSecondary,
-    marginTop: 2
-  }
-}))

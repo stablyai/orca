@@ -1,3 +1,4 @@
+import { journalInputOrder, setJournalInputOrder } from './journal-input-order'
 // Track writes through objects, iterators and collection entries; finalize only after COMMIT.
 
 import type { JournalReducerState } from './journal-reducer'
@@ -9,6 +10,7 @@ import {
 } from './journal-transition-collections'
 
 type DraftNode = {
+  original: object
   value: object
   /** What the draft holds now: the copy once written, else the object itself. */
   current: () => object
@@ -16,16 +18,24 @@ type DraftNode = {
   listen: (changed: () => void) => void
 }
 
+function draftProperty<Value extends object>(value: Value, key: PropertyKey): unknown {
+  const descriptor = Reflect.getOwnPropertyDescriptor(value, key)
+  return descriptor && ('value' in descriptor ? descriptor.value : descriptor.get?.call(value))
+}
+
 class JournalDraft {
   private readonly originals = new WeakMap<object, DraftNode>()
   private readonly proxies = new WeakMap<object, DraftNode>()
   private readonly collections: (JournalDraftMap<unknown, unknown> | JournalDraftSet<unknown>)[] =
     []
+  private readonly derived: object[] = []
   private readonly assigned = new WeakSet<object>()
   private readonly pending: (() => void)[] = []
   private readonly resolved = new WeakMap<object, object>()
   /** Objects and collections the fold reached; scaling tests pin how this grows with chat size. */
   nodes = 0
+  derivedNodes = 0
+  private notifications: Set<() => void> | undefined
 
   readonly access: JournalDraftAccess = {
     wrap: (value, changed, path) => this.wrap(value, changed, path),
@@ -43,29 +53,37 @@ class JournalDraft {
       return value
     }
     const node = this.proxies.get(value) ?? this.originals.get(value) ?? this.track(value, path)
-    node.listen(changed)
+    if (!path.startsWith('@inputOrder')) {
+      node.listen(changed)
+    }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a node's draft (overlay collection or copy-on-write proxy) has the interface of the object it isolates.
     return node.value as T
   }
 
   private track<T extends object>(value: T, path: string): DraftNode {
     this.nodes += 1
+    if (path.startsWith('@inputOrder')) {
+      this.derivedNodes++
+    }
     const listeners = new Set<() => void>()
     let dirty = false
-    let notifying = false
     const mark = (): void => {
       dirty = true
-      if (notifying) {
+      const outer = this.notifications === undefined
+      const wave = (this.notifications ??= new Set())
+      // Rotated/shared index nodes can reach the same ancestor by several paths.
+      if (wave.has(mark)) {
         return
       }
-      // A batch consumes changes after each row; later mutations must notify again.
-      notifying = true
+      wave.add(mark)
       try {
         for (const notify of listeners) {
           notify()
         }
       } finally {
-        notifying = false
+        if (outer) {
+          this.notifications = undefined
+        }
       }
     }
     const listen = (notify: () => void): void => {
@@ -82,6 +100,7 @@ class JournalDraft {
           : new JournalDraftSet(value, this.access, mark, path)
       this.collections.push(collection)
       node = {
+        original: value,
         value: collection,
         current: () => collection,
         finish: () => collection.finish(),
@@ -143,6 +162,7 @@ class JournalDraft {
         }
       })
       node = {
+        original: value,
         value: proxy,
         current,
         finish: () => {
@@ -152,7 +172,7 @@ class JournalDraft {
           const result = writable()
           const keys = Reflect.ownKeys(result)
           for (const key of keys) {
-            const child: unknown = Reflect.getOwnPropertyDescriptor(result, key)?.value
+            const child: unknown = draftProperty(result, key)
             if (assignedKeys.has(key) || this.assigned.has(value) || this.tracks(child)) {
               Reflect.set(result, key, this.finish(child))
             }
@@ -168,12 +188,15 @@ class JournalDraft {
             }
           }
           for (const key of keys) {
-            Reflect.set(value, key, Reflect.getOwnPropertyDescriptor(result, key)?.value)
+            Reflect.set(value, key, draftProperty(result, key))
           }
           return value
         },
         listen
       }
+    }
+    if (path.startsWith('@inputOrder')) {
+      this.derived.push(node.value)
     }
     this.originals.set(value, node)
     this.proxies.set(node.value, node)
@@ -195,6 +218,10 @@ class JournalDraft {
 
   adopt<T>(value: T): T {
     const result = this.resolve(value)
+    // Derived nodes adopt their own point changes; rotated ancestors do not own those writes.
+    for (const node of this.derived) {
+      this.resolve(node)
+    }
     for (const apply of this.pending) {
       apply()
     }
@@ -224,6 +251,10 @@ class JournalDraft {
     }
     const node = this.proxies.get(value) ?? this.originals.get(value)
     if (node) {
+      // The derived owner points back to canonical state and shares index entries.
+      // Resolve that identity before children so a committed graph is finalized once.
+      this.resolved.set(value, node.original)
+      this.resolved.set(node.value, node.original)
       const result = node.finish()
       this.resolved.set(value, result)
       this.resolved.set(node.value, result)
@@ -235,7 +266,7 @@ class JournalDraft {
     }
     // Values created during the fold may hold drafts introduced by spread or destructuring.
     for (const key of Reflect.ownKeys(value)) {
-      const child: unknown = Reflect.getOwnPropertyDescriptor(value, key)?.value
+      const child: unknown = draftProperty(value, key)
       const finished = this.finish(child)
       if (finished !== child) {
         Reflect.set(value, key, finished)
@@ -257,16 +288,28 @@ export function isolateJournalTransition<T>(
   untracked: (key: string, value: unknown) => unknown
   adopt: () => JournalReducerState
   tracked: () => number
+  trackedDerived: () => number
 } {
   const draft = new JournalDraft()
   const candidate = draft.wrap(state, () => undefined, '')
+  // Register canonical maps before the facade can reach them through an isolated query.
+  void candidate.inputEntries
+  void candidate.inputCards
+  const order = draft.wrap(journalInputOrder(state), () => undefined, '@inputOrder')
+  setJournalInputOrder(candidate, order)
   const result = fold(candidate)
   return {
     state: candidate,
     result,
-    changes: (reset) => draft.changes(reset),
+    changes: (reset) =>
+      draft.changes(reset).filter((entry) => !entry.path.startsWith('@inputOrder')),
     untracked: (_key, value) => draft.untracked(value),
-    adopt: () => draft.adopt(candidate),
+    adopt: () => {
+      const adopted = draft.adopt({ state: candidate, order })
+      setJournalInputOrder(adopted.state, adopted.order)
+      return adopted.state
+    },
+    trackedDerived: () => draft.derivedNodes,
     tracked: () => draft.nodes
   }
 }

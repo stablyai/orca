@@ -30,14 +30,14 @@ const EmptyRunCheck = z.looseObject({
 export function withWorkerStartNext(
   receipt: unknown,
   /** Set when an older execution host will not report this worker's turn stops. */
-  silentHost?: { name: string; dispatchId: string }
+  silentHost?: { name: string; dispatchId: string; cli: string }
 ): unknown {
   const ready = ReadyWorkerStart.safeParse(receipt)
   if (!ready.success) {
     return receipt
   }
   const next = silentHost
-    ? `${AWAIT_WAKE} ${silentHost.name} cannot report a worker that stops without worker_done, so if no report arrives, run \`orca orchestration worker-show --dispatch ${silentHost.dispatchId}\`.`
+    ? `${AWAIT_WAKE} ${silentHost.name} cannot report a worker that stops without worker_done, so if no report arrives, run \`${silentHost.cli} orchestration worker-show --dispatch ${silentHost.dispatchId}\`.`
     : AWAIT_WAKE
   return { ...ready.data, next }
 }

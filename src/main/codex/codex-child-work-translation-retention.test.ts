@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import {

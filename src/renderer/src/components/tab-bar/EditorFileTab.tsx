@@ -242,7 +242,7 @@ export default function EditorFileTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         onPointerDown(
           e,
@@ -288,6 +288,7 @@ export default function EditorFileTab({
         {isRenaming ? (
           <Input
             ref={setRenameInputElement}
+            density="compact"
             data-tab-rename-input="true"
             aria-label={translate(
               'auto.components.tab.bar.EditorFileTab.3da7445c84',
@@ -295,8 +296,7 @@ export default function EditorFileTab({
               { value0: basename(file.filePath) }
             )}
             defaultValue={basename(file.filePath)}
-            // Keep inline rename within titlebar height while reserving readable filename width.
-            className="mr-1 h-5 w-[12ch] min-w-[72px] max-w-[132px] rounded-sm bg-input/40 px-1 py-0 text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
+            className="mr-1 min-w-0 flex-1"
             spellCheck={false}
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}

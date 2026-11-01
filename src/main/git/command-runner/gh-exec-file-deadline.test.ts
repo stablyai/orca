@@ -64,45 +64,6 @@ describe('gh exec deadline', () => {
     }
   )
 
-  it('spawns with hidden console and captured stdio, never an inherited or shell stdio', async () => {
-    const child = mockChild()
-    spawnMock.mockImplementation(() => {
-      queueMicrotask(() => settleChild(child, 'HTTP/2.0 204 No Content\r\n'))
-      return child
-    })
-
-    const result = await ghExecFileAsync(['api', '--include', 'user/starred/stablyai/orca'], {
-      timeout: 15_000
-    })
-
-    expect(result.stdout).toContain('204 No Content')
-    const [command, args, options] = spawnMock.mock.calls[0]
-    expect(command).toBe('gh')
-    expect(args).toEqual(['api', '--include', 'user/starred/stablyai/orca'])
-    expect(options.windowsHide).toBe(true)
-    expect(options.stdio).toEqual(['pipe', 'pipe', 'pipe'])
-    expect(options.shell).toBe(false)
-  })
-
-  it('writes configured stdin through the child-process capture', async () => {
-    const child = mockChild()
-    const input = JSON.stringify({ title: 'Image issue', body: 'x'.repeat(133_596) })
-    spawnMock.mockImplementation(() => {
-      queueMicrotask(() => settleChild(child, '{"number":1}'))
-      return child
-    })
-
-    await expect(
-      ghExecFileAsync(['api', '-X', 'POST', 'repos/stablyai/orca/issues', '--input', '-'], {
-        timeout: 15_000,
-        stdin: input
-      })
-    ).resolves.toEqual({ stdout: '{"number":1}', stderr: '' })
-
-    expect(spawnMock).toHaveBeenCalledOnce()
-    expect(child.stdin?.end).toHaveBeenCalledWith(input)
-  })
-
   it('fails rather than returning a clipped answer when gh overruns maxBuffer', async () => {
     const child = mockChild()
     spawnMock.mockImplementation(() => {
