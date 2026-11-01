@@ -473,7 +473,7 @@ it.each([3, 30])(
       reads.push({ method, resolve: read.resolve, reject: read.reject })
       return read.promise
     })
-    const menu = model(`shared-${count}`, ['codex', 'claude', 'gemini'])
+    const menu = model(`shared-${count}`, ['claude', 'codex', 'gemini'])
     const mount = (open = true) =>
       renderHook(({ open }) => useAgentLaunchPickerInventory('wt', menu, open), {
         initialProps: { open }
@@ -511,7 +511,7 @@ it.each([3, 30])(
       settings.resolve(
         projectAgentLaunchSettings({
           agentPermissionDefault: 'ask',
-          agentDefaultArgs: { codex: '--add-dir docs' }
+          agentDefaultArgs: { claude: '--add-dir docs' }
         })
       )
     )
