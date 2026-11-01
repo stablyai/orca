@@ -175,7 +175,8 @@ export function ToolRun({
   previousTodoWrite,
   previousUpdatePlan,
   fontScale = 1,
-  onOpenFile
+  onOpenFile,
+  viewedImages
 }: MobileNativeChatToolRunProps): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -245,6 +246,8 @@ export function ToolRun({
           </Text>
         ) : null}
       </Pressable>
+      {/* A read's result is the image the agent saw, so it shows without opening the run. */}
+      {viewedImages ? <View style={styles.viewedImages}>{viewedImages}</View> : null}
       {open ? (
         <ToolRunMembers
           followKey={blocks.length + asideCount}

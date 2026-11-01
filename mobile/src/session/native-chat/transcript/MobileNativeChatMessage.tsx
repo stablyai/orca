@@ -3,6 +3,7 @@ import { Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { MobileNativeChatLongPressContent as Content } from '../MobileNativeChatLongPressContent'
 import { splitNativeChatBlocks } from '../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
+import { nativeChatToolRunViewedImages } from '../../../../../src/shared/native-chat/tools/native-chat-tool-viewed-images'
 import { selectActiveToolCall } from '../../../../../src/shared/native-chat/tools/native-chat-tool-activity'
 import {
   isImageRefBlock,
@@ -154,6 +155,11 @@ function MobileNativeChatMessageImpl({
     }
     return { before, after: run.thoughtsAfter.map(thought) }
   }, [run, fontScale, activeTurnIsWorking, openReasoning, onToggleReasoning, onOpenFile, openSheet])
+  // Asks and prose read no files, so the run's own blocks or this message's give the same images.
+  const viewedImages = useMemo(
+    () => nativeChatToolRunViewedImages(run?.blocks ?? message.blocks),
+    [run, message.blocks]
+  )
   const drawnProse = isReasoning ? [] : withoutSubagentGroupTwins(prose)
   const isSystem = message.role === 'system'
   const showToolRun = tools.length > 0
@@ -331,6 +337,20 @@ function MobileNativeChatMessageImpl({
               previousUpdatePlan={previousUpdatePlan}
               fontScale={fontScale}
               onOpenFile={onOpenFile}
+              viewedImages={
+                viewedImages.length > 0
+                  ? // Keyed by path: a read finishing late inserts above images already loaded.
+                    viewedImages.map((image) => (
+                      <Prose
+                        key={image.path}
+                        block={image}
+                        text=""
+                        fontScale={fontScale}
+                        onLongPress={onLongPress}
+                      />
+                    ))
+                  : undefined
+              }
             />
           ) : null}
         </Content>
