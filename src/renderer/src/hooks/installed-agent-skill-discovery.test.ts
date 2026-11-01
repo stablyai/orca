@@ -27,12 +27,14 @@ const remote = (environmentId: string): RuntimeClientTarget => ({
   environmentId
 })
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((resolvePromise) => {
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
+    reject = rejectPromise
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 function result(scannedAt: number): SkillDiscoveryResult {
@@ -79,6 +81,36 @@ afterEach(() => {
 })
 
 describe('installed agent skill discovery lifecycle', () => {
+  it('does not retry or repopulate a retired request after contact recovery was armed', async () => {
+    const offline = deferred<SkillDiscoveryResult>()
+    const fresh = deferred<SkillDiscoveryResult>()
+    discoverSkillsForRuntimeTarget
+      .mockReturnValueOnce(offline.promise)
+      .mockReturnValueOnce(fresh.promise)
+    const original = discoverInstalledAgentSkills(false, undefined, remote('paired'))
+    const recovering = discoverInstalledAgentSkills(
+      false,
+      undefined,
+      remote('paired'),
+      undefined,
+      undefined,
+      undefined,
+      { recoveryEpoch: 1 }
+    )
+    invalidateInstalledAgentSkillDiscovery()
+    const replacement = discoverInstalledAgentSkills(false, undefined, remote('paired'))
+
+    offline.reject(new Error('Retired host'))
+    await expect(original).rejects.toThrow('Retired host')
+    await expect(recovering).rejects.toThrow('Retired host')
+    fresh.resolve(result(2))
+    await expect(replacement).resolves.toEqual(result(2))
+    await expect(discoverInstalledAgentSkills(false, undefined, remote('paired'))).resolves.toEqual(
+      result(2)
+    )
+    expect(discoverSkillsForRuntimeTarget).toHaveBeenCalledTimes(2)
+  })
+
   it('does not let a pre-install scan repopulate invalidated cache state', async () => {
     const staleScan = deferred<SkillDiscoveryResult>()
     const freshScan = deferred<SkillDiscoveryResult>()

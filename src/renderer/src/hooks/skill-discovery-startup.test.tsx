@@ -85,10 +85,12 @@ function snapshot(
 
 function deferred() {
   let resolve!: (value: SkillDiscoveryResult) => void
-  const promise = new Promise<SkillDiscoveryResult>((finish) => {
+  let reject!: (reason: Error) => void
+  const promise = new Promise<SkillDiscoveryResult>((finish, fail) => {
     resolve = finish
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 function useSkill() {
@@ -304,6 +306,116 @@ it('retires discovery even before a status entry exists', async () => {
   expect(first.result.current.settled).toBe(true)
   expect(first.result.current.installed).toBe(false)
 })
+
+it.each([
+  ['failed', 'startup'],
+  ['pending', 'startup'],
+  ['failed', 'retirement'],
+  ['pending', 'retirement']
+] as const)(
+  'recovers a %s %s scan once contact returns, sharing the retry',
+  async (phase, source) => {
+    if (source === 'retirement') {
+      useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot(1))
+      rpc.mockResolvedValueOnce(installed)
+      const previous = renderHook(useSkill)
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(previous.result.current.installed).toBe(true)
+      previous.unmount()
+      useAppStore
+        .getState()
+        .applyRuntimeHostStatusSnapshot(
+          snapshot(2, { verification: 'blocked', retired: true, transport: 'disconnected' })
+        )
+      rpc.mockClear()
+    }
+    const offline = deferred()
+    const retry = deferred()
+    rpc.mockReturnValueOnce(offline.promise).mockReturnValueOnce(retry.promise)
+    const first = renderHook(useSkill)
+    const second = renderHook(useSkill)
+    expect(rpc).toHaveBeenCalledTimes(1)
+    if (phase === 'failed') {
+      await act(async () => offline.reject(new Error('Host disconnected')))
+      expect(first.result.current.error).toBe('Host disconnected')
+      expect(second.result.current.error).toBe('Host disconnected')
+    }
+
+    act(() => useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot(3)))
+    const later = renderHook(useSkill)
+    if (phase === 'pending') {
+      expect(rpc).toHaveBeenCalledTimes(1)
+      await act(async () => offline.reject(new Error('Host disconnected')))
+    }
+    expect(rpc).toHaveBeenCalledTimes(2)
+    await act(async () => retry.resolve(installed))
+    for (const consumer of [first, second, later]) {
+      expect(consumer.result.current.installed).toBe(true)
+      expect(consumer.result.current.settled).toBe(true)
+      expect(consumer.result.current.loading).toBe(false)
+      expect(consumer.result.current.error).toBeNull()
+    }
+    expect(renderHook(useSkill).result.current.installed).toBe(true)
+    expect(rpc).toHaveBeenCalledTimes(2)
+  }
+)
+
+it.each(['pending', 'completed'] as const)(
+  'preserves a successful %s scan on retired-host reconnection even past cache freshness',
+  async (phase) => {
+    useAppStore
+      .getState()
+      .applyRuntimeHostStatusSnapshot(
+        snapshot(1, { verification: 'blocked', retired: true, transport: 'disconnected' })
+      )
+    const scan = deferred()
+    rpc.mockReturnValue(scan.promise)
+    const first = renderHook(useSkill)
+    if (phase === 'completed') {
+      await act(async () => scan.resolve(absent))
+    }
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_060_000)
+    act(() => useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot(2)))
+    if (phase === 'pending') {
+      await act(async () => scan.resolve(absent))
+    }
+    expect(first.result.current.settled).toBe(true)
+    expect(first.result.current.installed).toBe(false)
+    expect(first.result.current.error).toBeNull()
+    expect(rpc).toHaveBeenCalledTimes(1)
+  }
+)
+
+it.each(['failed', 'pending'] as const)(
+  'limits a %s scan to one retry per contact epoch across consumers',
+  async (phase) => {
+    const offline = deferred()
+    rpc.mockReturnValueOnce(offline.promise).mockRejectedValue(new Error('Scan failed'))
+    const first = renderHook(useSkill)
+    const second = renderHook(useSkill)
+    if (phase === 'failed') {
+      await act(async () => offline.reject(new Error('Host disconnected')))
+    }
+    await act(async () => useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot(1)))
+    if (phase === 'pending') {
+      await act(async () => offline.reject(new Error('Host disconnected')))
+    }
+    expect(rpc).toHaveBeenCalledTimes(2)
+    expect(first.result.current.error).toBe('Scan failed')
+    expect(second.result.current.error).toBe('Scan failed')
+    await act(async () => useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot(2)))
+    expect(rpc).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      useAppStore
+        .getState()
+        .applyRuntimeHostStatusSnapshot(snapshot(3, { verification: 'unavailable' }))
+      useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot(4))
+    })
+    expect(rpc).toHaveBeenCalledTimes(3)
+  }
+)
 
 it('preserves a same-runtime transport recovery scan but fences legacy unreachable recovery', async () => {
   useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot(1))

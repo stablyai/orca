@@ -24,6 +24,7 @@ import {
 import {
   useActiveSkillDiscoveryRuntimeTarget,
   useSkillDiscoveryRuntimeIdentity,
+  useSkillDiscoveryRuntimeRecovery,
   type SkillDiscoveryRuntimeTarget
 } from './use-active-skill-discovery-runtime-target'
 import { useMountedRef } from './useMountedRef'
@@ -184,7 +185,7 @@ export function useInstalledAgentSkillNames(
   }
 
   const refresh = useCallback(
-    async (force = true, showLoading = true): Promise<boolean> => {
+    async (force = true, showLoading = true, recoveryEpoch?: number): Promise<boolean> => {
       const requestDiscoveryTargetKey = discoveryTargetKey
       const requestGeneration = ++refreshGenerationRef.current
       const writeIfCurrent = (write: () => void): void => {
@@ -220,7 +221,8 @@ export function useInstalledAgentSkillNames(
           runtimeTarget,
           candidateSkillNames,
           sourceKinds,
-          runtimeIdentity
+          runtimeIdentity,
+          { recoveryEpoch }
         )
         installedAfterRefresh = hasInstalledAgentSkillNamed(next.skills, candidateSkillNames, {
           sourceKinds
@@ -260,6 +262,9 @@ export function useInstalledAgentSkillNames(
   useEffect(() => {
     void refresh(false)
   }, [refresh])
+
+  const recover = useCallback((epoch: number) => refresh(false, false, epoch), [refresh])
+  useSkillDiscoveryRuntimeRecovery(enabled ? runtimeTarget : null, discoveryTargetKey, recover)
 
   useEffect(() => {
     if (!enabled) {

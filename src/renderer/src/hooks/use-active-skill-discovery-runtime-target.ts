@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { getSingleFocusedRuntimeEnvironmentId } from '@/lib/single-runtime-legacy-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -78,4 +78,28 @@ export function useSkillDiscoveryRuntimeIdentity(
     }
   }, [environmentId])
   return useAppStore(selectIdentity)
+}
+
+/** Contact return retries discovery without changing the host's cache identity. */
+export function useSkillDiscoveryRuntimeRecovery(
+  runtimeTarget: RuntimeClientTarget | null,
+  discoveryKey: string,
+  recover: (contactEpoch: number) => Promise<unknown>
+): void {
+  const key = runtimeTarget?.kind === 'environment' ? discoveryKey : null
+  const contactEpoch = useAppStore((state) => {
+    if (runtimeTarget?.kind !== 'environment') {
+      return null
+    }
+    const entry = state.runtimeStatusByEnvironmentId.get(runtimeTarget.environmentId)
+    return entry?.status ? (entry.hostContactEpoch ?? 0) : null
+  })
+  const previousContactRef = useRef({ key, epoch: contactEpoch })
+  useEffect(() => {
+    const previous = previousContactRef.current
+    previousContactRef.current = { key, epoch: contactEpoch }
+    if (previous.key === key && previous.epoch !== contactEpoch && contactEpoch !== null) {
+      void recover(contactEpoch)
+    }
+  }, [contactEpoch, key, recover])
 }
