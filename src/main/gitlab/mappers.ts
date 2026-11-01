@@ -1,8 +1,10 @@
 import type { CheckStatus } from '../../shared/github/pull-request-types'
 import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../shared/gitlab-types'
 import {
+  classifyGitLabPipelineStatus,
   mapGitLabPipelineJobStatusToCheckStatus,
-  mapGitLabPipelineJobStatusToConclusion
+  mapGitLabPipelineJobStatusToConclusion,
+  settleGitLabManualPipelineStatus
 } from '../../shared/gitlab-pipeline-checks'
 import { summarizeProviderChecks } from '../../shared/provider-check-summary'
 
@@ -101,14 +103,12 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
   }
 }
 
-// A mergeable manual pipeline has no automatic work outstanding, but its manual stage has not passed.
 function settleManualPipelineStatus(data: GitLabMRRaw, pipelineStatus: CheckStatus): CheckStatus {
-  const raw = (data.head_pipeline ?? data.pipeline)?.status?.toLowerCase()
-  return raw === 'manual' &&
-    data.detailed_merge_status === 'mergeable' &&
-    data.has_conflicts !== true
-    ? 'neutral'
-    : pipelineStatus
+  return settleGitLabManualPipelineStatus(
+    (data.head_pipeline ?? data.pipeline)?.status,
+    data.detailed_merge_status === 'mergeable' && data.has_conflicts !== true,
+    pipelineStatus
+  )
 }
 
 function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {
@@ -153,10 +153,10 @@ export function derivePipelineStatus(
     return 'neutral'
   }
   if (typeof rollup === 'string') {
-    return classifyPipelineString(rollup)
+    return classifyGitLabPipelineStatus(rollup)
   }
   if (!Array.isArray(rollup)) {
-    return classifyPipelineString(rollup.status ?? '')
+    return classifyGitLabPipelineStatus(rollup.status ?? '')
   }
   // Share rollup rules so pipeline cards cannot diverge from Checks rows.
   const { state } = summarizeProviderChecks(
@@ -257,30 +257,4 @@ export function mapIssueToWorkItem(
     repoId,
     ...(projectRef ? { projectRef } : {})
   }
-}
-
-function classifyPipelineString(status: string): CheckStatus {
-  const s = status.toLowerCase()
-  if (s === 'success') {
-    return 'success'
-  }
-  if (s === 'failed' || s === 'action_required') {
-    return 'failure'
-  }
-  // Pipeline manual means a required human trigger; report pending because merge can still be blocked.
-  if (s === 'manual') {
-    return 'pending'
-  }
-  // Preserve neutral skipped/canceled pipeline tones, independently of job-rollup classification.
-  if (
-    s === 'created' ||
-    s === 'pending' ||
-    s === 'running' ||
-    s === 'waiting_for_resource' ||
-    s === 'preparing' ||
-    s === 'scheduled'
-  ) {
-    return 'pending'
-  }
-  return 'neutral'
 }

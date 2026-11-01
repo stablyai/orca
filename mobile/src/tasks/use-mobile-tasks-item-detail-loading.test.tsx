@@ -46,12 +46,11 @@ const statusChanges: { field: string; source: Partial<GitLabWorkItem> }[] = [
 ]
 
 describe('GitLab task detail hydration', () => {
-  it('keeps a failed zero-job pipeline failing on the selected item and task row', async () => {
+  it('keeps a failed parent pipeline failing on the selected item and task row', async () => {
     const fixture = await mount(hydratedItem())
     await fixture.transport.answer(
       success({
         ...GITLAB_DETAILS,
-        pipelineJobs: [],
         pipeline: { id: 99, status: 'failed', webUrl: 'https://gitlab.com/g/p/-/pipelines/99' }
       })
     )

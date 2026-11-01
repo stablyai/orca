@@ -5,7 +5,7 @@ import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { PipelineJobRow } from '../gitlab-item-dialog-parts'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import type { GitLabPipelineActions } from './use-gitlab-pipeline-actions'
-import { gitLabPipelineJobsToPRChecks } from '../../../../shared/gitlab-pipeline-checks'
+import { gitLabPipelineToPRCheck } from '../../../../shared/gitlab-pipeline-checks'
 import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel/check-presentation'
 import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
@@ -21,11 +21,13 @@ export function GitLabPipelineTab({ item, state, pipelineActions }: Props) {
     return null
   }
   const { details, expandedJobId, jobTraceById, loading, retryingJobId } = state
-  const [pipelineCheck] = gitLabPipelineJobsToPRChecks(
-    [],
-    details?.pipeline,
-    translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')
-  )
+  const pipelineCheck = details?.pipeline
+    ? gitLabPipelineToPRCheck(
+        details.pipeline,
+        details.item.mergeable,
+        translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')
+      )
+    : null
   const PipelineIcon = CHECK_ICON[pipelineCheck?.conclusion ?? 'neutral'] ?? CircleDashed
   return (
     <TabsContent value="pipeline" className="mt-0">

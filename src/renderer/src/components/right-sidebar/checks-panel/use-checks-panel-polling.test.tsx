@@ -63,26 +63,43 @@ afterEach(() => {
 })
 
 describe('useChecksPanelPolling live behavior', () => {
-  it('passes a failed pipeline without jobs through to the check rows', async () => {
-    gitlab.fetchDetails.mockResolvedValue({
+  it('keeps the parent pipeline beside its jobs and follows a parent-only status change', async () => {
+    const reply = (status: string) => ({
       item: { projectRef: { host: 'gitlab.com', path: 'g/p' } },
-      pipelineJobs: [],
-      pipeline: { id: 99, status: 'failed', webUrl: 'https://gitlab.com/g/p/-/pipelines/99' },
+      pipeline: { id: 99, status, webUrl: 'https://gitlab.com/g/p/-/pipelines/99' },
+      pipelineJobs: [
+        {
+          id: 7,
+          name: 'unit',
+          stage: 'test',
+          status: 'success',
+          webUrl: 'https://gitlab.com/g/p/-/jobs/7',
+          duration: 3
+        }
+      ],
       comments: []
     })
+    const jobRow = expect.objectContaining({ name: 'test: unit', conclusion: 'success' })
     const model = createModel()
     const { result } = renderHook(() => useChecksPanelPolling(model))
 
+    gitlab.fetchDetails.mockResolvedValueOnce(reply('running'))
     await act(async () => result.current.fetchGitLabDetails({ mrNumberOverride: 17 }))
+    expect(model.setChecks).toHaveBeenLastCalledWith(
+      [jobRow],
+      expect.objectContaining({ name: 'Pipeline #99', conclusion: 'pending' })
+    )
 
-    expect(model.setChecks).toHaveBeenLastCalledWith([
-      {
-        name: 'Pipeline #99',
-        status: 'completed',
-        conclusion: 'failure',
-        url: 'https://gitlab.com/g/p/-/pipelines/99'
-      }
-    ])
+    model.pollIntervalRef.current = 120_000
+    gitlab.fetchDetails.mockResolvedValueOnce(reply('failed'))
+    await act(async () => result.current.fetchGitLabDetails({ mrNumberOverride: 17 }))
+    expect(model.setChecks).toHaveBeenLastCalledWith([jobRow], {
+      name: 'Pipeline #99',
+      status: 'completed',
+      conclusion: 'failure',
+      url: 'https://gitlab.com/g/p/-/pipelines/99'
+    })
+    expect(model.pollIntervalRef.current).toBe(60_000)
   })
 
   it('gates installation by panel visibility and cleans the active poller', () => {

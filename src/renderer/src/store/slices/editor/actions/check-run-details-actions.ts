@@ -12,7 +12,6 @@ import {
 import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
 import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
-import { isGitLabCheck } from '../../../../../../shared/gitlab-pipeline-checks'
 import type { OpenFile } from '../types/open-file'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 import { reconcileCheckDetailsReadingCache } from '@/components/editor/check-details-reading-cache'
@@ -247,7 +246,9 @@ export function createCheckRunDetailsActions(
           requestId
         })
       }
-      const { worktree, repo } = findCheckRunDetailsOwner(state, file) ?? {}
+      const owner = findCheckRunDetailsOwner(state, file)
+      const worktree = owner?.worktree
+      const repo = owner?.repo
       if (!repo?.path) {
         patch({
           details: checkRunDetails.details,
@@ -266,17 +267,15 @@ export function createCheckRunDetailsActions(
       try {
         const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, worktree)
         // GitLab jobs require GitLab trace; GitHub check-runs returns null and blanks the refreshed tab.
-        const details = isGitLabCheck(check, checkRunDetails.gitlabProjectRef)
-          ? check.gitlabJobId
-            ? await loadGitLabJobLogDetails({
-                repoPath: repo.path,
-                repoId: repo.id,
-                repoOwnerExecutionHostId,
-                check,
-                // Why: a fork MR's job lives in the source project, not the repo's own.
-                projectRef: checkRunDetails.gitlabProjectRef ?? null
-              })
-            : null
+        const details = check.gitlabJobId
+          ? await loadGitLabJobLogDetails({
+              repoPath: repo.path,
+              repoId: repo.id,
+              repoOwnerExecutionHostId,
+              check,
+              // Why: a fork MR's job lives in the source project, not the repo's own.
+              projectRef: checkRunDetails.gitlabProjectRef ?? null
+            })
           : await get().fetchPRCheckDetails(
               repo.path,
               {

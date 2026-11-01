@@ -1,18 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import { buildGitHubCheckSummary, type GitHubCheckLike } from './github-check-summary'
 import { buildGitLabCheckSummary } from './gitlab-check-summary'
+import { getHostedChecksLabel, getHostedReviewSignalTone } from './mobile-hosted-check-status'
 import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
 
 describe('buildGitHubCheckSummary', () => {
-  it('keeps a failed GitLab pipeline failing when it has no jobs', () => {
-    expect(
-      buildGitLabCheckSummary([], {
-        id: 99,
-        status: 'failed',
-        webUrl: 'https://gitlab.com/g/p/-/pipelines/99'
-      })
-    ).toEqual({ state: 'failure', total: 1, passed: 0, failed: 1, pending: 0, neutral: 0 })
-  })
+  it.each([
+    ['failed', undefined, '1 failing', 'danger'],
+    ['manual', undefined, '1 pending', 'warning'],
+    ['manual', 'MERGEABLE', 'Unresolved checks', 'neutral'],
+    ['canceled', undefined, 'Unresolved checks', 'neutral']
+  ] as const)(
+    'summarizes a %s GitLab parent pipeline over its passing jobs',
+    (status, mergeable, label, tone) => {
+      const jobs = Array.from({ length: 100 }, () => ({ status: 'success' }))
+      const checksSummary = buildGitLabCheckSummary(jobs, { id: 99, status }, mergeable)
+      expect(getHostedChecksLabel({ checksSummary })).toBe(label)
+      expect(getHostedReviewSignalTone({ checksSummary }, 'checks')).toBe(tone)
+    }
+  )
 
   it('returns none for empty check lists', () => {
     expect(buildGitHubCheckSummary([])).toEqual({

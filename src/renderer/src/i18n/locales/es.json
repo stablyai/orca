@@ -13691,6 +13691,7 @@
                 "failingChecks_one": "{{count}} comprobación fallida",
                 "failingChecks_other": "{{count}} comprobaciones fallidas",
                 "failingChecks_many": "{{count}} comprobaciones fallidas",
+                "pipelineFailed": "{{name}} falló",
                 "pendingChecks_one": "{{count}} comprobación pendiente",
                 "pendingChecks_other": "{{count}} comprobaciones pendientes",
                 "pendingChecks_many": "{{count}} comprobaciones pendientes",

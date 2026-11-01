@@ -176,7 +176,6 @@ function graphQLCheckSuite(
     conclusion: string | null
     url: string | null
     app: { name?: string | null; slug?: string | null } | null
-    checkRuns: { totalCount: number }
   }> = {}
 ): Record<string, unknown> {
   const databaseId = overrides.databaseId ?? 1001
@@ -187,8 +186,7 @@ function graphQLCheckSuite(
     url:
       overrides.url ??
       `https://github.com/acme/widgets/commit/head-oid/checks?check_suite_id=${databaseId}`,
-    app: overrides.app ?? { name: 'GitHub Actions', slug: 'github-actions' },
-    checkRuns: overrides.checkRuns ?? { totalCount: 0 }
+    app: overrides.app ?? { name: 'GitHub Actions', slug: 'github-actions' }
   }
 }
 
@@ -415,32 +413,26 @@ describe('getPRChecks', () => {
     ])
   })
 
-  it.each(['ACTION_REQUIRED', 'FAILURE', 'STARTUP_FAILURE'])(
-    'surfaces a %s suite even when there are zero check runs',
-    async (conclusion) => {
-      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-      ghExecFileAsyncMock.mockResolvedValueOnce(
-        graphQLChecksResponse({
-          checkSuites: [
-            graphQLCheckSuite({ databaseId: 1001, conclusion }),
-            graphQLCheckSuite({ databaseId: 1002, conclusion, checkRuns: { totalCount: 1 } })
-          ]
-        })
-      )
+  it('surfaces an action_required suite even when there are zero check runs', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce(
+      graphQLChecksResponse({
+        checkSuites: [graphQLCheckSuite({ databaseId: 1001 })]
+      })
+    )
 
-      const checks = await getPRChecks('/repo-root', 42, 'head-oid')
+    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
 
-      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-      expect(checks).toEqual([
-        {
-          name: 'GitHub Actions #1001',
-          status: 'completed',
-          conclusion: conclusion === 'ACTION_REQUIRED' ? 'action_required' : 'failure',
-          url: 'https://github.com/acme/widgets/commit/head-oid/checks?check_suite_id=1001'
-        }
-      ])
-    }
-  )
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(checks).toEqual([
+      {
+        name: 'GitHub Actions #1001',
+        status: 'completed',
+        conclusion: 'action_required',
+        url: 'https://github.com/acme/widgets/commit/head-oid/checks?check_suite_id=1001'
+      }
+    ])
+  })
 
   it('returns an empty list when the rollup has no checks or pending suites', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
@@ -450,80 +442,6 @@ describe('getPRChecks', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(checks).toEqual([])
-  })
-
-  it.each(['graphql', 'rest'])(
-    'keeps approval-only behavior when %s suite counts are absent',
-    async (transport) => {
-      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-      const suites = [
-        { id: 1001, databaseId: 1001, status: 'completed', conclusion: 'action_required' },
-        { id: 1002, databaseId: 1002, status: 'completed', conclusion: 'startup_failure' }
-      ]
-      if (transport === 'graphql') {
-        ghExecFileAsyncMock.mockResolvedValueOnce(graphQLChecksResponse({ checkSuites: suites }))
-      } else {
-        ghExecFileAsyncMock
-          .mockRejectedValueOnce(new Error('GraphQL unavailable'))
-          .mockResolvedValueOnce({ stdout: JSON.stringify({ check_runs: [] }) })
-          .mockResolvedValueOnce({ stdout: JSON.stringify({ statuses: [] }) })
-          .mockResolvedValueOnce({ stdout: JSON.stringify({ check_suites: suites }) })
-      }
-
-      const checks = await getPRChecks('/repo-root', 42, 'head-oid')
-
-      expect(checks).toHaveLength(1)
-      expect(checks[0]).toMatchObject({ conclusion: 'action_required' })
-    }
-  )
-
-  it('keeps a failed suite without runs in REST without duplicating a suite with runs', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('GraphQL unavailable'))
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          check_runs: [
-            {
-              id: 88,
-              name: 'build',
-              status: 'completed',
-              conclusion: 'failure',
-              html_url: 'https://github.com/acme/widgets/runs/88',
-              details_url: null,
-              check_suite: { id: 1000 }
-            }
-          ]
-        })
-      })
-      .mockResolvedValueOnce({ stdout: JSON.stringify({ statuses: [] }) })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          check_suites: [
-            { id: 1000, status: 'completed', conclusion: 'failure', latest_check_runs_count: 1 },
-            {
-              id: 1001,
-              status: 'completed',
-              conclusion: 'startup_failure',
-              latest_check_runs_count: 0,
-              app: { name: 'GitHub Actions' }
-            }
-          ]
-        })
-      })
-
-    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
-
-    expect(checks).toEqual([
-      expect.objectContaining({ name: 'build', conclusion: 'failure', checkRunId: 88 }),
-      {
-        name: 'GitHub Actions #1001',
-        status: 'completed',
-        conclusion: 'failure',
-        url: 'https://github.com/acme/widgets/commits/head-oid/checks#check-suite-1001'
-      }
-    ])
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(4)
   })
 
   it('uses REST fallback when the GraphQL rollup is unavailable', async () => {

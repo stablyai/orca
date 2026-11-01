@@ -14390,6 +14390,7 @@
                 "failingChecks_many": "{{count}} проверок с ошибками",
                 "failingChecks_one": "{{count}} проверка с ошибками",
                 "failingChecks_other": "{{count}} проверки с ошибками",
+                "pipelineFailed": "{{name}} завершился с ошибкой",
                 "pendingChecks_few": "{{count}} проверки в ожидании результата",
                 "pendingChecks_many": "{{count}} проверок в ожидании результата",
                 "pendingChecks_one": "{{count}} проверка в ожидании результата",

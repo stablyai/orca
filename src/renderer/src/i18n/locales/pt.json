@@ -9953,6 +9953,7 @@
                 "failingChecks_one": "{{count}} verificação com falha",
                 "failingChecks_other": "{{count}} verificações com falha",
                 "failingChecks_many": "{{count}} verificações com falha",
+                "pipelineFailed": "{{name}} falhou",
                 "pendingChecks_one": "{{count}} verificação pendente",
                 "pendingChecks_other": "{{count}} verificações pendentes",
                 "pendingChecks_many": "{{count}} verificações pendentes",

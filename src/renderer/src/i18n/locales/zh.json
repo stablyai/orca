@@ -13361,6 +13361,7 @@
                 "baseCommitLabel": "基础提交：",
                 "failingChecks_one": "{{count}} 项检查失败",
                 "failingChecks_other": "{{count}} 项检查失败",
+                "pipelineFailed": "{{name}} 失败",
                 "pendingChecks_one": "{{count}} 项检查待处理",
                 "pendingChecks_other": "{{count}} 项检查待处理",
                 "unresolvedChecks_one": "{{count}} 项检查未解决",

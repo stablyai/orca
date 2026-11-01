@@ -2,7 +2,10 @@ import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { useChecksDetailTimer } from './use-checks-detail-timer'
 import { ChecksDetailPollingPolicy } from './checks-detail-polling-policy'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { gitLabPipelineJobsToPRChecks } from '../../../../../shared/gitlab-pipeline-checks'
+import {
+  gitLabPipelineJobsToPRChecks,
+  gitLabPipelineToPRCheck
+} from '../../../../../shared/gitlab-pipeline-checks'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey
@@ -227,14 +230,17 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           throw new Error('GitLab MR details are unavailable')
         }
         gitLabProjectRefRef.current = details.item.projectRef ?? null
-        const result = gitLabPipelineJobsToPRChecks(
-          details.pipelineJobs ?? [],
-          details.pipeline,
-          translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')
-        )
-        setChecks(result)
+        const result = gitLabPipelineJobsToPRChecks(details.pipelineJobs ?? [])
+        const pipelineCheck = details.pipeline
+          ? gitLabPipelineToPRCheck(
+              details.pipeline,
+              details.item.mergeable,
+              translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')
+            )
+          : null
+        setChecks(result, pipelineCheck)
         setComments(gitLabMRCommentsToPRComments(details?.comments))
-        const signature = policyRef.current.accept(result)
+        const signature = policyRef.current.accept(result, pipelineCheck)
         pollIntervalRef.current =
           signature === prevChecksRef.current
             ? Math.min(pollIntervalRef.current * 2, 120_000)

@@ -14,13 +14,15 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
-import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
+import { getCheckStatusLabel } from '../../../../../shared/pr-check-status-label'
 import { type ChecksListProps, useChecksListState } from './use-checks-list-state'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink, openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
   const {
     checks,
+    pipelineCheck,
     checksError,
     checksLoading,
     checkDetailsContextKey,
@@ -47,6 +49,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
   } = useChecksListState(props)
   return (
     <>
+      {pipelineCheck && <PipelineCheckRow check={pipelineCheck} />}
       {checks.length > 0 && (
         <button
           type="button"
@@ -103,7 +106,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
         </button>
       )}
 
-      {checksLoading && checks.length === 0 ? (
+      {pipelineCheck && checks.length === 0 ? null : checksLoading && checks.length === 0 ? (
         <div className="flex items-center justify-center py-8">
           <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
         </div>
@@ -231,5 +234,37 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
         </>
       )}
     </>
+  )
+}
+
+// The parent pipeline opens on the provider; it has no inline job log to expand.
+function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Element {
+  const conclusion = check.conclusion ?? 'pending'
+  const Icon = CHECK_ICON[conclusion] ?? CircleDashed
+  const content = (
+    <>
+      <Icon
+        className={cn(
+          'size-3.5 shrink-0',
+          CHECK_COLOR[conclusion] ?? 'text-muted-foreground',
+          conclusion === 'pending' && 'animate-spin'
+        )}
+      />
+      <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
+      <span className="text-[11px] text-muted-foreground">{getCheckStatusLabel(check)}</span>
+      {check.url && <ExternalLink className="size-3 shrink-0 text-muted-foreground" />}
+    </>
+  )
+  const className = 'flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5'
+  return check.url ? (
+    <a
+      href={check.url}
+      onClick={openAppHttpLinkFromAnchor}
+      className={cn(className, 'transition-colors hover:bg-accent/40')}
+    >
+      {content}
+    </a>
+  ) : (
+    <div className={className}>{content}</div>
   )
 }

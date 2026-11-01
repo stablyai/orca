@@ -29,6 +29,7 @@ export type ChecksPanelActiveContentModel = Pick<
   | 'conflictDetailsRefreshing'
   | 'detachedHeadDisplay'
   | 'editingTitle'
+  | 'gitLabPipelineCheck'
   | 'isFixingChecksWithAI'
   | 'isRefreshing'
   | 'isResolvingConflictsWithAI'

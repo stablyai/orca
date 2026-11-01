@@ -1,5 +1,6 @@
-import type { GitLabPipeline, GitLabPipelineJob, GitLabProjectRef } from './gitlab-types'
+import type { GitLabPipeline, GitLabPipelineJob, MRMergeableState } from './gitlab-types'
 import type { PRCheckDetail } from './github/check-types'
+import type { CheckStatus } from './github/pull-request-types'
 
 export function mapGitLabPipelineJobStatusToCheckStatus(status: string): PRCheckDetail['status'] {
   const s = status.toLowerCase()
@@ -56,25 +57,73 @@ export function mapGitLabPipelineJobStatusToConclusion(
   return null
 }
 
-export function isGitLabCheck(check: PRCheckDetail, projectRef?: GitLabProjectRef | null): boolean {
-  return Boolean(check.gitlabJobId || projectRef)
+// Pipeline-level verdict: unlike job rows, a required manual pipeline still blocks and canceled/skipped are not failures.
+export function classifyGitLabPipelineStatus(status: string): CheckStatus {
+  const s = status.toLowerCase()
+  if (s === 'success') {
+    return 'success'
+  }
+  if (s === 'failed' || s === 'action_required') {
+    return 'failure'
+  }
+  // Pipeline manual means a required human trigger; report pending because merge can still be blocked.
+  if (s === 'manual') {
+    return 'pending'
+  }
+  // Preserve neutral skipped/canceled pipeline tones, independently of job-rollup classification.
+  if (
+    s === 'created' ||
+    s === 'pending' ||
+    s === 'running' ||
+    s === 'waiting_for_resource' ||
+    s === 'preparing' ||
+    s === 'scheduled'
+  ) {
+    return 'pending'
+  }
+  return 'neutral'
 }
 
-export function gitLabPipelineJobsToPRChecks(
-  jobs: GitLabPipelineJob[],
-  pipeline?: GitLabPipeline,
+// A mergeable manual pipeline has no automatic work outstanding, but its manual stage has not passed.
+export function settleGitLabManualPipelineStatus(
+  rawStatus: string | undefined,
+  mergeable: boolean,
+  status: CheckStatus
+): CheckStatus {
+  return rawStatus?.toLowerCase() === 'manual' && mergeable ? 'neutral' : status
+}
+
+const PIPELINE_CONCLUSION: Record<CheckStatus, PRCheckDetail['conclusion']> = {
+  success: 'success',
+  failure: 'failure',
+  pending: 'pending',
+  neutral: 'neutral'
+}
+
+/** The parent pipeline as a provider link, never a job row: its outcome follows pipeline-level policy. */
+export function gitLabPipelineToPRCheck(
+  pipeline: GitLabPipeline,
+  mergeable: MRMergeableState | undefined,
   pipelineLabel = 'Pipeline'
-): PRCheckDetail[] {
-  if (jobs.length === 0 && pipeline) {
-    return [
-      {
-        name: `${pipelineLabel} #${pipeline.id}`,
-        status: mapGitLabPipelineJobStatusToCheckStatus(pipeline.status),
-        conclusion: mapGitLabPipelineJobStatusToConclusion(pipeline.status) ?? 'neutral',
-        url: pipeline.webUrl ?? null
-      }
-    ]
+): PRCheckDetail {
+  const verdict = settleGitLabManualPipelineStatus(
+    pipeline.status,
+    mergeable === 'MERGEABLE',
+    classifyGitLabPipelineStatus(pipeline.status)
+  )
+  return {
+    name: `${pipelineLabel} #${pipeline.id}`,
+    // Settled pipelines read as completed so shared classifiers agree with the pipeline verdict.
+    status:
+      verdict === 'pending'
+        ? mapGitLabPipelineJobStatusToCheckStatus(pipeline.status)
+        : 'completed',
+    conclusion: PIPELINE_CONCLUSION[verdict],
+    url: pipeline.webUrl ?? null
   }
+}
+
+export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheckDetail[] {
   return jobs.map((job) => ({
     name: job.stage ? `${job.stage}: ${job.name}` : job.name,
     status: mapGitLabPipelineJobStatusToCheckStatus(job.status),

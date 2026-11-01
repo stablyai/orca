@@ -1,19 +1,27 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
 
 vi.mock('../HostedReviewActions', () => ({ default: () => null }))
 vi.mock('../SourceControlAgentActionDialog', () => ({ SourceControlAgentActionDialog: () => null }))
+const linkRouting = vi.hoisted(() => ({ openOwnedHttpLink: vi.fn() }))
+vi.mock('@/lib/http-link-routing', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...linkRouting
+}))
 
 import { ChecksPanelActiveContent } from './active-content'
 import { ChecksPanelEmptyContent } from './empty-content'
 import { getHostedReviewManualRefreshError } from '../github-refresh-error-copy'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { gitLabPipelineJobsToPRChecks } from '../../../../../shared/gitlab-pipeline-checks'
+import {
+  gitLabPipelineJobsToPRChecks,
+  gitLabPipelineToPRCheck
+} from '../../../../../shared/gitlab-pipeline-checks'
 import { i18n } from '@/i18n/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
@@ -22,6 +30,84 @@ afterEach(async () => {
   vi.useRealTimers()
   await i18n.changeLanguage('en')
 })
+
+const activeModel = {
+  activeConnectionId: null,
+  activeConflictReview: null,
+  activeGitLabReview: null,
+  activeReview: {
+    provider: 'github',
+    number: 42,
+    state: 'open',
+    title: 'Preserve mounted panel behavior',
+    url: 'https://github.com/orca/app/pull/42',
+    status: 'success',
+    updatedAt: '2026-08-23T00:00:00.000Z',
+    mergeable: 'MERGEABLE'
+  },
+  activeSourceControlLaunchPlatform: 'darwin',
+  activeWorktree: null,
+  activeWorktreeId: 'worktree-1',
+  agentComposerState: null,
+  aiActionDisabledReason: undefined,
+  fixChecksDisabledReason: undefined,
+  canTargetPRComments: false,
+  checks: [],
+  checksError: null,
+  checksLoading: false,
+  claimedCommentResolutionRef: { current: null },
+  commentResolutionLaunchAcceptedRef: { current: false },
+  comments: [],
+  commentsDisabledReason: undefined,
+  commentsError: null,
+  commentsLoading: false,
+  commentsSelectionClearRequest: null,
+  conflictDetailsRefreshing: false,
+  detachedHeadDisplay: null,
+  editingTitle: false,
+  gitLabPipelineCheck: null,
+  getGitLabProjectRef: vi.fn(() => null),
+  handleAddPRComment: vi.fn(),
+  handleCancelEdit: vi.fn(),
+  handleDeleteComment: vi.fn(),
+  handleEditComment: vi.fn(),
+  handleFixChecksWithAI: vi.fn(),
+  handleLinkAnotherReview: vi.fn(),
+  handleLoadCheckDetails: vi.fn(),
+  handleOpenPR: vi.fn(),
+  handleRefresh: vi.fn(),
+  manualRefreshError: null,
+  handleOpenStackPR: vi.fn(),
+  handleReplyToComment: vi.fn(),
+  handleResolve: vi.fn(),
+  handleResolveCommentsWithAI: vi.fn(),
+  handleResolveConflictsWithAI: vi.fn(),
+  handleSaveTitle: vi.fn(),
+  handleSetReaction: vi.fn(),
+  handleStartEdit: vi.fn(),
+  handleTitleKeyDown: vi.fn(),
+  handleUnlinkReview: vi.fn(),
+  isFixingChecksWithAI: false,
+  isRefreshing: false,
+  isResolvingConflictsWithAI: false,
+  linkedGitLabMR: null,
+  pendingCommentResolutionRef: { current: null },
+  pr: null,
+  prRefreshState: undefined,
+  repo: null,
+  refreshHostedReviewAfterMutation: vi.fn(),
+  resolveCommentsWithAIDisabledReason: undefined,
+  saveLaunchActionDefault: vi.fn(),
+  setAgentComposerState: vi.fn(),
+  setChecksPanelContentRef: vi.fn(),
+  settings: null,
+  sourceControlAiActionsVisible: false,
+  stateRequestKey: 'review-42',
+  titleDraft: '',
+  setTitleDraft: vi.fn(),
+  titleInputRef: { current: null },
+  titleSaving: false
+} satisfies ChecksPanelActiveContentModel
 
 describe('checks panel concrete content', () => {
   it('renders a durable unlinked state that can relink before PR data refetches', () => {
@@ -197,87 +283,10 @@ describe('checks panel concrete content', () => {
     }
   )
 
-  it('renders the active review header and empty check/comment sections with accessible actions', async () => {
-    const model = {
-      activeConnectionId: null,
-      activeConflictReview: null,
-      activeGitLabReview: null,
-      activeReview: {
-        provider: 'github',
-        number: 42,
-        state: 'open',
-        title: 'Preserve mounted panel behavior',
-        url: 'https://github.com/orca/app/pull/42',
-        status: 'success',
-        updatedAt: '2026-08-23T00:00:00.000Z',
-        mergeable: 'MERGEABLE'
-      },
-      activeSourceControlLaunchPlatform: 'darwin',
-      activeWorktree: null,
-      activeWorktreeId: 'worktree-1',
-      agentComposerState: null,
-      aiActionDisabledReason: undefined,
-      fixChecksDisabledReason: undefined,
-      canTargetPRComments: false,
-      checks: [],
-      checksError: null,
-      checksLoading: false,
-      claimedCommentResolutionRef: { current: null },
-      commentResolutionLaunchAcceptedRef: { current: false },
-      comments: [],
-      commentsDisabledReason: undefined,
-      commentsError: null,
-      commentsLoading: false,
-      commentsSelectionClearRequest: null,
-      conflictDetailsRefreshing: false,
-      detachedHeadDisplay: null,
-      editingTitle: false,
-      getGitLabProjectRef: vi.fn(() => null),
-      handleAddPRComment: vi.fn(),
-      handleCancelEdit: vi.fn(),
-      handleDeleteComment: vi.fn(),
-      handleEditComment: vi.fn(),
-      handleFixChecksWithAI: vi.fn(),
-      handleLinkAnotherReview: vi.fn(),
-      handleLoadCheckDetails: vi.fn(),
-      handleOpenPR: vi.fn(),
-      handleRefresh: vi.fn(),
-      manualRefreshError: null,
-      handleOpenStackPR: vi.fn(),
-      handleReplyToComment: vi.fn(),
-      handleResolve: vi.fn(),
-      handleResolveCommentsWithAI: vi.fn(),
-      handleResolveConflictsWithAI: vi.fn(),
-      handleSaveTitle: vi.fn(),
-      handleSetReaction: vi.fn(),
-      handleStartEdit: vi.fn(),
-      handleTitleKeyDown: vi.fn(),
-      handleUnlinkReview: vi.fn(),
-      isFixingChecksWithAI: false,
-      isRefreshing: false,
-      isResolvingConflictsWithAI: false,
-      linkedGitLabMR: null,
-      pendingCommentResolutionRef: { current: null },
-      pr: null,
-      prRefreshState: undefined,
-      repo: null,
-      refreshHostedReviewAfterMutation: vi.fn(),
-      resolveCommentsWithAIDisabledReason: undefined,
-      saveLaunchActionDefault: vi.fn(),
-      setAgentComposerState: vi.fn(),
-      setChecksPanelContentRef: vi.fn(),
-      settings: null,
-      sourceControlAiActionsVisible: false,
-      stateRequestKey: 'review-42',
-      titleDraft: '',
-      setTitleDraft: vi.fn(),
-      titleInputRef: { current: null },
-      titleSaving: false
-    } satisfies ChecksPanelActiveContentModel
+  it('renders the active review header and empty check/comment sections with accessible actions', () => {
+    const model = activeModel
 
-    const { rerender } = render(<ChecksPanelActiveContent model={model} />, {
-      wrapper: TooltipProvider
-    })
+    const { rerender } = render(<ChecksPanelActiveContent model={model} />)
 
     expect(screen.getByText('Preserve mounted panel behavior')).toBeTruthy()
     expect(screen.getByText('No checks configured')).toBeTruthy()
@@ -286,36 +295,6 @@ describe('checks panel concrete content', () => {
     expect(screen.getByRole('button', { name: '#42' }).getAttribute('title')).toContain(
       'Open on GitHub'
     )
-    rerender(
-      <ChecksPanelActiveContent
-        model={{
-          ...model,
-          activeReview: { ...model.activeReview, provider: 'gitlab', status: 'failure' },
-          checks: gitLabPipelineJobsToPRChecks([], {
-            id: 99,
-            status: 'failed',
-            webUrl: 'https://gitlab.com/g/p/-/pipelines/99'
-          })
-        }}
-      />
-    )
-    expect(screen.queryByText('No checks configured')).toBeNull()
-    expect(screen.getByText('Failed')).toBeTruthy()
-    await i18n.changeLanguage('es')
-    rerender(
-      <ChecksPanelActiveContent
-        model={{
-          ...model,
-          checks: gitLabPipelineJobsToPRChecks([], {
-            id: 99,
-            status: 'failed',
-            webUrl: 'https://gitlab.com/g/p/-/pipelines/99'
-          })
-        }}
-      />
-    )
-    expect(screen.getByText('Falló')).toBeTruthy()
-    await i18n.changeLanguage('en')
     const failedModel = {
       ...model,
       checksError: 'Previous detail error',
@@ -341,5 +320,47 @@ describe('checks panel concrete content', () => {
     // The classified GitHub line says more than the manual failure, so it is the one shown.
     expect(screen.getAllByRole('alert')).toHaveLength(1)
     expect(screen.getByRole('alert').textContent).toContain('GitHub is unreachable right now')
+  })
+
+  it('leads with a failed GitLab parent pipeline whose returned jobs all pass', async () => {
+    const pipelineUrl = 'https://gitlab.com/g/p/-/pipelines/99'
+    const model = {
+      ...activeModel,
+      activeReview: {
+        ...activeModel.activeReview,
+        provider: 'gitlab' as const,
+        status: 'failure' as const
+      },
+      checks: gitLabPipelineJobsToPRChecks([
+        { id: 7, name: 'unit', stage: 'test', status: 'success', webUrl: '', duration: 3 }
+      ]),
+      gitLabPipelineCheck: gitLabPipelineToPRCheck(
+        { id: 99, status: 'failed', webUrl: pipelineUrl },
+        'MERGEABLE'
+      ),
+      handleFixChecksWithAI: vi.fn(),
+      sourceControlAiActionsVisible: true
+    }
+    const { rerender } = render(<ChecksPanelActiveContent model={model} />, {
+      wrapper: TooltipProvider
+    })
+
+    expect(screen.getByText('Pipeline #99 failed')).toBeTruthy()
+    expect(screen.getByText('1 passing')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Fix' }))
+    expect(model.handleFixChecksWithAI).toHaveBeenCalledOnce()
+    // The parent is a provider destination, not an expandable job without inline details.
+    fireEvent.click(screen.getByRole('link', { name: /Pipeline #99/ }))
+    expect(linkRouting.openOwnedHttpLink).toHaveBeenCalledWith(pipelineUrl, expect.anything())
+    expect(model.handleLoadCheckDetails).not.toHaveBeenCalled()
+    expect(screen.queryByText('No inline details are available for this check.')).toBeNull()
+
+    // Zero jobs, or a job read that came back empty, still shows the parent.
+    rerender(<ChecksPanelActiveContent model={{ ...model, checks: [] }} />)
+    expect(screen.queryByText('No checks configured')).toBeNull()
+    expect(screen.getByRole('link', { name: /Pipeline #99/ })).toBeTruthy()
+    await i18n.changeLanguage('es')
+    rerender(<ChecksPanelActiveContent model={{ ...model, checks: [] }} />)
+    expect(screen.getByText('Pipeline #99 falló')).toBeTruthy()
   })
 })

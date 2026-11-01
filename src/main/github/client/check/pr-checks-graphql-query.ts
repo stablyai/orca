@@ -38,9 +38,6 @@ query($owner: String!, $repo: String!, $pr: Int!) {
                 status
                 conclusion
                 url
-                checkRuns(first: 1) {
-                  totalCount
-                }
                 app {
                   name
                   slug
@@ -106,7 +103,6 @@ export type GraphQLStatusCheckContext =
   | { __typename?: string | null }
 
 export type GraphQLCheckSuite = {
-  checkRuns?: { totalCount?: number | null } | null
   databaseId?: number | null
   status?: string | null
   conclusion?: string | null
@@ -130,7 +126,6 @@ export type RestCommitStatus = {
 }
 
 export type RestCheckSuite = {
-  latest_check_runs_count?: number | null
   id?: number | null
   status: string | null
   conclusion: string | null

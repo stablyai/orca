@@ -253,13 +253,14 @@ export type GitLabPipelineJob = {
   duration: number | null
 }
 
-// Flatten discussions into the work-item details comment list.
+// The MR's own pipeline; its status is the pipeline verdict even when its job list is partial or empty.
 export type GitLabPipeline = {
   id: number
   status: string
   webUrl?: string | null
 }
 
+// Flatten discussions into the work-item details comment list.
 export type GitLabWorkItemDetails = {
   /** repoId is stamped by the renderer's caller — the main process doesn't know Orca's Repo.id. */
   item: Omit<GitLabWorkItem, 'repoId'>

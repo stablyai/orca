@@ -13361,6 +13361,7 @@
                 "baseCommitLabel": "ベースコミット:",
                 "failingChecks_one": "失敗したチェック {{count}} 件",
                 "failingChecks_other": "失敗したチェック {{count}} 件",
+                "pipelineFailed": "{{name}} が失敗しました",
                 "pendingChecks_one": "保留中のチェック {{count}} 件",
                 "pendingChecks_other": "保留中のチェック {{count}} 件",
                 "unresolvedChecks_one": "未解決のチェック {{count}} 件",
