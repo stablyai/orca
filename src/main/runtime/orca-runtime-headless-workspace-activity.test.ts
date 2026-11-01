@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
 const WT = 'repo-1::/tmp/wt-a'
 const PTY = `${WT}@@a1b2c3d4`
 
-function createRuntime(window: 'headless' | 'desktop') {
+function createRuntime(window: 'headless' | 'desktop', failWrite = false) {
   const meta: Record<string, WorktreeMeta> = { [WT]: storeWorktreeMeta({ lastActivityAt: 1 }) }
   const repo = storeRepo({ id: 'repo-1', path: '/tmp/repo-1', connectionId: null })
   const runtime = new OrcaRuntimeService(
@@ -27,6 +27,9 @@ function createRuntime(window: 'headless' | 'desktop') {
       getWorktreeMeta: (id) => meta[id],
       getAllWorktreeMeta: () => meta,
       setWorktreeMeta: ({ id }: HostWorktreeTarget, updates) => {
+        if (failWrite) {
+          throw new Error('ambiguous workspace')
+        }
         meta[id] = { ...meta[id], ...updates }
         return meta[id]
       }
@@ -78,6 +81,17 @@ describe('workspace activity without a desktop window', () => {
     await runtime.createTerminal(`id:${WT}`, {})
     await runtime.onPtyExit(PTY, 0)
     expect(meta[WT].lastActivityAt).toBe(1)
+  })
+
+  it('returns the created terminal when the activity write fails', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { runtime } = createRuntime('headless', true)
+      await expect(runtime.createTerminal(`id:${WT}`, {})).resolves.toMatchObject({ ptyId: PTY })
+      expect(warning).toHaveBeenCalled()
+    } finally {
+      warning.mockRestore()
+    }
   })
 
   function agentPane(runtime: OrcaRuntimeService) {

@@ -265,6 +265,24 @@ describe('getWorktreeDotStatus', () => {
 })
 
 describe('buildSections', () => {
+  it('moves a recently active folder workspace ahead of older rows', () => {
+    const older = worktree({ worktreeId: 'older', displayName: 'A', lastActivityAt: 100 })
+    const folder = worktree({
+      worktreeId: 'folder:new',
+      displayName: 'Z',
+      workspaceKind: 'folder-workspace',
+      lastActivityAt: 200
+    })
+    const sections = buildSections(
+      [older, folder],
+      'recent',
+      { ...NO_WORKSPACE_ROW_FILTERS },
+      '',
+      'none',
+      new Set()
+    )
+    expect(sections[0].data.map((row) => row.worktreeId)).toEqual(['folder:new', 'older'])
+  })
   it('keys same-id rows by host inside a section', () => {
     const worktreeId = 'repo-1::/work/orca'
     const sections = buildSections(

@@ -98,6 +98,14 @@ export abstract class OrcaRuntimeWithHeadlessWorkspaceActivity extends OrcaRunti
     workspace: AgentPaneWorkspace,
     { throttled = false } = {}
   ): void {
+    try {
+      this.writeHeadlessWorkspaceActivity(workspace, throttled)
+    } catch (error) {
+      console.warn('[workspace-activity] Could not record activity', error)
+    }
+  }
+
+  private writeHeadlessWorkspaceActivity(workspace: AgentPaneWorkspace, throttled: boolean): void {
     if (
       !workspace.sshHostId &&
       isWslMoveProjectBlocked(
