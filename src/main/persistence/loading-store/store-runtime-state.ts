@@ -64,6 +64,7 @@ export class StoreRuntimeState {
   readonly retainedScrollbackRefsByMigrationId = new Map<string, ReadonlySet<string>>()
   writeTimer: ReturnType<typeof setTimeout> | null = null
   pendingWrite: Promise<void> | null = null
+  lastWriteError: unknown = null
   pendingSnapshotFileWork: Promise<void> | null = null
   writeGeneration = 0
   writesFrozen = false
