@@ -11,7 +11,7 @@ import { generateRuntimePullRequestFields } from '@/runtime/runtime-git-generati
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/hosted-review'
 import { localizedCreateFailure } from '../../hosted-review-create-failure-copy'
 import { normalizeHostedReviewHeadRef } from '../../../../../../shared/hosted-review-refs'
-import { resolveCreateReviewSeedText } from '../../create-review-draft-title'
+import { resolveCreateReviewSeedText } from '../../../../../../shared/hosted-review-create-seed'
 import {
   createPrIntentRunTokenMatches,
   resolveCreatePrIntentGeneratedReviewFields,

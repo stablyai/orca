@@ -37,7 +37,13 @@ import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile
 import { isMobileConflictAborting } from './mobile-source-control-conflict-abort'
 import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
 import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
-import { MobilePrViewPanelBody } from '../components/pr-sidebar/MobilePrViewPanel'
+import { MobilePrTabBody } from '../components/MobilePRSidebar'
+import { MobilePrTabSheets } from '../components/pr-sidebar/MobilePrTabSheets'
+import { PrTabScreenView } from '../components/pr-sidebar/PrTabScreenView'
+import {
+  useMobileSourceControlPrTab,
+  type MobilePrTabOpeners
+} from './use-mobile-source-control-pr-tab'
 import { openMobilePrUrl } from '../components/mobile-pr-url'
 
 export type MobileSourceControlPanelProps = {
@@ -69,12 +75,17 @@ export function MobileSourceControlPanel({
   const openHubScreen = hubScreens.open
   const openCommitsScreen = useCallback(() => openHubScreen('commits'), [openHubScreen])
   const openPrTab = useCallback(() => selectTab('pr'), [selectTab])
+  // The PR tab owns the Create PR and Merge sheets; the bar and Changes reach them through this.
+  const prOpeners = useRef<MobilePrTabOpeners>({ createPr: () => {}, merge: () => {} })
+  const openCreatePr = useCallback(() => prOpeners.current.createPr(), [])
+  const openMergeSheet = useCallback(() => prOpeners.current.merge(), [])
 
   const state = useMobileSourceControlState({
     hostId,
     worktreeId,
     name,
-    onOpenHistory: openCommitsScreen
+    onOpenHistory: openCommitsScreen,
+    onCreatePr: openCreatePr
   })
   const {
     client,
@@ -207,7 +218,8 @@ export function MobileSourceControlPanel({
     reviewsSupported: isHostedRepo && prBranch !== null,
     refetchPr,
     headSha: prHeadSha,
-    showWorkflowErrors: activeTab !== 'changes'
+    showWorkflowErrors: activeTab !== 'changes',
+    onMerge: openMergeSheet
   })
 
   const barInset =
@@ -226,6 +238,19 @@ export function MobileSourceControlPanel({
     }
     void refetchPr({ includeDetails: false })
   }, [activeTab, isHostedRepo, loadStatus, refetchPr])
+  const { prTab, prMenuGroups, branchCompare } = useMobileSourceControlPrTab({
+    state,
+    worktreeId,
+    prController,
+    prBranch,
+    prHeadSha,
+    ready,
+    selectTab,
+    onRefresh,
+    openersRef: prOpeners,
+    openScreen: openHubScreen,
+    shared: nextStep
+  })
 
   // Embedded close dismisses the dock; route Back pops. The dock column owns safe-area chrome.
   const onBack = () => router.back()
@@ -246,6 +271,7 @@ export function MobileSourceControlPanel({
       onBack={onBack}
       onClose={onClose}
       onRefresh={onRefresh}
+      menuGroups={activeTab === 'pr' ? prMenuGroups : null}
       onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
       prNumber={prWebNumber}
       accessory={
@@ -330,23 +356,14 @@ export function MobileSourceControlPanel({
 
       {showPrBody ? (
         <View style={hubStyles.tabBody}>
-          <MobilePrViewPanelBody
-            client={client}
-            connState={connState}
-            worktreeId={worktreeId}
-            branch={prBranch}
-            headSha={prHeadSha}
-            gitStatus={status}
-            isGithubRepo={isHostedRepo}
-            // Mid-probe false is still loading; do not flash unavailable.
-            branchContextLoaded={ready && prController.prSidebarRepoProbeLoaded}
-            controller={prController}
-            workspaceLabel={worktreeLabel}
+          <MobilePrTabBody
+            tab={prTab}
+            onRetry={prController.retryPRSidebar}
             bottomInset={barInset}
-            // While the bar is on a local step, Merge stays reachable in the PR body.
-            showMergeActions={!nextStep.offersMerge}
-            triage={nextStep.triage}
-            actions={nextStep.actions}
+            onOpenChanges={() => selectTab('changes')}
+            branchCompare={branchCompare}
+            // The bar offers Create and the review steps; on a local step Merge stays reachable here.
+            showBottomAction={!nextStep.offersMerge && prTab.state.kind === 'ready'}
           />
         </View>
       ) : activeTab === 'pr' ? (
@@ -386,10 +403,21 @@ export function MobileSourceControlPanel({
               statusHead={statusHead}
               onBack={hubScreens.close}
             />
+          ) : hubScreens.page ? (
+            <PrTabScreenView
+              screen={hubScreens.page}
+              tab={prTab}
+              onBack={hubScreens.close}
+              bottomInset={insets.bottom}
+              onOpenFile={(filePath) =>
+                state.openDiffForFile({ kind: 'changes', filePath, area: 'branch' })
+              }
+            />
           ) : null
         }
       />
       <MobileSourceControlModals state={state} actionSheetActions={actionSheetActions} />
+      <MobilePrTabSheets tab={prTab} />
     </View>
   )
 }

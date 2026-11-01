@@ -10,7 +10,9 @@ import {
   View,
   useWindowDimensions
 } from 'react-native'
+import { Check } from 'lucide-react-native'
 import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useBackClaim } from '../../navigation/use-back-claim'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -24,7 +26,8 @@ const EDGE_INSET = 8
 const OPEN_SPRING = { stiffness: 420, damping: 32, mass: 1 }
 const CLOSE_FADE_MS = 150
 
-type Anchor = { top: number; right: number }
+// Below the button, or above it when the button sits in the lower half, so the menu never runs off-screen.
+type Anchor = { top: number; right: number } | { bottom: number; right: number }
 
 type PullDownMenuProps = {
   visible: boolean
@@ -55,12 +58,14 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
       return
     }
     anchorRef.current?.measureInWindow((x, y, width, height) => {
-      setAnchor({
-        top: y + height + ANCHOR_GAP,
-        right: Math.max(EDGE_INSET, window.width - (x + width))
-      })
+      const right = Math.max(EDGE_INSET, window.width - (x + width))
+      setAnchor(
+        y + height / 2 > window.height / 2
+          ? { bottom: window.height - y + ANCHOR_GAP, right }
+          : { top: y + height + ANCHOR_GAP, right }
+      )
     })
-  }, [anchorRef, visible, window.width])
+  }, [anchorRef, visible, window.width, window.height])
 
   useEffect(() => {
     if (!visible || anchor === null) {
@@ -125,6 +130,15 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
     }
   }
 
+  // The page's Back (Android, the iOS edge swipe) closes the menu before the screen under it.
+  useBackClaim(
+    visible
+      ? () => {
+          onClose()
+          return true
+        }
+      : null
+  )
   const shown = groups.map((group) => group.filter(Boolean)).filter((group) => group.length > 0)
   return (
     <Modal visible={presented} transparent animationType="none" onRequestClose={onClose}>
@@ -138,7 +152,7 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
         <Animated.View
           style={[
             styles.menu,
-            { top: anchor.top, right: anchor.right },
+            anchor,
             {
               opacity: appear.interpolate({
                 inputRange: [0, 1],
@@ -146,7 +160,7 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
                 extrapolate: 'clamp'
               }),
               // Grows out of the button it hangs from rather than from its own middle.
-              transformOrigin: 'top right',
+              transformOrigin: 'top' in anchor ? 'top right' : 'bottom right',
               transform: [
                 {
                   scale: appear.interpolate({
@@ -178,13 +192,20 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
                     accessibilityRole="menuitem"
                     accessibilityLabel={action.label}
                     accessibilityHint={action.hint}
+                    accessibilityState={
+                      action.checked === undefined ? undefined : { checked: action.checked }
+                    }
                   >
                     <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
                       {action.label}
                     </Text>
-                    {action.renderIcon
-                      ? action.renderIcon()
-                      : Icon && <Icon size={17} color={tint} strokeWidth={2} />}
+                    {action.checked ? (
+                      <Check size={17} color={tint} strokeWidth={2.2} />
+                    ) : action.renderIcon ? (
+                      action.renderIcon()
+                    ) : (
+                      Icon && <Icon size={17} color={tint} strokeWidth={2} />
+                    )}
                   </Pressable>
                 )
               })}
