@@ -10,9 +10,14 @@ export type ComposerIdentityModel = {
   linkedPR: number | null
   setLinkedPR: React.Dispatch<React.SetStateAction<number | null>>
   linkedGitLabIssue: number | null
+  linkedGiteaIssue: number | null
   setLinkedGitLabIssue: React.Dispatch<React.SetStateAction<number | null>>
+  setLinkedGiteaIssue: React.Dispatch<React.SetStateAction<number | null>>
   linkedGitLabMR: number | null
+  linkedGiteaPR: number | null
   setLinkedGitLabMR: React.Dispatch<React.SetStateAction<number | null>>
+  setLinkedGiteaPR: React.Dispatch<React.SetStateAction<number | null>>
+  clearLinkedGiteaItems: () => void
   baseBranch: string | undefined
   setBaseBranch: React.Dispatch<React.SetStateAction<string | undefined>>
   baseBranchNamesWorkspace: boolean

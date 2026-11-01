@@ -14,6 +14,8 @@ import {
 import { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 import { useSmartWorkspaceGithubSearch } from './use-smart-workspace-github-search'
 import { useSmartWorkspaceGitlabSearch } from './use-smart-workspace-gitlab-search'
+import { useSmartWorkspaceGiteaSearch } from './use-smart-workspace-gitea-search'
+import { parseGiteaIssueOrPRLink } from '../../../../shared/new-workspace/gitea-links'
 import { useWorkItemSourcePresentation } from './use-work-item-source-presentation'
 import { useSmartWorkspaceSecondarySearches } from './use-smart-workspace-secondary-searches'
 
@@ -118,6 +120,18 @@ export function useWorkItemSourceSearch({
     sourceQueryWithinLimit,
     shouldQueryGitlab
   })
+  const shouldQueryGitea =
+    sourceQueryWithinLimit &&
+    !repoBackedSourcesDisabled &&
+    !foundation.jiraSource.intent &&
+    !linearUrlIntentOwnsInput &&
+    !textOnly &&
+    foundation.giteaSourceAvailable &&
+    foundation.repoBackedSearchTargets.length > 0 &&
+    // Why: smart mode only claims a pasted Gitea URL; free text stays with the other sources.
+    (foundation.mode === 'gitea' ||
+      (foundation.mode === 'smart' && parseGiteaIssueOrPRLink(foundation.debouncedQuery) !== null))
+  useSmartWorkspaceGiteaSearch({ foundation, shouldQueryGitea })
   const presentation = useWorkItemSourcePresentation(foundation, {
     linearUrlIntent,
     linearUrlIntentOwnsInput,

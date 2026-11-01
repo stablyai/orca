@@ -1,9 +1,13 @@
 import { useCallback, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GitLabAssignableUser, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
+import { GITLAB_DIALOG_FORGE, type GitLabDialogForge } from './gitlab-dialog-forge'
 import type { JobTraceState } from '../gitlab-item-dialog-parts'
 
-export function useGitLabItemDialogState(itemId: string | null) {
+export function useGitLabItemDialogState(
+  itemId: string | null,
+  forge: GitLabDialogForge = GITLAB_DIALOG_FORGE
+) {
   const [details, setDetails] = useState<GitLabWorkItemDetails | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,6 +60,7 @@ export function useGitLabItemDialogState(itemId: string | null) {
     editingDetails,
     error,
     expandedJobId,
+    forge,
     inlineCommentBody,
     inlineCommentFilePath,
     inlineCommentLine,

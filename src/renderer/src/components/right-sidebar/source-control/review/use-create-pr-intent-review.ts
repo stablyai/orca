@@ -93,7 +93,9 @@ export function useSourceControlCreatePrIntentReview({
       }
 
       const jiraIssueKey =
-        eligibility.provider === 'github' || eligibility.provider === 'gitlab'
+        eligibility.provider === 'github' ||
+        eligibility.provider === 'gitlab' ||
+        eligibility.provider === 'gitea'
           ? getWorkspaceJiraIssueKey(
               useAppStore
                 .getState()

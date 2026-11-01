@@ -8,6 +8,7 @@ export function createModel(overrides: Partial<PollingInput> = {}): PollingInput
   const fetchPRChecks = vi.fn<() => Promise<PRCheckDetail[]>>().mockResolvedValue([])
   return {
     activeGitLabReview: null,
+    activeGiteaReview: null,
     activeWorktree: null,
     asyncResultKeyRef: { current: 'cache::main::42' },
     branch: 'main',

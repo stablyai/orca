@@ -112,6 +112,18 @@ const COPY: Record<CodeHostFailureCode, (detail: string | null) => string | null
     detail === null
       ? null
       : translate('codeHost.errors.github.rerunFailed', EN['github.rerunFailed'], { detail }),
+  'gitea.projectUnresolved': () =>
+    translate('codeHost.errors.gitea.projectUnresolved', EN['gitea.projectUnresolved']),
+  'gitea.unexpectedResponse': () =>
+    translate('codeHost.errors.gitea.unexpectedResponse', EN['gitea.unexpectedResponse']),
+  'gitea.rateLimited': () =>
+    translate('codeHost.errors.gitea.rateLimited', EN['gitea.rateLimited']),
+  'gitea.issuePermissionDenied': () =>
+    translate('codeHost.errors.gitea.issuePermissionDenied', EN['gitea.issuePermissionDenied']),
+  'gitea.jobLogFailed': (detail) =>
+    detail === null
+      ? null
+      : translate('codeHost.errors.gitea.jobLogFailed', EN['gitea.jobLogFailed'], { detail }),
   'gitlab.projectUnresolved': () =>
     translate('codeHost.errors.gitlab.projectUnresolved', EN['gitlab.projectUnresolved']),
   'gitlab.unexpectedResponse': () =>
@@ -208,6 +220,26 @@ const START_POINT_COPY: Record<
       : translate('codeHost.startPoint.github.headShaEmpty', START_EN['github.headShaEmpty'], {
           number
         }),
+  'gitea.prNotFound': ({ number }) =>
+    number === null
+      ? null
+      : translate('codeHost.startPoint.gitea.prNotFound', START_EN['gitea.prNotFound'], { number }),
+  'gitea.prHeadBranchMissing': ({ number }) =>
+    number === null
+      ? null
+      : translate(
+          'codeHost.startPoint.gitea.prHeadBranchMissing',
+          START_EN['gitea.prHeadBranchMissing'],
+          { number }
+        ),
+  'gitea.forkHeadUnresolved': ({ number }) =>
+    number === null
+      ? null
+      : translate(
+          'codeHost.startPoint.gitea.forkHeadUnresolved',
+          START_EN['gitea.forkHeadUnresolved'],
+          { number }
+        ),
   'gitlab.projectNotFound': () =>
     translate('codeHost.startPoint.gitlab.projectNotFound', START_EN['gitlab.projectNotFound']),
   'gitlab.mrNotFound': ({ number }) =>

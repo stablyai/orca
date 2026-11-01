@@ -22,6 +22,7 @@ import {
   WorktreeActivate,
   WorktreeForceDeleteBranch,
   WorktreeRemove,
+  WorktreeResolveGiteaPrBase,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeSelector,
@@ -179,6 +180,20 @@ export const WORKTREE_METHODS = [
         mrIid: params.mrIid,
         sourceBranch: params.sourceBranch,
         targetBranch: params.targetBranch,
+        isCrossRepository: params.isCrossRepository,
+        wakeWslDistro: params.wakeWslDistro
+      })
+  }),
+  defineMethod({
+    name: 'worktree.resolveGiteaPrBase',
+    permission: 'workspace',
+    params: WorktreeResolveGiteaPrBase,
+    handler: async (params, { runtime }) =>
+      runtime.resolveManagedGiteaPrBase({
+        repoSelector: params.repo,
+        prNumber: params.prNumber,
+        headRefName: params.headRefName,
+        baseRefName: params.baseRefName,
         isCrossRepository: params.isCrossRepository,
         wakeWslDistro: params.wakeWslDistro
       })

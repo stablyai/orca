@@ -14517,7 +14517,9 @@
             "crossRepoDifferentTaskSource": "GitHub URL이 선택한 작업 소스와 다른 {{repo}} 저장소를 가리킵니다.",
             "crossRepoDifferentProject": "GitHub URL이 선택한 프로젝트와 다른 {{repo}} 저장소를 가리킵니다.",
             "useAsWorkspaceName": "<name>\"{{name}}\"</name>을(를) 워크스페이스 이름으로 사용",
-            "createNewBranchNamed": "새 브랜치 <name>{{name}}</name> 만들기"
+            "createNewBranchNamed": "새 브랜치 <name>{{name}}</name> 만들기",
+            "giteaMode": "Gitea",
+            "searchGitea": "Gitea PR 및 이슈 검색"
           },
           "ProjectCombobox": {
             "empty": "검색과 일치하는 프로젝트가 없습니다.",
@@ -21413,7 +21415,8 @@
         "jira_task_url": "Jira 작업(URL)",
         "bitbucket_pr": "Bitbucket PR",
         "azure_devops_pr": "Azure DevOps PR",
-        "gitea_pr": "Gitea PR"
+        "gitea_pr": "Gitea PR",
+        "gitea_issue": "Gitea 이슈"
       },
       "mrReference": "MR !{{number}}",
       "prReference": "PR #{{number}}",

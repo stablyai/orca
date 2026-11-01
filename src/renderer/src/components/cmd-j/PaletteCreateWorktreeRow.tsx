@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Github, Gitlab, Plus } from 'lucide-react'
+import { Coffee, Github, Gitlab, Plus } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { CommandItem } from '@/components/ui/command'
@@ -18,6 +18,9 @@ function TaskUrlProviderIcon({
   }
   if (provider === 'gitlab') {
     return <Gitlab className="size-3" aria-hidden="true" />
+  }
+  if (provider === 'gitea') {
+    return <Coffee className="size-3" aria-hidden="true" />
   }
   return <JiraIcon className="size-3" />
 }

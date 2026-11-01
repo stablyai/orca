@@ -24,4 +24,14 @@ describe('mobile RPC method routing census', () => {
     expect(MOBILE_RPC_METHOD_ROUTES.get('preflight.detectAgents')).toBe('execution-host')
     expect(MOBILE_RPC_METHOD_ROUTES.get('preflight.refreshAgents')).toBe('execution-host')
   })
+
+  it.each([
+    'gitea.listWorkItems',
+    'gitea.workItemDetails',
+    'gitea.mergePR',
+    'gitea.jobTrace',
+    'worktree.resolveGiteaPrBase'
+  ])('routes %s to the execution host that owns the repo checkout', (method) => {
+    expect(MOBILE_RPC_METHOD_ROUTES.get(method)).toBe('execution-host')
+  })
 })

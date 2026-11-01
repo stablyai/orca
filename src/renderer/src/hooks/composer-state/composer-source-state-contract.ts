@@ -34,6 +34,7 @@ export type ComposerSourceState = {
   >
   githubProviderSelection: Pick<ComposerModel, 'handleSmartGitHubItemSelect'>
   gitlabProviderSelection: Pick<ComposerModel, 'handleSmartGitLabItemSelect'>
+  giteaProviderSelection: Pick<ComposerModel, 'handleSmartGiteaItemSelect'>
   workItemSourceActions: Pick<
     ComposerModel,
     'handleSmartBranchSelect' | 'handleReuseSelectedBranchChange'

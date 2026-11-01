@@ -1,5 +1,5 @@
 import React from 'react'
-import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
+import { Coffee, Github, Gitlab, LayoutGrid, List } from 'lucide-react'
 
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -20,6 +20,9 @@ import type { TaskViewPresetId } from '../../../../shared/ui-chrome-types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
 export type GitLabIssueFilter = 'opened' | 'assigned-to-me'
+export type GiteaPRFilter = GitLabTaskFilter
+export type GiteaIssueFilter = GitLabIssueFilter
+export type GiteaTaskView = 'issues' | 'prs' | 'notifications'
 
 export type TaskQueryPreset = {
   id: TaskViewPresetId
@@ -115,6 +118,11 @@ export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
     id: 'gitlab',
     label: translate('auto.components.TaskPage.11a828abf8', 'GitLab'),
     Icon: ({ className }) => <Gitlab className={className} />
+  },
+  {
+    id: 'gitea',
+    label: translate('auto.components.TaskPage.giteaSource', 'Gitea'),
+    Icon: ({ className }) => <Coffee className={className} />
   },
   {
     id: 'linear',

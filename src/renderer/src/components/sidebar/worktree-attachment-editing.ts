@@ -15,6 +15,7 @@ import {
 } from '../../../../shared/workspace-attachment-normalization'
 import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
+import { parseGiteaIssueOrPRLink } from '../../../../shared/new-workspace/gitea-links'
 import { parseLinearIssueInput } from '../../../../shared/linear/links'
 import { parseJiraIssueUrl } from '../../../../shared/jira/jira-issue-url'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
@@ -46,7 +47,11 @@ export const ATTACHMENT_INPUT_KINDS = [
     value: 'azure-devops-pr',
     label: () => translate('workspace.links.kind.azure_devops_pr', 'Azure DevOps PR')
   },
-  { value: 'gitea-pr', label: () => translate('workspace.links.kind.gitea_pr', 'Gitea PR') }
+  { value: 'gitea-pr', label: () => translate('workspace.links.kind.gitea_pr', 'Gitea PR') },
+  {
+    value: 'gitea-issue',
+    label: () => translate('workspace.links.kind.gitea_issue', 'Gitea issue')
+  }
 ] as const
 export type AttachmentInputKind = (typeof ATTACHMENT_INPUT_KINDS)[number]['value']
 
@@ -88,6 +93,13 @@ export function parseWorkspaceAttachmentInput(
   const jira = parseJiraIssueUrl(value)
   const linear = parseLinearIssueInput(value)
   if (/^https?:\/\//i.test(value)) {
+    // Why: /issues/N is shared with GitHub, so only an explicit Gitea kind or a known Gitea host claims it.
+    const gitea = parseGiteaIssueOrPRLink(value, {
+      assumeGitea: kind === 'gitea-issue' || kind === 'gitea-pr'
+    })
+    if (gitea?.type === 'issue') {
+      return { provider: 'gitea', type: 'issue', number: gitea.number, url: value }
+    }
     const otherReview = parseOtherReviewUrl(value)
     if (otherReview) {
       return otherReview
@@ -141,6 +153,9 @@ export function parseWorkspaceAttachmentInput(
   }
   if (kind === 'gitlab-mr' || kind === 'gitlab-issue') {
     return { provider: 'gitlab', type: kind === 'gitlab-mr' ? 'mr' : 'issue', number }
+  }
+  if (kind === 'gitea-issue') {
+    return { provider: 'gitea', type: 'issue', number }
   }
   if (kind === 'bitbucket-pr' || kind === 'azure-devops-pr' || kind === 'gitea-pr') {
     const provider =
@@ -230,7 +245,7 @@ export function canUseWorkspaceReviewForChecks(
               host === 'ssh.dev.azure.com' ||
               host?.endsWith('.visualstudio.com')
             ? 'azure-devops'
-            : host === 'codeberg.org'
+            : host === 'codeberg.org' || item.provider === 'gitea'
               ? 'gitea'
               : undefined)
   if (provider && item.provider !== provider) {

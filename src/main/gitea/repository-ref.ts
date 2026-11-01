@@ -1,4 +1,15 @@
-import { createRemoteRefProbeCache } from '../git/remote-ref-probe-cache'
+import {
+  createRemoteRefProbeCache,
+  NEGATIVE_ENTRY_TTL_MS,
+  type RemoteRefLocalGitOptions
+} from '../git/remote-ref-probe-cache'
+import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
+import { getTeaKnownLogins } from './gitea-known-host-probe'
+import {
+  configuredInstanceUrl,
+  matchRemoteToGiteaLogin,
+  remoteMatchesInstanceUrl
+} from './gitea-login-remote-match'
 
 export type GiteaRepoRef = {
   host: string
@@ -6,11 +17,12 @@ export type GiteaRepoRef = {
   repo: string
   apiBaseUrl: string
   webBaseUrl: string
+  loginName?: string | null
 }
 
-type LocalGitExecOptions = {
-  wslDistro?: string
-}
+export type LocalGitExecOptions = RemoteRefLocalGitOptions
+
+const LOGIN_AWARE_CACHE_MAX_ENTRIES = 512
 
 const KNOWN_NON_GITEA_HOSTS = new Set([
   'github.com',
@@ -21,10 +33,12 @@ const KNOWN_NON_GITEA_HOSTS = new Set([
   'ssh.dev.azure.com'
 ])
 const repoRefProbeCache = createRemoteRefProbeCache(parseGiteaRepoRef)
+const loginAwareRepoRefCache = new Map<string, { value: GiteaRepoRef | null; expiresAt: number }>()
 
 /** @internal - exposed for tests only */
 export function _resetGiteaRepoRefCache(): void {
   repoRefProbeCache.clear()
+  loginAwareRepoRefCache.clear()
 }
 
 /** @internal - exposed for tests only */
@@ -128,13 +142,88 @@ export function parseGiteaRepoRef(remoteUrl: string): GiteaRepoRef | null {
   }
 }
 
+function rememberLoginAwareRef(cacheKey: string, value: GiteaRepoRef | null): void {
+  loginAwareRepoRefCache.set(cacheKey, {
+    value,
+    expiresAt: value === null ? Date.now() + NEGATIVE_ENTRY_TTL_MS : Number.POSITIVE_INFINITY
+  })
+  while (loginAwareRepoRefCache.size > LOGIN_AWARE_CACHE_MAX_ENTRIES) {
+    const oldest = loginAwareRepoRefCache.keys().next().value
+    if (oldest === undefined) {
+      return
+    }
+    loginAwareRepoRefCache.delete(oldest)
+  }
+}
+
+export function teaRepoArgs(repoRef: GiteaRepoRef): string[] {
+  const args = ['--repo', `${repoRef.owner}/${repoRef.repo}`]
+  if (repoRef.loginName) {
+    args.push('--login', repoRef.loginName)
+  }
+  return args
+}
+
 export async function getGiteaRepoRefForRemote(
   repoPath: string,
   remoteName: string,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GiteaRepoRef | null> {
-  return repoRefProbeCache.get(repoPath, remoteName, connectionId, localGitOptions)
+  const logins = await getTeaKnownLogins(connectionId, localGitOptions)
+  const envUrl = configuredInstanceUrl()
+  if (logins.length === 0 && !envUrl) {
+    return repoRefProbeCache.get(repoPath, remoteName, connectionId, localGitOptions)
+  }
+
+  const fingerprint = `${envUrl ?? ''}\0${logins
+    .map((login) => `${login.name}\0${login.url}\0${login.sshHost}`)
+    .join('\n')}`
+  const runtimeKey = connectionId || `local:${localGitOptions.wslDistro ?? 'host'}`
+  const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}\0${fingerprint}`
+  const cached = loginAwareRepoRefCache.get(cacheKey)
+  if (cached) {
+    if (cached.expiresAt > Date.now()) {
+      return cached.value
+    }
+    loginAwareRepoRefCache.delete(cacheKey)
+  }
+
+  try {
+    const stdout = await readRemoteUrl(
+      {
+        repoPath,
+        connectionId,
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+        ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
+      },
+      remoteName
+    )
+    if (stdout === null) {
+      return null
+    }
+    for (const login of logins) {
+      const matched = matchRemoteToGiteaLogin(stdout, login)
+      if (matched) {
+        rememberLoginAwareRef(cacheKey, matched)
+        return matched
+      }
+    }
+    if (envUrl && remoteMatchesInstanceUrl(stdout, envUrl)) {
+      const parsed = parseGiteaRepoRef(stdout)
+      rememberLoginAwareRef(cacheKey, parsed)
+      return parsed
+    }
+    // Logins and instance URLs are an allowlist, so other forges are not claimed as Gitea.
+    rememberLoginAwareRef(cacheKey, null)
+    return null
+  } catch (error) {
+    if (isTransientGitProbeError(error)) {
+      return null
+    }
+    rememberLoginAwareRef(cacheKey, null)
+    return null
+  }
 }
 
 export async function getGiteaRepoRef(

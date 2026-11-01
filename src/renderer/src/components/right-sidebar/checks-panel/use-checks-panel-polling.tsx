@@ -17,6 +17,11 @@ import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import { fetchGitLabMRDetailsForChecks, gitLabMRCommentsToPRComments } from './gitlab-review-client'
+import {
+  fetchGiteaReviewDataForChecks,
+  giteaPipelineJobsToPRChecks,
+  giteaPRCommentsToPRComments
+} from './gitea-review-client'
 import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
@@ -24,7 +29,12 @@ import { translate } from '@/i18n/i18n'
 
 export type ChecksPanelPollingInput = Pick<
   ChecksPanelContextState,
-  'activeGitLabReview' | 'hostedReviewCacheKey' | 'pr' | 'prCacheKey' | 'prNumber'
+  | 'activeGitLabReview'
+  | 'activeGiteaReview'
+  | 'hostedReviewCacheKey'
+  | 'pr'
+  | 'prCacheKey'
+  | 'prNumber'
 > &
   Pick<
     ChecksPanelControllerState,
@@ -53,7 +63,17 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
   useEffect(() => {
     modelRef.current = model
   })
-  const { activeGitLabReview, pr, prNumber, prCacheKey, branch, repo, hostedReviewCacheKey } = model
+  const {
+    activeGitLabReview,
+    activeGiteaReview,
+    pr,
+    prNumber,
+    prCacheKey,
+    branch,
+    repo,
+    hostedReviewCacheKey
+  } = model
+  const hostedReview = activeGitLabReview ?? activeGiteaReview
   const requestIdentity = JSON.stringify([
     repo?.id,
     repo?.path,
@@ -61,15 +81,16 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
     repo?.connectionId,
     model.activeWorktree?.hostId,
     branch,
-    activeGitLabReview ? 'gitlab' : 'github',
-    activeGitLabReview?.number ?? prNumber,
-    activeGitLabReview?.headSha ?? pr?.headSha,
+    hostedReview?.provider ?? 'github',
+    hostedReview?.number ?? prNumber,
+    hostedReview?.headSha ?? pr?.headSha,
     pr?.prRepo?.owner,
     pr?.prRepo?.repo,
     pr?.prRepo?.host,
-    activeGitLabReview ? hostedReviewCacheKey : prCacheKey
+    hostedReview ? hostedReviewCacheKey : prCacheKey
   ])
   const gitLabDetailsLoadingGenerationRef = useRef(0)
+  const giteaDetailsLoadingGenerationRef = useRef(0)
   const fetchChecks = useCallback(
     async ({
       force = false,
@@ -274,16 +295,124 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
     []
   )
 
+  const fetchGiteaDetails = useCallback(
+    async ({
+      prNumberOverride,
+      headShaOverride,
+      commitAsCurrent = false,
+      isRequestCurrent,
+      background = false
+    }: {
+      prNumberOverride?: number | null
+      headShaOverride?: string | null
+      commitAsCurrent?: boolean
+      isRequestCurrent?: () => boolean
+      /** A poll or tab entry: refused rather than booting a stopped WSL distro. */
+      background?: boolean
+    } = {}) => {
+      const {
+        activeGiteaReview,
+        repo,
+        branch,
+        hostedReviewCacheKey,
+        asyncResultKeyRef,
+        activeWorktree,
+        isCurrentAsyncResult,
+        setChecks,
+        setChecksError,
+        setChecksLoading,
+        setComments,
+        setCommentsError,
+        setCommentsLoading,
+        pollIntervalRef,
+        prevChecksRef
+      } = modelRef.current
+      const targetPRNumber = prNumberOverride ?? activeGiteaReview?.number ?? null
+      const targetHeadSha =
+        headShaOverride === undefined ? (activeGiteaReview?.headSha ?? null) : headShaOverride
+      if (!repo || !targetPRNumber) {
+        return
+      }
+      const requestKey = checksPanelHostedReviewAsyncResultKey(
+        hostedReviewCacheKey,
+        branch,
+        'gitea',
+        targetPRNumber,
+        targetHeadSha
+      )
+      if (isRequestCurrent?.() === false) {
+        return
+      }
+      if (commitAsCurrent) {
+        asyncResultKeyRef.current = requestKey
+      }
+      const loadingGeneration = giteaDetailsLoadingGenerationRef.current + 1
+      giteaDetailsLoadingGenerationRef.current = loadingGeneration
+      setChecksLoading(true)
+      setCommentsLoading(true)
+      try {
+        const details = await fetchGiteaReviewDataForChecks({
+          repoPath: repo.path,
+          repoId: repo.id,
+          number: targetPRNumber,
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+          background
+        })
+        if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
+          return
+        }
+        if (details === null) {
+          throw new Error('Gitea PR details are unavailable')
+        }
+        const result = giteaPipelineJobsToPRChecks(details.pipelineJobs ?? [])
+        setChecks(result)
+        setComments(giteaPRCommentsToPRComments(details.comments))
+        const signature = policyRef.current.accept(result)
+        pollIntervalRef.current =
+          signature === prevChecksRef.current
+            ? Math.min(pollIntervalRef.current * 2, 120_000)
+            : 60_000
+        prevChecksRef.current = signature
+      } catch (err) {
+        if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
+          return
+        }
+        if (!isWslDistroNotRunningRefusal(err)) {
+          console.warn('Failed to fetch Gitea PR checks:', err)
+        }
+        // One PR details request contains both Actions jobs and discussion; report failure for both.
+        const message = checksPanelLoadErrorMessage(
+          err,
+          forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+        )
+        setChecksError(message)
+        setCommentsError(message)
+        policyRef.current.fail()
+        pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
+      } finally {
+        if (
+          giteaDetailsLoadingGenerationRef.current === loadingGeneration &&
+          isCurrentAsyncResult(requestKey)
+        ) {
+          setChecksLoading(false)
+          setCommentsLoading(false)
+        }
+      }
+    },
+    []
+  )
+
   useChecksDetailTimer({
     model,
     modelRef,
     policyRef,
     requestIdentity,
     fetchChecks,
-    fetchGitLabDetails
+    fetchGitLabDetails,
+    fetchGiteaDetails
   })
 
-  return { fetchChecks, fetchGitLabDetails }
+  return { fetchChecks, fetchGitLabDetails, fetchGiteaDetails }
 }
 
 export type ChecksPanelPollingState = ReturnType<typeof useChecksPanelPolling>

@@ -1,6 +1,7 @@
 import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 export {
   getTaskPageRepoSourceContext,
+  buildGiteaProviderIdentity,
   buildGitLabProviderIdentity
 } from '@/lib/task-repo-source-context'
 import type {
@@ -8,6 +9,7 @@ import type {
   GitLabIssueFilter
 } from '@/components/task-page/task-page-localized-options'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GiteaWorkItem } from '../../../../shared/gitea-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -74,6 +76,16 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
       },
       getJiraIssueKeyCasingSeedOptions()
     )?.seedName ?? getLinkedWorkItemSuggestedName(issue)
+  )
+}
+export function getGiteaWorkItemWorkspaceSeed(item: GiteaWorkItem): string {
+  return (
+    getLinkedWorkItemWorkspaceName({
+      type: item.type,
+      provider: 'gitea',
+      number: item.number,
+      title: item.title
+    })?.seedName ?? getLinkedWorkItemSuggestedName(item)
   )
 }
 export function getTaskSourceHostAvailabilityForHost(

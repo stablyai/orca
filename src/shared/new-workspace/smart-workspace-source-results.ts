@@ -1,5 +1,6 @@
 import type { GitHubWorkItem } from '../github/work-item-types'
 import type { GitLabWorkItem } from '../gitlab-types'
+import type { GiteaWorkItem } from '../gitea-types'
 import type { JiraIssue } from '../jira/jira-types'
 import type { LinearIssue } from '../linear/issue-types'
 import type { LinearCollectionResult } from '../linear/workspace-types'
@@ -7,6 +8,7 @@ import type { BaseRefSearchResult } from '../repo-types'
 import { parseJiraIssueUrl } from '../jira/jira-issue-url'
 import { buildJiraTextMatchJql } from '../jira/jira-search-input-jql'
 import type { GitHubIssueOrPRLink } from '../github/links'
+import type { GiteaIssueOrPRLink } from './gitea-links'
 import {
   buildSmartWorkspaceUrlSourceRows,
   type SmartWorkspaceGitLabUrlIntent
@@ -18,13 +20,22 @@ export {
   isSmartWorkspaceSourceQueryWithinLimit
 } from './smart-workspace-source-query'
 
-export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'jira' | 'text'
+export type SmartNameMode =
+  | 'smart'
+  | 'github'
+  | 'gitlab'
+  | 'gitea'
+  | 'branches'
+  | 'linear'
+  | 'jira'
+  | 'text'
 
 export type SmartWorkspaceSourceRow =
   | { kind: 'use-name'; value: string; name: string }
   | { kind: 'create-branch'; value: string; name: string }
   | { kind: 'github'; value: string; item: GitHubWorkItem }
   | { kind: 'gitlab'; value: string; item: GitLabWorkItem }
+  | { kind: 'gitea'; value: string; item: GiteaWorkItem }
   | { kind: 'branch'; value: string; refName: string; localBranchName: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
   | { kind: 'jira'; value: string; issue: JiraIssue }
@@ -35,6 +46,7 @@ const EMPTY_HINT_BY_MODE: Record<SmartNameMode, string> = {
   smart: 'Start typing to create a name or find a source.',
   github: 'Start typing to search GitHub PRs and issues.',
   gitlab: 'Start typing to search GitLab MRs and issues.',
+  gitea: 'Start typing to search Gitea PRs and issues.',
   branches: 'No matching branches.',
   linear: 'Start typing to search Linear issues.',
   jira: 'Start typing to search Jira issues, or paste an issue URL.',
@@ -61,17 +73,26 @@ export function isBlockingTaskUrlResolution({
   sourceIntent,
   isQueryStale,
   githubLoading,
-  gitlabLoading
+  gitlabLoading,
+  giteaLoading = false
 }: {
-  sourceIntent: 'github' | 'gitlab' | null
+  sourceIntent: 'github' | 'gitlab' | 'gitea' | null
   isQueryStale: boolean
   githubLoading: boolean
   gitlabLoading: boolean
+  giteaLoading?: boolean
 }): boolean {
   if (sourceIntent === null) {
     return false
   }
-  return isQueryStale || (sourceIntent === 'github' ? githubLoading : gitlabLoading)
+  if (isQueryStale) {
+    return true
+  }
+  return sourceIntent === 'github'
+    ? githubLoading
+    : sourceIntent === 'gitlab'
+      ? gitlabLoading
+      : giteaLoading
 }
 
 function toJiraSourceRow(issue: JiraIssue): SmartWorkspaceSourceRow {
@@ -82,115 +103,12 @@ function toGitHubSourceRow(item: GitHubWorkItem): SmartWorkspaceSourceRow {
   return { kind: 'github', value: `github-${item.repoId}-${item.type}-${item.number}`, item }
 }
 
-export function getBranchSearchRequest({
-  branchesEnabled,
-  disabled,
-  textOnly,
-  mode,
-  selectedRepoId,
-  query,
-  limit
-}: {
-  branchesEnabled?: boolean
-  disabled: boolean
-  textOnly: boolean
-  mode: SmartNameMode
-  selectedRepoId: string | null
-  query: string
-  limit: number
-}): { repoId: string; query: string; limit: number } | null {
-  if (
-    branchesEnabled === false ||
-    disabled ||
-    textOnly ||
-    !isSmartWorkspaceSourceQueryWithinLimit(query) ||
-    !selectedRepoId
-  ) {
-    return null
-  }
-  const trimmedQuery = query.trim()
-  const shouldSearchBranches = mode === 'branches' || (mode === 'smart' && trimmedQuery.length > 0)
-  if (!shouldSearchBranches) {
-    return null
-  }
-  return { repoId: selectedRepoId, query: trimmedQuery, limit }
-}
-
-/** Hold provider results during 200ms debounce, but clear immediately on empty input so stale rows cannot remain selectable. */
-export function getVisibleHeldProviderResults<T>({
-  items,
-  value,
-  debouncedQuery
-}: {
-  items: readonly T[]
-  value: string
-  debouncedQuery: string
-}): T[] {
-  if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
-    return []
-  }
-  if (value.trim() === '' && debouncedQuery.trim() !== '') {
-    return []
-  }
-  return items.slice()
-}
-
-export function getVisibleBranchResults({
-  branches,
-  mode,
-  resultRepoId,
-  resultQuery,
-  selectedRepoId,
-  value
-}: {
-  branches: BaseRefSearchResult[]
-  mode: SmartNameMode
-  resultRepoId: string | null
-  resultQuery: string | null
-  selectedRepoId: string | null
-  value: string
-}): BaseRefSearchResult[] {
-  if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
-    return []
-  }
-  if (mode !== 'branches' && mode !== 'smart') {
-    return []
-  }
-  if (!selectedRepoId || resultRepoId !== selectedRepoId || resultQuery === null) {
-    return []
-  }
-  const currentQuery = value.trim()
-  // Retain settled rows for prefix edits during debounce; drop unrelated queries such as feat → bug.
-  if (currentQuery === '') {
-    return resultQuery === '' ? branches : []
-  }
-  if (!shouldHoldSourceResultsForQuery({ resultQuery, value: currentQuery })) {
-    return []
-  }
-  return branches
-}
-
-/** Max |live − settled| length while still treating a prefix as "still typing". */
-const SOURCE_RESULT_HOLD_MAX_DELTA = 4
-
-/** Bound prefix-hold length delta: a settled f must not remain under a long unrelated continuation for the full debounce. */
-export function shouldHoldSourceResultsForQuery({
-  resultQuery,
-  value
-}: {
-  resultQuery: string
-  value: string
-}): boolean {
-  const currentQueryKey = value.trim().toLowerCase()
-  const resultQueryKey = resultQuery.trim().toLowerCase()
-  if (resultQueryKey === currentQueryKey) {
-    return true
-  }
-  if (!currentQueryKey.startsWith(resultQueryKey) && !resultQueryKey.startsWith(currentQueryKey)) {
-    return false
-  }
-  return Math.abs(currentQueryKey.length - resultQueryKey.length) <= SOURCE_RESULT_HOLD_MAX_DELTA
-}
+export {
+  getBranchSearchRequest,
+  getVisibleBranchResults,
+  getVisibleHeldProviderResults,
+  shouldHoldSourceResultsForQuery
+} from './smart-workspace-source-visibility'
 
 export function buildSmartWorkspaceSourceRows({
   branches,
@@ -199,6 +117,9 @@ export function buildSmartWorkspaceSourceRows({
   gitlabAvailable,
   gitlabItems,
   gitlabUrlIntent,
+  giteaAvailable = false,
+  giteaItems = [],
+  giteaUrlIntent,
   jiraIntent = false,
   jiraIssue,
   jiraIssues = [],
@@ -215,6 +136,9 @@ export function buildSmartWorkspaceSourceRows({
   gitlabAvailable: boolean
   gitlabItems: GitLabWorkItem[]
   gitlabUrlIntent?: SmartWorkspaceGitLabUrlIntent | null
+  giteaAvailable?: boolean
+  giteaItems?: GiteaWorkItem[]
+  giteaUrlIntent?: GiteaIssueOrPRLink | null
   jiraIntent?: boolean
   jiraIssue?: JiraIssue | null
   jiraIssues?: JiraIssue[]
@@ -244,6 +168,9 @@ export function buildSmartWorkspaceSourceRows({
     gitlabAvailable,
     gitlabItems,
     gitlabUrlIntent,
+    giteaAvailable,
+    giteaItems,
+    giteaUrlIntent,
     linearAvailable,
     linearIssues: resolvedLinearIssues,
     linearUrlIntentOwnsResults,
@@ -271,6 +198,15 @@ export function buildSmartWorkspaceSourceRows({
       ...gitlabItems.map((item) => ({
         kind: 'gitlab' as const,
         value: `gitlab-${item.repoId}-${item.type}-${item.number}`,
+        item
+      }))
+    )
+  }
+  if (giteaAvailable && (mode === 'smart' || mode === 'gitea')) {
+    nextRows.push(
+      ...giteaItems.map((item) => ({
+        kind: 'gitea' as const,
+        value: `gitea-${item.repoId}-${item.type}-${item.number}`,
         item
       }))
     )

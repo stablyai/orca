@@ -34,7 +34,7 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     Partial<Record<TaskProvider, TaskSourceAvailabilityNotice>>
   >(() => {
     const availabilityForContexts = (
-      provider: Extract<TaskProvider, 'github' | 'gitlab'>,
+      provider: Extract<TaskProvider, 'github' | 'gitlab' | 'gitea'>,
       contexts: readonly TaskSourceContext[]
     ): TaskSourceHostAvailability[] => [
       ...contexts.flatMap((context) => {
@@ -81,6 +81,18 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
             'gitlab',
             selectedRepos
               .map((repo) => getTaskPageRepoSourceContext(repo, 'gitlab'))
+              .filter((context): context is TaskSourceContext => context !== null)
+          )
+        }) ?? undefined,
+      gitea:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('gitea'),
+          sourceCount: selectedRepos.length,
+          hostLabelById,
+          hostAvailability: availabilityForContexts(
+            'gitea',
+            selectedRepos
+              .map((repo) => getTaskPageRepoSourceContext(repo, 'gitea'))
               .filter((context): context is TaskSourceContext => context !== null)
           )
         }) ?? undefined,

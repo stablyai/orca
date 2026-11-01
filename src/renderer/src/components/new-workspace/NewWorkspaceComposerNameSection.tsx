@@ -19,6 +19,7 @@ type NewWorkspaceComposerNameSectionProps = Pick<
   | 'onNameValueChange'
   | 'onSmartGitHubItemSelect'
   | 'onSmartGitLabItemSelect'
+  | 'onSmartGiteaItemSelect'
   | 'onSmartBranchSelect'
   | 'onSmartLinearIssueSelect'
   | 'onSmartJiraIssueSelect'
@@ -61,6 +62,7 @@ export function NewWorkspaceComposerNameSection({
   onNameValueChange,
   onSmartGitHubItemSelect,
   onSmartGitLabItemSelect,
+  onSmartGiteaItemSelect,
   onSmartBranchSelect,
   onSmartLinearIssueSelect,
   onSmartJiraIssueSelect,
@@ -133,6 +135,7 @@ export function NewWorkspaceComposerNameSection({
         onValueChange={onNameValueChange}
         onGitHubItemSelect={onSmartGitHubItemSelect}
         onGitLabItemSelect={onSmartGitLabItemSelect}
+        onGiteaItemSelect={onSmartGiteaItemSelect}
         onBranchSelect={onSmartBranchSelect}
         onLinearIssueSelect={onSmartLinearIssueSelect}
         onJiraIssueSelect={onSmartJiraIssueSelect}

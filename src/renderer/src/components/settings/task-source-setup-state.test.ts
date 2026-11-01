@@ -20,6 +20,7 @@ function buildReadiness(
   const base: Record<TaskProvider, TaskProviderReadiness> = {
     github: { connected: true, checking: false, visible: true },
     gitlab: { connected: true, checking: false, visible: true },
+    gitea: { connected: true, checking: false, visible: true },
     linear: {
       connected: true,
       checking: false,

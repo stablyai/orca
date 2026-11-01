@@ -122,6 +122,7 @@ export function useReviewBaseSelectionFixture(initialReview?: GitHubWorkItem) {
     setLinkQuery: vi.fn(),
     setLinkedGitLabIssue: vi.fn(),
     setLinkedGitLabMR: vi.fn(),
+    clearLinkedGiteaItems: vi.fn(),
     setLinkedIssue: vi.fn(),
     setLinkedPR: vi.fn(),
     setLinkedTaskSourceContext: vi.fn(),

@@ -27,6 +27,11 @@ export type GitLabWorkspaceSource = WorkspaceSourceLinkedItem & {
   type: 'issue' | 'mr'
 }
 
+export type GiteaWorkspaceSource = WorkspaceSourceLinkedItem & {
+  provider: 'gitea'
+  type: 'issue' | 'pr'
+}
+
 export type LinearWorkspaceSource = WorkspaceSourceLinkedItem & {
   provider: 'linear'
   type: 'issue'
@@ -46,6 +51,8 @@ export type WorkspaceSourceSelectionKind =
   | 'github-issue'
   | 'gitlab-mr'
   | 'gitlab-issue'
+  | 'gitea-pr'
+  | 'gitea-issue'
   | 'branch'
   | 'linear'
   | 'jira'
@@ -115,6 +122,16 @@ export function buildGitLabWorkspaceSource(item: {
   repoId?: string
 }): GitLabWorkspaceSource {
   return { provider: 'gitlab', ...item }
+}
+
+export function buildGiteaWorkspaceSource(item: {
+  type: 'issue' | 'pr'
+  number: number
+  title: string
+  url: string
+  repoId?: string
+}): GiteaWorkspaceSource {
+  return { provider: 'gitea', ...item }
 }
 
 export function getUsableLinearBranchName(
@@ -203,9 +220,13 @@ export function buildWorkspaceSourceSelection(args: {
           ? linkedWorkItem.type === 'mr'
             ? 'gitlab-mr'
             : 'gitlab-issue'
-          : linkedWorkItem.type === 'pr'
-            ? 'github-pr'
-            : 'github-issue'
+          : provider === 'gitea'
+            ? linkedWorkItem.type === 'pr'
+              ? 'gitea-pr'
+              : 'gitea-issue'
+            : linkedWorkItem.type === 'pr'
+              ? 'github-pr'
+              : 'github-issue'
   return {
     kind,
     label:

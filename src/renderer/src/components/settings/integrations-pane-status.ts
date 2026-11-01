@@ -16,6 +16,7 @@ export type PreflightIntegrationStatuses = {
   azureDevOpsAccount: string | null
   azureDevOpsBaseUrl: string | null
   giteaStatus: GiteaStatus
+  giteaTeaStatus: GhStatus
   giteaAccount: string | null
   giteaBaseUrl: string | null
 }
@@ -51,7 +52,16 @@ export function tokenApiStatusFromPreflight(
   return 'configured'
 }
 
-export function giteaStatusFromPreflight(status: GiteaPreflightStatus | undefined): GiteaStatus {
+type TeaPreflightStatus = { installed: boolean; authenticated: boolean }
+
+/** Gitea counts as connected through an authenticated `tea` login or a configured REST token. */
+export function giteaStatusFromPreflight(
+  status: GiteaPreflightStatus | undefined,
+  tea?: TeaPreflightStatus
+): GiteaStatus {
+  if (tea?.authenticated === true) {
+    return 'configured'
+  }
   if (!status?.configured) {
     return 'not-configured'
   }
@@ -63,6 +73,13 @@ export function giteaStatusFromPreflight(status: GiteaPreflightStatus | undefine
 
 function ghStatusFromPreflight(status: PreflightStatus['gh']): GhStatus {
   if (!status.installed) {
+    return 'not-installed'
+  }
+  return status.authenticated ? 'connected' : 'not-authenticated'
+}
+
+function teaStatusFromPreflight(status: PreflightStatus['tea']): GhStatus {
+  if (!status?.installed) {
     return 'not-installed'
   }
   return status.authenticated ? 'connected' : 'not-authenticated'
@@ -104,6 +121,7 @@ export function getPreflightIntegrationStatuses(
       azureDevOpsAccount: null,
       azureDevOpsBaseUrl: null,
       giteaStatus: 'checking',
+      giteaTeaStatus: 'checking',
       giteaAccount: null,
       giteaBaseUrl: null
     }
@@ -132,7 +150,16 @@ export function getPreflightIntegrationStatuses(
     ),
     azureDevOpsAccount: azureDevOps?.account ?? null,
     azureDevOpsBaseUrl: azureDevOps?.baseUrl ?? null,
-    giteaStatus: maybeChecking('gitea', refreshingProviders, giteaStatusFromPreflight(gitea)),
+    giteaStatus: maybeChecking(
+      'gitea',
+      refreshingProviders,
+      giteaStatusFromPreflight(gitea, preflightStatus.tea)
+    ),
+    giteaTeaStatus: maybeChecking(
+      'gitea',
+      refreshingProviders,
+      teaStatusFromPreflight(preflightStatus.tea)
+    ),
     giteaAccount: gitea?.account ?? null,
     giteaBaseUrl: gitea?.baseUrl ?? null
   }

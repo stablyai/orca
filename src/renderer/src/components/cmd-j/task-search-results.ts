@@ -1,5 +1,6 @@
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GiteaWorkItem } from '../../../../shared/gitea-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import {
@@ -14,6 +15,7 @@ export type CmdJTask =
   | { provider: 'jira'; issue: JiraIssue }
   | { provider: 'github'; issue: GitHubWorkItem }
   | { provider: 'gitlab'; issue: GitLabWorkItem }
+  | { provider: 'gitea'; issue: GiteaWorkItem }
 
 export type CmdJTaskSearchResult = {
   id: string

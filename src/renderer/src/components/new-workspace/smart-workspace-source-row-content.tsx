@@ -49,6 +49,13 @@ export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
       <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
     )
   }
+  if (row.kind === 'gitea') {
+    return row.item.type === 'pr' ? (
+      <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
+    ) : (
+      <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
+    )
+  }
   if (row.kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
   }
@@ -63,13 +70,13 @@ export function SelectionIcon({
 }: {
   kind: SmartWorkspaceNameSelection['kind']
 }): React.JSX.Element {
-  if (kind === 'github-pr') {
+  if (kind === 'github-pr' || kind === 'gitea-pr') {
     return <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
   }
   if (kind === 'gitlab-mr') {
     return <GitMerge className="size-3.5 shrink-0 text-muted-foreground" />
   }
-  if (kind === 'github-issue' || kind === 'gitlab-issue') {
+  if (kind === 'github-issue' || kind === 'gitlab-issue' || kind === 'gitea-issue') {
     return <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
   }
   if (kind === 'branch') {
@@ -138,6 +145,13 @@ export function RowLabel({
           {row.item.number}
         </span>{' '}
         {row.item.title}
+      </span>
+    )
+  }
+  if (row.kind === 'gitea') {
+    return (
+      <span className="min-w-0 truncate">
+        <span className="font-medium text-foreground">#{row.item.number}</span> {row.item.title}
       </span>
     )
   }

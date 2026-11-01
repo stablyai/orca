@@ -1,6 +1,7 @@
 import type { TaskPageSearchActionsModel } from './use-task-page-search-actions'
 import { useCallback } from 'react'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GiteaWorkItem } from '../../../../shared/gitea-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { useAppStore } from '@/store'
@@ -9,8 +10,10 @@ import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-wo
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { toGiteaLinkedWorkItem } from '@/components/sidebar/folder-workspace-composer-helpers'
 import {
   getGitHubWorkItemWorkspaceSeed,
+  getGiteaWorkItemWorkspaceSeed,
   getGitLabWorkItemWorkspaceSeed,
   getTaskPageRepoSourceContext
 } from './task-page-source-context'
@@ -122,6 +125,25 @@ export function useTaskPageWorkspaceActions<Model extends TaskPageWorkspaceActio
     },
     [openComposerForGitLabItem]
   )
+  const openComposerForGiteaItem = useCallback(
+    (item: GiteaWorkItem): void => {
+      openModal('new-workspace-composer', {
+        linkedWorkItem: toGiteaLinkedWorkItem(item),
+        taskSourceContext: getTaskPageRepoSourceContext(getWorkItemRepo(repos, item), 'gitea'),
+        prefilledName: getGiteaWorkItemWorkspaceSeed(item),
+        initialRepoId: item.repoId,
+        telemetrySource: 'sidebar'
+      })
+    },
+    [openModal, repos]
+  )
+  const handleUseGiteaItem = useCallback(
+    (item: GiteaWorkItem): void => {
+      useAppStore.getState().recordFeatureInteraction('gitea-tasks')
+      openComposerForGiteaItem(item)
+    },
+    [openComposerForGiteaItem]
+  )
   const nextModel = model as typeof model & {
     openComposerForItem: typeof openComposerForItem
     handleUseWorkItem: typeof handleUseWorkItem
@@ -134,7 +156,11 @@ export function useTaskPageWorkspaceActions<Model extends TaskPageWorkspaceActio
   nextModel.handleOpenOrUseGitHubWorkItem = handleOpenOrUseGitHubWorkItem
   nextModel.openComposerForGitLabItem = openComposerForGitLabItem
   nextModel.handleUseGitLabItem = handleUseGitLabItem
-  return nextModel
+  const giteaModel = Object.assign(nextModel, {
+    openComposerForGiteaItem,
+    handleUseGiteaItem
+  })
+  return giteaModel
 }
 export type TaskPageWorkspaceActionsModel = ReturnType<
   typeof useTaskPageWorkspaceActions<TaskPageSearchActionsModel>

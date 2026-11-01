@@ -8,12 +8,25 @@ import {
 } from './pull-request-mappers'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
+import {
+  configuredGiteaApiBaseUrl,
+  normalizeGiteaApiBaseUrl,
+  requestGiteaJson
+} from './gitea-json-request'
 import { invalidateGiteaPullRequestScan, scanGiteaPullRequests } from './pull-request-scan-cache'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+
+export {
+  normalizeGiteaApiBaseUrl,
+  requestGiteaJson,
+  requestGiteaJsonWithHeaders,
+  requestGiteaText,
+  requestGiteaTextResult
+} from './gitea-json-request'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Forgejo may spend several seconds loading reviewers for one pulls page.
@@ -46,11 +59,6 @@ function envValue(name: string): string | null {
   return value.length > 0 ? value : null
 }
 
-export function normalizeGiteaApiBaseUrl(value: string): string {
-  const trimmed = value.trim().replace(/\/+$/, '')
-  return /\/api\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/api/v1`
-}
-
 function getAuthConfig(): GiteaAuthConfig {
   const apiBaseUrl = envValue('ORCA_GITEA_API_BASE_URL')
   return {
@@ -61,10 +69,6 @@ function getAuthConfig(): GiteaAuthConfig {
 
 function authHeaders(config: Pick<GiteaAuthConfig, 'token'>): Record<string, string> {
   return config.token ? { Authorization: `token ${config.token}` } : {}
-}
-
-function configuredApiBaseUrl(repo: GiteaRepoRef): string {
-  return getAuthConfig().apiBaseUrl ?? repo.apiBaseUrl
 }
 
 function apiUrl(baseUrl: string, path: string, searchParams?: RequestOptions['searchParams']): URL {
@@ -101,7 +105,8 @@ async function requestJsonAtBase<T>(
       }
       return null
     }
-    return (await response.json()) as T
+    const data: T = await response.json()
+    return data
   } catch (error) {
     if (throwOnFailure) {
       throw error
@@ -110,21 +115,12 @@ async function requestJsonAtBase<T>(
   }
 }
 
-function requestJson<T>(
-  repo: GiteaRepoRef,
-  path: string,
-  options: RequestOptions = {},
-  throwOnFailure = false
-): Promise<T | null> {
-  return requestJsonAtBase(configuredApiBaseUrl(repo), path, options, throwOnFailure)
-}
-
 function encodedRepoPath(repo: GiteaRepoRef): string {
   return `${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.repo)}`
 }
 
 function giteaPullRequestScanKey(repo: GiteaRepoRef): string {
-  return `${configuredApiBaseUrl(repo)}/${encodedRepoPath(repo)}`
+  return `${configuredGiteaApiBaseUrl(repo)}/${encodedRepoPath(repo)}`
 }
 
 /** Invalidate after creation so card refreshes cannot reuse a cached miss. */
@@ -141,7 +137,7 @@ async function getCommitStatus(
   if (!headSha) {
     return 'neutral'
   }
-  const data = await requestJson<RawGiteaCombinedStatus>(
+  const data = await requestGiteaJson<RawGiteaCombinedStatus>(
     repo,
     `/repos/${encodedRepoPath(repo)}/commits/${encodeURIComponent(headSha)}/status`
   )
@@ -228,7 +224,7 @@ export async function getGiteaPullRequest(
   if (!repo) {
     return null
   }
-  const raw = await requestJson<RawGiteaPullRequest>(
+  const raw = await requestGiteaJson<RawGiteaPullRequest>(
     repo,
     `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(prNumber))}`
   )
@@ -262,7 +258,7 @@ export async function getGiteaPullRequestForBranch(
       // Strict scans must not inherit an empty result produced by a failed lenient scan.
       throwOnFailure ? `${giteaPullRequestScanKey(repo)}::strict` : giteaPullRequestScanKey(repo),
       (page) =>
-        requestJson<RawGiteaPullRequest[]>(
+        requestGiteaJson<RawGiteaPullRequest[]>(
           repo,
           `/repos/${encodedRepoPath(repo)}/pulls`,
           {
@@ -299,7 +295,7 @@ export async function getGiteaPullRequestForBranch(
   if (typeof linkedPRNumber !== 'number') {
     return null
   }
-  const raw = await requestJson<RawGiteaPullRequest>(
+  const raw = await requestGiteaJson<RawGiteaPullRequest>(
     repo,
     `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`,
     { allowNotFound: true },

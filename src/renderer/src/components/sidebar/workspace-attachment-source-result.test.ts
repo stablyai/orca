@@ -139,6 +139,27 @@ describe('attachment source conversion', () => {
     }
   )
   it.each(['issue', 'pr'] as const)(
+    'resolves a bare Gitea %s across its shared number sequence but keeps URLs typed',
+    (type) => {
+      const query: WorkspaceAttachment = { provider: 'gitea', type, number: 7 }
+      const other: WorkspaceAttachment = {
+        ...query,
+        type: type === 'issue' ? 'pr' : 'issue',
+        url: `https://gitea.example.com/acme/orca/${type === 'issue' ? 'pulls' : 'issues'}/7`
+      }
+      expect(matchesWorkspaceAttachmentQuery(query, other)).toBe(true)
+      expect(
+        matchesWorkspaceAttachmentQuery(
+          {
+            ...query,
+            url: `https://gitea.example.com/acme/orca/${type === 'issue' ? 'issues' : 'pulls'}/7`
+          },
+          other
+        )
+      ).toBe(false)
+    }
+  )
+  it.each(['issue', 'pr'] as const)(
     'resolves a bare GitHub %s across its shared number sequence but keeps URLs typed',
     (type) => {
       const query: WorkspaceAttachment = { provider: 'github', type, number: 7 }

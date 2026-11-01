@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { CaseSensitive, LoaderCircle, Search } from 'lucide-react'
 import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
+import { parseGiteaIssueOrPRLink } from '../../../../shared/new-workspace/gitea-links'
 import {
   isSmartWorkspaceLinearIssueIntentMatch,
   parseBoundedSmartWorkspaceLinearIssueInput,
@@ -44,6 +45,8 @@ export function useWorkItemSourcePresentation(
     debouncedQuery,
     gitlabSourceAvailable,
     gitlabItems,
+    giteaSourceAvailable,
+    giteaItems,
     jiraIssues,
     linearAvailable,
     linearStatusChecked,
@@ -52,6 +55,7 @@ export function useWorkItemSourcePresentation(
     setCommandValue,
     githubLoading,
     gitlabLoading,
+    giteaLoading,
     branchesLoading,
     linearLoading,
     jiraLoading,
@@ -84,6 +88,13 @@ export function useWorkItemSourcePresentation(
         : null,
     [mode, value]
   )
+  const giteaUrlIntent = useMemo(
+    () =>
+      isSmartWorkspaceSourceQueryWithinLimit(value) && (mode === 'smart' || mode === 'gitea')
+        ? parseGiteaIssueOrPRLink(value, { assumeGitea: mode === 'gitea' })
+        : null,
+    [mode, value]
+  )
   const rows = useMemo<RowEntry[]>(() => {
     if (jiraSource.intent && jiraSource.accountChoices.length > 0) {
       return jiraSource.accountChoices.map((site) => ({
@@ -112,6 +123,13 @@ export function useWorkItemSourcePresentation(
         value,
         debouncedQuery
       }),
+      giteaAvailable: giteaSourceAvailable,
+      giteaItems: getVisibleHeldProviderResults({
+        items: giteaItems,
+        value,
+        debouncedQuery
+      }),
+      giteaUrlIntent,
       jiraIntent: jiraSource.intent,
       jiraIssue: jiraSource.issue,
       jiraIssues: getVisibleHeldProviderResults({
@@ -148,6 +166,9 @@ export function useWorkItemSourcePresentation(
     gitlabSourceAvailable,
     gitlabItems,
     gitlabUrlIntent,
+    giteaSourceAvailable,
+    giteaItems,
+    giteaUrlIntent,
     jiraSource.accountChoices,
     jiraSource.intent,
     jiraSource.issue,
@@ -176,7 +197,7 @@ export function useWorkItemSourcePresentation(
   const isQueryStale =
     !linearUrlIntentOwnsInput && trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
   // Why: unambiguous refs highlight their source row instead of the typed-text fallback.
-  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | null>(() => {
+  const sourceIntent = useMemo<'github' | 'gitlab' | 'gitea' | 'linear' | 'jira' | null>(() => {
     if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
       return null
     }
@@ -193,6 +214,12 @@ export function useWorkItemSourcePresentation(
     if (parseGitLabIssueOrMRLink(trimmed) !== null) {
       return 'gitlab'
     }
+    if (
+      giteaSourceAvailable &&
+      parseGiteaIssueOrPRLink(trimmed, { assumeGitea: mode === 'gitea' }) !== null
+    ) {
+      return 'gitea'
+    }
     if (linearAvailable) {
       const linearIntent = parseBoundedSmartWorkspaceLinearIssueInput(trimmed)
       if (
@@ -206,7 +233,7 @@ export function useWorkItemSourcePresentation(
       }
     }
     return null
-  }, [jiraSource.intent, linearAvailable, rows, value])
+  }, [giteaSourceAvailable, jiraSource.intent, linearAvailable, mode, rows, value])
   // Why: a slow host status read must not let Enter accept a pasted Linear URL as plain text.
   const unresolvedLinearUrlIntent =
     linearUrlIntentOwnsInput &&
@@ -214,10 +241,14 @@ export function useWorkItemSourcePresentation(
     (!linearStatusChecked ||
       (linearAvailable && (linearLoading || settledLinearUrlQuery !== linearQuery.trim())))
   const blockingTaskUrlResolution = isBlockingTaskUrlResolution({
-    sourceIntent: sourceIntent === 'github' || sourceIntent === 'gitlab' ? sourceIntent : null,
+    sourceIntent:
+      sourceIntent === 'github' || sourceIntent === 'gitlab' || sourceIntent === 'gitea'
+        ? sourceIntent
+        : null,
     isQueryStale,
     githubLoading,
-    gitlabLoading
+    gitlabLoading,
+    giteaLoading
   })
   const resolvedCommandValue = resolveSmartWorkspaceCommandValue({
     currentValue: commandValue,
@@ -238,7 +269,12 @@ export function useWorkItemSourcePresentation(
     linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
   const loading = jiraSource.intent
     ? jiraSource.loading
-    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
+    : githubLoading ||
+      gitlabLoading ||
+      giteaLoading ||
+      branchesLoading ||
+      visibleLinearLoading ||
+      jiraLoading
   // Why: only spin on first load, not refreshes with retained rows.
   const showSearchSpinner = loading && searchResultRows.length === 0
   const ActiveInputIcon =

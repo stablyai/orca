@@ -76,6 +76,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         linkedBitbucketPR: args.linkedBitbucketPR,
         linkedAzureDevOpsPR: args.linkedAzureDevOpsPR,
         linkedGiteaPR: args.linkedGiteaPR,
+        linkedGiteaIssue: args.linkedGiteaIssue,
         displayName: args.displayName,
         sparseCheckout: args.sparseCheckout,
         pushTarget: args.pushTarget,
@@ -131,6 +132,22 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       wakeWslDistro
     }) =>
       callRuntimeResult('worktree.resolvePrBase', {
+        repo: repoId,
+        prNumber,
+        headRefName,
+        baseRefName,
+        isCrossRepository,
+        ...(wakeWslDistro ? { wakeWslDistro } : {})
+      }),
+    resolveGiteaPrBase: async ({
+      repoId,
+      prNumber,
+      headRefName,
+      baseRefName,
+      isCrossRepository,
+      wakeWslDistro
+    }) =>
+      callRuntimeResult('worktree.resolveGiteaPrBase', {
         repo: repoId,
         prNumber,
         headRefName,

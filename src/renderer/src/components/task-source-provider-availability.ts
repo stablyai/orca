@@ -2,6 +2,7 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { TaskProvider } from '../../../shared/task-providers'
 import type { PreflightStatus } from '../../../preload/api-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { isGiteaTaskSourceConfigured } from '@/lib/gitea-review-configured'
 import type { TaskSourceHostAvailability } from './task-source-context-summary'
 
 type ProviderToolStatus = {
@@ -22,7 +23,7 @@ function isDesktopOwnedHost(hostId: TaskSourceContext['hostId']): boolean {
 }
 
 function getRepoBackedProviderToolStatus(
-  provider: Extract<TaskProvider, 'github' | 'gitlab'>,
+  provider: Extract<TaskProvider, 'github' | 'gitlab' | 'gitea'>,
   preflightStatus: PreflightStatus | null
 ): ProviderAvailabilityStatus | null {
   if (!preflightStatus) {
@@ -30,6 +31,16 @@ function getRepoBackedProviderToolStatus(
   }
   if (provider === 'github') {
     return preflightStatus.gh
+  }
+  if (provider === 'gitea') {
+    // Why: Gitea works through either a `tea` login or a configured REST token.
+    return preflightStatus.tea || preflightStatus.gitea
+      ? {
+          installed:
+            preflightStatus.tea?.installed === true || preflightStatus.gitea?.configured === true,
+          authenticated: isGiteaTaskSourceConfigured(preflightStatus)
+        }
+      : 'unsupported'
   }
   // Older servers can lack GitLab preflight; report a capability gap instead of a fixable missing glab install.
   return Object.hasOwn(preflightStatus, 'glab')
@@ -53,7 +64,7 @@ function getProviderReason(
 }
 
 export function getRepoBackedProviderAvailability(args: {
-  provider: Extract<TaskProvider, 'github' | 'gitlab'>
+  provider: Extract<TaskProvider, 'github' | 'gitlab' | 'gitea'>
   contexts: readonly TaskSourceContext[]
   preflightStatus: PreflightStatus | null
   preflightReady: boolean

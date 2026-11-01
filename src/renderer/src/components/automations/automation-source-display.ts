@@ -54,6 +54,8 @@ function getProviderLabel(provider: TaskSourceContext['provider']): string {
       return 'GitHub'
     case 'gitlab':
       return 'GitLab'
+    case 'gitea':
+      return 'Gitea'
     case 'linear':
       return 'Linear'
     case 'jira':
@@ -71,6 +73,8 @@ function getSourceIdentityLabel(sourceContext: TaskSourceContext): string | null
         return identity.namespace && identity.project
           ? `${identity.namespace}/${identity.project}`
           : (identity.projectId ?? null)
+      case 'gitea':
+        return identity.path ?? identity.host ?? null
       case 'linear':
         return identity.workspaceName ?? identity.workspaceId ?? null
       case 'jira':

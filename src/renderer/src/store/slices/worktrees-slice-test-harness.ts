@@ -81,6 +81,7 @@ export const mockApi = {
     forgetLocal: stubMock().mockResolvedValue({}),
     forceDeletePreservedBranch: stubMock().mockResolvedValue({ deleted: true }),
     resolvePrBase: stubMock(),
+    resolveGiteaPrBase: stubMock(),
     resolveMrBase: stubMock(),
     updateMeta:
       stubMock<[{ worktreeId: string; updates: Partial<WorktreeMeta> }]>().mockResolvedValue(
