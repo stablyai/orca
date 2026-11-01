@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import type { KeybindingFileSnapshot } from '../../../../shared/keybindings'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 
 const platform = vi.hoisted(() => ({ value: 'darwin' }))
 vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => platform.value }))
@@ -11,6 +14,25 @@ vi.mock('@/hooks/useAppMenuSelectionActions', () => ({ useAppMenuSelectionAction
 vi.mock('./use-agent-dashboard-telemetry', () => ({ useAgentDashboardTelemetry: () => {} }))
 vi.mock('./AgentKanbanBoard', () => ({ AgentKanbanBoard: () => null }))
 vi.mock('./useDashboardSnapshot', () => ({ useDashboardSnapshot: () => null }))
+vi.mock('@/lib/react-devtools-commit-hook-shim', () => ({}))
+vi.mock('@/lib/react-commit-cascade-observer', () => ({}))
+vi.mock('@/lib/crash-diagnostics', () => ({
+  installRendererCrashDiagnostics: () => {},
+  recordRendererCrashBreadcrumb: () => {}
+}))
+vi.mock('@/lib/react-commit-cascade-telemetry', () => ({
+  setReactCommitCascadeRendererSurface: () => {}
+}))
+vi.mock('@/lib/os-file-drop-cancellation-guard', () => ({
+  installOsFileDropCancellationGuard: () => () => {}
+}))
+vi.mock('@/lib/body-overlay-attributes', () => ({ installBodyOverlayAttributes: () => () => {} }))
+vi.mock('@/i18n/I18nProvider', () => ({
+  I18nProvider: ({ children }: { children: ReactNode }) => children
+}))
+vi.mock('@/lib/react-renderer-root', () => ({
+  getOrCreateRendererRoot: () => ({ render: (node: ReactNode) => render(node) })
+}))
 
 import { DashboardPopoutRoot } from './DashboardPopoutRoot'
 
@@ -22,6 +44,96 @@ describe('dashboard pop-out close shortcut', () => {
     document.body.replaceChildren()
     vi.restoreAllMocks()
     useAppStore.setState({ keybindings: initialKeybindings })
+  })
+
+  it('uses binding broadcasts while open and releases the subscription on unmount', async () => {
+    const initial = useAppStore.getState()
+    const originalApi = Object.getOwnPropertyDescriptor(window, 'api')
+    const originalAttributes = new Map(
+      [...document.documentElement.attributes].map(({ name, value }) => [name, value])
+    )
+    const listeners = new Set<(snapshot: KeybindingFileSnapshot) => void>()
+    const subscribed: ((snapshot: KeybindingFileSnapshot) => void)[] = []
+    const settings = createGlobalSettingsFixture({ theme: 'dark' })
+    const snapshot: KeybindingFileSnapshot = {
+      path: '/test/keybindings.json',
+      platform: 'darwin',
+      exists: true,
+      overrides: {},
+      commonOverrides: {},
+      platformOverrides: {},
+      diagnostics: []
+    }
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        settings: { getSync: () => settings, get: async () => settings, onChanged: () => () => {} },
+        keybindings: {
+          get: async () => snapshot,
+          onChanged: (listener: (next: KeybindingFileSnapshot) => void) => {
+            listeners.add(listener)
+            subscribed.push(listener)
+            return () => listeners.delete(listener)
+          }
+        }
+      }
+    })
+    try {
+      platform.value = 'darwin'
+      const close = vi.spyOn(window, 'close').mockImplementation(() => {})
+      const press = (key: string, code: string, shiftKey = false): void => {
+        document.body.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            bubbles: true,
+            cancelable: true,
+            metaKey: true,
+            key,
+            code,
+            shiftKey
+          })
+        )
+      }
+      const root = document.createElement('div')
+      root.id = 'root'
+      document.body.append(root)
+      await act(async () => {
+        await import('../../popout')
+      })
+      press('w', 'KeyW')
+      expect(close).toHaveBeenCalledOnce()
+      const updated = { ...snapshot, overrides: { 'tab.close': ['Mod+Shift+Y'] } }
+      act(() => {
+        for (const listener of listeners) {
+          listener(updated)
+        }
+      })
+      press('w', 'KeyW')
+      expect(close).toHaveBeenCalledOnce()
+      press('Y', 'KeyY', true)
+      expect(close).toHaveBeenCalledTimes(2)
+      expect(listeners.size).toBe(1)
+      cleanup()
+      expect(listeners.size).toBe(0)
+      const afterUnmount = useAppStore.getState().keybindingSnapshot
+      for (const listener of subscribed) {
+        listener(snapshot)
+      }
+      expect(useAppStore.getState().keybindingSnapshot).toBe(afterUnmount)
+    } finally {
+      cleanup()
+      useAppStore.setState(initial, true)
+      for (const name of document.documentElement.getAttributeNames()) {
+        document.documentElement.removeAttribute(name)
+      }
+      for (const [name, value] of originalAttributes) {
+        document.documentElement.setAttribute(name, value)
+      }
+      if (originalApi) {
+        Object.defineProperty(window, 'api', originalApi)
+      } else {
+        Reflect.deleteProperty(window, 'api')
+      }
+    }
   })
 
   it.each(['darwin', 'win32', 'linux'] as const)(
