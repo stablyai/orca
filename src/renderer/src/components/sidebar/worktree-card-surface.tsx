@@ -61,6 +61,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
           : isActiveSurface
             ? 'border border-transparent'
             : 'border border-transparent worktree-sidebar-card-hover',
+        'data-[worktree-tab-drop-target=true]:border-worktree-sidebar-foreground/50 data-[worktree-tab-drop-target=true]:bg-worktree-sidebar-accent data-[worktree-tab-drop-target=true]:ring-1 data-[worktree-tab-drop-target=true]:ring-inset data-[worktree-tab-drop-target=true]:ring-worktree-sidebar-ring/70',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
         revealHighlight && [
           'scroll-to-current-workspace-reveal-highlight',
@@ -72,6 +73,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         isRuntimeDisconnected && !isDeleting && 'opacity-60'
       )}
       data-worktree-card-surface="true"
+      data-worktree-id={worktree.id}
       data-worktree-card-active={
         isActiveSurface && !isLineageDropTarget ? activeSurfaceVariant : undefined
       }
