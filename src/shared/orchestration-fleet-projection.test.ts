@@ -748,4 +748,30 @@ describe('fleet liveness and attention after a host verdict', () => {
     expect(subject.attention.categories).not.toContain('stopped_without_worker_done')
     expect(subject.attention.requiresAction).toBe(true)
   })
+
+  it('drops stopped_without_worker_done when liveness is not live', () => {
+    const now = 10_000
+    const projected = projectOrchestrationFleet({
+      workers: [
+        worker('1', {
+          workerState: 'ready',
+          dispatchStatus: 'dispatched'
+        })
+      ],
+      statuses: [
+        status('1', now - 1_000, {
+          state: 'waiting',
+          orchestration: { taskId: 'task-1', dispatchId: '1' }
+        })
+      ],
+      now
+    })
+
+    const subject = projected.workers[0]!
+    expect(subject.attention.categories).toContain('stopped_without_worker_done')
+
+    subject.liveness = { verdict: 'unverifiable', reason: 'host_unavailable' }
+    refreshOrchestrationFleetLivenessAttention(subject)
+    expect(subject.attention.categories).not.toContain('stopped_without_worker_done')
+  })
 })

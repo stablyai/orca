@@ -142,7 +142,8 @@ export function refreshOrchestrationFleetLivenessAttention(worker: Orchestration
     pendingGuidance: had('guidance'),
     pendingApproval: had('approval'),
     interrupted: had('interruption'),
-    stoppedWithoutWorkerDone: had('stopped_without_worker_done'),
+    stoppedWithoutWorkerDone:
+      had('stopped_without_worker_done') && worker.liveness.verdict === 'live',
     lastAssistantMessage: worker.attention.lastAssistantMessage ?? worker.lastAssistantMessage,
     liveness: worker.liveness
   })
