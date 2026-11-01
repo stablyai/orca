@@ -17,8 +17,10 @@ import { chosenAgentChatUnlearned, agentChoiceOpensAsChat } from '@/lib/host-cha
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { readAgentLaunchPreferencesForWorktree } from '@/components/settings/use-host-agent-launch-preferences'
-import type { AgentLaunchPreferences } from '../../../shared/agent-session-host-authority'
+import {
+  readAgentLaunchPreferencesForWorktree,
+  type AgentLaunchPreferences
+} from '@/components/settings/use-host-agent-launch-preferences'
 
 type DefaultChatHost = { target: AgentDetectionTarget; preferences: AgentLaunchPreferences }
 
