@@ -21,7 +21,9 @@ vi.mock('expo-router', async () => {
   const React = await import('react')
   return {
     useFocusEffect: (effect: () => () => void) =>
-      React.useEffect(() => (focus.active ? effect() : undefined), [effect, focus.active])
+      React.useEffect(() => (focus.active ? effect() : undefined), [effect, focus.active]),
+    useRouter: () => ({ setParams: () => {} }),
+    useLocalSearchParams: () => ({})
   }
 })
 vi.mock('../platform/haptics', () => ({ triggerSelection: () => {} }))

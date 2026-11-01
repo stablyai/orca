@@ -208,6 +208,8 @@ describe('the phone Workspace options sheet', () => {
       activeFilterCount: 2
     })
     expect(texts()).toContain('Synced across your devices')
+    expect(texts()).toContain('Select sessions')
+    expect(texts()).toContain('Taller rows you can tap to open that session.')
     press('Reset')
     expect(settings.clearFilters).toHaveBeenCalledTimes(1)
     press('Sort by, Agent Activity')

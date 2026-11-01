@@ -19,6 +19,14 @@ vi.mock('../navigation/workspace-route-handoff', () => ({
 
 type RouteUpdateListener = (route: BridgeInitRoute | null) => void
 
+const routeParams = vi.hoisted(() => ({ paneKey: '' as string | string[] | undefined }))
+const setParams = vi.hoisted(() => vi.fn())
+
+vi.mock('expo-router', () => ({
+  useLocalSearchParams: () => routeParams,
+  useRouter: () => ({ setParams })
+}))
+
 const bridge = vi.hoisted(() => {
   const held: {
     route: BridgeInitRoute | null
@@ -117,6 +125,8 @@ beforeEach(() => {
   bridge.route = null
   bridge.listeners = []
   bridge.cleared.length = 0
+  routeParams.paneKey = ''
+  setParams.mockClear()
   switched.length = 0
 })
 
@@ -209,6 +219,28 @@ describe('the page pane hook', () => {
   it('does nothing at all when the page was opened on no pane', () => {
     render(true)
     expect(switched).toEqual([])
+  })
+
+  it('switches to the pane named on this document’s route', () => {
+    routeParams.paneKey = `tab-b:${LEAF}`
+    render(true)
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
+    expect(setParams).toHaveBeenCalledWith({ paneKey: '' })
+  })
+
+  it('applies the shell pane once when the document route names that same pane', () => {
+    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
+    routeParams.paneKey = `tab-b:${LEAF}`
+    render(true)
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
+    expect(setParams).toHaveBeenCalledWith({ paneKey: '' })
+  })
+
+  it('applies a document pane that differs from the shell pane', () => {
+    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-a:${LEAF}` } }
+    routeParams.paneKey = `tab-b:${LEAF}`
+    render(true)
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
   })
 })
 

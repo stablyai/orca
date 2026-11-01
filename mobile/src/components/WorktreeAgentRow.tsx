@@ -3,6 +3,7 @@ import { memo, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -27,7 +28,13 @@ type Props = {
   unvisited: boolean
   childRow?: AgentChildRowModel
   isReadOnly?: boolean
+  selectable?: boolean
+  /** This session is the one open from the sidebar. Child lines share the parent pane and stay unfilled. */
+  selected?: boolean
   onPress?: (paneKey: string) => void
+  onPressIn?: () => void
+  onPressOut?: () => void
+  onLongPress?: (paneKey: string) => void
   trailing?: ReactNode
 }
 
@@ -39,10 +46,16 @@ function WorktreeAgentRowComponent({
   unvisited,
   childRow,
   isReadOnly,
+  selectable = false,
+  selected = false,
   onPress,
+  onPressIn,
+  onPressOut,
+  onLongPress,
   trailing
 }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const dotState = childRow?.displayState ?? agentDotState(agent, now)
   // Visuals render only in transcript; row keeps surrounding prose and treats visual-only reply as empty.
   const reply = agent.lastAssistantMessage
@@ -62,14 +75,34 @@ function WorktreeAgentRowComponent({
         ? agentNoUpdateLabel(agent, now)
         : formatTimeAgo(timeAt, now)
 
-  const content = (
-    <View style={[styles.row, { paddingLeft: depth * AGENT_ROW_INDENT_PER_DEPTH }]}>
+  const spokenName = childText
+    ? `${childText.lead}${childText.trail ? ` ${childText.trail}` : ''}`
+    : label
+  const sessionActionsLabel = t(
+    'components.worktreeAgentRow.sessionActions',
+    'Actions for {{name}}',
+    { name: spokenName }
+  )
+  const rowStyle = [
+    styles.row,
+    selectable && styles.rowSelectable,
+    { paddingLeft: depth * AGENT_ROW_INDENT_PER_DEPTH }
+  ]
+  const leading = (
+    <>
       <AgentStateDot state={dotState} />
       {/* Use desktop-style agent identity logo instead of two-letter code. */}
       {!childRow && agent.agentType ? (
         <MobileAgentIcon agentId={agent.agentType} size={13} />
       ) : null}
-      <Text style={[styles.label, unvisited && styles.labelUnvisited]} numberOfLines={1}>
+      <Text
+        style={[
+          styles.label,
+          selectable && styles.labelSelectable,
+          unvisited && styles.labelUnvisited
+        ]}
+        numberOfLines={selectable ? 2 : 1}
+      >
         {childText ? (
           <>
             {childText.lead}
@@ -79,24 +112,103 @@ function WorktreeAgentRowComponent({
           label
         )}
       </Text>
-      {trailing}
-      <Text style={styles.time}>{ts}</Text>
-    </View>
+    </>
   )
-  return childRow ? (
+  const time = (
+    <Text accessible={false} importantForAccessibility="no" style={styles.time}>
+      {ts}
+    </Text>
+  )
+  if (!onPress && !onLongPress && !childRow) {
+    return (
+      <View style={rowStyle}>
+        {leading}
+        {trailing}
+        {time}
+      </View>
+    )
+  }
+
+  const interactive = Boolean(onPress || onLongPress)
+  const openSession = () => {
+    if (!isReadOnly && onPress) {
+      onPress(agent.paneKey)
+    }
+  }
+  const openSessionActions = () => {
+    if (!isReadOnly && onLongPress) {
+      onLongPress(agent.paneKey)
+    }
+  }
+  return (
     <Pressable
-      style={({ pressed }) => pressed && pressedStyle}
-      disabled={isReadOnly || !onPress}
-      accessibilityRole="button"
-      onPress={(event) => {
-        event.stopPropagation()
-        onPress?.(agent.paneKey)
-      }}
+      // Touch stays on the row. The control below is what VoiceOver focuses, so the disclosure stays reachable.
+      accessible={false}
+      disabled={isReadOnly || !interactive}
+      delayLongPress={400}
+      style={({ pressed }) => [
+        pressed && pressedStyle,
+        selectable && (selected || pressed) && styles.rowHighlight,
+        selectable && selected && styles.rowSelected,
+        selectable && pressed && styles.rowPressed
+      ]}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      onPress={
+        onPress
+          ? (event) => {
+              event.stopPropagation()
+              openSession()
+            }
+          : undefined
+      }
+      onLongPress={
+        onLongPress
+          ? (event) => {
+              event.stopPropagation()
+              openSessionActions()
+            }
+          : undefined
+      }
     >
-      {content}
+      <View style={rowStyle}>
+        {interactive ? (
+          <View
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={ts ? `${spokenName}, ${ts}` : spokenName}
+            accessibilityState={
+              selected || isReadOnly
+                ? {
+                    ...(selected ? { selected: true } : {}),
+                    ...(isReadOnly ? { disabled: true } : {})
+                  }
+                : undefined
+            }
+            accessibilityActions={[
+              ...(onPress ? [{ name: 'activate' }] : []),
+              ...(onLongPress ? [{ name: 'longpress', label: sessionActionsLabel }] : [])
+            ]}
+            onAccessibilityTap={onPress ? openSession : undefined}
+            onAccessibilityAction={(event) => {
+              if (event.nativeEvent.actionName === 'activate') {
+                openSession()
+              }
+              if (event.nativeEvent.actionName === 'longpress') {
+                openSessionActions()
+              }
+            }}
+            style={styles.sessionControl}
+          >
+            {leading}
+          </View>
+        ) : (
+          <View style={styles.sessionControl}>{leading}</View>
+        )}
+        {trailing}
+        {time}
+      </View>
     </Pressable>
-  ) : (
-    content
   )
 }
 
@@ -109,10 +221,41 @@ const styles = themedStyleSheet(() => ({
     gap: spacing.xs,
     marginTop: 3
   },
+  sessionControl: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  // 44pt is the smallest row a finger can hit without opening the workspace behind it.
+  rowSelectable: {
+    minHeight: 44,
+    marginTop: spacing.xs,
+    paddingVertical: spacing.sm
+  },
+  // Pad the fill, not the text: the negative margin puts that padding back, so idle rows stay aligned.
+  // Radius is desktop `rounded-sm` (`--radius-sm` = 0.6 × `--radius`).
+  rowHighlight: {
+    marginHorizontal: -spacing.sm,
+    marginVertical: -spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 6
+  },
+  rowSelected: {
+    backgroundColor: colors.bgPanel
+  },
+  rowPressed: {
+    backgroundColor: colors.bgRaised
+  },
   label: {
     flex: 1,
     fontSize: 11,
     color: colors.textMuted
+  },
+  labelSelectable: {
+    fontSize: 14
   },
   labelUnvisited: {
     color: colors.textPrimary,

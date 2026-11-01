@@ -587,6 +587,11 @@
       "unpin": "Unpin",
       "pin": "Pin",
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
+      "sessions": "Sessions",
+      "openSession": "Open {{name}}",
+      "closeSessionConfirm": "Close \"{{name}}\"?",
+      "closeSessionMissing": "This session is no longer open.",
+      "closeSessionFailed": "This session could not be closed.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
       "deleteFailed": "Failed to delete \"{{name}}\"",
@@ -673,7 +678,10 @@
       "workspaceOptions": "Workspace options",
       "syncedAcrossDevices": "Synced across your devices",
       "done": "Done",
-      "reset": "Reset"
+      "reset": "Reset",
+      "onThisPhone": "On this phone",
+      "selectSessions": "Select sessions",
+      "selectSessionsDetail": "Taller rows you can tap to open that session."
     },
     "hostBottomBar": {
       "workspaceOptions": "Workspace options",
@@ -1309,6 +1317,9 @@
     "mermaidDiagram": {
       "label": "Mermaid diagram",
       "expand": "Expand diagram"
+    },
+    "worktreeAgentRow": {
+      "sessionActions": "Actions for {{name}}"
     },
     "worktreeAgentList": {
       "hideChildAgents_one": "Hide {{count}} child agent",

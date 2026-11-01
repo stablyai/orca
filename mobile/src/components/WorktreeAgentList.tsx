@@ -19,6 +19,21 @@ import { WorktreeAgentRow } from './WorktreeAgentRow'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
 import { worktreeAgentChildRows } from '../worktree/worktree-agent-child-rows'
 
+function parentSessionPress(
+  selectable: boolean,
+  onAgentPress: ((paneKey: string) => void) | undefined,
+  onLongPress: ((paneKey: string) => void) | undefined,
+  onWorkspacePress: (() => void) | undefined
+): ((paneKey: string) => void) | undefined {
+  if (selectable && onAgentPress) {
+    return onAgentPress
+  }
+  if (onLongPress) {
+    return onWorkspacePress
+  }
+  return undefined
+}
+
 type Props = {
   agents: RuntimeWorktreeAgentRow[]
   now: number
@@ -28,6 +43,15 @@ type Props = {
   onAgentPress?: (paneKey: string) => void
   /** The desktop's "Full list" agent activity layout: every row, no summary. */
   fullList?: boolean
+  /** Each session is its own taller target. Off, a long-press on the card still lists every session. */
+  selectable?: boolean
+  /** Pane open from a session tap. Only that session row is filled. */
+  selectedPaneKey?: string | null
+  onLongPress?: (paneKey: string) => void
+  /** Tap on a session row while sessions are not selectable. Opens the workspace, not that session. */
+  onWorkspacePress?: () => void
+  onPressIn?: () => void
+  onPressOut?: () => void
 }
 
 // A parent's direct children: its sub-agent rows, then its spawned lineage agents.
@@ -47,7 +71,13 @@ export function WorktreeAgentList({
   statusLive = false,
   isReadOnly = false,
   onAgentPress,
-  fullList = false
+  fullList = false,
+  selectable = false,
+  selectedPaneKey = null,
+  onLongPress,
+  onWorkspacePress,
+  onPressIn,
+  onPressOut
 }: Props) {
   const roots = useMemo(
     () => flattenAgentRowLineage(agents).filter((node) => node.depth === 0),
@@ -74,8 +104,12 @@ export function WorktreeAgentList({
       depth={node.depth + 1}
       now={now}
       unvisited={unvisited}
+      selectable={selectable}
       isReadOnly={isReadOnly}
       onPress={onAgentPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      onLongPress={onLongPress}
     />
   )
 
@@ -114,6 +148,13 @@ export function WorktreeAgentList({
           depth={node.depth}
           now={now}
           unvisited={unvisited}
+          selectable={selectable}
+          selected={selectedPaneKey === node.row.paneKey}
+          isReadOnly={isReadOnly}
+          onPress={parentSessionPress(selectable, onAgentPress, onLongPress, onWorkspacePress)}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          onLongPress={onLongPress}
           trailing={
             children.length > 0 ? (
               <WorktreeAgentChildToggle
