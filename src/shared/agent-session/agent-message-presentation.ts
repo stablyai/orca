@@ -1,5 +1,6 @@
 import type { AgentMessageSender, AgentMessageSource } from './agent-session-message-source'
 import type { AgentStatusEntry } from '../agent-status-types'
+import type { NativeChatMessage } from '../native-chat-types'
 
 export const AGENT_MESSAGE_FOLDED_LINES = 3
 export type AgentMessageHeading =
@@ -26,13 +27,13 @@ export type AgentMessageSenderView = Readonly<{
     | 'permission'
 }>
 
+/** Takes the message's creation flags together, so no caller can show a handoff as a started worker. */
 export function agentMessageHeading(
   from: AgentMessageSource,
-  agentStart = false,
-  agentHandoff = false
+  creation: Pick<NativeChatMessage, 'agentStart' | 'agentHandoff'> = {}
 ): AgentMessageHeading {
-  if (agentStart) {
-    return agentHandoff ? 'handed-off' : 'started'
+  if (creation.agentStart) {
+    return creation.agentHandoff ? 'handed-off' : 'started'
   }
   if (from.orchestration?.message === 'task') {
     return 'task'

@@ -29,7 +29,7 @@ import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
 
 function heading(from: AgentMessageSource, message: NativeChatMessage): string {
-  switch (agentMessageHeading(from, message.agentStart === true, message.agentHandoff === true)) {
+  switch (agentMessageHeading(from, message)) {
     case 'started':
       return translate('components.native-chat.agentMessage.startedWorker', 'Started worker')
     case 'handed-off':
