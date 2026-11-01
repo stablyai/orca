@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
 import { getGitHubProjectSourceSummary } from './task-page-source-context'
+import { getTaskSourceContextSummary } from '../task-source-context-summary'
 import {
   Select,
   SelectTrigger,
@@ -35,6 +36,11 @@ export function TaskPageSourceBar({
     taskSource,
     taskSourceAvailabilityNoticeByProvider,
     taskSourceContextSummary,
+    taskSourceRepoContexts,
+    taskSourceHostAvailability,
+    perRepoSourceState,
+    activeGithubTaskKind,
+    selectedRepos,
     githubMode,
     accountBackedTaskSourceHostId,
     hostRegistryById,
@@ -63,7 +69,22 @@ export function TaskPageSourceBar({
           host: hostRegistryById.get(accountBackedTaskSourceHostId),
           hostLabelById
         })
-      : taskSourceContextSummary
+      : taskSource === 'github'
+        ? getTaskSourceContextSummary({
+            provider: 'github',
+            providerLabel:
+              visibleSourceOptions.find((source) => source.id === 'github')?.label ?? 'GitHub',
+            repoContexts: taskSourceRepoContexts,
+            // The list's resolved sources include preference and fallback; project identity does not.
+            repoIdentities: perRepoSourceState.map(({ sources }) => {
+              const source = activeGithubTaskKind === 'prs' ? sources?.prs : sources?.issues
+              return source ? { provider: 'github', ...source } : null
+            }),
+            hostAvailability: taskSourceHostAvailability,
+            hostLabelById,
+            selectedRepoCount: selectedRepos.length
+          })
+        : taskSourceContextSummary
   return (
     <div className="flex items-center justify-between gap-2">
       <div

@@ -50,6 +50,7 @@ export function getTaskSourceContextSummary(args: {
   provider: TaskProvider
   providerLabel: string
   repoContexts?: readonly TaskSourceContext[]
+  repoIdentities?: readonly (TaskProviderIdentity | null)[]
   hostAvailability?: readonly TaskSourceHostAvailability[]
   hostLabelById?: HostLabelLookup
   accountHostId?: ExecutionHostScope | null
@@ -119,6 +120,7 @@ export function getTaskSourceAvailabilityNotice(args: {
 function getRepoBackedTaskSourceSummary(args: {
   providerLabel: string
   repoContexts?: readonly TaskSourceContext[]
+  repoIdentities?: readonly (TaskProviderIdentity | null)[]
   hostAvailability?: readonly TaskSourceHostAvailability[]
   hostLabelById?: HostLabelLookup
   selectedRepoCount?: number
@@ -130,7 +132,9 @@ function getRepoBackedTaskSourceSummary(args: {
   const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById)
   const availabilityLabel = getAvailabilityLabel(unavailableHosts)
   const identityLabels = uniqueLabels(
-    contexts.map((context) => getProviderIdentityLabel(context.providerIdentity))
+    (args.repoIdentities ?? contexts.map((context) => context.providerIdentity ?? null)).map(
+      getProviderIdentityLabel
+    )
   )
   const accountLabels = uniqueLabels(contexts.map((context) => context.accountLabel))
   const repoCount = args.selectedRepoCount ?? contexts.length
