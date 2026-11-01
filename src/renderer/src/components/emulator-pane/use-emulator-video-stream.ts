@@ -21,6 +21,7 @@ type EmulatorVideoApi = {
   stopVideoStream?: (args: { streamId: string }) => Promise<void>
   onVideoStreamMeta?: (cb: (msg: VideoMetaMessage) => void) => () => void
   onVideoStreamFrame?: (cb: (msg: VideoFrameMessage) => void) => () => void
+  onFrameStreamError?: (cb: (msg: { streamId: string; message: string }) => void) => () => void
 }
 
 // Use Annex-B without avcC; prepend the SPS/PPS packet to the first keyframe.
@@ -78,6 +79,7 @@ export function useEmulatorVideoStream(
     let streamId: string | null = currentStreamId
     let unsubMeta: (() => void) | undefined
     let unsubFrame: (() => void) | undefined
+    let unsubEnd: (() => void) | undefined
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d') ?? null
     if (canvas) {
@@ -127,8 +129,10 @@ export function useEmulatorVideoStream(
       clearFirstFrameTimeout()
       unsubMeta?.()
       unsubFrame?.()
+      unsubEnd?.()
       unsubMeta = undefined
       unsubFrame = undefined
+      unsubEnd = undefined
       stopStream()
       if (decoder.state !== 'closed') {
         decoder.close()
@@ -146,6 +150,12 @@ export function useEmulatorVideoStream(
     unsubMeta = api.onVideoStreamMeta?.((msg) => {
       if (!disposed && msg.streamId === streamId && msg.deviceId === deviceId) {
         reportSize(msg.meta.width, msg.meta.height)
+      }
+    })
+
+    unsubEnd = api.onFrameStreamError?.((msg) => {
+      if (msg.streamId === streamId) {
+        fatal(msg.message)
       }
     })
 

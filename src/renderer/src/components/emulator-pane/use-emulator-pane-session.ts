@@ -160,6 +160,9 @@ export function useEmulatorPaneSession({
     [devices, resetVisualOrientation, selectedUdid, session, tabId]
   )
 
+  // Unlike iOS MJPEG, a dead Android stream never reconnects itself; show it disconnected so Connect restarts it.
+  const markStreamLost = useCallback(() => setSession((s) => s && { ...s, attached: false }), [])
+
   const attach = useCallback(
     async (deviceTarget?: string) => {
       if (loading) {
@@ -298,6 +301,7 @@ export function useEmulatorPaneSession({
     loading,
     error,
     attach,
+    markStreamLost,
     shutdown,
     refreshDevices,
     sendTap,
