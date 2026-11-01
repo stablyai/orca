@@ -32,7 +32,12 @@ export function SourceControlActionAgentPicker(props: PickerProps) {
         target: { workspace: { kind: 'git-worktree' as const } },
         detectionTarget: { kind: 'local' as const }
       }
-  const observation = useAgentMenuObservation(rows.target, !props.disabled, rows.detectionTarget)
+  const observation = useAgentMenuObservation(
+    rows.target,
+    !props.disabled,
+    rows.detectionTarget,
+    true
+  )
   const canSaveSurface = canSaveSourceControlActionSurface(rows.target, props.agent ?? 'claude')
   return (
     <SourceControlActionAgentPickerView
@@ -59,7 +64,11 @@ export function sourceControlActionAgentPreview(
   observation: ReturnType<typeof useAgentMenuObservation>,
   agent: TuiAgent | null
 ) {
-  return observation.preferencesPending || observation.detection.detectedIds === null
+  return observation.preferencesPending ||
+    (observation.detection.detectedIds === null &&
+      (!observation.detection.detectionFailed ||
+        observation.detection.isLoading ||
+        observation.detection.isRefreshing))
     ? { status: 'pending' as const }
     : {
         status: 'ready' as const,
@@ -67,7 +76,7 @@ export function sourceControlActionAgentPreview(
           savedAgent: agent,
           defaultAgent: observation.preferences.defaultTuiAgent,
           disabledAgents: observation.preferences.disabledTuiAgents,
-          detectedAgents: observation.detection.detectedIds
+          detectedAgents: observation.detection.detectedIds ?? []
         })
       }
 }

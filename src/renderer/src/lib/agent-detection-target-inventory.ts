@@ -12,6 +12,9 @@ import {
 } from '@/hooks/useAgentDetectionTarget'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import { getLocalAgentPreflightContext, localPreflightContextKey } from './local-preflight-context'
+import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 type DetectionReadState = Pick<
@@ -61,7 +64,7 @@ export function ensureDetectedAgentsForTarget(
   return state.ensureDetectedAgents(target.worktreeId)
 }
 
-function detectionTargetForWorktree(
+export function detectionTargetForWorktree(
   state: AgentDetectionOwnerState,
   worktreeId: string | null
 ): AgentDetectionTarget | undefined {
@@ -116,13 +119,46 @@ export function ensureDetectedAgentsForRepo(
   state: DetectionActionState,
   repo: RepoHostFields
 ): Promise<TuiAgent[]> | null {
+  const target = detectionTargetForRepo(repo)
+  return target ? ensureDetectedAgentsForTarget(state, target) : null
+}
+
+/** This is the source ensureRepo actually probes, before any workspace exists. */
+export function detectionTargetForRepo(repo: RepoHostFields): AgentDetectionTarget | undefined {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
-  if (host?.kind === 'runtime') {
+  return host?.kind === 'runtime'
+    ? undefined
+    : host?.kind === 'ssh'
+      ? { kind: 'ssh', connectionId: host.targetId }
+      : { kind: 'local' }
+}
+
+/** Click-local fence; never evaluated from a store subscription. */
+export function agentInventoryAttemptKey(
+  state: AppState,
+  target: AgentDetectionTarget | undefined
+): string | null {
+  if (!target) {
     return null
   }
-  return host?.kind === 'ssh'
-    ? state.ensureRemoteDetectedAgents(host.targetId)
-    : state.ensureDetectedAgents()
+  const context =
+    target.kind === 'local'
+      ? getLocalAgentPreflightContext(state, undefined, undefined, target.worktreeId)
+      : undefined
+  if (context?.projectRuntime && context.projectRuntime.status !== 'resolved') {
+    return null
+  }
+  return JSON.stringify([
+    target,
+    target.kind === 'local' ? localPreflightContextKey(context) : null,
+    target.kind === 'runtime'
+      ? [
+          getRuntimeEnvironmentRevision(target.environmentId),
+          lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(target.environmentId))
+            ?.runtimeId
+        ]
+      : null
+  ])
 }
 
 /** A just-created workspace's agents; names it to its project's host while the new row hydrates. */
@@ -131,14 +167,28 @@ export function ensureDetectedAgentsForNewWorktree(
   worktreeId: string,
   repo: RepoHostFields
 ): Promise<TuiAgent[]> {
+  return ensureDetectedAgentsForTarget(
+    state,
+    detectionTargetForNewWorktree(state, worktreeId, repo)
+  )
+}
+
+/** Bind reads to the same workspace/repo fallback that supplied the attempt. */
+export function detectionTargetForNewWorktree(
+  state: AgentDetectionOwnerState,
+  worktreeId: string,
+  repo: RepoHostFields
+): AgentDetectionTarget {
   const target = detectionTargetForWorktree(state, worktreeId)
   if (target) {
-    return ensureDetectedAgentsForTarget(state, target)
+    return target
   }
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   return host?.kind === 'runtime'
-    ? state.ensureRuntimeDetectedAgents(host.environmentId, worktreeId)
-    : (ensureDetectedAgentsForRepo(state, repo) ?? Promise.resolve([]))
+    ? { kind: 'runtime', environmentId: host.environmentId, worktreeId }
+    : host?.kind === 'ssh'
+      ? { kind: 'ssh', connectionId: host.targetId }
+      : { kind: 'local' }
 }
 
 /** Per-attempt project facts; older hosts retain their existing pre-create validation. */

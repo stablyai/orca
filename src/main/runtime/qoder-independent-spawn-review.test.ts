@@ -160,11 +160,11 @@ it('selects the installed command for a mobile Qoder history resume at creation'
   )
 })
 
-it('host discovery refusal prevents any production spawn', async () => {
+it('optional discovery failure preserves the original resume through production dispatch and settlement', async () => {
   vi.mocked(detectAgentCommandsOnHost).mockRejectedValueOnce(
     new Error('execution host unavailable')
   )
-  const spawn = vi.fn()
+  const spawn = vi.fn().mockResolvedValue({ id: 'pty-discovery-failed' })
   const runtime = new OrcaRuntimeService(store)
   runtime.setPtyController({
     spawn,
@@ -172,13 +172,25 @@ it('host discovery refusal prevents any production spawn', async () => {
     kill: () => true,
     getForegroundProcess: async () => null
   })
-  await expect(
-    runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+  const launchConfig = buildAgentResumeStartupPlan({
+    agent: 'qoder',
+    providerSession: { key: 'session_id', id: 'original-id' },
+    cmdOverrides: {},
+    platform: 'darwin'
+  })?.launchConfig
+  const result = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+    launchAgent: 'qoder',
+    command: 'qodercli --resume original-id',
+    launchConfig
+  })
+  expect(spawn).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
       launchAgent: 'qoder',
-      command: 'qodercli --resume original-id'
+      command: 'qodercli --resume original-id',
+      launchConfig
     })
-  ).rejects.toThrow('execution host unavailable')
-  expect(spawn).not.toHaveBeenCalled()
+  )
+  expect(result).toMatchObject({ ptyId: 'pty-discovery-failed' })
 })
 
 it('caller-owned explicit executable survives production resume without discovery', async () => {

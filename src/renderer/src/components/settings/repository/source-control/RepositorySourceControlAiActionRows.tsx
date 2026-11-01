@@ -82,7 +82,7 @@ export function RepositorySourceControlAiActionRows({
   useSourceControlActionAgentInventory()
   const repo = useAppStore((state) => state.repos.find((repo) => repo.id === repoId) ?? null)
   const rows = sourceControlRepoAgentRows(repo)
-  const observation = useAgentMenuObservation(rows.target, true, rows.detectionTarget)
+  const observation = useAgentMenuObservation(rows.target, true, rows.detectionTarget, true)
   const canSaveSurface = canSaveSourceControlActionSurface(rows.target)
   const settings = useAppStore((state) => state.settings)
   useHostStructuredAgentsVersion()

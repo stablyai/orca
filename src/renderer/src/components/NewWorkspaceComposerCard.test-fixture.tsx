@@ -49,14 +49,15 @@ export const hostOptions: ProjectHostSetupOption[] = [
 ]
 
 export async function renderCard(
-  overrides: Partial<React.ComponentProps<typeof NewWorkspaceComposerCard>> = {}
+  overrides: Partial<React.ComponentProps<typeof NewWorkspaceComposerCard>> = {},
+  Wrapper: React.ComponentType<{ children: React.ReactNode }> = React.Fragment
 ): Promise<HTMLDivElement> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   cardRoots.set(container, root)
   act(() => {
-    root.render(
+    const card = (
       <NewWorkspaceComposerCard
         quickAgent={null}
         onQuickAgentChange={() => {}}
@@ -120,6 +121,7 @@ export async function renderCard(
         {...overrides}
       />
     )
+    root.render(<Wrapper>{card}</Wrapper>)
   })
   // Settle mount-time warm before clicking; Vitest serializes overlapping imports unlike browsers.
   await act(async () => {})

@@ -87,6 +87,7 @@ export function AgentSessionContinuationDialog({
     workspace ? { workspace, launchCwd: request?.initialCwd } : null,
     open && Boolean(request),
     detectionTarget,
+    false,
     { wakeOnOpen: true }
   )
   const { detectedIds, detectionFailed } = observation.detection

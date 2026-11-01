@@ -1,35 +1,15 @@
 import React from 'react'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as StoreModule from '@/store'
+import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
 
-const {
-  shortcutLabelMock,
-  storeState,
-  openSettingsPageMock,
-  openSettingsTargetMock,
-  useDetectedAgentsMock
-} = vi.hoisted(() => ({
+const { shortcutLabelMock, useDetectedAgentsMock } = vi.hoisted(() => ({
   shortcutLabelMock: vi.fn<() => string | null>(),
-  storeState: {
-    settings: {
-      defaultTuiAgent: 'codex' as 'claude' | 'codex' | 'gemini' | 'blank' | null,
-      disabledTuiAgents: [] as string[]
-    },
-    runtimeStatusByEnvironmentId: new Map(),
-    detectedAgentIds: null,
-    localDetectedAgentIdsByContext: {},
-    remoteDetectedAgentIds: {},
-    runtimeDetectedAgentIds: {},
-    worktreesByRepo: {} as Record<string, unknown[]>,
-    repos: [] as unknown[],
-    openSettingsPage: vi.fn(),
-    openSettingsTarget: vi.fn()
-  },
-  openSettingsPageMock: vi.fn(),
-  openSettingsTargetMock: vi.fn(),
   useDetectedAgentsMock: vi.fn((): { detectedIds: string[] | null; detectionFailed?: boolean } => ({
     detectedIds: ['claude', 'codex', 'gemini']
   }))
@@ -43,17 +23,17 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   useOptionalShortcutLabel: shortcutLabelMock
 }))
 
-vi.mock('@/store', () => {
-  const useAppStore = Object.assign(
-    (selector: (state: typeof storeState) => unknown) => {
-      return selector(storeState)
-    },
-    {
-      getState: () => storeState
-    }
-  )
-
-  return { useAppStore }
+vi.mock('@/store', async () => {
+  const actual = await vi.importActual<typeof StoreModule>('@/store')
+  const store = actual.useAppStore
+  return {
+    ...actual,
+    useAppStore: Object.assign(
+      <T>(selector: (state: ReturnType<typeof store.getState>) => T): T =>
+        selector(store.getState()),
+      store
+    )
+  }
 })
 
 vi.mock('@/lib/agent-catalog', async () => {
@@ -123,22 +103,35 @@ function rowMarkup(html: string, label: string): string {
   return html.slice(start, end)
 }
 
+const initial = useAppStore.getInitialState()
+const settings = {
+  ...getDefaultSettings('/tmp'),
+  defaultTuiAgent: 'codex' as const,
+  disabledTuiAgents: [],
+  agentDefaultSurface: 'terminal' as const
+}
+
 beforeEach(() => {
   // A host without chats lists every agent as a terminal.
   setLocalRuntimeCapabilitiesForTests([])
   shortcutLabelMock.mockReset()
   shortcutLabelMock.mockReturnValue(null)
   useDetectedAgentsMock.mockClear()
-  openSettingsPageMock.mockReset()
-  openSettingsTargetMock.mockReset()
-  storeState.settings.defaultTuiAgent = 'codex'
-  storeState.settings.disabledTuiAgents = []
-  storeState.worktreesByRepo = {
-    [TEST_REPO.id]: [makeWorktree({ id: 'worktree-1', repoId: TEST_REPO.id, hostId: 'local' })]
-  }
-  storeState.repos = [TEST_REPO]
-  storeState.openSettingsPage = openSettingsPageMock
-  storeState.openSettingsTarget = openSettingsTargetMock
+  useAppStore.setState(
+    {
+      ...initial,
+      settings,
+      worktreesByRepo: {
+        [TEST_REPO.id]: [makeWorktree({ id: 'worktree-1', repoId: TEST_REPO.id, hostId: 'local' })]
+      },
+      repos: [TEST_REPO]
+    },
+    true
+  )
+})
+
+afterEach(() => {
+  useAppStore.setState(initial, true)
 })
 
 describe('QuickLaunchAgentMenuItems', () => {
@@ -163,10 +156,12 @@ describe('QuickLaunchAgentMenuItems', () => {
 
   it('routes agent detection to the worktree-owning runtime host, not the local client', () => {
     // Detect agents on the workspace’s execution host; client PATH cannot describe a paired runtime.
-    storeState.worktreesByRepo = {
-      'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'runtime:env-1' }]
-    }
-    storeState.repos = [{ id: 'repo-1' }]
+    useAppStore.setState({
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ id: 'worktree-1', repoId: 'repo-1', hostId: 'runtime:env-1' })]
+      },
+      repos: [{ ...TEST_REPO, id: 'repo-1' }]
+    })
 
     renderAgentMenuItems()
 
@@ -178,16 +173,19 @@ describe('QuickLaunchAgentMenuItems', () => {
   })
 
   it('prefers the paired runtime owner over its server-side SSH connection', () => {
-    storeState.worktreesByRepo = {
-      'repo-1': [{ id: 'worktree-1', repoId: 'repo-1' }]
-    }
-    storeState.repos = [
-      {
-        id: 'repo-1',
-        connectionId: 'server-only-ssh-target',
-        executionHostId: 'runtime:env-1'
-      }
-    ]
+    useAppStore.setState({
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ id: 'worktree-1', repoId: 'repo-1' })]
+      },
+      repos: [
+        {
+          ...TEST_REPO,
+          id: 'repo-1',
+          connectionId: 'server-only-ssh-target',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    })
 
     renderAgentMenuItems()
 
@@ -199,10 +197,12 @@ describe('QuickLaunchAgentMenuItems', () => {
   })
 
   it('routes agent detection to the owning SSH host', () => {
-    storeState.worktreesByRepo = {
-      'repo-1': [{ id: 'worktree-1', repoId: 'repo-1' }]
-    }
-    storeState.repos = [{ id: 'repo-1', connectionId: 'ssh-target-1' }]
+    useAppStore.setState({
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ id: 'worktree-1', repoId: 'repo-1' })]
+      },
+      repos: [{ ...TEST_REPO, id: 'repo-1', connectionId: 'ssh-target-1' }]
+    })
 
     renderAgentMenuItems()
 
@@ -225,10 +225,10 @@ describe('QuickLaunchAgentMenuItems', () => {
   it('does not label an auto-picked or blank default as configured', () => {
     shortcutLabelMock.mockReturnValue('⌘⌥T')
 
-    storeState.settings.defaultTuiAgent = null
+    useAppStore.setState({ settings: { ...settings, defaultTuiAgent: null } })
     expect(renderAgentMenuItems()).not.toContain('data-dropdown-shortcut="true"')
 
-    storeState.settings.defaultTuiAgent = 'blank'
+    useAppStore.setState({ settings: { ...settings, defaultTuiAgent: 'blank' } })
     expect(renderAgentMenuItems()).not.toContain('data-dropdown-shortcut="true"')
   })
 })

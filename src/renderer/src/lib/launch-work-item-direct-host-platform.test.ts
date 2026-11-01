@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
 import type { SshConnectionState } from '../../../shared/ssh-types'
+import type * as AgentInventory from '@/lib/agent-detection-target-inventory'
 import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
 
 const mocks = vi.hoisted(() => {
@@ -28,11 +29,27 @@ vi.mock('@/lib/launch-work-item-direct-preflight', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveDirectSetupDecision: vi.fn().mockResolvedValue({ kind: 'resolved', decision: 'inherit' })
 }))
-vi.mock('@/lib/agent-detection-target-inventory', () => ({
-  loadProjectLaunchContext: vi.fn().mockResolvedValue(undefined),
-  ensureDetectedAgentsForRepo: vi.fn().mockResolvedValue(['claude']),
-  ensureDetectedAgentsForNewWorktree: vi.fn().mockResolvedValue(['claude'])
-}))
+vi.mock('@/lib/agent-detection-target-inventory', async (importOriginal) => {
+  const inventory: ReturnType<typeof AgentInventory.readAgentInventoryForTarget> = {
+    ids: ['claude'],
+    state: 'successful'
+  }
+  return {
+    ...(await importOriginal<typeof AgentInventory>()),
+    loadProjectLaunchContext: vi
+      .fn<typeof AgentInventory.loadProjectLaunchContext>()
+      .mockResolvedValue(undefined),
+    ensureDetectedAgentsForRepo: vi
+      .fn<typeof AgentInventory.ensureDetectedAgentsForRepo>()
+      .mockResolvedValue(['claude']),
+    ensureDetectedAgentsForTarget: vi
+      .fn<typeof AgentInventory.ensureDetectedAgentsForTarget>()
+      .mockResolvedValue(['claude']),
+    readAgentInventoryForTarget: vi.fn<typeof AgentInventory.readAgentInventoryForTarget>(
+      () => inventory
+    )
+  }
+})
 vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   awaitStructuredRouteHostAnswer: vi.fn().mockResolvedValue(undefined),

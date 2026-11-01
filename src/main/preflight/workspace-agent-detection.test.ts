@@ -333,11 +333,44 @@ describe('preflight.detectAgents resolves the workspace on the host', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only resolveAgentDetectionHost and getRuntimeId from the runtime.
     const runtime = {
       getRuntimeId: () => 'host',
+      detectProjectLaunchContext: async () => detectProjectLaunchContext(s, s.getRepos!()[0]),
       resolveAgentDetectionHost: async (worktreeId?: string) =>
         worktreeId ? resolveFor(s, worktreeId) : { kind: 'local' }
     } as unknown as OrcaRuntimeService
     return new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
   }
+
+  it('keeps optional project candidates separate from ordinary failed inventories', async () => {
+    const target = repo({ id: 'r1', path: WSL_REPO_PATH })
+    const s = store({ repos: [target] })
+    const dispatcher = dispatcherFor(s)
+    detectInstalledMock.mockRejectedValue(new Error('probe unavailable'))
+    const request = { id: 'candidate', authToken: 't', method: 'preflight.detectAgents' }
+    expect(
+      await dispatcher.dispatch({ ...request, params: { project: { repo: 'id:r1' } } })
+    ).toMatchObject({
+      ok: true,
+      result: {
+        agents: [],
+        workspaceKind: 'git-worktree',
+        executionContext: {
+          kind: 'host',
+          projectRuntime: { status: 'resolved', runtime: { kind: 'wsl', distro: 'Ubuntu-24.04' } }
+        }
+      }
+    })
+    expect(
+      await dispatcher.dispatch({ ...request, params: { worktreeId: `r1::${WSL_REPO_PATH}` } })
+    ).toMatchObject({ ok: false, error: { message: 'probe unavailable' } })
+    detectInstalledMock.mockClear()
+    const repairTarget = repo({ id: 'r1', path: 'C:\\repo' })
+    const broken = store({ repos: [repairTarget], globalDefault: { kind: 'wsl', distro: null } })
+    await expect(detectProjectLaunchContext(broken, repairTarget)).rejects.toThrow(
+      'requires repair'
+    )
+    expect(detectInstalledMock).not.toHaveBeenCalled()
+    await expect(detectProjectLaunchContext({}, target)).rejects.toThrow('unresolved')
+  })
 
   it('#19885: a paired client naming a WSL-hosted workspace gets the distro probe', async () => {
     const dispatcher = dispatcherFor(store({ repos: [repo({ id: 'r1', path: WSL_REPO_PATH })] }))

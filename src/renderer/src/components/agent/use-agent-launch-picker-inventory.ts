@@ -2,10 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } fro
 import { readHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAppStore } from '@/store'
-import {
-  buildAgentLaunchRouteInput,
-  workspaceKindForWorktreeId
-} from '@/lib/agent-launch-route-input'
+import { resolveAgentLaunchHost, workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -84,13 +81,13 @@ export function useAgentLaunchPickerInventorySource(
   const settings = context ? context.settings : useAppStore.getState().settings
   const executionHostId =
     context?.executionHostId ??
-    buildAgentLaunchRouteInput(useAppStore.getState(), {
-      agent: 'claude',
-      workspace: context?.workspace ?? {
+    resolveAgentLaunchHost(
+      useAppStore.getState(),
+      context?.workspace ?? {
         kind: worktreeId ? workspaceKindForWorktreeId(worktreeId) : 'floating',
         ...(worktreeId ? { worktreeId } : {})
       }
-    }).executionHostId
+    ).executionHostId
   const target = structuredAgentSessionTargetForHost(executionHostId)
   const key = useMemo(
     () =>

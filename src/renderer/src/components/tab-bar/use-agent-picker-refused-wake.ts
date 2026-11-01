@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { useLocalAgentPreflightContext } from '@/hooks/useLocalAgentPreflightContext'
+import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 
 /**
@@ -15,11 +17,12 @@ export function useAgentPickerRefusedWake(
     userOpened && detectionTarget?.kind === 'local'
       ? (detectionTarget.worktreeId ?? null)
       : undefined
+  const context = useLocalAgentPreflightContext(worktreeId, worktreeId !== undefined)
+  const key = worktreeId !== undefined ? localAgentInventoryContextKey(context) : undefined
   // The target this open already woke; cleared on close so the next open may wake again.
   const wokenFor = useRef<{ worktreeId: string | null } | null>(null)
   const failed = useAppStore(
-    (state) =>
-      worktreeId !== undefined && state.readLocalAgentInventory(worktreeId).state === 'failed'
+    (state) => key !== undefined && state.readLocalAgentInventoryByKey(key).state === 'failed'
   )
   useEffect(() => {
     if (worktreeId === undefined) {

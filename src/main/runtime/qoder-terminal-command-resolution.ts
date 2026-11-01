@@ -37,7 +37,8 @@ export async function resolveQoderTerminalCommand<
     return options
   }
   const candidates = getTuiAgentDetectCommands(TUI_AGENT_CONFIG.qoder)
-  const found = await detect(candidates, host)
+  // Discovery is optional; its failure must not prevent the caller's command from running.
+  const found = await detect(candidates, host).catch(() => new Set<string>())
   const selected = candidates.find((candidate) => found.has(candidate))
   if (!selected || selected === parsed.tokens[executableIndex]) {
     return options

@@ -7,18 +7,26 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import type * as Observation from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import type * as StructuredAgentClient from '@/runtime/structured-agent-session-client'
 import type { UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
 
 const mocks: {
+  observe: Mock<typeof Observation.useAgentMenuObservation>
   capability: Mock
   detection: Mock<() => UseDetectedAgentsResult>
   launch: Mock
 } = vi.hoisted(() => ({
+  observe: vi.fn<typeof Observation.useAgentMenuObservation>(),
   capability: vi.fn(),
   detection: vi.fn<() => UseDetectedAgentsResult>(),
   launch: vi.fn()
 }))
+vi.mock('@/components/tab-bar/use-new-tab-agent-menu-rows', async (importOriginal) => {
+  const actual = await importOriginal<typeof Observation>()
+  mocks.observe.mockImplementation(actual.useAgentMenuObservation)
+  return { ...actual, useAgentMenuObservation: mocks.observe }
+})
 vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
   ...(await importOriginal<typeof StructuredAgentClient>()),
   supportsStructuredAgentSessionContinuationContext: mocks.capability

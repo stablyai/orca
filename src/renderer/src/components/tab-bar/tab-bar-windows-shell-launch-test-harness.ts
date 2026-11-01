@@ -1,171 +1,83 @@
 import { vi } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
+import type { AppState } from '@/store/types'
+import { createTestStore } from '@/store/slices/store-test-helpers'
 
-export const appStoreSnapshot: {
-  activeRepoId: string | null
-  activeTabId: string | null
-  activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
-  activeRuntimeEnvironmentId: string | null
-  activeWorktreeId: string | null
-  projects: {
-    id: string
-    localWindowsRuntimePreference?:
-      | { kind: 'inherit-global' | 'windows-host' }
-      | {
-          kind: 'wsl'
-          distro: string
-        }
-    sourceRepoIds?: string[]
-  }[]
-  repos: { id: string; connectionId?: string | null }[]
-  sshConnectionStates: Map<string, { remotePlatform?: NodeJS.Platform }>
-  worktreesByRepo: Record<
-    string,
-    {
-      id: string
-      repoId: string
-      path?: string
-      projectId?: string
-      hostId?: 'local' | `runtime:${string}` | `ssh:${string}`
-      runtimeOwnerEnvironmentId?: string
-    }[]
-  >
-  unifiedTabsByWorktree: Record<string, unknown[]>
-  activeGroupIdByWorktree: Record<string, string>
-  detectedAgentIds: string[] | null
-  localDetectedAgentIdsByContext: Record<string, string[] | null>
-  remoteDetectedAgentIds: Record<string, string[]>
-  isDetectingAgents: boolean
-  isDetectingLocalAgentsByContext: Record<string, boolean>
-  isRefreshingLocalAgentsByContext: Record<string, boolean>
-  isDetectingRemoteAgents: Record<string, boolean>
-} = {
-  activeRepoId: null,
-  activeTabId: null,
-  activeTabType: null,
-  activeRuntimeEnvironmentId: null,
-  activeWorktreeId: null,
-  projects: [],
-  repos: [],
-  sshConnectionStates: new Map(),
-  worktreesByRepo: {},
-  unifiedTabsByWorktree: {},
-  activeGroupIdByWorktree: {},
-  detectedAgentIds: null,
-  localDetectedAgentIdsByContext: {},
-  remoteDetectedAgentIds: {},
-  isDetectingAgents: false,
-  isDetectingLocalAgentsByContext: {},
-  isRefreshingLocalAgentsByContext: {},
-  isDetectingRemoteAgents: {}
-}
+const store = createTestStore()
+const initial = store.getState()
 export const pinTabMock: (tabId: string) => void = vi.fn()
 export const unpinTabMock: (tabId: string) => void = vi.fn()
 
-const useAppStoreMock = vi.fn(
-  (
-    selector: (state: {
-      activeRepoId: string | null
-      activeTabId: string | null
-      activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
-      activeWorktreeId: string | null
-      gitStatusByWorktree: Record<string, never[]>
-      projects: typeof appStoreSnapshot.projects
-      repos: { id: string; connectionId?: string | null }[]
-      sshConnectionStates: Map<string, { remotePlatform?: NodeJS.Platform }>
-      worktreesByRepo: typeof appStoreSnapshot.worktreesByRepo
-      unifiedTabsByWorktree: Record<string, unknown[]>
-      activeGroupIdByWorktree: Record<string, string>
-      detectedAgentIds: string[] | null
-      localDetectedAgentIdsByContext: Record<string, string[] | null>
-      remoteDetectedAgentIds: Record<string, string[]>
-      isDetectingAgents: boolean
-      isDetectingLocalAgentsByContext: Record<string, boolean>
-      isRefreshingLocalAgentsByContext: Record<string, boolean>
-      isDetectingRemoteAgents: Record<string, boolean>
-      pinTab: typeof pinTabMock
-      unpinTab: typeof unpinTabMock
+export const appStoreSnapshot = {
+  get activeRepoId() {
+    return store.getState().activeRepoId
+  },
+  set activeRepoId(value: AppState['activeRepoId']) {
+    store.setState({ activeRepoId: value })
+  },
+  get activeWorktreeId() {
+    return store.getState().activeWorktreeId
+  },
+  set activeWorktreeId(value: AppState['activeWorktreeId']) {
+    store.setState({ activeWorktreeId: value })
+  },
+  get projects() {
+    return store.getState().projects
+  },
+  set projects(value: AppState['projects']) {
+    store.setState({ projects: value })
+  },
+  get repos() {
+    return store.getState().repos
+  },
+  set repos(value: AppState['repos']) {
+    store.setState({ repos: value })
+  },
+  get sshConnectionStates() {
+    return store.getState().sshConnectionStates
+  },
+  set sshConnectionStates(value: AppState['sshConnectionStates']) {
+    store.setState({ sshConnectionStates: value })
+  },
+  get worktreesByRepo() {
+    return store.getState().worktreesByRepo
+  },
+  set worktreesByRepo(value: AppState['worktreesByRepo']) {
+    store.setState({ worktreesByRepo: value })
+  },
+  get activeRuntimeEnvironmentId() {
+    return store.getState().settings?.activeRuntimeEnvironmentId ?? null
+  },
+  set activeRuntimeEnvironmentId(value: string | null) {
+    store.setState({
       settings: {
-        terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | 'git-bash'
-        terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
-        activeRuntimeEnvironmentId: string | null
-        localWindowsRuntimeDefault: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
+        ...getDefaultSettings('/tmp'),
+        ...store.getState().settings,
+        activeRuntimeEnvironmentId: value
       }
-    }) => unknown
-  ) =>
-    selector({
-      activeRepoId: appStoreSnapshot.activeRepoId,
-      activeTabId: appStoreSnapshot.activeTabId,
-      activeTabType: appStoreSnapshot.activeTabType,
-      activeWorktreeId: appStoreSnapshot.activeWorktreeId,
-      gitStatusByWorktree: {},
-      projects: appStoreSnapshot.projects,
-      repos: appStoreSnapshot.repos,
-      sshConnectionStates: appStoreSnapshot.sshConnectionStates,
-      worktreesByRepo: appStoreSnapshot.worktreesByRepo,
-      unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
-      activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
-      detectedAgentIds: appStoreSnapshot.detectedAgentIds,
-      localDetectedAgentIdsByContext: appStoreSnapshot.localDetectedAgentIdsByContext,
-      remoteDetectedAgentIds: appStoreSnapshot.remoteDetectedAgentIds,
-      isDetectingAgents: appStoreSnapshot.isDetectingAgents,
-      isDetectingLocalAgentsByContext: appStoreSnapshot.isDetectingLocalAgentsByContext,
-      isRefreshingLocalAgentsByContext: appStoreSnapshot.isRefreshingLocalAgentsByContext,
-      isDetectingRemoteAgents: appStoreSnapshot.isDetectingRemoteAgents,
+    })
+  }
+}
+
+export const useAppStoreExport = Object.assign(
+  <T>(selector: (state: AppState) => T): T => selector(store.getState()),
+  { getState: store.getState }
+)
+
+export function resetAppStoreSnapshot(): void {
+  store.setState(
+    {
+      ...initial,
       pinTab: pinTabMock,
       unpinTab: unpinTabMock,
       settings: {
+        ...getDefaultSettings('/tmp'),
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'pwsh.exe',
-        activeRuntimeEnvironmentId: appStoreSnapshot.activeRuntimeEnvironmentId,
+        activeRuntimeEnvironmentId: null,
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       }
-    })
-)
-
-export const useAppStoreExport = (selector: Parameters<typeof useAppStoreMock>[0]): unknown =>
-  useAppStoreMock(selector)
-useAppStoreExport.getState = vi.fn(() => ({
-  activeRepoId: appStoreSnapshot.activeRepoId,
-  activeTabId: appStoreSnapshot.activeTabId,
-  activeTabType: appStoreSnapshot.activeTabType,
-  activeWorktreeId: appStoreSnapshot.activeWorktreeId,
-  gitStatusByWorktree: {},
-  projects: appStoreSnapshot.projects,
-  repos: appStoreSnapshot.repos,
-  sshConnectionStates: appStoreSnapshot.sshConnectionStates,
-  worktreesByRepo: appStoreSnapshot.worktreesByRepo,
-  unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
-  activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
-  detectedAgentIds: appStoreSnapshot.detectedAgentIds,
-  localDetectedAgentIdsByContext: appStoreSnapshot.localDetectedAgentIdsByContext,
-  remoteDetectedAgentIds: appStoreSnapshot.remoteDetectedAgentIds,
-  isDetectingAgents: appStoreSnapshot.isDetectingAgents,
-  isDetectingLocalAgentsByContext: appStoreSnapshot.isDetectingLocalAgentsByContext,
-  isRefreshingLocalAgentsByContext: appStoreSnapshot.isRefreshingLocalAgentsByContext,
-  isDetectingRemoteAgents: appStoreSnapshot.isDetectingRemoteAgents,
-  pinTab: pinTabMock,
-  unpinTab: unpinTabMock,
-  settings: {
-    terminalWindowsShell: 'powershell.exe',
-    terminalWindowsPowerShellImplementation: 'pwsh.exe',
-    activeRuntimeEnvironmentId: appStoreSnapshot.activeRuntimeEnvironmentId,
-    localWindowsRuntimeDefault: { kind: 'windows-host' }
-  }
-}))
-
-export function resetAppStoreSnapshot(): void {
-  appStoreSnapshot.activeRepoId = null
-  appStoreSnapshot.activeTabId = null
-  appStoreSnapshot.activeTabType = null
-  appStoreSnapshot.activeRuntimeEnvironmentId = null
-  appStoreSnapshot.activeWorktreeId = null
-  appStoreSnapshot.projects = []
-  appStoreSnapshot.repos = []
-  appStoreSnapshot.sshConnectionStates = new Map()
-  appStoreSnapshot.worktreesByRepo = {}
-  appStoreSnapshot.unifiedTabsByWorktree = {}
-  appStoreSnapshot.activeGroupIdByWorktree = {}
-  appStoreSnapshot.localDetectedAgentIdsByContext = {}
-  appStoreSnapshot.isDetectingLocalAgentsByContext = {}
-  appStoreSnapshot.isRefreshingLocalAgentsByContext = {}
+    },
+    true
+  )
 }

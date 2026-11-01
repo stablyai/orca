@@ -1,82 +1,34 @@
 import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
-import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
-import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import {
+  ensureAgentLaunchPreferences,
+  readAgentLaunchPreferencesForWorktree
+} from '@/components/settings/use-host-agent-launch-preferences'
+import { useAppStore } from '@/store'
+import {
+  detectionTargetForWorktree,
+  ensureDetectedAgentsForTarget,
+  agentInventoryAttemptKey,
+  readAgentInventoryForTarget
+} from '@/lib/agent-detection-target-inventory'
+import { sourceControlRepoAgentRows } from '@/lib/source-control-agent-picker'
+import {
+  AgentLaunchChoiceCancelled,
+  acquireAgentLaunchChoices
+} from '@/lib/host-chat-program-acquisition'
+import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+import { buildAgentLaunchRouteInput, worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import type { AppState } from '@/store/types'
+
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
-import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type {
-  SourceControlLaunchActionId,
-  SourceControlActionRecipe
-} from '../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
+  UseSourceControlAgentActionStartArgs,
+  SourceControlAgentActionStartWithDetectedAgentsArgs,
+  UseSourceControlAgentActionStartResult
+} from './source-control-agent-action-start-types'
 import { buildSourceControlAgentDeliveryPlan } from './buildSourceControlAgentDeliveryPlan'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
-import {
-  runSourceControlAgentActionStart,
-  type RunSourceControlAgentActionStartArgs
-} from './runSourceControlAgentActionStart'
+import { runSourceControlAgentActionStart } from './runSourceControlAgentActionStart'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
-
-type UseSourceControlAgentActionStartArgs = {
-  open: boolean
-  connectionId?: string | null
-  selectedAgent: TuiAgent | null
-  commandInput: string
-  trimmedCommandInput: string
-  /** False when the launch would be structured native chat, which reads no CLI arguments. */
-  agentArgsApply: boolean
-  prepareRecipe?: (agent: TuiAgent) => SelectedSourceControlActionRecipe
-  recipe: SelectedSourceControlActionRecipe
-  saveLaunchRecipe: boolean
-  saveTargetValue: string
-  actionId: SourceControlLaunchActionId
-  repoId?: string | null
-  agentLaunchPreferences: AgentLaunchPreferences
-  settings: GlobalSettings | null
-  repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
-  worktreeId?: string | null
-  groupId?: string | null
-  promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
-  launchPlatform?: NodeJS.Platform
-  /** SSH uses plain orca; omit the local Linux orca-ide rename in its preview. */
-  isRemote?: boolean
-  launchSource: LaunchSource
-  recoveryContext?: RuntimeGitContext | null
-  connectionUnavailable: boolean
-  /** The dialog's one host observation; Start is gated on it having settled. */
-  detectedAgents: TuiAgent[]
-  /** The picker's choice as rendered when Start was pressed, captured before any await. */
-  launchChoice?: AgentLaunchChoice
-  onStart?: RunSourceControlAgentActionStartArgs['onStart']
-  onSaveAgentDefault?: (
-    target: SourceControlAiWriteTarget,
-    actionId: SourceControlLaunchActionId,
-    recipe: SourceControlActionRecipe
-  ) => void | Promise<void>
-  onLaunchAccepted?: () => void
-  onLaunchAborted?: () => void
-  onLaunched?: () => void
-  onClose: () => void
-}
-
-type SourceControlAgentActionStartWithDetectedAgentsArgs = {
-  detectedAgents: TuiAgent[]
-}
-
-type UseSourceControlAgentActionStartResult = {
-  deliveryPlan: SourceControlAgentActionDeliveryPlanState
-  resetDeliveryPlan: () => void
-  cancelStart: () => void
-  isStarting: boolean
-  handleStart: () => Promise<void>
-  startWithDetectedAgents: (
-    args: SourceControlAgentActionStartWithDetectedAgentsArgs
-  ) => Promise<boolean>
-}
 
 export function useSourceControlAgentActionStart({
   open,
@@ -122,47 +74,27 @@ export function useSourceControlAgentActionStart({
     attemptRef.current = null
     setIsStarting(false)
   }, [])
-  useEffect(() => cancelStart, [open, worktreeId, connectionId, actionId, cancelStart])
-
-  const buildPlan = useCallback(
-    (
-      currentDetectedAgents: TuiAgent[],
-      submitted: SelectedSourceControlActionRecipe
-    ): SourceControlAgentActionDeliveryPlanState =>
-      buildSourceControlAgentDeliveryPlan({
-        settings,
-        agentLaunchPreferences,
-        selectedAgent,
-        commandInput,
-        // Why: the check must judge the arguments the launch will really apply.
-        agentArgs:
-          agentArgsApply && selectedAgent
-            ? projectSelectedSourceControlActionLaunch(submitted, selectedAgent, {
-                renderedPrompt: commandInput,
-                settings
-              }).agentArgs
-            : undefined,
-        detectedAgents: currentDetectedAgents,
-        connectionUnavailable,
-        launchPlatform,
-        isRemote
-      }),
+  useEffect(
+    () => cancelStart,
     [
-      settings,
-      agentLaunchPreferences,
-      agentArgsApply,
-      commandInput,
-      connectionUnavailable,
+      open,
+      worktreeId,
+      connectionId,
+      actionId,
       selectedAgent,
-      launchPlatform,
-      isRemote
+      recipe.agentId,
+      recipe.agentArgs,
+      recipe.commandInputTemplate,
+      recipe.surface,
+      recipe.launchPreferences,
+      recipe.launchPreferencesYieldToAgentArgs,
+      launchChoice?.requestedSurface,
+      cancelStart
     ]
   )
 
   const startWithDetectedAgents = useCallback(
-    async ({
-      detectedAgents: nextAgents
-    }: SourceControlAgentActionStartWithDetectedAgentsArgs): Promise<boolean> => {
+    async (_args: SourceControlAgentActionStartWithDetectedAgentsArgs): Promise<boolean> => {
       if (!open || !selectedAgent || attemptRef.current) {
         return false
       }
@@ -175,12 +107,106 @@ export function useSourceControlAgentActionStart({
       setIsStarting(true)
       try {
         const submitted = prepareRecipe ? prepareRecipe(selectedAgent) : recipe
-        const nextPlan = buildPlan(nextAgents, submitted)
-        if (nextPlan.status === 'error') {
-          setDeliveryPlan(nextPlan)
+        const targetFor = (state: AppState) =>
+          worktreeId
+            ? detectionTargetForWorktree(state, worktreeId)
+            : repoId
+              ? sourceControlRepoAgentRows(state.repos.find((entry) => entry.id === repoId) ?? null)
+                  .detectionTarget
+              : typeof connectionId === 'string'
+                ? { kind: 'ssh' as const, connectionId }
+                : { kind: 'local' as const }
+        const initial = useAppStore.getState()
+        const target = targetFor(initial)
+        const key = agentInventoryAttemptKey(initial, target)
+        if (!key || !target) {
           return false
         }
-        setDeliveryPlan(nextPlan)
+        const repoRows = sourceControlRepoAgentRows(
+          initial.repos.find((entry) => entry.id === repoId) ?? null
+        )
+        const workspace = worktreeId
+          ? worktreeLaunchWorkspace(worktreeId)
+          : typeof repoRows.target === 'string'
+            ? worktreeLaunchWorkspace(repoRows.target)
+            : {
+                ...repoRows.target.workspace,
+                ...(typeof connectionId === 'string'
+                  ? { executionHostId: `ssh:${connectionId}` }
+                  : {})
+              }
+        if (
+          launchChoice?.executionHostId &&
+          launchChoice.executionHostId !==
+            buildAgentLaunchRouteInput(initial, { agent: selectedAgent, workspace }).executionHostId
+        ) {
+          return false
+        }
+        await Promise.all([
+          acquireAgentLaunchChoices(
+            workspace,
+            () => ensureDetectedAgentsForTarget(useAppStore.getState(), target),
+            attempt.signal
+          ),
+          ensureAgentLaunchPreferences(initial, workspace, attempt.signal)
+        ])
+        const validateBeforeLaunch = async () => {
+          if (
+            attempt.signal.aborted ||
+            key !==
+              agentInventoryAttemptKey(useAppStore.getState(), targetFor(useAppStore.getState()))
+          ) {
+            return null
+          }
+          const acquiredPreferences = worktreeId
+            ? null
+            : await ensureAgentLaunchPreferences(useAppStore.getState(), workspace, attempt.signal)
+          const current = useAppStore.getState()
+          if (key !== agentInventoryAttemptKey(current, targetFor(current))) {
+            return null
+          }
+          const currentPreferences = worktreeId
+            ? readAgentLaunchPreferencesForWorktree(current, worktreeId)
+            : target.kind === 'runtime' && acquiredPreferences
+              ? acquiredPreferences
+              : {
+                  defaultTuiAgent: current.settings?.defaultTuiAgent,
+                  disabledTuiAgents: current.settings?.disabledTuiAgents
+                }
+          const inventory = readAgentInventoryForTarget(current, target)
+          const nextPlan = buildSourceControlAgentDeliveryPlan({
+            settings: current.settings,
+            agentLaunchPreferences: currentPreferences,
+            selectedAgent,
+            commandInput,
+            agentArgs: agentArgsApply
+              ? projectSelectedSourceControlActionLaunch(submitted, selectedAgent, {
+                  renderedPrompt: commandInput,
+                  settings: current.settings
+                }).agentArgs
+              : undefined,
+            detectedAgents: agentArgsApply
+              ? [...(inventory.ids ?? [])]
+              : agentsOfferedForLaunch(current, workspace, inventory.ids),
+            explicitInventoryFailed:
+              recipe.agentId === selectedAgent && inventory.state === 'failed',
+            connectionUnavailable,
+            launchPlatform,
+            isRemote
+          })
+          setDeliveryPlan(nextPlan)
+          return nextPlan.status === 'error'
+            ? null
+            : {
+                settings: current.settings,
+                agentLaunchPreferences: currentPreferences,
+                repo: current.repos.find((entry) => entry.id === repoId) ?? null
+              }
+        }
+        const current = await validateBeforeLaunch()
+        if (!current) {
+          return false
+        }
         return await runSourceControlAgentActionStart({
           selectedAgent,
           trimmedCommandInput,
@@ -199,6 +225,7 @@ export function useSourceControlAgentActionStart({
           launchSource,
           recoveryContext,
           signal: attempt.signal,
+          validateBeforeLaunch,
           onStart,
           onSaveAgentDefault,
           onLaunchAccepted,
@@ -209,6 +236,15 @@ export function useSourceControlAgentActionStart({
             onClose()
           }
         })
+      } catch (error) {
+        if (
+          attempt.signal.aborted ||
+          error instanceof AgentLaunchChoiceCancelled ||
+          (error instanceof DOMException && error.name === 'AbortError')
+        ) {
+          return false
+        }
+        throw error
       } finally {
         if (attemptRef.current === attempt) {
           attemptRef.current = null
@@ -219,7 +255,10 @@ export function useSourceControlAgentActionStart({
     [
       actionId,
       agentLaunchPreferences,
-      buildPlan,
+      agentArgsApply,
+      commandInput,
+      connectionId,
+      isRemote,
       launchChoice,
       recipe,
       prepareRecipe,

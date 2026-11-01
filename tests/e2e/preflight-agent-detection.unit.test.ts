@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as LocalCommandResolver from './command-path-resolver'
+import type * as LocalCommandResolver from '../../src/main/ipc/command-path-resolver'
+import { getDefaultSettings } from '../../src/shared/constants'
+import type { GlobalSettings } from '../../src/shared/global-settings-types'
 
 const {
   handleMock,
@@ -35,13 +37,13 @@ const {
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
 // These cases cover a running distro; the E9 stopped-distro gate has its own suite.
-vi.mock('../wsl/wsl-background-exec-gate', () => ({
+vi.mock('../../src/main/wsl/wsl-background-exec-gate', () => ({
   assertWslDistroRunningForExec: async () => {},
   runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
 }))
 
 // WSL detection uses runWslProcess, so child_process mocks cannot observe it.
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../../src/main/wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -59,53 +61,54 @@ vi.mock('child_process', () => {
   }
 })
 
-vi.mock('../runtime/structured-agent-shell-environment', () => ({
+vi.mock('../../src/main/runtime/structured-agent-shell-environment', () => ({
   captureHostShellEnvironment: vi.fn(async (beforeCapture?: () => Promise<unknown>) =>
     beforeCapture?.()
   )
 }))
 
-vi.mock('../startup/hydrate-shell-path', () => ({
+vi.mock('../../src/main/startup/hydrate-shell-path', () => ({
   hydrateShellPath: hydrateShellPathMock,
   mergePathSegments: mergePathSegmentsMock
 }))
 
-vi.mock('../../shared/node-cli-command-resolution', () => ({
+vi.mock('../../src/shared/node-cli-command-resolution', () => ({
   resolveCliCommands: resolveCliCommandsMock
 }))
 
 // Route filesystem PATH resolution through the existing command-lookup mock.
-vi.mock('./command-path-resolver', async (importOriginal) => ({
+vi.mock('../../src/main/ipc/command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
   findCommandsOnLocalPath: findCommandsOnLocalPathMock,
   isCommandOnLocalPath: isCommandOnLocalPathMock,
   listLocalCommandPaths: listLocalCommandPathsMock
 }))
 
-vi.mock('../pty/windows-environment-path', () => ({
+vi.mock('../../src/main/pty/windows-environment-path', () => ({
   mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))
 
-vi.mock('../bitbucket/client', () => ({
+vi.mock('../../src/main/bitbucket/client', () => ({
   getBitbucketAuthStatus: getBitbucketAuthStatusMock
 }))
 
-vi.mock('../azure-devops/client', () => ({
+vi.mock('../../src/main/azure-devops/client', () => ({
   getAzureDevOpsAuthStatus: getAzureDevOpsAuthStatusMock
 }))
 
-vi.mock('../gitea/client', () => ({
+vi.mock('../../src/main/gitea/client', () => ({
   getGiteaAuthStatus: getGiteaAuthStatusMock
 }))
 
 import {
   detectInstalledAgents,
   detectInstalledAgentsWithShellPathHydration
-} from '../preflight/agent-detection'
-import { registerPreflightHandlers } from './preflight'
-import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
-import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
+} from '../../src/main/preflight/agent-detection'
+import * as guestEnvironment from '../../src/main/wsl/wsl-guest-environment'
+import { registerPreflightHandlers } from '../../src/main/ipc/preflight'
+import { resetPreflightMocks, type HandlerMap } from '../../src/main/ipc/preflight-test-harness'
+import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
 
 describe('preflight', () => {
   const originalPlatform = process.platform
@@ -138,6 +141,88 @@ describe('preflight', () => {
       configurable: true,
       value: originalPlatform
     })
+  })
+
+  it('carries an unresolved login environment through production IPC/store failure and manual recovery', async () => {
+    const { useAppStore } = await import('@/store')
+    const initial = useAppStore.getState()
+    const invalidation = vi.spyOn(guestEnvironment, 'invalidateWslGuestEnvironment')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    vi.stubGlobal('window', {
+      api: {
+        platform: { get: () => ({ platform: 'win32' }) },
+        preflight: {
+          detectAgents: (context: unknown) =>
+            handlers['preflight:detectAgents'](undefined, context),
+          refreshAgents: (context: unknown) =>
+            handlers['preflight:refreshAgents'](undefined, context)
+        }
+      }
+    })
+    try {
+      const settings: GlobalSettings = {
+        ...(initial.settings ?? getDefaultSettings('/tmp')),
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+      registerPreflightHandlers({ getSettings: () => settings })
+      useAppStore.setState(
+        {
+          ...useAppStore.getInitialState(),
+          settings
+        },
+        true
+      )
+      useAppStore.getState().clearLocalDetectedAgents()
+      runWslProcessMock.mockResolvedValue({
+        environmentResolved: false,
+        code: 0,
+        stdout: '',
+        timedOut: false
+      })
+      await useAppStore.getState().ensureDetectedAgents()
+      expect(useAppStore.getState().readLocalAgentInventory()).toEqual({
+        ids: null,
+        state: 'failed'
+      })
+      expect(useAppStore.getState().isDetectingAgents).toBe(false)
+      expect(runWslProcessMock).toHaveBeenCalledOnce()
+      expect(runWslProcessMock).toHaveBeenCalledWith(expect.objectContaining({ distro: 'Ubuntu' }))
+      expect(await runWslProcessMock.mock.results[0].value).toMatchObject({
+        environmentResolved: false,
+        code: 0,
+        stdout: '',
+        timedOut: false
+      })
+      invalidation.mockClear()
+      runWslProcessMock.mockClear()
+      await useAppStore.getState().refreshDetectedAgents()
+      expect(invalidation).toHaveBeenCalledExactlyOnceWith('Ubuntu')
+      expect(runWslProcessMock).toHaveBeenCalledOnce()
+      expect(runWslProcessMock).toHaveBeenCalledWith(expect.objectContaining({ distro: 'Ubuntu' }))
+      expect(invalidation.mock.invocationCallOrder[0]).toBeLessThan(
+        runWslProcessMock.mock.invocationCallOrder[0]
+      )
+      expect(useAppStore.getState().readLocalAgentInventory()).toEqual({
+        ids: null,
+        state: 'failed'
+      })
+      runWslProcessMock.mockResolvedValue({
+        environmentResolved: true,
+        code: 0,
+        stdout: '',
+        timedOut: false
+      })
+      await useAppStore.getState().refreshDetectedAgents()
+      expect(useAppStore.getState().readLocalAgentInventory()).toEqual({
+        ids: [],
+        state: 'successful'
+      })
+    } finally {
+      invalidation.mockRestore()
+      useAppStore.getState().clearLocalDetectedAgents()
+      useAppStore.setState(initial, true)
+      vi.unstubAllGlobals()
+    }
   })
 
   it.each(['win32', 'darwin', 'linux'])(
@@ -191,6 +276,7 @@ describe('preflight', () => {
     runWslProcessMock.mockResolvedValue({
       code: 0,
       timedOut: false,
+      environmentResolved: true,
       stdout:
         '__ORCA_AGENT_PATH__claude\t/home/me/bin/claude\n__ORCA_AGENT_PATH__kiro-cli\t/home/me/bin/kiro-cli\n',
       stderr: ''

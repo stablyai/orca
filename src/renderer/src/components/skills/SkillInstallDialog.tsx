@@ -66,7 +66,11 @@ export function SkillInstallDialog({
     environmentId,
     wslDistro: executionTarget?.distro ?? null
   })
-  const providers = providerChoice ?? defaultSelectedSkillProviders(detectedAgents)
+  const providers =
+    providerChoice ??
+    (detectedAgents.state === 'failed'
+      ? new Set<SkillInstallProviderId>()
+      : defaultSelectedSkillProviders(detectedAgents.ids))
   const installRisk = useSkillInstallRisk(preview?.version ?? null)
 
   const workspaceChoices = useMemo(
@@ -341,7 +345,7 @@ export function SkillInstallDialog({
                 setDestinationPreview(null)
               }}
               providers={providers}
-              detectedAgents={detectedAgents}
+              detectedAgents={detectedAgents.ids}
               onProvidersChange={setProviderChoice}
               busy={busy}
               runtimeEnvironments={runtimeEnvironments}

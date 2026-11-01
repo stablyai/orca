@@ -11,6 +11,7 @@ import {
 } from './AntigravityProviderSignInArea'
 import { getHostRuntimeLabel, getRuntimeSentenceLabel } from './accounts-pane-runtime'
 import type { AgentOpensAs } from './native-chat-provider-choice'
+import { Button } from '../ui/button'
 import { SettingsSegmentedControl } from './SettingsFormControls'
 
 // The chat choice is this computer's, so the downloaded chat programs are too.
@@ -94,4 +95,25 @@ export function AgentChatRuntimeArea({
       ) : null}
     </div>
   )
+}
+
+export function NativeAgentInventoryFailure({
+  failed,
+  onRetry
+}: {
+  failed: boolean
+  onRetry: () => void
+}): React.JSX.Element | null {
+  return failed ? (
+    <span>
+      {translate(
+        'settings.agents.localDetectionFailed',
+        "Couldn't check which agents are installed on this computer"
+      )}
+      {' · '}
+      <Button type="button" variant="link" size="xs" className="h-auto" onClick={onRetry}>
+        {translate('auto.components.settings.AgentsPane.retryDetection', 'Retry')}
+      </Button>
+    </span>
+  ) : null
 }

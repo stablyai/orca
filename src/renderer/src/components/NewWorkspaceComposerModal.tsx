@@ -204,6 +204,7 @@ function QuickTabBody({
     cardProps.agentRows?.target ?? null,
     active && Boolean(cardProps.agentRows),
     cardProps.agentRows?.detectionTarget,
+    false,
     { wakeOnOpen: true }
   )
   const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)

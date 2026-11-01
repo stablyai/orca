@@ -815,3 +815,45 @@ describe('local preflight context', () => {
     )
   })
 })
+
+it('keeps first exact project identity ahead of ordered source-repo fallback during indexed runtime selection', () => {
+  const state = makeState({
+    repoPath: 'C:\\repo',
+    worktreePath: 'C:\\repo',
+    worktree: { projectId: 'saved-project' }
+  })
+  const fallback = project({
+    id: 'fallback',
+    sourceRepoIds: ['repo-1'],
+    localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+  })
+  const exact = project({
+    id: 'saved-project',
+    localWindowsRuntimePreference: { kind: 'windows-host' }
+  })
+  const duplicate = project({
+    id: 'saved-project',
+    localWindowsRuntimePreference: { kind: 'wsl', distro: 'Debian' }
+  })
+  const select = (projects: Project[]) =>
+    getLocalProjectExecutionRuntimeContext(
+      {
+        ...state,
+        projects
+      },
+      undefined,
+      'win32'
+    )
+  expect(select([fallback, exact, duplicate])).toMatchObject({
+    runtime: { projectId: 'saved-project', kind: 'windows-host' }
+  })
+  expect(select([exact, fallback, duplicate])).toMatchObject({
+    runtime: { projectId: 'saved-project', kind: 'windows-host' }
+  })
+  expect(select([duplicate, exact, fallback])).toMatchObject({
+    runtime: { kind: 'wsl', distro: 'Debian' }
+  })
+  expect(
+    select([fallback, { ...duplicate, id: 'other', sourceRepoIds: ['repo-1'] }])
+  ).toMatchObject({ runtime: { projectId: 'saved-project', kind: 'wsl', distro: 'Ubuntu' } })
+})

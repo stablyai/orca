@@ -6,7 +6,10 @@ import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
 } from '@/lib/host-chat-program-acquisition'
-import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import {
+  ensureAgentLaunchPreferences,
+  readAgentLaunchPreferencesForWorktree
+} from '@/components/settings/use-host-agent-launch-preferences'
 import {
   buildAgentLaunchRouteInput,
   workspaceKindForWorktreeId
@@ -15,7 +18,14 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
+import {
+  detectionTargetForWorktree,
+  agentInventoryAttemptKey,
+  readAgentInventoryForTarget,
+  ensureDetectedAgentsForWorktree
+} from '@/lib/agent-detection-target-inventory'
+import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
 import { sourceControlLaunchAppliesAgentArgs } from './source-control-launch-agent-args-applicability'
@@ -64,12 +74,14 @@ export function useSavedSourceControlActionStart() {
         onFallback()
         return
       }
-      const projection = projectSelectedSourceControlActionLaunch(recipe, agent, {
-        basePrompt: args.basePrompt,
-        settings: args.settings
-      })
+      const target = detectionTargetForWorktree(store, worktreeId)
+      const attemptKey = agentInventoryAttemptKey(store, target)
+      if (!target || !attemptKey) {
+        onFallback()
+        return
+      }
       const workspace = { worktreeId, kind: workspaceKindForWorktreeId(worktreeId) }
-      const [choices, agentLaunchPreferences] = await Promise.all([
+      const [choices] = await Promise.all([
         acquireAgentLaunchChoices(
           workspace,
           () => ensureDetectedAgentsForWorktree(store, worktreeId),
@@ -78,8 +90,21 @@ export function useSavedSourceControlActionStart() {
         ensureAgentLaunchPreferences(store, workspace, signal)
       ])
       signal?.throwIfAborted()
+      const current = useAppStore.getState()
+      if (
+        attemptKey !==
+        agentInventoryAttemptKey(current, detectionTargetForWorktree(current, worktreeId))
+      ) {
+        onFallback()
+        return
+      }
+      const projection = projectSelectedSourceControlActionLaunch(recipe, agent, {
+        basePrompt: args.basePrompt,
+        settings: current.settings
+      })
+      const agentLaunchPreferences = readAgentLaunchPreferencesForWorktree(current, worktreeId)
       const route = isTuiAgent(agent)
-        ? buildAgentLaunchRouteInput(store, {
+        ? buildAgentLaunchRouteInput(current, {
             agent,
             workspace: {
               worktreeId: worktreeId ?? undefined,
@@ -95,8 +120,55 @@ export function useSavedSourceControlActionStart() {
           repoId: args.repoId
         })
       const detectedAgents = appliesArgs ? [...(choices.detected ?? [])] : choices.offered
+      const validateBeforeLaunch = () => {
+        if (signal?.aborted) {
+          return null
+        }
+        const state = useAppStore.getState()
+        if (
+          attemptKey !==
+          agentInventoryAttemptKey(state, detectionTargetForWorktree(state, worktreeId))
+        ) {
+          return null
+        }
+        const currentRepo = state.repos.find((entry) => entry.id === args.repoId) ?? null
+        const saved = resolveSourceControlActionRecipe({
+          settings: state.settings,
+          repo: currentRepo,
+          actionId: args.actionId
+        })
+        if (saved.agentId !== agent) {
+          return null
+        }
+        const inventory = readAgentInventoryForTarget(state, target)
+        const preferences = readAgentLaunchPreferencesForWorktree(state, worktreeId)
+        const currentProjection = projectSelectedSourceControlActionLaunch(recipe, agent, {
+          basePrompt: args.basePrompt,
+          settings: state.settings
+        })
+        const plan = buildSourceControlAgentDeliveryPlan({
+          settings: state.settings,
+          agentLaunchPreferences: preferences,
+          selectedAgent: agent,
+          commandInput: projection.commandInput,
+          agentArgs: appliesArgs ? currentProjection.agentArgs : undefined,
+          detectedAgents: appliesArgs
+            ? [...(inventory.ids ?? [])]
+            : agentsOfferedForLaunch(state, workspace, inventory.ids),
+          explicitInventoryFailed: inventory.state === 'failed',
+          connectionUnavailable: args.connectionId === undefined,
+          launchPlatform: args.launchPlatform,
+          isRemote: typeof args.connectionId === 'string'
+        })
+        if (plan.status === 'error') {
+          toast.error(plan.error)
+          return null
+        }
+        return { settings: state.settings, agentLaunchPreferences: preferences, repo: currentRepo }
+      }
       const plan = buildSourceControlAgentDeliveryPlan({
-        settings: args.settings,
+        settings: current.settings,
+        explicitInventoryFailed: readAgentInventoryForTarget(current, target).state === 'failed',
         agentLaunchPreferences,
         selectedAgent: agent,
         commandInput: projection.commandInput,
@@ -123,7 +195,8 @@ export function useSavedSourceControlActionStart() {
           requestedSurface: projection.requestedSurface,
           executionHostId: route ? parseExecutionHostId(route.executionHostId)?.id : undefined
         },
-        saveTargetValue: 'none'
+        saveTargetValue: 'none',
+        validateBeforeLaunch
       })
       if (!launched) {
         onFallback()

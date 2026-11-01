@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillCloudVersion } from '../../../../shared/skill-cloud-contract'
+import type { SkillBundleInstallResult } from '../../../../shared/skill-bundle-install-contract'
 import type { SkillInstallProgress } from '../../../../shared/skill-sharing-contract'
 import { useAppStore } from '@/store'
 import { SkillInstallDialog } from './SkillInstallDialog'
@@ -202,6 +203,93 @@ describe('SkillInstallDialog', () => {
     expect(request.providers).toContain('codex')
     expect(request.providers).toContain('droid')
   })
+
+  it.each([false, true])(
+    'failed discovery selects no automatic destinations and preserves explicit picks (bundle=%s)',
+    async (bundle) => {
+      const skills = installApi(
+        vi.fn().mockResolvedValue({
+          status: 'ok',
+          value: {
+            name: 'private-skill',
+            packageDigest: DIGEST,
+            destinationIdentity: 'local:global',
+            currentState: 'missing',
+            providers: []
+          }
+        })
+      )
+      skills.resolveShare.mockResolvedValue({
+        status: 'ok',
+        value: { id: 'share_1', version: bundle ? bundleVersion() : version() }
+      })
+      skills.previewBundleInstall.mockResolvedValue({
+        status: 'ok',
+        value: {
+          packageId: 'pkg_1',
+          versionId: 'ver_1',
+          bundleDigest: 'c'.repeat(64),
+          destinationIdentity: 'local:global',
+          skills: ['alpha', 'beta'].map((name) => ({
+            id: `skill-${name}`,
+            name,
+            digest: DIGEST,
+            currentState: 'missing'
+          }))
+        }
+      })
+      const bundleResult: SkillBundleInstallResult = {
+        operationId: 'op_1',
+        packageId: 'pkg_1',
+        versionId: 'ver_1',
+        bundleDigest: 'c'.repeat(64),
+        status: 'complete',
+        skills: []
+      }
+      skills.installBundleShare.mockResolvedValue({
+        status: 'ok',
+        value: bundleResult
+      })
+      const preflight = detectionApi([])
+      preflight.detectAgents.mockRejectedValue(new Error('WSL environment unresolved'))
+      Object.defineProperty(window, 'api', { configurable: true, value: { skills, preflight } })
+      render(<SkillInstallDialog open onOpenChange={() => undefined} />)
+      await inspectSkill(bundle ? 'alpha description' : 'A private skill')
+      fireEvent.click(screen.getByRole('button', { name: /Installing for:/ }))
+      expect(
+        screen.getByRole('checkbox', { name: /Claude Code/ }).getAttribute('aria-checked')
+      ).toBe('false')
+      fireEvent.click(screen.getByRole('checkbox', { name: /Claude Code/ }))
+      fireEvent.click(
+        screen.getByRole('button', { name: bundle ? 'Install 2 skills' : 'Install skill' })
+      )
+      const install = bundle ? skills.installBundleShare : skills.installShare
+      await waitFor(() => expect(install).toHaveBeenCalledOnce())
+      expect(install).toHaveBeenCalledWith(expect.objectContaining({ providers: ['claude'] }))
+      cleanup()
+      let rejectProbe: (error: Error) => void = () => {}
+      preflight.detectAgents.mockImplementation(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectProbe = reject
+          })
+      )
+      render(<SkillInstallDialog open onOpenChange={() => undefined} />)
+      await inspectSkill(bundle ? 'alpha description' : 'A private skill')
+      fireEvent.click(screen.getByRole('button', { name: /Installing for:/ }))
+      fireEvent.click(screen.getByRole('button', { name: /Deselect/ }))
+      fireEvent.click(screen.getByRole('checkbox', { name: /Claude Code/ }))
+      await act(async () => {
+        rejectProbe(new Error('late discovery failure'))
+      })
+      expect(
+        screen.getByRole('checkbox', { name: /Claude Code/ }).getAttribute('aria-checked')
+      ).toBe('true')
+      expect(screen.getByRole('checkbox', { name: /^Droid/ }).getAttribute('aria-checked')).toBe(
+        'false'
+      )
+    }
+  )
 
   it('pins installation to the version shown for review', async () => {
     const skills = installApi(

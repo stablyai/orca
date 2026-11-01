@@ -13,10 +13,15 @@ export type LocalDetectedAgentState = {
     ids: TuiAgent[] | null
     state: 'pending' | 'successful' | 'failed'
   }
+  readLocalAgentInventoryByKey: (key: string) => {
+    ids: TuiAgent[] | null
+    state: 'pending' | 'successful' | 'failed'
+  }
   detectedAgentIds: TuiAgent[] | null
   isDetectingAgents: boolean
   isRefreshingAgents: boolean
   localDetectedAgentIdsByContext: Record<string, TuiAgent[] | null>
+  localAgentInventoryFailedByContext: Record<string, boolean>
   isDetectingLocalAgentsByContext: Record<string, boolean>
   isRefreshingLocalAgentsByContext: Record<string, boolean>
   pathSource: PathSource | null
@@ -46,6 +51,7 @@ export function createEmptyLocalDetectedAgentState(): Pick<
   | 'isDetectingAgents'
   | 'isRefreshingAgents'
   | 'localDetectedAgentIdsByContext'
+  | 'localAgentInventoryFailedByContext'
   | 'isDetectingLocalAgentsByContext'
   | 'isRefreshingLocalAgentsByContext'
   | 'pathSource'
@@ -56,6 +62,7 @@ export function createEmptyLocalDetectedAgentState(): Pick<
     isDetectingAgents: false,
     isRefreshingAgents: false,
     localDetectedAgentIdsByContext: {},
+    localAgentInventoryFailedByContext: {},
     isDetectingLocalAgentsByContext: {},
     isRefreshingLocalAgentsByContext: {},
     pathSource: null,
@@ -67,4 +74,17 @@ export function readNativeDetectedAgents(state: {
   localDetectedAgentIdsByContext?: LocalDetectedAgentState['localDetectedAgentIdsByContext']
 }): TuiAgent[] | null {
   return state.localDetectedAgentIdsByContext?.host ?? null
+}
+
+export function localAgentInventoryFailurePatch(state: LocalDetectedAgentState, key: string) {
+  return {
+    localDetectedAgentIdsByContext: {
+      ...state.localDetectedAgentIdsByContext,
+      [key]: state.localDetectedAgentIdsByContext[key] ?? null
+    },
+    localAgentInventoryFailedByContext: {
+      ...state.localAgentInventoryFailedByContext,
+      [key]: true
+    }
+  }
 }

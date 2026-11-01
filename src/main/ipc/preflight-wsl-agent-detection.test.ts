@@ -39,6 +39,75 @@ describe('detectWslCommandsOnPath', () => {
 
     expect(found).toEqual(new Set())
   })
+
+  it('finds a real command even with rc/motd-shaped noise ahead of it in stdout (regression)', async () => {
+    // Banner-shaped text must not corrupt parsing even though the probe lane itself avoids shell startup.
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 0,
+      stdout:
+        'Welcome to Ubuntu! Run a command as administrator (user "root")...\n' +
+        '__ORCA_AGENT_PATH__claude\t/home/user/.nvm/versions/node/v20/bin/claude\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
+
+    expect(found).toEqual(new Set(['claude']))
+  })
+
+  it('rejects when wsl.exe cannot be started', async () => {
+    runWslProcessMock.mockRejectedValue(new Error('spawn wsl.exe ENOENT'))
+    await expect(detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])).rejects.toThrow()
+  })
+
+  it.each([
+    { timedOut: true, code: 0, environmentResolved: true },
+    { timedOut: false, code: 1, environmentResolved: true },
+    { timedOut: false, code: null, environmentResolved: true },
+    { timedOut: false, code: 0, environmentResolved: false }
+  ])('rejects an incomplete WSL probe: %j', async (result) => {
+    runWslProcessMock.mockResolvedValue({
+      ...result,
+      stdout: '__ORCA_AGENT_PATH__claude\t/bin/claude\n'
+    })
+    await expect(detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])).rejects.toThrow()
+  })
+
+  it('skips the probe entirely when no commands are requested', async () => {
+    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, [])
+
+    expect(found).toEqual(new Set())
+    expect(runWslProcessMock).not.toHaveBeenCalled()
+  })
+})
+
+it('does not veto a guest binary on an ordinary Linux mount under /mnt', async () => {
+  // Only mount evidence identifies Windows drives; /mnt/d may be an ext4 guest volume.
+  runWslProcessMock.mockResolvedValue({
+    environmentResolved: true,
+    code: 0,
+    stdout: '__ORCA_AGENT_PATH__claude\t/mnt/d/tools/claude\n',
+    stderr: '',
+    timedOut: false
+  })
+  await expect(detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])).resolves.toEqual(
+    new Set(['claude'])
+  )
+})
+
+it('still counts a genuine guest install', async () => {
+  runWslProcessMock.mockResolvedValue({
+    environmentResolved: true,
+    code: 0,
+    stdout: '__ORCA_AGENT_PATH__claude\t/home/alice/.nvm/versions/node/v20.1.0/bin/claude\n',
+    stderr: '',
+    timedOut: false
+  })
+  expect(await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])).toEqual(
+    new Set(['claude'])
+  )
 })
 
 describe('the detection script itself, run by a real POSIX shell', () => {
@@ -62,7 +131,7 @@ describe('the detection script itself, run by a real POSIX shell', () => {
 
   const runScript = async (): Promise<string> => {
     runWslProcessMock.mockResolvedValue({
-      environmentResolved: false,
+      environmentResolved: true,
       code: 0,
       stdout: '',
       stderr: '',

@@ -47,6 +47,19 @@ export type RunSourceControlAgentActionStartArgs = {
   launchSource: LaunchSource
   recoveryContext?: RuntimeGitContext | null
   signal?: AbortSignal
+  /** Recheck current action facts after recovery before either writer or dispatch. */
+  validateBeforeLaunch?: () =>
+    | {
+        settings: GlobalSettings | null
+        agentLaunchPreferences: AgentLaunchPreferences
+        repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
+      }
+    | null
+    | Promise<{
+        settings: GlobalSettings | null
+        agentLaunchPreferences: AgentLaunchPreferences
+        repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
+      } | null>
   onStart?: (args: {
     agentLaunchPreferences?: AgentLaunchPreferences
     agent: TuiAgent
@@ -89,6 +102,7 @@ export async function runSourceControlAgentActionStart({
   launchSource,
   recoveryContext,
   signal,
+  validateBeforeLaunch,
   onStart,
   onSaveAgentDefault,
   onLaunchAccepted,
@@ -105,6 +119,15 @@ export async function runSourceControlAgentActionStart({
   }
   if (signal?.aborted) {
     return false
+  }
+  if (validateBeforeLaunch) {
+    const current = await validateBeforeLaunch()
+    if (!current || signal?.aborted) {
+      return false
+    }
+    settings = current.settings
+    agentLaunchPreferences = current.agentLaunchPreferences
+    repo = current.repo
   }
   let launched = false
   let launchFailureNotified = false

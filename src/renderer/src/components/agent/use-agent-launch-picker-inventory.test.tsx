@@ -18,6 +18,7 @@ import type * as picker from '../../../../shared/agent-launch-picker'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
+import type * as RouteInput from '@/lib/agent-launch-route-input'
 import {
   useAgentLaunchPickerInventorySource,
   useAgentPickerInventoryEntries
@@ -36,10 +37,18 @@ vi.mock('@/store', () => ({
     { getState: () => ({}) }
   )
 }))
-vi.mock('@/lib/agent-launch-route-input', () => ({
-  buildAgentLaunchRouteInput: () => ({ executionHostId: 'local' }),
-  workspaceKindForWorktreeId: () => 'git-worktree'
-}))
+vi.mock('@/lib/agent-launch-route-input', () => {
+  const resolveAgentLaunchHost: typeof RouteInput.resolveAgentLaunchHost = () => ({
+    owner: undefined,
+    executionHostId: 'local',
+    hostCapabilities: null
+  })
+  return {
+    buildAgentLaunchRouteInput: () => ({ executionHostId: 'local' }),
+    workspaceKindForWorktreeId: () => 'git-worktree',
+    resolveAgentLaunchHost
+  }
+})
 vi.mock('@/runtime/structured-agent-session-owner', () => ({
   structuredAgentSessionTargetForHost: (host: string) =>
     host.startsWith('runtime:')

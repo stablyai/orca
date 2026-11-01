@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'src/main/ipc/preflight*'
+      - 'tests/e2e/preflight-agent-detection.unit.test.ts'
       - 'src/main/ipc/agent-detection-shell-path.ts'
       - 'src/main/ipc/command-path-resolver*'
       - 'src/main/preflight/**'
@@ -47,7 +48,7 @@ jobs:
           src/main/ipc/preflight-command-exec.test.ts
           src/main/ipc/preflight-host-cli-status.test.ts
           src/main/ipc/preflight-runnable-local-cli.test.ts
-          src/main/ipc/preflight-agent-detection.test.ts
+          tests/e2e/preflight-agent-detection.unit.test.ts
           src/main/ipc/preflight-agent-refresh.test.ts
           src/main/ipc/preflight-wsl-agent-detection.test.ts
           src/main/ipc/preflight-windows-path-refresh.repro.test.ts

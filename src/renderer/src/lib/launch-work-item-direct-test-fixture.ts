@@ -1,3 +1,4 @@
+import { directWorkItemProjectFixture } from './launch-work-item-direct-project.test-fixture'
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as TuiAgentSelectionModule from '../../../shared/tui-agent-selection'
@@ -190,27 +191,12 @@ beforeEach(() => {
   mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'tab-1' })
   mocks.pasteDraftWhenAgentReady.mockResolvedValue(true)
   mocks.store = {
-    repos: [
-      {
-        id: 'repo-1',
-        path: '/repo',
-        displayName: 'Repo',
-        addedAt: 1
-      }
-    ],
-    activeRepoId: 'repo-1',
-    activeWorktreeId: null,
-    projects: [
-      {
-        id: 'repo-1',
-        displayName: 'Repo',
-        badgeColor: '#000000',
-        sourceRepoIds: ['repo-1'],
-        createdAt: 1,
-        updatedAt: 1
-      }
-    ],
+    ...directWorkItemProjectFixture(),
     worktreesByRepo: {},
+    localDetectedAgentIdsByContext: {},
+    remoteDetectedAgentIds: {},
+    runtimeDetectedAgentIds: {},
+    remoteAgentInventoryOutcome: () => 'successful',
     settings: {
       defaultTuiAgent: 'codex',
       disabledTuiAgents: [],

@@ -20,7 +20,6 @@ export type LocalAgentInventoryLifecycle = {
   /** Contexts whose last probe the E9 gate refused (distro not running), not a real failure. */
   refusedContextKeys: Set<string>
   keptThroughFailure: WeakSet<TuiAgent[]>
-  failedDetectContextKeys: Set<string>
   detectedContextKey: string | null
   legacyDetectContextKey: string | null
   legacyRefreshContextKey: string | null
@@ -40,11 +39,6 @@ export function refreshLocalAgentInventory(
   const contextKey = localAgentInventoryContextKey(context, includeDisabled)
   const publishedContextKey = localAgentInventoryContextKey(context)
   const refreshContextKeys = new Set([contextKey, publishedContextKey])
-  const cached = get().localDetectedAgentIdsByContext[contextKey]
-  const hadUsableCache = cached != null && !lifecycle.failedDetectContextKeys.has(contextKey)
-  const publishedHadUsableCache =
-    get().localDetectedAgentIdsByContext[publishedContextKey] != null &&
-    !lifecycle.failedDetectContextKeys.has(publishedContextKey)
   const requestGeneration = lifecycle.localDetectionGeneration
   const exposeInflightToLegacy = (): void => {
     if (!isolatedInventory) {
@@ -110,9 +104,7 @@ export function refreshLocalAgentInventory(
         requestGeneration === lifecycle.localDetectionGeneration &&
         lifecycle.refreshPromises.get(contextKey) === pending
       ) {
-        lifecycle.failedDetectContextKeys.delete(contextKey)
         lifecycle.refusedContextKeys.delete(contextKey)
-        lifecycle.failedDetectContextKeys.delete(publishedContextKey)
         const exposeToLegacy =
           lifecycle.legacyRefreshContextKey !== null &&
           refreshContextKeys.has(lifecycle.legacyRefreshContextKey)
@@ -129,6 +121,10 @@ export function refreshLocalAgentInventory(
                 pathFailureReason: result.pathFailureReason
               }
             : {}),
+          localAgentInventoryFailedByContext: contextEviction.removeLocalAgentContextEntries(
+            state.localAgentInventoryFailedByContext,
+            refreshContextKeys
+          ),
           localDetectedAgentIdsByContext: {
             ...state.localDetectedAgentIdsByContext,
             [contextKey]: typed,
@@ -143,20 +139,18 @@ export function refreshLocalAgentInventory(
       return typed
     })
     .catch((error: unknown) => {
-      const fallback = get().localDetectedAgentIdsByContext[contextKey] ?? []
+      const fallback = get().localDetectedAgentIdsByContext[contextKey] ?? null
       if (
         requestGeneration === lifecycle.localDetectionGeneration &&
         lifecycle.refreshPromises.get(contextKey) === pending
       ) {
         markLocalAgentRefusal(lifecycle, contextKey, error)
-        lifecycle.keptThroughFailure.add(fallback)
-        const publishedFallback = get().localDetectedAgentIdsByContext[publishedContextKey] ?? []
-        lifecycle.keptThroughFailure.add(publishedFallback)
-        if (!publishedHadUsableCache) {
-          lifecycle.failedDetectContextKeys.add(publishedContextKey)
+        if (fallback !== null) {
+          lifecycle.keptThroughFailure.add(fallback)
         }
-        if (!hadUsableCache) {
-          lifecycle.failedDetectContextKeys.add(contextKey)
+        const publishedFallback = get().localDetectedAgentIdsByContext[publishedContextKey] ?? null
+        if (publishedFallback !== null) {
+          lifecycle.keptThroughFailure.add(publishedFallback)
         }
         const exposeToLegacy =
           lifecycle.legacyRefreshContextKey !== null &&
@@ -174,13 +168,18 @@ export function refreshLocalAgentInventory(
             [contextKey]: fallback,
             [publishedContextKey]: publishedFallback
           },
+          localAgentInventoryFailedByContext: {
+            ...state.localAgentInventoryFailedByContext,
+            [contextKey]: true,
+            [publishedContextKey]: true
+          },
           isRefreshingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntries(
             state.isRefreshingLocalAgentsByContext,
             refreshContextKeys
           )
         }))
       }
-      return fallback
+      return fallback ?? []
     })
     .finally(() => {
       if (lifecycle.refreshPromises.get(contextKey) === pending) {

@@ -11,6 +11,7 @@ export type SourceControlLaunchCheckResult = { ok: true } | { ok: false; error: 
 export function checkSourceControlAgentActionLaunch(args: {
   agent: TuiAgent | null
   commandInput: string
+  explicitInventoryFailed?: boolean
   detectedAgents: TuiAgent[]
   disabledAgents?: TuiAgent[]
   cmdOverrides?: Partial<Record<TuiAgent, string>>
@@ -39,7 +40,7 @@ export function checkSourceControlAgentActionLaunch(args: {
       )
     }
   }
-  if (!args.detectedAgents.includes(agent)) {
+  if (!args.explicitInventoryFailed && !args.detectedAgents.includes(agent)) {
     return {
       ok: false,
       error: translate(

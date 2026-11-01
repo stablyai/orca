@@ -192,9 +192,12 @@ export async function detectProjectLaunchContext(
   if (!ssh && !projectRuntime) {
     throw new Error('worktree_execution_host_unresolved')
   }
-  const agents = await detectAgentsOnHost(
-    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } }
-  )
+  const context = { projectRuntime }
+  getPreflightWslTarget(context)
+  // Launch candidates are optional; owner/runtime validation and inventory APIs still refuse.
+  const agents = ssh
+    ? await detectAgentsOnHost({ kind: 'ssh', connectionId: ssh })
+    : await detectAgentsOnHost({ kind: 'local', context }).catch(() => [])
   return {
     agents: agents.filter(isTuiAgent),
     workspaceKind: isFolderRepo(repo) ? 'folder' : 'git-worktree',

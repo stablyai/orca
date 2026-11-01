@@ -6,6 +6,7 @@ type LocalAgentContextState = Pick<
   | 'isDetectingAgents'
   | 'isRefreshingAgents'
   | 'localDetectedAgentIdsByContext'
+  | 'localAgentInventoryFailedByContext'
   | 'isDetectingLocalAgentsByContext'
   | 'isRefreshingLocalAgentsByContext'
   | 'pathSource'
@@ -58,6 +59,7 @@ export function getLocalAgentContextEviction(args: {
   }
   const contextKeys = new Set([
     ...Object.keys(args.state.localDetectedAgentIdsByContext),
+    ...Object.keys(args.state.localAgentInventoryFailedByContext),
     ...Object.keys(args.state.isDetectingLocalAgentsByContext),
     ...Object.keys(args.state.isRefreshingLocalAgentsByContext),
     ...args.internalContextKeys
@@ -101,6 +103,10 @@ export function getLocalAgentContextEviction(args: {
           }
         : {}),
       ...(clearRefreshing ? { isRefreshingAgents: false } : {}),
+      localAgentInventoryFailedByContext: removeLocalAgentContextEntries(
+        args.state.localAgentInventoryFailedByContext,
+        removedContextKeys
+      ),
       localDetectedAgentIdsByContext: removeLocalAgentContextEntries(
         args.state.localDetectedAgentIdsByContext,
         removedContextKeys

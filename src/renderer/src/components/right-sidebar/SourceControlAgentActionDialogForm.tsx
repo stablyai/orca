@@ -155,7 +155,10 @@ export function SourceControlAgentActionDialogForm({
               'Agent'
             )}
           </Label>
-          {hasEnabledAgents || selectedAgent ? (
+          {hasEnabledAgents ||
+          selectedAgent ||
+          (surfaceRows.model.state === 'settled' &&
+            surfaceRows.model.rows.some((row) => row.kind === 'cli' || row.kind === 'terminal')) ? (
             <AgentCombobox
               agents={agentOptions}
               value={selectedAgent}

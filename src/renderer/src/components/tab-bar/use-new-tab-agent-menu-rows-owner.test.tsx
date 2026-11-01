@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi, type MockInstance } from 'vitest'
 import { useAppStore } from '@/store'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
+import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
+import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import {
   makeFolderWorkspace,
   makeWorktree,
@@ -50,74 +52,178 @@ it('settles ownerless continuation and plus inventory without borrowing agents, 
     { worktreeId: 'r1::/remote/restored', rows: { repos: [repo] } }
   ]
   for (const { worktreeId, rows } of cases) {
-    const local = vi.fn<AppState['ensureDetectedAgents']>(async () => ['claude'])
+    type DetectAgents = Window['api']['preflight']['detectAgents']
+    const reply = Promise.withResolvers<Awaited<ReturnType<DetectAgents>>>()
+    const detected: Awaited<ReturnType<DetectAgents>> = ['claude']
+    const detectAgents = vi.fn<DetectAgents>(() => reply.promise)
+    const originalApi = Object.getOwnPropertyDescriptor(window, 'api')
+    const originalEnsure = useAppStore.getState().ensureDetectedAgents
     const otherHost = vi.fn(async () => [])
     const getStatus = vi.fn()
-    Object.assign(window, { api: { runtime: { getStatus } } })
-    setLocalRuntimeCapabilitiesForTests(worktreeId.startsWith('folder:') ? null : [CHAT, CLIENT])
-    useAppStore.setState({
-      ...initial,
-      settings: { ...getDefaultSettings('/home/me'), nativeChatProviders: EVERY_AGENT_CHAT },
-      activeWorktreeId: worktreeId,
-      activeWorkspaceExecutionHostId: null,
-      folderWorkspaces: [],
-      projectGroups: [],
-      repos: [],
-      worktreesByRepo: {},
-      detectedWorktreesByRepo: {},
-      restoredRuntimeHostIdByWorkspaceSessionKey: {},
-      detectedAgentIds: ['gemini'],
-      remoteDetectedAgentIds: { other: ['codex'] },
-      ensureDetectedAgents: local,
-      ensureRemoteDetectedAgents: otherHost,
-      ensureRuntimeDetectedAgents: otherHost,
-      ...rows
-    })
-    const hook = renderHook(() => {
-      const target = useAgentDetectionTargetForWorktree(worktreeId)
-      const workspace = { kind: workspaceKindForWorktreeId(worktreeId), worktreeId }
-      return {
-        form: useAgentMenuObservation({ workspace }, true, target),
-        plus: useNewTabAgentMenuRows(worktreeId, true, target)
-      }
-    })
-    expect(hook.result.current.form.detection).toMatchObject({ detectedIds: [], isLoading: false })
-    expect(hook.result.current.form.selectionFor('claude', 'terminal').ready).toBe(false)
-    for (const model of [hook.result.current.form.model, hook.result.current.plus]) {
-      expect(model.state).toBe('settled')
-      expect(
-        model.state === 'settled' &&
-          model.rows.every(
-            (row) =>
-              row.kind === 'chat-unavailable' &&
-              row.reason === 'check-failed' &&
-              row.executionHostId === undefined
-          )
-      ).toBe(true)
-    }
-    for (const probe of [local, otherHost, getStatus]) {
-      expect(probe).not.toHaveBeenCalled()
-    }
-    local.mockImplementation(async () => {
-      useAppStore.setState({ detectedAgentIds: ['claude'] })
-      return ['claude']
-    })
-    await act(async () => {
-      setLocalRuntimeCapabilitiesForTests([CHAT, CLIENT])
-      useAppStore.setState({
-        folderWorkspaces: [{ ...folder, executionHostId: 'local' }],
-        repos: [repo],
-        worktreesByRepo: {
-          r1: [makeWorktree({ id: worktreeId, repoId: 'r1', hostId: 'local', path: '/work/local' })]
-        },
-        detectedAgentIds: null
+    let ensure: MockInstance<AppState['ensureDetectedAgents']> | undefined
+    let unmount: (() => void) | undefined
+    try {
+      useAppStore.getState().clearLocalDetectedAgents()
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { runtime: { getStatus }, preflight: { detectAgents } }
       })
-    })
-    expect(hook.result.current.form.detection.detectedIds).toEqual(['claude'])
-    expect(hook.result.current.form.selectionFor('claude').ready).toBe(true)
-    expect(
-      hook.result.current.plus.state === 'settled' && hook.result.current.plus.rows
-    ).toContainEqual({ kind: 'chat', agent: 'claude', executionHostId: 'local' })
-    hook.unmount()
+      setLocalRuntimeCapabilitiesForTests(worktreeId.startsWith('folder:') ? null : [CHAT, CLIENT])
+      useAppStore.setState({
+        ...initial,
+        settings: { ...getDefaultSettings('/home/me'), nativeChatProviders: EVERY_AGENT_CHAT },
+        activeWorktreeId: worktreeId,
+        activeWorkspaceExecutionHostId: null,
+        folderWorkspaces: [],
+        projectGroups: [],
+        repos: [],
+        worktreesByRepo: {},
+        detectedWorktreesByRepo: {},
+        restoredRuntimeHostIdByWorkspaceSessionKey: {},
+        detectedAgentIds: ['gemini'],
+        remoteDetectedAgentIds: { other: ['codex'] },
+        ensureRemoteDetectedAgents: otherHost,
+        ensureRuntimeDetectedAgents: otherHost,
+        ...rows
+      })
+      const local = vi.spyOn(useAppStore.getState(), 'ensureDetectedAgents')
+      ensure = local
+      const hook = renderHook(() => {
+        const target = useAgentDetectionTargetForWorktree(worktreeId)
+        const workspace = { kind: workspaceKindForWorktreeId(worktreeId), worktreeId }
+        return {
+          form: useAgentMenuObservation({ workspace }, true, target),
+          plus: useNewTabAgentMenuRows(worktreeId, true, target)
+        }
+      })
+      unmount = hook.unmount
+      expect(hook.result.current.form.detection).toMatchObject({
+        detectedIds: [],
+        isLoading: false
+      })
+      expect(hook.result.current.form.selectionFor('claude', 'terminal').ready).toBe(false)
+      for (const model of [hook.result.current.form.model, hook.result.current.plus]) {
+        expect(model.state).toBe('settled')
+        expect(
+          model.state === 'settled' &&
+            model.rows.every(
+              (row) =>
+                row.kind === 'chat-unavailable' &&
+                row.reason === 'check-failed' &&
+                row.executionHostId === undefined
+            )
+        ).toBe(true)
+      }
+      for (const probe of [local, detectAgents, otherHost, getStatus]) {
+        expect(probe).not.toHaveBeenCalled()
+      }
+      await act(async () => {
+        setLocalRuntimeCapabilitiesForTests([CHAT, CLIENT])
+        useAppStore.setState({
+          folderWorkspaces: [{ ...folder, executionHostId: 'local' }],
+          repos: [repo],
+          worktreesByRepo: {
+            r1: [
+              makeWorktree({ id: worktreeId, repoId: 'r1', hostId: 'local', path: '/work/local' })
+            ]
+          },
+          detectedAgentIds: null
+        })
+      })
+      const expectedContext = getLocalAgentPreflightContext(useAppStore.getState())
+      const expectedKey = localAgentInventoryContextKey(expectedContext)
+      expect(useAppStore.getState().readLocalAgentInventory()).toEqual({
+        ids: null,
+        state: 'pending'
+      })
+      expect(useAppStore.getState().localDetectedAgentIdsByContext[expectedKey]).toBeNull()
+      expect(local.mock.calls.length).toBeGreaterThan(0)
+      for (const args of local.mock.calls) {
+        expect(args).toEqual([undefined])
+      }
+      expect(detectAgents).toHaveBeenCalledExactlyOnceWith({
+        ...expectedContext,
+        enabledOnly: true
+      })
+      expect(otherHost).not.toHaveBeenCalled()
+      await act(async () => {
+        reply.resolve(detected)
+        const completed = await Promise.all(
+          local.mock.results.map((result) => {
+            if (result.type !== 'return' || !(result.value instanceof Promise)) {
+              throw new Error('Expected the real inventory owner to return its settlement promise')
+            }
+            return result.value
+          })
+        )
+        for (const value of completed) {
+          expect(value).toEqual(['claude'])
+        }
+      })
+      expect(useAppStore.getState().readLocalAgentInventory()).toEqual({
+        ids: ['claude'],
+        state: 'successful'
+      })
+      expect(useAppStore.getState().localDetectedAgentIdsByContext[expectedKey]).toEqual(['claude'])
+      expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
+      expect(hook.result.current.form.detection.detectedIds).toEqual(['claude'])
+      expect(hook.result.current.form.selectionFor('claude').ready).toBe(true)
+      expect(
+        hook.result.current.plus.state === 'settled' && hook.result.current.plus.rows
+      ).toContainEqual({ kind: 'chat', agent: 'claude', executionHostId: 'local' })
+    } finally {
+      try {
+        await act(async () => {
+          try {
+            if (unmount) {
+              unmount()
+            } else {
+              cleanup()
+            }
+          } finally {
+            reply.resolve(detected)
+            const results = ensure?.mock.results ?? []
+            const drained = await Promise.allSettled(
+              results.flatMap((result) => (result.type === 'return' ? [result.value] : []))
+            )
+            for (const result of results) {
+              expect(result.type).toBe('return')
+              if (result.type === 'return') {
+                expect(result.value).toBeInstanceOf(Promise)
+              }
+            }
+            for (const result of drained) {
+              expect(result).toEqual({ status: 'fulfilled', value: ['claude'] })
+            }
+          }
+        })
+      } finally {
+        try {
+          useAppStore.getState().clearLocalDetectedAgents()
+        } finally {
+          try {
+            ensure?.mockRestore()
+          } finally {
+            try {
+              if (originalApi) {
+                Object.defineProperty(window, 'api', originalApi)
+              } else {
+                Reflect.deleteProperty(window, 'api')
+              }
+            } finally {
+              try {
+                useAppStore.setState({ ensureDetectedAgents: originalEnsure })
+              } finally {
+                try {
+                  useAppStore.setState(initial, true)
+                } finally {
+                  setLocalRuntimeCapabilitiesForTests(null)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 })
