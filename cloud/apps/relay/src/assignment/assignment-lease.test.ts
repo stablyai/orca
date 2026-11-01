@@ -11,7 +11,7 @@ import {
   classifyAssignmentLease
 } from './assignment-lease.js'
 import { ASSIGNMENT_LEASE_SHADOW_EVENT, AssignmentLeaseShadow } from './assignment-lease-shadow.js'
-import type { RelayAssignmentStore } from '../assignment-store.js'
+import type { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from '../config.js'
 import type { RelayCredentialStore } from '../credential-store.js'
 import { HostSessionRegistry } from '../host-session-registry.js'

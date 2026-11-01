@@ -6,8 +6,8 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase

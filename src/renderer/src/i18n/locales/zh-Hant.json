@@ -1722,7 +1722,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "工作區以外的檔案尚無法在配對伺服器上預覽。",
           "webClientUnavailable": "文件預覽在 Web 用戶端中不可用。"
         }
       },

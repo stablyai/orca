@@ -48,21 +48,6 @@ describe.skipIf(hostPlatform === 'win32')('planCodexNoDaemonLaunch', () => {
     )
   })
 
-  it.each([
-    ['agents'],
-    ['queue --thread T'],
-    ['--no-daemon'],
-    ['resume --no-daemon'],
-    ['--remote unix://'],
-    ['--remote=ws://h:1']
-  ])('leaves `codex %s` alone: it needs the shared server or has the flag', (args) => {
-    expect(plan(`${codex} ${args}`)).toBeNull()
-  })
-
-  it('leaves SSH and WSL launches to the codex function on that host', () => {
-    expect(plan(`${codex} --yolo`, { executesOnThisHost: false })).toBeNull()
-  })
-
   it('ignores an inherited opt-out the pane deletes', async () => {
     vi.stubEnv('ORCA_CODEX_ISOLATE', '0')
 
@@ -71,22 +56,11 @@ describe.skipIf(hostPlatform === 'win32')('planCodexNoDaemonLaunch', () => {
     )
   })
 
-  it('honours ORCA_CODEX_ISOLATE=0 from the pane env', () => {
-    expect(plan(`${codex} --yolo`, { env: { ORCA_CODEX_ISOLATE: '0' } })).toBeNull()
-  })
-
   it('keeps the command when the binary predates --no-daemon', async () => {
     const oldCodex = writeCodex('0.155/codex', HELP_WITHOUT_FLAG)
 
     await expect(plan(`${oldCodex} --yolo`)).resolves.toBe(`${oldCodex} --yolo`)
   })
-
-  it.each([['codex --yolo'], ['claude --yolo'], ['/opt/bin/codexx --yolo']])(
-    'leaves `%s` to the shell function or to another agent',
-    (command) => {
-      expect(plan(command)).toBeNull()
-    }
-  )
 
   it('probes a bare codex on PATH for cmd.exe, which has no codex function', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

@@ -8,7 +8,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import * as transcriptNaming from '../claude/claude-provider-session-rename'
 import * as transcriptFs from '../native-chat/wsl-transcript-fs-access'
 import { HOST_TEST_SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './agent-session/structured-agent-session-runtime'
 import {
   createClaudeNamingRuntime,
   nativeNamingTitle,

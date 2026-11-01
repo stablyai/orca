@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { structuredAgentSessionSendSelection } from './structured-agent-session-option-view'
 import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
-import type { AgentSessionModelCatalogResult } from '../../agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,

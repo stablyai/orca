@@ -3,7 +3,7 @@ import { useMobileStructuredOptionState } from './use-mobile-structured-option-s
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import { structuredAgentSessionSeedCatalog } from '../../../src/shared/agent-session/options/structured-agent-session-seed-catalog'
-import type { AgentSessionOptionResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/agent-session-wire'
 import { lockedStructuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 import {
   structuredAgentSessionOptionView,

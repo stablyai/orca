@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RelayHomeCellUnavailableError, type RelayAssignment } from '../assignment-store.js'
+import { RelayHomeCellUnavailableError, type RelayAssignment } from './assignment-store.js'
 import type { RelayConfig } from '../config.js'
 
 const fakes = vi.hoisted(() => ({

@@ -1,5 +1,5 @@
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
-import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import { isCodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import { providerDiagnosticOf } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionCancelOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexSession } from './codex-structured-session-state'

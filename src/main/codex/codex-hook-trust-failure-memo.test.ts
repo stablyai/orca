@@ -2,21 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type * as AppServerSession from './codex-app-server-session'
+import type * as AppServerSession from './app-server/codex-app-server-session'
 
 const mocks = vi.hoisted(() => ({
   runCodexAppServerSession: vi.fn(),
   runProcess: vi.fn()
 }))
 
-vi.mock('./codex-app-server-session', async (importOriginal) => ({
+vi.mock('./app-server/codex-app-server-session', async (importOriginal) => ({
   ...(await importOriginal<typeof AppServerSession>()),
   runCodexAppServerSession: mocks.runCodexAppServerSession
 }))
 vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
 
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
-import { CodexAppServerUnsupportedError } from './codex-app-server-session'
+import { CodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import {
   _internals,
   lookupCodexHookAnswer,

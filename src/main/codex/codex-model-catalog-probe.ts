@@ -3,11 +3,11 @@ import {
   type StructuredAgentResolutionOperation
 } from '../native-chat/structured-agent-command-resolution'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { isMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
-import { runCodexAppServerSession } from './codex-app-server-session'
+import { runCodexAppServerSession } from './app-server/codex-app-server-session'
 import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
 import { applyCodexConfiguredLaunchDefaults } from './codex-configured-launch-defaults'
 import {

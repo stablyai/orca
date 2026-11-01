@@ -14,7 +14,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
@@ -28,7 +28,7 @@ import {
   type AgentSessionAttachParams,
   type AttachedJournal
 } from './structured-agent-session-attach'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   adapterSupportsCreateIfDeclared,
   hostCanStartRecord

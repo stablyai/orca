@@ -13,7 +13,7 @@ import {
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../../runtime/agent-session-record-store-test-harness'
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'

@@ -6,7 +6,7 @@ import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentRunningTurnTiming
-} from '../../shared/structured-agent-session-turn-timing'
+} from '../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'

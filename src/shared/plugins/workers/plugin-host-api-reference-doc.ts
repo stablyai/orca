@@ -14,7 +14,7 @@ function signature(params: z.ZodType, result: z.ZodType): string {
 }
 
 // Why a Record: a new error code fails typecheck until it is documented here.
-const ERROR_CODES: Record<PluginErrorCode, string> = {
+export const PLUGIN_HOST_ERROR_CODE_MEANINGS: Record<PluginErrorCode, string> = {
   invalid_request: 'the call itself is malformed',
   invalid_params:
     'params do not match the method, including a field this Orca does not know; the message names it',
@@ -89,7 +89,9 @@ export function renderPluginHostApiReference(): string {
     '',
     'A failed call rejects with an `Error` carrying `code`, `message`, `retryable` and, for `rate_limited`, `retryAfterMs`. Treat a code not listed here as `action_failed`:',
     '',
-    ...Object.entries(ERROR_CODES).map(([code, meaning]) => `- \`${code}\`: ${meaning}.`),
+    ...Object.entries(PLUGIN_HOST_ERROR_CODE_MEANINGS).map(
+      ([code, meaning]) => `- \`${code}\`: ${meaning}.`
+    ),
     '',
     '## Stability and deprecation',
     '',

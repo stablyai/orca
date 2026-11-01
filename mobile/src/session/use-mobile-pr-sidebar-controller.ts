@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
+import type { GitHubPRFileViewedState } from '../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   fetchGithubRepoSlug,
@@ -279,6 +280,37 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
   }, [identity, state, load, ensurePrSidebarDetails])
 
+  // Desktop's patchCachedPRFileViewedState: a viewed tick shows at once, and a failed write puts the old state back.
+  const patchPrFileViewed = useCallback(
+    (pullRequestId: string, path: string, viewed: GitHubPRFileViewedState) => {
+      setState((prev) => {
+        const files = prev.kind === 'ready' ? prev.data.details?.files : undefined
+        // A write for one PR must not land on another the workspace was relinked to meanwhile.
+        if (
+          prev.kind !== 'ready' ||
+          !prev.data.details ||
+          !files ||
+          prev.data.details.pullRequestId !== pullRequestId
+        ) {
+          return prev
+        }
+        return {
+          kind: 'ready',
+          data: {
+            ...prev.data,
+            details: {
+              ...prev.data.details,
+              files: files.map((file) =>
+                file.path === path ? { ...file, viewerViewedState: viewed } : file
+              )
+            }
+          }
+        }
+      })
+    },
+    []
+  )
+
   const retry = useCallback(() => {
     void load({ includeDetails: true })
   }, [load])
@@ -292,7 +324,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     openPRSidebar,
     retryPRSidebar: retry,
     refetchPRSidebar: load,
-    ensurePrSidebarDetails
+    ensurePrSidebarDetails,
+    patchPrFileViewed
   }
 }
 

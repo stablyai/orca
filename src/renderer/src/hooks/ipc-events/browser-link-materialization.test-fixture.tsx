@@ -70,6 +70,7 @@ export function installBrowserLinkMaterializationProbe() {
       notifications: {
         enabled: false,
         agentTaskComplete: false,
+        agentNeedsInput: false,
         terminalBell: false,
         suppressWhenFocused: true,
         customSoundId: 'system',

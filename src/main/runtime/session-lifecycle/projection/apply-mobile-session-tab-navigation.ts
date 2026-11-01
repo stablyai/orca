@@ -30,7 +30,9 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     snapshot: RuntimeMobileSessionTabsResult,
     activeTabId: string,
     navigation: RuntimeNavigationTarget,
-    clientNavigationId?: string
+    clientNavigationId?: string,
+    /** The caller asked for nothing itself (a host action on its behalf), so it must be told to follow. */
+    callerFollows = false
   ): RuntimeMobileSessionTabsResult {
     let callerSnapshot: RuntimeMobileSessionTabsResult | null = null
     if (navigationTargetsClients(navigation)) {
@@ -61,7 +63,7 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
         clientNavigationId,
         activeTabId
       )
-      this.emitMobileSessionTabsSnapshotToClient(callerSnapshot, clientNavigationId)
+      this.emitMobileSessionTabsSnapshotToClient(callerSnapshot, clientNavigationId, callerFollows)
     }
     if (clientNavigationId) {
       return callerSnapshot ?? this.projectMobileSessionTabsForClient(snapshot, clientNavigationId)

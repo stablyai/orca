@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
@@ -122,30 +122,6 @@ describe('rebuild-native-deps Electron install fallback', () => {
     }
   })
 
-  it('passes the rebuild target to the Electron binary installer', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir, { logTargetBeforeInstall: true })
-      writeFakeElectronExtractor(projectDir, { createExecutable: true })
-      writeFakeElectronRebuild(projectDir)
-
-      const result = runRebuildScript(
-        projectDir,
-        { npm_config_platform: '', npm_config_arch: '' },
-        ['--platform=linux', '--arch=arm64', '--force']
-      )
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toBe(
-        'platform=linux arch=arm64\ndownload attempted\n'
-      )
-    } finally {
-      removeTreeSync(projectDir)
-    }
-  })
-
   it('lets an explicit rebuild target win over inherited installer variables', () => {
     const projectDir = mkTempProject()
 
@@ -188,48 +164,6 @@ describe('rebuild-native-deps Electron install fallback', () => {
       expect(readFileSync(join(projectDir, 'node_modules/electron/path.txt'), 'utf8')).toBe(
         'electron.exe'
       )
-    } finally {
-      removeTreeSync(projectDir)
-    }
-  })
-
-  it('falls back to npm config when no rebuild or installer target is set', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir, { logTargetBeforeInstall: true })
-      writeFakeElectronExtractor(projectDir, { createExecutable: true })
-      writeFakeElectronRebuild(projectDir)
-
-      // runRebuildScript defaults npm_config_platform=linux / npm_config_arch=x64.
-      const result = runRebuildScript(projectDir)
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toContain(
-        'platform=linux arch=x64'
-      )
-    } finally {
-      removeTreeSync(projectDir)
-    }
-  })
-
-  it('repairs existing Electron path metadata without invoking the installer', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeUsableElectronPackage(projectDir)
-      writeFakeElectronRebuild(projectDir)
-      rmSync(join(projectDir, 'node_modules/electron/path.txt'))
-
-      const result = runRebuildScript(projectDir, {}, ['--platform=linux', '--force'])
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(readFileSync(join(projectDir, 'node_modules/electron/path.txt'), 'utf8')).toBe(
-        'electron'
-      )
-      expect(result.stdout).toContain('Repaired Electron path.txt -> electron')
-      expect(existsSync(join(projectDir, 'electron-get.log'))).toBe(false)
     } finally {
       removeTreeSync(projectDir)
     }

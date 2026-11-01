@@ -184,14 +184,15 @@ describe('ui.* payloads', () => {
     })
   })
 
-  it('accepts only primitive event args', () => {
+  it('accepts plain JSON event args: scalars, scalar lists and one flat object', () => {
     const base = { document: 'd1', revision: 1, callback: '1.0' }
-    expect(
-      pluginDeclarativeEventPayloadSchema.safeParse({ ...base, args: ['a', 1, true, null] }).success
-    ).toBe(true)
-    expect(pluginDeclarativeEventPayloadSchema.safeParse({ ...base, args: [{}] }).success).toBe(
-      false
-    )
+    const accepts = (args: unknown[]): boolean =>
+      pluginDeclarativeEventPayloadSchema.safeParse({ ...base, args }).success
+    expect(accepts(['a', 1, true, null])).toBe(true)
+    expect(accepts([['a', 'b'], { keys: ['a'] }, { column: 'name', direction: 'asc' }])).toBe(true)
+    expect(accepts([{ nested: { deeper: 1 } }])).toBe(false)
+    expect(accepts([[['nested']]])).toBe(false)
+    expect(accepts([Number.NaN])).toBe(false)
     expect(
       pluginDeclarativeEventPayloadSchema.safeParse({ ...base, args: [], extra: 1 }).success
     ).toBe(false)

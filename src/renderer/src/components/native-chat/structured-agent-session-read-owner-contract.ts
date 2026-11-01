@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
-import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
-import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
+import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
+import type { AgentSessionHistoryPage } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 

@@ -4,7 +4,7 @@ import { agentSessionFailureFact } from '../../../shared/agent-session/failures/
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'

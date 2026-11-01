@@ -31,7 +31,7 @@ vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => f
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   ensureRuntimeEnvironmentCompatible: async () => {}
 }))
-vi.mock('@/lib/structured-agent-session-launch-label', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-label', () => ({
   structuredAgentLabel: () => 'Codex'
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({

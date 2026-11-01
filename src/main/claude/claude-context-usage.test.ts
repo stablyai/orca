@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionContextReport } from '../../shared/agent-session-context-usage'
+import type { AgentSessionContextReport } from '../../shared/agent-session/agent-session-context-usage'
 import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claude-context-facts'
 import {
   bindClaudeContextUsageCapture,

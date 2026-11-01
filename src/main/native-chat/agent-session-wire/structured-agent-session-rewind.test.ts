@@ -18,8 +18,8 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { nativeChatTurnMembership } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type {
   StructuredAgentSessionAdapter,

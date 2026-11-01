@@ -4,7 +4,7 @@ import { isTerminalLeafId, parsePaneKey } from '../../shared/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
 import { sealedChildEnv } from './structured-session-child-env.test-support'
 import {

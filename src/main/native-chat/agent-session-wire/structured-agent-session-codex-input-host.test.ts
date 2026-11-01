@@ -17,7 +17,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import {
   type AgentSessionSubscribeEvent,
   agentSessionSendSubmission as submission
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import {
@@ -29,14 +29,14 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { CodexAppServerTimeoutError } from '../../codex/codex-app-server-session'
+import { CodexAppServerTimeoutError } from '../../codex/app-server/codex-app-server-session'
 import {
   THREAD_ID as THREAD,
   adapterFor,
   fakeCodex
 } from '../../codex/codex-structured-session-adapter-fixture'
 import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { createRestTestRig } from './structured-agent-session-rest-test-rig'

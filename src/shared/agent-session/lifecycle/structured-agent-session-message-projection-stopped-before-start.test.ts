@@ -17,7 +17,7 @@ import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_WRITE_FAILED
 } from '../requests/structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionMessages } from '../../structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../view/structured-agent-session-message-projection'
 import {
   projectNativeChatTranscript,
   projectNativeChatTranscriptMessages

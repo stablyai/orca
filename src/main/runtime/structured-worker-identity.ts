@@ -8,7 +8,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
 import type { TuiAgent } from '../../shared/tui-agent'

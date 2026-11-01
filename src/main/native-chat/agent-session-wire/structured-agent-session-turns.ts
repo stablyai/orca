@@ -14,7 +14,7 @@ import {
   isAgentSessionRefusalError
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
-import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'

@@ -6,7 +6,7 @@ import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/st
 import { hostTestState } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { scaleStore } from './agent-session-scale.test-fixture'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import type { AgentStatusStore } from '../../shared/agent-status-store'
 
 class CountedServer extends AgentHookServer {

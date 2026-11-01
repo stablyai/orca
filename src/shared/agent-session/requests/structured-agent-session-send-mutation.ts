@@ -3,7 +3,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSkillRef
 } from '../journal/agent-session-journal-types'
-import type { AgentSessionMutationEnvelope } from '../../agent-session-wire'
+import type { AgentSessionMutationEnvelope } from '../agent-session-wire'
 import type { z } from 'zod'
 import {
   MAX_SKILL_REFS,

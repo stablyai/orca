@@ -1,5 +1,6 @@
 import { classifyClaudeBackgroundTaskKind } from './claude-background-task-kind'
 import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
+import { runsOrcaOrchestrationWait } from './orca-cli-invocations'
 
 const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'idle',
@@ -47,6 +48,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   runningNonAgentTaskIds: string[]
   /** No running shell-like entry went unlisted, so the ids account for all of them. */
   allRunningNonAgentTasksListed: boolean
+  /** Running shells blocked on `orca orchestration check --wait`, which recovers them after a listener restart. */
+  runningAgentWaitIds: string[]
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
@@ -56,7 +59,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       truncated: false,
       hasRunningNonAgentTask: false,
       runningNonAgentTaskIds: [],
-      allRunningNonAgentTasksListed: false
+      allRunningNonAgentTasksListed: false,
+      runningAgentWaitIds: []
     }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
@@ -64,6 +68,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   let hasRunningNonAgentTask = false
   const runningNonAgentTaskIds: string[] = []
   let allRunningNonAgentTasksListed = true
+  const runningAgentWaitIds: string[] = []
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       truncated = true
@@ -88,6 +93,9 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       const id = typeof obj.id === 'string' ? obj.id.trim() : ''
       if (id.length > 0) {
         runningNonAgentTaskIds.push(id)
+        if (runsOrcaOrchestrationWait(obj.command)) {
+          runningAgentWaitIds.push(id)
+        }
       } else {
         allRunningNonAgentTasksListed = false
       }
@@ -113,6 +121,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     truncated,
     hasRunningNonAgentTask,
     runningNonAgentTaskIds,
-    allRunningNonAgentTasksListed
+    allRunningNonAgentTasksListed,
+    runningAgentWaitIds
   }
 }

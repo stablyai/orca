@@ -11,17 +11,17 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-identity'
 import type { AgentJournalTurnLifecycle } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import {
   activeStructuredAgentSessionTurnId,
   runningStructuredAgentSessionTurnId
-} from '../../../shared/structured-agent-session-live-turn'
+} from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../../shared/structured-agent-session-reducer'
-import { selectStructuredAgentTurnBars } from '../../../shared/structured-agent-session-turn-timing'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
+import { selectStructuredAgentTurnBars } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {

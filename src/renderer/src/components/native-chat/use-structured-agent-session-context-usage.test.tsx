@@ -49,7 +49,7 @@ vi.mock('./use-structured-agent-session-sends', () => ({
 import type {
   AgentSessionContextUsage,
   AgentSessionContextUsed
-} from '../../../../shared/agent-session-context-usage'
+} from '../../../../shared/agent-session/agent-session-context-usage'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 

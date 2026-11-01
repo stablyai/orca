@@ -24,7 +24,7 @@ import {
 import {
   isAgentSessionProviderContextBoundary,
   type AgentSessionProviderContextBoundary
-} from '../../agent-session-provider-context'
+} from '../agent-session-provider-context'
 import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
 import { isNonNegativeSafeInteger } from '../../ssh-retained-payload-limits'
 import {

@@ -1,51 +1,58 @@
-import { FlatList, Text } from 'react-native'
 import { FileText, ListChecks } from 'lucide-react-native'
-import type { RefObject } from 'react'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { MobileLoadErrorState, MobileOfflineState, MobileStateView } from './MobileStateView'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { MobileDiffReviewLine } from './MobileDiffReviewLine'
+import { MobileDiffReviewLines, type LineRange } from './MobileDiffReviewLines'
+import type { ReviewDiffState, ReviewScreenState } from '../session/mobile-diff-review-screen-model'
 import type {
-  ReviewDiffLine,
-  ReviewDiffState,
-  ReviewScreenState
-} from '../session/mobile-diff-review-screen-model'
-import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+  MobileDiffReviewQueueFilter,
+  MobileDiffReviewQueueItem
+} from '../session/mobile-diff-review-queue'
+import type { MobileDiffReviewThread } from '../session/mobile-diff-review-github'
+import type { PRCommentCardActions } from './pr-sidebar/PRCommentCard'
 
 type Props = {
-  activeHunkIndex: number | null
   commentsByLine: ReadonlyMap<number, DiffComment[]>
   currentItem: MobileDiffReviewQueueItem | null
   diffState: ReviewDiffState
   filteredCount: number
-  listRef: RefObject<FlatList<ReviewDiffLine> | null>
   screenState: ReviewScreenState
   staleCommentIds: ReadonlySet<string>
-  onAddNote: (lineNumber: number) => void
+  threadsByLine: ReadonlyMap<number, readonly MobileDiffReviewThread[]>
+  threadActions: PRCommentCardActions | undefined
+  selectedRange: LineRange | null
+  onPickLines: (range: LineRange) => void
+  /** Scroll to this line once, then report it done. */
+  scrollToLine: number | null
+  onScrolledToLine: () => void
   onEditNote: (comment: DiffComment) => void
   onRetry: (() => void) | undefined
   /** The host is unreachable, so a failed load is a wait rather than an error. */
   offline: boolean
-  /** Clears a narrowing review filter; absent when already showing everything. */
-  onShowAll?: () => void
+  /** The section this screen walks; an empty one means the reader finished it. */
+  filter: MobileDiffReviewQueueFilter
+  onBack: () => void
 }
 
 export function MobileDiffReviewBody({
-  activeHunkIndex,
   commentsByLine,
   currentItem,
   diffState,
   filteredCount,
-  listRef,
   screenState,
   staleCommentIds,
-  onAddNote,
+  threadsByLine,
+  threadActions,
+  selectedRange,
+  onPickLines,
+  scrollToLine,
+  onScrolledToLine,
   onEditNote,
   onRetry,
   offline,
-  onShowAll
+  filter,
+  onBack
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -81,17 +88,12 @@ export function MobileDiffReviewBody({
     return (
       <MobileStateView
         icon={ListChecks}
-        title={t('components.diffReviewBody.noReviewableChanges', 'No Reviewable Changes')}
-        message={
-          onShowAll
-            ? t('components.diffReviewBody.tryDifferentFilter', 'Try a different review filter.')
-            : null
+        title={
+          filter === 'unstaged'
+            ? t('components.diffReviewBody.allStaged', 'Everything is staged')
+            : t('components.diffReviewBody.noReviewableChanges', 'No Reviewable Changes')
         }
-        action={
-          onShowAll
-            ? { label: t('components.diffReviewBody.showAll', 'Show all'), onPress: onShowAll }
-            : null
-        }
+        action={{ label: t('common.back', 'Back'), onPress: onBack }}
       />
     )
   }
@@ -114,41 +116,19 @@ export function MobileDiffReviewBody({
     return <DiffUnavailableState diffState={diffState} />
   }
   return (
-    <FlatList
-      ref={listRef}
-      data={diffState.lines}
-      keyExtractor={(_, index) => `${currentItem?.key ?? 'diff'}:${index}`}
-      renderItem={({ item, index }) => {
-        const lineNumber = item.newLineNumber ?? -1
-        const active =
-          activeHunkIndex !== null &&
-          index >= (diffState.hunks[activeHunkIndex]?.startIndex ?? -1) &&
-          index <= (diffState.hunks[activeHunkIndex]?.endIndex ?? -1)
-        return (
-          <MobileDiffReviewLine
-            line={item}
-            comments={commentsByLine.get(lineNumber) ?? []}
-            staleCommentIds={staleCommentIds}
-            active={active}
-            onAddNote={onAddNote}
-            onEditNote={onEditNote}
-          />
-        )
-      }}
-      contentContainerStyle={styles.diffList}
-      onScrollToIndexFailed={(info) => {
-        listRef.current?.scrollToOffset({
-          offset: Math.max(0, info.averageItemLength * info.index),
-          animated: true
-        })
-      }}
-      ListFooterComponent={
-        diffState.truncated ? (
-          <Text style={styles.truncatedText}>
-            {t('components.diffReviewBody.diffTruncated', 'Diff truncated for mobile preview.')}
-          </Text>
-        ) : null
-      }
+    <MobileDiffReviewLines
+      key={diffState.itemKey}
+      lines={diffState.lines}
+      truncated={diffState.truncated}
+      commentsByLine={commentsByLine}
+      staleCommentIds={staleCommentIds}
+      threadsByLine={threadsByLine}
+      threadActions={threadActions}
+      selectedRange={selectedRange}
+      scrollToLine={scrollToLine}
+      onScrolledToLine={onScrolledToLine}
+      {...(currentItem?.scope === 'commit' ? {} : { onPickLines })}
+      onEditNote={onEditNote}
     />
   )
 }

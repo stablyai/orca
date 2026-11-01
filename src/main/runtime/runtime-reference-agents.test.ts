@@ -12,7 +12,7 @@ import {
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 
 const observations = vi.hoisted<{ status: 'live' | 'exited' | 'unverifiable'; reachable: boolean }>(
   () => ({
@@ -26,7 +26,7 @@ vi.mock('./structured-worker-authority', () => ({
 vi.mock('./orchestration/structured-session-mail-address', () => ({
   structuredSessionMailReach: () => ({ kind: observations.reachable ? 'reachable' : 'ended' })
 }))
-vi.mock('./agent-session-record-store-slot', () => ({
+vi.mock('./agent-session/records/agent-session-record-store-slot', () => ({
   peekOpenedAgentSessionRecordStore: () => null
 }))
 

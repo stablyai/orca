@@ -4,7 +4,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
-import { isAgentSessionContextClear } from '../../../shared/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandTurn } from '../../../shared/agent-session/structured-agent-session-command-entry'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'

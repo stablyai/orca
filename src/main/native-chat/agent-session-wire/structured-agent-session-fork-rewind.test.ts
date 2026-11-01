@@ -8,8 +8,8 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

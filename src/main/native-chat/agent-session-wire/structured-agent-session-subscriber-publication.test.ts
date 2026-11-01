@@ -4,7 +4,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journa
 import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'

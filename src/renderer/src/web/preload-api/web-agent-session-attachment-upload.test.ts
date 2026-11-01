@@ -23,7 +23,7 @@ import {
   uploadBrowserFilesToWebAgentSessionAttachments
 } from './web-agent-session-attachment-upload'
 import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
-import { AGENT_SESSION_ATTACHMENT_CHUNK_BYTES } from '../../../../shared/agent-session-attachments'
+import { AGENT_SESSION_ATTACHMENT_CHUNK_BYTES } from '../../../../shared/agent-session/agent-session-attachments'
 
 const target = {
   environmentId: 'env-1',

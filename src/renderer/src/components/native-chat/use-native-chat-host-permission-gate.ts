@@ -1,6 +1,6 @@
 import { newChatPermissionModeForSettings } from '../../../../shared/agent-chat-permission-mode'
 import { translate } from '@/i18n/i18n'
-import { hostPermissionRefusedText } from '@/lib/structured-agent-session-launch-permission-notice'
+import { hostPermissionRefusedText } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { useStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'

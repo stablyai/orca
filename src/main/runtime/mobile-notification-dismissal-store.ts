@@ -7,7 +7,7 @@ import type { DeliveredNotificationIdentity } from '../../shared/mobile-notifica
 import {
   isStructuredAttentionOrigin,
   type StructuredAttentionOrigin
-} from '../../shared/agent-session-attention'
+} from '../../shared/agent-session/agent-session-attention'
 
 export type DeliveredNotificationRecord = DeliveredNotificationIdentity & {
   structuredOrigin?: StructuredAttentionOrigin
@@ -121,15 +121,19 @@ export class MobileNotificationDismissalStore {
     return this.flush()
   }
 
+  /** Unreadable history cannot rule a delivery out. */
+  hasLiveDelivery(notificationId: string): boolean {
+    const now = Date.now()
+    return (
+      this.unreadable ||
+      this.entries.some((entry) => entry.notificationId === notificationId && isLive(entry, now))
+    )
+  }
+
   liveDeliveries(prefix = ''): DeliveredNotificationRecord[] {
     const now = Date.now()
     return this.entries
-      .filter(
-        (entry) =>
-          entry.expiresAt > now &&
-          entry.notificationId.startsWith(prefix) &&
-          entry.dismissedThrough < entry.notificationSeq
-      )
+      .filter((entry) => entry.notificationId.startsWith(prefix) && isLive(entry, now))
       .map(({ notificationId, notificationEpoch, notificationSeq, structuredOrigin }) => ({
         notificationId,
         notificationEpoch,
@@ -151,6 +155,10 @@ export class MobileNotificationDismissalStore {
       )
     )
   }
+}
+
+function isLive(entry: RecordEntry, now: number): boolean {
+  return entry.expiresAt > now && entry.dismissedThrough < entry.notificationSeq
 }
 
 /** Keep records with unknown future origin kinds, degrading only their origin to none. */
