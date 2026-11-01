@@ -208,6 +208,84 @@ describe('Claude profile refresh from the default home', () => {
       modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
     })
   })
+  it('syncs global model when the profile has no model choice', async () => {
+    const f = fixture()
+    f.json(join(f.source, 'settings.json'), { theme: 'dark' })
+    await provision(f)
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ theme: 'dark' })
+
+    f.json(join(f.source, 'settings.json'), { theme: 'dark', model: 'claude-sonnet-4-5' })
+    expect((await provision(f)).surfaces['settings.json']).toBe('synced')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
+      theme: 'dark',
+      model: 'claude-sonnet-4-5'
+    })
+  })
+  it('updates inherited global model when global model changes, but preserves profile choice', async () => {
+    const f = fixture()
+    f.json(join(f.source, 'settings.json'), {
+      theme: 'dark',
+      model: 'claude-sonnet-4-5'
+    })
+    await provision(f)
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
+      theme: 'dark',
+      model: 'claude-sonnet-4-5'
+    })
+
+    // User did not change model in profile; global model changes and propagates
+    f.json(join(f.source, 'settings.json'), {
+      theme: 'dark',
+      model: 'claude-sonnet-4-6'
+    })
+    expect((await provision(f)).surfaces['settings.json']).toBe('synced')
+    expect(f.read(join(f.profileHome, 'settings.json')).model).toBe('claude-sonnet-4-6')
+
+    // Profile sets an explicit choice
+    f.json(join(f.profileHome, 'settings.json'), {
+      theme: 'dark',
+      model: 'claude-opus-5-5'
+    })
+    expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
+
+    // Global model changes again, but explicit profile choice is preserved
+    f.json(join(f.source, 'settings.json'), {
+      theme: 'light',
+      model: 'claude-sonnet-4-7'
+    })
+    expect((await provision(f)).surfaces['settings.json']).toBe('synced')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
+      theme: 'light',
+      model: 'claude-opus-5-5'
+    })
+  })
+  it('prunes stale global settings when global settings file is deleted, preserving profile choices', async () => {
+    const f = fixture()
+    const settings = {
+      model: 'claude-sonnet-4-5',
+      apiKeyHelper: 'helper',
+      env: { ANTHROPIC_BASE_URL: 'https://proxy.example.test' }
+    }
+    f.json(join(f.source, 'settings.json'), settings)
+    await provision(f)
+
+    f.json(join(f.profileHome, 'settings.json'), {
+      ...settings,
+      model: 'claude-opus-5-5',
+      effortLevel: 'high'
+    })
+
+    fs.rmSync(join(f.source, 'settings.json'))
+    expect((await provision(f)).surfaces['settings.json']).toBe('synced')
+
+    // Stale global settings are removed; profile choices are preserved
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
+      model: 'claude-opus-5-5',
+      effortLevel: 'high'
+    })
+
+    expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
+  })
   itLinks(
     'restores settings the profile changed and leaves a linked settings file alone',
     async () => {
