@@ -17,7 +17,10 @@ export const AGENT_NAMES = [
   'grok',
   'devin',
   'zcode',
-  'jcode'
+  'jcode',
+  // Why: Qwen Code installs as `qwen`; token-match is safe (uncommon in cwd names)
+  // and keeps the hook-less title-derived sidebar path aligned with process recognition.
+  'qwen'
 ]
 
 // Allow Windows launcher suffixes such as openclaude.exe while rejecting arbitrary dotted paths.
