@@ -3,7 +3,12 @@ import { useEffect, type CSSProperties } from 'react'
 import { useEmulatorFrameStream } from './use-emulator-frame-stream'
 import { useEmulatorVideoStream } from './use-emulator-video-stream'
 import { translate } from '@/i18n/i18n'
-import type { StreamSize, VisualStreamGeometry } from './emulator-device-frame-layout'
+import type { VisualStreamGeometry } from './emulator-device-frame-layout'
+
+type StreamSize = {
+  height: number
+  width: number
+}
 
 type EmulatorScreenStreamContentProps = {
   loading: boolean
@@ -92,11 +97,7 @@ export function EmulatorScreenStreamContent({
           if (naturalWidth <= 0 || naturalHeight <= 0) {
             return
           }
-          onStreamSize({
-            width: naturalWidth,
-            height: naturalHeight,
-            orientation: frameStream.config?.orientation
-          })
+          onStreamSize({ width: naturalWidth, height: naturalHeight })
         }}
       />
     )
@@ -143,10 +144,12 @@ function resolveStreamMediaStyle(
   if (streamRotation === 0 || screenAspectRatio <= 0) {
     return undefined
   }
+  // A half turn keeps the frame's own proportions; only quarter turns swap them.
+  const halfTurn = streamRotation === 180
   return {
-    height: `${Math.abs(streamRotation) === 90 ? 100 * screenAspectRatio : 100}%`,
+    height: `${halfTurn ? 100 : 100 * screenAspectRatio}%`,
     transform: `translate(-50%, -50%) rotate(${streamRotation}deg)`,
     transformOrigin: 'center',
-    width: `${Math.abs(streamRotation) === 90 ? 100 / screenAspectRatio : 100}%`
+    width: `${halfTurn ? 100 : 100 / screenAspectRatio}%`
   }
 }

@@ -15,8 +15,9 @@ describe('resolveVisualStreamGeometry', () => {
     'uses reported $orientation for raw panel geometry',
     ({ orientation, rotation, width, height }) => {
       const geometry = resolveVisualStreamGeometry(
-        { width: 2007, height: 2853, orientation },
-        'portrait'
+        { width: 2007, height: 2853 },
+        'portrait',
+        orientation
       )
       expect(geometry.streamRotation).toBe(rotation)
       expect(geometry.size).toEqual({ width, height })
@@ -28,7 +29,7 @@ describe('resolveVisualStreamGeometry', () => {
     'preserves an already landscape %s frame',
     (orientation) => {
       expect(
-        resolveVisualStreamGeometry({ width: 844, height: 390, orientation }, 'portrait')
+        resolveVisualStreamGeometry({ width: 844, height: 390 }, 'portrait', orientation)
       ).toEqual({
         size: { width: 844, height: 390 },
         aspectRatio: 844 / 390,

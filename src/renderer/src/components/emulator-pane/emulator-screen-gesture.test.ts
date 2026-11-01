@@ -24,8 +24,9 @@ describe('emulator screen gestures', () => {
     'round-trips a raw panel point through $orientation display geometry',
     ({ orientation, display }) => {
       const geometry = resolveVisualStreamGeometry(
-        { width: 2007, height: 2853, orientation },
-        'portrait'
+        { width: 2007, height: 2853 },
+        'portrait',
+        orientation
       )
       const displayRect = {
         left: 10,
