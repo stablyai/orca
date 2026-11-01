@@ -112,7 +112,7 @@ export function getManualOrderAnchorRepo<R extends ProjectSectionRepo>(
   return anchor
 }
 
-/** Order headers by canonical repo order or newest visible workspace activity; inactive projects trail, then manual rank and label break ties. */
+/** Order headers by canonical repo order or newest visible workspace activity; inactive projects trail, then manual rank and label break ties. Name sorts by label alone. */
 export function sortProjectEntries<
   T extends readonly [string, ProjectSectionEntry<ActivityItem, ProjectSectionRepo>]
 >(
@@ -137,6 +137,11 @@ export function sortProjectEntries<
       }
       return compareSidebarText(a[1].label, b[1].label) || compareCodePoints(a[0], b[0])
     })
+  }
+  if (projectOrderBy === 'name') {
+    return [...entries].sort(
+      (a, b) => compareSidebarText(a[1].label, b[1].label) || compareCodePoints(a[0], b[0])
+    )
   }
   if (!repoOrder) {
     return entries
