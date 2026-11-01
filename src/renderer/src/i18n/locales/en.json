@@ -20598,7 +20598,7 @@
       "detectingAgents": "Detecting Agents on this workspace host…",
       "detectionFailed": "Could not detect Agents on this workspace host.",
       "noAgents": "No enabled Agents were detected on this workspace host.",
-      "onlySourceFamilyDetected": "Only Agents sharing the usage limit with {{agent}} are enabled and detected. Enable or install a different Agent on this workspace host.",
+      "onlySourceFamilyDetected": "Only Agents sharing the usage limit with {{agent}} are available on this workspace host. Enable or install a different Agent.",
       "context": "Context",
       "modeFocused": "Focused handoff (Recommended)",
       "modeFocusedDescription": "Uses the latest status and current workspace, reading older transcript details only when needed.",

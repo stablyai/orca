@@ -9,6 +9,10 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useNativeChatHandOff } from '../native-chat/use-native-chat-hand-off'
 import { AgentSessionContinuationDialog } from './AgentSessionContinuationDialog'
+import * as rpc from '@/runtime/runtime-rpc-subscribe'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 
 it('clears failed detection, gates unresolved Start, and submits the displayed root/subfolder choice', async () => {
   const props = { open: true, request, onOpenChange: vi.fn() }
@@ -236,7 +240,7 @@ it.each([
     if (selected === null) {
       expect(
         screen.getByText(
-          `Only Agents sharing the usage limit with ${getAgentLabel(sourceAgent)} are enabled and detected. Enable or install a different Agent on this workspace host.`
+          `Only Agents sharing the usage limit with ${getAgentLabel(sourceAgent)} are available on this workspace host. Enable or install a different Agent.`
         )
       ).toBeTruthy()
       expect(
@@ -351,7 +355,7 @@ it('explains the excluded source family in Spanish', async () => {
     )
     expect(
       screen.getByText(
-        'Solo están activados y detectados agentes que comparten el límite de uso con Claude. Activa o instala un agente diferente en el host de este espacio de trabajo.'
+        'En el host de este espacio de trabajo solo hay disponibles agentes que comparten el límite de uso con Claude. Activa o instala un agente diferente.'
       )
     ).toBeTruthy()
     expect(
@@ -392,4 +396,81 @@ it('keeps an unavailable alternative and its explanation when the source family 
   expect(screen.getByRole('option', { name: /Codex/ }).getAttribute('aria-disabled')).toBe('true')
   expect(screen.getByText('Not installed')).toBeTruthy()
   expect(screen.queryAllByRole('option', { name: /Claude/ })).toHaveLength(0)
+})
+
+it('ignores a detected agent this build does not know when explaining the excluded family', () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude')
+        .map((agent) => agent.id)
+    }
+  })
+  // A newer paired host can report an agent id this build has no config for.
+  const detectedIds = ['claude', 'future-agent'] as TuiAgent[]
+  mocks.detection.mockReturnValue({ ...detection, detectedIds })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'claude' },
+        avoidSourceAgent: true
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  expect(
+    screen.getByText(
+      'Only Agents sharing the usage limit with Claude are available on this workspace host. Enable or install a different Agent.'
+    )
+  ).toBeTruthy()
+})
+
+// Last: the host's published chat availability outlives this test.
+it('explains the excluded family when the source agent is offered only as a chat', async () => {
+  setLocalRuntimeCapabilitiesForTests([CHAT, AVAILABILITY])
+  vi.spyOn(rpc, 'subscribeRuntimeRpc').mockImplementation(
+    async (_target, _method, _params, handlers) => {
+      queueMicrotask(() =>
+        handlers.onEvent({
+          type: 'availability',
+          agents: [{ agent: 'codex', state: 'available', chatProgram: 'available' }]
+        })
+      )
+      return { unsubscribe: () => {} }
+    }
+  )
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'codex')
+        .map((agent) => agent.id)
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: [] })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'codex' },
+        avoidSourceAgent: true
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  await act(async () => {})
+  expect(
+    screen.getByText(
+      'Only Agents sharing the usage limit with Codex are available on this workspace host. Enable or install a different Agent.'
+    )
+  ).toBeTruthy()
+  expect(
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+  ).toBe(true)
 })

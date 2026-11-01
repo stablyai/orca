@@ -96,10 +96,11 @@ export function AgentSessionContinuationDialog({
   const offered = workspace
     ? agentsOfferedForLaunch(useAppStore.getState(), workspace, detectedIds)
     : []
-  const agents = getAgentCatalog().filter(
-    (agent) =>
-      isTuiAgentEnabled(agent.id, disabledAgents) &&
-      isContinuationAgentAllowed(agent.id, request?.source.sourceAgent, request?.avoidSourceAgent)
+  const enabledAgents = getAgentCatalog().filter((agent) =>
+    isTuiAgentEnabled(agent.id, disabledAgents)
+  )
+  const agents = enabledAgents.filter((agent) =>
+    isContinuationAgentAllowed(agent.id, request?.source.sourceAgent, request?.avoidSourceAgent)
   )
   const destinationModel =
     observation.model.state === 'settled'
@@ -118,15 +119,11 @@ export function AgentSessionContinuationDialog({
         offered.includes(agent) &&
         rows.some((row) => row.agent === agent && row.kind !== 'chat-unavailable')
     )
-  const detectedEnabledAgents = (detectedIds ?? []).filter((agent) =>
-    isTuiAgentEnabled(agent, disabledAgents)
-  )
-  const onlySourceFamilyDetected =
-    detectedEnabledAgents.length > 0 &&
-    detectedEnabledAgents.every(
-      (agent) =>
-        !isContinuationAgentAllowed(agent, request?.source.sourceAgent, request?.avoidSourceAgent)
-    )
+  // Catalog membership drops ids a newer host reports that this build cannot launch.
+  const offeredEnabledAgents = enabledAgents.filter((agent) => offered.includes(agent.id))
+  const onlySourceFamilyOffered =
+    offeredEnabledAgents.length > 0 &&
+    offeredEnabledAgents.every((agent) => !agents.includes(agent))
   const preparing = request === null
   const controlsDisabled = preparing || detecting || starting
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
@@ -278,10 +275,10 @@ export function AgentSessionContinuationDialog({
                 </p>
               ) : destinationModel.state === 'settled' && rows.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground">
-                  {onlySourceFamilyDetected && sourceAgentLabel
+                  {onlySourceFamilyOffered && sourceAgentLabel
                     ? translate(
                         'components.agentSessionContinuation.onlySourceFamilyDetected',
-                        'Only Agents sharing the usage limit with {{agent}} are enabled and detected. Enable or install a different Agent on this workspace host.',
+                        'Only Agents sharing the usage limit with {{agent}} are available on this workspace host. Enable or install a different Agent.',
                         { agent: sourceAgentLabel }
                       )
                     : translate(

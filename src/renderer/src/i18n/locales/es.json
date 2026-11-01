@@ -20165,7 +20165,7 @@
       "detectingAgents": "Detectando agentes en el host de este espacio de trabajo…",
       "detectionFailed": "No se pudieron detectar agentes en el host de este espacio de trabajo.",
       "noAgents": "No se detectaron agentes habilitados en el host de este espacio de trabajo.",
-      "onlySourceFamilyDetected": "Solo están activados y detectados agentes que comparten el límite de uso con {{agent}}. Activa o instala un agente diferente en el host de este espacio de trabajo.",
+      "onlySourceFamilyDetected": "En el host de este espacio de trabajo solo hay disponibles agentes que comparten el límite de uso con {{agent}}. Activa o instala un agente diferente.",
       "context": "Contexto",
       "modeFocused": "Traspaso enfocado (recomendado)",
       "modeFocusedDescription": "Usa el estado más reciente y el espacio de trabajo actual, y consulta detalles anteriores solo cuando hacen falta.",

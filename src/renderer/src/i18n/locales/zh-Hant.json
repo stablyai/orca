@@ -20014,7 +20014,7 @@
       "detectingAgents": "正在此工作區主機上偵測代理程式…",
       "detectionFailed": "無法偵測此工作區主機上的代理程式。",
       "noAgents": "未在此工作區主機上偵測到已啟用的代理程式。",
-      "onlySourceFamilyDetected": "已啟用且偵測到的代理程式均與 {{agent}} 共用使用額度。請在此工作區主機上啟用或安裝其他代理程式。",
+      "onlySourceFamilyDetected": "此工作區主機上可用的代理程式均與 {{agent}} 共用使用額度。請啟用或安裝其他代理程式。",
       "context": "上下文",
       "modeFocused": "重點移交（推薦）",
       "modeFocusedDescription": "使用最新進度和目前工作區，僅在需要時讀取更早的工作階段記錄細節。",
