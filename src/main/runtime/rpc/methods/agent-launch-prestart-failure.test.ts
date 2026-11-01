@@ -155,7 +155,8 @@ describe('a launch whose terminal fails', () => {
       runtime,
       new OrchestrationError(
         'agent_unconfigured',
-        'Agent claude is disabled. Choose an enabled agent.'
+        'Agent claude is disabled. Choose an enabled agent.',
+        { retrySafe: false }
       ),
       false
     )
@@ -166,7 +167,8 @@ describe('a launch whose terminal fails', () => {
       ok: false,
       error: {
         code: 'agent_unconfigured',
-        message: 'Agent claude is disabled. Choose an enabled agent.'
+        message: 'Agent claude is disabled. Choose an enabled agent.',
+        data: { retrySafe: false }
       }
     })
     expect(outcomeOf(OPERATION_ID)).toMatchObject({
