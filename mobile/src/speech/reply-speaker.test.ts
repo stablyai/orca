@@ -324,7 +324,7 @@ describe('auto-read paused', () => {
     expect(last().text).toBe('Later.')
   })
 
-  it('lets Previous read the last message again while messages wait, not once idle', () => {
+  it('lets Previous read the last message again while messages wait', () => {
     speakReply('read', 'First.', 'queue')
     finishPiece()
     setAutoPlay(false)
@@ -332,8 +332,15 @@ describe('auto-read paused', () => {
     expect(native.setReaderState.mock.calls.at(-1)?.[4]).toBe(true)
     previousMessage('test')
     expect(last().text).toBe('First.')
-    stopSpeaking()
-    expect(native.setReaderState.mock.calls.at(-1)?.[4]).toBe(false)
+  })
+
+  it('lets Previous read the last message again once everything was read', () => {
+    speakReply('read', 'Only.', 'queue')
+    finishPiece()
+    expect(native.setReaderState.mock.calls.at(-1)?.[0]).toBe('idle')
+    expect(native.setReaderState.mock.calls.at(-1)?.[4]).toBe(true)
+    previousMessage('test')
+    expect(last().text).toBe('Only.')
   })
 
   it('plays a waiting message through the speaker when asked, with headphones only on', () => {

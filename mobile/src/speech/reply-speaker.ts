@@ -50,7 +50,7 @@ function emit(): void {
   const title = current?.title ?? null
   const status = readerStatus(state, hold, current, queue.length)
   const canRepeat = history.length > 0
-  const canPrevious = canGoPrevious(history, current, queue.length)
+  const canPrevious = canGoPrevious(history, current)
   const canNext = queue.length > 0
   const report = JSON.stringify([state, title, status, canRepeat, canPrevious, canNext])
   if (report !== reported) {

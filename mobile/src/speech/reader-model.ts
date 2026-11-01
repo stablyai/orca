@@ -94,15 +94,11 @@ export function previousTarget(
   return playedForMs >= RESTART_AFTER_MS || at <= 0 ? playing : history[at - 1]
 }
 
-/** Whether Previous has a message to go back to; while idle the notification's Play repeats. */
-export function canGoPrevious(
-  history: readonly Utterance[],
-  current: Utterance | null,
-  waiting: number
-): boolean {
+/** Whether Previous has a message to go back to. */
+export function canGoPrevious(history: readonly Utterance[], current: Utterance | null): boolean {
   if (current === null) {
-    // Messages wait while auto-read is paused; Previous reads the last one again.
-    return waiting > 0 && history.length > 0
+    // Nothing being read: Previous reads the last message again, like a player after the album.
+    return history.length > 0
   }
   return history.findIndex((kept) => kept.id === current.id) > 0
 }
