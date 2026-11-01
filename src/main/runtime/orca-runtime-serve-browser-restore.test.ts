@@ -453,6 +453,16 @@ describe('a saved browser tab on a host with no window', () => {
     expect(createTab).toHaveBeenCalledWith(expect.objectContaining({ browserPageId: 'page-1' }))
   })
 
+  it('reports why a saved page could not start instead of calling it closed', async () => {
+    const { runtime, createTab } = restartedServe()
+    // As route preparation refuses a page whose SSH host is down.
+    createTab.mockRejectedValueOnce(new Error("This workspace's SSH host isn't connected"))
+
+    await expect(
+      runtime.browserTabShow({ worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1' })
+    ).rejects.toThrow("SSH host isn't connected")
+  })
+
   it('is found by page alone in a workspace that holds only browser tabs', async () => {
     const { runtime, createTab } = restartedServe()
 

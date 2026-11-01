@@ -15,7 +15,7 @@ import {
 } from '../../../../../shared/execution-host'
 import { getHostSettingOverride } from '../../../../../shared/host-setting-overrides'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
+import { resolveSshWorkspaceBrowserRouteEligibility } from '../../../../../shared/ssh-workspace-browser-route-eligibility'
 
 /** Use the shared globe slot to expose egress location because local and remotely routed pages otherwise look identical. */
 function EgressIndicatorButton({

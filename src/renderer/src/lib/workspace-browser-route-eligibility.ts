@@ -9,7 +9,7 @@ import {
 } from './client-creation-action-policy'
 import { resolveWorktreeOperationRoute } from './worktree-operation-route'
 import { getExecutionHostIdForWorktree } from './worktree-runtime-owner'
-import { resolveSshWorkspaceBrowserRouteEligibility } from './ssh-workspace-browser-route-eligibility'
+import { resolveSshWorkspaceBrowserRouteEligibility } from '../../../shared/ssh-workspace-browser-route-eligibility'
 
 export function isExpectedRuntimeBrowserRoute(
   state: AppState,

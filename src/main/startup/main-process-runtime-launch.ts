@@ -15,6 +15,7 @@ import { registerHeadlessPtyRuntime } from '../ipc/pty/register-headless-runtime
 import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
 import { publishHeadlessRuntimeGraph } from '../runtime/headless-runtime-graph'
 import { OffscreenBrowserBackend } from '../browser/backends/offscreen-browser-backend'
+import { prepareWorkspaceBrowserRoutePartition } from '../browser/routing/workspace-browser-route-partition'
 import { browserManager } from '../browser/browser-manager'
 import { getDesktopRelayStatus } from './main-process-relay-status'
 import { startDesktopRelayService } from './main-process-relay-startup'
@@ -182,7 +183,13 @@ async function launchServeMode(
     runtime.setOffscreenBrowserBackend(
       new OffscreenBrowserBackend(browserManager, {
         getAgentBrowserBridge: () => state.agentBrowserBridge,
-        onPageNavigated: (page) => runtime.serveBrowserPageNavigated(page)
+        onPageNavigated: (page) => runtime.serveBrowserPageNavigated(page),
+        resolveWorkspaceRoutePartition: ({ executionHostId, browserProfileId }) =>
+          prepareWorkspaceBrowserRoutePartition({
+            executionHostId,
+            browserProfileId,
+            settings: state.store!.getSettings()
+          })
       })
     )
   }

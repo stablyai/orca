@@ -5,7 +5,7 @@ import {
   resolveRemoteCliBrowserScopeSelector
 } from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getWorktreeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
@@ -193,6 +193,11 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       getBrowserHostRequestRegistry: () => getBrowserHostRequestRegistry(this),
       getPairedDeviceName: (pairedDeviceId) => this.getPairedDeviceNameFn(pairedDeviceId),
       getRuntimeBrowserPageRegistry: () => getRuntimeBrowserPageRegistry(this),
+      getBrowserWorkspaceExecutionHostId: (worktree) =>
+        getWorktreeExecutionHostId(
+          worktree,
+          worktree.repoId ? this.requireStore().getRepo(worktree.repoId) : undefined
+        ),
       resolveBrowserNetworkExecutionHost: (worktree) =>
         this.resolveBrowserNetworkExecutionHostForWorktree(worktree),
       getAuthoritativeWindow: () => this.getAuthoritativeWindow(),

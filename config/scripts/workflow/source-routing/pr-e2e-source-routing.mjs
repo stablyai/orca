@@ -230,7 +230,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-browser-routing.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/browser\/routing\/local-host-partitions\/local-ssh-browser|main\/ipc\/browser\.ts$|renderer\/src\/(?:lib\/(?:ssh-workspace-browser-route-eligibility|worktree-host-connection-phase)|components\/browser-pane\/use-ssh-workspace-browser-route|store\/repos\/converted-ssh-browser-pages|store\/slices\/browser\/browser-tab-actions|hooks\/ipc-events\/ssh-managed-server-state-effects))/.test(
+      /^src\/(?:main\/browser\/routing\/(?:local-host-partitions\/local-ssh-browser|workspace-browser-route-partition\.ts$)|main\/ipc\/browser\.ts$|shared\/ssh-workspace-browser-route-eligibility\.ts$|renderer\/src\/(?:lib\/worktree-host-connection-phase|components\/browser-pane\/use-ssh-workspace-browser-route|store\/repos\/converted-ssh-browser-pages|store\/slices\/browser\/browser-tab-actions|hooks\/ipc-events\/ssh-managed-server-state-effects))/.test(
         file
       )
   },
@@ -239,7 +239,17 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-terminal-browser-link.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/renderer\/src\/(?:lib\/(?:workspace-browser-tab-open|http-link-(?:destinations|routing)|ssh-workspace-browser-route-eligibility)|components\/terminal-pane\/terminal-http-link-source-owner)\.ts$/.test(
+      (/^src\/renderer\/src\/(?:lib\/(?:workspace-browser-tab-open|http-link-(?:destinations|routing))|components\/terminal-pane\/terminal-http-link-source-owner)\.ts$/.test(
+        file
+      ) ||
+        file === 'src/shared/ssh-workspace-browser-route-eligibility.ts')
+  },
+  {
+    id: 'ssh.orcad-serve-browser-localhost',
+    specs: ['tests/e2e/ssh-orcad-serve-browser-localhost.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/(?:main\/browser\/(?:backends\/offscreen-browser-backend|routing\/workspace-browser-route-partition|routing\/local-host-partitions\/local-ssh-browser-partitions)|main\/startup\/main-process-runtime-launch|shared\/ssh-workspace-browser-route-eligibility)\.ts$/.test(
         file
       )
   },

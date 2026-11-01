@@ -69,7 +69,8 @@ class MockBrowserWindow {
 vi.mock('electron', () => ({ BrowserWindow: mocks.BrowserWindow }))
 vi.mock('../sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
-    getDefaultProfile: vi.fn(() => ({ id: 'default', partition: 'persist:orca-browser' }))
+    getDefaultProfile: vi.fn(() => ({ id: 'default', partition: 'persist:orca-browser' })),
+    getProfile: vi.fn(() => null)
   }
 }))
 
@@ -114,10 +115,20 @@ describe('OffscreenBrowserBackend lifecycle', () => {
       getAgentBrowserBridge: () => ({ onPageClosed })
     })
 
-    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+    await backend.createTab({
+      browserPageId: 'page-1',
+      url: 'about:blank',
+      worktreeId: 'wt',
+      executionHostId: 'local'
+    })
     const close = backend.closeTab('page-1')
     await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledWith('page-1'))
-    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+    await backend.createTab({
+      browserPageId: 'page-1',
+      url: 'about:blank',
+      worktreeId: 'wt',
+      executionHostId: 'local'
+    })
 
     releaseOwnerRetirement()
     await close
@@ -140,7 +151,12 @@ describe('OffscreenBrowserBackend lifecycle', () => {
       getAgentBrowserBridge: () => ({ onPageClosed })
     })
 
-    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+    await backend.createTab({
+      browserPageId: 'page-1',
+      url: 'about:blank',
+      worktreeId: 'wt',
+      executionHostId: 'local'
+    })
     mocks.windows[0].webContents.emit('destroyed')
     await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledWith('page-1'))
 
@@ -153,5 +169,75 @@ describe('OffscreenBrowserBackend lifecycle', () => {
 
     releaseOwnerRetirement()
     await shutdown
+  })
+
+  it('routes a restored page whose saved profile was deleted through the default profile', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
+      unregisterGuest: vi.fn()
+    }
+    const resolveWorkspaceRoutePartition = vi.fn().mockResolvedValue('persist:ssh-route')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: createTab reads only these two BrowserManager members.
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      resolveWorkspaceRoutePartition
+    })
+
+    await backend.createTab({
+      browserPageId: 'page-1',
+      url: 'http://127.0.0.1:3000/',
+      worktreeId: 'wt',
+      executionHostId: 'ssh:box',
+      profileId: 'deleted-profile'
+    })
+
+    expect(resolveWorkspaceRoutePartition).toHaveBeenCalledWith({
+      worktreeId: 'wt',
+      executionHostId: 'ssh:box',
+      browserProfileId: 'default'
+    })
+    expect(mocks.BrowserWindow.mock.lastCall?.[0].webPreferences.partition).toBe(
+      'persist:ssh-route'
+    )
+  })
+
+  // STA-13126: a server-hosted page must load an SSH workspace's localhost from that host.
+  it("loads a workspace page on its host's route partition and never falls back to local egress", async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
+      unregisterGuest: vi.fn()
+    }
+    const resolveWorkspaceRoutePartition = vi
+      .fn()
+      .mockResolvedValueOnce('persist:ssh-route')
+      .mockRejectedValueOnce(new Error("This workspace's SSH host isn't connected"))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: createTab reads only these two BrowserManager members.
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      resolveWorkspaceRoutePartition
+    })
+
+    await backend.createTab({
+      browserPageId: 'page-1',
+      url: 'http://127.0.0.1:3000/',
+      worktreeId: 'wt',
+      executionHostId: 'ssh:box'
+    })
+    expect(resolveWorkspaceRoutePartition).toHaveBeenCalledWith({
+      worktreeId: 'wt',
+      executionHostId: 'ssh:box',
+      browserProfileId: 'default'
+    })
+    expect(mocks.BrowserWindow.mock.lastCall?.[0].webPreferences.partition).toBe(
+      'persist:ssh-route'
+    )
+
+    await expect(
+      backend.createTab({
+        browserPageId: 'page-2',
+        url: 'http://127.0.0.1:3000/',
+        worktreeId: 'wt',
+        executionHostId: 'ssh:box'
+      })
+    ).rejects.toThrow("SSH host isn't connected")
+    expect(mocks.windows).toHaveLength(1)
   })
 })

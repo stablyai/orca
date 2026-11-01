@@ -8,6 +8,7 @@ import {
 } from './browser-tab-create-publication'
 import { browserSessionRegistry } from '../../../browser/sessions/browser-session-registry'
 import { BrowserError } from '../../../browser/browser-error'
+import type { BrowserBackendCreateTab } from '../../../browser/browser-backend'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
@@ -22,6 +23,7 @@ export class RuntimeBrowserTabCreation {
       RuntimeBrowserCommandHost,
       | 'getAgentBrowserBridge'
       | 'resolveBrowserWorkspace'
+      | 'getBrowserWorkspaceExecutionHostId'
       | 'resolveBrowserNetworkExecutionHost'
       | 'getBrowserHostLeaseRegistry'
       | 'getBrowserHostRequestRegistry'
@@ -105,9 +107,16 @@ export class RuntimeBrowserTabCreation {
       if (!offscreen) {
         throw new BrowserError('browser_error', 'This host does not support browser panes.')
       }
+      // The selector may have named one of two same-id twins; its id alone cannot.
+      const page: BrowserBackendCreateTab = worktree
+        ? {
+            url,
+            worktreeId: worktree.id,
+            executionHostId: this.host.getBrowserWorkspaceExecutionHostId(worktree)
+          }
+        : { url }
       const created = await offscreen.createTab({
-        url,
-        worktreeId,
+        ...page,
         profileId: params.profileId,
         ...(params.page ? { browserPageId: params.page } : {})
       })

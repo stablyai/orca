@@ -1,9 +1,9 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../shared/execution-host'
+import type { GlobalSettings } from './global-settings-types'
+import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from './execution-host'
 import {
   getOrcadSshDeployment,
   type PublicKnownRuntimeEnvironment
-} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+} from './remote-runtime/host-catalog/runtime-environments'
 
 type SshBrowserRoutingSettings = Pick<
   GlobalSettings,
@@ -40,4 +40,21 @@ export function resolveSshWorkspaceBrowserRouteEligibility(
       settings?.browserSshWorkspaceRoutingEnabled !== false &&
       !settings?.browserSshWorkspaceRoutingDisabledTargetIds?.includes(targetId)
   }
+}
+
+export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unavailable' | 'unknown'
+
+export function classifySshWorkspaceBrowserRouteError(
+  message: string
+): SshWorkspaceBrowserRouteErrorKind {
+  if (message.includes('browser_local_route_forwarding_blocked')) {
+    return 'forwarding-blocked'
+  }
+  if (
+    message.includes('browser_local_route_ssh_unavailable') ||
+    message.includes('browser_tunnel_execution_host_unavailable')
+  ) {
+    return 'ssh-unavailable'
+  }
+  return 'unknown'
 }

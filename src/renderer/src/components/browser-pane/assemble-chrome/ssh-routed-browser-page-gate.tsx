@@ -4,10 +4,8 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { DOC_PREVIEW_PARTITION } from '../../../../../shared/doc-preview-scheme'
 import { destroyPersistentWebview, webviewRegistry } from '../host-guest/webview-registry'
-import {
-  useSshWorkspaceBrowserRoute,
-  type SshWorkspaceBrowserRouteErrorKind
-} from '../use-ssh-workspace-browser-route'
+import { useSshWorkspaceBrowserRoute } from '../use-ssh-workspace-browser-route'
+import type { SshWorkspaceBrowserRouteErrorKind } from '../../../../../shared/ssh-workspace-browser-route-eligibility'
 
 /** Require a proxy-verified partition before mounting SSH browser guests; local egress is allowed only through explicit global or per-target opt-outs. */
 export function SshRoutedBrowserPageGate({

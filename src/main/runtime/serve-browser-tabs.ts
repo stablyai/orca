@@ -165,8 +165,23 @@ export class ServeBrowserTabs {
     })
   }
 
-  // The backend registers the page before it returns, so a second caller finds it running.
-  private async restore(page: RestorableBrowserPage): Promise<boolean> {
+  /** Restores in flight, by page id: creation can await the workspace's SSH route. */
+  private readonly pendingRestores = new Map<string, Promise<boolean>>()
+
+  // The backend registers the page before it returns; until then a second caller joins this restore.
+  private restore(page: RestorableBrowserPage): Promise<boolean> {
+    const pending = this.pendingRestores.get(page.pageId)
+    if (pending) {
+      return pending
+    }
+    const restore = this.createRestoredPage(page).finally(() => {
+      this.pendingRestores.delete(page.pageId)
+    })
+    this.pendingRestores.set(page.pageId, restore)
+    return restore
+  }
+
+  private async createRestoredPage(page: RestorableBrowserPage): Promise<boolean> {
     const backend = this.deps.backend()
     if (!backend) {
       return false
@@ -175,8 +190,16 @@ export class ServeBrowserTabs {
       browserPageId: page.pageId,
       url: page.url,
       worktreeId: page.worktreeId,
+      // The saved tab lives in its host's session; its bare id can name twins on two hosts.
+      executionHostId: this.deps.hostId(page.worktreeId),
       ...(page.profileId ? { profileId: page.profileId } : {})
     })
+    // Creation can await the workspace's SSH route; a tab closed meanwhile must not come back.
+    const session = this.deps.session(page.worktreeId)
+    if (!session || !findSavedBrowserPage(session, page.worktreeId, page.pageId)) {
+      await backend.closeTab(page.pageId)
+      return false
+    }
     return true
   }
 

@@ -52,6 +52,7 @@ function createCommandHost(
   return {
     resolveWorkspaceSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
+    getBrowserWorkspaceExecutionHostId: () => 'local',
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAgentBrowserBridge: () =>
       ({
@@ -346,6 +347,29 @@ describe('browser tab-create placement census', () => {
       ipcMainOnMock.mockReset()
       waitForTabRegistrationMock.mockReset()
       waitForTabRegistrationMock.mockResolvedValue(undefined)
+    })
+
+    it('creates an offscreen page on the host its selector resolved, not by its bare id', async () => {
+      const { RuntimeBrowserCommands } = await import('../commands/browser-commands')
+      const createTab = vi.fn(async () => ({ browserPageId: 'page-created' }))
+      const commands = new RuntimeBrowserCommands(
+        createCommandHost({
+          // Same-id twins: only the identity selector names the SSH copy.
+          resolveBrowserWorkspace: async () => ({ id: 'wt-1', hostId: 'ssh:box' }),
+          getBrowserWorkspaceExecutionHostId: (worktree) => worktree.hostId ?? 'local',
+          getOffscreenBrowserBackend: vi.fn(() => ({
+            createTab,
+            closeTab: vi.fn(async () => {}),
+            ownsTab: () => true
+          }))
+        })
+      )
+
+      await commands.browserTabCreate({ worktree: 'identity:wt-1@ssh:box', url: 'about:blank' })
+
+      expect(createTab).toHaveBeenCalledWith(
+        expect.objectContaining({ worktreeId: 'wt-1', executionHostId: 'ssh:box' })
+      )
     })
 
     it('moves a user-created offscreen tab into the clicked split group', async () => {

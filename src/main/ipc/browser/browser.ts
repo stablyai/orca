@@ -128,21 +128,15 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
       if (typeof args?.targetId !== 'string' || args.targetId.length === 0) {
         throw new Error('browser_local_route_target_invalid')
       }
-      const { getSshConnectionStore } = await import('../ssh/ssh')
-      const { requireLocalSshBrowserRouteTarget } =
-        await import('../../browser/routing/local-host-partitions/local-ssh-browser-route')
-      requireLocalSshBrowserRouteTarget(
-        getSshConnectionStore()?.getTarget(args.targetId),
-        args.expectedSshTargetGeneration
-      )
-      const { prepareLocalSshBrowserPartition } =
-        await import('../../browser/routing/local-host-partitions/local-ssh-browser-partitions')
-      return prepareLocalSshBrowserPartition({
+      const { prepareSshWorkspaceBrowserPartition } =
+        await import('../../browser/routing/workspace-browser-route-partition')
+      return prepareSshWorkspaceBrowserPartition({
         targetId: args.targetId,
         browserProfileId:
           typeof args.browserProfileId === 'string' && args.browserProfileId.length > 0
             ? args.browserProfileId
             : 'default',
+        expectedSshTargetGeneration: args.expectedSshTargetGeneration,
         skipProbe: args.skipProbe === true
       })
     }

@@ -119,9 +119,7 @@ export class RuntimeBrowserCommandTargets {
       browserPopupPageWebContentsId(browserPageId) === null &&
       !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)
     ) {
-      try {
-        await this.ensureBrowserPageActive(worktreeId, browserPageId)
-      } catch {}
+      await this.ensureBrowserPageActive(worktreeId, browserPageId)
     }
     return {
       // Explicit page ids already provide stable scope; do not add cwd-derived worktree scope.
@@ -171,18 +169,25 @@ export class RuntimeBrowserCommandTargets {
     await waitForWorktreeTabRegistration(worktreeId)
   }
 
+  /** Window activation is best-effort, as the command reports a page that never registers; a saved
+   *  page that cannot start (its SSH route is down) throws, so a command needing it says why. */
   async ensureBrowserPageActive(
     worktreeId: string | undefined,
     browserPageId: string,
     options: { waitForFirstLoad?: boolean } = {}
   ): Promise<void> {
-    if (!(await this.host.serveBrowserTabs?.start(worktreeId, browserPageId))) {
-      await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
-      await waitForTabRegistration(browserPageId)
-    }
-    // Why opt-in: a switched-to tab should read like one open all along, but streaming panes must not wait.
-    if (options.waitForFirstLoad) {
-      await waitForTabFirstLoad(browserPageId)
+    const started = await this.host.serveBrowserTabs?.start(worktreeId, browserPageId)
+    try {
+      if (!started) {
+        await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
+        await waitForTabRegistration(browserPageId)
+      }
+      // Why opt-in: a switched-to tab should read like one open all along, but streaming panes must not wait.
+      if (options.waitForFirstLoad) {
+        await waitForTabFirstLoad(browserPageId)
+      }
+    } catch {
+      // Startup/tests may have no window; the command reports a page that never registers.
     }
   }
 

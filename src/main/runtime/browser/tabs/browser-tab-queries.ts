@@ -113,15 +113,12 @@ export class RuntimeBrowserTabQueries {
       )
     }
     if (selected.loaded === false) {
-      try {
-        await this.targets.ensureBrowserPageActive(
-          selected.worktreeId ?? undefined,
-          selected.browserPageId,
-          { waitForFirstLoad: true }
-        )
-      } catch {
-        // The switch below reports browser_tab_not_found if the page could not load.
-      }
+      // A page that could not load is reported by the switch below as browser_tab_not_found.
+      await this.targets.ensureBrowserPageActive(
+        selected.worktreeId ?? undefined,
+        selected.browserPageId,
+        { waitForFirstLoad: true }
+      )
     }
     const clientPage = this.host.getRuntimeBrowserPageRegistry().getPage(selected.browserPageId)
     if (clientPage) {

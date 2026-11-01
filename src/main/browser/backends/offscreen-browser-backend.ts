@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
-import { ORCA_BROWSER_PARTITION } from '../../../shared/constants'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser-guest-web-preferences'
 import { mapSettledWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { BrowserBackend, BrowserBackendCreateTab } from '../browser-backend'
@@ -29,6 +29,12 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     private readonly options: {
       getAgentBrowserBridge?: () => Pick<AgentBrowserBridge, 'onPageClosed'> | null
       onPageNavigated?: (page: ServeBrowserPageState) => void
+      /** The workspace's route partition, or null for the profile's own egress. */
+      resolveWorkspaceRoutePartition?: (input: {
+        worktreeId: string
+        executionHostId: ExecutionHostId
+        browserProfileId: string
+      }) => Promise<string | null>
     } = {}
   ) {}
 
@@ -40,11 +46,26 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     if (this.windowsByPageId.has(browserPageId)) {
       throw new Error(`Browser page ${browserPageId} already exists`)
     }
-    // Reuse desktop profile partitions to preserve cookies and storage.
-    const profile = params.profileId
-      ? browserSessionRegistry.getProfile(params.profileId)
-      : browserSessionRegistry.getDefaultProfile()
-    const partition = profile?.partition ?? ORCA_BROWSER_PARTITION
+    // Reuse desktop profile partitions to preserve cookies and storage. A saved tab whose profile
+    // was deleted opens in the default one, still routed: a missing profile must not mean local egress.
+    const profile =
+      (params.profileId ? browserSessionRegistry.getProfile(params.profileId) : null) ??
+      browserSessionRegistry.getDefaultProfile()
+    const routePartition = params.worktreeId
+      ? await this.options.resolveWorkspaceRoutePartition?.({
+          worktreeId: params.worktreeId,
+          executionHostId: params.executionHostId,
+          browserProfileId: profile.id
+        })
+      : null
+    // Route preparation awaits SSH; recheck what the synchronous guards above proved.
+    if (this.shutdownStarted) {
+      throw new Error('Offscreen browser backend is shutting down')
+    }
+    if (this.windowsByPageId.has(browserPageId)) {
+      throw new Error(`Browser page ${browserPageId} already exists`)
+    }
+    const partition = routePartition ?? profile.partition
 
     const win = new BrowserWindow({
       show: false,
@@ -67,7 +88,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     const registered = this.browserManager.registerOffscreenGuest({
       browserPageId,
       worktreeId: params.worktreeId,
-      sessionProfileId: profile?.id ?? null,
+      sessionProfileId: profile.id,
       webContentsId: win.webContents.id
     })
     if (!registered) {

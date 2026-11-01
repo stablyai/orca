@@ -2,31 +2,18 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
-import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
+import {
+  classifySshWorkspaceBrowserRouteError,
+  resolveSshWorkspaceBrowserRouteEligibility,
+  type SshWorkspaceBrowserRouteErrorKind
+} from '../../../../shared/ssh-workspace-browser-route-eligibility'
 import type { BrowserLoadFailureRoute } from '../../../../shared/browser-load-failure'
-
-export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unavailable' | 'unknown'
 
 export type SshWorkspaceBrowserRouteState =
   | { kind: 'unrouted' }
   | { kind: 'preparing' }
   | { kind: 'ready'; partition: string; targetId: string; expectedSshTargetGeneration?: number }
   | { kind: 'error'; errorKind: SshWorkspaceBrowserRouteErrorKind; message: string }
-
-export function classifySshWorkspaceBrowserRouteError(
-  message: string
-): SshWorkspaceBrowserRouteErrorKind {
-  if (message.includes('browser_local_route_forwarding_blocked')) {
-    return 'forwarding-blocked'
-  }
-  if (
-    message.includes('browser_local_route_ssh_unavailable') ||
-    message.includes('browser_tunnel_execution_host_unavailable')
-  ) {
-    return 'ssh-unavailable'
-  }
-  return 'unknown'
-}
 
 // A remounted gate starts from its last verified partition instead of destroying guests already on it.
 const verifiedPartitionByRoute = new Map<string, string>()
