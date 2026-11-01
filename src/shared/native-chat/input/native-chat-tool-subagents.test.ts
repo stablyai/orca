@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock, NativeChatMessage } from '../native-chat-types'
-import { nativeChatSubagentActivities } from './native-chat-activity'
+import { nativeChatListedSubagents, nativeChatSubagentActivities } from './native-chat-activity'
 import {
   nativeChatToolSubagentActivities,
   readNativeChatSubagentActivities
@@ -76,6 +76,39 @@ function completion(id: string, description: string, prose: string): string {
 }
 
 describe('nativeChatToolSubagentActivities', () => {
+  it('settles a foreground Grok spawn when the reply carries subagent_result', () => {
+    const childId = '01a19984-7518-7790-b750-a335273057b8'
+    const messages = [
+      message('spawn', [
+        {
+          type: 'tool-call',
+          name: 'spawn_subagent',
+          callId: 'call-1',
+          input: {
+            description: 'Say hello',
+            prompt:
+              'Reply with exactly this sentence and nothing else: Hello from the Grok scratch subagent.'
+          }
+        }
+      ]),
+      message(
+        'result',
+        [
+          {
+            type: 'tool-result',
+            callId: 'call-1',
+            output: `Hello from the Grok scratch subagent.\n\n<subagent_result>\nsubagent_id: ${childId}\n</subagent_result>`
+          }
+        ],
+        { role: 'tool' }
+      )
+    ]
+    expect(nativeChatToolSubagentActivities(messages)).toEqual([
+      expect.objectContaining({ id: childId, label: 'Say hello', state: 'completed' })
+    ])
+    expect(nativeChatListedSubagents(nativeChatSubagentActivities(messages))).toEqual([])
+  })
+
   it('names each background spawn from its ack', () => {
     expect(nativeChatToolSubagentActivities(spawnTurn())).toEqual([
       { id: DATE_ID, label: "Report today's date", state: 'working', activity: 'date' },

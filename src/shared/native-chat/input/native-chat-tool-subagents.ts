@@ -21,6 +21,7 @@ const LABEL_LIMIT = 80
 const ACTIVITY_LIMIT = 160
 const MAX_ACTIVITIES = 64
 const SPAWN_ID = /subagent_id:\s*(\S+)/
+const FOREGROUND_RESULT = /<subagent_result>[\s\S]*?subagent_id:\s*\S+[\s\S]*?<\/subagent_result>/
 const AGENT_ID = /agentId:\s*(\S+)/
 const ACK_DESCRIPTION = /^description:\s*(.+)$/m
 const SUBAGENT_COMMAND = /^Command: \[subagent(?::[^\]]*)?\]\s*(.*)$/m
@@ -234,6 +235,8 @@ export function nativeChatToolSubagentActivities(
       if (call && SPAWN_TOOLS.has(canonical(call.name))) {
         const failed = call.state === 'failed' || pair.result?.isError === true
         const settled = pair.result?.subagent
+        // A foreground spawn returns the reply wrapped in subagent_result. A background ack does not.
+        const finished = FOREGROUND_RESULT.test(pair.result?.output ?? '')
         const id =
           settled?.id ??
           ackId(pair.result?.output) ??
@@ -249,7 +252,7 @@ export function nativeChatToolSubagentActivities(
         note(
           id,
           label,
-          failed ? 'failed' : (settled?.state ?? 'working'),
+          failed ? 'failed' : (settled?.state ?? (finished ? 'completed' : 'working')),
           reported && reported !== label ? reported : spawned
         )
       }

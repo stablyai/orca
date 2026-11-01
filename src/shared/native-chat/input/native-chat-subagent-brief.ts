@@ -118,7 +118,8 @@ function visibleResult(output: string): string | null {
   if (report !== null) {
     return report || null
   }
-  return output
+  const reply = output.replace(/<subagent_(meta|result)>[\s\S]*?<\/subagent_\1>/g, '').trim()
+  return reply || null
 }
 
 export function nativeChatSpawnedSubagentId(
