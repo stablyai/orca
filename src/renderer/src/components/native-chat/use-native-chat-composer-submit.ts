@@ -14,6 +14,7 @@ import {
 } from './native-chat-composer-draft-store'
 import {
   isBareStructuredAgentSessionGoalCommand,
+  isStructuredAgentSessionHostCommand,
   structuredAgentSessionGoalObjective
 } from '../../../../shared/structured-agent-session-composer'
 
@@ -52,11 +53,13 @@ export function useNativeChatComposerSubmit(args: {
   ) => void
   /** Runs a command Orca owns, like `/resume`; true means the draft never reaches the agent. */
   consumeOrcaCommand?: (draft: string) => boolean
+  matchesOrcaCommand?: (draft: string) => boolean
   setDraft: (value: string) => void
   setCaret: (caret: number) => void
 }): {
   send: (intent?: NativeChatComposerSendIntent) => void
   goalMode: NativeChatComposerGoalMode
+  messageDelivery: boolean
 } {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
   const { consumeOrcaCommand, setCaret, setDraft, structuredTransport, submitEmpty } = args
@@ -172,5 +175,15 @@ export function useNativeChatComposerSubmit(args: {
 
   const exit = useCallback(() => setEntered(false), [])
   const goalMode = useMemo(() => ({ active, exit, interceptPick }), [active, exit, interceptPick])
-  return { send, goalMode }
+  const messageDelivery =
+    !active &&
+    !args.matchesOrcaCommand?.(draft) &&
+    !(
+      structuredTransport &&
+      isStructuredAgentSessionHostCommand(
+        resolveNativeChatPastedText(draftScopeKey, draft),
+        threadGoal !== undefined
+      )
+    )
+  return { send, goalMode, messageDelivery }
 }

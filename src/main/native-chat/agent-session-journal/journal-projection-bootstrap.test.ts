@@ -1,3 +1,5 @@
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { journalInputOrder } from './journal-input-order'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -171,3 +173,155 @@ it('refuses to publish a new epoch over one the caller did not see, writing noth
   expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(before)
   expect(restoreJournal(database.db, sessionId)?.state.epoch).toBe(epoch)
 })
+
+// A frozen marker-5 prefix and an outcome-only format-1 chat carry different evidence.
+it.each(['prefix', 'zero', 'recreated'] as const)(
+  'lifts actual %s evidence once, then treats native tombstones as authoritative',
+  async (path) => {
+    const user = {
+      kind: 'message' as const,
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: 'M' }]
+    }
+    const rows: JournalRow[] = [
+      projectionEpochRow,
+      ...['C', 'D'].map((id, i): JournalRow => ({
+        ...base(i + 2),
+        kind: 'queue',
+        messageId: id,
+        change: {
+          op: 'queued',
+          body: id === 'C' ? { ...user, command: { name: 'compact' } } : user,
+          position: i,
+          queuedAt: { epoch, sequence: i + 2 }
+        }
+      })),
+      {
+        ...base(4),
+        kind: 'submission',
+        clientMessageId: 'S',
+        body: user,
+        payloadFingerprint: 'S',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' },
+        handoverRecorded: true
+      },
+      {
+        ...base(5),
+        kind: 'dispatch',
+        clientMessageId: 'S',
+        state: 'accepted',
+        providerItemId: null,
+        reason: null
+      },
+      {
+        ...base(6),
+        kind: 'submission',
+        clientMessageId: 'M',
+        body: user,
+        payloadFingerprint: 'M',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' },
+        handoverRecorded: true,
+        inputOrderContext: { source: { epoch, sequence: 6 }, basis: 'observed', cut: 6 }
+      }
+    ]
+    if (path !== 'zero') {
+      seedProjectionRows(database, rows)
+    } else {
+      seedOutcomeRows(database, rows)
+    }
+    let state = restoreJournal(database.db, sessionId)!.state
+    const first = projectionWriter(database, state)
+    rigs.push(first)
+    await first.writer.enqueue((seq, ts): JournalRow => ({
+      ...base(seq),
+      ts,
+      kind: 'queue',
+      messageId: 'D',
+      change: { op: 'edited', body: { ...user, blocks: [{ type: 'text', text: 'latest D' }] } }
+    }))
+    if (path === 'recreated') {
+      await first.writer.enqueue((seq): JournalRow => ({
+        ...base(seq),
+        kind: 'tombstone',
+        itemId: agentJournalSubmissionKey('M'),
+        revision: seq,
+        retireSubmission: true
+      }))
+      await first.writer.enqueue((seq): JournalRow => ({
+        ...base(seq),
+        kind: 'submission',
+        clientMessageId: 'M',
+        body: user,
+        payloadFingerprint: 'M-recreated',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' },
+        handoverRecorded: true
+      }))
+    }
+    // These ordinary records are admitted by the frozen format-1 contract; old writers had no native families.
+    database.db.exec(
+      "DELETE FROM journal_outcomes WHERE field IN ('inputEntries','inputCards'); UPDATE journal_outcomes SET format=1; UPDATE journal_outcome_epochs SET format=1"
+    )
+    const prefix = liveTestJournalRows(database.db, sessionId)
+    const restored = restoreJournal(database.db, sessionId)!
+    expect(restored).toMatchObject({ newer: null, damage: null })
+    state = restored.state
+    expect(state.queue.cards.get('D')?.body.blocks).toEqual([{ type: 'text', text: 'latest D' }])
+    expect(journalInputOrder(state).firstQueued()?.clientMessageId).toBe('M')
+    expect(journalInputOrder(state).forced('M')).toBe(path === 'prefix')
+    expect(state.inputEntries.get('M')?.context.basis).toBe(
+      path === 'prefix' ? 'observed' : 'legacy'
+    )
+    if (path === 'prefix') {
+      expect(
+        ['C', 'D'].map((id) =>
+          journalInputOrder(state).precedes(state.queue.cards.get(id)!, state.submissions.get('M')!)
+        )
+      ).toEqual([true, true])
+    }
+    const rig = projectionWriter(database, state)
+    rigs.push(rig)
+    database.db.exec(
+      "CREATE TRIGGER no_upgrade BEFORE UPDATE ON journal_outcome_epochs BEGIN SELECT RAISE(ABORT, 'upgrade failed'); END"
+    )
+    await expect(rig.writer.enqueue((seq) => item(seq, 'upgrade'))).rejects.toThrow(
+      'upgrade failed'
+    )
+    database.db.exec('DROP TRIGGER no_upgrade')
+    expect(
+      database.db
+        .prepare(
+          "SELECT COUNT(*) AS n FROM journal_outcomes WHERE field IN ('inputEntries','inputCards')"
+        )
+        .get()?.n
+    ).toBe(0)
+    expect(rig.state().items.has('upgrade')).toBe(false)
+    expect(liveTestJournalRows(database.db, sessionId)).toEqual(prefix)
+    await rig.writer.enqueue((seq) => item(seq, 'upgrade'))
+    expect(database.db.prepare('SELECT format FROM journal_outcome_epochs').get()?.format).toBe(2)
+    expectProjectionMatches(database, rig.state())
+    const native = database.db
+      .prepare(
+        "SELECT field, entry_key FROM journal_outcomes WHERE field IN ('inputEntries','inputCards')"
+      )
+      .all()
+    expect(native).toHaveLength(3)
+    expect(native).toContainEqual({ field: 'inputEntries', entry_key: '"M"' })
+    expect(liveTestJournalRows(database.db, sessionId)).toEqual(prefix)
+    await rig.writer.enqueue((seq): JournalRow => ({
+      ...base(seq),
+      kind: 'dispatch',
+      clientMessageId: 'M',
+      state: 'accepted',
+      providerItemId: null,
+      reason: null
+    }))
+    expectProjectionMatches(database, rig.state())
+    expect(restoreJournal(database.db, sessionId)!.state.inputEntries.size).toBe(0)
+    expect(
+      journalInputOrder(restoreJournal(database.db, sessionId)!.state).firstQueued()
+    ).toBeUndefined()
+    // A later unrelated write cannot revive the old prefix's own component.
+    await rig.writer.enqueue((seq) => item(seq, 'after-retirement'))
+    expect(restoreJournal(database.db, sessionId)!.state.inputEntries.size).toBe(0)
+  }
+)

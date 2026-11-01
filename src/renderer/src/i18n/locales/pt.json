@@ -481,6 +481,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} já é um host.",
         "distroStopped": "{{distro}} parou após a leitura da lista. Escolha “Iniciar e adicionar” para iniciá-la.",
+        "distroUnverifiable": "O WSL não respondeu se {{distro}} está em execução. Atualize a lista ou adicione-a pela caixa de diálogo, que a inicia se necessário.",
         "wsl1": "{{distro}} usa WSL 1, que o Orca não suporta mais. Converta-a para WSL 2 em um terminal do Windows com: {{command}}",
         "notRegistered": "{{distro}} não é uma distribuição WSL instalada. Execute {{command}} em um terminal do Windows para ver as instaladas ou reinstale-a e tente novamente.",
         "sshManaged": "{{distro}} já executa o servidor Orca de “{{server}}”, que este computador acessa por SSH. Remova esse servidor primeiro; ainda não há suporte para movê-lo para um host WSL."
@@ -5177,7 +5178,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "Cor magenta ANSI",
-          "03c855d15f": "Redefinir todas as substituições de cor",
           "63f8d9336e": "Substituições de Cor",
           "e86e09b5c7": "Substitui cores individuais do terminal.",
           "1d1920dc8a": "Oculta o cursor do mouse ao digitar no terminal.",
@@ -5244,7 +5244,11 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Reiniciar agora",
           "907131d741": "Reiniciando…",
-          "605a35d600": "Ainda não aplicado pelo renderizador do terminal — o xterm.js não tem um slot de cor para negrito. Um valor salvo é preservado."
+          "605a35d600": "Ainda não aplicado pelo renderizador do terminal — o xterm.js não tem um slot de cor para negrito. Um valor salvo é preservado.",
+          "color_overrides_dark_description": "Substitui cores individuais do tema escuro do terminal.",
+          "color_overrides_light_description": "Substitui cores individuais do tema claro do terminal.",
+          "reset_dark_color_overrides": "Redefinir as substituições de cor do tema escuro",
+          "reset_light_color_overrides": "Redefinir as substituições de cor do tema claro"
         },
         "agents": {
           "search": {
@@ -9596,7 +9600,9 @@
           "light": "Claro",
           "languageIncomplete": "{{value0}}% traduzido, incompleto demais para usar como idioma do Orca",
           "languageCoverage": "Idioma da interface · {{value0}}% traduzido",
-          "newFileMenu": "Adiciona ao menu +"
+          "newFileMenu": "Adiciona ao menu +",
+          "editorReplacesViewer": "Abre {{value0}} em vez do visualizador do Orca",
+          "editorMayReplaceViewer": "Pode abrir {{value0}} em vez do visualizador do Orca"
         },
         "PluginPageHero": {
           "screenshots": "Capturas de tela",
@@ -12593,12 +12599,14 @@
           "added": "Já é um host",
           "running": "Em execução",
           "stopped": "Parada",
+          "unverifiable": "Desconhecido",
           "title": "Adicionar distribuição WSL",
           "description": "O Orca executa seu servidor dentro da distribuição, para que git, arquivos e terminais funcionem nativamente no Linux. Os projetos desta distribuição que você abriu por \\\\wsl.localhost são movidos automaticamente para este host quando seus terminais ficam ociosos; projetos em uma unidade do Windows (/mnt/…) permanecem neste computador. Você pode trazer de volta um projeto movido pela barra lateral.",
           "distro": "Distribuição",
           "loading": "Procurando distribuições WSL…",
           "placeholder": "Escolha uma distribuição",
           "stoppedHint": "{{value0}} está parada. Adicioná-la irá iniciá-la.",
+          "unverifiableHint": "O WSL não informou se {{value0}} está em execução. Adicioná-la a inicia se necessário.",
           "addingHint": "Instalando e iniciando o servidor Orca na distribuição. Na primeira vez, pode levar um minuto.",
           "adding": "Configurando…",
           "startAndAdd": "Iniciar e adicionar",
@@ -13207,11 +13215,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Aumentar zoom",
-          "6c89c73d9f": "Redefinir zoom",
           "be27304574": "Diminuir zoom",
-          "77bfc9b35a": "Abrir imagem em popup",
           "3ef9551ba2": "Carregando pré-visualização...",
-          "d9d2944855": "Falha ao carregar a pré-visualização do arquivo"
+          "d9d2944855": "Falha ao carregar a pré-visualização do arquivo",
+          "fitToView": "Ajustar à visualização",
+          "actualSize": "Tamanho real",
+          "expand": "Expandir imagem"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "sem-titulo.md",
@@ -13360,11 +13369,6 @@
           "57aac3979a": "Original",
           "fb0ae4f3c0": "Sem pré-visualização"
         },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Pressione Esc para fechar",
-          "535f4e2b56": "Fechar",
-          "9e27b2ecaf": "Pré-visualização de imagem em tamanho completo"
-        },
         "MonacoEditor": {
           "68cb83f4a7": "Adicionar nota no texto selecionado",
           "fd68ae03b3": "Buscar nos Arquivos",
@@ -13510,7 +13514,10 @@
           "zoomOut": "Diminuir zoom",
           "zoomIn": "Aumentar zoom",
           "fit": "Ajustar à tela",
-          "close": "Fechar"
+          "close": "Fechar",
+          "copyPng": "Copiar como PNG",
+          "copiedPng": "Copiado como PNG",
+          "copyPngFailed": "Não foi possível copiar a imagem"
         },
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "A inserção da imagem foi cancelada porque o destino mudou. O arquivo importado foi mantido.",
@@ -20026,6 +20033,8 @@
       },
       "composer": {
         "send": "Enviar",
+        "alternateSteerHint": "{{shortcut}} para orientar",
+        "alternateQueueHint": "{{shortcut}} para colocar na fila",
         "noPty": "Nenhum terminal ativo — alterne de volta para reconectar.",
         "locked": "A entrada está retida por outro dispositivo.",
         "placeholder": "Enviar uma mensagem…",
@@ -20798,7 +20807,8 @@
         "stopped": "{{distro}} está parado",
         "start": "Iniciar",
         "unverifiable": "O Orca não conseguiu verificar se {{distro}} está em execução",
-        "startToSend": "Inicie {{distro}} para enviar."
+        "startToSend": "Inicie {{distro}} para enviar.",
+        "startDistro": "Iniciar {{distro}}"
       },
       "interruptedContinue": {
         "continue": "Continuar",
@@ -22381,7 +22391,6 @@
       "workspace": "Espaço de trabalho",
       "binding": "Aba",
       "idCopied": "ID da sessão do Orca copiado",
-      "cancel": "Cancelar",
       "unassigned": "Não atribuído",
       "thisComputer": "Este computador",
       "retry": "Tentar novamente",
@@ -22399,19 +22408,16 @@
       "agentOwnership": "Evidência de vínculo com o agente",
       "observationTime": "Horário da observação",
       "goToTerminal": "Ir para o terminal",
-      "endTitle": "Encerrar {{terminal}}?",
       "checkingTabs": "Verificando abas…",
       "detailsNamed": "Detalhes para {{terminal}}",
       "copyId": "Copiar ID da sessão do Orca",
       "ending": "Encerrando…",
       "localOwnedCount_one": "{{count}} PTY do Orca neste computador",
-      "endDescription": "Isso encerra o terminal e seus processos filhos. O trabalho não salvo pode ser perdido.",
       "lastProcess": "Último processo visto: {{process}}",
       "localOwnedCount_other": "{{count}} PTYs do Orca neste computador",
       "localOwnedCount_many": "{{count}} PTYs do Orca neste computador",
       "loading": "Carregando terminais…",
       "endNamed": "Encerrar {{terminal}}",
-      "end": "Encerrar terminal",
       "openNamed": "Abrir {{terminal}}",
       "withoutTab": "{{count}} sem aba",
       "observedTime": "Última observação: {{time}}",

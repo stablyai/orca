@@ -66,6 +66,7 @@ export type GitHubSlice = {
       fallbackPRNumber?: number | null
       fallbackPRSource?: GitHubPRFallbackSource | null
       reason?: GitHubPRRefreshReason
+      userRefresh?: boolean
     }
   ) => Promise<PRInfo | null>
   fetchIssue: (
@@ -83,6 +84,7 @@ export type GitHubSlice = {
       throwOnError?: boolean
       /** Refresh or a check action: a user act that may start a stopped WSL distro. */
       wakeWslDistro?: boolean
+      userRefresh?: boolean
     }
   ) => Promise<PRCheckDetail[]>
   fetchPRCheckDetails: (
@@ -99,7 +101,7 @@ export type GitHubSlice = {
   fetchPRComments: (
     repoPath: string,
     prNumber: number,
-    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null; userRefresh?: boolean }
   ) => Promise<PRComment[]>
   addPRConversationComment: (
     repoPath: string,

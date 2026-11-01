@@ -23,6 +23,7 @@ import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 import { useNativeChatAssembledMessages } from './use-native-chat-assembled-messages'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
+import { takeNativeChatOpenWake } from './native-chat-open-wake'
 
 export type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
 
@@ -39,6 +40,9 @@ export type UseNativeChatLiveSessionArgs = {
   /** False suspends transcript IO while retaining the last committed session. */
   enabled?: boolean
 }
+
+// Paging is the user's own click, so it may start a stopped WSL distro.
+const USER_PAGING = { wakeWslDistro: true } as const
 
 // Keep the base axis stable through non-ready reads.
 const EMPTY_MESSAGES: readonly NativeChatMessage[] = []
@@ -78,10 +82,13 @@ export function useNativeChatLiveSession(
   const [hookState, hookStateStartedAt, hookHasWorkingSubagents] = useNativeChatHookStatus(paneKey)
 
   const latestEnabled = useRef(enabled)
+  // Read, not a dependency: the source key below already changes with the pane.
+  const latestPaneKey = useRef(paneKey)
   // Fence late frames before passive cleanup closes the previous stream.
   useLayoutEffect(() => {
     latestEnabled.current = enabled
-  }, [enabled])
+    latestPaneKey.current = paneKey
+  }, [enabled, paneKey])
   const latestSessionId = useRef<string | null>(sessionId)
   latestSessionId.current = sessionId
   // Owner flips can retain sessionId; transport identity must also fence stale pagination.
@@ -140,6 +147,7 @@ export function useNativeChatLiveSession(
     replaceList(appendMergerRef.current, [])
     setAppended([])
     setHasMore(false)
+    const wake = { wakeWslDistro: takeNativeChatOpenWake(latestPaneKey.current, sourceKey) }
 
     // Seed independently for silent streams, but never overwrite an authoritative frame.
     function loadSession(attempt: number): void {
@@ -147,7 +155,7 @@ export function useNativeChatLiveSession(
         return
       }
       void transport
-        .readSession(agent, activeSessionId, limitRef.current, transcriptPath ?? undefined)
+        .readSession(agent, activeSessionId, limitRef.current, transcriptPath ?? undefined, wake)
         .then((result) => {
           if (cancelled || !latestEnabled.current || frameArrived) {
             return
@@ -188,7 +196,8 @@ export function useNativeChatLiveSession(
         agent,
         sessionId,
         transcriptPath: transcriptPath ?? undefined,
-        limit: limitRef.current
+        limit: limitRef.current,
+        wakeWslDistro: wake.wakeWslDistro
       },
       (frame) => {
         if (cancelled || !latestEnabled.current) {
@@ -255,7 +264,7 @@ export function useNativeChatLiveSession(
     const loadedCount = read.messages.length
     setLoadingEarlier(true)
     const promise = transport
-      .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined)
+      .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined, USER_PAGING)
       .then((result): NativeChatOlderPageResult => {
         if (
           !latestEnabled.current ||

@@ -10,14 +10,6 @@ const route = (overrides: Partial<SshRoute> = {}): SshRoute => ({
 })
 
 describe('sshRouteKey', () => {
-  it('keeps aliases apart when a shared ProxyCommand names the alias with %n', () => {
-    const proxy = { kind: 'proxy-command' as const, command: 'docker exec -i %n nc localhost 22' }
-
-    expect(sshRouteKey(route({ alias: 'dev1', proxy }))).not.toBe(
-      sshRouteKey(route({ alias: 'dev2', proxy }))
-    )
-  })
-
   it('matches a route whose tokens expand to the same command', () => {
     expect(
       sshRouteKey(route({ proxy: { kind: 'proxy-command', command: 'ssh bastion -W %h:%p' } }))

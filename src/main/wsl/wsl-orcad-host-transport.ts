@@ -41,6 +41,8 @@ type WslOrcadHostTransportOptions = {
   commandLoops?: boolean
   /** Test seam; production shares the deploy's own registry read (no extra reg.exe). */
   readDistroRegistryId?: (distro: string) => Promise<string | null>
+  /** Once aborted, no wsl.exe starts and running ones end, so a late step can't boot a stopped distro. */
+  signal?: AbortSignal
 }
 
 /** Reuse loops for stdin-free probes; stdin consumers get dedicated wsl.exe children. WSL is a Linux host without SFTP, so transfers use exec. */
@@ -77,11 +79,16 @@ export function createWslOrcadHostTransport(
   const transport: WslOrcadHostTransport = {
     // wrapCommand is SSH-only; WSL starts sh directly without a login shell.
     async exec(command: string, execOptions?: SshExecOptions): Promise<RemoteCommandChannel> {
-      if (execOptions?.signal?.aborted) {
+      if (execOptions?.signal?.aborted || options.signal?.aborted) {
         throw createSshOperationAbortError()
       }
       const child = spawnWsl(['sh', '-c', command])
       const channel = wrapWslCommandProcess(child)
+      const endOnAbort = (): void => {
+        channel.destroy(createSshOperationAbortError())
+      }
+      options.signal?.addEventListener('abort', endOnAbort, { once: true })
+      channel.once('close', () => options.signal?.removeEventListener('abort', endOnAbort))
       // Reject spawn failure while opening the channel, matching SSH, rather than as a later stream error.
       const spawnError = (error: Error): void => {
         channel.destroy(error)

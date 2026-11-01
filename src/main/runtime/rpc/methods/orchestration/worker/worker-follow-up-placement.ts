@@ -9,17 +9,24 @@ import {
   resolveStructuredWorkerIdentity,
   structuredWorkerSession
 } from '../../../../structured-worker-authority'
+import type { WorkerFollowUpPlacement } from './worker-follow-up-choice'
 
 /** What a follow-up continues, and for a closed worker how it comes back once the follow-up holds its Dispatch. */
 export type WorkerFollowUp = {
   /** The settled Dispatch whose worker this one continues. */
   of: string
+  /** The Dispatch the sender named, which a refusal reports. */
+  addressed: string
+  /** The Dispatch that last took custody of the worker's agent, whose creator owns it; absent when none ever got one, and the first request's creator owns it. */
+  custodian?: string
+  /** The start owner admits the caller before resolving placement, which may release an owned shell. */
+  place: (assertCreatorCurrent: () => void) => Promise<WorkerFollowUpPlacement>
   /** Resolves null when the agent refused to resume before spawning anything; a fresh one starts instead. */
   reopen?: (dispatchId: string) => Promise<ReopenedWorker | null>
   /** The send this follow-up answers, whose pending receipt names the Dispatch it accepted. */
   acceptedBy?: { callerFingerprint: string; requestId: string }
-  /** Unread mail this follow-up carries as its Task. */
-  consumesMessageIds?: readonly string[]
+  /** The Dispatch whose unread mail this follow-up's Task tells it to check. */
+  takesMailOf?: string
   /** Appended to the Task when a reopen falls back to a fresh agent. */
   earlierWork?: string
 }

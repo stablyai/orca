@@ -15,7 +15,7 @@ import {
   type SetStateAction
 } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../shared/native-chat/native-chat-agent-profiles'
 import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion
