@@ -7,7 +7,10 @@ import { serveNativeClipboardVerb } from './native-clipboard'
 import { createNativeMediaVerbServer } from './native-media'
 import { discardStagedMedia, nativeMediaDeviceDeps } from './native-media-device'
 
-export type NativeDeviceVerb = Exclude<BridgeNativeVerb, 'native.storage.read' | 'native.pdf.view'>
+export type NativeDeviceVerb = Exclude<
+  BridgeNativeVerb,
+  'native.storage.read' | 'native.pdf.view' | 'native.browser.local'
+>
 
 // Tie stateful audio/media handlers to the page session so replacement documents cannot inherit abandoned microphones or staged handles.
 export function useNativeDeviceVerbs(

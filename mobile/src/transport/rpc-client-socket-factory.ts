@@ -1,4 +1,9 @@
+import { isBrowserNetworkTunnelFrameKind } from '../../../src/shared/browser-network-tunnel-protocol'
 import type { PairedE2EEFramingPolicy } from '../../../src/shared/paired-e2ee-framing-policy'
+import {
+  BrowserTunnelFrameListeners,
+  type BrowserTunnelFrameChannel
+} from './browser-tunnel-frame-channel'
 import { createDirectE2EEFramingPolicy } from './direct-e2ee-framing-policy'
 import { publicKeyFromBase64 } from './e2ee'
 import { RpcClientSocketSession } from './rpc-client-socket-session'
@@ -31,6 +36,19 @@ export class RpcClientSocketFactory {
   private lastSocketClosedAt: number | null = null
   private constructionCount = 0
   private dialStartedAt = 0
+  private latestSession: RpcClientSocketSession | null = null
+  private readonly tunnelListeners = new BrowserTunnelFrameListeners()
+
+  // Tunnel frames share the socket with terminal and screencast frames; the kind byte tells them apart.
+  readonly browserTunnel: BrowserTunnelFrameChannel = {
+    send: (frame) => {
+      const session = this.latestSession
+      return session !== null && session.socket === this.options.getCurrentSocket()
+        ? session.sendBinary(frame)
+        : false
+    },
+    onFrame: (listener) => this.tunnelListeners.add(listener)
+  }
 
   constructor(private readonly options: SocketFactoryOptions) {
     // Why: an invalid pairing key fails construction, not every dial.
@@ -58,7 +76,7 @@ export class RpcClientSocketFactory {
         : 'Opening WebSocket',
       redactSocketEndpoint(this.options.endpoint)
     )
-    return new RpcClientSocketSession({
+    const session = new RpcClientSocketSession({
       endpoint: this.options.endpoint,
       deviceToken: this.options.deviceToken,
       serverPublicKeyB64: this.options.serverPublicKeyB64,
@@ -72,12 +90,17 @@ export class RpcClientSocketFactory {
       onAuthenticated: this.options.onAuthenticated,
       onAuthRejected: this.options.onAuthRejected,
       onRpcResponse: this.options.onRpcResponse,
-      onBinary: this.options.onBinary,
+      onBinary: (bytes) =>
+        isBrowserNetworkTunnelFrameKind(bytes)
+          ? this.tunnelListeners.emit(bytes)
+          : this.options.onBinary(bytes),
       onAnyInbound: (receivedAt) => (this.lastInboundAt = receivedAt),
       onAuthenticatedInbound: this.options.onAuthenticatedInbound,
       onClosed: this.options.onClosed,
       onForcedClose: this.options.onForcedClose
     })
+    this.latestSession = session
+    return session
   }
 
   getDialStartedAt(): number {

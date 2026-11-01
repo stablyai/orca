@@ -15,6 +15,10 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
+import {
+  MobileBrowserDrawingButtons,
+  type MobileBrowserStreamedDrawing
+} from './MobileBrowserDrawingButtons'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
 import {
@@ -58,6 +62,7 @@ type MobileBrowserPaneViewProps = {
   keyboardValue: string
   layoutRef: RefObject<BrowserTouchLayout | null>
   navigateToAddress: () => Promise<void>
+  drawing?: MobileBrowserStreamedDrawing
   panResponder: PanResponderInstance
   pointerModifiers: BrowserPointerModifier[]
   reloadPage: () => void
@@ -98,6 +103,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     keyboardValue,
     layoutRef,
     navigateToAddress,
+    drawing,
     panResponder,
     pointerModifiers,
     reloadPage,
@@ -155,6 +161,13 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           value={browserViewMode}
           onChange={selectBrowserViewMode}
         />
+        {drawing && (
+          <MobileBrowserDrawingButtons
+            drawing="stream"
+            onDrawingChange={drawing.onDrawingChange}
+            fullScreen={drawing.fullScreen}
+          />
+        )}
       </View>
 
       <View

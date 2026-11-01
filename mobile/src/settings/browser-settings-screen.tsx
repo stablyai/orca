@@ -1,18 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'expo-router'
-import { Globe } from 'lucide-react-native'
+import { Globe, Network } from 'lucide-react-native'
 import { ListRow } from '../components/list/ListGroup'
 import { PickerModal, type PickerOption } from '../components/PickerModal'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
+  DEFAULT_BROWSER_DRAWING,
+  DEFAULT_TERMINAL_LINK_OPEN_MODE,
+  loadBrowserDrawing,
   loadTerminalLinkOpenMode,
+  saveBrowserDrawing,
   saveTerminalLinkOpenMode,
+  type MobileBrowserDrawing,
   type MobileTerminalLinkOpenMode
 } from '../storage/preferences'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
+import { useSavedBrowserPreference } from './use-saved-browser-preference'
 
 function linkModeOptions(t: Translate): PickerOption<MobileTerminalLinkOpenMode>[] {
   return [
@@ -35,11 +41,37 @@ function linkModeOptions(t: Translate): PickerOption<MobileTerminalLinkOpenMode>
   ]
 }
 
-function linkModeLabel(
-  mode: MobileTerminalLinkOpenMode,
-  options: PickerOption<MobileTerminalLinkOpenMode>[]
-): string {
-  return options.find((option) => option.value === mode)?.label ?? options[0]!.label
+function drawingOptions(t: Translate): PickerOption<MobileBrowserDrawing>[] {
+  return [
+    {
+      value: 'stream',
+      label: t('settings.browserSettingsScreen.streamDrawing', 'Stream from the host'),
+      subtitle: t(
+        'settings.browserSettingsScreen.streamDrawingDescription',
+        "Show pictures of the desktop's browser; the phone button still draws a tab here."
+      )
+    },
+    {
+      value: 'host',
+      label: t('settings.browserSettingsScreen.hostDrawing', 'Draw on the phone, through the host'),
+      subtitle: t(
+        'settings.browserSettingsScreen.hostNetworkDescription',
+        'Traffic goes out from your paired desktop, using its network and proxy settings.'
+      )
+    },
+    {
+      value: 'phone',
+      label: t('settings.browserSettingsScreen.phoneDrawing', 'Draw on the phone, on its network'),
+      subtitle: t(
+        'settings.browserSettingsScreen.phoneNetworkDescription',
+        'Traffic goes out from this phone, like any app on it.'
+      )
+    }
+  ]
+}
+
+function optionLabel<T extends string>(value: T, options: PickerOption<T>[]): string {
+  return options.find((option) => option.value === value)?.label ?? options[0]!.label
 }
 
 export default function BrowserSettingsScreen({
@@ -50,59 +82,20 @@ export default function BrowserSettingsScreen({
   const t = useMobileTranslation()
   useMobileColorScheme()
   const router = useRouter()
-  const [linkMode, setLinkMode] = useState<MobileTerminalLinkOpenMode>('orca-browser')
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [error, setError] = useState<'load' | 'save' | null>(null)
+  const [pickerOpen, setPickerOpen] = useState<'links' | 'drawing' | null>(null)
+  const linkMode = useSavedBrowserPreference(
+    loadTerminalLinkOpenMode,
+    saveTerminalLinkOpenMode,
+    DEFAULT_TERMINAL_LINK_OPEN_MODE
+  )
+  const drawing = useSavedBrowserPreference(
+    loadBrowserDrawing,
+    saveBrowserDrawing,
+    DEFAULT_BROWSER_DRAWING
+  )
   const options = linkModeOptions(t)
-  const selectionRevision = useRef(0)
-  const failedSelectionRevision = useRef<number | null>(null)
-  const savedMode = useRef<MobileTerminalLinkOpenMode>('orca-browser')
-  const hasSaved = useRef(false)
-
-  useEffect(() => {
-    let active = true
-    void loadTerminalLinkOpenMode().then(
-      (mode) => {
-        if (!hasSaved.current) {
-          savedMode.current = mode
-        }
-        if (
-          active &&
-          (selectionRevision.current === 0 ||
-            failedSelectionRevision.current === selectionRevision.current)
-        ) {
-          setLinkMode(savedMode.current)
-        }
-      },
-      () => {
-        if (active) {
-          setError('load')
-        }
-      }
-    )
-    return () => {
-      active = false
-    }
-  }, [])
-
-  const selectLinkMode = useCallback((mode: MobileTerminalLinkOpenMode) => {
-    setError(null)
-    const revision = ++selectionRevision.current
-    setLinkMode(mode)
-    void saveTerminalLinkOpenMode(mode).then(
-      () => {
-        savedMode.current = mode
-        hasSaved.current = true
-      },
-      () => {
-        if (revision === selectionRevision.current) {
-          failedSelectionRevision.current = revision
-          setLinkMode(savedMode.current)
-          setError('save')
-        }
-      }
-    )
-  }, [])
+  const drawings = drawingOptions(t)
+  const error = linkMode.error ?? drawing.error
 
   const errorNote = error ? (
     <SettingsNote error>
@@ -123,14 +116,24 @@ export default function BrowserSettingsScreen({
       title={t('settings.browserSettingsScreen.title', 'Browser')}
       onBack={onBack ?? (() => router.back())}
       overlays={
-        <PickerModal<MobileTerminalLinkOpenMode>
-          visible={pickerOpen}
-          title={t('settings.browserSettingsScreen.openTerminalLinks', 'Open terminal links')}
-          options={options}
-          selected={linkMode}
-          onSelect={selectLinkMode}
-          onClose={() => setPickerOpen(false)}
-        />
+        <>
+          <PickerModal<MobileTerminalLinkOpenMode>
+            visible={pickerOpen === 'links'}
+            title={t('settings.browserSettingsScreen.openTerminalLinks', 'Open terminal links')}
+            options={options}
+            selected={linkMode.value}
+            onSelect={linkMode.select}
+            onClose={() => setPickerOpen(null)}
+          />
+          <PickerModal<MobileBrowserDrawing>
+            visible={pickerOpen === 'drawing'}
+            title={t('settings.browserSettingsScreen.showTabs', 'Show tabs')}
+            options={drawings}
+            selected={drawing.value}
+            onSelect={drawing.select}
+            onClose={() => setPickerOpen(null)}
+          />
+        </>
       }
     >
       <SettingsSection
@@ -151,14 +154,31 @@ export default function BrowserSettingsScreen({
         <ListRow
           key="linkMode"
           title={t('settings.browserSettingsScreen.openTerminalLinks', 'Open terminal links')}
-          subtitle={linkModeLabel(linkMode, options)}
+          subtitle={optionLabel(linkMode.value, options)}
           leading={<Globe size={18} color={colors.textSecondary} />}
           navigates
           accessibilityLabel={t(
             'settings.browserSettingsScreen.openTerminalLinks',
             'Open terminal links'
           )}
-          onPress={() => setPickerOpen(true)}
+          onPress={() => setPickerOpen('links')}
+        />
+      </SettingsSection>
+      <SettingsSection
+        title={t('settings.browserSettingsScreen.tabsHeading', 'BROWSER TABS')}
+        footer={t(
+          'settings.browserSettingsScreen.tabsDescription',
+          'Choose how browser tabs show on the phone, and the network pages drawn here use.'
+        )}
+      >
+        <ListRow
+          key="drawing"
+          title={t('settings.browserSettingsScreen.showTabs', 'Show tabs')}
+          subtitle={optionLabel(drawing.value, drawings)}
+          leading={<Network size={18} color={colors.textSecondary} />}
+          navigates
+          accessibilityLabel={t('settings.browserSettingsScreen.showTabs', 'Show tabs')}
+          onPress={() => setPickerOpen('drawing')}
         />
       </SettingsSection>
     </SettingsScreen>

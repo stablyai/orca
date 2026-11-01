@@ -14,10 +14,12 @@ import {
 import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
 import { defineStreamingMethod } from '../core'
 
-const outboundMemoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
+// Desktop and phone tunnels share one process-wide outbound memory budget.
+export const BROWSER_NETWORK_TUNNEL_OUTBOUND_MEMORY =
+  new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
 
 export function createBrowserNetworkTunnelMethods(
-  memoryBudgets: BrowserNetworkTunnelOutboundMemoryBudgetRegistry = outboundMemoryBudgets,
+  memoryBudgets: BrowserNetworkTunnelOutboundMemoryBudgetRegistry = BROWSER_NETWORK_TUNNEL_OUTBOUND_MEMORY,
   resolveExecutionRoute: BrowserNetworkExecutionRouteResolver = resolveBrowserNetworkExecutionRoute
 ) {
   return [

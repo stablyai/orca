@@ -252,6 +252,33 @@ describe('a saved browser tab on a host with no window', () => {
     expect(listed.tabs.some((tab) => tab.id === 'page-1')).toBe(false)
   })
 
+  it('republishes the tab list when a page finishes loading, for phones that draw the tab themselves', async () => {
+    const { runtime } = restartedServe()
+    await runtime['serveBrowserTabs'].start(TEST_WORKTREE_ID, 'page-1')
+    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const published = vi.fn()
+    const unsubscribe = runtime.onMobileSessionTabsChanged(published)
+
+    runtime.serveBrowserPageNavigated({
+      worktreeId: TEST_WORKTREE_ID,
+      pageId: 'page-1',
+      url: 'https://example.com/',
+      title: 'Example'
+    })
+
+    await vi.waitFor(() =>
+      expect(published).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabs: expect.arrayContaining([
+            expect.objectContaining({ id: 'page-1', url: 'https://example.com/' })
+          ])
+        }),
+        expect.any(Number)
+      )
+    )
+    unsubscribe()
+  })
+
   it('starts its page for a command that names only the page', async () => {
     const { runtime, createTab } = restartedServe()
 

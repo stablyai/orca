@@ -18,6 +18,7 @@ import { BROWSER_CLIENT_HOST_METHODS } from './browser-client-host'
 import { DESKTOP_BROWSER_BRIDGE_RPC_METHODS } from './desktop-browser-bridge'
 import { BROWSER_CLIENT_FILE_CHANNEL_METHODS } from './browser-client-file-channel'
 import { BROWSER_NETWORK_TUNNEL_METHODS } from './browser-network-tunnel'
+import { MOBILE_BROWSER_TUNNEL_METHODS } from './mobile-browser-network-tunnel'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { NOTIFICATION_METHODS } from './notifications'
 import { STATS_METHODS } from './stats'
@@ -106,6 +107,7 @@ export const ALL_RPC_METHODS = [
   ...DESKTOP_BROWSER_BRIDGE_RPC_METHODS,
   ...BROWSER_CLIENT_FILE_CHANNEL_METHODS,
   ...BROWSER_NETWORK_TUNNEL_METHODS,
+  ...MOBILE_BROWSER_TUNNEL_METHODS,
   ...ORCHESTRATION_METHODS,
   ...NOTIFICATION_METHODS,
   ...STATS_METHODS,

@@ -94,7 +94,9 @@ describe('init and state', () => {
       'navigate',
       'storage',
       'haptics',
-      'screencastBinary'
+      'screencastBinary',
+      'native.browser.local',
+      'native.browser.view'
     ])
     const pair = (init.pageRouteGrants ?? []).find((entry) => entry.pathname === '/h/[hostId]')
     expect(pair?.grants).toEqual(['navigate', 'storage', 'haptics', 'screencastBinary'])

@@ -169,6 +169,10 @@ export type RpcContext = {
   registerBinaryMessageHandler?: (
     handler: (bytes: Uint8Array<ArrayBufferLike>) => void
   ) => () => void
+  // Browser tunnel frames that share a phone's socket with its terminal streams.
+  registerBrowserTunnelFrameHandler?: (
+    handler: (bytes: Uint8Array<ArrayBufferLike>) => void
+  ) => () => void
 }
 
 // No schema means no params; the handler must not read its first argument.
