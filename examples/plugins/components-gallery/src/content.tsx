@@ -13,8 +13,12 @@ import {
   Toolbar,
   Button,
   host,
+  RelativeTime,
   ui
 } from 'orca'
+
+// When this panel module loaded: RelativeTime keeps "…ago" current with no timer of our own.
+const loadedAt = Date.now()
 
 const README = `## Components Gallery
 
@@ -46,6 +50,9 @@ export function ContentTab() {
       </Toolbar>
       <Callout tone="accent" title="Catalog 2">
         <Text>These components need Orca 1.4.247 or newer (ui.catalog {ui.catalog}).</Text>
+        <Text muted size="xs">
+          Opened <RelativeTime at={loadedAt} format="long" />
+        </Text>
       </Callout>
       <Grid minItemWidth="sm" gap="sm">
         <Card title="Logo">

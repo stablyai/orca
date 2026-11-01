@@ -11,6 +11,7 @@
 - `function stored(value: unknown, version: number): unknown`: A persisted value an older version wrote, to test an atom's `migrate`.
 - `function mount(target: PanelModule | (() => OrcaNode), options?: MountOptions): Promise<TestPanel>`: Mounts a panel module (`import * as panel from './panel'`) or its component, with the real runtime and Orca's own checks, and resolves once it has drawn. Mounting again starts over: every atom goes back to its initial value.
 - `function mountWorker(module: WorkerModule, options?: MountWorkerOptions): Promise<TestWorker>`: Calls the worker's default-exported `activate(orca)` with the `orca` object Orca passes, backed by `mockHost` (worker methods, the manifest's capabilities). `.ts` mains load as Orca loads them.
+- `function defineCheck<S extends Record<string, CheckScenario>>(scenarios: S): S`: Named scenarios for `orca plugin check`, as the default export of `<entry>.check.ts` beside the panel (`src/panel.check.ts` for `src/panel.tsx`). Check renders the panel once per scenario, with the plugin's worker on the same host; without the file it renders once with defaults.
 - `function test(name: string, fn: () => unknown): Promise<void>`: Node's `node:test`, re-exported so a test type-checks without the Node typings.
 - `function describe(name: string, fn: () => unknown): Promise<void>`
 - `function beforeEach(fn: () => unknown): void`
@@ -76,3 +77,4 @@
 - `MountOptions = { host?: MockHost; theme?: 'light' | 'dark'; locale?: string; visible?: boolean; panelId?: string; persisted?: { plugin?: Record<string, unknown>; workspace?: Record<string, unknown> } }`
 - `MountWorkerOptions = { host?: MockHost; events?: readonly string[]; commands?: readonly string[] }`
 - `MockHostOptions = { capabilities?: readonly string[]; results?: Record<string, unknown>; requests?: MockRequests; storage?: Record<string, JsonValue>; settings?: Record<string, JsonValue>; secrets?: Record<string, string> }`
+- `CheckScenario = MockHostOptions & { persisted?: MountOptions['persisted']; theme?: 'light' | 'dark'; events?: readonly { [E in keyof OrcaEvents]: { event: E; payload: OrcaEvents[E] } }[keyof OrcaEvents][] }`

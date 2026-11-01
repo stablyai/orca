@@ -6,6 +6,7 @@ import {
   createPluginWorkerOrcaApi
 } from '../../workers/plugin-worker-orca-api'
 import type { MockHost } from './testing-host'
+import { hostError } from './testing-host-error'
 
 /** A worker `main` module: `activate` is its default export; `deactivate` may sit beside it. */
 export type WorkerModule = {
@@ -81,6 +82,17 @@ export async function mountWorker(module: WorkerModule, options: MountWorkerOpti
     throw new Error(`registered undeclared command ${undeclared}: list it in contributes.commands`)
   }
 
+  async function answer(name: string, input: unknown, panelId?: string): Promise<unknown> {
+    const handler = tables.panelRequests.get(name)
+    if (!handler) {
+      throw hostError('unknown_method', `no panel handler named ${name}`)
+    }
+    const panel = { ...TEST_PANEL, contributionId: panelId ?? TEST_PANEL.contributionId }
+    return handler(input, { panel, signal: new AbortController().signal })
+  }
+  // Why no idle() here: the panel's own call is still pending on the host while this answers.
+  const stopAnswering = host.routeRequests((name, input) => answer(name, input))
+
   return {
     host,
     /** What the worker passed to `orca.log`, in order. */
@@ -125,15 +137,7 @@ export async function mountWorker(module: WorkerModule, options: MountWorkerOpti
       input?: unknown,
       caller: { panel?: string } = {}
     ): Promise<unknown> {
-      const handler = tables.panelRequests.get(name)
-      if (!handler) {
-        throw Object.assign(new Error(`no panel handler named ${name}`), {
-          code: 'unknown_method',
-          retryable: false
-        })
-      }
-      const panel = { ...TEST_PANEL, contributionId: caller.panel ?? TEST_PANEL.contributionId }
-      const output = await handler(input, { panel, signal: new AbortController().signal })
+      const output = await answer(name, input, caller.panel)
       await host.idle()
       return output
     },
@@ -144,6 +148,7 @@ export async function mountWorker(module: WorkerModule, options: MountWorkerOpti
       }
       active = false
       stopListening()
+      stopAnswering()
       tables.events.clear()
       tables.commands.clear()
       tables.panelRequests.clear()

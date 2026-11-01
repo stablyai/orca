@@ -1,4 +1,8 @@
 import type { PluginDeclarativeChild, PluginDeclarativeNode } from '../plugin-declarative-catalog'
+import {
+  formatPluginRelativeTime,
+  PLUGIN_RELATIVE_TIME_FORMATS
+} from '../plugin-declarative-relative-time'
 
 /** One element of the drawn tree, as a test sees it. Actions re-find it by `path`. */
 export type TestElement = {
@@ -62,7 +66,24 @@ const ROLES: Record<string, string> = {
   KeyValue: 'list',
   Callout: 'note',
   Skeleton: 'status',
+  RelativeTime: 'time',
   Unsupported: 'unsupported'
+}
+
+/** What a relative time reads now, in English, as Orca draws it (`short` unless set). */
+function relativeText(at: unknown, format: unknown): string {
+  if (typeof at !== 'number') {
+    return ''
+  }
+  const chosen = PLUGIN_RELATIVE_TIME_FORMATS.find((each) => each === format) ?? 'short'
+  return formatPluginRelativeTime(at, Date.now(), chosen, 'en')
+}
+
+function cellText(cell: unknown): string {
+  if (typeof cell === 'object' && cell !== null && 'at' in cell) {
+    return relativeText(cell.at, 'format' in cell ? cell.format : undefined)
+  }
+  return String(cell ?? '')
 }
 
 const OWN_TEXT_PROPS = ['title', 'description', 'content', 'code', 'error', 'alt']
@@ -79,7 +100,7 @@ function dataText(props: Record<string, unknown>): string[] {
     }
     const entry: Record<string, unknown> = { ...next }
     if (typeof entry.cells === 'object' && entry.cells !== null) {
-      words.push(...Object.values(entry.cells).map((cell) => String(cell ?? '')))
+      words.push(...Object.values(entry.cells).map(cellText))
     }
     for (const name of ['label', 'value']) {
       if (entry[name] !== undefined && entry[name] !== null) {
@@ -101,6 +122,9 @@ function textOf(node: PluginDeclarativeChild): string {
   const own = OWN_TEXT_PROPS.map((name) => props[name]).filter(
     (value): value is string => typeof value === 'string'
   )
+  if (node.type === 'RelativeTime') {
+    return relativeText(props.at, props.format)
+  }
   // A tab's words are its label; its children are the panel it shows.
   if (node.type === 'Tab') {
     return typeof props.label === 'string' ? props.label : ''

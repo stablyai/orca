@@ -169,7 +169,7 @@ export function parsePluginDeclarativeTree(raw: unknown): PluginDeclarativeTreeR
         fail(path, `${parentType} accepts only text`)
       }
       if (policy === 'inline' && known && !PLUGIN_DECLARATIVE_INLINE_COMPONENTS.has(type)) {
-        fail(path, `${parentType} accepts only text, Text, Link, Code and Badge`)
+        fail(path, `${parentType} accepts only text, Text, Link, Code, Badge and RelativeTime`)
       }
       const slot = slotChild(policy)
       const ownSlot = typeof type === 'string' ? SLOT_CHILD_POLICY.get(type) : undefined

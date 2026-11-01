@@ -12,7 +12,11 @@ declare module 'orca' {
     width?: 'auto' | 'xs' | 'sm' | 'md' | 'lg'
     sortable?: boolean
   }
-  export type TableCell = string | number | boolean | null
+  /** How a relative time reads: `long` "5 minutes ago", `short` "5m ago", `duration` "5m". */
+  export type RelativeTimeFormat = 'long' | 'short' | 'duration'
+  /** A cell Orca keeps current, e.g. `{ type: 'relative', at: agent.stateStartedAt }`. */
+  export type RelativeTimeCell = { type: 'relative'; at: number; format?: RelativeTimeFormat }
+  export type TableCell = string | number | boolean | null | RelativeTimeCell
   export type TableRow = { key: string; cells: Record<string, TableCell>; disabled?: boolean }
   export type TableSort = { column: string; direction: 'asc' | 'desc' }
   /**
@@ -91,6 +95,19 @@ declare module 'orca' {
     code?: boolean
   }
   export type KeyValueProps = Leaf & { label?: string; items: readonly KeyValueItem[] }
+  /**
+   * Since 1.4.247 (`ui.catalog` 3): a time Orca keeps current ("5m ago") with no polling. Inline:
+   * it may sit inside `Text`.
+   */
+  export type RelativeTimeProps = Leaf & {
+    /** Milliseconds since the epoch, e.g. `Date.now()` or an agent's `stateStartedAt`. */
+    at: number
+    format?: RelativeTimeFormat
+    tone?: Tone
+    muted?: boolean
+  }
+
+  export const RelativeTime: OrcaComponent<RelativeTimeProps>
   export const Table: OrcaComponent<TableProps>
   export const Tree: OrcaComponent<TreeProps>
   export const Markdown: OrcaComponent<MarkdownProps>

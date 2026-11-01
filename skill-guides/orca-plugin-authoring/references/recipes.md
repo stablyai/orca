@@ -45,7 +45,8 @@ agent events with `on(...)` (frames: `orca.on`) without `contributes.events`.
    lists and `terminal.sendText` takes; `paneKey` is Orca's own id).
 3. Push `on('workspace.changed', ...)` too and re-run `agents.list`: it fires when focus moves or
    terminals open, close or are renamed, with the new `readContext` answer in `context`.
-4. Keep the rows in an atom and render them as `List`/`ListItem`. Never poll.
+4. Keep the rows in an atom and render them as a `Table` (or `List`/`ListItem`); show "since" with
+   a `{ type: 'relative', at: stateStartedAt }` cell, which Orca keeps current. Never poll.
 5. Test it with `mockHost({ results: { 'agents.list': { agents: [...] } } })` and
    `panel.emit('agent.status.changed', payload)`.
 

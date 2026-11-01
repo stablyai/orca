@@ -361,7 +361,7 @@ var PLUGIN_DECLARATIVE_MESSAGES = {
   /** guest → host, `{ document, entries: [{ key, version, value? }] }`: keyed memory atoms changed. */
   retain: "ui.retain"
 };
-var PLUGIN_DECLARATIVE_CATALOG_VERSION = 2;
+var PLUGIN_DECLARATIVE_CATALOG_VERSION = 3;
 var PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
   Stack: ["gap", "align"],
   Row: ["gap", "align", "justify", "wrap"],
@@ -480,7 +480,9 @@ var PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
   Image: ["src", "alt", "size", "fit", "rounded"],
   KeyValue: ["label", "items"],
   Callout: ["tone", "title", "icon"],
-  Skeleton: ["shape", "lines", "label"]
+  Skeleton: ["shape", "lines", "label"],
+  // Catalog 3 (also Orca 1.4.247).
+  RelativeTime: ["at", "format", "tone", "muted"]
 };
 var PLUGIN_DECLARATIVE_VALUE_CONTROLS = {
   Input: { value: "value", change: "onChange" },
@@ -1447,6 +1449,7 @@ var Image = "Image";
 var KeyValue = "KeyValue";
 var Callout = "Callout";
 var Skeleton = "Skeleton";
+var RelativeTime = "RelativeTime";
 export {
   Badge,
   Button,
@@ -1471,6 +1474,7 @@ export {
   Markdown,
   Progress,
   RadioGroup,
+  RelativeTime,
   Row,
   Select,
   Separator,

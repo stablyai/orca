@@ -20,6 +20,7 @@ import { PluginDeclarativeTable } from './PluginDeclarativeTable'
 import { PluginDeclarativeTree } from './PluginDeclarativeTree'
 import { PluginDeclarativeMarkdown } from './PluginDeclarativeMarkdown'
 import { PluginDeclarativeImage } from './PluginDeclarativeImage'
+import { PluginDeclarativeRelativeTimeText } from './PluginDeclarativeRelativeTime'
 import {
   PluginDeclarativeCallout,
   PluginDeclarativeCodeView,
@@ -45,7 +46,8 @@ const RICH_TYPES = [
   'Image',
   'KeyValue',
   'Callout',
-  'Skeleton'
+  'Skeleton',
+  'RelativeTime'
 ] as const
 const RICH_TYPE_SET: ReadonlySet<string> = new Set(RICH_TYPES)
 
@@ -122,5 +124,14 @@ export function PluginDeclarativeRichNodeView({
       return <PluginDeclarativeCallout props={node.props}>{children}</PluginDeclarativeCallout>
     case 'Skeleton':
       return <PluginDeclarativeSkeleton props={node.props} />
+    case 'RelativeTime':
+      return (
+        <span
+          data-tone={node.props.muted ? 'muted' : (node.props.tone ?? 'neutral')}
+          className="text-foreground data-[tone=accent]:text-primary data-[tone=danger]:text-destructive data-[tone=muted]:text-muted-foreground data-[tone=success]:text-status-success data-[tone=warning]:text-status-warning-text"
+        >
+          <PluginDeclarativeRelativeTimeText at={node.props.at} format={node.props.format} />
+        </span>
+      )
   }
 }

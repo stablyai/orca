@@ -7,6 +7,7 @@ import type { PluginDeclarativeProps } from '../../../../../shared/plugins/decla
 import { usePluginDeclarativeHostValue } from './plugin-declarative-host-value'
 import type { PluginDeclarativeEmit } from './PluginDeclarativeControls'
 import { nextTableRow, nextTableSelection } from './plugin-declarative-table-selection'
+import { PluginDeclarativeRelativeTimeText } from './PluginDeclarativeRelativeTime'
 
 type TableProps = PluginDeclarativeProps<'Table'>
 type Column = TableProps['columns'][number]
@@ -31,6 +32,13 @@ function CellValue({ value }: { value: Cell | undefined }): React.ReactNode {
         className="size-4"
         aria-label={translate('auto.components.plugins.declarative.Table.yes', 'Yes')}
       />
+    )
+  }
+  if (typeof value === 'object' && value !== null) {
+    return (
+      <span className="truncate">
+        <PluginDeclarativeRelativeTimeText at={value.at} format={value.format} />
+      </span>
     )
   }
   if (value === false || value === null || value === undefined || value === '') {

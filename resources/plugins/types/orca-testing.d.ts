@@ -232,6 +232,22 @@ declare module 'orca/testing' {
     options?: MountWorkerOptions
   ): Promise<TestWorker>
 
+  /** One render `orca plugin check` makes: the host it runs on, persisted values, and Orca events
+   *  delivered after it first draws. */
+  export type CheckScenario = MockHostOptions & {
+    persisted?: MountOptions['persisted']
+    theme?: 'light' | 'dark'
+    events?: readonly {
+      [E in keyof OrcaEvents]: { event: E; payload: OrcaEvents[E] }
+    }[keyof OrcaEvents][]
+  }
+  /**
+   * Named scenarios for `orca plugin check`, as the default export of `<entry>.check.ts` beside the
+   * panel (`src/panel.check.ts` for `src/panel.tsx`). Check renders the panel once per scenario,
+   * with the plugin's worker on the same host; without the file it renders once with defaults.
+   */
+  export function defineCheck<S extends Record<string, CheckScenario>>(scenarios: S): S
+
   /** Node's `node:test`, re-exported so a test type-checks without the Node typings. */
   export function test(name: string, fn: () => unknown): Promise<void>
   export function describe(name: string, fn: () => unknown): Promise<void>

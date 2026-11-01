@@ -192,6 +192,94 @@ describe('the example plugins', () => {
 
 describe('orca plugin check', () => {
   it(
+    "runs the plugin's worker so panel requests reach it, and renders each fixture scenario",
+    async () => {
+      const dir = await componentsPlugin()
+      const manifestPath = join(dir, 'orca-plugin.json')
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+      await writeFile(
+        manifestPath,
+        JSON.stringify({
+          ...manifest,
+          execution: 'trusted-worker',
+          main: 'src/worker.ts',
+          capabilities: [{ kind: 'agent:read' }]
+        })
+      )
+      await writeFile(
+        join(dir, 'src', 'worker.ts'),
+        [
+          "import type { OrcaWorkerApi } from 'orca/worker'",
+          'export default function activate(orca: OrcaWorkerApi): void {',
+          "  orca.panels.handle('stats', () => ({ changes: 7 }))",
+          '}',
+          ''
+        ].join('\n')
+      )
+      await writeFile(
+        join(dir, 'src', 'panel.tsx'),
+        [
+          "import { atom, host, List, ListItem, plugin, read, set, Text } from 'orca'",
+          "const changes = atom<number | null>('changes', null)",
+          "const names = atom<string[]>('names', [])",
+          'export function setup(): void {',
+          "  void plugin.request('stats').then((stats) => set(changes, (stats as { changes: number }).changes))",
+          "  void host.call('agents.list').then(({ agents }) => set(names, agents.map((agent) => agent.title ?? '?')))",
+          '}',
+          'export default function Panel() {',
+          '  return (',
+          '    <List label="Agents">',
+          '      {read(names).map((name) => <ListItem key={name} title={name} />)}',
+          '      <ListItem key="#changes" title={`changes ${read(changes)}`} />',
+          '    </List>',
+          '  )',
+          '}',
+          ''
+        ].join('\n')
+      )
+      await writeFile(
+        join(dir, 'src', 'panel.check.ts'),
+        [
+          "import { defineCheck } from 'orca/testing'",
+          'export default defineCheck({',
+          '  empty: {},',
+          '  busy: {',
+          "    results: { 'agents.list': { agents: [",
+          "      { terminalId: 't1', title: 'Claude', agent: 'claude', state: 'working', stateStartedAt: 1 },",
+          "      { terminalId: 't2', title: 'Codex', agent: 'codex', state: 'done', stateStartedAt: 1 }",
+          '    ] } }',
+          '  }',
+          '})',
+          ''
+        ].join('\n')
+      )
+      const checks = await checkPluginPanels(dir)
+      expect(
+        checks.map(({ scenario, elements, issues, warnings }) => ({
+          scenario,
+          elements,
+          issues,
+          warnings
+        }))
+      ).toEqual([
+        { scenario: 'empty', elements: 1, issues: [], warnings: [] },
+        { scenario: 'busy', elements: 3, issues: [], warnings: [] }
+      ])
+
+      await writeFile(join(dir, 'src', 'worker.ts'), 'export function activate(): void {}\n')
+      await writeFile(join(dir, 'src', 'panel.check.ts'), 'export default {}\n')
+      const [broken] = await checkPluginPanels(dir)
+      expect(broken.issues.map((issue) => issue.message)).toEqual([
+        expect.stringContaining('must export default'),
+        expect.stringMatching(/^worker \(src\/worker\.ts\): .*exports activate by name/),
+        'no panel handler named stats'
+      ])
+    },
+    // Each run starts its own Node process and transpiles the plugin.
+    60_000
+  )
+
+  it(
     'renders the template panel cleanly',
     async () => {
       const dir = await componentsPlugin()

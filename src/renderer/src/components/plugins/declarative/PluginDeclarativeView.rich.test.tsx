@@ -223,4 +223,22 @@ describe('catalog 2 in the host view', () => {
     expect(screen.getByRole('status', { name: 'Loading files' })).toBeTruthy()
     expect(screen.getByText('notes.txt')).toBeTruthy()
   })
+
+  it('keeps a RelativeTime current without the plugin polling', () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 10, 1, 12) })
+    try {
+      const at = Date.now() - 58_000
+      view(node('Text', {}, ['Started ', node('RelativeTime', { at, format: 'long' })]))
+      expect(screen.getByText('58 seconds ago').tagName).toBe('TIME')
+      // Each tick schedules the next after React commits, so step one second at a time.
+      for (let second = 0; second < 3; second++) {
+        act(() => {
+          vi.advanceTimersByTime(1000)
+        })
+      }
+      expect(screen.getByText('1 minute ago')).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

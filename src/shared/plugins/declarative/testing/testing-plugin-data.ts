@@ -59,13 +59,19 @@ export function createMockPluginData(options: MockPluginDataOptions) {
     return { ok: true }
   }
 
+  // A worker mounted on the same host answers what `requests` does not stub, as Orca's would.
+  let worker: ((name: string, input: unknown) => Promise<unknown>) | null = null
+
   async function request(params: unknown): Promise<{ output: unknown }> {
     const name = String(field(params, 'name'))
+    const input = field(params, 'input')
     if (!options.requests || !Object.hasOwn(options.requests, name)) {
+      if (worker) {
+        return { output: (await worker(name, input)) ?? null }
+      }
       throw hostError('unknown_method', `no panel handler named ${name}`)
     }
     const handler: unknown = options.requests[name]
-    const input = field(params, 'input')
     const output = typeof handler === 'function' ? await handler(input) : handler
     return { output: output ?? null }
   }
@@ -100,6 +106,15 @@ export function createMockPluginData(options: MockPluginDataOptions) {
           return write('secrets', key, undefined)
         default:
           return { ok: true }
+      }
+    },
+    /** Routes unstubbed `plugin.request` calls to a mounted worker; returns the undo. */
+    routeRequests(handler: (name: string, input: unknown) => Promise<unknown>): () => void {
+      worker = handler
+      return () => {
+        if (worker === handler) {
+          worker = null
+        }
       }
     },
     onChange(listener: (area: 'storage' | 'settings', key: string) => void): () => void {

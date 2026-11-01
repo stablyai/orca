@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { PLUGIN_DECLARATIVE_LIMITS as LIMITS } from './plugin-declarative-limits'
 import {
+  PLUGIN_RELATIVE_TIME_FORMATS,
+  pluginRelativeTimeAt
+} from './plugin-declarative-relative-time'
+import {
   component,
   flag,
   icon,
@@ -73,6 +77,15 @@ const keyValueProps = z
   })
   .strict()
 const calloutProps = z.object({ tone, title: label.optional(), icon: icon.optional() }).strict()
+const relativeTimeProps = z
+  .object({
+    /** Milliseconds since the epoch (`Date.now()`); Orca keeps the words current. */
+    at: pluginRelativeTimeAt,
+    format: z.enum(PLUGIN_RELATIVE_TIME_FORMATS).optional(),
+    tone,
+    muted: flag
+  })
+  .strict()
 const skeletonProps = z
   .object({
     shape: z.enum(['text', 'block', 'circle']).optional(),
@@ -87,5 +100,6 @@ export const PLUGIN_DECLARATIVE_CONTENT_CATALOG = {
   Image: component(imageProps, 'none'),
   KeyValue: component(keyValueProps, 'none'),
   Callout: component(calloutProps, 'any'),
-  Skeleton: component(skeletonProps, 'none')
+  Skeleton: component(skeletonProps, 'none'),
+  RelativeTime: component(relativeTimeProps, 'none')
 } as const

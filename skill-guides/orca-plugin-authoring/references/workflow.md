@@ -60,9 +60,60 @@ Both run the plugin's code on this machine, outside Orca's sandbox: only on code
 - `ORCA plugin check [dir] --json` validates, then renders each components panel once against a
   stand-in host with the manifest's capabilities: what it threw (`file:line:col`), layouts Orca
   would refuse, props it would drop, and host calls Orca would refuse (`host refused …` warnings,
-  even when the panel caught the error). Exit `0`, `1` `plugin_check_failed`, `2` invalid.
+  even when the panel caught the error). With a worker (`main`), it mounts the worker on the same
+  host first, so the panel's `plugin.request` reaches its `orca.panels.handle` handlers; a worker
+  that fails to activate is an issue named `worker (<file>): …`. Exit `0`, `1`
+  `plugin_check_failed`, `2` invalid.
 
 The full kit API, generated from this Orca, is in `references/testing.md`.
+
+### Check fixtures
+
+Check renders against an empty host (no agents, no storage) unless the panel has scenarios. Put
+them beside its entry (`src/panel.check.ts` for `src/panel.tsx`); check renders the panel once per
+scenario, each on a fresh host with the worker, and labels each result with `scenario`:
+
+```ts
+import { defineCheck } from 'orca/testing'
+
+export default defineCheck({
+  empty: {},
+  busy: {
+    results: {
+      'agents.list': {
+        agents: [
+          {
+            terminalId: 't1',
+            title: 'Claude',
+            agent: 'claude',
+            state: 'working',
+            stateStartedAt: 0
+          }
+        ]
+      }
+    },
+    settings: { notifyOnBlocked: true },
+    events: [
+      {
+        event: 'agent.status.changed',
+        payload: {
+          workspaceId: null,
+          paneKey: 'p',
+          terminalId: 't1',
+          state: 'blocked',
+          receivedAt: 0
+        }
+      }
+    ]
+  }
+})
+```
+
+- A scenario takes `mockHost()` options (`results`, `requests`, `storage`, `settings`, `secrets`,
+  `capabilities`), plus `persisted` and `theme` as `mount()` takes them, and `events` delivered in
+  order after the first draw. `requests` stubs a name; any other goes to the worker.
+- Add one per state worth seeing: empty, busy, an error answer (`hostError(code)` in `results`).
+- Orca itself never loads `*.check.ts`; it may import `orca/testing`.
 
 ### Panels with orca/testing
 

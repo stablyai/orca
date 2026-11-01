@@ -193,7 +193,7 @@ export function isPluginDeclarativeComponentName(
 export const PLUGIN_DECLARATIVE_COMPONENT_NAMES: readonly PluginDeclarativeComponentName[] =
   Object.keys(PLUGIN_DECLARATIVE_CATALOG).filter(isPluginDeclarativeComponentName)
 export const PLUGIN_DECLARATIVE_INLINE_COMPONENTS: ReadonlySet<string> =
-  new Set<PluginDeclarativeComponentName>(['Text', 'Link', 'Code', 'Badge'])
+  new Set<PluginDeclarativeComponentName>(['Text', 'Link', 'Code', 'Badge', 'RelativeTime'])
 /** Controls a pressable ListItem may not contain: one row, one press target. */
 export const PLUGIN_DECLARATIVE_INTERACTIVE_COMPONENTS: ReadonlySet<string> =
   new Set<PluginDeclarativeComponentName>([

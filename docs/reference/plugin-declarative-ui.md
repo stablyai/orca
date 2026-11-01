@@ -283,39 +283,85 @@ test('notifies when an agent is blocked', async () => {
   on the same host sees the same data.
 
 `orca plugin check [dir]` validates the plugin like `orca plugin validate`, then renders every
-components panel once against `mockHost()` and reports what the panel threw (with `file:line`),
-layouts Orca would refuse, props it would drop, and host calls Orca would refuse (a warning even
-when the panel caught the error). Repeated identical issues are reported once. Both commands run the plugin's code on your
-machine with your full access, outside Orca's sandbox, so run them only on code you trust. They use
-the `node` on PATH when it is 20.6 or newer (the first with `module.register`), else the Node built
-into Orca, so authors need no Node install.
+components panel against `mockHost()` and reports what the panel threw (with `file:line`), layouts
+Orca would refuse, props it would drop, and host calls Orca would refuse (a warning even when the
+panel caught the error). Repeated identical issues are reported once. When the plugin has a worker
+(`main`), check mounts it on the same host first, so the panel's `plugin.request` reaches its
+`orca.panels.handle` handlers as in Orca; a worker that fails to activate is reported as an issue
+named after its file. Both commands run the plugin's code on your machine with your full access,
+outside Orca's sandbox, so run them only on code you trust. They use the `node` on PATH when it is
+20.6 or newer (the first with `module.register`), else the Node built into Orca, so authors need no
+Node install.
+
+### Check scenarios
+
+By default check renders each panel once, against an empty host: no agents, no storage. To check
+the states that matter, put named scenarios beside the panel's entry (`src/panel.check.ts` for
+`src/panel.tsx`); check renders the panel once per scenario and reports each under its name:
+
+```ts
+import { defineCheck } from 'orca/testing'
+
+export default defineCheck({
+  empty: {},
+  'two agents': {
+    results: {
+      'agents.list': {
+        agents: [
+          {
+            terminalId: 't1',
+            title: 'Claude',
+            agent: 'claude',
+            state: 'working',
+            stateStartedAt: 0
+          },
+          { terminalId: 't2', title: 'Codex', agent: 'codex', state: 'blocked', stateStartedAt: 0 }
+        ]
+      }
+    },
+    settings: { notifyOnBlocked: true },
+    events: [
+      {
+        event: 'agent.status.changed',
+        payload: { workspaceId: null, paneKey: 'p', terminalId: 't2', state: 'done', receivedAt: 0 }
+      }
+    ]
+  }
+})
+```
+
+A scenario takes everything `mockHost()` does (`results`, `requests`, `storage`, `settings`,
+`secrets`, `capabilities`), plus `persisted` and `theme` as `mount()` takes them and `events`,
+delivered in order after the first draw. `requests` stubs a request; any other name goes to the
+worker. The file is a plugin source like any other (it may import `orca/testing`) and is never
+loaded by Orca itself.
 
 ## Catalog
 
 Props are semantic: tones, sizes and gaps, never class names, styles or colours. Colour has one
 vocabulary, `tone`: `neutral` `accent` `success` `warning` `danger`.
 
-| Component    | Props                                                                                                                                                                                    | Children                           |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `Stack`      | `gap` (`none` `xs` `sm` `md` `lg`), `align` (`start` `center` `end` `stretch`)                                                                                                           | any                                |
-| `Row`        | `gap`, `align`, `justify` (`start` `center` `end` `between`), `wrap`                                                                                                                     | any                                |
-| `Text`       | `tone`, `muted`, `size` (`xs` `sm` `md`), `weight` (`regular` `medium` `semibold`), `truncate`                                                                                           | text, `Text` `Link` `Code` `Badge` |
-| `Heading`    | `level` (1–3, below the panel title)                                                                                                                                                     | as `Text`                          |
-| `Button`     | `variant` (`solid` `outline` `ghost`), `tone`, `size`, `icon`, `disabled`, `onPress()`                                                                                                   | text                               |
-| `IconButton` | `icon` and `label` (required; the label is its name and tooltip), `variant`, `tone`, `size`, `disabled`, `onPress()`                                                                     | none                               |
-| `Badge`      | `tone`                                                                                                                                                                                   | text                               |
-| `Card`       | `title`, `description`                                                                                                                                                                   | any                                |
-| `List`       | `label`                                                                                                                                                                                  | `ListItem` only                    |
-| `ListItem`   | `title`, `description`, `icon`, `current`, `disabled`, `onPress()`                                                                                                                       | any; no controls with `onPress`    |
-| `Input`      | `label` (required), `labelHidden`, `value`, `defaultValue`, `placeholder`, `type` (`text` `search` `password`), `maxLength`, `invalid`, `disabled`, `onChange(value)`, `onSubmit(value)` | none                               |
-| `Switch`     | `label` (required), `checked`, `defaultChecked`, `disabled`, `onChange(checked)`                                                                                                         | none                               |
-| `Select`     | `label` (required), `labelHidden`, `value`, `defaultValue`, `placeholder`, `options` (`{ value, label, disabled? }[]`), `disabled`, `onChange(value)`                                    | none                               |
-| `Separator`  | `orientation` (`horizontal` `vertical`)                                                                                                                                                  | none                               |
-| `Progress`   | `label` (required), `labelHidden`, `value` (0–100)                                                                                                                                       | none                               |
-| `Spinner`    | `label` (required), `labelHidden`                                                                                                                                                        | none                               |
-| `EmptyState` | `title` (required), `description`, `icon`                                                                                                                                                | actions                            |
-| `Link`       | `href` (`https:`, `http:`, `mailto:`; opened in the OS browser), `onPress()`                                                                                                             | text                               |
-| `Code`       | `block`                                                                                                                                                                                  | text                               |
+| Component    | Props                                                                                                                                                                                    | Children                                          |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `Stack`      | `gap` (`none` `xs` `sm` `md` `lg`), `align` (`start` `center` `end` `stretch`)                                                                                                           | any                                               |
+| `Row`        | `gap`, `align`, `justify` (`start` `center` `end` `between`), `wrap`                                                                                                                     | any                                               |
+| `Text`       | `tone`, `muted`, `size` (`xs` `sm` `md`), `weight` (`regular` `medium` `semibold`), `truncate`                                                                                           | text, `Text` `Link` `Code` `Badge` `RelativeTime` |
+| `Heading`    | `level` (1–3, below the panel title)                                                                                                                                                     | as `Text`                                         |
+| `Button`     | `variant` (`solid` `outline` `ghost`), `tone`, `size`, `icon`, `disabled`, `onPress()`                                                                                                   | text                                              |
+| `IconButton` | `icon` and `label` (required; the label is its name and tooltip), `variant`, `tone`, `size`, `disabled`, `onPress()`                                                                     | none                                              |
+| `Badge`      | `tone`                                                                                                                                                                                   | text                                              |
+| `Card`       | `title`, `description`                                                                                                                                                                   | any                                               |
+| `List`       | `label`                                                                                                                                                                                  | `ListItem` only                                   |
+| `ListItem`   | `title`, `description`, `icon`, `current`, `disabled`, `onPress()`                                                                                                                       | any; no controls with `onPress`                   |
+| `Input`      | `label` (required), `labelHidden`, `value`, `defaultValue`, `placeholder`, `type` (`text` `search` `password`), `maxLength`, `invalid`, `disabled`, `onChange(value)`, `onSubmit(value)` | none                                              |
+| `Switch`     | `label` (required), `checked`, `defaultChecked`, `disabled`, `onChange(checked)`                                                                                                         | none                                              |
+| `Select`     | `label` (required), `labelHidden`, `value`, `defaultValue`, `placeholder`, `options` (`{ value, label, disabled? }[]`), `disabled`, `onChange(value)`                                    | none                                              |
+| `Separator`  | `orientation` (`horizontal` `vertical`)                                                                                                                                                  | none                                              |
+| `Progress`   | `label` (required), `labelHidden`, `value` (0–100)                                                                                                                                       | none                                              |
+| `Spinner`    | `label` (required), `labelHidden`                                                                                                                                                        | none                                              |
+| `EmptyState` | `title` (required), `description`, `icon`                                                                                                                                                | actions                                           |
+| `Link`       | `href` (`https:`, `http:`, `mailto:`; opened in the OS browser), `onPress()`                                                                                                             | text                                              |
+| `Code`       | `block`                                                                                                                                                                                  | text                                              |
 
 `Button` and `IconButton` also take `tooltip` (since 1.4.247). A tooltip only names a control: an
 `IconButton`'s defaults to its `label`; on a `Button`, use it for a short hint its text leaves out.
@@ -323,28 +369,30 @@ vocabulary, `tone`: `neutral` `accent` `success` `warning` `danger`.
 ### Added in Orca 1.4.247 (`ui.catalog` 2)
 
 Check `ui.has('Table')` (or `ui.catalog >= 2`) when your `engines.orca` minimum is older; see
-forward compatibility below.
+forward compatibility below. The same release ships catalog 3, which adds `RelativeTime` and relative
+Table cells (`ui.has('RelativeTime')`).
 
-| Component     | Props                                                                                                                                                                                                                                                                                                                         | Children   |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| `Textarea`    | as `Input` without `type`, plus `rows` (2–20); `onSubmit(value)` fires on Cmd+Enter (Ctrl+Enter off macOS)                                                                                                                                                                                                                    | none       |
-| `Checkbox`    | `label` (required), `description`, `checked`, `defaultChecked`, `disabled`, `onChange(checked)`                                                                                                                                                                                                                               | none       |
-| `RadioGroup`  | `label` (required), `labelHidden`, `value`, `defaultValue`, `options` (`{ value, label, description?, disabled? }[]`), `orientation` (`vertical` `horizontal`), `disabled`, `onChange(value)`                                                                                                                                 | none       |
-| `Slider`      | `label` (required), `labelHidden`, `value`, `defaultValue`, `min` (0), `max` (100), `step` (1), `showValue`, `disabled`, `onChange(value)`                                                                                                                                                                                    | none       |
-| `Field`       | `label` (required), `description`, `error` (shown in the danger tone and announced), `required`                                                                                                                                                                                                                               | any        |
-| `Tabs`        | `label` (required, the tab list's name), `value`, `defaultValue`, `onChange(value)`; only the selected tab's children are drawn                                                                                                                                                                                               | `Tab` only |
-| `Tab`         | `value` and `label` (required), `icon`, `disabled`                                                                                                                                                                                                                                                                            | any        |
-| `Collapsible` | `title` (required), `description`, `open`, `defaultOpen`, `disabled`, `onChange(open)`; stack several for an accordion                                                                                                                                                                                                        | any        |
-| `Toolbar`     | `label` (required), `gap`; arrow keys, Home and End move between its controls                                                                                                                                                                                                                                                 | any        |
-| `Grid`        | `columns` (1–6, default 2) or `minItemWidth` (`xs` `sm` `md` `lg`: as many columns as fit), `gap`                                                                                                                                                                                                                             | any        |
-| `Table`       | `label`, `columns` (`{ key, label, align?, width?, sortable? }[]`) and `rows` (`{ key, cells, disabled? }[]`) required; `sort`, `selectionMode` (`none` `single` `multiple`), `selected`, `defaultSelected`, `hasMore`, `loading`, `emptyText`, `maxHeight`, `onSortChange`, `onSelectionChange`, `onRowAction`, `onLoadMore` | none       |
-| `Tree`        | `label` and `items` (`{ key, label, description?, icon?, disabled?, hasChildren?, children? }[]`) required; `selected`, `defaultSelected`, `expanded`, `defaultExpanded`, `maxHeight`, `onSelect`, `onToggle`, `onAction`                                                                                                     | none       |
-| `Markdown`    | `content` (required, up to 64 KiB)                                                                                                                                                                                                                                                                                            | none       |
-| `CodeView`    | `code` (required, up to 64 KiB), `language`, `label`, `lineNumbers`, `wrap`, `maxHeight`                                                                                                                                                                                                                                      | none       |
-| `Image`       | `src` (required: an image file in the plugin), `alt` (required; `''` for decoration), `size` (`xs` `sm` `md` `lg` `full`), `fit` (`contain` `cover`), `rounded`                                                                                                                                                               | none       |
-| `KeyValue`    | `items` (`{ label, value, tone?, code? }[]`, required), `label`                                                                                                                                                                                                                                                               | none       |
-| `Callout`     | `tone`, `title`, `icon`                                                                                                                                                                                                                                                                                                       | any        |
-| `Skeleton`    | `shape` (`text` `block` `circle`), `lines` (1–10, for `text`), `label` (its screen-reader name; default "Loading")                                                                                                                                                                                                            | none       |
+| Component      | Props                                                                                                                                                                                                                                                                                                                         | Children   |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `Textarea`     | as `Input` without `type`, plus `rows` (2–20); `onSubmit(value)` fires on Cmd+Enter (Ctrl+Enter off macOS)                                                                                                                                                                                                                    | none       |
+| `Checkbox`     | `label` (required), `description`, `checked`, `defaultChecked`, `disabled`, `onChange(checked)`                                                                                                                                                                                                                               | none       |
+| `RadioGroup`   | `label` (required), `labelHidden`, `value`, `defaultValue`, `options` (`{ value, label, description?, disabled? }[]`), `orientation` (`vertical` `horizontal`), `disabled`, `onChange(value)`                                                                                                                                 | none       |
+| `Slider`       | `label` (required), `labelHidden`, `value`, `defaultValue`, `min` (0), `max` (100), `step` (1), `showValue`, `disabled`, `onChange(value)`                                                                                                                                                                                    | none       |
+| `Field`        | `label` (required), `description`, `error` (shown in the danger tone and announced), `required`                                                                                                                                                                                                                               | any        |
+| `Tabs`         | `label` (required, the tab list's name), `value`, `defaultValue`, `onChange(value)`; only the selected tab's children are drawn                                                                                                                                                                                               | `Tab` only |
+| `Tab`          | `value` and `label` (required), `icon`, `disabled`                                                                                                                                                                                                                                                                            | any        |
+| `Collapsible`  | `title` (required), `description`, `open`, `defaultOpen`, `disabled`, `onChange(open)`; stack several for an accordion                                                                                                                                                                                                        | any        |
+| `Toolbar`      | `label` (required), `gap`; arrow keys, Home and End move between its controls                                                                                                                                                                                                                                                 | any        |
+| `Grid`         | `columns` (1–6, default 2) or `minItemWidth` (`xs` `sm` `md` `lg`: as many columns as fit), `gap`                                                                                                                                                                                                                             | any        |
+| `Table`        | `label`, `columns` (`{ key, label, align?, width?, sortable? }[]`) and `rows` (`{ key, cells, disabled? }[]`) required; `sort`, `selectionMode` (`none` `single` `multiple`), `selected`, `defaultSelected`, `hasMore`, `loading`, `emptyText`, `maxHeight`, `onSortChange`, `onSelectionChange`, `onRowAction`, `onLoadMore` | none       |
+| `Tree`         | `label` and `items` (`{ key, label, description?, icon?, disabled?, hasChildren?, children? }[]`) required; `selected`, `defaultSelected`, `expanded`, `defaultExpanded`, `maxHeight`, `onSelect`, `onToggle`, `onAction`                                                                                                     | none       |
+| `Markdown`     | `content` (required, up to 64 KiB)                                                                                                                                                                                                                                                                                            | none       |
+| `CodeView`     | `code` (required, up to 64 KiB), `language`, `label`, `lineNumbers`, `wrap`, `maxHeight`                                                                                                                                                                                                                                      | none       |
+| `Image`        | `src` (required: an image file in the plugin), `alt` (required; `''` for decoration), `size` (`xs` `sm` `md` `lg` `full`), `fit` (`contain` `cover`), `rounded`                                                                                                                                                               | none       |
+| `KeyValue`     | `items` (`{ label, value, tone?, code? }[]`, required), `label`                                                                                                                                                                                                                                                               | none       |
+| `Callout`      | `tone`, `title`, `icon`                                                                                                                                                                                                                                                                                                       | any        |
+| `Skeleton`     | `shape` (`text` `block` `circle`), `lines` (1–10, for `text`), `label` (its screen-reader name; default "Loading")                                                                                                                                                                                                            | none       |
+| `RelativeTime` | `at` (required: ms since the epoch), `format` (`short` "5m ago", `long` "5 minutes ago", `duration` "5m"), `tone`, `muted`; Orca re-renders it as time passes, so the plugin never polls. Catalog 3; may sit inside `Text`                                                                                                    | none       |
 
 `maxHeight` (`sm` `md` `lg` `none`) gives long content its own scroll area: a `Table` and a `CodeView`
 default to `md`, a `Tree` to `none`.
@@ -355,7 +403,8 @@ the order you give. A click selects (Cmd/Ctrl-click and Shift-click extend a `mu
 do Space and Shift+arrows), `onSelectionChange({ keys })` reports it, and Enter or a double click calls
 `onRowAction({ key })`. Paging is pull-based: with `hasMore`, scrolling within ten rows of the end
 calls `onLoadMore()` once per length of `rows`; append the next page and Orca asks again when the
-person nears the new end. Cells are strings, numbers, booleans (a check mark) or `null`.
+person nears the new end. Cells are strings, numbers, booleans (a check mark), `null`, or a relative
+time Orca keeps current: `{ type: 'relative', at, format? }` (see `RelativeTime`).
 
 ```tsx
 const page = atom<Row[]>([])

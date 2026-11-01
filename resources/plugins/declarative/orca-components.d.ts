@@ -292,4 +292,5 @@ declare module 'orca' {
     | 'KeyValue'
     | 'Callout'
     | 'Skeleton'
+    | 'RelativeTime'
 }

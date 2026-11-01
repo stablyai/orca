@@ -74,6 +74,8 @@ export type MockHost = {
   data(): MockPluginDataSnapshot
   /** Hears each storage or settings write, as Orca tells the plugin's open panels. */
   onDataChange(listener: (area: 'storage' | 'settings', key: string) => void): () => void
+  /** A mounted worker answers the panel's `plugin.request` (what `requests` does not stub). */
+  routeRequests(handler: (name: string, input: unknown) => Promise<unknown>): () => void
   /** The panel's view of the host. */
   readonly bridge: MockHostSurface
   /** A worker's view: worker methods, no gestures. */
@@ -190,6 +192,7 @@ export function createMockHost(
     },
     data: () => data.snapshot(),
     onDataChange: (listener) => data.onChange(listener),
+    routeRequests: (handler) => data.routeRequests(handler),
     async idle() {
       while (pending.size > 0) {
         await Promise.allSettled(pending)

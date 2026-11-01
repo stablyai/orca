@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { exportedTypeShape, runtimeShape } from '../../authoring/plugin-author-typings.test-fixture'
 import { agentStatusChangedPayloadSchema } from '../../events/plugin-events'
+import { atom, read, set } from '../runtime/declarative-atoms'
 import { h } from '../runtime/declarative-elements'
-import { host as panelHost } from '../runtime/orca-module'
+import { host as panelHost, plugin } from '../runtime/orca-module'
 import { mockHost, mount, mountWorker, type TestPanel } from './orca-testing'
 
 type Orca = {
@@ -161,5 +162,65 @@ describe('panel refusals', () => {
       }
     ])
     expect(panel.errors).toEqual([])
+  })
+})
+
+describe('a panel and its worker on one host', () => {
+  it("routes the panel's plugin.request to the mounted worker, unless `requests` stubs it", async () => {
+    const host = mockHost({ capabilities: [], requests: { stubbed: 'from the stub' } })
+    const worker = await mountWorker(
+      {
+        default: (orca: Orca) => {
+          orca.panels.handle('stats', (input) => ({ asked: input }))
+          orca.panels.handle('stubbed', () => 'from the worker')
+        }
+      },
+      { host, events: [], commands: [] }
+    )
+    const answers = atom<unknown[]>([])
+    panel = await mount(
+      {
+        setup: () => {
+          void Promise.all([
+            plugin.request('stats', { n: 1 }),
+            plugin.request('stubbed'),
+            plugin.request('missing').catch((error: { code?: string }) => error.code)
+          ]).then((values) => set(answers, values))
+        },
+        default: () => h('Text', null, JSON.stringify(read(answers)))
+      },
+      { host }
+    )
+    expect(panel.find({ role: 'text' })?.text).toBe(
+      JSON.stringify([{ asked: { n: 1 } }, 'from the stub', 'unknown_method'])
+    )
+    await worker.deactivate()
+  })
+})
+
+describe('RelativeTime in the test kit', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('reads as Orca draws it now, in a node and in a Table cell', async () => {
+    // Only Date is faked: the kit settles on real macrotasks.
+    vi.useFakeTimers({ now: Date.UTC(2026, 10, 1, 12), toFake: ['Date'] })
+    const at = Date.UTC(2026, 10, 1, 12) - 5 * 60_000
+    panel = await mount(() =>
+      h(
+        'Stack',
+        null,
+        h('Text', null, 'Started ', h('RelativeTime', { at })),
+        h('Table', {
+          label: 'Agents',
+          columns: [{ key: 'since', label: 'Since' }],
+          rows: [{ key: 'a', cells: { since: { type: 'relative', at, format: 'duration' } } }]
+        })
+      )
+    )
+    expect(panel.find({ role: 'time' })?.text).toBe('5m ago')
+    expect(panel.find({ role: 'grid' })?.text).toBe('5m')
+    expect(panel.warnings).toEqual([])
   })
 })

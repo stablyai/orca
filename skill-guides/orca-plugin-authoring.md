@@ -69,7 +69,8 @@ with `terminal:send` can.
    `shot` whose `path` is a PNG of the panel exactly as Orca draws it: read the image and fix
    what looks wrong. Fix every `log` error (`[frame] <file>:<line>`) and `check` issue.
 4. `ORCA plugin test <dir> --json` after changes, and `ORCA plugin check <dir> --json` before you
-   finish. For a worker, `ORCA plugin dev emit . <event> --data '{...}'` fires a test event.
+   finish (it runs the worker; add states in `src/panel.check.ts`, see `references/workflow.md`).
+   For a worker, `ORCA plugin dev emit . <event> --data '{...}'` fires a test event.
 5. To show the user, `ORCA plugin open <plugin-key> --panel <id>`. Ctrl-C stops the watch.
 
 ## Ship
@@ -99,6 +100,7 @@ fingerprint Orca did not give you. New capabilities or changed commands print a 
   rendering. Components panels have no hooks and no DOM: state lives in atoms.
 - Keyed atoms (`atom('draft', '')`) survive a hot reload; unkeyed ones and module variables reset.
   `persist` values must be plain JSON; bump `version` (with `migrate`) when the shape changes.
+- Never poll for the time: `<RelativeTime at={ms} />` and `{ type: 'relative', at }` cells tick.
 - A save that fails to load keeps the last good render with an inline `file:line:col` error.
 - No network: requests outside the plugin's files fail. Ship assets and load them relatively.
 - `shell.openExternal` and `files.saveAs` need a press on a settled control; never call on load.

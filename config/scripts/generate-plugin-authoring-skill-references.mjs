@@ -165,7 +165,7 @@ function renderTesting({ testing }) {
       [
         '## Options',
         '',
-        ...['MountOptions', 'MountWorkerOptions', 'MockHostOptions'].map(
+        ...['MountOptions', 'MountWorkerOptions', 'MockHostOptions', 'CheckScenario'].map(
           (name) => `- ${code(testing.typeDeclaration(name))}`
         )
       ]
