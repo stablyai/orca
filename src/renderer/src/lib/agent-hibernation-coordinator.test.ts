@@ -18,6 +18,7 @@ import {
   installRuntimeListResponses,
   layout,
   LEAF,
+  mockGetTerminalAttention,
   mockRuntimeEnvironmentCall,
   NOW,
   resetAgentHibernationCoordinatorFixture,
@@ -255,6 +256,79 @@ describe('agent sleep coordinator', () => {
     await vi.advanceTimersByTimeAsync(3000)
 
     expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('keeps a tab a paired client is showing, and sleeps it once the client hides it (#36427)', async () => {
+    vi.useFakeTimers()
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+    let shownRemotely = true
+    mockGetTerminalAttention.mockImplementation(async (ids) =>
+      Object.fromEntries(ids.map((id) => [id, { shownRemotely, lastInputAt: null }]))
+    )
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(mockGetTerminalAttention).toHaveBeenCalledWith(['pty-1'])
+
+    shownRemotely = false
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(shutdown).toHaveBeenCalledOnce()
+  })
+
+  it('treats typing from a paired client after the turn as input that keeps the tab (#36427)', async () => {
+    vi.useFakeTimers()
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+    mockGetTerminalAttention.mockImplementation(async (ids) =>
+      Object.fromEntries(ids.map((id) => [id, { shownRemotely: false, lastInputAt: NOW - 1 }]))
+    )
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(3000)
+
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('keeps a runtime-hosted tab another client is showing, but not on hosts that report nothing', async () => {
+    vi.useFakeTimers()
+    const shown = runtimeListResult(['pty-1'])
+    const withAttention = {
+      ...shown,
+      terminals: shown.terminals.map((terminal) => ({
+        ...terminal,
+        attention: { shownRemotely: true, lastInputAt: null }
+      }))
+    }
+    installRuntimeListResponses(withAttention, withAttention, withAttention, withAttention)
+    const runtimeState = {
+      settings: {
+        experimentalAgentHibernation: true,
+        agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS,
+        activeRuntimeEnvironmentId: 'runtime-1'
+      } as never,
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), runtimeState)
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.list',
+        params: expect.objectContaining({ includeAttention: true })
+      })
+    )
+
+    // An older host omits attention; agent sleep must keep working there.
+    resetAgentHibernationCoordinatorFixture()
+    vi.useFakeTimers()
+    installRuntimeListResponses(shown, shown, shown)
+    const legacyShutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), runtimeState)
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(legacyShutdown).toHaveBeenCalledOnce()
   })
 
   it.each(['wt-bg', 'folder:folder-1'])(
