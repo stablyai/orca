@@ -987,7 +987,7 @@
 1 test-no-wall-clock:src/main/runtime/rpc/methods/pairing.test.ts
 1 test-no-wall-clock:src/main/runtime/runtime-agent-row-main-agent-projection.test.ts
 2 test-no-wall-clock:src/main/runtime/runtime-client-agent-launch-settings-durability.test.ts
-10 test-no-wall-clock:src/main/runtime/runtime-hook-agent-row-selection.test.ts
+9 test-no-wall-clock:src/main/runtime/runtime-hook-agent-row-selection.test.ts
 9 test-no-wall-clock:src/main/runtime/runtime-mobile-agent-status-builder.test.ts
 3 test-no-wall-clock:src/main/runtime/runtime-mobile-codex-side-title.test.ts
 6 test-no-wall-clock:src/main/runtime/runtime-rpc-pairing-mode-persistence.test.ts
