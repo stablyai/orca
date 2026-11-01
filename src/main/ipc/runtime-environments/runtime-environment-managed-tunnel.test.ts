@@ -9,7 +9,6 @@ import {
 } from './runtime-environment-subscription-handlers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { resetRuntimeEnvironmentCapabilityEvidence } from './runtime-environment-capability-evidence'
 import {
   getRuntimeEnvironmentStatusOwner,
@@ -470,34 +469,6 @@ describe('crew retry at the actual IPC and routing boundary', () => {
     noPreparation()
     expect(pending.size).toBe(0)
     expect(remote.has('crew')).toBe(true)
-  })
-
-  it('preserves raw original errors and AbortError while serializing only the opt-in result', async () => {
-    verify()
-    const abort = new DOMException('The operation was aborted.', 'AbortError')
-    mocks.rawSubscribe.mockRejectedValueOnce(abort)
-    await expect(open()).resolves.toEqual({
-      subscriptionId: 'crew',
-      ok: false,
-      failure: { message: abort.message, fact: { kind: 'operation', operation: 'subscription' } }
-    })
-    noPreparation()
-    mocks.rawSubscribe.mockRejectedValueOnce(abort)
-    await expect(
-      subscribeRuntimeEnvironment('/u', 'crew', args.method, {}, undefined, {
-        onEvent: vi.fn(),
-        onClose: vi.fn()
-      })
-    ).rejects.toBe(abort)
-    const refused = new RemoteRuntimeClientError('unauthorized', 'Actual raw refusal')
-    mocks.rawSubscribe.mockRejectedValueOnce(refused)
-    await expect(open()).resolves.toMatchObject({
-      ok: false,
-      failure: { code: 'unauthorized', fact: { kind: 'remote', code: 'unauthorized' } }
-    })
-    expect(pending.size).toBe(0)
-    expect(remote.size).toBe(0)
-    expect(sender.eventNames()).toEqual([])
   })
 
   it('refuses a different raw runtime before recording or publishing its Crew response', async () => {

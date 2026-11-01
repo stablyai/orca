@@ -166,12 +166,6 @@ it('retires raw main bindings on real Store-only writes with Crew as sole observ
       expect(
         runtime.getTerminalHandleForPaneKey('absent:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
       ).toBeNull()
-      console.log('main Store source contract', {
-        population,
-        initial,
-        final: capture.mock.calls.length,
-        generationReads: generations.mock.calls.length
-      })
     } finally {
       stop()
       db.close()

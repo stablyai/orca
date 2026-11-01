@@ -278,11 +278,6 @@ it('reuses raw inputs for new historical parties through the production Crew bou
       expect(candidate.output).toEqual(baseline.output)
       expect(candidate.acquisition.entries).toBeLessThan(baseline.acquisition.entries)
       expect(candidate.acquisition.entries).toBeLessThan(10 * (population + 1))
-      console.log('production Crew native acquisition', {
-        population,
-        baseline: baseline.acquisition,
-        candidate: candidate.acquisition
-      })
     }
   } finally {
     vi.useRealTimers()

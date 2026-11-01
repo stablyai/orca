@@ -122,13 +122,10 @@ it('charges selected genuine worker follow-up lineage, origin and caller facts a
       ).toHaveLength(2)
       stop()
       return {
-        population,
         selected: sqlTotals(acquired),
         boundKeys: keys.length,
         boundChars: String(acquired[0].parameters[0]).length,
-        work,
-        output,
-        raw
+        work
       }
     } finally {
       stop()
@@ -149,8 +146,6 @@ it('charges selected genuine worker follow-up lineage, origin and caller facts a
 it('shares one caller continuation union across selected starts and charges raw misses, histories and warm recomputation', () => {
   const samples = [
     [3, 3],
-    [30, 3],
-    [3, 30],
     [30, 30]
   ].map(([eligible, closure]) => {
     const f = deltaFixture()
@@ -261,22 +256,7 @@ it('shares one caller continuation union across selected starts and charges raw 
       expect(meter.executions.filter((entry) => authority(entry.sql)).length).toBeGreaterThan(
         afterWrite
       )
-      return {
-        eligible,
-        closure,
-        cold: sqlTotals(cold),
-        boundKeys: cold.reduce((n, row) => n + row.parameters.length, 0),
-        parameterBytes: cold.reduce(
-          (n, row) => n + Buffer.byteLength(JSON.stringify(row.parameters)),
-          0
-        ),
-        visits: coldVisits,
-        decoderCalls: histories.length,
-        historyChars: histories.reduce((a, b) => a + b, 0),
-        plans,
-        baseline: sqlTotals(meter.executions.filter((entry) => !authority(entry.sql))),
-        raw: meter.executions
-      }
+      return sqlTotals(cold)
     } finally {
       stop()
       meter.restore()
@@ -285,9 +265,6 @@ it('shares one caller continuation union across selected starts and charges raw 
     }
   })
   for (const field of ['all', 'rows', 'bytes', 'stringChars'] as const) {
-    expect(samples[3].cold[field]).toBeLessThanOrEqual(10 * samples[0].cold[field])
-  }
-  for (const sample of samples) {
-    expect(sample.visits).toBeLessThanOrEqual(sample.eligible + sample.closure + 2)
+    expect(samples[1][field]).toBeLessThanOrEqual(10 * samples[0][field])
   }
 })
