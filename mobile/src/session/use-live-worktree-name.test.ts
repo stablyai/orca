@@ -180,6 +180,46 @@ describe('useLiveWorktreeName request volume', () => {
     }
   )
 
+  it.each(['reposChanged', 'ready'])(
+    'gives a new project read its full retry budget after %s',
+    async (eventType) => {
+      let attempts = 0
+      sendRequest.mockImplementation(async (method) => {
+        if (method === 'repo.show' && ++attempts % 4 !== 0) {
+          throw new Error('transport unavailable')
+        }
+        return {
+          id: method,
+          ok: true,
+          result:
+            method === 'repo.show'
+              ? { repo: { displayName: attempts === 4 ? 'orca' : 'Renamed project' } }
+              : { worktree: { id: 'repo-1::/worktree', displayName: 'master' } }
+        }
+      })
+      await mountHarness()
+      await emitEvent({ type: 'ready', subscriptionId: 'events' })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(9_000)
+      })
+      expect(attempts).toBe(4)
+      expect(live?.projectName).toBe('orca')
+      expect(vi.getTimerCount()).toBe(0)
+
+      await emitEvent({ type: eventType, subscriptionId: 'new-events' })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(9_000)
+      })
+      expect(attempts).toBe(8)
+      expect(live?.projectName).toBe('Renamed project')
+      expect(vi.getTimerCount()).toBe(0)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000)
+      })
+      expect(attempts).toBe(8)
+    }
+  )
+
   it('cancels project retry when the screen is left', async () => {
     sendRequest.mockImplementation(async (method) => {
       if (method === 'repo.show') {

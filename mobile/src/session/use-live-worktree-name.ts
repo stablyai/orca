@@ -80,7 +80,6 @@ export function useLiveWorktreeName({
       let refreshGeneration = 0
       let refreshProjectName = true
       let projectGeneration = 0
-      let projectRetries = 0
       let projectRetryTimer: ReturnType<typeof setTimeout> | null = null
       const repoId = getRepoIdFromWorktreeId(worktreeId)
 
@@ -146,6 +145,7 @@ export function useLiveWorktreeName({
             const projectHost = parseRoutableExecutionHostId(hostId)
             if (refreshProjectName && (!hostId || projectHost)) {
               refreshProjectName = false
+              let projectRetries = 0
               if (projectRetryTimer !== null) {
                 clearTimeout(projectRetryTimer)
                 projectRetryTimer = null
