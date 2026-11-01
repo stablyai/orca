@@ -1,0 +1,298 @@
+import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import type {
+  CustomSttEndpointReachability,
+  SpeechModelManifest,
+  VoiceSettings
+} from '../../../../shared/speech-types'
+import type { CustomSttEndpointTestState } from './CustomSttEndpointDialog'
+import { translate } from '@/i18n/i18n'
+
+type UseCustomSttEndpointArgs = {
+  voiceSettings: VoiceSettings
+  selectedModel: SpeechModelManifest | undefined
+  updateVoiceSettings: (updates: Partial<VoiceSettings>) => void
+  refreshModelStates: () => Promise<void> | void
+  isMounted: () => boolean
+}
+
+const DISCOVERY_DEBOUNCE_MS = 700
+
+/**
+ * Owns the custom-endpoint dialog state and its IPC. Extracted from VoicePane so
+ * the pane stays within the file-size budget and the endpoint flow is testable.
+ */
+export function useCustomSttEndpoint({
+  voiceSettings,
+  selectedModel,
+  updateVoiceSettings,
+  refreshModelStates,
+  isMounted
+}: UseCustomSttEndpointArgs): {
+  dialogOpen: boolean
+  baseUrlDraft: string
+  modelDraft: string
+  languageDraft: string
+  apiKeyDraft: string
+  pending: boolean
+  testing: boolean
+  discovering: boolean
+  modelSuggestions: string[]
+  testResult: CustomSttEndpointTestState | null
+  reachability: CustomSttEndpointReachability
+  setDialogOpen: (open: boolean) => void
+  setBaseUrlDraft: (value: string) => void
+  setModelDraft: (value: string) => void
+  setLanguageDraft: (value: string) => void
+  setApiKeyDraft: (value: string) => void
+  openDialog: () => void
+  cancel: () => void
+  save: () => Promise<void>
+  clear: () => Promise<void>
+  test: () => Promise<void>
+} {
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [baseUrlDraft, setBaseUrlDraft] = useState('')
+  const [modelDraft, setModelDraft] = useState('')
+  const [languageDraft, setLanguageDraft] = useState('')
+  const [apiKeyDraft, setApiKeyDraft] = useState('')
+  const [pending, setPending] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [discovering, setDiscovering] = useState(false)
+  const [modelSuggestions, setModelSuggestions] = useState<string[]>([])
+  const [reachability, setReachability] = useState<CustomSttEndpointReachability>('unknown')
+  // Why: a Test result is only meaningful for the exact values it ran against. Store
+  // the signature so editing any field (or typing a new key) hides the stale verdict
+  // instead of leaving a rejection that blocks Save, or a success for an untested URL.
+  const [tested, setTested] = useState<{
+    signature: string
+    result: CustomSttEndpointTestState
+  } | null>(null)
+
+  const runSignature = `${baseUrlDraft.trim()}\u0000${modelDraft.trim()}\u0000${languageDraft.trim()}\u0000${apiKeyDraft.trim()}`
+  const testResult = tested && tested.signature === runSignature ? tested.result : null
+
+  // Why: once a base URL is typed, ask the endpoint what it supports so the Model
+  // field can suggest real names AND show whether the URL actually answers. A miss
+  // of the model list is harmless — the field stays free text — but a failure to
+  // answer at all is worth a red mark.
+  useEffect(() => {
+    if (!dialogOpen) {
+      return
+    }
+    const baseUrl = baseUrlDraft.trim()
+    if (!baseUrl) {
+      setModelSuggestions([])
+      setReachability('unknown')
+      return
+    }
+    let cancelled = false
+    const timer = setTimeout(() => {
+      setDiscovering(true)
+      void window.api.speech
+        .discoverCustomEndpointModels({ baseUrl, apiKey: apiKeyDraft })
+        .then((result) => {
+          if (!cancelled) {
+            setModelSuggestions(result.ok ? result.models : [])
+            setReachability(result.reachability)
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setModelSuggestions([])
+            setReachability('unreachable')
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setDiscovering(false)
+          }
+        })
+    }, DISCOVERY_DEBOUNCE_MS)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [dialogOpen, baseUrlDraft, apiKeyDraft])
+
+  const resetDrafts = useCallback((): void => {
+    setBaseUrlDraft('')
+    setModelDraft('')
+    setLanguageDraft('')
+    setApiKeyDraft('')
+    setTested(null)
+    setReachability('unknown')
+    setModelSuggestions([])
+  }, [])
+
+  // Why: opening the dialog must not change any setting — the endpoint model is
+  // only selected on Save. Drafts are seeded from the persisted store for display,
+  // so Cancel/Esc leaves the profile exactly as it was.
+  const openDialog = useCallback((): void => {
+    void window.api.speech
+      .getCustomEndpointStatus()
+      .then((status) => {
+        setBaseUrlDraft(status.baseUrl)
+        setModelDraft(status.model)
+        setLanguageDraft(status.language)
+      })
+      .catch(() => {})
+    setApiKeyDraft('')
+    setTested(null)
+    setDialogOpen(true)
+  }, [])
+
+  const cancel = useCallback((): void => {
+    resetDrafts()
+    setDialogOpen(false)
+  }, [resetDrafts])
+
+  const save = useCallback(async (): Promise<void> => {
+    setPending(true)
+    try {
+      const status = await window.api.speech.saveCustomEndpoint({
+        baseUrl: baseUrlDraft,
+        model: modelDraft,
+        language: languageDraft,
+        apiKey: apiKeyDraft
+      })
+      updateVoiceSettings({
+        customSttBaseUrl: status.baseUrl,
+        customSttModel: status.model,
+        customSttLanguage: status.language,
+        customSttApiKeyConfigured: status.apiKeyConfigured,
+        sttModel: 'custom-openai-compatible'
+      })
+      await refreshModelStates()
+      resetDrafts()
+      setDialogOpen(false)
+      toast.success(
+        translate(
+          'auto.components.settings.VoicePane.customEndpointSaved',
+          'Custom transcription endpoint saved'
+        )
+      )
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.VoicePane.customEndpointSaveFailed',
+              'Failed to save custom endpoint'
+            )
+      )
+    } finally {
+      if (isMounted()) {
+        setPending(false)
+      }
+    }
+  }, [
+    baseUrlDraft,
+    modelDraft,
+    languageDraft,
+    apiKeyDraft,
+    updateVoiceSettings,
+    refreshModelStates,
+    resetDrafts,
+    isMounted
+  ])
+
+  const clear = useCallback(async (): Promise<void> => {
+    setPending(true)
+    try {
+      await window.api.speech.clearCustomEndpoint()
+      updateVoiceSettings({
+        customSttBaseUrl: '',
+        customSttModel: '',
+        customSttLanguage: '',
+        customSttApiKeyConfigured: false,
+        sttModel: selectedModel?.provider === 'custom' ? '' : voiceSettings.sttModel
+      })
+      await refreshModelStates()
+      resetDrafts()
+      setDialogOpen(false)
+      toast.success(
+        translate(
+          'auto.components.settings.VoicePane.customEndpointCleared',
+          'Custom transcription endpoint cleared'
+        )
+      )
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.VoicePane.customEndpointClearFailed',
+              'Failed to clear custom endpoint'
+            )
+      )
+    } finally {
+      if (isMounted()) {
+        setPending(false)
+      }
+    }
+  }, [
+    selectedModel,
+    voiceSettings.sttModel,
+    updateVoiceSettings,
+    refreshModelStates,
+    resetDrafts,
+    isMounted
+  ])
+
+  const test = useCallback(async (): Promise<void> => {
+    const signature = runSignature
+    setTesting(true)
+    setTested(null)
+    try {
+      const result = await window.api.speech.testCustomEndpoint({
+        baseUrl: baseUrlDraft,
+        model: modelDraft,
+        language: languageDraft,
+        apiKey: apiKeyDraft
+      })
+      if (isMounted()) {
+        setTested({ signature, result })
+      }
+    } catch (err) {
+      if (isMounted()) {
+        setTested({
+          signature,
+          result: {
+            ok: false,
+            outcome: 'transport',
+            detail: err instanceof Error ? err.message : String(err)
+          }
+        })
+      }
+    } finally {
+      if (isMounted()) {
+        setTesting(false)
+      }
+    }
+  }, [runSignature, baseUrlDraft, modelDraft, languageDraft, apiKeyDraft, isMounted])
+
+  return {
+    dialogOpen,
+    baseUrlDraft,
+    modelDraft,
+    languageDraft,
+    apiKeyDraft,
+    pending,
+    testing,
+    discovering,
+    modelSuggestions,
+    testResult,
+    reachability,
+    setDialogOpen,
+    setBaseUrlDraft,
+    setModelDraft,
+    setLanguageDraft,
+    setApiKeyDraft,
+    openDialog,
+    cancel,
+    save,
+    clear,
+    test
+  }
+}

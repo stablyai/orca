@@ -5,7 +5,12 @@ export type SpeechModelType =
   | 'senseVoice'
   | 'nemo-ctc'
   | 'openai'
-export type SpeechModelProvider = 'local' | 'openai'
+export type SpeechModelProvider = 'local' | 'openai' | 'custom'
+
+/** True for providers that transcribe over HTTP rather than on-device. */
+export function isRemoteSpeechModelProvider(provider: SpeechModelProvider): boolean {
+  return provider === 'openai' || provider === 'custom'
+}
 
 export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'
 
@@ -33,6 +38,18 @@ export type SpeechModelManifest = {
 }
 
 export type SpeechModelStatus = 'not-downloaded' | 'downloading' | 'extracting' | 'ready' | 'error'
+
+/**
+ * Outcome of probing a custom OpenAI-compatible endpoint. Drives how strict the
+ * settings Save gate is (see the custom-endpoint design doc).
+ */
+export type CustomSttEndpointTestOutcome = 'ok' | 'auth' | 'rejected' | 'transport' | 'invalid'
+
+/**
+ * Whether an endpoint URL answers at all, independent of whether it advertises a
+ * model list: `reachable` means the server responded (even a 401 means it exists).
+ */
+export type CustomSttEndpointReachability = 'reachable' | 'unreachable' | 'unknown'
 
 export type SpeechModelState = {
   id: string
@@ -75,6 +92,20 @@ export type VoiceSettings = {
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]
   openAiApiKeyConfigured: boolean
+  /**
+   * Base URL of a user-configured OpenAI-compatible transcription endpoint
+   * (e.g. `http://127.0.0.1:8090/v1`). Empty means not configured.
+   */
+  customSttBaseUrl: string
+  /** Model id sent to the custom endpoint (e.g. `large-v3`). */
+  customSttModel: string
+  /**
+   * Optional ISO-639 language hint sent to the custom endpoint (e.g. `en`, `yue`).
+   * Empty means the server auto-detects.
+   */
+  customSttLanguage: string
+  /** True when a bearer token is stored for the custom endpoint. */
+  customSttApiKeyConfigured: boolean
   /** null = system default input device */
   microphoneDeviceId: string | null
   /** Cached label for display when the preferred device is unplugged */

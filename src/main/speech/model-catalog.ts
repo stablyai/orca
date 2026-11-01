@@ -143,8 +143,21 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'multilingual',
     sampleRate: 16000,
     streaming: false
+  },
+  {
+    id: 'custom-openai-compatible',
+    label: 'Custom endpoint',
+    description:
+      'Send audio to any OpenAI-compatible /audio/transcriptions server, local or remote.',
+    type: 'openai',
+    provider: 'custom',
+    language: 'multilingual',
+    sampleRate: 16000,
+    streaming: false
   }
 ]
+
+export const CUSTOM_STT_MODEL_ID = 'custom-openai-compatible'
 
 export function getCatalogModel(id: string): SpeechModelManifest | undefined {
   return SPEECH_MODEL_CATALOG.find((m) => m.id === id)
