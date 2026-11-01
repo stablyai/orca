@@ -12,6 +12,7 @@ import type { ServedProjectSections } from '../worktree/project-sections-operati
 import type { SectionRepo } from '../worktree/workspace-list-types'
 import { NO_SERVER_WORKSPACES, type ServerWorkspaces } from '../worktree/server-workspaces'
 import type { ProjectGroup } from '../../../src/shared/project-group-types'
+import type { SidebarSessionAction } from './sidebar-session-action'
 
 export function useHostScreenState(
   hostId: string | undefined,
@@ -65,6 +66,7 @@ export function useHostScreenState(
   const [serverNotice, setServerNotice] = useState<string | null>(null)
   const [showWorkspaceOptions, setShowWorkspaceOptions] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
+  const [sessionAction, setSessionAction] = useState<SidebarSessionAction | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [showNewWorktree, setShowNewWorktree] = useState(false)
@@ -80,6 +82,7 @@ export function useHostScreenState(
 
   return {
     actionTarget,
+    sessionAction,
     catalogError,
     clientRef,
     confirmDelete,
@@ -107,6 +110,7 @@ export function useHostScreenState(
     serverNotice,
     serverWorkspaces,
     setActionTarget,
+    setSessionAction,
     setCatalogError,
     setConfirmDelete,
     setConfirmRemoveHost,

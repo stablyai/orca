@@ -50,6 +50,7 @@ export function ChoiceRows<Id extends string>(props: {
 /* Only the switch takes the tap, avoiding duplicate writes on web. */
 export function SwitchRow(props: {
   label: string
+  subtitle?: string
   value: boolean
   onChange: (value: boolean) => void
   indent?: boolean
@@ -57,6 +58,7 @@ export function SwitchRow(props: {
   return (
     <ListRow
       title={props.label}
+      subtitle={props.subtitle}
       // An empty leading slot indents the row under the option it qualifies.
       leading={props.indent ? <View /> : undefined}
       accessory={

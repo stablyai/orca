@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, type ReactElement } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -21,6 +21,7 @@ import { WORKTREE_ROW_LAYOUT } from '../components/worktree-list-row-layout'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
+import type { Worktree } from '../worktree/workspace-list-types'
 import {
   HostWorkspaceListReopen,
   HostWorkspaceListStates
@@ -34,6 +35,8 @@ import { HostPendingCreationRow } from './host-pending-creation-row'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
+import { sidebarSessionAction } from './sidebar-session-action'
+import { useSelectableSidebarSessions } from './selectable-sidebar-sessions'
 
 export function HostWorkspaceList({
   controller,
@@ -47,6 +50,7 @@ export function HostWorkspaceList({
   pageTitle?: { element: ReactElement; collapsing: CollapsingTitle }
 }) {
   const colorScheme = useMobileColorScheme()
+  const selectableSessions = useSelectableSidebarSessions()
   const {
     actions,
     activeWorktreeScroll,
@@ -72,6 +76,13 @@ export function HostWorkspaceList({
     state
   } = controller
   const { rawSections, sections, repoById } = sectionsResult
+  const { setSessionAction } = state
+  const openSessionMenu = useCallback(
+    (item: Worktree, paneKey: string) => {
+      setSessionAction(sidebarSessionAction(item, paneKey, now))
+    },
+    [now, setSessionAction]
+  )
   const { pending } = settings.pendingViewChanges
   // A collapse the desktop has not answered within SLOW_PENDING_MS spins on its header.
   const pendingCollapseKeys = useSlowPendingKeys(
@@ -288,10 +299,12 @@ export function HostWorkspaceList({
               agentActivityDisplayMode={state.view.agentActivityDisplayMode}
               onPress={actions.openWorktreeSession}
               onAgentPress={actions.openWorktreeSession}
+              selectableSessions={selectableSessions}
               statusLive={connState === 'connected' && !item.hostContextHealthLabel}
               onLongPress={
                 item.workspaceKind === 'folder-workspace' ? undefined : state.setActionTarget
               }
+              onSessionLongPress={openSessionMenu}
               onToggleLineage={settings.toggleWorktreeLineage}
             />
           )}

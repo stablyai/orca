@@ -27,7 +27,13 @@ type Props = {
   unvisited: boolean
   childRow?: AgentChildRowModel
   isReadOnly?: boolean
+  selectable?: boolean
+  /** This session is the one open from the sidebar. Child lines share the parent pane and stay unfilled. */
+  selected?: boolean
   onPress?: (paneKey: string) => void
+  onPressIn?: () => void
+  onPressOut?: () => void
+  onLongPress?: (paneKey: string) => void
   trailing?: ReactNode
 }
 
@@ -39,7 +45,12 @@ function WorktreeAgentRowComponent({
   unvisited,
   childRow,
   isReadOnly,
+  selectable = false,
+  selected = false,
   onPress,
+  onPressIn,
+  onPressOut,
+  onLongPress,
   trailing
 }: Props) {
   useMobileColorScheme()
@@ -63,13 +74,26 @@ function WorktreeAgentRowComponent({
         : formatTimeAgo(timeAt, now)
 
   const content = (
-    <View style={[styles.row, { paddingLeft: depth * AGENT_ROW_INDENT_PER_DEPTH }]}>
+    <View
+      style={[
+        styles.row,
+        selectable && styles.rowSelectable,
+        { paddingLeft: depth * AGENT_ROW_INDENT_PER_DEPTH }
+      ]}
+    >
       <AgentStateDot state={dotState} />
       {/* Use desktop-style agent identity logo instead of two-letter code. */}
       {!childRow && agent.agentType ? (
         <MobileAgentIcon agentId={agent.agentType} size={13} />
       ) : null}
-      <Text style={[styles.label, unvisited && styles.labelUnvisited]} numberOfLines={1}>
+      <Text
+        style={[
+          styles.label,
+          selectable && styles.labelSelectable,
+          unvisited && styles.labelUnvisited
+        ]}
+        numberOfLines={selectable ? 2 : 1}
+      >
         {childText ? (
           <>
             {childText.lead}
@@ -83,20 +107,42 @@ function WorktreeAgentRowComponent({
       <Text style={styles.time}>{ts}</Text>
     </View>
   )
-  return childRow ? (
+  if (!onPress && !onLongPress && !childRow) {
+    return content
+  }
+  return (
     <Pressable
-      style={({ pressed }) => pressed && pressedStyle}
-      disabled={isReadOnly || !onPress}
+      disabled={isReadOnly || (!onPress && !onLongPress)}
       accessibilityRole="button"
-      onPress={(event) => {
-        event.stopPropagation()
-        onPress?.(agent.paneKey)
-      }}
+      accessibilityState={selected ? { selected: true } : undefined}
+      delayLongPress={400}
+      style={({ pressed }) => [
+        pressed && pressedStyle,
+        selectable && (selected || pressed) && styles.rowHighlight,
+        selectable && selected && styles.rowSelected,
+        selectable && pressed && styles.rowPressed
+      ]}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      onPress={
+        onPress
+          ? (event) => {
+              event.stopPropagation()
+              onPress(agent.paneKey)
+            }
+          : undefined
+      }
+      onLongPress={
+        onLongPress
+          ? (event) => {
+              event.stopPropagation()
+              onLongPress(agent.paneKey)
+            }
+          : undefined
+      }
     >
       {content}
     </Pressable>
-  ) : (
-    content
   )
 }
 
@@ -109,10 +155,34 @@ const styles = themedStyleSheet(() => ({
     gap: spacing.xs,
     marginTop: 3
   },
+  // 44pt is the smallest row a finger can hit without opening the workspace behind it.
+  rowSelectable: {
+    minHeight: 44,
+    marginTop: spacing.xs,
+    paddingVertical: spacing.sm
+  },
+  // Pad the fill, not the text: the negative margin puts that padding back, so idle rows stay aligned.
+  // Radius is desktop `rounded-sm` (`--radius-sm` = 0.6 × `--radius`).
+  rowHighlight: {
+    marginHorizontal: -spacing.sm,
+    marginVertical: -spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 6
+  },
+  rowSelected: {
+    backgroundColor: colors.bgPanel
+  },
+  rowPressed: {
+    backgroundColor: colors.bgRaised
+  },
   label: {
     flex: 1,
     fontSize: 11,
     color: colors.textMuted
+  },
+  labelSelectable: {
+    fontSize: 14
   },
   labelUnvisited: {
     color: colors.textPrimary,

@@ -20,12 +20,8 @@ import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
-import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
-
-// Match desktop formatBranchName by hiding refs/heads/ prefix.
-function displayBranch(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
-}
+import { displayBranch, WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
+import { useWorktreeRowSession } from './worktree-session-press'
 
 type Props = {
   item: Worktree
@@ -41,8 +37,12 @@ type Props = {
   status: WorktreeStatus
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
+  /** Phone view setting: session rows are taller and open that session. */
+  selectableSessions?: boolean
   statusLive?: boolean
   onLongPress?: (item: Worktree) => void
+  /** Actions for one session. The card long-press stays the workspace menu. */
+  onSessionLongPress?: (item: Worktree, paneKey: string) => void
   onToggleLineage?: (item: Worktree) => void
 }
 
@@ -58,8 +58,10 @@ function WorktreeListRowComponent({
   status,
   onPress,
   onAgentPress,
+  selectableSessions = false,
   statusLive,
   onLongPress,
+  onSessionLongPress,
   onToggleLineage
 }: Props) {
   useMobileColorScheme()
@@ -80,6 +82,12 @@ function WorktreeListRowComponent({
     .join(', ')
   // Why: the desktop's compact card keeps an icon-only glyph for remote projects after the host badge goes.
   const showHostGlyph = !cardDetails.metaRow && isRemoteExecutionHostId(hostId)
+  const sessionPress = useWorktreeRowSession(item, selectableSessions, onPress, onAgentPress)
+  const handleLongPress = sessionPress.cardLongPress(onLongPress, triggerMediumImpact)
+  const handleSessionLongPress = sessionPress.sessionLongPress(
+    onSessionLongPress,
+    triggerMediumImpact
+  )
 
   return (
     <Pressable
@@ -87,18 +95,15 @@ function WorktreeListRowComponent({
         styles.worktreeRow,
         indent > 0 && { paddingLeft: spacing.lg + indent },
         item.isActive && styles.worktreeRowActive,
-        pressed && (item.isActive ? styles.worktreeRowActivePressed : styles.worktreeRowPressed)
+        // The open session keeps this accent and takes the fill; the rest of the card does not.
+        sessionPress.highlightedPane && { backgroundColor: colors.bgBase },
+        pressed &&
+          !sessionPress.isClaimed() &&
+          (item.isActive ? styles.worktreeRowActivePressed : styles.worktreeRowPressed)
       ]}
       disabled={isReadOnly}
-      onPress={() => onPress(item)}
-      onLongPress={
-        onLongPress
-          ? () => {
-              triggerMediumImpact()
-              onLongPress(item)
-            }
-          : undefined
-      }
+      onPress={sessionPress.press}
+      onLongPress={handleLongPress}
       delayLongPress={400}
     >
       <View style={styles.indicatorCol}>
@@ -217,8 +222,14 @@ function WorktreeListRowComponent({
             unvisited={item.unread}
             statusLive={statusLive}
             isReadOnly={isReadOnly}
-            onAgentPress={onAgentPress ? (paneKey) => onAgentPress(item, paneKey) : undefined}
+            onAgentPress={sessionPress.openAgent}
+            selectedPaneKey={sessionPress.highlightedPane}
             fullList={agentActivityDisplayMode === 'full'}
+            selectable={selectableSessions}
+            onPressIn={sessionPress.claim}
+            onPressOut={sessionPress.release}
+            onWorkspacePress={sessionPress.openWorkspace}
+            onLongPress={handleSessionLongPress}
           />
         ) : null}
         {count > 0 && onToggleLineage ? (

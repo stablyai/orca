@@ -129,6 +129,8 @@ const sectionHeaderStyles = themedStyleSheet(() => ({
 // Kept beside ListGroup for the same reason as SectionHeader: one module, one page chunk.
 type ListRowProps = {
   title: string
+  /** Title clamp. One line unless a caller needs the text to wrap. */
+  titleLines?: number
   subtitle?: string
   /** Richer content under the title, e.g. usage bars or a coloured status line. */
   detail?: ReactNode
@@ -156,6 +158,7 @@ type ListRowProps = {
 /** One row of a grouped list: 48 pt, or 60 with a subtitle, with a trailing value, chevron or check. */
 export function ListRow({
   title,
+  titleLines = 1,
   subtitle,
   detail,
   leading,
@@ -189,7 +192,7 @@ export function ListRow({
             subtitle !== undefined && listRowStyles.titleEmphasis,
             destructive && listRowStyles.titleDestructive
           ]}
-          numberOfLines={1}
+          numberOfLines={titleLines}
         >
           {title}
         </Text>

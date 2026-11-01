@@ -11,6 +11,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
+import { setSelectedSidebarSession } from '../host-screen/selected-sidebar-session'
+import { colors } from '../theme/mobile-theme'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { WorktreeListRow } from './WorktreeListRow'
 import {
@@ -20,11 +22,14 @@ import {
 } from '../../../src/shared/worktree/card-properties'
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
-const { agentSpinnerRender, agentStateDotRender, metaGlyphsRender } = vi.hoisted(() => ({
-  agentSpinnerRender: vi.fn(),
-  agentStateDotRender: vi.fn(),
-  metaGlyphsRender: vi.fn()
-}))
+const { agentListRender, agentSpinnerRender, agentStateDotRender, metaGlyphsRender } = vi.hoisted(
+  () => ({
+    agentListRender: vi.fn(),
+    agentSpinnerRender: vi.fn(),
+    agentStateDotRender: vi.fn(),
+    metaGlyphsRender: vi.fn()
+  })
+)
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -58,7 +63,12 @@ vi.mock('./AgentStateDot', () => ({
 }))
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('./MobileRepoIcon', () => ({ MobileRepoIcon: () => null }))
-vi.mock('./WorktreeAgentList', () => ({ WorktreeAgentList: () => null }))
+vi.mock('./WorktreeAgentList', () => ({
+  WorktreeAgentList: (props: unknown) => {
+    agentListRender(props)
+    return null
+  }
+}))
 vi.mock('./WorktreeMetaGlyphs', () => ({
   prStateColor: () => '#000000',
   WorktreeMetaGlyphs: (props: unknown) => {
@@ -157,14 +167,17 @@ describe('memoized worktree rows', () => {
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
+    agentListRender.mockClear()
     agentSpinnerRender.mockClear()
     agentStateDotRender.mockClear()
     metaGlyphsRender.mockClear()
+    setSelectedSidebarSession(null)
   })
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    setSelectedSidebarSession(null)
   })
 
   it.each([false, true])('names the owner once (Project mode: %s)', async (hideRepo) => {
@@ -588,5 +601,43 @@ describe('memoized worktree rows', () => {
       )
     )
     expect(lastPresence()).toMatchObject({ jira: false, automation: false, cli: false })
+  })
+
+  it('fills the open session and leaves the rest of the workspace card clear', async () => {
+    const row = (item: TestItem) =>
+      createElement(WorktreeListRow, {
+        item,
+        isReadOnly: false,
+        now: 2_000,
+        repoColor: '#000000',
+        cardDetails: ALL_DETAILS,
+        agentActivityDisplayMode: 'full',
+        status: item.status,
+        selectableSessions: true,
+        onPress: () => undefined,
+        onAgentPress: () => undefined
+      })
+    const cardFill = () =>
+      Object.assign(
+        {},
+        ...findAllByHostType(renderer!.root, 'Pressable')[0]
+          .props.style({ pressed: false })
+          .filter(Boolean)
+      )
+    setSelectedSidebarSession({ worktreeId: baseItem.worktreeId, paneKey: 'agent-1' })
+    await act(async () => {
+      renderer = create(row({ ...baseItem, isActive: true }))
+    })
+    expect(cardFill().backgroundColor).toBe(colors.bgBase)
+    expect(cardFill().borderLeftColor).toBe(colors.textSecondary)
+    expect(agentListRender).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedPaneKey: 'agent-1' })
+    )
+
+    await act(async () => setSelectedSidebarSession(null))
+    expect(cardFill().backgroundColor).toBe(colors.bgPanel)
+    expect(agentListRender).toHaveBeenLastCalledWith(
+      expect.objectContaining({ selectedPaneKey: null })
+    )
   })
 })
