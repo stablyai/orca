@@ -55,16 +55,19 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         transport: ReturnType<typeof createMockTransport>
         deps: ReturnType<typeof createDeps>
         emit: (data: string, meta?: { droppedOutput?: boolean }) => void
+        reconnect: () => void
         dispose: () => void
       }> {
         const { connectPanePty } = await import('./pty-connection')
         const transport = createMockTransport('pty-id')
         const captured: {
           current: ((data: string, meta?: { droppedOutput?: boolean }) => void) | null
+          onConnect?: () => void
         } = { current: null }
         transport.connect.mockImplementation(
           async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
             captured.current = callbacks.onData ?? null
+            captured.onConnect = callbacks.onConnect
             return 'pty-id'
           }
         )
@@ -83,6 +86,7 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
           deps,
           emit: (data: string, meta?: { droppedOutput?: boolean }) =>
             captured.current?.(data, meta),
+          reconnect: () => captured.onConnect?.(),
           dispose: () => binding.dispose()
         }
       }
@@ -100,6 +104,19 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
         expect(deps.paneLastThemeModeRef.current.get(1)).toBeUndefined()
         expect(replies(transport)).toEqual([])
+        dispose()
+      })
+
+      it('reports a flip missed while disconnected exactly once on reconnect', async () => {
+        const { transport, emit, reconnect, dispose } = await connectVisiblePane()
+        emit('\x1b[?2031h')
+        mockStoreState = {
+          ...mockStoreState,
+          settings: { ...mockStoreState.settings, theme: 'dark' }
+        }
+        reconnect()
+        reconnect()
+        expect(replies(transport)).toEqual(['\x1b[?997;1n'])
         dispose()
       })
 

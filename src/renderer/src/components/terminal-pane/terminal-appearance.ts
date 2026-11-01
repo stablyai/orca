@@ -204,10 +204,12 @@ export function applyTerminalAppearance(
       resolveTerminalInlineImagesEnabled(settings.terminalInlineImages)
     )
     const transport = paneTransports.get(pane.id)
+    if (transport) {
+      maybePushMode2031Flip(pane.id, appearance.mode, transport, paneMode2031, paneLastThemeMode)
+    }
     // Why: PTY is already at phone dimensions under a mobile-fit override — don't resize it back to desktop.
     const appearancePtyId = transport?.getPtyId()
     if (transport?.isConnected() && (!appearancePtyId || !getFitOverrideForPty(appearancePtyId))) {
-      maybePushMode2031Flip(pane.id, appearance.mode, transport, paneMode2031, paneLastThemeMode)
       safeFitAndThen(pane, 'appearance-pty-resize', () => {
         const currentTransport = paneTransports.get(pane.id)
         if (

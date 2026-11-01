@@ -5,6 +5,7 @@ import {
   isLocalNativeWindowsConpty,
   type WindowsPtyCompatibilityContext
 } from './windows-pty-compatibility'
+import { PANE_TERMINAL_VT_EXTENSIONS } from './pane-terminal-options'
 
 export type TerminalKeyboardProtocolContext = WindowsPtyCompatibilityContext & {
   executionHostId: ExecutionHostId
@@ -37,5 +38,5 @@ export function buildTerminalKeyboardProtocolOptions(
   if (!shouldDisableKittyKeyboardForTerminal(context)) {
     return {}
   }
-  return { vtExtensions: { kittyKeyboard: false } }
+  return { vtExtensions: { ...PANE_TERMINAL_VT_EXTENSIONS, kittyKeyboard: false } }
 }

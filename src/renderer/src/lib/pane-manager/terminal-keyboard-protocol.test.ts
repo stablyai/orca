@@ -17,7 +17,7 @@ const localWindowsConpty = {
 describe('buildTerminalKeyboardProtocolOptions', () => {
   it('withholds the Kitty keyboard advertisement for a local Windows ConPTY pane', () => {
     expect(buildTerminalKeyboardProtocolOptions(localWindowsConpty)).toEqual({
-      vtExtensions: { kittyKeyboard: false }
+      vtExtensions: { colorSchemeQuery: false, kittyKeyboard: false }
     })
   })
 
