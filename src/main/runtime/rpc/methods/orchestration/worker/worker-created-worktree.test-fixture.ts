@@ -6,6 +6,7 @@ export function mockWorkerCreatedWorktree(
   runtime: OrcaRuntimeService,
   options?: {
     hookFound?: boolean
+    displayName?: string
     startupPolicy?: 'start-immediately' | 'wait-for-setup'
     state?: 'running' | 'skipped' | 'not_configured' | 'spawn_failed'
     terminals?: { handle: string; title: string }[]
@@ -21,7 +22,7 @@ export function mockWorkerCreatedWorktree(
         ...WORKTREE_META_PERSISTED_DEFAULTS,
         id: 'repo::created',
         repoId: 'repo',
-        displayName: '',
+        displayName: options?.displayName ?? '',
         comment: '',
         isUnread: false,
         sortOrder: 0,
