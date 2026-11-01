@@ -4,7 +4,7 @@ import { addNodePtyRecoveryHint } from '../../../daemon/node-pty-error-hints'
 import type { Store } from '../../../persistence'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { isCurrentPtyExit, ptyIncarnationById, ptyOwnership } from './ownership-state'
-import { getRelayPtyId } from './registry'
+import { getRelayPtyId, tryGetProviderForPty } from './registry'
 import {
   KEEP_HISTORY_STOP_POLL_MS,
   KEEP_HISTORY_STOP_SETTLE_MS
@@ -19,7 +19,7 @@ export function normalizeNodePtySpawnError(err: unknown): Error {
     return err
   }
   if (err instanceof Error) {
-    // Why: preserve the original stack/name/custom fields while adding the same recovery hint as the pty:spawn path.
+    // Mutate only the message to retain stack, name and custom error fields.
     err.message = hintedMessage
     return err
   }
@@ -45,9 +45,8 @@ export async function isProviderPtyLive(
   ptyId: string,
   deadlineMs?: number
 ): Promise<boolean> {
-  // Why: bound the liveness list RPC by the teardown deadline so a wedged daemon
-  // fails fast; undefined keeps the provider default for all other callers.
-  return (await provider.listProcesses(deadlineMs !== undefined ? { deadlineMs } : undefined)).some(
+  // Share the teardown deadline with the liveness RPC; other callers retain provider defaults.
+  return (await provider.listProcesses({ deadlineMs, ptyIds: [ptyId] })).some(
     (session) => session.id === ptyId
   )
 }
@@ -56,13 +55,14 @@ export async function isProviderAgentSessionOwnerLive(
   provider: IPtyProvider,
   owner: AgentSessionOwnerBinding
 ): Promise<boolean> {
-  const session = (await provider.listProcesses()).find((candidate) => candidate.id === owner.ptyId)
+  const session = (await provider.listProcesses({ ptyIds: [owner.ptyId] })).find(
+    (candidate) => candidate.id === owner.ptyId
+  )
   if (!session) {
     return false
   }
   if (provider.providesAgentSessionOwnerListings?.(owner.ptyId) !== true) {
-    // Why: in-process local owners cannot serialize the controller claim; exact incarnation
-    // liveness keeps that claim authoritative until the normal PTY exit releases it.
+    // In-process providers cannot list controller claims; exact incarnation liveness preserves their authority.
     const expectedIncarnation = ptyIncarnationById.get(owner.ptyId)
     return expectedIncarnation !== undefined && session.incarnationId === expectedIncarnation
   }
@@ -76,16 +76,18 @@ export async function isProviderAgentSessionOwnerLive(
 export async function verifyPtyStopped(
   provider: IPtyProvider,
   ptyId: string,
-  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined
+  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined,
+  exitObserved = false
 ): Promise<boolean> {
   if (await isProviderPtyLive(provider, ptyId, opts?.deadlineMs)) {
     return false
   }
-  if (!opts?.keepHistory) {
+  // Observed exit already proves this incarnation stopped; polling guards only unobserved stops.
+  if (!opts?.keepHistory || exitObserved) {
     return true
   }
   const settleDeadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS
-  // Why: deadlineMs is absolute, so the settle poll must not outlive the caller's teardown budget.
+  // Polling must remain within the caller's absolute teardown deadline.
   const deadline =
     opts.deadlineMs !== undefined ? Math.min(settleDeadline, opts.deadlineMs) : settleDeadline
   while (Date.now() < deadline) {
@@ -124,4 +126,15 @@ export function finishPtyShutdown(
   }
   ptyOwnership.delete(id)
   return incarnationId
+}
+
+export async function isRegisteredAgentSessionOwnerLive(
+  owner: AgentSessionOwnerBinding
+): Promise<boolean> {
+  const ownerProvider = tryGetProviderForPty(owner.ptyId)
+  if (!ownerProvider) {
+    // Why: an owner on a host this process cannot reach is unknown, never absent.
+    throw new Error('execution_owner_unavailable')
+  }
+  return await isProviderAgentSessionOwnerLive(ownerProvider, owner)
 }

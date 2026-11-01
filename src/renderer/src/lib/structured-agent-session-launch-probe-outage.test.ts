@@ -29,6 +29,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
     throw offline()
   })
 }))
+vi.mock('@/runtime/structured-chat-host-permission', () => ({
+  readStructuredChatHostPermissionVerdict: async () => ({ kind: 'allowed' })
+}))
 vi.mock('@/runtime/structured-session-tab-inventory', () => ({
   readStructuredSessionTabInventory: vi.fn(async () => {
     calls.log.push('inventory')
@@ -40,7 +43,7 @@ import {
   createStructuredAgentSessionLaunchIntent,
   StructuredAgentSessionCreateUnknownOutcomeError
 } from '@/lib/launch-structured-agent-session'
-import { launchAndReconcile } from '@/lib/structured-agent-session-launch-recovery'
+import { launchAndReconcile } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 
 function launchState(executionHostId: 'local' | 'runtime:server-1') {
   return {
@@ -56,8 +59,7 @@ beforeEach(() => {
   calls.createSupportAnswers.splice(0)
 })
 
-// An outage is not an answer: the chat stays as "Could not confirm" with Retry, and the launch
-// keeps its prompt, instead of being forgotten as though the host had said no.
+// Outage proves no refusal; retain unconfirmed state/prompt for Retry instead of forgetting the launch.
 describe('a structured launch whose host stops answering', () => {
   it('stays unconfirmed when the reply to a sent create is lost and the retry cannot reach it', async () => {
     calls.createSupportAnswers.push('supported', 'offline')

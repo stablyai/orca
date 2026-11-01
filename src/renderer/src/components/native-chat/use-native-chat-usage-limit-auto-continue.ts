@@ -6,7 +6,7 @@ import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
 import { AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { NativeChatUsageLimitCut } from '../../../../shared/native-chat-usage-limit-cut'
+import type { NativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { NativeChatUsageLimitAutoContinueState } from './NativeChatUsageLimitAutoContinue'
 
 export function useNativeChatUsageLimitAutoContinue(

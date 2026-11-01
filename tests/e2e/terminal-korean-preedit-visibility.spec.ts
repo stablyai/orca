@@ -1,16 +1,5 @@
-/**
- * Headless end-to-end coverage for 2-Set Korean terminal input, asserting what the user sees.
- *
- * Two IME defects shipped past a suite of ~3000 passing IME assertions. Both were invisible to it
- * for the same reason: every assertion was about bytes reaching the PTY, and a preedit rendered
- * into a hidden overlay satisfies all of them while the user composes blind. The real-geometry
- * coverage that would have caught it existed, but was `@headful`, env-gated and macOS-only, so it
- * never ran in CI.
- *
- * This file closes that gap. Composition is driven through CDP `Input.imeSetComposition`, which
- * opens a genuine Chromium composition session with no native IME, no accessibility grant and no
- * system input source — so the geometry assertions run in the normal headless CI project.
- */
+// Assert real preedit geometry: PTY byte checks passed while hidden overlays left users composing blind.
+// CDP imeSetComposition opens Chromium composition without native IME/accessibility grants, enabling normal headless CI coverage.
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
@@ -106,16 +95,12 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
   test('keeps a preedit the IME resumes without a compositionstart visible', async ({
     orcaPage
   }, testInfo) => {
-    // Red on `main`, by design. xterm adds `.active` to the overlay only in its `compositionstart`
-    // handler, so a preedit resumed by a bare `compositionupdate` is written into a hidden element
-    // and the user composes blind while the committed bytes still land correctly — which is why no
-    // byte-level assertion ever saw it. Pre-existing and broken in every shipped build; closed by
-    // the visibility fix in xterm's own composition helper one layer below this one.
+    // Bare compositionupdate writes preedit without xterm’s compositionstart-only .active, hiding text despite correct bytes.
+    // Pre-existing on main; fixed in xterm’s CompositionHelper visibility layer.
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
     try {
-      // Synthesised, not replayed — see dispatchResumedCompositionUpdate for why the recorded
-      // corpus cannot supply this ordering and why it is still reachable in production.
+      // Synthesize this ordering; dispatchResumedCompositionUpdate explains why the recorded corpus cannot supply it.
       await dispatchResumedCompositionUpdate(orcaPage, '한')
 
       const sample = await samplePreeditOverlay(orcaPage)
@@ -135,9 +120,7 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
   test('renders the preedit at every update of a recorded Windows/WSL Hangul session', async ({
     orcaPage
   }, testInfo) => {
-    // Pinned to the Windows policy because the trace is a Windows recording. Without the pin it
-    // ran under whatever the runner reported — macOS locally, Linux on the CI shards — so the one
-    // platform it was named for was the one platform it never exercised.
+    // Pin Windows renderer policy for the Windows recording regardless of runner OS.
     await applyImePlatformPolicy(orcaPage, 'windows')
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
@@ -146,8 +129,7 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
       const updates = replay.samples.filter(
         (sample) => sample.type === 'compositionupdate' && sample.data.length > 0
       )
-      // If the fixture is ever replaced with one that carries no updates this assertion keeps the
-      // rest of the test from passing vacuously.
+      // Require updates so replacing the fixture with an empty sequence cannot pass.
       expect(updates.length, 'the recorded trace carries no composition updates').toBe(37)
 
       const invisible = updates.filter(
@@ -163,9 +145,7 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
         .map((sample) => sample.data)
       expect(committed.join('')).toBe('문제모르겠네안녕하세요')
 
-      // The capture's own byte stream, asserted rather than carried unused: it is the only thing
-      // in this test that would notice a syllable being dropped between the overlay and the PTY,
-      // and the trailing ASCII `hello` pins that a plain word after a Korean session is unharmed.
+      // Assert captured PTY bytes to catch dropped syllables; trailing ASCII hello checks post-Korean plain input.
       expect(replay.onData).toBe((RECORDED_TRACE.onData ?? []).map((entry) => entry.data).join(''))
       expect(replay.onData).toBe('문제\r모르겠네\r안녕하세요\rhello\r')
       completed = true
@@ -183,8 +163,7 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
     let completed = false
     try {
       await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
-      // No settle time between frames or between syllables: the cadence a fast typist produces,
-      // and the one that used to drop or double a syllable at the boundary.
+      // No frame/syllable settling: fast-typing cadence previously dropped or doubled boundary syllables.
       for (let repetition = 0; repetition < 4; repetition += 1) {
         await composeHangulSyllable(arena.session, orcaPage, HAN_FRAMES, 0)
         await commitImeText(arena.session, '한')

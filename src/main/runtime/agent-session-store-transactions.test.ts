@@ -1,8 +1,4 @@
 import { cancelAgentSessionUsageLimitContinue } from '../../shared/agent-session-usage-limit-continue'
-// How a record-store write reaches the chat database: only the rows it changed, each checked with
-// the rules a load applies, never inside a caller's own transaction, and never in memory unless the
-// rows committed.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,11 +25,10 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
-/** Reserve, observe the spawn, prove the handle: a chat with a live writer. */
 async function liveChat(
   store: AgentSessionRecordStore,
   sessionId: string
@@ -124,8 +119,7 @@ describe('writing a transaction', () => {
     expect(totalChanges()).toBe(before)
   })
 
-  // Every mutation lands after the caller's frame, so one made inside an open journal transaction
-  // on the same connection never nests a BEGIN there.
+  // Defer BEGIN beyond the caller's frame to avoid nesting its open journal transaction.
   it('runs a store call made inside an open journal transaction after that transaction', async () => {
     const store = await openTestAgentSessionRecordStore(root)
     await liveChat(store, 'chat-a-0001')
@@ -173,7 +167,6 @@ describe('a receipt', () => {
     return reopened.getOperationRow('client-1', operationId)?.outcome.status
   }
 
-  // Written inside the caller's journal transaction, so it commits or rolls back with that write.
   it.each([false, true])(
     'adopts record and operation together after commit (insert=%s)',
     async (insert) => {
@@ -234,7 +227,7 @@ describe('a receipt', () => {
       (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
         ?.usageLimitContinueCancel
     ).toBeUndefined()
-    // The next store transaction diffs from what committed, not from the discarded draft.
+    // A discarded draft must not become the next diff baseline.
     await store.setConversationName('chat-a-0001', 'after')
     expect(await persistedStatus()).toBe(insert ? undefined : 'pending')
   })
@@ -325,11 +318,10 @@ describe('rows in memory', () => {
 })
 
 describe('after the database closes', () => {
-  // Late settlement at quit lands here: the caller reports it, and nothing in memory moves.
   it('refuses a write with journal_closed and leaves memory as it was', async () => {
     const store = await openTestAgentSessionRecordStore(root)
     const before = await liveChat(store, 'chat-a-0001')
-    closeTestJournalHostDatabases()
+    await closeTestJournalHostDatabases()
 
     await expect(store.setConversationName('chat-a-0001', 'late')).rejects.toMatchObject({
       code: 'journal_closed'

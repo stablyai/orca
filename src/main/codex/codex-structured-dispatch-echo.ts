@@ -4,14 +4,10 @@ import type {
   AgentJournalTurnJoin
 } from '../../shared/agent-session-journal-types'
 
-/** Sends awaiting their echo. One bound to a turn that ended without taking it settles from that
- *  end; any other whose echo never arrives is retired by the journal's recovery on exit. */
 export const MAX_CODEX_PENDING_DISPATCH_ECHOES = 256
-/** Turn ends kept for an answer read after the turn it names had already ended, and answered
- *  turns kept that Codex left unopened through a wait. */
+// Retain turn outcomes for late answers and turns left unopened by a wait.
 export const MAX_CODEX_RECORDED_TURN_ENDS = 64
 
-/** How a primary-thread turn ended, as Codex reported it. */
 export type CodexTurnEnd =
   | { status: 'completed' }
   | { status: 'interrupted' }
@@ -22,37 +18,23 @@ export type CodexDispatchRequestOrigin = {
   sequence: number
 }
 
-/**
- * Which sends this session is still waiting to hear back about, keyed by the
- * client message id Codex echoes on the user message.
- *
- * Keyed rather than ordered on purpose: Codex coalesces a `turn/start` issued
- * while a turn is running into that turn, so two sends can share one turn id and
- * their echoes arrive far apart. Queue position identifies neither.
- */
+/** Key by client message ID: coalesced sends share turns and can echo out of order. */
 export type CodexDispatchEchoes = {
-  /** A point in the order Codex's replies and notifications are read in: `onReply` and
-   *  `observeStatus` stamp from it as they read, so a stamp orders what arrived, not what ran. */
+  /** Receipt order of provider replies and notifications. */
   tick: () => number
-  /** Codex answered this send (or its request timed out, `at`) without naming a turn. */
+  /** Record an answer or timeout that names no turn. */
   answered: (clientMessageId: string, at: number) => void
-  /** The primary thread's reported status, as read: only one read after a send's answer decides
-   *  whether Codex still works on a send it answered into no turn. */
+  /** Only status received after a no-turn answer determines whether that send is held. */
   observeStatus: (active: boolean) => void
-  /** The sends Codex still holds: unanswered, answered into a turn that has not ended, or answered
-   *  into none while the thread reported running since. Execution, never delivery: an ended turn
-   *  releases a send whether or not its echo came. */
+  /** Sends still executing; ended turns release them even without an echo. */
   heldSends: () => ReadonlySet<string>
-  /** Arms settlement for a send about to be written; false preserves older waits at capacity. */
+  /** False at capacity preserves older pending sends. */
   arm: (clientMessageId: string, requestedAt?: number) => boolean
-  /** True once, for a send this session armed and has not yet settled. */
+  /** True once per armed send. */
   settle: (clientMessageId: string) => boolean
   /** Drops an armed send whose write never reached the provider. */
   disarm: (clientMessageId: string) => void
-  /**
-   * Binds a send to the turn Codex answered it into, and how it joined that turn. Returns that
-   * turn's end when the answer is read after it; a send that end settles is no longer armed.
-   */
+  /** Return an already-recorded turn end and settle the send if that end requires it. */
   bindTurn: (
     clientMessageId: string,
     threadId: string,
@@ -60,31 +42,30 @@ export type CodexDispatchEchoes = {
     via: AgentJournalTurnJoin,
     answeredAt?: number
   ) => CodexTurnEnd | null
-  /** The turn the latest armed send was answered into that is neither in `openTurnIds`, ended, nor
-   *  left unopened through a wait: one Codex has picked for the send but not opened. */
+  /** Latest answered turn eligible for its first open wait. */
   answeredUnopenedTurn: (threadId: string, openTurnIds: ReadonlySet<string>) => string | null
-  /** Codex did not open this answered turn within a wait, so no later wait is spent on it. */
+  /** Mark a timed-out open wait so later sends do not wait again. */
   leftUnopened: (threadId: string, turnId: string) => void
-  /** Codex opened this turn, by its `turn/started`. */
   opened: (threadId: string, turnId: string) => void
-  /** Whether Codex opened this turn: an `error` naming one it never opened is that turn's end. */
+  /** An error naming a never-opened turn counts as its end. */
   hasOpened: (threadId: string, turnId: string) => boolean
-  /** The latest armed send's answered turn a wait left unopened, neither open nor ended: Codex may
-   *  still open it, though no wait is spent on it again. */
+  /** Latest answered turn still unopened after its wait was exhausted. */
   answeredTurnLeftUnopened: (threadId: string, openTurnIds: ReadonlySet<string>) => string | null
-  /**
-   * Records a turn's end and returns the sends bound to it that it settles: all of them unless it
-   * completed, which echoes its pending input first, so one it never echoed waits for recovery. An
-   * interrupt withdraws an un-echoed send, steered or the turn's own input: neither reached history.
-   */
+  /** Settle bound sends on failure or interruption; completed turns leave missing echoes for recovery. */
   endTurn: (
     threadId: string,
     turnId: string,
     end: CodexTurnEnd
   ) => { clientMessageId: string; via: AgentJournalTurnJoin }[]
-  /** Submission origin for this exact send, retained until its echo settles it. */
+  /** Submission origin retained while the send remains armed. */
   requestOrigin: (clientMessageId: string) => CodexDispatchRequestOrigin | null
-  /** Highest causal sequence assigned to a dispatch in this session. */
+  /** A turn/start reply named the turn this send opened, recorded at reply receipt. */
+  repliedTurn: (clientMessageId: string, threadId: string, turnId: string) => void
+  /** Earliest armed send whose turn/start reply named this turn; hook-refused prompts never echo. */
+  turnOpener: (
+    threadId: string,
+    turnId: string
+  ) => { clientMessageId: string; requestOrigin: CodexDispatchRequestOrigin } | null
   latestSequence: () => number
   clear: () => void
   readonly size: number
@@ -97,6 +78,7 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
       requestedAt: number | null
       sequence: number
       turn?: { threadId: string; turnId: string; via: AgentJournalTurnJoin }
+      openedTurn?: { threadId: string; turnId: string }
       answeredAt?: number
       turnEnded?: true
     }
@@ -114,7 +96,6 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
           : []
       )
     )
-  /** Runs a change and reports it when the sends Codex holds changed with it. */
   const reporting = <T>(change: () => T): T => {
     if (!onHeldChange) {
       return change()
@@ -232,7 +213,7 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
             ? [{ clientMessageId, via: entry.turn.via, entry }]
             : []
         )
-        // A completed turn echoed what it took first, so one it never echoed is no longer Codex's.
+        // Completed turns echo accepted input first; missing echoes no longer count as held.
         for (const { entry } of bound) {
           entry.turnEnded = true
         }
@@ -250,6 +231,25 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
         ? null
         : { requestedAt: origin.requestedAt, sequence: origin.sequence }
     },
+    repliedTurn: (clientMessageId, threadId, turnId) => {
+      const entry = armed.get(clientMessageId)
+      if (entry) {
+        entry.openedTurn = { threadId, turnId }
+      }
+    },
+    turnOpener: (threadId, turnId) => {
+      // Sends are armed in sequence order, so the first match is the earliest.
+      for (const [clientMessageId, { openedTurn, requestedAt, sequence }] of armed) {
+        if (
+          openedTurn?.threadId === threadId &&
+          openedTurn.turnId === turnId &&
+          requestedAt !== null
+        ) {
+          return { clientMessageId, requestOrigin: { requestedAt, sequence } }
+        }
+      }
+      return null
+    },
     latestSequence: () => nextSequence - 1,
     clear: () => {
       status = null
@@ -265,7 +265,6 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
   }
 }
 
-/** The user-message echo a settlement is read off, or null for any other item. */
 export function readCodexDispatchEcho(
   item: { type: string; id: string } & Record<string, unknown>,
   identity: AgentJournalItemIdentity

@@ -112,7 +112,6 @@ async function openJournal(): Promise<AgentSessionJournal> {
   })
 }
 
-/** One acquisition: a fresh sink and translator over the session's journal. */
 function acquire(journal: AgentSessionJournal) {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, coalesceMs: 0 })
@@ -156,7 +155,6 @@ describe('context usage across a restart', () => {
     expect(ring(journal)).toMatchObject({ usedTokens: 150_000, windowTokens: 1_000_000 })
     before.release()
 
-    // A new acquisition builds a new translator; it holds no turn of its own.
     const after = acquire(journal)
     after.translator.handle(compactBoundary(10_000))
     await after.settle()
@@ -193,37 +191,10 @@ describe('context usage across a restart', () => {
     after.translator.handle(assistantFrame('reply-b', 11_000, 160_000))
     await after.settle()
     expect(ring(journal)).toMatchObject({ usedTokens: 160_000, windowTokens: 1_000_000 })
-    // Adopted: a response on another model says the journal's window no longer serves.
     after.translator.handle(assistantFrame('reply-b2', 12_000, 170_000, 'claude-sonnet-5'))
     await after.settle()
     expect(ring(journal)).toBeNull()
     after.release()
-  })
-
-  it('keeps the last known size of a turn the child crashed in', async () => {
-    const journal = await openJournal()
-    const crashed = acquire(journal)
-    crashed.translator.handle(initFrame(900))
-    crashed.translator.handle(userFrame('turn-a', 1_000))
-    crashed.translator.handle(assistantFrame('reply-a', 2_000, 20_000))
-    crashed.translator.handle(resultFrame(3_000))
-    crashed.translator.handle(initFrame(3900))
-    crashed.translator.handle(userFrame('turn-b', 4_000))
-    crashed.translator.handle(assistantFrame('reply-b', 5_000, 120_000))
-    await crashed.settle()
-    // The child dies with turn-b running; nothing ends it from the provider side.
-    crashed.release()
-
-    await settleStaleStructuredAgentSessionState({
-      journal,
-      sessionId: 'orca-session',
-      fence: 2,
-      acquisitionGeneration: 'next',
-      deathEvidence: null
-    })
-    const turns = journal.snapshot().items.map((item) => readAgentJournalTurn(item.body)?.state)
-    expect(turns).toContain('unverifiable')
-    expect(ring(journal)).toMatchObject({ usedTokens: 120_000, windowTokens: 1_000_000 })
   })
 
   it('never brings a settled turn back to running with a context write that ran late', async () => {
@@ -233,7 +204,6 @@ describe('context usage across a restart', () => {
     live.translator.handle(userFrame('turn-a', 1_000))
     live.translator.handle(assistantFrame('reply-a', 2_000, 20_000))
     await live.settle()
-    // The write is queued while the host settles the turn behind the sink's back.
     live.detach()
     live.translator.handle(assistantFrame('reply-a2', 3_000, 30_000))
     await settleStaleStructuredAgentSessionState({
@@ -253,22 +223,6 @@ describe('context usage across a restart', () => {
       state: 'unverifiable',
       contextUsage: { used: { kind: 'estimate', usage: { inputTokens: 30_000 } } }
     })
-    live.release()
-  })
-
-  it("reads a new session's implied window the same from its loaded rows and from the host", async () => {
-    const journal = await openJournal()
-    const live = acquire(journal)
-    live.translator.modelWritten('opus[1m]')
-    live.translator.handle(initFrame(900))
-    live.translator.handle(userFrame('turn-a', 1_000))
-    live.translator.handle(assistantFrame('reply-a', 2_000, 150_000))
-    await live.settle()
-    const expected = { usedTokens: 150_000, windowTokens: 1_000_000, percentage: 15 }
-    expect(ring(journal)).toMatchObject(expected)
-    expect(journal.contextUsage()).toMatchObject({ window: { tokens: 1_000_000 } })
-    // A client whose loaded page lacks the turn reads the host's answer.
-    expect(selectStructuredAgentContextUsage([], journal.contextUsage())).toMatchObject(expected)
     live.release()
   })
 

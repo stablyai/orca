@@ -61,6 +61,43 @@ function expectConflict(run: () => void, code: string): void {
 }
 
 describe('assertAutomationOwnerFence', () => {
+  it('refuses legacy bare execution of a reselection orphan truthfully and fences stale callers first', () => {
+    const repairContext = {
+      ...context,
+      repoConnectionId: () => 'ssh-1',
+      requiresHostReselection: () => true
+    }
+    const record = automation({
+      runContext: {
+        kind: 'workspace-run',
+        repoId: 'repo-1',
+        projectId: 'logical-project',
+        projectHostSetupId: 'setup',
+        hostId: 'ssh:ssh-1',
+        path: '/captured'
+      }
+    })
+    expect(() =>
+      assertAutomationOwnerFence({
+        automation: record,
+        operation: 'execute',
+        context: repairContext
+      })
+    ).toThrow(
+      'Edit the automation and reselect its host before running it.: automation_target_removed'
+    )
+    expectConflict(
+      () =>
+        assertAutomationOwnerFence({
+          automation: record,
+          operation: 'execute',
+          context: repairContext,
+          expectedOwner: { selector: { kind: 'self' } }
+        }),
+      AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged
+    )
+  })
+
   it('passes when the captured owner still matches', () => {
     expect(() =>
       assertAutomationOwnerFence({
@@ -104,8 +141,7 @@ describe('assertAutomationOwnerFence', () => {
     )
   })
 
-  // Optional on the wire is not unenforced: a generation-bearing record refuses
-  // an ownerless mutation, while a generation-less legacy row stays callable bare.
+  // Optional wire fields still enforce fenced owners; only generation-less legacy rows accept bare mutations.
   it('refuses an ownerless mutation of a record that captured a generation', () => {
     expectConflict(
       () => assertAutomationOwnerFence({ automation: sshRecord, operation: 'mutate', context }),
@@ -136,8 +172,7 @@ describe('assertAutomationOwnerFence', () => {
     ).not.toThrow()
   })
 
-  // The stored field is absent on a workspace-pinned record while the projection carries a
-  // generation, so keying the demand off storage let precisely this population write unfenced.
+  // Workspace pins carry projected generations absent from storage; storage-only checks would leave these writes unfenced.
   it('keeps legacy workspace-pinned mutations and execution compatible', () => {
     for (const operation of ['mutate', 'execute'] as const) {
       expect(() =>
@@ -258,8 +293,7 @@ describe('destination validation', () => {
     ).not.toThrow()
   })
 
-  // The stored fields say `local`, but the pin is where the run goes: reading storage let a
-  // record dispatch sends over SSH land under a Self destination the user chose.
+  // Projected workspace pins own local-stored records; storage-only checks could approve Self while dispatch ran over SSH.
   it('refuses a self destination for a record its workspace pins to SSH', () => {
     expectConflict(
       () =>

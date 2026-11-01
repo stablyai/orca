@@ -1,5 +1,4 @@
-// A Codex that keeps reconnecting is working, so the idle sweep must not stop it. Every retry
-// frame writes and publishes its own row, and that publish is the activity the sweep reads.
+// Published retry rows count as activity, keeping reconnecting sessions alive.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,7 +16,10 @@ import {
   resetHostTestOperationIds
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
@@ -90,6 +92,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -103,7 +106,7 @@ describe('a Codex reconnecting a dropped stream', () => {
     }
     const translator = createCodexJournalTranslator({ sink, primaryThreadId: () => THREAD })
 
-    // Five frames ten minutes apart: fifty minutes, well past the thirty-minute idle window.
+    // Continue retries beyond the idle window.
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       clock += RETRY_GAP_MS
       translator.handle({
@@ -133,11 +136,10 @@ describe('a Codex reconnecting a dropped stream', () => {
       )
     )
 
-    // Once the frames stop, the same clock does let the sweep close it.
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS
     await host.collaboratorsForTests().lifetime.idleSweep.tick()
     await vi.waitFor(() => {
-      expect(closeSession).toHaveBeenCalledWith(SESSION)
+      expect(closeSession).toHaveBeenCalledWith(SESSION, undefined)
       expect(host.hasSession(SESSION)).toBe(false)
     })
   })

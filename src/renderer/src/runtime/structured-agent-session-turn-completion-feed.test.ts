@@ -1,9 +1,4 @@
-// LIVE-ONLY PIN for the renderer half of the completion feed.
-//
-// The point of most of these is not that the feed delivers, but that it REMEMBERS NOTHING: no
-// snapshot for a late listener, no buffer, and no catch-up across a reconnect. A refactor that
-// quietly adds a cursor or a replay arm to make reconnects "lossless" has to fail here, because
-// what it would actually do is light the dot for work the user already read.
+// Keep completion/prompt edges live-only: no late snapshot, buffering or reconnect catch-up, which would mark already-read work unread again.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -22,7 +17,8 @@ vi.mock('./runtime-rpc-client', () => ({
 
 import {
   getStructuredAgentSessionTurnCompletionFeed,
-  resetStructuredAgentSessionTurnCompletionFeedsForTests
+  resetStructuredAgentSessionTurnCompletionFeedsForTests,
+  structuredAgentSessionTurnCompletionFeedCountForTests as retainedCount
 } from './structured-agent-session-turn-completion-feed'
 
 function label(edge: AgentSessionAttentionEdge): string {
@@ -59,6 +55,37 @@ function completion(turnId: string): AgentSessionTurnCompletion {
     outcome: 'success',
     completedAt: 1
   }
+}
+
+function emitEdges(value: Subscription): void {
+  value.emit({ type: 'completion', completion: completion('turn-live') })
+  value.emit({
+    type: 'prompt',
+    prompt: {
+      scope: completion('unused').scope,
+      sessionId: 'session-1',
+      promptId: 'approval-live',
+      raisedAt: 1
+    }
+  })
+}
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: Error) => void
+} {
+  let resolve: (value: T) => void = () => {
+    throw new Error('not initialized')
+  }
+  let reject: (error: Error) => void = () => {
+    throw new Error('not initialized')
+  }
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes
+    reject = no
+  })
+  return { promise, resolve, reject }
 }
 
 describe('structured turn completion feed (renderer)', () => {
@@ -151,16 +178,14 @@ describe('structured turn completion feed (renderer)', () => {
     await vi.advanceTimersByTimeAsync(5_000)
     expect(subscriptions).toHaveLength(2)
 
-    // NO CURSOR ANYWHERE: the reopen call carries the target and three callbacks and nothing
-    // else. A catch-up arm would have to add an argument here, so this assertion is the pin.
+    // Assert target plus callbacks only; adding a catch-up cursor must break this contract.
     for (const call of mocks.subscribe.mock.calls) {
       expect(call).toHaveLength(4)
       expect(call[0]).toEqual({ kind: 'local' })
       expect(call.slice(1).every((argument) => typeof argument === 'function')).toBe(true)
     }
 
-    // The reopened stream is empty until the host sends something new; whatever completed during
-    // the gap is gone, not queued.
+    // Reopened streams deliver only future edges; completions during the gap are lost.
     expect(seen).toEqual(['before-drop'])
     subscription(1).emit({ type: 'completion', completion: completion('after-reconnect') })
     expect(seen).toEqual(['before-drop', 'after-reconnect'])
@@ -187,12 +212,21 @@ describe('structured turn completion feed (renderer)', () => {
       kind: 'environment',
       environmentId: 'env-1'
     })
-    feed.activate()
+    let release = feed.activate()
+    queueMicrotask(() => {
+      release = feed.activate()
+    })
+    release()
     await vi.advanceTimersByTimeAsync(30_000)
 
     expect(mocks.subscribe).not.toHaveBeenCalled()
     // An old host is a settled answer, not a fault; retrying would probe the relay forever.
     expect(mocks.supportsCapability).toHaveBeenCalledTimes(1)
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    feed.activate()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mocks.supportsCapability).toHaveBeenCalledTimes(2)
   })
 
   it('subscribes a remote host that advertises the capability', async () => {
@@ -217,6 +251,7 @@ describe('structured turn completion feed (renderer)', () => {
     const opened = subscription()
 
     release()
+    await vi.advanceTimersByTimeAsync(0)
     expect(opened.unsubscribe).toHaveBeenCalledTimes(1)
 
     // A late frame from the torn-down stream reaches nobody.
@@ -247,11 +282,267 @@ describe('structured turn completion feed (renderer)', () => {
     expect(seen).toEqual(['turn-1'])
   })
 
-  it('hands the same owner to every caller for one target and separate owners per target', () => {
-    const local = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
-    expect(getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })).toBe(local)
-    expect(
-      getStructuredAgentSessionTurnCompletionFeed({ kind: 'environment', environmentId: 'env-1' })
-    ).not.toBe(local)
+  it.each(['activation-first', 'listener-first'] as const)(
+    'bounds distinct targets by live interest through %s cleanup and renewal',
+    async (order) => {
+      const held = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
+      let release = held.activate()
+      const seen: string[] = []
+      let unlisten = held.subscribe((edge) => seen.push(label(edge)))
+      const peer = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
+      const releasePeer = peer.activate()
+      const peerSeen: string[] = []
+      const unlistenPeer = peer.subscribe((edge) => peerSeen.push(label(edge)))
+      await vi.advanceTimersByTimeAsync(0)
+      for (let index = 0; index < 12; index += 1) {
+        getStructuredAgentSessionTurnCompletionFeed({
+          kind: 'environment',
+          environmentId: `lookup-${index}`
+        })
+        const feed = getStructuredAgentSessionTurnCompletionFeed({
+          kind: 'environment',
+          environmentId: `env-${index}`
+        })
+        const stop = feed.activate()
+        const edges: string[] = []
+        const off = feed.subscribe((edge) => edges.push(label(edge)))
+        await vi.advanceTimersByTimeAsync(0)
+        emitEdges(subscription(index + 1))
+        expect(edges).toEqual(['turn-live', 'prompt:approval-live'])
+        if (order === 'activation-first') {
+          stop()
+          off()
+        } else {
+          off()
+          stop()
+        }
+        await vi.advanceTimersByTimeAsync(0)
+        expect(subscription(index + 1).unsubscribe).toHaveBeenCalledTimes(1)
+        expect(retainedCount()).toBe(1)
+      }
+      expect(subscriptions).toHaveLength(13)
+      emitEdges(subscription())
+      expect(seen).toEqual(['turn-live', 'prompt:approval-live'])
+      expect(peerSeen).toEqual(seen)
+      releasePeer()
+      unlistenPeer()
+      await vi.advanceTimersByTimeAsync(0)
+      emitEdges(subscription())
+      expect(seen).toHaveLength(4)
+      expect(peerSeen).toHaveLength(2)
+      // Both main's independent effects and the combined release-first caller renew in one pass.
+      const oldRelease = release
+      const oldUnlisten = unlisten
+      if (order === 'activation-first') {
+        release()
+        unlisten()
+      } else {
+        unlisten()
+        release()
+      }
+      unlisten = peer.subscribe((edge) => seen.push(label(edge)))
+      release = held.activate()
+      oldRelease()
+      oldUnlisten()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(subscriptions).toHaveLength(13)
+      expect(subscription().unsubscribe).not.toHaveBeenCalled()
+      emitEdges(subscription())
+      expect(seen).toHaveLength(6)
+      expect(peerSeen).toHaveLength(2)
+      release()
+      emitEdges(subscription())
+      await vi.advanceTimersByTimeAsync(0)
+      expect(seen).toHaveLength(6)
+      expect(retainedCount()).toBe(1)
+      expect(subscription().unsubscribe).toHaveBeenCalledTimes(1)
+      release = peer.activate()
+      await vi.advanceTimersByTimeAsync(0)
+      emitEdges(subscription(13))
+      expect(seen).toHaveLength(8)
+      unlisten()
+      release()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(retainedCount()).toBe(0)
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
+  it('scopes deduplicated listener disposers to their original registration', async () => {
+    const feed = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
+    feed.activate()
+    const listener = vi.fn()
+    const old = feed.subscribe(listener)
+    const duplicate = feed.subscribe(listener)
+    await vi.advanceTimersByTimeAsync(0)
+    emitEdges(subscription())
+    expect(listener).toHaveBeenCalledTimes(2)
+    old()
+    const fresh = feed.subscribe(listener)
+    old()
+    duplicate()
+    emitEdges(subscription())
+    expect(listener).toHaveBeenCalledTimes(4)
+    fresh()
+    emitEdges(subscription())
+    expect(listener).toHaveBeenCalledTimes(4)
+  })
+
+  it.each(['capability', 'open'] as const)(
+    'preserves queued %s progress and rejection retry across zero-activation renewal',
+    async (phase) => {
+      for (const reject of [false, true]) {
+        resetStructuredAgentSessionTurnCompletionFeedsForTests()
+        const probe = deferred<boolean>()
+        const opening = deferred<{ unsubscribe: () => void }>()
+        if (phase === 'capability') {
+          mocks.supportsCapability.mockReturnValueOnce(probe.promise)
+        } else {
+          mocks.subscribe.mockImplementationOnce((_target, emit, fail, close) => {
+            subscriptions.push({ emit, fail, close, unsubscribe: vi.fn() })
+            return opening.promise
+          })
+        }
+        const feed = getStructuredAgentSessionTurnCompletionFeed({
+          kind: 'environment',
+          environmentId: 'queued'
+        })
+        let release = feed.activate()
+        const seen: string[] = []
+        feed.subscribe((edge) => seen.push(label(edge)))
+        if (phase === 'open') {
+          await vi.advanceTimersByTimeAsync(0)
+        }
+        const start = subscriptions.length
+        const opened = { unsubscribe: vi.fn() }
+        if (reject) {
+          if (phase === 'capability') {
+            probe.reject(new Error('probe failed'))
+          } else {
+            opening.reject(new Error('open failed'))
+          }
+          // The rejection propagates through then before catch becomes continuation C.
+          await Promise.resolve()
+        } else if (phase === 'capability') {
+          probe.resolve(true)
+        } else {
+          opening.resolve(opened)
+        }
+        // Continuation C, renewal N, then final-release flush F.
+        queueMicrotask(() => {
+          release = feed.activate()
+        })
+        release()
+        await vi.advanceTimersByTimeAsync(0)
+        if (reject) {
+          expect(vi.getTimerCount()).toBe(1)
+          await vi.advanceTimersByTimeAsync(250)
+          expect(subscriptions).toHaveLength(start + 1)
+        } else {
+          expect(subscriptions).toHaveLength(start + (phase === 'capability' ? 1 : 0))
+          expect(opened.unsubscribe).not.toHaveBeenCalled()
+        }
+        emitEdges(subscription(subscriptions.length - 1))
+        expect(seen).toEqual(['turn-live', 'prompt:approval-live'])
+        release()
+        await vi.advanceTimersByTimeAsync(0)
+        if (!reject && phase === 'open') {
+          expect(opened.unsubscribe).toHaveBeenCalledTimes(1)
+        }
+        expect(vi.getTimerCount()).toBe(0)
+      }
+    }
+  )
+
+  it.each([
+    (value: Subscription) => value.emit({ type: 'end' }),
+    (value: Subscription) => value.fail(new Error('relay gone')),
+    (value: Subscription) => value.close()
+  ])('preserves terminal progress during grace and fences retired callbacks', async (drop) => {
+    const feed = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
+    let release = feed.activate()
+    const seen: string[] = []
+    let off = feed.subscribe((edge) => seen.push(label(edge)))
+    await vi.advanceTimersByTimeAsync(0)
+    const retired = subscription()
+    queueMicrotask(() => {
+      drop(retired)
+      emitEdges(retired)
+    })
+    queueMicrotask(() => {
+      release = feed.activate()
+    })
+    release()
+    await vi.advanceTimersByTimeAsync(250)
+    expect(subscriptions).toHaveLength(2)
+    expect(seen).toEqual([])
+    emitEdges(subscription(1))
+    expect(seen).toHaveLength(2)
+    release()
+    off()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(retainedCount()).toBe(0)
+    release = feed.activate()
+    off = feed.subscribe((edge) => seen.push(label(edge)))
+    drop(retired)
+    emitEdges(retired)
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(subscriptions).toHaveLength(3)
+    emitEdges(subscription(2))
+    expect(seen).toHaveLength(4)
+    release()
+    off()
+  })
+
+  it('retires pending opens, probes and queued cleanup on reset without touching replacement entries', async () => {
+    const probe = deferred<boolean>()
+    mocks.supportsCapability.mockReturnValueOnce(probe.promise)
+    const remote = getStructuredAgentSessionTurnCompletionFeed({
+      kind: 'environment',
+      environmentId: 'late'
+    })
+    const releaseRemote = remote.activate()
+    releaseRemote()
+    await vi.advanceTimersByTimeAsync(0)
+    remote.activate()
+    probe.resolve(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(subscriptions).toHaveLength(1)
+    const opening = deferred<{ unsubscribe: () => void }>()
+    mocks.subscribe.mockReturnValueOnce(opening.promise)
+    const held = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
+    const oldRelease = held.activate()
+    const listener = vi.fn()
+    const oldOff = held.subscribe(listener)
+    oldRelease()
+    resetStructuredAgentSessionTurnCompletionFeedsForTests()
+    const replacement = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
+    const releaseReplacement = replacement.activate()
+    const replacementListener = vi.fn()
+    const offReplacement = replacement.subscribe(replacementListener)
+    const release = held.activate()
+    const off = held.subscribe(listener)
+    const late = { unsubscribe: vi.fn() }
+    opening.resolve(late)
+    oldRelease()
+    oldOff()
+    releaseRemote()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(late.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(retainedCount()).toBe(1)
+    emitEdges(subscription(1))
+    expect(subscriptions).toHaveLength(2)
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(replacementListener).toHaveBeenCalledTimes(2)
+    release()
+    off()
+    emitEdges(subscription(1))
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(replacementListener).toHaveBeenCalledTimes(4)
+    releaseReplacement()
+    offReplacement()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(retainedCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

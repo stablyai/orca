@@ -17,6 +17,7 @@ import {
 } from '../../runtime/runtime-client-target'
 import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
+import { selectFolderWorkspaces } from '../workspace-record-selectors'
 
 type FolderPathStatusSnapshotState = Pick<
   AppState,
@@ -59,7 +60,7 @@ function getFolderPathStatusScope(
         }
       : null
   }
-  const folders = state.folderWorkspaces.filter(
+  const folders = selectFolderWorkspaces(state).filter(
     (workspace) =>
       workspace.id === request.folderWorkspaceId &&
       catalogOwnsHost(ownerHostId, getFolderWorkspaceHostId(workspace, state.projectGroups))
@@ -81,11 +82,11 @@ function getFolderPathStatusScope(
   }
 }
 
-export function getFolderWorkspaceStatusRequestSnapshot(
+export function getFolderWorkspaceStatusRequestDependencies(
   state: FolderPathStatusSnapshotState,
   request: FolderWorkspacePathStatusRequest,
   options: FolderWorkspacePathStatusRouteOptions
-): string | null {
+) {
   const ownerHostId = getRuntimeTargetHostId(
     runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
   )
@@ -114,17 +115,30 @@ export function getFolderWorkspaceStatusRequestSnapshot(
       relevantConnectionIds.add(repo.connectionId)
     }
   }
-  const sshFingerprint = [...relevantConnectionIds]
-    .map(
-      (connectionId) =>
-        `${connectionId}:${state.sshConnectionStates.get(connectionId)?.status ?? 'missing'}`
-    )
-    .sort()
-    .join('|')
   const repoFingerprint = candidateRepos
     .map(
       (repo) =>
         `${repo.id}:${repo.path}:${repo.projectGroupId ?? ''}:${repo.connectionId ?? ''}:${getRepoExecutionHostId(repo)}`
+    )
+    .sort()
+    .join('|')
+  return { scope, relevantConnectionIds, repoFingerprint }
+}
+
+export function getFolderWorkspaceStatusRequestSnapshot(
+  state: FolderPathStatusSnapshotState,
+  request: FolderWorkspacePathStatusRequest,
+  options: FolderWorkspacePathStatusRouteOptions
+): string | null {
+  const dependencies = getFolderWorkspaceStatusRequestDependencies(state, request, options)
+  if (!dependencies) {
+    return null
+  }
+  const { scope, relevantConnectionIds, repoFingerprint } = dependencies
+  const sshFingerprint = [...relevantConnectionIds]
+    .map(
+      (connectionId) =>
+        `${connectionId}:${state.sshConnectionStates.get(connectionId)?.status ?? 'missing'}`
     )
     .sort()
     .join('|')

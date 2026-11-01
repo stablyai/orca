@@ -12,9 +12,7 @@ import {
   readOpenCodeDatabase
 } from './session-scanner-opencode-sqlite-open'
 
-// Reproduces #15036: OpenCode holds opencode.db open while it runs, so a scan
-// lands mid-write. The reader had no busy timeout, failed in ~1 ms with the bare
-// driver string "database is locked", and one failed DB emptied both scopes.
+// A writer lock previously failed immediately and emptied both scan scopes (#15036).
 
 let tempDirs: string[] = []
 let lockHolders: Worker[] = []
@@ -58,8 +56,7 @@ function seededDatabase(name: string, sessionId: string): string {
   return path
 }
 
-// The lock holder must live on another thread: sqlite3_busy_timeout sleeps
-// synchronously, so a same-thread timer could never fire to release it.
+// SQLite busy waits block the thread, so only another thread can release the lock during a read.
 const LOCK_HOLDER_SOURCE = `
   const { parentPort, workerData } = require('node:worker_threads')
   const { DatabaseSync } = require('node:sqlite')
@@ -102,7 +99,6 @@ describe('listOpenCodeSqliteSessions against a database OpenCode is writing to',
 
     expect(candidates).toEqual([])
     expect(issues).toHaveLength(1)
-    // The panel counts only unkinded issues as skipped transcripts.
     expect(issues[0]?.kind).toBe('scope')
     expect(issues[0]?.message).toContain('OpenCode is writing to opencode.db')
     expect(issues[0]?.message).not.toBe('database is locked')
@@ -231,11 +227,7 @@ describe('readOpenCodeDatabase', () => {
 })
 
 describe('openCodeBusyTimeoutMs', () => {
-  // Measured on a real Windows host against a real distro: a read over
-  // \\wsl.localhost fails whatever the timeout, and the wait is not bounded by
-  // it -- 1500 took ~2400 ms, 5000 took ~7250 ms, 0 failed in ~21 ms. Waiting
-  // there is dead time on every scan, and enough such databases would spend the
-  // list worker's whole deadline.
+  // WSL-share lock failures persist across timeouts; observed waits can also exceed the requested duration.
   it('does not wait on a share where the wait provably cannot succeed', () => {
     expect(openCodeBusyTimeoutMs('\\\\wsl.localhost\\Ubuntu\\home\\ada\\opencode.db')).toBe(0)
     expect(openCodeBusyTimeoutMs('\\\\wsl$\\Ubuntu\\home\\ada\\opencode.db')).toBe(0)
@@ -257,8 +249,7 @@ describe('openCodeDatabaseScanIssue', () => {
     expect(issue.kind).toBe('scope')
     expect(issue.path).toBe(dbPath)
     expect(issue.message).toBe("OpenCode sessions inside WSL can't be searched from Windows yet.")
-    // Checkpointing cannot fix a share that refuses SQLite's locks, so the copy
-    // must not send the user after the write-ahead log.
+    // Checkpointing cannot fix WSL-share locking; the diagnostic must not suggest flushing the WAL.
     expect(issue.message).not.toContain('write-ahead log')
   })
 
@@ -269,10 +260,7 @@ describe('openCodeDatabaseScanIssue', () => {
     expect(issue.message).toContain('write-ahead log')
   })
 
-  // Measured against a real Ubuntu-24.04 distro: Windows cannot take SQLite's
-  // locks over \\wsl.localhost at all. An idle, never-WAL database answers
-  // SQLITE_BUSY the same way, while the identical bytes read fine once copied
-  // to local disk — so no busy timeout and no journal mode changes the outcome.
+  // Real WSL-share reads fail even for idle non-WAL databases whose bytes open successfully on local disk.
   it('does not blame a live writer for a lock-family error over a WSL share', () => {
     const busy = Object.assign(new Error('database is locked'), { errcode: 5 })
     const issue = openCodeDatabaseScanIssue(

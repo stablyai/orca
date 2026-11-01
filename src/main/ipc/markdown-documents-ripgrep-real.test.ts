@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -109,6 +109,38 @@ describe('Markdown listing with bundled ripgrep', () => {
   it('returns an empty list for an empty ordinary folder', async () => {
     await expect(listMarkdownDocuments(root)).resolves.toEqual([])
   })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'returns readable Markdown when ignored database directories deny access',
+    async () => {
+      await put('README.md')
+      await put('docs/guide.md')
+      await put('.gitignore', '/data/\n')
+      await put('data/clickhouse/store/hidden.md')
+      const store = join(root, 'data/clickhouse/store')
+      await chmod(store, 0o000)
+      try {
+        expect(
+          (await listMarkdownDocuments(root)).map((document) => document.relativePath)
+        ).toEqual(['docs/guide.md', 'README.md'])
+      } finally {
+        await chmod(store, 0o700)
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'still rejects an unreadable root',
+    async () => {
+      await put('README.md')
+      await chmod(root, 0o000)
+      try {
+        await expect(listMarkdownDocuments(root)).rejects.toThrow()
+      } finally {
+        await chmod(root, 0o700)
+      }
+    }
+  )
 
   it('rejects a missing root rather than treating it as an empty folder', async () => {
     await expect(listMarkdownDocuments(join(root, 'missing'))).rejects.toThrow()

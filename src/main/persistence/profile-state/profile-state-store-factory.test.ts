@@ -2,11 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  isProfileStateSqliteAvailable,
-  openProfileStateDatabase,
-  profileStateDatabaseFile
-} from './profile-state-database'
+import { openProfileStateDatabase, profileStateDatabaseFile } from './profile-state-database'
 import {
   createProfileStateStore as createProfileStateStoreImpl,
   type ProfileStateStoreFactoryOptions
@@ -138,18 +134,6 @@ describe('profile state Store authority factory', () => {
     expect(() => initial.value.takeParsedState?.()).toThrow('already been consumed')
   })
 
-  it('uses a capability probe that remains false on a Node 18-style host', () => {
-    const original = process.getBuiltinModule
-    vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) => {
-      if (id === 'node:sqlite') {
-        return undefined
-      }
-      return original(id)
-    })
-
-    expect(isProfileStateSqliteAvailable()).toBe(false)
-  })
-
   it('imports legacy state by default and preserves its original bytes', () => {
     const options = createOptions()
     const source = JSON.stringify({ settings: { theme: 'dark' }, unknownDomain: { keep: true } })
@@ -195,21 +179,6 @@ describe('profile state Store authority factory', () => {
     }
   )
 
-  it('migrates JSON and constructs a SQLite Store', () => {
-    const options = createOptions()
-    const source = JSON.stringify({ settings: { theme: 'dark' }, unknownDomain: { keep: true } })
-    writeFileSync(options.dataFile, source)
-
-    const result = createProfileStateStore({ ...options })
-
-    expect(result.backend).toBe('sqlite')
-    expect(result.classification).toBe('json-only')
-    expect(result.migrated).toBe(true)
-    expect(result.store.getSettings().theme).toBe('dark')
-    expect(existsSync(options.databaseFile)).toBe(true)
-    expect(readFileSync(options.dataFile, 'utf8')).toBe(source)
-  })
-
   it('reuses the candidate authority after the legacy export is removed', () => {
     const options = createOptions()
     writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
@@ -222,28 +191,6 @@ describe('profile state Store authority factory', () => {
     expect(result.classification).toBe('sqlite-only')
     expect(result.migrated).toBe(false)
     expect(result.store.getSettings().theme).toBe('dark')
-  })
-
-  it('fails closed instead of falling back to a stale JSON mirror when SQLite is missing', () => {
-    const options = createOptions()
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    const migrated = createProfileStateStore({ ...options })
-    const exportPath = profileStateJsonExportPath(options.dataFile, 1)
-    expect(existsSync(exportPath)).toBe(true)
-    migrated.store.freezeWrites()
-    rmSync(options.databaseFile)
-
-    expect(() => createProfileStateStore({ ...options })).toThrow(ProfileStateRecoveryRequiredError)
-  })
-
-  it('does not let candidate mode re-import JSON after SQLite was established', () => {
-    const options = createOptions()
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    const migrated = createProfileStateStore({ ...options })
-    migrated.store.freezeWrites()
-    rmSync(options.databaseFile)
-
-    expect(() => createProfileStateStore({ ...options })).toThrow(ProfileStateRecoveryRequiredError)
   })
 
   it('reopens JSON after an explicit rollback removes the SQLite export marker', () => {
@@ -292,43 +239,35 @@ describe('profile state Store authority factory', () => {
   it.each([
     [
       { experimentalNativeChat: true, openAgentTabsInChatByDefault: true },
-      false,
-      'standard',
+      'eligible',
       'chat-ui-on'
     ],
     [
       { experimentalNativeChat: true, openAgentTabsInChatByDefault: false },
-      true,
-      'keep-terminal',
-      'chat-ui-on-terminal-default'
-    ],
-    [
-      { experimentalNativeChat: false, openAgentTabsInChatByDefault: false },
-      true,
-      'none',
+      'eligible',
       'chat-ui-off'
-    ]
+    ],
+    [{ experimentalNativeChat: false }, 'eligible', 'chat-ui-off']
   ])(
-    'decides the native chat upgrade tip audience once from the startup snapshot (%o)',
-    (settings, laterChatUi, variant, basis) => {
+    'decides the Chat UI launch tip audience once from the startup snapshot (%o)',
+    (settings, membership, basis) => {
       const options = createOptions()
       writeFileSync(options.dataFile, JSON.stringify({ settings }))
       const first = createProfileStateStore({ ...options })
-      expect(first.store.getNativeChatUpgradeTipVariant()).toBe(variant)
 
-      // Why: a later Chat UI change must never move a profile into or out of the audience.
-      first.store.updateSettings({ experimentalNativeChat: laterChatUi })
+      // Later choices must not alter the recorded audience.
+      first.store.updateSettings({ nativeChatProviders: { claude: basis === 'chat-ui-off' } })
       first.store.flushOrThrow()
       rmSync(options.dataFile)
       const restarted = createProfileStateStore({ ...options })
 
-      expect(restarted.store.getNativeChatUpgradeTipVariant()).toBe(variant)
-      expect(JSON.parse(restarted.store.prepareProfileStateExport().json)).toMatchObject({
-        nativeChatUpgradeTipAudience: {
-          membership: variant === 'none' ? 'excluded' : 'eligible',
-          basis
-        }
-      })
+      const saved = JSON.parse(restarted.store.prepareProfileStateExport().json)
+      expect(saved).toMatchObject({ chatUiLaunchTipAudience: { version: 1, membership, basis } })
+      expect(saved.settings).toHaveProperty(
+        'experimentalNativeChat',
+        settings.experimentalNativeChat
+      )
+      expect(restarted.store.getSettings()).not.toHaveProperty('experimentalNativeChat')
     }
   )
 

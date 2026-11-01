@@ -13,22 +13,26 @@ import {
   type StructuredAgentSessionSubagentRowsDeps
 } from './structured-agent-session-subagent-rows'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import type { StructuredAgentSessionConversationNaming } from './structured-agent-session-host-types'
 
-/** Wire the host's own deps into a feed, and each subagent's saved row onto its child records;
- *  keeps the host at one call site.
- *  `deps` is a thunk because the host builds the feed in a field initializer,
- *  before its constructor parameters are assigned. */
+/** Resolve deps lazily because field initializers run before host constructor assignments. */
 export function createStructuredAgentSessionHostStatusFeed(args: {
   sessions: StructuredAgentSessionStatusFeedDeps['sessions']
+  starting?: (sessionId: string) => boolean
   readUsageLimitContinue?: StructuredAgentSessionStatusFeedDeps['readUsageLimitContinue']
   now: () => number
   currentWork: StructuredAgentSessionSubagentRowsDeps['currentWork']
   deps: () => {
-    store: Pick<AgentSessionRecordStore, 'getRecord' | 'replacedRuntime'>
+    store: Pick<
+      AgentSessionRecordStore,
+      'getConversation' | 'replacedRuntime' | 'listConversations'
+    >
     logger: StructuredAgentSessionLogger
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
     statusSink?: StructuredAgentSessionStatusSink
+    conversationNaming?: StructuredAgentSessionConversationNaming
   }
+  onPublished?: StructuredAgentSessionStatusFeedDeps['onPublished']
   onAgentStarted?: (sessionId: string) => void
   onChildWorkChanged?: (sessionId: string) => void
 }): StructuredAgentSessionStatusFeed {
@@ -36,7 +40,6 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     journal: (sessionId) => args.sessions.get(sessionId)?.journal,
     fence: (sessionId) => structuredAgentSessionConversationFence(args.deps().store, sessionId),
     currentWork: args.currentWork,
-    // The views, with the two host-only facts a saved row also keeps from their records.
     readChildWork: (sessionId) => {
       const records = new Map(
         feed.readChildWorkRecords(sessionId)?.map((record) => [record.childWorkId, record])
@@ -59,15 +62,18 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
   })
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: args.sessions,
+    starting: args.starting,
     readUsageLimitContinue: args.readUsageLimitContinue,
-    getRecord: (sessionId) => args.deps().store.getRecord(sessionId),
+    onPublished: args.onPublished,
+    getConversation: (sessionId) => args.deps().store.getConversation(sessionId),
+    listConversations: () => args.deps().store.listConversations(),
     replacedRuntime: (sessionId) => args.deps().store.replacedRuntime(sessionId),
     now: args.now,
     logger: deferredStructuredAgentSessionLogger(() => args.deps().logger),
     onStatusChanged: (summary, options) => args.deps().onSessionStatusChanged?.(summary, options),
-    // Resolved per call for the same reason the other deps are: the host builds this feed in a
-    // field initializer, before its constructor parameters are assigned.
     statusSink: () => args.deps().statusSink,
+    namingActiveSessionIds: () => args.deps().conversationNaming?.activeSessionIds() ?? [],
+    namingFailure: (sessionId) => args.deps().conversationNaming?.failure(sessionId),
     ...(args.onAgentStarted ? { onAgentStarted: args.onAgentStarted } : {}),
     onChildWorkChanged: (sessionId, producer) => {
       subagentRows.changed(sessionId, producer)

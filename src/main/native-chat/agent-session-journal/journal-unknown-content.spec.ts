@@ -1,7 +1,5 @@
-// Inside a row of a known kind, what a newer build wrote is never damage. A body of a kind this
-// build does not know (or a plan subject of one) is kept and the chat stays writable; a mutation or
-// sent message of a newer kind fails the load as a newer Orca's chat with every row kept as it was,
-// even beside damage. Anything else that fails is damage: the chat fails to load, every row kept.
+// Unknown body kinds remain writable; unsupported mutations/sends require a newer reader.
+// Preserve all stored rows on either unsupported content or damage.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -34,7 +32,7 @@ export function registerJournalUnknownContentTests(): void {
   const SCOPE = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
 
   let root: string
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-journal-newer-content-'))
@@ -59,8 +57,7 @@ export function registerJournalUnknownContentTests(): void {
     )
   }
 
-  /** An anchor, two items, then `rows` as a newer build (or damage) wrote them, then one more item
-   *  of this build's: closed, so the next open replays all of it. */
+  /** Close after injecting rows so the next open replays them. */
   async function journalWith(rows: (epoch: string) => Record<string, unknown>[]) {
     const first = await open()
     await first.appendItem(item(0), { kind: 'status', text: 'one' }, SCOPE)
@@ -74,7 +71,7 @@ export function registerJournalUnknownContentTests(): void {
       seq += 1
       insertTestJournalRowJson(db, IDENTITY.sessionId, seq, JSON.stringify({ ...row, seq }), 5_000)
     }
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
     return { written: stored() }
   }
 
@@ -113,44 +110,32 @@ export function registerJournalUnknownContentTests(): void {
     subject: { kind: 'plan', text: 'Step one' }
   }
 
-  /** Refused as a newer Orca's chat on every open, with every row left as it was. */
   async function expectNewerAndKept(written: { seq: number; rowJson: string }[]) {
     await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
     await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
     expect(stored()).toEqual(written)
   }
 
-  /** Opens writable, keeps the newer item in the snapshot, takes a write, and leaves every earlier
-   *  row byte-identical. */
-  async function expectWritableAndKept(
-    written: { seq: number; rowJson: string }[],
-    itemId: string
-  ) {
-    const journal = await open()
-    expect(journal.snapshot().items.some((entry) => entry.itemId === itemId)).toBe(true)
-    await journal.appendItem(item(5), { kind: 'status', text: 'taken' }, SCOPE)
-    await journals.closeAll()
-    expect(stored().slice(0, written.length)).toEqual(written)
-  }
-
-  describe("a newer build's body kind, kept and writable", () => {
+  // An input row's union tags are closed like its keys: a newer kind refuses the chat before main's
+  // reader could keep it undrawn and this build restate the chat without it.
+  describe("a newer build's body kind", () => {
     it.each([
       ['an item body of a newer kind', NEWER_BODY],
       ['a plan subject of a newer kind', { ...PLAN_APPROVAL, subject: { kind: 'diff' } }]
-    ])('keeps %s and stays writable', async (_name, body) => {
+    ])('fails the load on %s and keeps the row', async (_name, body) => {
       const { written } = await journalWith((epoch) => [
         itemRow(epoch, 'codex:thread-1:turn-1:2', body)
       ])
-      await expectWritableAndKept(written, 'codex:thread-1:turn-1:2')
+      await expectNewerAndKept(written)
     })
 
-    it('keeps a lifecycle mutation whose body is a newer kind, and stays writable', async () => {
+    it('fails the load on a lifecycle mutation whose body is a newer kind', async () => {
       const { written } = await journalWith((epoch) => [
         batchRow(epoch, [
           { kind: 'item', itemId: 'codex:thread-1:turn-1:4', revision: 1, body: NEWER_BODY }
         ])
       ])
-      await expectWritableAndKept(written, 'codex:thread-1:turn-1:4')
+      await expectNewerAndKept(written)
     })
   })
 
@@ -235,7 +220,7 @@ export function registerJournalUnknownContentTests(): void {
   })
 
   describe("a turn's context usage of a newer shape", () => {
-    it('is dropped like an unusable annotation: the chat stays writable and keeps the row', async () => {
+    it('fails the load and keeps the row', async () => {
       const { written } = await journalWith((epoch) => [
         itemRow(epoch, 'codex:thread-1:turn-1:2', {
           kind: 'turn',
@@ -244,14 +229,7 @@ export function registerJournalUnknownContentTests(): void {
           contextUsage: { used: { kind: 'measured', capturedAt: 1 } }
         })
       ])
-      const journal = await open()
-      expect(journal.snapshot().items[2]?.body).toEqual({
-        kind: 'turn',
-        turnId: 'turn-1',
-        state: 'completed'
-      })
-      await journals.closeAll()
-      expect(stored()).toEqual(written)
+      await expectNewerAndKept(written)
     })
   })
 

@@ -12,6 +12,7 @@ import { MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
 import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import {
@@ -31,11 +32,10 @@ import {
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
-import { nativeChatMessageCopyText } from './native-chat-message-copy-text'
+import { nativeChatMessageCopyText } from '../../../../shared/native-chat-message-copy-text'
 
 type UsageLimitActions = {
   account: ReactNode
-  reserveAccount: boolean
   handOff?: () => void
   disabled: boolean
 }
@@ -87,7 +87,7 @@ export function NativeChatUsageLimitActionsProvider({
   const disabled = loading || preparing === intentKey
   const chatTab = useAppStore((state) =>
     directory
-      ? state.unifiedTabsByWorktree[directory.worktreeId]?.find((tab) => tab.id === pane.tabId)
+      ? structuredChatTabById(state.unifiedTabsByWorktree, directory.worktreeId, pane.tabId)
       : undefined
   )
   const conversationName = useStructuredChatTabConversationName(chatTab)
@@ -202,7 +202,6 @@ export function NativeChatUsageLimitActionsProvider({
   const actions = useMemo<UsageLimitActions>(
     () => ({
       account,
-      reserveAccount: pane.agent === 'claude',
       disabled,
       ...(canHandOff || (loading && isTuiAgent(pane.agent))
         ? {
@@ -254,35 +253,29 @@ export function NativeChatUsageLimitActions(): React.JSX.Element | null {
     return null
   }
   return (
-    <div className="ml-6 space-y-2 text-chat-foreground-faint">
+    <div className="ml-6 flex flex-wrap items-center gap-2 text-chat-foreground-faint">
       <p className="text-xs">
         {translate(
           'components.native-chat.usageLimitActions.leadIn',
           'Continue this chat without waiting:'
         )}
       </p>
-      <div className="flex flex-wrap gap-2">
-        {actions.reserveAccount ? (
-          <div className="w-32 shrink-0">{actions.account}</div>
-        ) : (
-          actions.account
-        )}
-        {actions.handOff ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            disabled={actions.disabled}
-            onClick={actions.handOff}
-          >
-            <MessageSquarePlus />
-            {translate(
-              'components.agentSessionContinuation.handOffToAnotherAgent',
-              'Hand Off to Another Agent'
-            )}
-          </Button>
-        ) : null}
-      </div>
+      {actions.account ? <div className="w-32 shrink-0 empty:hidden">{actions.account}</div> : null}
+      {actions.handOff ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          disabled={actions.disabled}
+          onClick={actions.handOff}
+        >
+          <MessageSquarePlus />
+          {translate(
+            'components.agentSessionContinuation.handOffToAnotherAgent',
+            'Hand Off to Another Agent'
+          )}
+        </Button>
+      ) : null}
     </div>
   )
 }

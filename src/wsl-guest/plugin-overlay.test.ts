@@ -179,9 +179,7 @@ describe('PluginOverlayManager', () => {
     )
   })
 
-  // Why: the remote/guest config root keeps whichever Orca plugin files earlier
-  // launches installed. Mirroring the other major's file into this overlay would
-  // hand the agent a plugin whose variant gate registers nothing.
+  // Mirror only the selected OpenCode major’s Orca plugin; the other variant’s gate registers nothing.
   it.each([
     { agent: 'opencode', stale: 'orca-opencode2-status.js', own: 'orca-opencode-status.js' },
     { agent: 'opencode2', stale: 'orca-opencode-status.js', own: 'orca-opencode2-status.js' }
@@ -204,7 +202,6 @@ describe('PluginOverlayManager', () => {
       expect(readdirSync(join(dir!, 'plugins')).sort()).toEqual(
         [own, ownTui, 'user-plugin.js'].sort()
       )
-      // The TUI copy is the same module; its setup() tells a TUI context from a server one.
       expect(readFileSync(join(dir!, 'plugins', ownTui, 'tui.js'), 'utf8')).toBe(
         agent === 'opencode2' ? 'v2' : 'v1'
       )
@@ -364,10 +361,7 @@ describe('PluginOverlayManager', () => {
     expect(readFileSync(join(second!.sourceAgentDir!, 'agent.db'), 'utf8')).toBe(content)
   })
 
-  // Why: per-agent source dir. The renderer picks Pi or OMP per
-  // launch, and the relay must use the right `~/.<kind>/agent` source —
-  // disk-presence guessing (always-Pi or first-exists) shadows the other
-  // agent's user extensions when both dirs exist on the remote disk.
+  // Use the launch-selected Pi/OMP home; disk-presence guessing can shadow user extensions when both exist.
   describe('per-agent default source dir (no cross-agent fallback)', () => {
     function seedAgentDir(dotDir: '.pi' | '.omp', tag: string): string {
       const agentDir = join(homeDir, dotDir, 'agent')
@@ -402,9 +396,7 @@ describe('PluginOverlayManager', () => {
       const dir = result?.sourceAgentDir
 
       expect(dir).toBe(join(homeDir, '.omp', 'agent'))
-      // Even though ~/.pi/agent exists, the OMP launch MUST mirror OMP's
-      // source dir. Cross-agent fallback would silently shadow the user's
-      // OMP extensions on the remote.
+      // An existing Pi home must not override an OMP launch’s extension source.
       expect(readFileSync(join(dir!, 'auth.json'), 'utf8')).toBe('omp token')
       const extensions = readdirSync(join(dir!, 'extensions')).sort()
       expect(extensions).toContain('omp-ext')
@@ -413,8 +405,7 @@ describe('PluginOverlayManager', () => {
     })
 
     it('launching omp when only ~/.pi/agent exists does NOT mirror Pi state', () => {
-      // Why: missing OMP source dir on the remote must create only OMP's
-      // own extension dir. Pi state must never cross-pollinate in.
+      // Missing OMP source may create only OMP state; never borrow Pi extensions.
       seedAgentDir('.pi', 'pi')
       expect(existsSync(join(homeDir, '.omp'))).toBe(false)
       expect(existsSync(join(homeDir, '.prime'))).toBe(false)
@@ -424,7 +415,6 @@ describe('PluginOverlayManager', () => {
       const dir = result?.sourceAgentDir
 
       expect(dir).toBe(join(homeDir, '.omp', 'agent'))
-      // Pi-only home must NOT leak into the OMP home.
       expect(existsSync(join(dir!, 'auth.json'))).toBe(false)
       const extensions = readdirSync(join(dir!, 'extensions')).sort()
       expect(extensions).toEqual(['orca-agent-status.ts'])

@@ -105,8 +105,7 @@ describe('orchestration RPC methods', () => {
     it('deliberately permits present but unverifiable restored-terminal evidence', async () => {
       setup()
       mockCurrentWorkerStart()
-      // Restored/adopted terminals have no launch token, so verification returns null; this
-      // fail-open is deliberate compatibility behavior, not an oversight.
+      // Restored/adopted terminals have no launch token; preserve intentional fail-open compatibility.
       const task = db.createTask({ spec: 'restored caller limitation' })
       ctx = {
         ...ctx,
@@ -151,11 +150,11 @@ describe('orchestration RPC methods', () => {
       )
       expect(db.getTask(task.id)?.status).toBe('dispatched')
       expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('ready')
-      // Why: dispatching a worker is background work — surfaceOwner:false adopts
-      // the tab without scrolling the sidebar to the worker's workspace.
+      // Background worker adoption must not scroll the sidebar to its workspace.
       expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
         startupAgent: 'codex',
         launchSource: 'orchestration',
+        suppressStartupUpdatePrompt: true,
         title: `worker-${task.id}`,
         surfaceOwner: false
       })
@@ -164,6 +163,103 @@ describe('orchestration RPC methods', () => {
         expect.any(String),
         expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
       )
+    })
+
+    it('creates and binds a Run for an unbound coordinator, then names it on reuse', async () => {
+      setup(false)
+      mockCurrentWorkerStart()
+      const start = () =>
+        call('orchestration.workerStart', {
+          spec: 'Audit the parser\nCheck every branch.',
+          from: 'term_coord',
+          agent: 'codex'
+        })
+
+      const first = await start()
+      const bound = db.getCurrentRunForCoordinator({
+        terminalHandle: 'term_coord',
+        paneKey: coordinatorPaneKey,
+        orcaSessionId: null
+      })
+      const run = { id: bound?.id, objective: 'Audit the parser' }
+      expect(first).toMatchObject({ state: 'ready', run: { ...run, created: true } })
+      expect(await start()).toMatchObject({ run: { ...run, created: false } })
+    })
+
+    it('puts overlapping first starts from an unbound coordinator in one Run', async () => {
+      setup(false)
+      mockCurrentWorkerStart()
+      // Hold both starts in preflight, then let the second finish first.
+      const preflights: (() => void)[] = []
+      vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preflight reads only the workspace id.
+            preflights.push(() => resolve({ id: 'repo::worktree' } as never))
+          )
+      )
+      const start = (spec: string) =>
+        call('orchestration.workerStart', { spec, from: 'term_coord', agent: 'codex' })
+
+      const first = start('Audit the parser')
+      const second = start('Audit the lexer')
+      await vi.waitFor(() => expect(preflights).toHaveLength(2))
+      preflights[1]()
+      const secondReceipt = await second
+      preflights[0]()
+      const firstReceipt = await first
+
+      const runs = db.listRuns().runs.filter((run) => run.legacy === 0)
+      expect(runs).toHaveLength(1)
+      expect(secondReceipt).toMatchObject({ run: { id: runs[0].id, created: true } })
+      expect(firstReceipt).toMatchObject({ run: { id: runs[0].id, created: false } })
+    })
+
+    it.each([['not-json'], ['["task_elsewhere"]']])(
+      'creates no Run when an unbound coordinator passes deps %s',
+      async (deps) => {
+        setup(false)
+        mockCurrentWorkerStart()
+
+        await expect(
+          call('orchestration.workerStart', {
+            spec: 'Audit the parser',
+            from: 'term_coord',
+            agent: 'codex',
+            deps
+          })
+        ).rejects.toMatchObject({ code: expect.stringMatching(/invalid_argument|task_not_found/) })
+        expect(db.listRuns().runs.filter((run) => run.legacy === 0)).toEqual([])
+      }
+    )
+
+    it('creates no Run when an unbound coordinator names an existing Task', async () => {
+      setup(false)
+      mockCurrentWorkerStart()
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: 'task_missing',
+          from: 'term_coord',
+          agent: 'codex'
+        })
+      ).rejects.toMatchObject({ code: 'consumer_fenced' })
+      expect(db.listRuns().runs.filter((run) => run.legacy === 0)).toEqual([])
+    })
+
+    it('creates no Run when an unbound coordinator start fails preflight', async () => {
+      setup(false)
+      mockCurrentWorkerStart()
+
+      await expect(
+        call('orchestration.workerStart', {
+          spec: 'Audit the parser',
+          from: 'term_coord',
+          agent: 'codex',
+          worktree: 'new-child'
+        })
+      ).rejects.toThrow('repo_not_found')
+      expect(db.listRuns().runs.filter((run) => run.legacy === 0)).toEqual([])
     })
 
     it('applies and reports opaque per-invocation model preferences', async () => {
@@ -188,6 +284,7 @@ describe('orchestration RPC methods', () => {
 
       expect(result).toMatchObject({
         state: 'ready',
+        next: "Orca wakes you when workers report; end your turn when you're done.",
         launch: {
           requested: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' },
           effective: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' }
@@ -221,8 +318,7 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
-    // Why: `cursor` on PATH is the Cursor desktop app; passing the agent id as a
-    // shell command opened the IDE and left a blank shell (issue #11926).
+    // Resolve cursor through agent config; the bare command launches the desktop IDE (#11926).
     it('never passes the agent id to the worker terminal as a shell command', async () => {
       setup()
       mockCurrentWorkerStart()
@@ -474,8 +570,7 @@ describe('orchestration RPC methods', () => {
       )
     })
 
-    // Why the second column: an older host still publishes the codex-* token, and this receipt
-    // reaches the user verbatim -- so it names the neutral spelling the same way the CLI does.
+    // Older hosts emit codex-* tokens; user-facing receipts must still use neutral wording.
     it.each([
       ['codex-update-prompt', 'codex-update-prompt (agent-update-prompt)'],
       ['codex-trust-workspace', 'codex-trust-workspace (agent-trust-workspace)'],

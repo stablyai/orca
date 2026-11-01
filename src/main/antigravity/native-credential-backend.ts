@@ -1,64 +1,29 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync } from 'node:fs'
-import { join, dirname } from 'node:path'
-import { writeCredentialFileAtomic } from '../integration-credential-file'
-import { parseAntigravityNativeCredential } from './native-credential-codec'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   readAntigravityMacOSCredential,
   writeAntigravityMacOSCredential
 } from './native-macos-credentials'
 import type { AntigravityCredentialBackend } from './native-account-service'
+import {
+  createAntigravityWindowsCredentialBackend,
+  getAntigravityWindowsHome
+} from './native-windows-credentials'
+import {
+  createAntigravityFileCredentialBackend,
+  isAntigravityFileStorageHost
+} from './native-file-credentials'
+export {
+  createAntigravityFileCredentialBackend,
+  isAntigravityFileStorageHost
+} from './native-file-credentials'
 
 const CONFLICT =
   'The native Antigravity credential changed during selection; refresh before retrying.'
 
-export function isAntigravityFileStorageHost(env: NodeJS.ProcessEnv, kernelRelease = ''): boolean {
-  return (
-    ['SSH_TTY', 'SSH_CLIENT', 'SSH_CONNECTION', 'WSL_DISTRO_NAME', 'WSL_INTEROP'].some((name) =>
-      Boolean(env[name])
-    ) || /microsoft|wsl/i.test(kernelRelease)
-  )
-}
-
-export function createAntigravityFileCredentialBackend(path: string): AntigravityCredentialBackend {
-  async function read() {
-    if (!existsSync(path)) {
-      return null
-    }
-    try {
-      const stat = lstatSync(path)
-      if (
-        !stat.isFile() ||
-        stat.size > 64 * 1024 ||
-        (process.platform !== 'win32' && (stat.mode & 0o077) !== 0)
-      ) {
-        throw new Error('unsafe credential file')
-      }
-      return parseAntigravityNativeCredential(readFileSync(path, 'utf8'))
-    } catch {
-      throw new Error('The Antigravity execution-host credential file could not be read safely.')
-    }
-  }
-  return {
-    read,
-    async write(contents, expected) {
-      parseAntigravityNativeCredential(contents)
-      if ((await read())?.contents !== (expected ?? undefined)) {
-        throw new Error(CONFLICT)
-      }
-      mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-      writeCredentialFileAtomic(path, Buffer.from(contents, 'utf8'))
-      if ((await read())?.contents !== contents) {
-        throw new Error(CONFLICT)
-      }
-    }
-  }
-}
-
 export function createAntigravityHostCredentialBackend(home: string): AntigravityCredentialBackend {
   if (process.platform === 'win32') {
-    throw new Error(
-      'Native Antigravity account switching is not supported on this host yet. Windows credential storage and private file permissions need a verified adapter.'
-    )
+    return createAntigravityWindowsCredentialBackend(getAntigravityWindowsHome(process.env))
   }
   const root = join(home, '.gemini', 'antigravity-cli')
   const file = createAntigravityFileCredentialBackend(join(root, 'antigravity-oauth-token'))
@@ -66,9 +31,7 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
   if (process.platform === 'linux') {
     try {
       kernelRelease = readFileSync('/proc/sys/kernel/osrelease', 'utf8')
-    } catch {
-      /* Environment detectors remain authoritative. */
-    }
+    } catch {}
   }
   if (isAntigravityFileStorageHost(process.env, kernelRelease)) {
     return file

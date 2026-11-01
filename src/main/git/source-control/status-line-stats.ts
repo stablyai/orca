@@ -14,6 +14,7 @@ import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 async function runNumstat(
   worktreePath: string,
   cached: boolean,
+  detectRenames: boolean,
   options: GitRuntimeOptions = {}
 ): Promise<Map<string, GitLineStats> | null> {
   try {
@@ -27,7 +28,7 @@ async function runNumstat(
         '-z',
         ...(cached ? ['--cached'] : []),
         '--numstat',
-        '-M'
+        detectRenames ? '-M' : '--no-renames'
       ],
       {
         ...gitReadOptionsForWorktree(worktreePath, options),
@@ -36,11 +37,11 @@ async function runNumstat(
     )
     return parseNumstat(stdout)
   } catch (error) {
-    // Why: an aborted pass must reject; only a genuine numstat failure degrades to uncounted rows.
+    // Propagate cancellation; ordinary numstat failures may degrade to uncounted rows.
     if (options.signal?.aborted) {
       throw error
     }
-    // Why: a numstat failure leaves rows uncounted; null (not empty map) flags the pass incomplete and uncacheable.
+    // null marks the pass incomplete and uncacheable; an empty map would imply success.
     return null
   }
 }
@@ -54,12 +55,18 @@ export async function attachLineStats(
   if (entries.length === 0) {
     return true
   }
-  const { hasStaged, hasUnstaged, untrackedPaths } = collectGitStatusLineStatInputs(entries)
+  const { hasStaged, hasUnstaged, hasStagedRenames, hasUnstagedRenames, untrackedPaths } =
+    collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
+  // Approximates status's rename policy: -M only for areas where status reported a rename.
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
-    hasStaged ? runNumstat(worktreePath, true, options) : Promise.resolve(emptyStats),
-    hasUnstaged ? runNumstat(worktreePath, false, options) : Promise.resolve(emptyStats),
-    // Why: git took the guest path, but this read goes straight through Node's own namespace.
+    hasStaged
+      ? runNumstat(worktreePath, true, hasStagedRenames, options)
+      : Promise.resolve(emptyStats),
+    hasUnstaged
+      ? runNumstat(worktreePath, false, hasUnstagedRenames, options)
+      : Promise.resolve(emptyStats),
+    // Node reads need host paths even when Git runs in WSL.
     collectUntrackedAdditions(
       resolveWorktreeFilesystemPath(worktreePath, options),
       untrackedPaths,

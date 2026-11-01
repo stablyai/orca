@@ -85,8 +85,7 @@ export function AutoRenameBranchFromWorkSetting({
 
   useEffect(() => {
     setBranchNameTemplateDraft(persistedBranchNameTemplateRef.current)
-    // Why: Settings owns the discard confirmation, but the draft lives here so
-    // the row can keep its prompt-specific save/discard affordances.
+    // Settings owns discard confirmation; keep the draft here for row-specific save/discard controls.
   }, [branchPromptDiscardSignal])
 
   useEffect(() => {
@@ -99,8 +98,7 @@ export function AutoRenameBranchFromWorkSetting({
     if (node !== null) {
       return
     }
-    // Why: Settings owns the global unsaved-branch-prompt guard; reset it
-    // when this setting detaches without a passive cleanup-only Effect.
+    // Clear Settings’ global dirty guard when this row detaches.
     onBranchPromptDirtyChangeRef.current?.(false)
   }, [])
 
@@ -241,7 +239,7 @@ export function AutoRenameBranchFromWorkSetting({
                   'auto.components.settings.AutoRenameBranchFromWorkSetting.c71770c455',
                   '{basePrompt}'
                 )}
-                className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+                className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
               />
               <SourceControlActionVariableChips
                 actionId="branchName"

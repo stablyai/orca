@@ -1,3 +1,5 @@
+import { translate } from '@/i18n/i18n'
+
 export type PendingDiffCommentsClear =
   | { kind: 'all'; worktreeId: string }
   | { kind: 'file'; worktreeId: string; filePath: string }
@@ -43,9 +45,16 @@ export function formatPendingDiffCommentsClearDescription(
   if (!pending) {
     return ''
   }
-  const noun = count === 1 ? 'note' : 'notes'
   if (pending.kind === 'all') {
-    return `Clear ${count} ${noun} from this workspace?`
+    return translate(
+      'auto.components.right.sidebar.SourceControl.clearNotesFromWorkspace',
+      'Clear {{count}} notes from this workspace?',
+      { count, defaultValue_one: 'Clear {{count}} note from this workspace?' }
+    )
   }
-  return `Clear ${count} ${noun} from ${pending.filePath}?`
+  return translate(
+    'auto.components.right.sidebar.SourceControl.clearNotesFromFile',
+    'Clear {{count}} notes from {{path}}?',
+    { count, path: pending.filePath, defaultValue_one: 'Clear {{count}} note from {{path}}?' }
+  )
 }

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -69,18 +69,67 @@ describe('ConfirmationDialogProvider', () => {
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
   })
 
+  it('tells the cancel button apart from Escape', async () => {
+    const onCancelClicked = vi.fn()
+    const { onSettled } = renderDialog({ title: 'Use your camera?', onCancelClicked })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await screen.findByText('Use your camera?')
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+    expect(onCancelClicked).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(onSettled).toHaveBeenCalledTimes(2))
+    expect(onCancelClicked).toHaveBeenCalledOnce()
+  })
+
+  it('lets a held Enter or a double-click press neither button of a guarded prompt', async () => {
+    const onCancelClicked = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Use your camera?',
+      ignoresOpeningGesture: true,
+      onCancelClicked
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    const cancel = await screen.findByRole('button', { name: 'Cancel' })
+    await waitFor(() => expect(cancel).toHaveFocus())
+    // The Enter that made the page ask is still held: its repeats must not press either button.
+    for (const name of ['Cancel', 'Confirm']) {
+      const button = screen.getByRole('button', { name })
+      expect(fireEvent.keyDown(button, { key: 'Enter', repeat: true })).toBe(false)
+    }
+    // A double-click's first click opened the prompt in the page; its second lands here.
+    fireEvent.click(cancel, { detail: 2 })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }), { detail: 2 })
+    expect(onSettled).not.toHaveBeenCalled()
+    expect(onCancelClicked).not.toHaveBeenCalled()
+
+    await userEvent.click(cancel)
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+    expect(onCancelClicked).toHaveBeenCalledOnce()
+  })
+
   it('keeps the default cancel focus for callers that do not opt in', async () => {
     renderDialog({ title: 'Delete artifact?', confirmVariant: 'destructive' })
     await userEvent.click(screen.getByRole('button', { name: 'ask' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
   })
 
-  it('omits the checkbox unless the caller opts in', async () => {
-    renderDialog({ title: 'Delete artifact?' })
-
+  it('shows only the confirm button for a notice', async () => {
+    const { onSettled } = renderDialog({
+      title: "Can't use p1 here yet",
+      confirmLabel: 'OK',
+      acknowledgeOnly: true,
+      initialFocus: 'confirm'
+    })
     await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    expect(await screen.findByText('Delete artifact?')).toBeInTheDocument()
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'OK' })).toHaveFocus())
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
   })
 
   it('runs the skip callback when confirmed with the box checked', async () => {

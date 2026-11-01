@@ -17,34 +17,42 @@ function deferred() {
 describe('terminal accessory repeat', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('keeps one send in flight and preserves repeat order under host latency', async () => {
-    vi.useFakeTimers()
-    const first = deferred()
-    const second = deferred()
-    const sent: string[] = []
-    const send = vi.fn((input: string) => {
-      sent.push(input)
-      return (sent.length === 1 ? first.promise : second.promise).then(() => true)
-    })
-    const repeat = createTerminalAccessoryRepeatController<string>()
+  it.each([
+    ['recognized hold', undefined],
+    ['keyboard hold', TERMINAL_ACCESSORY_REPEAT_DELAY_MS]
+  ] as const)(
+    'keeps one send in flight for a %s under host latency',
+    async (_, firstRepeatDelayMs) => {
+      vi.useFakeTimers()
+      const first = deferred()
+      const second = deferred()
+      const sent: string[] = []
+      const send = vi.fn((input: string) => {
+        sent.push(input)
+        return (sent.length === 1 ? first.promise : second.promise).then(() => true)
+      })
+      const repeat = createTerminalAccessoryRepeatController<string>()
 
-    repeat.start('down', send)
-    expect(sent).toEqual(['down'])
+      repeat.start('down', send, firstRepeatDelayMs)
+      expect(sent).toEqual(['down'])
 
-    await vi.advanceTimersByTimeAsync(TERMINAL_ACCESSORY_REPEAT_DELAY_MS + 500)
-    expect(sent).toEqual(['down'])
+      await vi.advanceTimersByTimeAsync(TERMINAL_ACCESSORY_REPEAT_DELAY_MS + 500)
+      expect(sent).toEqual(['down'])
 
-    first.resolve()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(sent).toEqual(['down', 'down'])
+      first.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(sent).toEqual(firstRepeatDelayMs === undefined ? ['down'] : ['down', 'down'])
+      await vi.advanceTimersByTimeAsync(TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS)
+      expect(sent).toEqual(['down', 'down'])
 
-    await vi.advanceTimersByTimeAsync(TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS + 500)
-    expect(sent).toEqual(['down', 'down'])
+      await vi.advanceTimersByTimeAsync(TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS + 500)
+      expect(sent).toEqual(['down', 'down'])
 
-    second.resolve()
-    await vi.advanceTimersByTimeAsync(TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS)
-    expect(sent).toEqual(['down', 'down', 'down'])
-  })
+      second.resolve()
+      await vi.advanceTimersByTimeAsync(TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS)
+      expect(sent).toEqual(['down', 'down', 'down'])
+    }
+  )
 
   it('does not schedule another repeat after release while a send is pending', async () => {
     vi.useFakeTimers()
@@ -60,7 +68,7 @@ describe('terminal accessory repeat', () => {
     expect(send).toHaveBeenCalledTimes(1)
   })
 
-  it('dispatches distinct taps without waiting for prior acknowledgements', async () => {
+  it('starts distinct holds without waiting for prior acknowledgements', async () => {
     vi.useFakeTimers()
     const pending = Array.from({ length: 5 }, () => deferred())
     const sent: string[] = []
@@ -71,18 +79,18 @@ describe('terminal accessory repeat', () => {
     const repeat = createTerminalAccessoryRepeatController<string>()
 
     for (let index = 0; index < pending.length; index += 1) {
-      repeat.start(`tap-${index}`, send)
+      repeat.start(`hold-${index}`, send)
       repeat.stop()
     }
 
-    expect(sent).toEqual(['tap-0', 'tap-1', 'tap-2', 'tap-3', 'tap-4'])
+    expect(sent).toEqual(['hold-0', 'hold-1', 'hold-2', 'hold-3', 'hold-4'])
 
     pending.forEach(({ resolve }) => resolve())
     await vi.runAllTimersAsync()
     expect(send).toHaveBeenCalledTimes(5)
   })
 
-  it('cancels repeats without dropping a distinct tap already dispatched by the user', async () => {
+  it('does not drop an in-flight send when a new hold is canceled', async () => {
     vi.useFakeTimers()
     const first = deferred()
     const sent: string[] = []

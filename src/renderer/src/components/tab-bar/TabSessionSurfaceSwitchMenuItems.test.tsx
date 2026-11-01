@@ -2,11 +2,7 @@
 import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuItems'
 
@@ -82,9 +78,9 @@ afterEach(cleanup)
 function renderItemsNow(structuredSessionId?: string): void {
   render(
     <TooltipProvider>
-      <DropdownMenu open>
-        <DropdownMenuTrigger>Open</DropdownMenuTrigger>
-        <DropdownMenuContent>
+      <ContextMenu>
+        <ContextMenuTrigger>Open</ContextMenuTrigger>
+        <ContextMenuContent>
           <TabSessionSurfaceSwitchMenuItems
             tab={{ id: 'tab-1', worktreeId: 'wt-1' }}
             nativeChat={
@@ -92,10 +88,11 @@ function renderItemsNow(structuredSessionId?: string): void {
             }
             leadingSeparator
           />
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </ContextMenuContent>
+      </ContextMenu>
     </TooltipProvider>
   )
+  fireEvent.contextMenu(screen.getByText('Open'), { button: 2, clientX: 16, clientY: 8 })
 }
 
 async function renderItems(structuredSessionId?: string): Promise<void> {
@@ -115,7 +112,7 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     mocks.subject = CHAT_SUBJECT
     renderItemsNow('orca-chat-1')
     expect(mocks.listSessions).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Terminal' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Continue with Terminal Agent' }))
     expect(mocks.runNativeChatCliFork).toHaveBeenCalledWith(
       expect.objectContaining({
         subject: CHAT_SUBJECT,
@@ -136,7 +133,7 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     }
     mocks.cliSource = source
     renderItemsNow()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Chat' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Continue in Chat UI' }))
     await act(async () => {})
     expect(mocks.runCliChatResume).toHaveBeenCalledWith(source)
     expect(mocks.listSessions).not.toHaveBeenCalled()
@@ -150,8 +147,8 @@ it('keeps an accepted native action visible with shared disabled spinner feedbac
     mocks.pendingListeners.forEach((listener) => listener())
   })
   await renderItems('orca-chat-1')
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Terminal' }))
-  const item = screen.getByRole('menuitem', { name: 'Switch to Terminal' })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Continue with Terminal Agent' }))
+  const item = screen.getByRole('menuitem', { name: 'Continue with Terminal Agent' })
   expect(item.getAttribute('aria-busy')).toBe('true')
   expect(item.getAttribute('data-disabled')).not.toBeNull()
   expect(item.querySelector('.animate-spin')).not.toBeNull()

@@ -1,11 +1,13 @@
-import type { EventEmitter } from 'node:events'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
-import { spawnProcess } from '@orca/process-host'
+import { spawnDetachedWithoutInheritance } from '@orca/process-host/isolated-detached-spawn'
 import { queryWindowsProcess } from '../daemon/daemon-process-inspection'
-import type { WindowsProcessEvidence } from '../daemon/daemon-incarnation-evidence-types'
-import { listConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
+import {
+  listConfirmedRunningWslDistros,
+  noteWslDistroMayHaveStopped
+} from '../wsl-background-distro-gate'
+import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
-import { buildWslDistroHolderArgs, isWslDistroHolderCommandLine } from './wsl-distro-holder-command'
+import { buildWslDistroHolderArgs } from './wsl-distro-holder-command'
 import {
   listWslDistroHolderRecordDistros,
   readWslDistroHolderRecord,
@@ -16,102 +18,44 @@ import {
 } from './wsl-distro-holder-record'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 
-/** Holder liveness, in the execution-host vocabulary: lookup failure is never `exited`. */
-export type WslDistroHolderState = 'live' | 'exited' | 'unverifiable'
-
-export type WslDistroHolderEnsureResult =
-  | { outcome: 'adopted'; record: WslDistroHolderRecord }
-  | { outcome: 'spawned'; record: WslDistroHolderRecord }
-  /** The recorded holder could not be checked; kept rather than doubled (it may be live). */
-  | { outcome: 'unverifiable'; record: WslDistroHolderRecord }
-
-/** The slice of a ChildProcess the holder reads; `spawn`, `error` and `exit` events. */
-export type WslDistroHolderChild = EventEmitter & { readonly pid?: number; unref(): void }
-
-export type WslDistroHolderAdoption = { distro: string; state: WslDistroHolderState }
-
-export type WslDistroHolderDependencies = {
-  userDataPath: string
-  /** Test seam; production spawns `wsl.exe` detached through process-host. */
-  spawnHolder?: (distro: string) => WslDistroHolderChild
-  queryProcess?: (pid: number) => Promise<WindowsProcessEvidence>
-  killProcess?: (pid: number) => void
-  /** Must never boot a distro: `wsl --list --running` only. */
-  listRunningDistros?: () => Promise<string[]>
-  /** Wall clock, only for the record's `startedAtMs` stamp. */
-  now?: () => number
-  /** Deadlines and the unverifiable bound; monotonic so a clock jump moves neither. */
-  monotonicNow?: () => number
-  /** A holder this process spawned exited (code 1 when its distro stopped); liveness re-checks. */
-  onHolderExit?: (
-    distro: string,
-    exit: { code: number | null; signal: NodeJS.Signals | null }
-  ) => void
-  sleep?: (ms: number) => Promise<void>
-  /** How long a spawned holder has to bring its distro up (a cold boot can take ~15 s). */
-  bootTimeoutMs?: number
-}
-
-export type WslDistroHolder = {
-  /** User-initiated only: the one path allowed to boot a stopped distro. */
-  ensureHeld(distro: string): Promise<WslDistroHolderEnsureResult>
-  /** Startup: keep holders a previous Orca left running, drop records that are provably stale. */
-  adoptHolders(): Promise<WslDistroHolderAdoption[]>
-  /** Explicit stop only; the distro then idles out on WSL's own schedule. */
-  release(distro: string): Promise<WslDistroHolderState>
-  holderState(distro: string): Promise<WslDistroHolderState>
-}
+export type {
+  WslDistroHolder,
+  WslDistroHolderAdoption,
+  WslDistroHolderChild,
+  WslDistroHolderDependencies,
+  WslDistroHolderEnsureResult,
+  WslDistroHolderState
+} from './wsl-distro-holder-types'
+import type {
+  WslDistroHolder,
+  WslDistroHolderChild,
+  WslDistroHolderDependencies,
+  WslDistroHolderEnsureResult,
+  WslDistroHolderReleaseOptions,
+  WslDistroHolderState
+} from './wsl-distro-holder-types'
 
 const DEFAULT_BOOT_TIMEOUT_MS = 60_000
 const BOOT_POLL_INTERVAL_MS = 250
 const RELEASE_EXIT_TIMEOUT_MS = 5_000
-/**
- * How long a recorded holder may stay `unverifiable` while its distro is confirmed running before
- * `ensureHeld` spawns another. A process-table read that fails that long is not a hiccup, and the
- * distro running all along means something holds it, so waiting costs nothing; a second holder
- * costs a `sleep` and, if the first was live after all, keeps the distro up after `release`
- * until that one is ended too (its pid is logged).
- */
+/** Replace unverifiable holders only after this monotonic grace while confirmed running. A duplicate costs a sleep and may keep the distro alive after release; log the old PID. */
 export const WSL_HOLDER_UNVERIFIABLE_REPLACE_AFTER_MS = 5 * 60_000
 
 function spawnDetachedHolder(distro: string): WslDistroHolderChild {
-  // Why detached: an attached child sits in libuv's kill-on-close job and dies with Orca, and the
-  // holder must outlive a full quit. A `taskkill /T` of Orca's tree still reaches it, as for the daemon.
-  return spawnProcess({
+  // Detached and broken away from Orca's jobs where they allow it, so a holder outlives a crash of
+  // Orca even inside a kill-on-close job (an OpenSSH session's); taskkill /T still reaches it.
+  // Inheriting none of Orca's handles keeps a launcher's pipe or a DevTools socket from outliving Orca.
+  return spawnDetachedWithoutInheritance({
     program: resolveWslExecutablePath(),
     args: buildWslDistroHolderArgs(distro),
-    // Why: outlives every worktree, so it must not pin one as its Win32 cwd.
+    // A host-wide holder must never pin a worktree as its Windows cwd.
     cwd: resolveWslInteropSpawnCwd(),
-    env: { ...process.env, WSL_UTF8: '1' },
-    detached: true,
-    stdio: 'ignore'
+    env: { ...process.env, WSL_UTF8: '1' }
   })
 }
 
-/** Pid + creation time + command line must all agree; any one contradicting means pid reuse. */
-export function classifyWslDistroHolderProcess(
-  record: WslDistroHolderRecord,
-  evidence: WindowsProcessEvidence
-): WslDistroHolderState {
-  if (evidence.status === 'unavailable') {
-    return 'unverifiable'
-  }
-  if (evidence.status === 'missing') {
-    return 'exited'
-  }
-  const timeKnown = record.creationTimeMs !== null && evidence.startedAtMs !== null
-  if (timeKnown && record.creationTimeMs !== evidence.startedAtMs) {
-    return 'exited'
-  }
-  if (!evidence.commandLine) {
-    return 'unverifiable'
-  }
-  if (!isWslDistroHolderCommandLine(evidence.commandLine, record.distro)) {
-    return 'exited'
-  }
-  // A record written without a creation time never had one to compare; the command line decides.
-  return timeKnown || record.creationTimeMs === null ? 'live' : 'unverifiable'
-}
+export { classifyWslDistroHolderProcess } from './wsl-distro-holder-process-classification'
+import { classifyWslDistroHolderProcess } from './wsl-distro-holder-process-classification'
 
 export function createWslDistroHolder(dependencies: WslDistroHolderDependencies): WslDistroHolder {
   const { userDataPath } = dependencies
@@ -119,6 +63,7 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
   const queryProcess = dependencies.queryProcess ?? ((pid: number) => queryWindowsProcess(pid))
   const killProcess = dependencies.killProcess ?? ((pid: number) => process.kill(pid))
   const listRunningDistros = dependencies.listRunningDistros ?? listConfirmedRunningWslDistros
+  const noteMayHaveStopped = dependencies.noteMayHaveStopped ?? noteWslDistroMayHaveStopped
   const now = dependencies.now ?? Date.now
   const monotonicNow = dependencies.monotonicNow ?? (() => performance.now())
   const unverifiableSince = new Map<string, number>()
@@ -127,9 +72,12 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
   const bootTimeoutMs = dependencies.bootTimeoutMs ?? DEFAULT_BOOT_TIMEOUT_MS
 
   const tails = new Map<string, Promise<void>>()
-  const inFlightEnsures = new Map<string, Promise<WslDistroHolderEnsureResult>>()
+  const inFlightEnsures = new Map<
+    string,
+    { promise: Promise<WslDistroHolderEnsureResult>; gated: boolean }
+  >()
 
-  // Ensure, release and adoption of one distro never interleave; other distros run freely.
+  // Serialize ensure/release/adoption per distro; other distros remain independent.
   function serialize<T>(distro: string, task: () => Promise<T>): Promise<T> {
     return runKeyedSerializedOperation(tails, wslDistroHolderKey(distro), task)
   }
@@ -192,7 +140,7 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
 
   async function spawnAndRecord(distro: string): Promise<WslDistroHolderRecord> {
     const child = spawnHolder(distro)
-    // Listen from the start: a bad distro name makes wsl.exe exit before the record is written.
+    // Observe exit before async lookup/recording; invalid distro names can fail immediately.
     const observed: { exit: HolderExit | null } = { exit: null }
     const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
       observed.exit = { code, signal }
@@ -203,7 +151,7 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
         child.once('spawn', resolve)
         child.once('error', reject)
       })
-      // The holder must never keep this process alive; it is the other way around.
+      // Unref so the surviving holder cannot keep Orca alive.
       child.unref()
       const pid = child.pid
       if (pid === undefined) {
@@ -221,32 +169,51 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
       try {
         await waitForDistroRunning(distro, () => observed.exit)
       } catch (error) {
-        await stopRecordedHolder(record)
+        // This process spawned it moments ago, so its pid is ours even without a start time.
+        await stopRecordedHolder(record, { spawnedHere: true })
         throw error
       }
       const { onHolderExit } = dependencies
-      if (onHolderExit) {
-        child.once('exit', (code, signal) => onHolderExit(distro, { code, signal }))
-      }
+      child.once('exit', (code, signal) => {
+        // Unfiltered and bridge-independent: no cooldown or open socket can hide this stop.
+        if (code === 1) {
+          noteMayHaveStopped(distro)
+        }
+        onHolderExit?.(distro, { code, signal })
+      })
       return record
     } finally {
       child.off('exit', onExit)
     }
   }
 
-  async function stopRecordedHolder(record: WslDistroHolderRecord): Promise<WslDistroHolderState> {
-    let state = classifyWslDistroHolderProcess(record, await queryProcess(record.pid))
-    if (state === 'live') {
+  async function stopRecordedHolder(
+    record: WslDistroHolderRecord,
+    { spawnedHere = false, forUninstall = false } = {}
+  ): Promise<WslDistroHolderState> {
+    const classify = async (): Promise<WslDistroHolderState> =>
+      classifyWslDistroHolderProcess(record, await queryProcess(record.pid), {
+        commandLineSuffices: forUninstall
+      })
+    let state = await classify()
+    if (state === 'unverifiable' && forUninstall) {
+      await sleep(BOOT_POLL_INTERVAL_MS)
+      state = await classify()
+    }
+    // A command line alone can't tell our holder from a reused pid running the same argv.
+    const provenOurs = spawnedHere || record.creationTimeMs !== null || forUninstall
+    const stateBeforeKill = state
+    if (state === 'live' && provenOurs) {
       try {
-        // wsl.exe re-launches itself as a child with the same argv; ending the recorded parent ends both (WSL 2.7.10).
+        // WSL 2.7.10 relaunches a same-argv child; killing the recorded parent ends both.
         killProcess(record.pid)
       } catch {
         // Raced its own exit, or denied; the re-check below decides.
       }
       const deadline = monotonicNow() + RELEASE_EXIT_TIMEOUT_MS
       for (;;) {
-        state = classifyWslDistroHolderProcess(record, await queryProcess(record.pid))
-        // A holder mid-exit can read unverifiable (pid present, command line gone); only `exited` is proof.
+        state = await classify()
+        // Mid-exit rows may retain PID but lose command line; only exited proves termination.
         if (state === 'exited' || monotonicNow() >= deadline) {
           break
         }
@@ -256,7 +223,12 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
     if (state === 'exited') {
       await removeWslDistroHolderRecord(userDataPath, record.distro)
     }
-    return state
+    if (forUninstall) {
+      console.warn(
+        `[wsl] uninstall: ${record.distro} holder pid ${record.pid} was ${stateBeforeKill}, now ${state}`
+      )
+    }
+    return state === 'live' && !provenOurs ? 'unverifiable' : state
   }
 
   async function unverifiableTooLongWhileRunning(distro: string): Promise<boolean> {
@@ -265,20 +237,30 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
     if (since === undefined || monotonicNow() - since < WSL_HOLDER_UNVERIFIABLE_REPLACE_AFTER_MS) {
       return false
     }
-    // Fails closed: an unreadable list keeps the recorded holder rather than doubling it.
+    // Unreadable running lists must retain the recorded holder rather than spawn a duplicate.
     const running = await listRunningDistros()
     return running.some((candidate) => wslDistroHolderKey(candidate) === key)
   }
 
-  return {
-    ensureHeld(distro) {
+  const holder: WslDistroHolder = {
+    ensureHeld(distro, options = {}) {
       const key = wslDistroHolderKey(distro)
       if (!key) {
         return Promise.reject(new Error('A WSL distro name is required'))
       }
+      const { requireRunning } = options
       const existing = inFlightEnsures.get(key)
       if (existing) {
-        return existing
+        // A user ensure must not inherit a background one's refusal of a stopped distro.
+        return existing.gated && !requireRunning
+          ? existing.promise.catch(() => holder.ensureHeld(distro))
+          : existing.promise
+      }
+      const spawnIfAllowed = async (): Promise<WslDistroHolderRecord> => {
+        if (requireRunning && !(await requireRunning())) {
+          throw new WslDistroNotRunningError(distro)
+        }
+        return spawnAndRecord(distro)
       }
       const pending = serialize(distro, async (): Promise<WslDistroHolderEnsureResult> => {
         const { state, record } = await recordedHolderState(distro)
@@ -293,18 +275,18 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
             `[wsl] holder pid ${record.pid} for ${distro} stayed unverifiable; spawning another`
           )
           unverifiableSince.delete(key)
-          return { outcome: 'spawned', record: await spawnAndRecord(distro) }
+          return { outcome: 'spawned', record: await spawnIfAllowed() }
         }
         if (state === 'unverifiable') {
           throw new Error(`The WSL holder record for ${distro} could not be read`)
         }
-        return { outcome: 'spawned', record: await spawnAndRecord(distro) }
+        return { outcome: 'spawned', record: await spawnIfAllowed() }
       }).finally(() => {
-        if (inFlightEnsures.get(key) === pending) {
+        if (inFlightEnsures.get(key)?.promise === pending) {
           inFlightEnsures.delete(key)
         }
       })
-      inFlightEnsures.set(key, pending)
+      inFlightEnsures.set(key, { promise: pending, gated: Boolean(requireRunning) })
       return pending
     },
 
@@ -321,22 +303,35 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
       )
     },
 
-    release(distro) {
-      return serialize(distro, async () => {
-        const read = await readWslDistroHolderRecord(userDataPath, distro)
-        if (read.status === 'unreadable') {
-          return 'unverifiable'
-        }
-        if (read.status !== 'present') {
-          await removeWslDistroHolderRecord(userDataPath, distro)
-          return 'exited'
-        }
-        return stopRecordedHolder(read.record)
-      })
+    release: (distro) => releaseRecorded(distro),
+
+    async releaseAll(options) {
+      const distros = await listWslDistroHolderRecordDistros(userDataPath)
+      return Promise.all(
+        distros.map(async (distro) => ({ distro, state: await releaseRecorded(distro, options) }))
+      )
     },
 
     holderState(distro) {
       return serialize(distro, async () => (await recordedHolderState(distro)).state)
     }
+  }
+  return holder
+
+  function releaseRecorded(
+    distro: string,
+    options: WslDistroHolderReleaseOptions = {}
+  ): Promise<WslDistroHolderState> {
+    return serialize(distro, async () => {
+      const read = await readWslDistroHolderRecord(userDataPath, distro)
+      if (read.status === 'unreadable') {
+        return 'unverifiable'
+      }
+      if (read.status !== 'present') {
+        await removeWslDistroHolderRecord(userDataPath, distro)
+        return 'exited'
+      }
+      return stopRecordedHolder(read.record, options)
+    })
   }
 }

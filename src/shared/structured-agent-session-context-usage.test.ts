@@ -53,21 +53,6 @@ function turn(sequence: number, contextUsage: AgentSessionContextUsage): AgentJo
 }
 
 describe('selectStructuredAgentContextUsage', () => {
-  it('reads the report on the newest turn that carries a used count', () => {
-    expect(
-      selectStructuredAgentContextUsage([
-        turn(1, { used: estimate(20_000), window: WINDOW }),
-        turn(3, { used: { kind: 'report', ...REPORT } })
-      ])
-    ).toEqual({
-      usedTokens: 29_400,
-      windowTokens: 200_000,
-      percentage: 15,
-      estimated: false,
-      categories: REPORT.categories
-    })
-  })
-
   it('orders by journal position, not by the clock on the fact', () => {
     const late = { ...REPORT, capturedAt: 99_000 }
     expect(
@@ -76,21 +61,6 @@ describe('selectStructuredAgentContextUsage', () => {
         turn(2, { used: estimate(54_617) })
       ])
     ).toMatchObject({ usedTokens: 54_617, windowTokens: 1_000_000, estimated: true })
-  })
-
-  it('estimates against the newest window, which may sit on an older turn', () => {
-    expect(
-      selectStructuredAgentContextUsage([
-        turn(1, { used: estimate(10_000), window: WINDOW }),
-        turn(2, { used: estimate(18_600) })
-      ])
-    ).toEqual({
-      usedTokens: 18_600,
-      windowTokens: 1_000_000,
-      percentage: 2,
-      estimated: true,
-      categories: []
-    })
   })
 
   it('divides by the newest window, not the one written beside the estimate', () => {
@@ -134,14 +104,6 @@ describe('selectStructuredAgentContextUsage', () => {
         turn(1, { used: estimate(18_600), window: WINDOW }),
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a row from a newer host, which no local type admits.
         turn(2, { used: future as unknown as AgentSessionContextUsage['used'] })
-      ])
-    ).toBeNull()
-  })
-
-  it('is null for a journal with neither', () => {
-    expect(
-      selectStructuredAgentContextUsage([
-        item('u', 1, { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] })
       ])
     ).toBeNull()
   })

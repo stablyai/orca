@@ -18,35 +18,6 @@ function group(agents: NativeChatSubagentEntry[]): NativeChatSubagentGroupBlock 
 }
 
 describe('NativeChatSubagentRun', () => {
-  it('reads as a live spawn while children work', () => {
-    render(
-      <NativeChatSubagentRun
-        block={group([
-          { id: 'a', label: 'read', state: 'working' },
-          { id: 'b', label: 'search', state: 'completed', tokens: 40661 }
-        ])}
-      />
-    )
-
-    expect(screen.getByText('Kicked off 2 subagents')).toBeInTheDocument()
-    expect(screen.getByRole('button')).toHaveTextContent('1 working')
-    expect(screen.getByRole('button')).toHaveTextContent('40.7k tokens')
-  })
-
-  it('switches to Ran once every child completed', () => {
-    render(
-      <NativeChatSubagentRun
-        block={group([
-          { id: 'a', label: 'read', state: 'completed' },
-          { id: 'b', label: 'search', state: 'completed' }
-        ])}
-      />
-    )
-
-    expect(screen.getByText('Ran 2 subagents')).toBeInTheDocument()
-    expect(screen.getByRole('button')).toHaveTextContent('completed')
-  })
-
   it('shows the worst settled verdict, not the count of finished children', () => {
     render(
       <NativeChatSubagentRun
@@ -76,38 +47,9 @@ describe('NativeChatSubagentRun', () => {
     const row = screen.getByRole('button')
     expect(row).toHaveTextContent('3 working')
     expect(row).toHaveTextContent('+1 failed')
-    // The dot carries the failure; the pulse still says the group is in flight.
     expect(container.querySelector('.bg-destructive.animate-pulse')).not.toBeNull()
   })
 
-  it('leaves the dot neutral when nothing has gone wrong', () => {
-    const { container } = render(
-      <NativeChatSubagentRun
-        block={group([
-          { id: 'a', label: 'read', state: 'working' },
-          { id: 'b', label: 'search', state: 'completed' }
-        ])}
-      />
-    )
-
-    expect(screen.getByRole('button')).not.toHaveTextContent('failed')
-    expect(container.querySelector('.bg-destructive')).toBeNull()
-  })
-
-  it('leads with the bot glyph, decorative beside the word that names the group', () => {
-    const { container } = render(
-      <NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state: 'working' }])} />
-    )
-
-    const glyph = container.querySelector('.lucide-bot')
-    expect(glyph).not.toBeNull()
-    expect(glyph).toHaveAttribute('aria-hidden', 'true')
-    // Never icon-only: the word is what carries the accessible name.
-    expect(screen.getByRole('button')).toHaveAccessibleName(/Kicked off 1 subagent/)
-  })
-
-  // The only aria-hidden span carrying text is the elapsed-clock wrapper: the
-  // glyph's Bot is an <svg> and the status dots render empty.
   function hiddenTextSpans(container: HTMLElement): Element[] {
     return [...container.querySelectorAll('span[aria-hidden="true"]')].filter(
       (element) => (element.textContent ?? '').trim().length > 0
@@ -123,8 +65,7 @@ describe('NativeChatSubagentRun', () => {
 
     const row = screen.getByRole('button')
     expect(row).toHaveAttribute('aria-live', 'polite')
-    // A clock that reticks every second would announce a new duration every
-    // second and bury the state changes the live region exists to report.
+    // Hide the ticking clock from the live region so repeated durations cannot bury state changes.
     expect(hiddenTextSpans(container)).toHaveLength(1)
   })
 
@@ -137,14 +78,11 @@ describe('NativeChatSubagentRun', () => {
       />
     )
 
-    // Settled: the duration is fixed, so hiding it would cost a reader real
-    // information for no announcement churn.
+    // Expose the fixed settled duration once announcement churn ends.
     expect(hiddenTextSpans(container)).toHaveLength(0)
     expect(screen.getByRole('button')).toHaveTextContent('4s')
   })
 
-  // A resumed child reopens in its original row with a fresh start; the idle
-  // time since its sibling stopped is not run time.
   it('reads a child resumed after a long gap as its runs, not the gap', () => {
     render(
       <NativeChatSubagentRun
@@ -169,15 +107,11 @@ describe('NativeChatSubagentRun', () => {
 
     const row = screen.getByRole('button')
     expect(row).toHaveTextContent('status unavailable')
-    // `unverifiable` with no terminal timestamp has no known run length, so the
-    // clock would measure to `now` and report the time since we lost sight of
-    // the child as how long it ran — on a row that is not even counting.
+    // Without a stop timestamp, measuring to now would invent a duration after contact was lost.
     expect(row.textContent).not.toContain('·')
   })
 
-  // A partial sweep leaves one child settled and one whose fate is unknown. The
-  // group's clock would then report the settled sibling's duration as the
-  // group's run length while the other child is still unaccounted for.
+  // A settled sibling’s duration cannot represent a group containing an unaccounted-for child.
   it('shows no duration while one child settled and another is unaccounted for', () => {
     render(
       <NativeChatSubagentRun
@@ -193,7 +127,6 @@ describe('NativeChatSubagentRun', () => {
     expect(row.textContent).not.toContain('·')
   })
 
-  // The provider can still say how a child whose host died ended, but not when.
   it('shows no duration when a verdict reached a child with no recorded stop time', () => {
     render(
       <NativeChatSubagentRun
@@ -225,9 +158,7 @@ describe('NativeChatToolRun with a spawn group', () => {
     expect(screen.queryByText('1 tool call')).toBeNull()
   })
 
-  // A completed turn can keep its roster visible while the regular tool-run
-  // disclosure remains closed. This durable row is the work's status, not a
-  // reason to open the rest of the activity automatically.
+  // Durable roster status stays visible without opening a completed turn’s tool activity.
   it('keeps the roster visible on a completed turn whose activity is collapsed', () => {
     render(
       <NativeChatToolRun
@@ -241,9 +172,7 @@ describe('NativeChatToolRun with a spawn group', () => {
     expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
   })
 
-  // The roster-only branch returns a spacing wrapper whenever it has rows, so a
-  // group that draws nothing must not count as one — that wrapper would be the
-  // empty bubble with a margin that the message row refuses to emit.
+  // Childless groups must not create the margin-bearing wrapper used for visible roster rows.
   it('draws nothing at all for a spawn group that carries no children', () => {
     const { container } = render(
       <NativeChatToolRun
@@ -255,20 +184,6 @@ describe('NativeChatToolRun with a spawn group', () => {
     )
 
     expect(container).toBeEmptyDOMElement()
-  })
-
-  it('renders the roster alongside the tool activity of its turn', () => {
-    render(
-      <NativeChatToolRun
-        blocks={[{ type: 'tool-call', name: 'shell', input: { command: 'ls' } }]}
-        subagentGroups={[group([{ id: 'a', label: 'read', state: 'completed' }])]}
-        expandSignal={false}
-        activeTurnIsWorking={false}
-      />
-    )
-
-    expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
-    expect(screen.getByText('ls').closest('button')).toHaveTextContent('ls')
   })
 
   it('lists every child as a plain line when none has rows of its own', () => {

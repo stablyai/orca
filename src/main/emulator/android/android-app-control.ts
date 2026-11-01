@@ -1,7 +1,3 @@
-// Pure arg-building for `adb` app install/launch. No process execution here:
-// the caller prepends the resolved adb binary path to every arg array.
-
-// `adb -s <serial> install [-r] <apkPath>` (-r reinstalls over an existing app).
 export function installApkArgs(
   serial: string,
   apkPath: string,
@@ -15,9 +11,7 @@ export function installApkArgs(
   return args
 }
 
-// `adb -s <serial> shell am start -n <package>/<activity>` when an activity is
-// known; otherwise launch the default LAUNCHER activity via monkey, which does
-// not require the caller to resolve the entry-point component name.
+// monkey launches the default activity without requiring its component name.
 export function launchAppArgs(serial: string, packageName: string, activity?: string): string[] {
   if (activity && activity.trim() !== '') {
     return ['-s', serial, 'shell', 'am', 'start', '-n', `${packageName}/${activity}`]

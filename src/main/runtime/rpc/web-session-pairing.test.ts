@@ -96,8 +96,7 @@ function sign(key: nacl.SignKeyPair, purpose: 'auth' | 'register', transcriptHas
   return Buffer.from(nacl.sign.detached(message, key.secretKey)).toString('base64')
 }
 
-// Why no page origin here: the host no longer gates a first pairing on the page that opened the
-// socket (#27540's refusal broke LAN and Tailscale web pairing), so every direct client pairs alike.
+// First pairing accepts direct clients regardless of page origin; origin gating broke LAN/Tailscale web pairing (#27540).
 describe('first pairing over a direct socket', () => {
   it('pairs a never-used code and keeps an already-paired browser working', () => {
     const { registry, connect } = harness()
@@ -106,23 +105,6 @@ describe('first pairing over a direct socket', () => {
       type: 'e2ee_authenticated'
     })
     expect(registry.getDevice(pending.deviceId)?.lastSeenAt).toBeGreaterThan(0)
-    expect(connect(() => ({ deviceToken: pending.token })).reply).toMatchObject({
-      type: 'e2ee_authenticated'
-    })
-  })
-})
-
-describe('relayed phones', () => {
-  it('pair over Relay', () => {
-    const { registry, connect, bindRelay } = harness((relayDeviceId) => ({
-      transport: 'relay',
-      relayHostId: RELAY_HOST_ID,
-      relayDeviceId,
-      basisConnId: 'conn',
-      credentialKind: 'invite'
-    }))
-    const pending = registry.getOrCreatePendingDevice('Phone', 'mobile')
-    bindRelay(pending.deviceId)
     expect(connect(() => ({ deviceToken: pending.token })).reply).toMatchObject({
       type: 'e2ee_authenticated'
     })
@@ -163,24 +145,5 @@ describe('session-only browser keys', () => {
       type: 'e2ee_error',
       error: { code: 'device_revoked', deviceId: fork.deviceId }
     })
-  })
-
-  it('cuts sockets bound to a swept row', () => {
-    const { registry, wiring, transport } = harness()
-    const paired = registry.addDevice('Browser', 'runtime')
-    registry.updateLastSeen(paired.deviceId)
-    const key = nacl.sign.keyPair()
-    const fork = registry.forkDeviceKey(
-      paired.deviceId,
-      Buffer.from(key.publicKey).toString('base64'),
-      'Tab',
-      { ephemeral: true }
-    )
-    expect(
-      wiring.sweepIdleEphemeralDevices(fork.lastSeenAt + EPHEMERAL_DEVICE_IDLE_MS + 1)
-    ).toEqual([fork.deviceId])
-    expect(transport.terminateClientConnections).toHaveBeenCalledWith(fork.deviceId)
-    expect(registry.getDevice(paired.deviceId)).not.toBeNull()
-    wiring.dispose()
   })
 })

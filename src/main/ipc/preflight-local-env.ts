@@ -27,8 +27,7 @@ export function buildLocalPreflightEnv(
     return env
   }
   const env = stringOnlyProcessEnv(process.env)
-  // Why: newly installed CLIs update persisted Windows Path, but the running
-  // Electron process keeps its old environment until we merge it explicitly.
+  // The running app must merge persisted Windows PATH to see newly installed CLIs.
   mergePersistedWindowsPath(env)
   return env
 }

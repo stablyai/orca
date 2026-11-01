@@ -137,8 +137,6 @@ export async function uploadFileViaSystemSsh(
     throwIfAborted(options?.signal)
 
     if (options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)) {
-      // This is the path that carries the large files, so it is the one the transport choice is
-      // made for; see the #16432 note below.
       const source: WindowsWriteSource = {
         totalBytes: openedStat.size,
         readChunk: async (offset, maxBytes) => {
@@ -146,7 +144,6 @@ export async function uploadFileViaSystemSsh(
           const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset)
           return buffer.subarray(0, bytesRead)
         },
-        // The verified local file is already exactly the payload, so sftp sends it as is.
         withLocalFile: (send) => send(localPath)
       }
       await writeWindowsRemoteFile(target, remotePath, source, options ?? {})
@@ -181,42 +178,9 @@ export async function uploadFileViaSystemSsh(
   }
 }
 
-/**
- * #16432, re-measured: the constraint is not a size limit, and it is not cmd.exe's.
- *
- * A read on Windows PowerShell 5.1's redirected-stdin handle over a non-pty ssh exec can die
- * permanently when it finds the stream momentarily empty: no further bytes arrive, and no EOF ever
- * does. It is probabilistic per such read — not a size threshold, and not certain on the first one.
- * Measured on Windows 11 26200.9168 / OpenSSH_for_Windows_10.0p2 with `DefaultShell = cmd.exe`, by
- * replacing the copy loop with a counting reader:
- *
- *   - a 1.5s gap before any byte, which forces the first read to find nothing -> 0 bytes, 6 of 6
- *   - one byte, a 1.5s gap, then 32767 more  -> exactly 1 byte, then nothing
- *   - 32768, a 1.5s gap, then 32768 more     -> exactly 32768, then nothing
- *   - a continuous 2MB                       -> 167936 / 270336 / 372736, then nothing
- *
- * Those three 2MB death points are one payload run three times under the same conditions, which is
- * what rules out a threshold: a stream that died at a fixed point would not vary by 2x. Independently reproduced by
- * a second harness, where one 1.9MB counted read survived 39 reads to completion and another died
- * after 11 — same construct, same payload.
- *
- * A payload small enough to arrive in one burst usually presents only one read that can find the
- * stream empty (the one waiting for EOF), which is why 32KB mostly works: it still failed 15 times
- * in 120 with the host under load, and 1 in 40 on a quiet one. Neither rate is survivable across
- * the 62 execs a 1.9MB file needs — even 2.5% compounds to roughly four uploads in five failing —
- * and no chunk size helps, because the client does not control whether its bytes arrive together.
- *
- * The same host, same `DefaultShell`, same connection pattern contradicts every size-limit reading:
- * `findstr` took 2,016,000 bytes through one exec's stdin, and PowerShell 7 took 2MB. So cmd.exe is
- * not the ceiling and neither is ~50KB. Writes now go over sftp, which moves the whole payload
- * without any remote process reading a pipe; see `system-ssh-windows-write-strategy.ts` for the
- * fallback order.
- *
- * Successes are never partial. Across every run in both harnesses a failed write hung; not one
- * produced a short file, so this defect cannot silently truncate an upload.
- */
+/** #16432: on Windows 11/OpenSSH 10.0p2, PowerShell 5.1 stdin can hang permanently when a read finds an empty pipe, losing data and EOF. This is per read, not a size limit: even 32KiB failed 15/120 under load; identical 2MB writes hung at different offsets. findstr and PowerShell 7 accepted 2MB on the same host. Prefer SFTP, then PowerShell 7, with bounded 5.1 last (system-ssh-windows-write-strategy.ts). Observed failures hung rather than reporting successful short writes. */
 
-/** A staged write is materialized locally first when the source is a buffer rather than a file. */
+/** SFTP requires a local file even when the source is an in-memory buffer. */
 async function withTemporaryLocalFile<T>(
   contents: Buffer,
   send: (localPath: string) => Promise<T>
@@ -224,7 +188,7 @@ async function withTemporaryLocalFile<T>(
   const directory = await mkdtemp(join(tmpdir(), 'orca-win-upload-'))
   const localPath = join(directory, 'payload.bin')
   try {
-    // 0600: the payload can be repository content, and tmpdir is shared on every platform.
+    // Repository payloads in shared temp directories must be private from creation.
     await writeFile(localPath, contents, { mode: 0o600 })
     return await send(localPath)
   } finally {

@@ -1,7 +1,6 @@
 import type { SyntaxHighlighter, SyntaxHighlightState, SyntaxToken } from './syntax-highlighter'
 
 export type SyntaxLine = {
-  /** Offset of the line in the document; unique, so it keys the line. */
   start: number
   tokens: readonly SyntaxToken[]
   /** The separator the source has after this line, CRLF included. */
@@ -20,19 +19,12 @@ export type SyntaxProgress = {
 const BATCH_LENGTH = 250
 const BATCH_LINES = 10
 
-/**
- * The text of a run of lines without its final separator, copied out of the
- * document: a substring keeps its parent alive, so tokens cut straight from a
- * streaming block would pin every copy of it that streamed past.
- */
+// Copy line runs without final separators; substring tokens from streaming blocks would retain every prior parent document.
 function detachedLines(text: string): string {
   return ` ${text.replace(/\r?\n$/, '')}`.slice(1)
 }
 
-/**
- * Tokenizes a document a few lines at a time, resuming after the last completed
- * line, and stops once `budgetMs` is spent. Completed lines keep their identity.
- */
+/** Tokenize line batches until budgetMs, resuming after the last completed line and preserving its identity. */
 export function createIncrementalSyntaxTokenizer(
   highlight: SyntaxHighlighter
 ): (code: string, budgetMs: number) => SyntaxProgress {

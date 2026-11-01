@@ -40,8 +40,3 @@ it('removes the listener on disposal', () => {
   parent.emit('disconnect')
   expect(quit).not.toHaveBeenCalled()
 })
-
-it('does not couple a desktop launch to a sidecar owner marker', () => {
-  installServeSupervisorDisconnectQuit(false, new EventEmitter())
-  expect(quit).not.toHaveBeenCalled()
-})

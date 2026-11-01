@@ -13,10 +13,7 @@ import {
   readWorkingSubmoduleHead
 } from './submodule-gitlink-oid'
 
-/**
- * Run a plain status inside a submodule's own worktree (lazy "expand submodule"
- * flow). Entry paths are relative to the submodule root; the renderer prefixes them.
- */
+/** Return submodule-relative entries; the renderer supplies the parent prefix. */
 export async function getSubmoduleStatus(
   worktreePath: string,
   submodulePath: string,
@@ -24,13 +21,12 @@ export async function getSubmoduleStatus(
 ): Promise<GitStatusResult> {
   const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
   const limit = resolveGitStatusLimit(options.limit)
-  // Why: staged expansion only represents HEAD→index; scanning the submodule worktree is wasted work.
-  // These three reads are independent, so they run concurrently — on SSH/WSL each one is a real round trip.
+  // Read independent inputs concurrently; staged expansion needs HEAD/index only, not inner status.
   const [workingResult, fromOid, toOid] = await Promise.all([
     options.staged
       ? Promise.resolve<GitStatusResult>({ entries: [], conflictOperation: 'unknown' })
       : getStatus(submoduleWorktreePath, options),
-    // Why: a moved gitlink (clean worktree) has no status rows; surface the parent-commit→checkout range as inner rows.
+    // A clean moved gitlink still needs committed range rows.
     options.staged
       ? readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options)
       : readGitlinkOidFromIndex(worktreePath, submodulePath, options).then(
@@ -68,10 +64,6 @@ export async function getSubmoduleStatus(
   return workingResult
 }
 
-/**
- * List files changed between two submodule commits as status rows — used when a
- * gitlink pointer moved so the expanded submodule shows committed changes.
- */
 async function computeSubmoduleRangeEntries(
   submoduleWorktreePath: string,
   fromOid: string,

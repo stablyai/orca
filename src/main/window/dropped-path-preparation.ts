@@ -1,13 +1,26 @@
+import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../shared/agent-session-attachments'
+import { basename } from 'node:path'
+import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 import type { NativeFileDropCopyFailureReason } from '../../shared/native-file-drop'
 import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
 } from '../../shared/native-file-drop-preparation'
 import {
+  DragTempCopyBatch,
+  closeDragTempSource,
   materializeDragTempPaths,
-  mayNeedDragTempCopy,
+  releaseDragTempBatch,
+  type DragTempCopyItemResult,
   type DragTempCopyEnvironment
 } from './dragged-temp-file-copy'
+import {
+  copyCheckedDragTempSource,
+  isDragTempSourceChanged,
+  stageCapturedDragTempBytes,
+  writeCheckedDragTempSource
+} from './checked-drag-temp-source'
+import { mayNeedDragTempCopy } from './drag-temp-path'
 
 const DRAG_TEMP_COPY_TIMEOUT_MS = 2 * 60 * 1000
 export const MAX_PENDING_DRAG_TEMP_COPIES = 8
@@ -17,6 +30,10 @@ export type DroppedPathPreparationDeps = {
   platform: NodeJS.Platform
   getCopyEnvironment: () => Promise<DragTempCopyEnvironment>
   watchRenderer: () => RendererDropLifetime
+  localChatAttachmentStore?: () => Promise<Pick<
+    AgentSessionAttachmentStore,
+    'storeFile' | 'storeWith'
+  > | null>
   copyTimeoutMs?: number
 }
 
@@ -24,7 +41,7 @@ export function createDragTempCopyLane(): { tail: Promise<void>; pending: number
   return { tail: Promise.resolve(), pending: 0 }
 }
 
-// Why: replacement windows still share the retained-copy budget with work already in flight.
+// Why: replacement windows share the copy queue with work already in flight.
 export const windowDragTempCopyLane = createDragTempCopyLane()
 
 export function createDroppedPathPreparationQueue(
@@ -61,19 +78,43 @@ export function createDroppedPathPreparationQueue(
 export async function prepareDroppedPaths(
   request: PrepareDroppedPathsRequest,
   env: DragTempCopyEnvironment,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  localChatAttachmentStore?: DroppedPathPreparationDeps['localChatAttachmentStore']
 ): Promise<PreparedDroppedPaths> {
-  const results = await materializeDragTempPaths(request.paths, env, signal)
+  // Capture within main's batch memory budget before waiting for the local chat store.
+  const batch = new DragTempCopyBatch(
+    request.consumer === 'local-chat' ? AGENT_SESSION_ATTACHMENT_MAX_BYTES : -1
+  )
+  let prepared: DragTempCopyItemResult[]
+  try {
+    const capture = materializeDragTempPaths(request.paths, env, signal, batch)
+    prepared = await (signal ? rejectOnDropAbort(capture, signal) : capture)
+    if (request.consumer === 'local-chat') {
+      prepared = []
+      const handoff = storeCapturedSources(batch, env, localChatAttachmentStore, signal)
+      await (signal ? rejectOnDropAbort(handoff, signal) : handoff)
+      prepared = request.paths.map((path) => batch.completed.get(path)!)
+    }
+    signal?.throwIfAborted()
+    batch.completed.clear()
+  } catch (error) {
+    batch.completed.clear()
+    await releaseDragTempBatch(batch)
+    throw error
+  }
   const acceptsOriginal = request.consumer === 'main-reader'
-  const paths = results.flatMap((result) =>
+  const paths = prepared.flatMap((result) =>
     result.status === 'imported'
       ? [result.destPath]
       : result.status === 'uncopied' && acceptsOriginal
         ? [result.sourcePath]
         : []
   )
-  const unprepared = results.flatMap((result) =>
-    result.status === 'imported' || (result.status === 'uncopied' && acceptsOriginal)
+  const unprepared = prepared.flatMap((result) =>
+    result.status === 'opened' ||
+    result.status === 'buffered' ||
+    result.status === 'imported' ||
+    (result.status === 'uncopied' && acceptsOriginal)
       ? []
       : [result]
   )
@@ -84,6 +125,61 @@ export async function prepareDroppedPaths(
     paths,
     failures: unprepared.length > 0 ? [copyFailure(unprepared.length, commonReason)] : []
   }
+}
+
+async function storeCapturedSources(
+  batch: DragTempCopyBatch,
+  env: DragTempCopyEnvironment,
+  getStore: DroppedPathPreparationDeps['localChatAttachmentStore'],
+  signal?: AbortSignal
+): Promise<void> {
+  let pending:
+    | ReturnType<NonNullable<DroppedPathPreparationDeps['localChatAttachmentStore']>>
+    | undefined
+  for (const [sourcePath, result] of batch.completed) {
+    signal?.throwIfAborted()
+    if (result.status !== 'buffered' && result.status !== 'opened') {
+      continue
+    }
+    pending ??= getStore?.().catch(() => null) ?? Promise.resolve(null)
+    // A host that never starts must not hold captured bytes or handles past the deadline.
+    const store = await (signal ? rejectOnDropAbort(pending, signal) : pending)
+    const stored = await storeCapturedSource(result, store, env, batch, signal)
+    signal?.throwIfAborted()
+    batch.completed.set(sourcePath, stored)
+    if (result.status === 'opened') {
+      await closeDragTempSource(batch, result.source)
+    }
+  }
+}
+
+async function storeCapturedSource(
+  result: Extract<DragTempCopyItemResult, { status: 'buffered' | 'opened' }>,
+  store: Awaited<ReturnType<NonNullable<DroppedPathPreparationDeps['localChatAttachmentStore']>>>,
+  env: DragTempCopyEnvironment,
+  batch: DragTempCopyBatch,
+  signal?: AbortSignal
+): Promise<DragTempCopyItemResult> {
+  if (store) {
+    try {
+      const destPath =
+        result.status === 'buffered'
+          ? await store.storeFile(basename(result.sourcePath), result.bytes)
+          : await store.storeWith(result.source.name, (partPath) =>
+              writeCheckedDragTempSource(result.source, partPath, signal)
+            )
+      return { sourcePath: result.sourcePath, status: 'imported', destPath }
+    } catch (error) {
+      signal?.throwIfAborted()
+      if (isDragTempSourceChanged(error)) {
+        // Why: the dropped bytes changed since the drop; a fallback copy would carry new ones.
+        return { sourcePath: result.sourcePath, status: 'failed', reason: 'changed' }
+      }
+    }
+  }
+  return result.status === 'buffered'
+    ? stageCapturedDragTempBytes(result.sourcePath, result.bytes, env, batch, signal)
+    : copyCheckedDragTempSource(result.source, env, batch, signal)
 }
 
 function failDroppedPathPreparation(
@@ -112,7 +208,9 @@ async function copyDroppedPaths(
   const signal = AbortSignal.any([rendererSignal, timeout.signal])
   try {
     return await rejectOnDropAbort(
-      deps.getCopyEnvironment().then((env) => prepareDroppedPaths(request, env, signal)),
+      deps
+        .getCopyEnvironment()
+        .then((env) => prepareDroppedPaths(request, env, signal, deps.localChatAttachmentStore)),
       signal
     )
   } catch (error) {

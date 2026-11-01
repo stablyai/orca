@@ -1,3 +1,4 @@
+import type { StructuredSessionSurface } from '../../agent-session/structured-agent-session-close'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import type { z } from 'zod'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
@@ -24,12 +25,7 @@ import {
   structuredAgentSessionClosedBeforeCreateRefusal
 } from './structured-agent-session-close-before-create'
 
-/**
- * The attach-shaped entries take the location from the client instead of resolving it from a
- * worktree, so they never reach the worktree-resolving create-support check. Ask the executing
- * host the same question directly: only it knows which agents and locations it runs, and a client
- * cannot forge that answer.
- */
+/** Attach-shaped requests bypass workspace create-support; ask the execution host directly so client-supplied locations cannot forge support. */
 async function resolveClientSuppliedAttach(params: z.infer<typeof AttachParams>, ctx: RpcContext) {
   await ensureHostInstalled(ctx, params.agent)
   const host = requireHost(ctx, params.agent)
@@ -61,7 +57,8 @@ export async function attachClientSuppliedLocation(
 
 export async function handleStructuredAgentSessionCreate(
   params: z.infer<typeof CreateParams>,
-  ctx: RpcContext
+  ctx: RpcContext,
+  capture?: (surface: StructuredSessionSurface) => void
 ) {
   requireStructuredAgentAudience(ctx, params.agent)
   if (params.envelope.expectedRuntimeFence !== null) {
@@ -69,8 +66,7 @@ export async function handleStructuredAgentSessionCreate(
       reason: 'requestMalformed'
     })
   }
-  // Everything up to `attach` is pre-commit, and answers with a refusal rather than a throw so
-  // a client can tell "nothing was created" from "the outcome is unknown".
+  // Before attach, return refusals instead of throwing so clients can distinguish no effects from unknown outcomes.
   const prepared = await resolveUncommittedStructuredCreate(async () => {
     if ('worktree' in params) {
       const conflict = agentSessionFingerprintConflict(
@@ -93,6 +89,7 @@ export async function handleStructuredAgentSessionCreate(
         structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
+        ...(params.optionsMode ? { optionsMode: params.optionsMode } : {}),
         ...(params.options ? { options: params.options } : {}),
         ...(params.firstMessage ? { firstMessage: params.firstMessage } : {}),
         atRest: Boolean(
@@ -118,6 +115,11 @@ export async function handleStructuredAgentSessionCreate(
     runtime: ctx.runtime,
     caller: callerFor(ctx),
     prepared,
-    activate: true
+    activate: true,
+    placedByWindow: ctx.caller?.kind === 'desktop',
+    ...(capture ? { capture } : {}),
+    ...('tabPlacement' in params && params.tabPlacement
+      ? { tabPlacement: params.tabPlacement }
+      : {})
   })
 }

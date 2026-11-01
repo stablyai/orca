@@ -1,15 +1,20 @@
-import type { WslHostStatus } from '../../../../shared/wsl-host-types'
+import type { WslHostCapability, WslHostStatus } from '../../../../shared/wsl-host-types'
 import { isWslHostRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { workspaceOwnerHostId } from '../../lib/workspace-row-owner-host'
 import type { AppState } from '../../store/types'
 import { useAppStore } from '../../store'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /**
- * The WSL hosts an open project or terminal needs: the active workspace's host and the host of
- * every workspace with a terminal tab, each resolved from the workspace's own owner.
+ * The WSL hosts with visible work: the active workspace's, and those of workspaces focused earlier
+ * in this window that still have tabs (their panes stay mounted). Saved tabs alone never count, and
+ * a launch boots none: the focused host connects only if its distro already runs (E9).
  */
-export function selectWslHostsWithVisibleWork(state: AppState): string[] {
+export function selectWslHostsWithVisibleWork(
+  state: AppState,
+  focusedThisSession: ReadonlySet<string> = new Set()
+): string[] {
   const wslEnvironmentIds = new Set(
     state.runtimeEnvironments
       .filter(isWslHostRuntimeEnvironment)
@@ -22,8 +27,8 @@ export function selectWslHostsWithVisibleWork(state: AppState): string[] {
   if (state.activeWorktreeId) {
     workspaceIds.add(state.activeWorktreeId)
   }
-  for (const [workspaceId, tabs] of Object.entries(state.tabsByWorktree)) {
-    if (tabs.length > 0) {
+  for (const workspaceId of focusedThisSession) {
+    if ((state.tabsByWorktree[workspaceId]?.length ?? 0) > 0) {
       workspaceIds.add(workspaceId)
     }
   }
@@ -45,12 +50,21 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
     return
   }
   const apply = (status: WslHostStatus): void => useAppStore.getState().applyWslHostStatus(status)
+  const applyCapability = ({ serverFiles, acceptsNewWork }: WslHostCapability): void => {
+    const state = useAppStore.getState()
+    state.setWslHostServerFiles(serverFiles)
+    state.setWslHostsAcceptNewWork(acceptsNewWork !== false)
+  }
   // A preload from before the capability call leaves it unknown, which the UI treats as present.
   if (typeof api.getCapability === 'function') {
     void api
       .getCapability()
-      .then(({ serverFiles }) => useAppStore.getState().setWslHostServerFiles(serverFiles))
+      .then(applyCapability)
       .catch((error) => console.error('Failed to read WSL host capability:', error))
+  }
+  // A block learned mid-run hides the offer and the add/move entry points without a relaunch.
+  if (typeof api.onCapabilityChanged === 'function') {
+    unsubs.push(api.onCapabilityChanged(applyCapability))
   }
   let stopped = false
   unsubs.push(api.onStatusChanged(apply), () => {
@@ -67,8 +81,13 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
 
   let reported = ''
   let inputs: readonly unknown[] = []
+  let focusEntry = ''
+  const focusedThisSession = new Set<string>()
   const report = (state: AppState): void => {
     if (state.settings?.experimentalWslHosts !== true) {
+      // Focus while WSL hosts are off is not an act on a host; turning them on re-reports.
+      inputs = []
+      focusEntry = ''
       return
     }
     // Why: this runs on every store write; only these inputs can change the answer.
@@ -77,14 +96,28 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
       state.tabsByWorktree,
       state.runtimeEnvironments,
       state.repos,
-      state.folderWorkspaces,
+      selectFolderWorkspaces(state),
       state.projectGroups
     ]
     if (next.every((value, index) => value === inputs[index])) {
       return
     }
     inputs = next
-    const environmentIds = selectWslHostsWithVisibleWork(state)
+    if (state.activeWorktreeId) {
+      focusedThisSession.add(state.activeWorktreeId)
+    }
+    const [focusedHost] = selectWslHostsWithVisibleWork(state)
+    const entry = focusedHost ? `${state.activeWorktreeId}\0${focusedHost}` : ''
+    // A switch or launch restore onto a WSL host: main connects a running distro, never boots one.
+    if (entry !== focusEntry) {
+      focusEntry = entry
+      if (typeof api.focusHost === 'function') {
+        void api.focusHost({ environmentId: focusedHost ?? null }).catch((error) => {
+          console.error('Failed to report the focused WSL host:', error)
+        })
+      }
+    }
+    const environmentIds = selectWslHostsWithVisibleWork(state, focusedThisSession)
     const key = environmentIds.join('\n')
     if (key === reported) {
       return

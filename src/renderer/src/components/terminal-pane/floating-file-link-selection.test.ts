@@ -2,7 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { openHttpLink, registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import {
+  openHttpLink,
+  registerHttpLinkStoreAccessor,
+  registerWorkspaceHttpLinkBrowserOpener
+} from '@/lib/http-link-routing'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { openDetectedFilePath } from './terminal-file-open-routing'
 import { buildFileLinkActions, handleTerminalFileLink } from './terminal-file-link-actions'
@@ -77,6 +81,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  registerWorkspaceHttpLinkBrowserOpener(null)
   useAppStore.setState(initialState, true)
   vi.unstubAllGlobals()
 })
@@ -144,7 +149,8 @@ describe('floating file links preserve main-window selection', () => {
     expect(openFileForLink).toHaveBeenCalledWith(
       expect.objectContaining({ filePath, worktreeId: FLOATING_TERMINAL_WORKTREE_ID }),
       { forceContentReload: true },
-      null
+      null,
+      expect.any(Function)
     )
     expect(mocks.findWorkspaceFileRoute).not.toHaveBeenCalled()
     expect(mainSelection()).toEqual(before)
@@ -157,7 +163,8 @@ describe('floating file links preserve main-window selection', () => {
     expect(openFileForLink).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: FLOATING_TERMINAL_WORKTREE_ID }),
       { forceContentReload: true },
-      null
+      null,
+      expect.any(Function)
     )
     expect(mainSelection()).toEqual(before)
   })
@@ -173,16 +180,20 @@ describe('floating file links preserve main-window selection', () => {
   })
 
   it('keeps HTTP links in the floating browser as well', () => {
+    const openBrowserTab = vi.fn(async () => null)
+    registerWorkspaceHttpLinkBrowserOpener(openBrowserTab)
     const before = mainSelection()
     openHttpLink('https://example.com', {
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       sourceOwner: { kind: 'local' }
     })
-    expect(createBrowserTab).toHaveBeenCalledWith(
-      FLOATING_TERMINAL_WORKTREE_ID,
-      'https://example.com',
-      { activate: true }
-    )
+    expect(openBrowserTab).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+      url: 'https://example.com',
+      intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
+    })
+    expect(createBrowserTab).not.toHaveBeenCalled()
     expect(mainSelection()).toEqual(before)
   })
 })

@@ -1,6 +1,6 @@
 import type { AgentStartupPlan } from './tui-agent-startup'
 import type { SleepingAgentLaunchConfig } from './agent-session-resume'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import type { TuiAgent } from './tui-agent'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'

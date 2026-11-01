@@ -1,4 +1,3 @@
-// `layout.apply`'s sleep and wake commands (see LayoutApplyParams).
 import { z } from 'zod'
 import { parsePaneKey } from '../stable-pane-id'
 import { sleepingAgentSessionRecordSchema } from '../workspace-session-sleeping-agents'
@@ -11,10 +10,7 @@ function paneKeysNameTab(command: { tabId: string; paneKeys: string[] }): boolea
   return command.paneKeys.every((paneKey) => parsePaneKey(paneKey)?.tabId === command.tabId)
 }
 
-/**
- * The window's sleep of panes of one tab it already stopped; main records how each resumes.
- * `recordOnly`: a resume record of a running agent (a live or quit capture); nothing stops.
- */
+/** Record how already-stopped panes resume; recordOnly captures running agents without stopping them. */
 export const SleepCommand = z
   .object({
     type: z.literal('sleep'),
@@ -31,10 +27,7 @@ export const SleepCommand = z
     )
   )
 
-/**
- * The window's wake of the one pane it shows; never more, so agents are not resumed in bulk.
- * `recordOnly`: the window dropped the panes' resume records; nothing starts, so any count.
- */
+/** Wake one shown pane to avoid bulk agent resumes; recordOnly drops any number of resume records without starting them. */
 export const WakeCommand = z
   .object({
     type: z.literal('wake'),
@@ -44,3 +37,8 @@ export const WakeCommand = z
   })
   .refine((command) => command.recordOnly === true || command.paneKeys.length === 1)
   .refine(paneKeysNameTab)
+
+/** The window's start of one pane it shows that has no live terminal; main starts it, never the window. */
+export const StartPaneCommand = z
+  .object({ type: z.literal('startPane'), ...OnTab, paneKey: z.string().min(1) })
+  .refine((command) => parsePaneKey(command.paneKey)?.tabId === command.tabId)

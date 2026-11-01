@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
@@ -21,8 +22,16 @@ it('projects the serving record before returning paired-host row identity', asyn
   record.providerHandleChain = [
     { ...record.providerHandleChain[0]!, handle: claudeProviderHandle('provider-session', null) }
   ]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection only reads this record-list member.
-  setStructuredAgentSessionHost({ deps: { store: { listRecords: () => [record] } } } as never)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection reads only `listConversations`, `getRecord` and `hostId`.
+  setStructuredAgentSessionHost({
+    deps: {
+      store: {
+        hostId: 'local',
+        getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null),
+        listConversations: () => [agentSessionConversationView(record)]
+      }
+    }
+  } as never)
   const row: AiVaultSession = {
     id: 'local:claude:provider-session',
     executionHostId: 'local',
@@ -91,8 +100,16 @@ it('owns indexed search hits only for a client that can open the native chat', a
   record.providerHandleChain = [
     { ...record.providerHandleChain[0]!, handle: claudeProviderHandle('provider-session', null) }
   ]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection only reads this record-list member.
-  setStructuredAgentSessionHost({ deps: { store: { listRecords: () => [record] } } } as never)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection reads only `listConversations`, `getRecord` and `hostId`.
+  setStructuredAgentSessionHost({
+    deps: {
+      store: {
+        hostId: 'local',
+        getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null),
+        listConversations: () => [agentSessionConversationView(record)]
+      }
+    }
+  } as never)
   const hit = {
     agent: 'claude' as const,
     sessionId: 'provider-session',

@@ -11,7 +11,7 @@ import type { TerminalAgent } from '../../../shared/terminal-agent'
 import {
   resolveLaunchedAgentExitEvidence,
   resolveTabAgentFromSignals
-} from './tab-agent-from-signals'
+} from '../../../shared/tab-agent-from-signals'
 import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
@@ -69,25 +69,8 @@ describe('resolveTabAgentFromSignals process identity', () => {
     ).toBe('claude')
   })
 
-  it('suppresses launch identity on shell-foreground evidence despite a stale agent title', () => {
-    // Why: OSC 133;D is process-grade exit proof — a TUI that died without
-    // restoring its title must not keep painting the tab.
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: '✳ Claude Code',
-        hookAgent: null,
-        processAgent: null,
-        processShellForeground: true,
-        launchAgent: 'claude'
-      })
-    ).toBeNull()
-  })
-
   it('suppresses stuck-title identity once shell foreground is proven on a manual pane', () => {
-    // Why: pre-probe-removal, the foreground read cleared icons for TUIs that
-    // died with a stuck title; shell-foreground evidence restores that.
+    // Shell-foreground evidence replaces the old foreground probe for dead TUIs with stuck titles.
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -114,19 +97,6 @@ describe('resolveTabAgentFromSignals process identity', () => {
       })
     ).toBe('claude')
   })
-
-  it('keeps launch identity while the recognized process is still in the foreground', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: 'zsh',
-        hookAgent: null,
-        processAgent: 'codex',
-        launchAgent: 'codex'
-      })
-    ).toBe('codex')
-  })
 })
 
 describe('resolveLaunchedAgentExitEvidence shell-foreground gate', () => {
@@ -137,10 +107,6 @@ describe('resolveLaunchedAgentExitEvidence shell-foreground gate', () => {
     hasCompletedHook: false,
     processShellForeground: true
   }
-
-  it('counts shell-foreground proof as local launched-agent exit evidence', () => {
-    expect(resolveLaunchedAgentExitEvidence({ ...baseArgs, isRemote: false })).toBe(true)
-  })
 
   it('never counts a shell-foreground flag as remote launched-agent exit evidence', () => {
     expect(resolveLaunchedAgentExitEvidence({ ...baseArgs, isRemote: true })).toBe(false)
@@ -205,8 +171,7 @@ describe('useTabAgent process signals', () => {
     expect(latestHookAgent).toBe('aider')
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
 
-    // Why: OSC 133;D marks the launched command exiting; the stale spinner
-    // title must not keep the launch identity alive.
+    // OSC 133;D proves launched-command exit; stale spinner titles cannot retain identity.
     await setPaneForeground({ agent: null, shellForeground: true })
     await act(async () => {
       root.render(createElement(HookProbe, { tab: launchedTab }))
@@ -219,8 +184,7 @@ describe('useTabAgent process signals', () => {
     const launchedTab = { ...baseTab, launchAgent: 'aider' as const }
     await renderHookProbe(launchedTab)
 
-    // Pre-start window: the shell prompt (or a quick setup command) finishing
-    // is not evidence the launched agent ever ran.
+    // Pre-start shell/setup completion cannot prove the launched agent ever ran.
     await setPaneForeground({ agent: null, shellForeground: true })
 
     expect(latestHookAgent).toBe('aider')

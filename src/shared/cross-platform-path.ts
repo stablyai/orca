@@ -6,18 +6,20 @@ export function isWindowsAbsolutePathLike(value: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\') || value.startsWith('//')
 }
 
-/**
- * Whether names under `rootPath` compare case-insensitively.
- *
- * Decided by path SYNTAX, never by the client platform — a Windows client can
- * drive a case-sensitive SSH or WSL workspace. Windows drive/UNC roots fold
- * case; the WSL UNC aliases front a case-sensitive Linux filesystem, as do
- * POSIX roots. macOS stays case-sensitive here, matching
- * `normalizeRuntimePathForComparison`: folding a case-sensitive root would
- * merge distinct files, which is worse than missing a case-only duplicate.
- */
+/** Use path syntax, never client OS: Windows drive/UNC roots fold case; WSL UNC and POSIX/macOS stay case-sensitive to avoid merging distinct SSH/WSL files. */
 export function isCaseInsensitiveRuntimeRoot(rootPath: string): boolean {
   return isWindowsAbsolutePathLike(rootPath) && !isWslUncPath(rootPath)
+}
+
+export function normalizeRelativePath(path: string, rootPath?: string | null): string {
+  if (rootPath && !isWindowsAbsolutePathLike(rootPath)) {
+    return path.replace(/^\/+/, '').replace(/\/+/g, '/')
+  }
+  return path.replace(/^[\\/]+/, '').replace(/[\\/]+/g, '/')
+}
+
+export function splitPathSegments(path: string, rootPath?: string | null): string[] {
+  return normalizeRelativePath(path, rootPath).split('/').filter(Boolean)
 }
 
 export function normalizeRuntimePathSeparators(value: string): string {
@@ -30,50 +32,29 @@ export function normalizeRuntimePathSeparators(value: string): string {
   return normalized
 }
 
-/**
- * Why the probe: `/\/+/g` can only change a string that contains `//`, and the scan is the
- * dominant cost of every comparison key on the FS-event storm path (`includes` is ~30x cheaper).
- */
+/** Probe // before the dominant FS-event scan; includes is ~30x cheaper than unconditional replacement. */
 function collapseRuntimePathSlashes(value: string): string {
   return value.includes('//') ? value.replace(/\/+/g, '/') : value
 }
 
-/**
- * Comparison key only — never return this as, or splice it into, a real path.
- *
- * Why NFC: macOS file pickers and on-disk names yield NFD, while agents such as
- * Claude Code record cwd and encode their project directory names in NFC. Both
- * spell the same file, so a non-ASCII workspace otherwise never matches its own
- * sessions (#10832). Folding here knowingly treats canonically equivalent names
- * as one, which is exact on APFS but permissive on byte-exact Linux/SSH hosts —
- * an acceptable trade, since only comparison keys are affected.
- */
+/** Comparison keys only, never real paths. NFC unifies macOS picker NFD with agent NFC (#10832); this knowingly permits canonical equivalence on byte-exact Linux/SSH hosts. */
 export function normalizeRuntimePathForComparison(rawValue: string): string {
   // Normalize before any folding so the WSL alias branch below is covered too.
   const value = rawValue.normalize('NFC')
   const isWindowsPath = isWindowsAbsolutePathLike(value)
-  // Why: backslash is a valid POSIX filename character; fold it only when the
-  // path itself proves Windows drive/UNC semantics.
+  // Backslash is legal in POSIX names; fold only paths proving Windows drive/UNC semantics.
   const normalized = trimRuntimePathTrailingSlash(
     isWindowsPath ? normalizeRuntimePathSeparators(value) : collapseRuntimePathSlashes(value)
   )
   const wslUnc = normalized.match(/^\/\/(?:wsl\.localhost|wsl\$)\/([^/]+)(\/[\s\S]*)?$/i)
   if (wslUnc) {
-    // Why: Windows exposes the same case-sensitive WSL filesystem through two
-    // UNC aliases, while the distro/server portion remains case-insensitive.
+    // WSL UNC aliases share a case-sensitive Linux tail; only distro/server components fold case.
     return `//wsl/${wslUnc[1].toLowerCase()}${wslUnc[2] ?? ''}`
   }
   return isWindowsPath ? normalized.toLowerCase() : normalized
 }
 
-/**
- * Whether `uncPath` is the WSL UNC spelling of `linuxPath` as the caller's own distro sees it.
- *
- * Why the distro must match and not just the Linux tail: every distro spells
- * `/home/<user>/repo`, so a tail-only match lets a Debian caller resolve — and
- * `worktree rm` then delete — an Ubuntu directory. The distro is proven by the
- * caller's UNC cwd, never guessed.
- */
+/** Require caller UNC cwd to prove the distro: Linux tails repeat across distros, and a tail-only match could make worktree rm delete another distro’s directory. */
 export function isWslUncPathForCallerLinuxPath(
   uncPath: string,
   linuxPath: string,
@@ -91,12 +72,7 @@ export function isWslUncPathForCallerLinuxPath(
   )
 }
 
-/**
- * Whether a WSL UNC path fronts the same Windows-mounted `/mnt/<drive>` path.
- *
- * `/mnt/<drive>` is backed by the host drive and is shared across distros, so
- * matching it does not require the caller's distro proof used for Linux paths.
- */
+/** Windows-backed /mnt/<drive> paths are shared across distros, so they need no caller-distro proof. */
 export function isWslUncPathForLinuxMountedPath(uncPath: string, linuxPath: string): boolean {
   const parsed = parseWslUncPath(uncPath)
   if (!parsed || !/^\/mnt\/[A-Za-z](?:\/|$)/.test(parsed.linuxPath)) {
@@ -169,14 +145,7 @@ export function getRuntimePathBasename(value: string): string {
   return trimmed.slice(separator + 1)
 }
 
-/**
- * Pre-normalizes the root so a fan-out normalizes it once, not once per candidate.
- *
- * Why the name says "normalized": candidates must already be run through
- * `normalizeRuntimePathForComparison`. That function is not idempotent for WSL UNC
- * paths (`//wsl.localhost/Ubuntu/A` folds to `//wsl/ubuntu/A`, which a second pass
- * lowercases further), so a raw candidate here would silently fail to match.
- */
+/** Normalize roots once; require already-normalized candidates. WSL UNC normalization is not idempotent (a second pass lowercases the Linux tail), so raw candidates silently mismatch. */
 export function createNormalizedPathInsideOrEqualMatcher(
   rootPath: string
 ): (normalizedCandidate: string) => boolean {
@@ -194,10 +163,7 @@ export function isPathInsideOrEqual(rootPath: string, candidatePath: string): bo
 }
 
 export function relativePathInsideRoot(rootPath: string, candidatePath: string): string | null {
-  // Why: decide Windows-ness on the same NFC form the comparison key uses, or the
-  // two disagree (U+212A folds to 'K', making only one side a drive path) and the
-  // segment counts desync. Only the branch test sees NFC — the sliced string stays
-  // raw so the returned suffix remains byte-exact.
+  // Classify Windows syntax on NFC too (Kelvin folds to K), preserving raw bytes for returned suffixes; otherwise comparison and slicing count different segments.
   const normalizedCandidate = trimRuntimePathTrailingSlash(
     isWindowsAbsolutePathLike(candidatePath.normalize('NFC'))
       ? normalizeRuntimePathSeparators(candidatePath)
@@ -217,13 +183,7 @@ export function relativePathInsideRoot(rootPath: string, candidatePath: string):
   return sliceCandidatePastRootSegments(comparisonRoot, normalizedCandidate)
 }
 
-/**
- * Why: skip whole root segments rather than a character count. Comparison
- * folding (NFC, case, UNC alias) changes length, so a folded-prefix length would
- * cut the raw candidate mid-character and fabricate a path; segment positions
- * survive every fold and keep the suffix byte-exact. Scanning rather than
- * splitting keeps watcher event storms allocation-free.
- */
+/** Skip whole root segments: NFC/case/UNC folding changes prefix lengths, so character slicing corrupts real suffixes. Scan without allocations during watcher storms. */
 function sliceCandidatePastRootSegments(root: string, candidate: string): string {
   let remainingRootSegments = 0
   let inRootSegment = false

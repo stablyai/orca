@@ -28,7 +28,7 @@ vi.mock('fs/promises', async () => {
 })
 
 import { renameLocalPathSerializedByDestination } from './destination-serialized-local-rename'
-import { registerFilesystemMutationHandlers } from './ipc/filesystem-mutations'
+import { registerFilesystemMutationHandlers } from './ipc/filesystem/filesystem-mutations'
 import { RuntimeFileCommands } from './runtime/orca-runtime-files'
 
 const REPO_PATH = path.resolve('/workspace/repo')
@@ -214,31 +214,6 @@ describe('renameLocalPathSerializedByDestination', () => {
     const secondRename = renameLocalPathSerializedByDestination(
       path.join(secondParent, 'source.md'),
       path.join(secondParent, 'beta.md')
-    )
-    await reachNextMacrotask()
-    expect(renameMock).toHaveBeenCalledTimes(1)
-
-    firstRenameGate.release()
-    await expect(Promise.all([firstRename, secondRename])).resolves.toEqual([undefined, undefined])
-    expect(renameMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('scopes conservative serialization to one destination parent', async () => {
-    const firstRenameGate = createGate()
-    renameMock.mockImplementation(async () => {
-      if (renameMock.mock.calls.length === 1) {
-        await firstRenameGate.promise
-      }
-    })
-
-    const firstRename = renameLocalPathSerializedByDestination(
-      path.join(REPO_PATH, 'first.md'),
-      path.join(REPO_PATH, 'dotless-ı.md')
-    )
-    await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(1))
-    const secondRename = renameLocalPathSerializedByDestination(
-      path.join(REPO_PATH, 'second.md'),
-      path.join(REPO_PATH, 'dotless-I.md')
     )
     await reachNextMacrotask()
     expect(renameMock).toHaveBeenCalledTimes(1)

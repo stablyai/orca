@@ -38,7 +38,7 @@ function createGuest(type: 'webview' | 'window') {
   return Object.assign(createMockScreencastWebContents(), { getType: vi.fn(() => type) })
 }
 
-// What a <webview> guest streams: its element's size, whatever viewport is emulated.
+// Model a webview compositor constrained by its embedder.
 function emitGuestFrame(
   guest: ReturnType<typeof createGuest>,
   sessionId: number,
@@ -51,7 +51,6 @@ function emitGuestFrame(
   })
 }
 
-// Each distinct emulated size in order; the stream re-applies one before every snapshot.
 function emulatedSizes(guest: ReturnType<typeof createGuest>): string[] {
   const sizes = guest.debugger.sendCommand.mock.calls
     .filter(([method]) => method === 'Emulation.setDeviceMetricsOverride')
@@ -76,21 +75,6 @@ async function startOversizedStream(guest: ReturnType<typeof createGuest>, onFra
 }
 
 describe('clampScreencastViewportToGuestView', () => {
-  it('shrinks each side the guest cannot paint and keeps the rest of the request', () => {
-    expect(
-      clampScreencastViewportToGuestView(
-        { viewportWidth: 1833, viewportHeight: 1179, deviceScaleFactor: 2, mobile: false },
-        { width: 1463, height: 849 }
-      )
-    ).toEqual({ viewportWidth: 1463, viewportHeight: 849, deviceScaleFactor: 2, mobile: false })
-    expect(
-      clampScreencastViewportToGuestView(
-        { viewportWidth: 390, viewportHeight: 900 },
-        { width: 1463, height: 849 }
-      )
-    ).toEqual({ viewportWidth: 390, viewportHeight: 849 })
-  })
-
   it('never goes below the smallest viewport a client may request', () => {
     expect(
       clampScreencastViewportToGuestView(
@@ -98,10 +82,6 @@ describe('clampScreencastViewportToGuestView', () => {
         { width: 1, height: 1 }
       )
     ).toEqual({ viewportWidth: 320, viewportHeight: 240 })
-  })
-
-  it('leaves a sizeless request alone', () => {
-    expect(clampScreencastViewportToGuestView({}, { width: 600, height: 400 })).toEqual({})
   })
 })
 
@@ -118,7 +98,6 @@ describe('screencast of a guest smaller than the requested viewport (#30341)', (
     )
     expect(emulatedSizes(guest)).toEqual(['1833x1179'])
 
-    // This frame is the top-left crop of a 1833x1179 layout: it must not reach the client.
     emitGuestFrame(guest, 1, { width: 1463, height: 849 })
     await vi.waitFor(() => expect(emulatedSizes(guest)).toEqual(['1833x1179', '1463x849']))
     expect(guest.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {

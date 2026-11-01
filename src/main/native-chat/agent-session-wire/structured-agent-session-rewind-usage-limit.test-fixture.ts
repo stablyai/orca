@@ -5,7 +5,7 @@ import {
   hostTestOperationId,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
-import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat-usage-limit-cut'
+import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'

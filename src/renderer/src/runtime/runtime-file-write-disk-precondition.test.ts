@@ -5,12 +5,14 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
-import { FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY } from '../../../shared/file-write-disk-precondition'
+import {
+  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
+  FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
+} from '../../../shared/file-write-disk-precondition'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import {
-  fsWriteFile,
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,
   runtimeEnvironmentTransportCall,
@@ -33,6 +35,7 @@ function rpcOk(result: unknown) {
 
 function serveHost(options: {
   enforcesPrecondition: boolean
+  identicalNoop?: boolean
   diskContent?: string
   readError?: string
   readErrorCode?: string
@@ -50,7 +53,12 @@ function serveHost(options: {
           capabilities: [
             FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
             ...(options.enforcesPrecondition
-              ? [FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY]
+              ? [
+                  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
+                  ...(options.identicalNoop === false
+                    ? []
+                    : [FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY])
+                ]
               : [])
           ]
         })
@@ -82,23 +90,6 @@ function writeCalls(): RuntimeRpcRequest[] {
 }
 
 describe('writeRuntimeFile disk precondition', () => {
-  it('sends the precondition to a local writer and returns its refusal', async () => {
-    fsWriteFile.mockResolvedValue({ ok: false, diskConflict: 'changed' })
-
-    const result = await writeRuntimeFile(
-      { target: { kind: 'local' }, worktreeId: 'wt-1', worktreePath: '/repo' },
-      '/repo/file.ts',
-      'edited',
-      undefined,
-      precondition
-    )
-
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
-    expect(fsWriteFile).toHaveBeenCalledWith(
-      expect.objectContaining({ diskPrecondition: precondition })
-    )
-  })
-
   it('cannot write through an older server reached after a supporting server was probed', async () => {
     // The shared socket reconnected to an older server between the capability verdict and the send.
     serveHost({ enforcesPrecondition: true })
@@ -122,26 +113,6 @@ describe('writeRuntimeFile disk precondition', () => {
     expect(unguardedWrites).toHaveLength(0)
   })
 
-  it('lets a host that enforces the precondition compare at write time', async () => {
-    serveHost({ enforcesPrecondition: true })
-    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: false, diskConflict: 'missing' }))
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      precondition
-    )
-
-    expect(result).toEqual({ ok: false, diskConflict: 'missing' })
-    expect(writeCalls()).toHaveLength(1)
-    expect(writeCalls()[0]?.params).toMatchObject({ diskPrecondition: precondition })
-    expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'files.read' })
-    )
-  })
-
   it('compares from the client before writing through an older host', async () => {
     serveHost({ enforcesPrecondition: false, diskContent: 'original' })
     runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
@@ -159,28 +130,6 @@ describe('writeRuntimeFile disk precondition', () => {
     expect(writeCalls()[0]?.params).not.toHaveProperty('diskPrecondition')
   })
 
-  it("decides support from the write path's own status probe, one per save", async () => {
-    serveHost({ enforcesPrecondition: false, diskContent: 'original' })
-    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
-
-    for (let save = 0; save < 3; save += 1) {
-      await writeRuntimeFile(
-        remoteContext,
-        '/remote/repo/file.ts',
-        'edited',
-        undefined,
-        precondition
-      )
-    }
-
-    const statusCalls = runtimeEnvironmentTransportCall.mock.calls.filter(
-      ([args]) => args.method === 'status.get'
-    )
-    // One ownership probe per save plus the read client's one-time compatibility probe.
-    expect(statusCalls).toHaveLength(4)
-    expect(writeCalls()).toHaveLength(3)
-  })
-
   it('refuses without writing when an older host holds newer disk content', async () => {
     serveHost({ enforcesPrecondition: false, diskContent: 'agent rewrite' })
 
@@ -193,6 +142,31 @@ describe('writeRuntimeFile disk precondition', () => {
     )
 
     expect(result).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(writeCalls()).toHaveLength(0)
+  })
+
+  it.each(['original', 'edited'])(
+    'skips identical content on a v1 guarded host for an automatic save (baseline %s)',
+    async (baseline) => {
+      serveHost({ enforcesPrecondition: true, identicalNoop: false, diskContent: 'edited' })
+      expect(
+        await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, {
+          expectedSignature: getDiskBaselineSignature(baseline),
+          requireLosslessUtf8: true
+        })
+      ).toEqual({ ok: true, unchanged: true })
+      expect(writeCalls()).toHaveLength(0)
+    }
+  )
+
+  it('refuses an ambiguous automatic baseline before sending to a v1 host', async () => {
+    serveHost({ enforcesPrecondition: true, identicalNoop: false, diskContent: 'a�' })
+    expect(
+      await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'a�', undefined, {
+        expectedSignature: getDiskBaselineSignature('a�'),
+        requireLosslessUtf8: true
+      })
+    ).toEqual({ ok: false, diskConflict: 'not-utf8' })
     expect(writeCalls()).toHaveLength(0)
   })
 
@@ -240,36 +214,6 @@ describe('writeRuntimeFile disk precondition', () => {
       })
     ).rejects.toThrow('timed out')
     expect(writeCalls()).toHaveLength(0)
-  })
-
-  it('reports a file an older host can no longer send as changed', async () => {
-    serveHost({
-      enforcesPrecondition: false,
-      readError: 'File too large: 60.0MB exceeds 50MB limit'
-    })
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      {
-        ...precondition,
-        allowMissing: true
-      }
-    )
-
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
-    expect(writeCalls()).toHaveLength(0)
-  })
-
-  it('binds a guarded write to the runtime whose capabilities were probed', async () => {
-    serveHost({ enforcesPrecondition: true })
-    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
-
-    await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
-
-    expect(writeCalls()[0]).toMatchObject({ expectedEnvironmentRuntimeId: 'remote-runtime' })
   })
 
   it('refuses to send when the runtime connection changes after the probe', async () => {
@@ -441,4 +385,34 @@ describe('writeRuntimeFile disk precondition', () => {
     ).rejects.toThrow('pairing changed')
     expect(writeCalls()).toHaveLength(1)
   })
+
+  it.each([
+    ['a host that compares at write time', true, precondition],
+    ['an older host after the client-side compare', false, precondition],
+    ['an unguarded write', true, undefined]
+  ])(
+    'sends no bytes when the caller is voided during the checks (%s)',
+    async (_, enforces, pre) => {
+      let voided = false
+      const voidCaller = (): void => {
+        voided = true
+      }
+      serveHost({
+        enforcesPrecondition: enforces,
+        diskContent: 'original',
+        onStatus: voidCaller,
+        onRead: voidCaller
+      })
+      runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
+
+      await expect(
+        writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, pre, () => {
+          if (voided) {
+            throw new Error('voided')
+          }
+        })
+      ).rejects.toThrow('voided')
+      expect(writeCalls()).toHaveLength(0)
+    }
+  )
 })

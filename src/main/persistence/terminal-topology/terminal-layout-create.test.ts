@@ -137,7 +137,7 @@ describe('Store.applyLayoutCommand: a window’s terminal tab create', () => {
   it('keeps records the create did not touch exactly as stored', async () => {
     const { store } = await openStore((window) => {
       withOneTab(window)
-      // Leftovers a full load-and-save rewrite would drop or renumber.
+      // Verify record patches preserve residue that full load/save normalization would drop.
       window.session.terminalPtyIncarnationsByPaneKey = { [`${TAB}:${LEAF}`]: 'incarnation-1' }
       window.session.tabsByWorktree[WORKTREE]![0]!.sortOrder = 7
     })
@@ -182,5 +182,46 @@ describe('Store.applyLayoutCommand: a window’s terminal tab create', () => {
       { type: 'leaf', leafId: NEW_LEAF }
     )
     expect(store.getWorkspaceSession()).toEqual(local)
+  })
+})
+
+describe('Store.applyLayoutCommand: a workspace’s default tabs', () => {
+  const defaults: CommandOf<'applyDefaultTabs'> = {
+    type: 'applyDefaultTabs',
+    workspace: FIXTURE_FOLDER_WORKTREE_ID,
+    tabs: [
+      { tabId: NEW_TAB, leafId: NEW_LEAF, title: 'Server' },
+      { tabId: 'tab-new-2', leafId: '33333333-3333-4333-8333-333333333333', color: 'blue' }
+    ]
+  }
+
+  it('writes every tab under the window’s ids with the mark, durably, in one command', async () => {
+    const { store, directory } = await openStore(withOneTab)
+
+    const reply = await store.applyLayoutCommand(defaults)
+
+    expect(reply.ok && reply.result.createdTabs?.map((tab) => tab.tabId)).toEqual([
+      NEW_TAB,
+      'tab-new-2'
+    ])
+    const session = (await reopenTopologyStore(store, directory)).getWorkspaceSession()
+    expect(session.tabsByWorktree[FIXTURE_FOLDER_WORKTREE_ID]?.map((tab) => tab.id)).toEqual([
+      NEW_TAB,
+      'tab-new-2'
+    ])
+    expect(session.defaultTerminalTabsAppliedByWorktreeId?.[FIXTURE_FOLDER_WORKTREE_ID]).toBe(true)
+  })
+
+  it('refuses the whole command when another tab holds one of its ids, and writes nothing', async () => {
+    const { store } = await openStore(withOneTab)
+    const before = store.getWorkspaceSession()
+
+    const reply = await store.applyLayoutCommand({
+      ...defaults,
+      tabs: [defaults.tabs[0]!, { ...defaults.tabs[1]!, tabId: TAB }]
+    })
+
+    expect(reply).toEqual({ ok: false, code: 'tab_exists' })
+    expect(store.getWorkspaceSession()).toBe(before)
   })
 })

@@ -3,6 +3,8 @@ import { Loader2, Server, ServerOff } from 'lucide-react'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { Button } from '@/components/ui/button'
 import { SshHostNodeMirrorAction } from '@/components/settings/SshHostNodeMirrorAction'
+import { SshHostMoveAnywayButton } from '@/components/settings/SshHostMoveAnywayAction'
+import { OpenPlainSshTerminalButton } from '@/components/plain-ssh-terminal/OpenPlainSshTerminalButton'
 import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -25,17 +27,12 @@ type TerminalSshReconnectOverlayProps = {
   targetId: string
   targetLabel: string
   status: SshConnectionStatus
-  // The failure detail behind the status. Shown beneath the canned sentence rather than instead of
-  // it, because the sentence says what to do and this says what happened — a host key rejection
-  // names the remedy here and nowhere else in the terminal.
+  // Keep failure detail beneath the action sentence because it can carry the terminal’s only host-key remedy.
   error?: string | null
-  // The SSH target was removed entirely — reconnect is impossible, so offer to
-  // remove the workspace instead of a Connect button that can only fail.
+  // Removed targets cannot reconnect; offer workspace removal instead.
   targetRemoved?: boolean
   worktreeId?: string
-  // Set when the SSH target belongs to a remote Orca server (runtime
-  // environment): Connect and the failed-connect resync then route to that
-  // environment's runtime RPC and bucket instead of the local ssh.* API.
+  // Route server-owned targets and failed-connect resync through that environment’s RPC/state bucket.
   sshOwnerEnvironmentId?: string | null
 }
 
@@ -89,11 +86,9 @@ export function TerminalSshReconnectOverlay({
   const managedServer = useAppStore(
     (store) => store.sshConnectionStates.get(targetId)?.managedServer
   )
-  // Why: shared registry, not local state — the sidebar card control can dial the same
-  // target, and the store status lags a click by one IPC hop.
+  // Share in-flight state with sidebar controls because store status trails clicks by one IPC hop.
   const connecting = useSshConnectInFlight(targetId)
   const isConnecting = connecting || isConnectingSshStatus(status)
-  // Why: a removed target can never reconnect, so never offer Connect for it.
   const showConnect = !targetRemoved && canConnectSshStatus(status)
   const executionHostId = sshOwnerEnvironmentId
     ? toRuntimeExecutionHostId(sshOwnerEnvironmentId)
@@ -105,22 +100,18 @@ export function TerminalSshReconnectOverlay({
     }
     try {
       if (sshOwnerEnvironmentId) {
-        // Bucket state is written inside the helper, mirroring the local path.
         await trackSshConnect(
           targetId,
           connectRuntimeEnvironmentSshTarget(sshOwnerEnvironmentId, targetId)
         )
       } else {
-        // Why: track the connect request, not this bounded wait — the backend is still
-        // dialing after the UI timeout fires, so releasing here would let the next click
-        // raise a second credential prompt.
+        // Track the backend request beyond UI timeout or another click could open a duplicate credential prompt.
         const connectState = await withUiConnectTimeout(
           trackSshConnect(targetId, window.api.ssh.connect({ targetId })),
           SSH_RECONNECT_UI_TIMEOUT_MS
         )
         if (connectState) {
-          // Why: ssh.connect can resolve before the global state-change IPC lands;
-          // the waiting deferred PTY reattach path keys off this renderer store.
+          // Publish before delayed global IPC so waiting deferred PTYs can reattach.
           setSshConnectionState(targetId, connectState)
         }
       }
@@ -134,11 +125,7 @@ export function TerminalSshReconnectOverlay({
         ),
         sshOwnerEnvironmentId
       )
-      // Why: a failed connect usually means the renderer's target metadata is
-      // stale (target removed, or re-added under a new id). Resync it so the
-      // overlay converges to the ghost/re-adopted state instead of offering
-      // the same failing Connect forever (STA-1468). Apply the target list
-      // first — a removed-labels failure must not discard it.
+      // Resync stale target metadata after failed connect; apply targets before optional removed-label metadata so removal can still converge.
       if (sshOwnerEnvironmentId) {
         void resyncRuntimeEnvironmentSshTargets(sshOwnerEnvironmentId).catch(() => {})
       } else {
@@ -196,17 +183,31 @@ export function TerminalSshReconnectOverlay({
                 )
               : messageForStatus(status, targetLabel)}
           </div>
-          {/* Why not truncated: a host key failure ends in `ssh-keygen -R <host>`, and a removed
-              target already explains itself above. */}
+          {/* Keep the full host-key remedy visible; removed targets already have their own explanation. */}
           {!targetRemoved && error ? (
             <div className="mt-1 text-xs leading-5 text-red-400 [overflow-wrap:anywhere]">
               {error}
             </div>
           ) : null}
           {!targetRemoved ? (
-            <div className="mt-2 empty:hidden">
+            <div className="mt-2 flex flex-wrap gap-2 empty:hidden">
               <SshHostNodeMirrorAction
                 targetId={targetId}
+                status={managedServer}
+                ownerEnvironmentId={sshOwnerEnvironmentId}
+              />
+              {/* Why local only: the dialog drives this desktop's own move, not a server's. */}
+              {sshOwnerEnvironmentId ? null : (
+                <SshHostMoveAnywayButton
+                  target={{ id: targetId, label: targetLabel }}
+                  status={managedServer}
+                  // A connect in flight may clear the refusal; a click would start a second one.
+                  disabled={isConnecting}
+                />
+              )}
+              <OpenPlainSshTerminalButton
+                targetId={targetId}
+                targetLabel={targetLabel}
                 status={managedServer}
                 ownerEnvironmentId={sshOwnerEnvironmentId}
               />

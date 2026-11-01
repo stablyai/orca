@@ -15,7 +15,7 @@ import { _resetWorkingDirectoryValidationStateForTest } from './working-director
 
 let tempDir: string
 
-/** UNC probes now start after a lane acquire, so let that microtask land. */
+/** Let the UNC lane-acquire microtask run. */
 const flushLaneAcquire = async (): Promise<void> => {
   await Promise.resolve()
   await Promise.resolve()
@@ -64,8 +64,7 @@ describe('validateWorkingDirectoryAsync', () => {
   })
 
   describe('cancellation', () => {
-    // Unique per test: the dedupe map is module-level, and a never-settling
-    // probe would otherwise leak into later cases.
+    // Unsettled probes persist in the module-level dedupe map; use a distinct path per test.
     const deadShare = (name: string): string => `\\\\wsl.localhost\\Ubuntu\\dead-${name}`
 
     beforeEach(() => {
@@ -77,7 +76,7 @@ describe('validateWorkingDirectoryAsync', () => {
     })
 
     it('lets an aborted caller give up on a probe that never answers', async () => {
-      // fs.stat takes no signal, so the caller leaves; the probe keeps running.
+      // fs.stat cannot abort; only its caller stops waiting.
       wslUncDirectoryExistsAsyncMock.mockReturnValue(new Promise<boolean>(() => {}))
       const abort = new AbortController()
 
@@ -121,9 +120,7 @@ describe('validateWorkingDirectoryAsync', () => {
         wslUncDirectoryExistsAsyncMock.mockReturnValue(new Promise<boolean>(() => {}))
         const hung = deadShare('still-hung')
 
-        // `fs.stat` is uninterruptible, so retiring the entry on a timer would
-        // free no libuv thread — it would only let each retry pin another, and
-        // the default pool of 4 is exhausted after a few rounds.
+        // Expiring an uninterruptible stat would let each retry pin another libuv thread.
         for (let retry = 0; retry < 4; retry += 1) {
           void validateWorkingDirectoryAsync(hung).catch(() => {})
           await vi.advanceTimersByTimeAsync(60_000)
@@ -155,7 +152,7 @@ describe('validateWorkingDirectoryAsync', () => {
     })
 
     it('caps concurrent probes against one unreachable distro', async () => {
-      // Four dead paths would otherwise hold all four libuv fs threads.
+      // Four dead paths could occupy the default libuv fs pool.
       let inFlight = 0
       let peak = 0
       wslUncDirectoryExistsAsyncMock.mockImplementation(
@@ -184,7 +181,6 @@ describe('validateWorkingDirectoryAsync', () => {
         )
       }
 
-      // A local-disk path must not queue behind a dead server.
       await expect(validateWorkingDirectoryAsync(tempDir)).resolves.toBeUndefined()
     })
 
@@ -265,7 +261,7 @@ describe('validateWorkingDirectoryAsync', () => {
     })
 
     it('falls back to the filesystem when the distro probe is inconclusive', async () => {
-      // An inconclusive guest probe is not proof that the directory is missing.
+      // An inconclusive distro probe must fall back to filesystem validation.
       wslUncDirectoryExistsAsyncMock.mockResolvedValue(null)
 
       await expect(validateWorkingDirectoryAsync(wslPath)).rejects.toThrow(/does not exist/)

@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react'
+import React from 'react'
 import { translate } from '@/i18n/i18n'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AutomationEditorDialog } from './AutomationEditorDialog'
 import { AutomationsDetailPane } from './AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
@@ -36,15 +37,7 @@ export function AutomationsPageSurface({
     externalActions,
     openRunWorkspace
   } = controller
-  const {
-    projectHostSetups,
-    repoMap,
-    worktreeMap,
-    settings,
-    repoForRow,
-    worktreeForRow,
-    setPendingAutomationRunNavigation
-  } = store
+  const { projectHostSetups, repoMap, settings, setPendingAutomationRunNavigation } = store
   const {
     createOpen,
     editingAutomationId,
@@ -83,18 +76,12 @@ export function AutomationsPageSurface({
   } = local
   const { hostCatalog, hasListItems, selected, selectedRow, selectedExternal } = list
   const selectedAutomationRunPage = setup.selectedAutomationRunPage
-  const selectedRunWorktreeMap = useMemo(() => {
-    if (!selectedRow) {
-      return worktreeMap
-    }
-    const repo = repoForRow(selectedRow)
-    return new Map(
-      setup.selectedRuns.flatMap((run) => {
-        const worktree = worktreeForRow(selectedRow, repo, run.workspaceId)
-        return worktree ? [[worktree.id, worktree] as const] : []
-      })
-    )
-  }, [repoForRow, selectedRow, setup.selectedRuns, worktreeForRow, worktreeMap])
+  const selectedRunWorktreeMap = new Map(
+    setup.selectedRuns.flatMap((run) => {
+      const worktree = list.runTargetFor(run).worktree
+      return worktree ? [[run.id, worktree] as const] : []
+    })
+  )
   const runSelectedRowAction = (action: (row: AutomationListRow) => void): void => {
     if (selectedRow) {
       action(selectedRow)
@@ -116,18 +103,21 @@ export function AutomationsPageSurface({
     setPageView('run')
   }
   const showAutomationsList = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('automations')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(false)
     setActivePaneTab('overview')
   }
   const showRunsDashboard = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('runs')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(false)
     setActivePaneTab('overview')
   }
   const showAutomationDetails = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('automations')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(true)
@@ -228,6 +218,17 @@ export function AutomationsPageSurface({
           setPendingAutomationRunNavigation={setPendingAutomationRunNavigation}
           setIsDetailOpen={setIsDetailOpen}
         />
+      ) : pageView === 'run' && store.pendingAutomationRunNavigation?.runId ? (
+        <div
+          role="status"
+          className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground"
+        >
+          <LoadingSpinner className="size-4" />
+          {translate(
+            'auto.components.automations.AutomationRunsDashboard.loading',
+            'Loading runs…'
+          )}
+        </div>
       ) : pageView === 'run' && selectedAutomationRunPage ? (
         <AutomationRunDetailsPage
           automation={selected}

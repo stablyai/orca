@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { buildPosixStdoutFence } from '../../shared/posix-stdout-fence'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
@@ -11,8 +12,28 @@ import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-o
 
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 
+/** Runs a bash check in the distro, off the main thread and without the user's rc files; returns its fenced stdout. */
+export type ValidateWslPath = (distro: string, script: string) => Promise<string>
+
+const validateWslPathInDistro: ValidateWslPath = async (distro, script) => {
+  // Fenced although no rc file runs here, so a stray line can never be read as the path.
+  const fence = buildPosixStdoutFence(script, 'WSL')
+  const result = await runWslProcess({
+    distro,
+    loginPath: 'none',
+    script: fence.command,
+    shell: 'bash',
+    timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
+  })
+  const payload = fence.readStdout(result.stdout)
+  if (result.code !== 0 || result.timedOut || payload === null) {
+    throw new Error(`The managed Codex home check in WSL ${distro} failed.`)
+  }
+  return payload
+}
+
 export class CodexManagedHomePath {
-  constructor(private readonly validateWslPath: (distro: string, script: string) => string) {}
+  constructor(private readonly validateWslPath: ValidateWslPath = validateWslPathInDistro) {}
 
   getRoot(): string {
     const root = join(getAppEnvironment().getPath('userData'), 'codex-accounts')
@@ -37,7 +58,7 @@ export class CodexManagedHomePath {
     }
 
     try {
-      return this.assert(account.managedHomePath, account.id)
+      return await this.assert(account.managedHomePath, account.id)
     } catch (error) {
       if (!this.isMissingHomeError(error)) {
         throw error
@@ -46,7 +67,8 @@ export class CodexManagedHomePath {
     }
   }
 
-  assert(candidatePath: string, expectedAccountId?: string): string {
+  /** Host and mounted homes are checked synchronously; a Windows WSL home's check runs in its distro. */
+  assert(candidatePath: string, expectedAccountId?: string): string | Promise<string> {
     const wslInfo = parseWslUncPath(candidatePath)
     if (!wslInfo) {
       return assertOwnedHostCodexManagedHomePath({
@@ -74,12 +96,15 @@ export class CodexManagedHomePath {
     return this.assertMountedWslPath(candidatePath, wslInfo.linuxPath, expectedAccountId)
   }
 
-  private recreateExpectedHostHome(account: CodexManagedAccount, originalError: unknown): string {
+  private recreateExpectedHostHome(
+    account: CodexManagedAccount,
+    originalError: unknown
+  ): string | Promise<string> {
     const expectedPath = join(this.getRoot(), account.id, 'home')
     if (!this.pathsEqual(account.managedHomePath, expectedPath)) {
       throw originalError
     }
-    // Why: re-auth may recreate a lost empty home, but only at the exact Orca-owned path persisted for this account.
+    // Recreate missing homes only at this account's exact persisted Orca path.
     mkdirSync(expectedPath, { recursive: true })
     writeFileSync(join(expectedPath, '.orca-managed-home'), `${account.id}\n`, 'utf-8')
     return this.assert(expectedPath, account.id)
@@ -113,8 +138,7 @@ export class CodexManagedHomePath {
       shell: 'bash',
       timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
     })
-    // Why: 41/42 mean the path is not this account's home; re-auth must refuse
-    // rather than write credentials into someone else's directory.
+    // Exit 41/42 refuses writing credentials into an unmarked or differently owned home.
     if (result.code !== 0 || result.timedOut) {
       throw new Error(
         `Could not prepare the managed Codex home in WSL ${wslInfo.distro} for re-authentication.`
@@ -122,31 +146,33 @@ export class CodexManagedHomePath {
     }
   }
 
-  private assertWindowsWslPath(
+  private async assertWindowsWslPath(
     wslInfo: { distro: string; linuxPath: string },
     expectedAccountId?: string
-  ): string {
+  ): Promise<string> {
     try {
-      const canonicalLinuxPath = this.validateWslPath(
-        wslInfo.distro,
-        [
-          'set -euo pipefail',
-          `candidate=${quotePosixShell(wslInfo.linuxPath)}`,
-          'managed_root="${HOME%/}/.local/share/orca/codex-accounts"',
-          'candidate_real=$(readlink -f -- "$candidate")',
-          'managed_root_real=$(readlink -f -- "$managed_root")',
-          'test -f "$candidate_real/.orca-managed-home"',
-          ...(expectedAccountId === undefined
-            ? [
-                'case "$candidate_real" in "$managed_root_real"/*/home) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
-              ]
-            : [
-                `expected_marker=${quotePosixShell(expectedAccountId)}`,
-                'test "$candidate_real" = "$managed_root_real/$expected_marker/home"',
-                'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"',
-                'printf "%s\\n" "$candidate_real"'
-              ])
-        ].join('\n')
+      const canonicalLinuxPath = (
+        await this.validateWslPath(
+          wslInfo.distro,
+          [
+            'set -euo pipefail',
+            `candidate=${quotePosixShell(wslInfo.linuxPath)}`,
+            'managed_root="${HOME%/}/.local/share/orca/codex-accounts"',
+            'candidate_real=$(readlink -f -- "$candidate")',
+            'managed_root_real=$(readlink -f -- "$managed_root")',
+            'test -f "$candidate_real/.orca-managed-home"',
+            ...(expectedAccountId === undefined
+              ? [
+                  'case "$candidate_real" in "$managed_root_real"/*/home) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
+                ]
+              : [
+                  `expected_marker=${quotePosixShell(expectedAccountId)}`,
+                  'test "$candidate_real" = "$managed_root_real/$expected_marker/home"',
+                  'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"',
+                  'printf "%s\\n" "$candidate_real"'
+                ])
+          ].join('\n')
+        )
       ).trim()
       if (!canonicalLinuxPath) {
         throw new Error('Managed Codex home directory does not exist on disk.')

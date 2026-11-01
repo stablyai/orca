@@ -1,4 +1,6 @@
 import type { TreeNode } from './file-explorer-types'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
 
 export type FileExplorerSelectionState = {
   activePath: string | null
@@ -170,7 +172,12 @@ export function updateFileExplorerSelectionPaths(
 
 export function formatFileExplorerPathsForClipboard(
   nodes: readonly TreeNode[],
-  pathKind: 'absolute' | 'relative'
+  pathKind: 'absolute' | 'relative',
+  owner: LocalPathOpenOwner
 ): string {
-  return nodes.map((node) => (pathKind === 'absolute' ? node.path : node.relativePath)).join('\n')
+  return nodes
+    .map((node) =>
+      pathKind === 'absolute' ? formatClipboardFilePath(node.path, owner) : node.relativePath
+    )
+    .join('\n')
 }

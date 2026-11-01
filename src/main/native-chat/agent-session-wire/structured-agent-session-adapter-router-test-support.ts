@@ -8,8 +8,6 @@ import { StructuredAgentRegistry } from './structured-agent-registry'
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registry reads only the optional methods a declaration needs; this double has none, so its agents declare none.
 const NO_METHODS = {} as StructuredAgentSessionAdapter
 
-/** This build's agent as a host over a bare adapter double registers it: who it is (so its chats
- *  start), and nothing it can do. */
 function declaringNothing(definition: StructuredAgentDefinition): StructuredAgentDefinition {
   return {
     ...definition,
@@ -30,8 +28,6 @@ function declaringNothing(definition: StructuredAgentDefinition): StructuredAgen
   }
 }
 
-/** These agents declaring no capability and no resting options: what a host over a bare adapter
- *  double declares. */
 export function structuredAgentsDeclaringNothing(
   definitions: readonly StructuredAgentDefinition[]
 ): StructuredAgentRegistry {
@@ -48,8 +44,7 @@ export const NO_STRUCTURED_AGENTS = structuredAgentsDeclaringNothing([
   CODEX_STRUCTURED_AGENT
 ])
 
-/** This build's two agents over doubles. Each declares only what its double implements, so a
- *  double need not carry every method its real adapter has. */
+/** Declare only each double’s implemented capabilities. */
 export function claudeAndCodexAgents(
   adapters:
     | { claude: StructuredAgentSessionAdapter; codex: StructuredAgentSessionAdapter }
@@ -62,7 +57,7 @@ export function claudeAndCodexAgents(
   ])
 }
 
-/** This build's two agents exactly as declared, for a host whose double gains its methods per test. */
+/** Keep real declarations for tests that add adapter methods per case. */
 export function claudeAndCodexDeclared(): StructuredAgentRegistry {
   const unused = (): never => {
     throw new Error('a registry never calls its adapters')
@@ -76,7 +71,6 @@ export function claudeAndCodexDeclared(): StructuredAgentRegistry {
   })
 }
 
-/** A router over this build's two agents. */
 export function claudeAndCodexRouter(
   adapters: { claude: StructuredAgentSessionAdapter; codex: StructuredAgentSessionAdapter },
   closeAdapters: () => Promise<void>
@@ -95,7 +89,9 @@ function implementedBy(
       ...declared,
       compact: declared.compact && Boolean(adapter.compact),
       threadGoal: declared.threadGoal && Boolean(adapter.changeThreadGoal),
-      rewind: declared.rewind && Boolean(adapter.rewind && adapter.recoverRewind)
+      rewind:
+        declared.rewind &&
+        Boolean(adapter.forkForRewind || (adapter.rewind && adapter.recoverRewind))
     }
   }
 }

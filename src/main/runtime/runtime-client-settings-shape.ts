@@ -13,6 +13,8 @@ export type RuntimeClientSettings = Pick<
   | 'agentDefaultArgs'
   | 'agentDefaultEnv'
   | 'agentStatusHooksEnabled'
+  | 'codexShareHistoryAcrossAccounts'
+  | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
   | 'defaultTaskSource'
   | 'defaultTaskViewPreset'
@@ -21,7 +23,6 @@ export type RuntimeClientSettings = Pick<
   | 'defaultLinearTeamSelection'
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
-  | 'experimentalNativeChat'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
@@ -34,11 +35,11 @@ export type RuntimeClientSettings = Pick<
   | 'machineName'
   | 'nativeChatPermissionMode'
   | 'nativeChatAutoContinueAfterUsageLimit'
-  | 'agentNativeChatPermissionModes'
+  | 'nativeChatQueueFollowUps'
+  | 'sourceControlGroupOrder'
+  | 'sourceControlCompareAgainstUpstream'
+  | 'diffShowWhitespace'
 > & {
-  /** Older clients still read these; neither is persisted or accepted as an update. */
-  openAgentTabsInChatByDefault?: boolean
-  experimentalStructuredNativeChat?: boolean
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
 }
@@ -54,6 +55,8 @@ export type RuntimeHostDisplayLabelOverrides = Partial<
 export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
+  | 'claudeSubagentNavigationEnabled'
+  | 'experimentalConnectors'
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'
   | 'agentDefaultArgs'

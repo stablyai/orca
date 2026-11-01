@@ -30,21 +30,15 @@ import {
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../../../../shared/sidebar-list/host-filtering'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectWorkspaceBoardStatuses } from '@/store/host-workspace-status-columns'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
 const EMPTY_IMPORTED_BY_REPO: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map()
 const EMPTY_INBOX_BY_REPO: ReadonlyMap<string, NewExternalWorktreesInboxCandidate> = new Map()
 const EMPTY_PENDING_CREATIONS: readonly PendingCreationRef[] = []
 
-/**
- * Orders already-filtered worktrees the way the sidebar would render them, for
- * Cmd+1–9 numbering while WorktreeList is unmounted (#9497).
- *
- * Why replay the pipeline: a flat list drops grouping, pinning, main-worktree
- * hoisting and collapse elision, so the shortcut numbered the wrong card.
- * Why worktrees are passed in: keeps the dependency on visible-worktrees.ts
- * one-way, since test suites mock that module's path.
- */
+/** Replay grouping, pins and collapse for unmounted-list shortcut order without reversing the visible-worktrees dependency. */
 export function computeRenderedSidebarWorktrees(
   state: AppState,
   visibleWorktrees: readonly Worktree[]
@@ -55,7 +49,6 @@ export function computeRenderedSidebarWorktrees(
   )
 }
 
-/** The sidebar's row model, replayed from the store without mounting WorktreeList. */
 export function computeRenderedSidebarRows(
   state: AppState,
   visibleWorktrees: readonly Worktree[]
@@ -81,7 +74,7 @@ export function computeRenderedSidebarRows(
     repoMap,
     prGroupOf: createSidebarPRGroupReader(repoMap, prCache),
     repoOrder: getLogicalRepoOrderRankById(state.repos.map((repo) => repo.id)),
-    workspaceStatuses: state.workspaceStatuses,
+    workspaceStatuses: selectWorkspaceBoardStatuses(state),
     projectOrderBy: state.projectOrderBy,
     lineageById: state.worktreeLineageById,
     worktreeMap: getWorktreeMapFromState(state),
@@ -98,7 +91,7 @@ export function computeRenderedSidebarRows(
     pendingCreations: EMPTY_PENDING_CREATIONS,
     projectGrouping: { projects: projection.projects, projectHostSetups: projection.setups },
     folderWorkspaces: filterFolderWorkspacesForVisibleHosts(
-      state.folderWorkspaces,
+      selectFolderWorkspaces(state),
       projectGroups,
       visibleHostIdSet,
       defaultHostId
@@ -109,8 +102,7 @@ export function computeRenderedSidebarRows(
     filterRepoIds: state.filterRepoIds
   }).render(state.collapsedGroups)
 
-  // Why lazy: with no host filter, addHostSectionRows is a pass-through, so skip building the whole host registry on a keystroke.
-  // Deliberately a superset of its internal guards — on <=1 host it still no-ops, wasting only the registry build.
+  // Build the host registry only when sections may affect order; zero/one-host cases still safely no-op.
   const needsHostSections =
     state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE || state.visibleWorkspaceHostIds != null
   return needsHostSections

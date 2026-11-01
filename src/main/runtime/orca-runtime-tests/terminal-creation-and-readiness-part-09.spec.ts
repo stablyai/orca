@@ -340,14 +340,13 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     runtime.onPtyData('pty-1', 'hel', 100)
 
-    // Non-cursor reads include the partial line for UI display
     const firstRead = await runtime.readTerminal(terminal.handle)
     expect(firstRead.tail).toEqual(['hel'])
     expect(firstRead.nextCursor).toBe('0')
 
     runtime.onPtyData('pty-1', 'lo', 101)
 
-    // Cursor reads exclude partial lines to prevent duplication (partial now, then completed line next read).
+    // Exclude partial lines from cursor reads or the completed line repeats them.
     const secondRead = await runtime.readTerminal(terminal.handle, {
       cursor: Number(firstRead.nextCursor)
     })
@@ -452,7 +451,7 @@ describe('OrcaRuntimeService', () => {
     expect(futureCursorRead.limited).toBe(false)
   })
 
-  // Why: PR #2553 keeps retained output cursor-reachable while previews stay bounded (not full-transcript payloads).
+  // Bound preview payloads while keeping all retained output pageable (#2553).
   it('keeps terminal read payloads bounded while retained output remains pageable', async () => {
     const runtime = new OrcaRuntimeService(store)
     syncSinglePty(runtime)
@@ -502,7 +501,7 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     const lines = Array.from({ length: 120 }, (_, index) => `line-${index}-${'x'.repeat(400)}`)
     runtime.onPtyData('pty-1', `${lines.join('\n')}\n`, 100)
-    // Why: xterm-headless uses Array.shift while draining writes; this test guards read-preview trimming, not emulator parsing.
+    // Settle xterm writes before spying on Array.shift to isolate preview trimming.
     await runtime.serializeMainTerminalBuffer('pty-1')
 
     const originalShift = Array.prototype.shift

@@ -118,7 +118,7 @@ function sortPullRequestsForBranch(
   const leftStatus = left.status?.trim().toLowerCase()
   const rightStatus = right.status?.trim().toLowerCase()
   const abandonedOrder = Number(leftStatus === 'abandoned') - Number(rightStatus === 'abandoned')
-  // Why: abandoned PRs can have newer close dates, but should not hide a usable branch PR.
+  // Newer abandoned PRs must not hide usable branch reviews.
   if (abandonedOrder !== 0) {
     return abandonedOrder
   }
@@ -232,8 +232,6 @@ export async function getAzureDevOpsPullRequestForBranch(
     )
     const raw = (list?.value ?? []).sort(sortPullRequestsForBranch)[0]
     if (raw) {
-      // Why (#9171): discard a non-open implicit branch match on the repo
-      // default branch and fall through to the linked-number fallback below.
       const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
         state: mapAzureDevOpsPullRequestState(raw),
         reviewNumber: raw.pullRequestId ?? null,
@@ -263,11 +261,7 @@ export async function getAzureDevOpsPullRequestForBranch(
   return raw ? normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw) : null
 }
 
-/**
- * Existing-review lookup that surfaces transport/auth failures instead of
- * collapsing them to null, so a failed lookup becomes
- * `reviewLookupOutcome: 'unavailable'` rather than a false "No pull request found".
- */
+/** Preserve lookup failures so creation preflight can report review state as unavailable. */
 export function getAzureDevOpsPullRequestForBranchOrThrow(
   repoPath: string,
   branch: string,

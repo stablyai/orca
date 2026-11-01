@@ -2,15 +2,18 @@ import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PickerModal } from './PickerModal'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',
+  TextInput: 'TextInput',
   View: 'View'
 }))
 
-vi.mock('lucide-react-native', () => ({ Check: 'Check' }))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', Search: 'Search', X: 'X' }))
 
 vi.mock('./BottomDrawer', async () => {
   const React = await import('react')
@@ -54,7 +57,7 @@ describe('PickerModal accessibility', () => {
       )
     })
 
-    const rows = renderer!.root.findAllByType('Pressable')
+    const rows = findAllByHostType(renderer!.root, 'Pressable')
     expect(rows.map((row) => row.props.accessible)).toEqual([true, true])
     expect(rows.map((row) => row.props.accessibilityRole)).toEqual(['button', 'button'])
     expect(rows.map((row) => row.props.accessibilityState)).toEqual([

@@ -1,8 +1,7 @@
-import type * as NodeFs from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { appendFileSync } from 'node:fs'
 import {
   chmod,
-  lstat,
   mkdir,
   mkdtemp,
   readdir,
@@ -10,7 +9,6 @@ import {
   rm,
   stat,
   symlink,
-  utimes,
   writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -24,18 +22,16 @@ const fsFaults: {
   writeError: NodeJS.ErrnoException | null
 } = vi.hoisted(() => ({ beforeCopyWrite: null, writeError: null }))
 
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFs>()
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
   return {
     ...actual,
-    createWriteStream: (...args: Parameters<typeof actual.createWriteStream>) => {
+    writeFile: (...args: Parameters<typeof actual.writeFile>) => {
       fsFaults.beforeCopyWrite?.()
-      const stream = actual.createWriteStream(...args)
-      const writeError = fsFaults.writeError
-      if (writeError) {
-        stream.once('open', () => stream.destroy(writeError))
+      if (fsFaults.writeError) {
+        return Promise.reject(fsFaults.writeError)
       }
-      return stream
+      return actual.writeFile(...args)
     }
   }
 })
@@ -46,14 +42,8 @@ vi.mock('../ipc/runtime-import-limits', async (importOriginal) => ({
   REMOTE_IMPORT_MAX_TOTAL_BYTES: 16
 }))
 
-import {
-  DRAG_TEMP_COPY_TTL_MS,
-  materializeDragTempPaths,
-  mayNeedDragTempCopy,
-  scheduleDragTempCopySweep,
-  sweepExpiredDragTempCopies,
-  type DragTempCopyEnvironment
-} from './dragged-temp-file-copy'
+import { materializeDragTempPaths, type DragTempCopyEnvironment } from './dragged-temp-file-copy'
+import { mayNeedDragTempCopy } from './drag-temp-path'
 
 const SCREENSHOT_NAME = 'Screenshot 2026-09-28 at 4.03.11 PM.png'
 const canChangePermissions = process.platform !== 'win32' && process.getuid?.() !== 0
@@ -292,30 +282,25 @@ describe('materializeDragTempPaths', () => {
     expect(await copyDirs()).toHaveLength(2)
   })
 
-  it('counts copies retained from earlier drops against the budget', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  it('never refuses a drop for copies earlier drops left behind', async () => {
     const first = await dragTempFile('a.png', '0123456789')
     const second = await dragTempFile('b.png', '0123456789')
-    const third = await dragTempFile('c.png', '012345')
 
     const [firstDrop] = await materializeDragTempPaths([first], env)
     const [secondDrop] = await materializeDragTempPaths([second], env)
-    const [thirdDrop] = await materializeDragTempPaths([third], env)
 
     expect(importedPath(firstDrop)).not.toBe(first)
-    expect(secondDrop).toMatchObject({ status: 'uncopied', reason: 'storage-full' })
-    expect(importedPath(thirdDrop)).not.toBe(third)
+    expect(importedPath(secondDrop)).not.toBe(second)
     expect(await copyDirs()).toHaveLength(2)
   })
 
-  it('rejects a source that changes mid-copy and leaves no copy behind', async () => {
+  it('keeps proven buffered bytes when the source changes after reading', async () => {
     const source = await dragTempFile('shot.png', 'png')
     fsFaults.beforeCopyWrite = () => appendFileSync(source, '-grown')
 
-    expect(await materializeDragTempPaths([source], env)).toEqual([
-      { sourcePath: source, status: 'failed', reason: 'changed' }
-    ])
-    expect(await readdir(env.copyRoot)).toEqual([])
+    const [result] = await materializeDragTempPaths([source], env)
+    expect(await readFile(importedPath(result), 'utf8')).toBe('png')
+    expect(await readFile(source, 'utf8')).toBe('png-grown')
   })
 
   it('reports a full disk as a reason token, logging the errno, and leaves no copy behind', async () => {
@@ -423,54 +408,5 @@ describe('mayNeedDragTempCopy', () => {
     expect(mayNeedDragTempCopy(drag, 'linux')).toBe(false)
     expect(mayNeedDragTempCopy(dirname(drag), 'darwin')).toBe(false)
     expect(mayNeedDragTempCopy(join('/', 'Users', 'me', 'Desktop', 'a.png'), 'darwin')).toBe(false)
-  })
-})
-
-describe('sweepExpiredDragTempCopies', () => {
-  it('removes only expired orca-drop directories', async () => {
-    const source = await dragTempFile('shot.png', 'x')
-    const [oldCopy] = await materializeDragTempPaths([source], env)
-    const [freshCopy] = await materializeDragTempPaths([source], env)
-    const oldDir = dirname(importedPath(oldCopy))
-    const freshDir = dirname(importedPath(freshCopy))
-    const foreign = join(env.copyRoot, 'not-ours')
-    await mkdir(foreign)
-    const nowMs = Date.now()
-    const expired = new Date(nowMs - DRAG_TEMP_COPY_TTL_MS - 1000)
-    await utimes(oldDir, expired, expired)
-    await utimes(foreign, expired, expired)
-
-    await sweepExpiredDragTempCopies(env.copyRoot, nowMs)
-
-    await expect(lstat(oldDir)).rejects.toMatchObject({ code: 'ENOENT' })
-    expect((await lstat(freshDir)).isDirectory()).toBe(true)
-    expect((await lstat(foreign)).isDirectory()).toBe(true)
-  })
-
-  it('does nothing when no copy root exists', async () => {
-    await expect(sweepExpiredDragTempCopies(join(root, 'nope'))).resolves.toBeUndefined()
-  })
-})
-
-describe('scheduleDragTempCopySweep', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('sweeps on macOS shortly after startup and then hourly, scheduling only once', async () => {
-    vi.useFakeTimers()
-    const getCopyRoot = vi.fn(() => join(root, 'nope'))
-
-    scheduleDragTempCopySweep(getCopyRoot, 'linux')
-    expect(vi.getTimerCount()).toBe(0)
-
-    scheduleDragTempCopySweep(getCopyRoot, 'darwin')
-    scheduleDragTempCopySweep(getCopyRoot, 'darwin')
-    expect(vi.getTimerCount()).toBe(2)
-
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(getCopyRoot).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
-    expect(getCopyRoot).toHaveBeenCalledTimes(2)
   })
 })

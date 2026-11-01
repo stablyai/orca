@@ -20,9 +20,7 @@ import {
   type ActivityPortalReadinessStatus
 } from './activity-portal-readiness-oscillation'
 
-// Why: re-applying ready DOM never consumes the readiness flip budget (a 'ready'
-// status resets the latch), so this retry budget is independent of
-// ACTIVITY_PORTAL_READINESS_MAX_FLIPS and must not be derived from it.
+// Ready resets the flip latch, so retries need an independent budget unrelated to ACTIVITY_PORTAL_READINESS_MAX_FLIPS.
 const PORTAL_READY_REAPPLY_ATTEMPTS = 32
 
 const WORKTREE_ID = 'wt-1'
@@ -46,8 +44,7 @@ const PANE_C = thread(OTHER_TAB_ID, LEAF_C)
 
 let root: Root
 
-// Freeze Date (not timers/rAF) so the latch's flip window cannot expire between two drains on a
-// loaded CI machine; the readiness frames are still driven by the controllers below.
+// Freeze Date only so CI load cannot expire the flip window; controllers still drive timers/rAF.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
 })
@@ -127,8 +124,7 @@ async function flushPortalFramesUntil(
   }
 }
 
-// Drain MutationObserver microtasks and the readiness rAF they schedule. Reports whether the
-// drain settled so a caller never reads a transition whose readiness callbacks are still queued.
+// Drain observer microtasks/readiness frames; report settlement before callers inspect transitions.
 async function flushPortalReadiness(
   frames: ReturnType<typeof installAnimationFrameController>
 ): Promise<boolean> {
@@ -423,9 +419,7 @@ describe('Activity portal pane switching', () => {
     await flushPortalFramesUntil(frames, () => statuses.at(-1) === 'unavailable')
     expect(statuses.at(-1)).toBe('unavailable')
 
-    // Feed each DOM state separately and keep going until sibling DOM reports latched
-    // unavailable. A fixed 9-flip budget flakes when CI load drops MutationObserver
-    // deliveries below ACTIVITY_PORTAL_READINESS_MAX_FLIPS transitions.
+    // Feed DOM states until sibling loading latches unavailable; CI may coalesce mutations below the flip limit.
     let sawSiblingLoading = false
     let sawLatchedSibling = false
     for (
@@ -443,9 +437,7 @@ describe('Activity portal pane switching', () => {
       if (mode !== 'sibling') {
         continue
       }
-      // Transition-local evidence: an unlatched subscription answers sibling DOM with 'loading',
-      // so the latch is only proven once a sibling transition that previously emitted 'loading'
-      // stops doing so and leaves 'unavailable' standing.
+      // Prove the latch on a sibling transition that formerly emitted loading, rather than on a missing leaf.
       if (statuses.slice(statusesBefore).includes('loading')) {
         sawSiblingLoading = true
       } else if (sawSiblingLoading && statuses.at(-1) === 'unavailable') {
@@ -455,8 +447,7 @@ describe('Activity portal pane switching', () => {
     expect(sawLatchedSibling).toBe(true)
     expect(statuses.at(-1)).toBe('unavailable')
 
-    // Why: under CI load MutationObserver may miss one replaceChildren; re-apply ready DOM
-    // and keep draining until attach is observed.
+    // CI may coalesce a replacement; reapply ready DOM until attach is observed.
     let sawReady = false
     for (let attempt = 0; attempt < PORTAL_READY_REAPPLY_ATTEMPTS && !sawReady; attempt += 1) {
       await act(async () => {

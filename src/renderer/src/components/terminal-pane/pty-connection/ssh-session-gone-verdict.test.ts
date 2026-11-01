@@ -1,17 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { isSshSessionGoneError } from './pty-connect-limits'
 
-// The only gate the renderer has for "retire this pane's binding and cold-restore the agent into a
-// fresh shell". Anything it accepts that the relay did not disown puts a second `--resume` on a
-// running agent's transcript (docs/reference/ssh-execution-boundary.md).
+// Only host-proven absence authorizes retirement/cold resume; accepting unverifiable errors duplicates live transcripts (docs/reference/ssh-execution-boundary.md).
 describe('the renderer verdict that licenses replacing a pane PTY', () => {
   it('accepts the relay answering that this pane PTY is gone', () => {
     expect(isSshSessionGoneError(new Error('SSH_SESSION_EXPIRED: ssh:conn-1@@pty-1'))).toBe(true)
   })
 
-  // The relay found a LIVE PTY under that id belonging to another pane. It observed nothing about
-  // this pane's process, and main's own gate (`isPtyAlreadyGoneError`) already refuses to respawn
-  // on it — the renderer read the same message as absence and respawned anyway.
+  // Owner mismatch proves another pane’s PTY is live, not this pane’s absence; renderer must agree with main’s isPtyAlreadyGoneError refusal.
   it('refuses an identity mismatch, which names a live PTY owned by another pane', () => {
     expect(
       isSshSessionGoneError(
@@ -28,8 +24,7 @@ describe('the renderer verdict that licenses replacing a pane PTY', () => {
     ).toBe(false)
   })
 
-  // A live PTY whose output delivery needs reopening: main no longer wears the expiry token for it,
-  // and the verdict must stay `unverifiable` even if some future caller reintroduces the wording.
+  // Delivery loss for a live PTY stays unverifiable even if future wording accidentally includes the expiry token.
   it('refuses a source-restore verdict for a PTY the relay just proved alive', () => {
     expect(
       isSshSessionGoneError(

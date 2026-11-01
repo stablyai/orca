@@ -24,10 +24,9 @@ export type BrowserScreencastParams = {
 export type BrowserScreencastStartResult = {
   subscriptionId: string
   ready: Extract<BrowserScreencastResult, { type: 'ready' }>
-  // The frame budget and the page's dialog belong to the shared page, not to one subscriber's handle.
-  session: Omit<BrowserScreencastSession, 'updateFrameBudget' | 'settleDialog'>
-  // Why: callers gate frames until they have emitted `ready`, and the snapshot captured
-  // for a joining subscriber lands inside that window. This replays it once the gate opens.
+  // Shared-page budget ownership must not leak through subscriber handles.
+  session: Omit<BrowserScreencastSession, 'updateFrameBudget'>
+  // Replay the joining snapshot once the caller's pre-ready gate opens.
   flushPendingFrame: () => void
 }
 
@@ -40,8 +39,7 @@ export type ActiveBrowserScreencastSubscriber = {
   budget: BrowserScreencastFrameBudget
   pendingFrame: Uint8Array<ArrayBufferLike> | null
   pendingFrameRetry: ReturnType<typeof setTimeout> | null
-  // Why: identifies the viewer across reconnects, which the RPC connectionId cannot — a new
-  // socket never reuses the old id, so a reconnecting device would stack a second subscription.
+  // Device identity survives reconnects; connection ids cannot replace stale subscriptions.
   pairedDeviceId?: string
   delivery: ScreencastSubscriberDeliveryState
 }

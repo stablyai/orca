@@ -20,9 +20,17 @@ const RESOLUTION = {
   resolvedAt: null
 } as const
 
-// Canonical fixtures are typed: if a shape here stops compiling, the schema
-// audit below is validating the wrong model.
+// Typed fixtures ensure the schema audit validates the canonical model.
 const CANONICAL_BODIES: AgentJournalItemBody[] = [
+  {
+    kind: 'agent-start',
+    dispatchId: 'dispatch',
+    task: 'Complete task',
+    worker: {
+      party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+      name: 'Worker'
+    }
+  },
   {
     kind: 'message',
     role: 'reasoning',
@@ -123,7 +131,7 @@ describe('canonical admission', () => {
     const item: AgentJournalRenderItem = {
       itemId: 'codex:t:turn:0',
       revision: 1,
-      body: CANONICAL_BODIES[0] as AgentJournalItemBody,
+      body: { kind: 'message', role: 'user', blocks: [] },
       sequence: 1,
       observedAt: 1_000,
       recovered: true
@@ -179,8 +187,6 @@ describe('nested corruption is rejected', () => {
     expect(
       isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'x', turnLifecycle: true })
     ).toBe(false)
-    // A KNOWN block type with a broken payload must not slip through as a
-    // "future" block.
     expect(
       isAdmissibleAgentJournalItemBody({
         kind: 'message',
@@ -194,8 +200,6 @@ describe('nested corruption is rejected', () => {
   })
 
   it('rejects a subagent roster whose entries are malformed', () => {
-    // A KNOWN block type stays a known block: it must not fall through to the
-    // forward-tolerant arm just because its payload is wrong.
     expect(
       isAdmissibleAgentJournalItemBody({
         kind: 'message',
@@ -232,13 +236,12 @@ describe('nested corruption is rejected', () => {
     const base = {
       itemId: 'codex:t:turn:0',
       revision: 1,
-      body: CANONICAL_BODIES[0] as AgentJournalItemBody,
+      body: { kind: 'message', role: 'user', blocks: [] },
       sequence: 1,
       observedAt: 1_000
     }
     expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: 'task-1' })).toBe(true)
-    // `''` is PRESENT. Admitting it would hide the row from its own author on
-    // every parent-scoped surface — the defect linkage exists to remove.
+    // An empty id is present and would hide the row from its author on parent-scoped surfaces.
     expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: '' })).toBe(false)
     expect(isAdmissibleAgentJournalRenderItem({ ...base, parentAgentId: '' })).toBe(false)
     expect(isAdmissibleAgentJournalRenderItem({ ...base, providerParentRef: '' })).toBe(false)
@@ -292,9 +295,7 @@ describe('forward tolerance', () => {
   })
 
   it('admits a turn outcome from a later vocabulary but rejects a non-string one', () => {
-    // Open like `state`: a verdict a newer build writes keeps the row readable,
-    // and `readAgentJournalTurnOutcome` is what stops it being acted on. A
-    // non-string stays fatal — the row is structurally wrong, not just newer.
+    // Keep newer string verdicts readable for the outcome reader; nonstrings remain structural damage.
     const turn = { kind: 'turn', turnId: 'turn-1', state: 'completed' }
     expect(isAdmissibleAgentJournalItemBody({ ...turn, outcome: 'partially-refused' })).toBe(true)
     expect(isAdmissibleAgentJournalItemBody({ ...turn, outcome: 7 })).toBe(false)
@@ -411,8 +412,8 @@ describe('optional tool annotations', () => {
     ).toBe(true)
     const padded = AgentJournalItemBodySchema.safeParse({ ...body, callId: ' call-1 ' })
     expect(padded.success).toBe(true)
-    if (padded.success && padded.data.kind === 'tool-call') {
-      expect(padded.data.callId).toBe(' call-1 ')
+    if (padded.success) {
+      expect(padded.data).toMatchObject({ kind: 'tool-call', callId: ' call-1 ' })
     }
   })
   it('admits explicit MCP identity without constraining the raw name', () => {

@@ -1,10 +1,4 @@
-/**
- * Command Code TUI output scrape — that CLI lacks hooks, so working/done
- * agent-status rows are seeded from its rendered status words and idle
- * composer. Shared because main runs this per-PTY under side-effect authority
- * (emitting command-code facts) while the renderer keeps the byte path for
- * remote-runtime PTYs and the kill switch.
- */
+/** Command Code lacks hooks, so scrape rendered status/composer text. Main emits facts under side-effect authority; renderer retains remote-PTY/kill-switch observation. */
 import {
   cleanCommandCodePromptCandidate,
   isCommandCodeIdlePromptCandidate
@@ -13,8 +7,6 @@ import { stripTerminalControl } from './terminal-control-stripping'
 import { escapeRegex } from './string-utils'
 import { ownRetainedString } from './own-retained-string'
 
-export { stripTerminalControl } from './terminal-control-stripping'
-
 type CommandCodeOutputStatusDetector = {
   observe: (data: string) => boolean
 }
@@ -22,8 +14,7 @@ type CommandCodeOutputStatusDetector = {
 const RECENT_TEXT_LIMIT = 300
 const STATUS_SCAN_TEXT_LIMIT = 4096
 const COMMAND_CODE_STATUS_GLYPH_RE_SOURCE = '[·○◇☆✧⌘✻⎿]'
-// Why: Command Code 0.27.3 randomizes its in-flight LLM status from this
-// package-local list, so checking only a few examples misses real active turns.
+// Command Code 0.27.3 randomizes active LLM labels from this list; partial examples miss real turns.
 const COMMAND_CODE_LLM_STATUS_WORDS = [
   'Thinking',
   'Pondering',
@@ -109,7 +100,7 @@ const ACTIVE_LLM_STATUS_RE = new RegExp(
 const ACTIVE_EXECUTION_STATUS_RE = new RegExp(
   `(?:^|[\\r\\n])\\s*(?:${COMMAND_CODE_STATUS_GLYPH_RE_SOURCE}\\s*)?(?:Executing:\\s+\\S|Running\\s*\\()`
 )
-const IDLE_PROMPT_RE = /(?:^|[\r\n])\s*[❯>]\s+Ask your question\.\.\./
+const IDLE_PROMPT_RE = /(?:^|[\r\n])\s*[\u276F>]\s+Ask your question\.\.\./
 const SEMVER_NUMBER_RE_SOURCE = '(?:0|[1-9]\\d*)'
 const SEMVER_PRERELEASE_IDENTIFIER_RE_SOURCE = '(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)'
 const SEMVER_BUILD_IDENTIFIER_RE_SOURCE = '[0-9A-Za-z-]+'
@@ -137,21 +128,14 @@ function isCommandCodeLaunchCommand(command: string | null | undefined): boolean
 }
 
 function rawTextMayContainCommandCodeBanner(rawText: string): boolean {
-  // Why: every terminal pane observes this detector, but only Command Code
-  // panes need the ANSI/control stripping path. Use a broad no-false-negative
-  // letter prefilter so ANSI styling inside the banner words still works.
+  // All panes observe this; a no-false-negative letter prefilter avoids control stripping on unrelated panes, including ANSI-split words.
   return rawText.includes('C') && rawText.includes('o') && rawText.includes('d')
 }
 
-// COMMAND_CODE_BANNER_RE requires a literal '#', and stripTerminalControl only ever removes
-// characters, so raw bytes without one cannot produce a banner match.
+// Control stripping only removes bytes; without raw # the banner regex cannot match.
 const BANNER_REQUIRED_RAW_CHAR = '#'
 
-/**
- * Prefilter run against the raw chunk before the scan windows are built. Testing the whole carry
- * plus chunk over-admits relative to the window test (the windows drop middle content), so it can
- * never turn a match into a miss.
- */
+/** Whole carry/chunk prefilter over-admits relative to windows that drop middle content; it cannot turn a match into a miss. */
 function rawChunkMayContainCommandCodeBanner(previousRawText: string, data: string): boolean {
   return (
     data.includes(BANNER_REQUIRED_RAW_CHAR) || previousRawText.includes(BANNER_REQUIRED_RAW_CHAR)
@@ -181,9 +165,7 @@ function buildStatusScanRawText(prefix: string, data: string): string {
   const tailBudget = Math.max(0, dataBudget - headBudget - 1)
   const head = headBudget > 0 ? data.slice(0, headBudget) : ''
   const tail = tailBudget > 0 ? data.slice(-tailBudget) : ''
-  // Why: pasted terminal echoes can produce megabyte-sized chunks. Status
-  // detection only needs chunk-boundary context plus recent output, so scan the
-  // start and end windows instead of regex-stripping the full PTY payload.
+  // Megabyte pasted echoes need only boundary/recent context; scan head/tail windows instead of stripping the entire payload.
   return `${boundedPrefix}${head}\n${tail}`
 }
 
@@ -233,9 +215,7 @@ function isIdlePromptText(context: StatusScanContext): boolean {
 
 export function createCommandCodeOutputStatusDetector(args: {
   startupCommand?: string | null
-  /** Continuity seed for a detector created long after launch (parked watchers):
-   *  the banner is off-screen by then, so a turn known to be in flight both arms
-   *  the scrape and carries its prompt into the idle-composer done check. */
+  /** Seed parked watchers after the banner scrolls away, arming an existing turn and retaining its prompt for idle completion. */
   inFlightTurn?: { prompt: string } | null
   onWorking: (prompt: string) => void
   onDone?: (prompt: string) => void
@@ -249,8 +229,7 @@ export function createCommandCodeOutputStatusDetector(args: {
     observe(data: string): boolean {
       const previousRawText = recentRawText
       recentRawText = appendRecentRawText(previousRawText, data)
-      // Why before the windows: a non-Command-Code pane pays two ~4KB string builds per chunk
-      // otherwise, only to fail the same prefilter a few lines later.
+      // Prefilter before window builds so unrelated panes avoid two ~4KB strings per chunk.
       if (!hasSeenCommandCodeUi && !rawChunkMayContainCommandCodeBanner(previousRawText, data)) {
         return false
       }
@@ -291,22 +270,20 @@ export function createCommandCodeOutputStatusDetector(args: {
         combinedTextWithChunkBoundary: scanTextWithChunkBoundary,
         previousTextWithChunkBoundaryLength
       }
-      for (const promptMatch of scanText.matchAll(/(?:^|[\r\n])\s*[❯>]\s+([^\r\n]+)(?=[\r\n])/g)) {
+      for (const promptMatch of scanText.matchAll(
+        /(?:^|[\r\n])\s*[\u276F>]\s+([^\r\n]+)(?=[\r\n])/g
+      )) {
         const prompt = cleanPromptCandidate(promptMatch[1] ?? '')
         if (prompt && !isIdlePromptCandidate(prompt)) {
           lastSubmittedPrompt = prompt
         }
       }
-      // Why: Command Code lacks a prompt-start hook. Its TUI prints these
-      // status words while a submitted prompt is actively running, including
-      // no-tool turns that would otherwise jump straight from idle to done.
+      // Without prompt-start hooks, active words detect submitted/no-tool turns that otherwise jump idle to done.
       if (isActiveStatusText(statusContext)) {
         args.onWorking(lastSubmittedPrompt)
         return true
       }
-      // Why: Command Code does not reliably emit a Stop hook for no-tool turns.
-      // When a submitted prompt has returned to the idle composer, let the pane
-      // connection settle-check the current row and mark that turn done.
+      // No-tool turns may omit Stop; idle composer lets the connection settle-check and complete the current row.
       if (lastSubmittedPrompt && isIdlePromptText(statusContext)) {
         args.onDone?.(lastSubmittedPrompt)
         return true

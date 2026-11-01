@@ -1,10 +1,9 @@
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
-} from './agent-session-resume'
+import type { TerminalLaunchResult } from './agent-session-resume'
+import type * as AgentSessionResume from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
+import type { PtyLivenessVerdict } from './pty-liveness-verdict'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { TabGroupLayoutNode } from './tab-types'
@@ -22,11 +21,7 @@ export type RuntimeTerminalSummary = {
   ptyId: string | null
   incarnationId?: string | null
   orphaned?: boolean
-  /**
-   * Orphaned only: the pane the host last recorded for this PTY, which the renderer owning it can
-   * still hold even when its graph omitted that pane. Absent when none was recorded or the host
-   * predates the field.
-   */
+  /** Orphaned PTY’s last recorded pane may survive in its owning renderer despite graph omission; absent if unknown/old host. */
   recordedPaneKey?: string
   worktreeId: string
   worktreePath: string
@@ -46,6 +41,8 @@ export type RuntimeTerminalSummary = {
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
+  /** Read verdict for host liveness: legacy connected can stay true while unreachable. Absent on older hosts. */
+  verdict?: PtyLivenessVerdict['status']
 }
 
 export type RuntimeTerminalVisualTerminalNode = {
@@ -250,8 +247,8 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
-  launchConfig?: SleepingAgentLaunchConfig
-  resumeProviderSession?: AgentProviderSessionMetadata
+  launchConfig?: AgentSessionResume.SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentSessionResume.AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'
@@ -271,24 +268,7 @@ export type RuntimeTerminalCreateRequestPayload =
       source: 'runtime-session'
     })
 
-export type RuntimeTerminalCreate = {
-  handle: string
-  /** Host-owned PTY incarnation used to fence remote identity observations. */
-  incarnationId?: string | null
-  tabId?: string
-  paneKey?: string | null
-  ptyId?: string | null
-  worktreeId: string
-  title: string | null
-  executionHostId?: ExecutionHostId
-  hostPlatform?: NodeJS.Platform
-  surface?: 'background' | 'visible'
-  warning?: string
-  agentSessionDisposition?: 'created' | 'adopted'
-  isReattach?: true
-  /** Spawn process identity for host-internal ownership proof. */
-  processId?: number
-}
+export type { RuntimeTerminalCreate } from './runtime-terminal-create-contract'
 
 export type RuntimeTerminalSplit = {
   handle: string
@@ -298,7 +278,7 @@ export type RuntimeTerminalSplit = {
   leafId?: string
 }
 
-export type RuntimeTerminalResolvePane = {
+export type RuntimeTerminalResolvePane = TerminalLaunchResult & {
   handle: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string | null
@@ -325,17 +305,14 @@ export type RuntimeTerminalClose = {
   ptyKilled: boolean
   ptyStopVerdict?: 'live' | 'unverifiable'
   ptyStopReason?: string
-  /** The host durably recorded a kill order it replays when the PTY's SSH host reconnects.
-   *  Older hosts never send it, so a client promises no retry without it. */
+  /** Durable host kill order replays on SSH reconnect; promise kill replay only when the host reports this field. */
   pendingKillRecorded?: true
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
 
-// Why both spellings: the codex-* members were published by every host before the agent-neutral
-// rename, so they are permanent — a client still has to read them off an older host. This build
-// keeps a codex-* reason only where the matched wording is plausibly Codex's own; every matcher
-// that inspects no agent publishes the agent-* spelling.
+// Keep published codex-* reasons readable forever; emit them only for plausibly Codex-specific wording.
+// Agent-agnostic matchers use agent-* reasons.
 export type RuntimeTerminalWaitBlockedReason =
   | 'codex-update-prompt'
   | 'codex-trust-workspace'

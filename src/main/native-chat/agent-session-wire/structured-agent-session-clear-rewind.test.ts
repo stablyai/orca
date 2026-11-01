@@ -1,5 +1,5 @@
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat-usage-limit-cut'
+import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
@@ -32,10 +32,10 @@ afterEach(() => rig.dispose())
 
 const journal = () => rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
 const db = () => openTestJournalHostDatabase(rig.root).db
-const rawPrefix = (sequence: number) =>
+const canonicalPrefix = (sequence: number) =>
   db()
     .prepare(
-      'SELECT seq, row_json FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq <= ? ORDER BY seq'
+      'SELECT seq, field, entry_key, ordinal, value_json, deleted FROM journal_outcomes WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ? AND epoch = ?) AND seq <= ? ORDER BY seq, field, entry_key'
     )
     .all(SESSION, journal().cursor().epoch, sequence)
 
@@ -46,6 +46,8 @@ async function clear() {
     envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId())
   })
   expect(result).toMatchObject({ ok: true })
+  await rig.host.drainStatusWrites()
+  expect(rig.store.getRecord(SESSION)?.lastTurn).toBeUndefined()
 }
 
 async function send(text: string, turn: string) {
@@ -63,7 +65,7 @@ async function seed(limited = false) {
   const prefix = journal()
     .snapshot()
     .items.filter((item) => item.sequence <= floor.sequence)
-  const raw = rawPrefix(floor.sequence)
+  const raw = canonicalPrefix(floor.sequence)
   const kept = await send('kept after clear', 'kept')
   if (limited) {
     const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
@@ -169,9 +171,7 @@ describe('rewind behind a clear boundary', () => {
     const target = agentJournalSubmissionKey(later)
     const newer = await journal().queuedMessages.insert({
       messageId: 'queued-after-stop',
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'newer card' }] },
-      fingerprint: 'newer-card',
-      hostInstance: 'test'
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'newer card' }] }
     })
     const originalPause = structuredQueuePauses(journal()).find(
       (entry) => entry.reason === 'stopped'
@@ -223,7 +223,6 @@ describe('rewind behind a clear boundary', () => {
       expect(prepared.contextClearOperationId).toBe(
         rig.store.getRecord(SESSION)!.providerContextBoundary!.operationId
       )
-      // The record names the cut; the journal keeps the rows it keeps.
       expect(prepared).not.toHaveProperty('retained')
       return { ok: true }
     })
@@ -245,7 +244,7 @@ describe('rewind behind a clear boundary', () => {
         .snapshot()
         .items.filter((item) => item.sequence <= floor.sequence)
     ).toEqual(prefix)
-    expect(rawPrefix(floor.sequence)).toEqual(raw)
+    expect(canonicalPrefix(floor.sequence)).toEqual(raw)
     expect(
       journal()
         .snapshot()
@@ -275,12 +274,14 @@ describe('rewind behind a clear boundary', () => {
       rig.store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)?.outcome.status
     ).toBe('pending')
     db().exec('DROP TRIGGER fail_rewind')
-    await recoverStructuredRewind(
-      rig.host.deps,
-      SESSION,
-      journal(),
-      rig.store.getRecord(SESSION)!.lease.runtimeFence
-    )
+    await rig.host.close(SESSION, 'evict')
+    await rig.host.revealSession(SESSION)
+    await rig.host.drainStatusWrites()
+    expect(rig.host.readStatusSummary(SESSION)).toMatchObject({
+      status: 'idle',
+      latestPrompt: 'kept after clear'
+    })
+    expect(rig.store.getRecord(SESSION)?.lastTurn).toBeUndefined()
     const recovered = journal().snapshot()
     const restored = latestNativeChatUsageLimitCut(recovered.items, recovered.submissions)!
     expect(restored.turnItemId).toBe('orca:context-limit-turn')
@@ -296,7 +297,7 @@ describe('rewind behind a clear boundary', () => {
       rig.store.getRecord(SESSION)!.lease.runtimeFence
     )
     expect(journal().snapshot()).toEqual(recovered)
-    expect(rawPrefix(floor.sequence)).toEqual(raw)
+    expect(canonicalPrefix(floor.sequence)).toEqual(raw)
     expect(rewind).toHaveBeenCalledOnce()
     expect(await rig.host.rewind(CALLER, params)).toMatchObject({ ok: true, replayed: true })
   })

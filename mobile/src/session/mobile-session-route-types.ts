@@ -3,13 +3,32 @@ import type { StructuredAgentId } from '../../../src/shared/agent-session-provid
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
-import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
+import type {
+  RuntimeMobileSessionAgentTabStatus,
+  RuntimeMobileTerminalTheme as MobileTerminalTheme
+} from '../../../src/shared/runtime-types'
+import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
+import type { MirroredEvidenceReceipt } from '../../../src/shared/agent-status-observation'
 import type { MobileDiffLine } from './mobile-diff-lines'
 import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
 import type { TerminalRecord } from './mobile-terminal-records'
+import type { MobileNativeChatIdentity } from './native-chat/mobile-native-chat-eligibility'
 
 export type Terminal = TerminalRecord
+
+export type MobileBrowserTab = {
+  type: 'browser'
+  id: string
+  title: string
+  browserWorkspaceId: string
+  browserPageId: string | null
+  url: string
+  loading: boolean
+  loadError?: BrowserLoadError | null
+  canGoBack: boolean
+  canGoForward: boolean
+  isActive: boolean
+}
 
 export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session'
 
@@ -23,9 +42,9 @@ export type MobileSessionTab =
       status?: 'pending-handle' | 'ready'
       terminal: string | null
       agentStatus?: AgentStatusEntry | null
-      /** Agent Orca launched in this terminal, if any. This makes chat eligible
-       *  before the first live agent-status update reaches the mobile client. */
+      // Launch identity enables chat before live agent status arrives.
       launchAgent?: TuiAgent
+      nativeChatIdentity?: MobileNativeChatIdentity
       /** Host-provided launch context still parked as an unsent TUI-input draft. */
       launchDraft?: string
       launchDraftCreatedAt?: number
@@ -38,6 +57,7 @@ export type MobileSessionTab =
       title: string
       sessionId: string
       agent: StructuredAgentId
+      chatStatus?: RuntimeMobileSessionAgentTabStatus & MirroredEvidenceReceipt
       isActive: boolean
     }
   | {
@@ -59,6 +79,7 @@ export type MobileSessionTab =
       language?: string
       mode?: 'edit' | 'diff'
       diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
+      oldPath?: string
       isDirty: boolean
       isActive: boolean
     }
@@ -66,6 +87,8 @@ export type MobileSessionTab =
 
 export type SessionTabsResult = {
   worktree: string
+  clientHostedPagesUnreconciled?: true
+  agentSessionsUnverifiable?: true
   publicationEpoch?: string
   snapshotVersion: number
   tabs: MobileSessionTab[]
@@ -106,13 +129,13 @@ export type FileDocState =
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'ready'; kind: 'image'; dataUri: string }
   | { status: 'ready'; kind: 'html'; content: string }
+  | { status: 'ready'; kind: 'svg'; content: string; truncated: boolean; byteLength: number }
   | { status: 'error'; message: string }
 
 export type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>
 
 export type DiffCommentActions = {
   comments: DiffComment[]
-  /** Notes a new agent session is still being started with. */
   sendingCommentIds: ReadonlySet<string>
   busy: boolean
   onAdd: (filePath: string, lineNumber: number, body: string) => Promise<boolean>
@@ -146,7 +169,6 @@ export type DirtyMarkdownDraft = {
   content: string
 }
 
-/** `other-runtime`: another Orca server owns the workspace, so the paired host cannot list its agents. */
 export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error' | 'other-runtime'
 
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'

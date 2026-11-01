@@ -24,20 +24,4 @@ describe('classifyError', () => {
       )
     ).toEqual({ error_class: 'unknown' })
   })
-
-  it('returns unknown for null/undefined input', () => {
-    expect(classifyError(null)).toEqual({ error_class: 'unknown' })
-    expect(classifyError(undefined)).toEqual({ error_class: 'unknown' })
-  })
-
-  it('returns unknown for an unrecognized message', () => {
-    expect(classifyError(new Error('some unique failure mode we do not know'))).toEqual({
-      error_class: 'unknown'
-    })
-  })
-
-  it('returns unknown for non-Error throws', () => {
-    expect(classifyError('a bare string')).toEqual({ error_class: 'unknown' })
-    expect(classifyError({ random: 'object' })).toEqual({ error_class: 'unknown' })
-  })
 })

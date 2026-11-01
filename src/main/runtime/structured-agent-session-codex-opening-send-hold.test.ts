@@ -1,7 +1,4 @@
-// A message queued behind a send whose Codex turn has not opened yet waits for that turn: handed
-// over once it opens, it goes in as a steer and its row belongs to that turn, never ahead of it.
-// Driven through the shipped host, journal and Codex adapter; only the Codex child is fake, keeping
-// Codex 0.157's turn bookkeeping, and the rows are drawn by the client's own projection.
+// Drive the real host/journal/adapter and client projection with fake Codex 0.157; sends behind an unopened turn wait to steer into it.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,14 +8,14 @@ import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-it
 import { CODEX_TURN_OPEN_WAIT_MS } from '../codex/codex-structured-turn-open-wait'
 import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from '../../shared/native-chat-transcript-projection'
-import { nativeChatRowsInDrawOrder } from '../../shared/native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from '../../shared/native-chat/transcript/native-chat-turn-grouping'
 import { nativeChatTurnMembership } from '../../shared/native-chat-turn-membership'
-import {
-  CodexAppServerRequestError,
-  type CodexAppServerConnection,
-  type CodexAppServerConnectionHandlers,
-  type openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+import { CodexAppServerRequestError } from '../codex/app-server/codex-app-server-request-error'
+import type {
+  CodexAppServerConnection,
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { settledWithin } from '../codex/codex-structured-dispatch-test-support'
 import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wait'
@@ -100,7 +97,7 @@ let interruptEndHeld: boolean
 let turns: ReturnType<typeof codexTurnLifecycleFake>
 let operations = 0
 
-/** The durable ledger stamps its own clock and refuses an id far from it. */
+/** Use the ledger clock; far-future operation ids are refused. */
 const operationId = (): string => `${Date.now()}-${(++operations).toString(16).padStart(32, '0')}`
 
 function envelope(method: string, fields: Record<string, unknown>) {
@@ -245,7 +242,7 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     resolveWorkspacePath: async () => root,
     resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-    resolveCodexCommand: () => 'codex',
+    resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
     resolveLaunchArgs: () => [],
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),
     ...scriptedCodexTransport(openConnection)
@@ -418,7 +415,7 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     expect(new Set(rows.slice(3).map((row) => row.turn)).size).toBe(1)
   })
 
-  // A Stop withdraws what is still queued, so the held message is taken back, never sent.
+  // Stop withdraws queued messages before handover.
   it('is withdrawn with the queue by a Stop pressed before that turn opens', async () => {
     const compaction = await compactRunning()
     const zero = await send('queued zero')
@@ -458,7 +455,7 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     expect(steers).toBe(0)
   })
 
-  // Its turn/start answer lost, the send ahead settles as doubt at once, and that releases the wait.
+  // A lost turn/start answer settles unknown immediately and releases the wait.
   it('goes in at once when the send ahead lost its answer', async () => {
     const compaction = await compactRunning()
     const answer = turns.routes['turn/start']
@@ -475,7 +472,7 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     expect(answers).toBe(3)
   })
 
-  // A steer still unanswered joined a turn that is open; it opens nothing, so nothing waits on it.
+  // An unanswered steer opens no turn, so later sends need not wait on it.
   it('never holds a message sent into a turn already running, nor one behind such a steer', async () => {
     const warmUp = await send('warm up')
     await vi.waitFor(() => expect(answers).toBe(1))
@@ -522,7 +519,7 @@ describe('a send whose turn Codex answered and never opened', () => {
     expect(openWaits.turnIds).toEqual([])
   })
 
-  // No clock: however long Codex takes to open the turn, the send ahead is never doubted for it.
+  // Slow turn opening alone must never turn an accepted send into doubt.
   it('never doubts a send whose turn is slow to open, and holds the next until it opens', async () => {
     const { first, second } = await heldBehindAnAnsweredSend()
 
@@ -563,7 +560,7 @@ describe('a send whose turn Codex answered and never opened', () => {
   })
 })
 
-// Codex reports the thread idle ahead of the `turn/completed` of a turn it opened, as the fake does.
+// Codex may report idle before turn/completed for an opened turn.
 describe('a send in a turn Codex opened, when Codex reports the thread idle', () => {
   function lateSettlements(clientMessageId: string) {
     return vi

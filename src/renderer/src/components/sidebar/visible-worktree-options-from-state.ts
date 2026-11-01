@@ -9,13 +9,7 @@ import {
 } from '../../../../shared/workspace-creator-visibility'
 import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
 
-/**
- * Read the store into the filter inputs `computeVisibleWorktrees` decides from.
- *
- * Why separate from the filter itself: this is the only part of the pipeline that touches the
- * store, so keeping it here leaves the filter a pure function of its options — which is what lets
- * the sidebar, Cmd+J and the Cmd+1–9 handler all reuse it without a React render.
- */
+/** Isolate store reads so sidebar, palette and keyboard shortcuts can share the pure visibility filter. */
 export function buildVisibleWorktreeOptionsFromState(
   state: ReturnType<typeof useAppStore.getState>,
   repoMap: Map<string, Repo>
@@ -31,7 +25,10 @@ export function buildVisibleWorktreeOptionsFromState(
       state.tabsByWorktree,
       Date.now()
     ),
-    worktreeIdsWithStructuredChat: getWorktreeIdsWithStructuredChat(state.unifiedTabsByWorktree),
+    worktreeIdsWithStructuredChat: getWorktreeIdsWithStructuredChat(
+      state.unifiedTabsByWorktree,
+      state.structuredChatSleptAtByPaneKey
+    ),
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,

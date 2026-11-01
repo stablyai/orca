@@ -43,7 +43,6 @@ export async function execBridge(
   }
 }
 
-/** Unwrap the raw-stream carrier back into the error callers expect. */
 async function mapped(
   run: Promise<{ stdout: string; stderr: string }>
 ): Promise<{ stdout: string; stderr: string }> {
@@ -54,21 +53,7 @@ async function mapped(
   }
 }
 
-/**
- * Only a run that produced no stdout at all may be replayed.
- *
- * What the stdout guard covers: operations are not idempotent, and the response
- * embeds window titles and element names, so a snapshot that merely contains
- * the word "SecurityError" must not be read as a policy block and replayed as a
- * second click, keystroke or paste. It closes that injection route only.
- *
- * What it does not cover: one-shot mode runs the operation to completion and
- * writes stdout only afterwards, so stdout is empty for the whole action, not
- * just before it starts. A crash after the click but before the write looks
- * identical to a helper that never started. Nothing here can tell those apart —
- * only a policy pattern that cannot match a non-policy failure keeps the replay
- * off, which is why its `\b` is load-bearing rather than cosmetic.
- */
+/** Retry policy failures with empty stdout; a post-action crash can also leave stdout empty. */
 function isPolicyBlockedStart(error: unknown): error is BridgeProcessFailure {
   return (
     error instanceof BridgeProcessFailure &&
@@ -77,7 +62,7 @@ function isPolicyBlockedStart(error: unknown): error is BridgeProcessFailure {
   )
 }
 
-/** Carries the raw streams so the retry decision does not read a mapped message. */
+/** Preserve raw streams so policy classification does not depend on a mapped error message. */
 class BridgeProcessFailure extends Error {
   constructor(
     readonly stdout: string,
@@ -125,8 +110,7 @@ function runBridgeProcess(
       resolve(result ?? { stdout: '', stderr: '' })
     }
 
-    // Why: native automation can hang inside platform APIs; reject promptly,
-    // then escalate cleanup if the bridge ignores the graceful termination.
+    // Native automation can hang; reject promptly and escalate if graceful termination fails.
     const timeout = setTimeout(() => {
       child?.kill('SIGTERM')
       forceKillTimer = setTimeout(() => {
@@ -174,6 +158,9 @@ function runBridgeProcess(
 
 export function mapBridgeError(message: string): RuntimeClientError {
   const text = message.trim() || 'desktop provider failed'
+  if (/text_input_incomplete/i.test(text)) {
+    return new RuntimeClientError('action_timeout', text)
+  }
   if (/appNotFound|app not found/i.test(text)) {
     return new RuntimeClientError('app_not_found', text)
   }
@@ -195,9 +182,18 @@ export function mapBridgeError(message: string): RuntimeClientError {
     return new RuntimeClientError('invalid_argument', text)
   }
   if (/ModuleNotFoundError: No module named 'gi'|PyGObject|python3-gi/i.test(text)) {
+    const interpreter = /PyGObject unavailable in interpreter: (.+)/.exec(text)?.[1]?.trim()
     return new RuntimeClientError(
       'unsupported_capability',
-      'Linux Computer Use requires python3-gi and AT-SPI packages. Install python3-gi gir1.2-atspi-2.0 at-spi2-core, then retry.'
+      interpreter
+        ? `Linux Computer Use requires python3-gi and AT-SPI packages, which the python3 it ran (${interpreter}) cannot load. Install python3-gi gir1.2-atspi-2.0 at-spi2-core for that interpreter, or put a python3 that has them (usually /usr/bin/python3) first on PATH, then retry.`
+        : 'Linux Computer Use requires python3-gi and AT-SPI packages. Install python3-gi gir1.2-atspi-2.0 at-spi2-core, then retry.'
+    )
+  }
+  if (/spawn python3 ENOENT/.test(text)) {
+    return new RuntimeClientError(
+      'unsupported_capability',
+      "Computer use isn't available on this host: Linux Computer Use runs python3, and none is on PATH. Install python3 with python3-gi gir1.2-atspi-2.0 at-spi2-core, then retry."
     )
   }
   if (/not a valid secondary action|action.*not supported/i.test(text)) {

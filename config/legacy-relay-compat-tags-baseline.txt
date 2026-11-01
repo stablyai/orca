@@ -40,3 +40,4 @@ tests/e2e/helpers/build-released-relay-bundle.mts
 tests/e2e/helpers/legacy-relay-docker-host.ts
 tests/e2e/helpers/orcad-upgrade-profile.ts
 tests/e2e/ssh-orcad-legacy-relay-bridge.spec.ts
+tests/e2e/ssh-orcad-relay-tab-only-shell.spec.ts

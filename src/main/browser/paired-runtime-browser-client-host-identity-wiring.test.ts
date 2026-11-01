@@ -71,7 +71,6 @@ function pairedEnvironment(id: string): KnownRuntimeEnvironment {
   } as KnownRuntimeEnvironment
 }
 
-/** Boots the modules as a freshly launched process would, resolving the profile's hosting id. */
 async function launch(profileDirectory: string): Promise<void> {
   vi.resetModules()
   createHostCallbacks.length = 0
@@ -80,7 +79,6 @@ async function launch(profileDirectory: string): Promise<void> {
   initializeBrowserClientHostId(profileDirectory)
 }
 
-/** Reports the identity a client host of the current launch attaches under. */
 async function hostingIdentity(): Promise<string> {
   const runtime = await import('./paired-runtime-browser-client-host-runtime')
   runtime.configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
@@ -113,7 +111,6 @@ describe('client host hosting identity wiring', () => {
   it('attaches under the same identity after the desktop relaunches', async () => {
     const profileDirectory = mkdtempSync(join(tmpdir(), 'orca-host-wiring-'))
 
-    // Why: a per-process id made the server treat every relaunch as a new host and drop its tabs.
     expect(await hostingIdentityForLaunch(profileDirectory)).toBe(
       await hostingIdentityForLaunch(profileDirectory)
     )
@@ -128,9 +125,7 @@ describe('client host hosting identity wiring', () => {
   it('attaches under the identity already stamped into the first window', async () => {
     await launch(mkdtempSync(join(tmpdir(), 'orca-host-wiring-')))
 
-    // Why the stamp is read first: window creation puts the id in the renderer's argv long before
-    // any environment pairs, and a renderer holding a different id than the lease stops
-    // recognizing the pages it is itself hosting.
+    // Windows receive the hosting id before pairing; the lease must reuse it.
     const { getBrowserClientHostId } = await import('./browser-client-host-id')
     const stamped = getBrowserClientHostId()
 
@@ -142,7 +137,6 @@ describe('client host hosting identity wiring', () => {
     createHostCallbacks.length = 0
     hostOptions.length = 0
 
-    // Why not a throw: an unresolvable profile costs survival across a relaunch, not this session.
     const { getBrowserClientHostId } = await import('./browser-client-host-id')
     expect(await hostingIdentity()).toBe(getBrowserClientHostId())
   })

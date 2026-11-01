@@ -45,7 +45,6 @@ const REPLY = [
   ''
 ].join('\n')
 
-/** Feeds the source a few characters at a time, as a stream delivers it. */
 function streamed(source: string, step: number): string[] {
   let split: MarkdownBlockSplit | null = null
   for (let end = step; end < source.length + step; end += step) {

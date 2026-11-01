@@ -2,7 +2,11 @@
 // adds what the row's producer cannot say. Shared by desktop, dashboard and mobile.
 import type { AgentStatusEntry } from '../agent-status-types'
 import type { ProgramStatusFacet } from './facet'
-import { programStatusStateCarriesProgress, type ProgramStatusKind } from './protocol'
+import {
+  isTurnScopedProgramStatusKind,
+  programStatusStateCarriesProgress,
+  type ProgramStatusKind
+} from './protocol'
 
 type ProgramStatusAttention = {
   /** What the program waits for; `undefined` when it did not say. */
@@ -15,8 +19,7 @@ export type ProgramStatusPresentation = {
   progress?: number
   /** The program's own line for a live row whose producer has no structured tool preview. */
   message?: string
-  /** A block the program reports that the row's own state does not show (e.g. sign-in after a
-   *  hook-owned turn ended). Present only while the row reads as not needing the user. */
+  /** Expose program blocks hidden by row state (e.g. sign-in after hook completion); approval/question blocks last only during live turns. */
   attention?: ProgramStatusAttention
 }
 
@@ -49,7 +52,11 @@ export function resolveProgramStatusPresentation(
   if (bothLive && facet.message && !entry.toolName?.trim()) {
     presentation.message = facet.message
   }
-  if (facet.state === 'blocked' && entry.state !== 'waiting' && entry.state !== 'blocked') {
+  if (
+    facet.state === 'blocked' &&
+    (entry.state === 'working' ||
+      (entry.state === 'done' && !isTurnScopedProgramStatusKind(facet.kind)))
+  ) {
     presentation.attention = {
       ...(facet.kind ? { kind: facet.kind } : {}),
       ...(facet.message ? { message: facet.message } : {})

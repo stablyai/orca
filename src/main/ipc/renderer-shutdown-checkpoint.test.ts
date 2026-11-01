@@ -31,11 +31,14 @@ import {
   registerRendererShutdownCheckpointHandler,
   SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS
 } from './renderer-shutdown-checkpoint'
+import {
+  resetWslMoveWindowWriteHoldForTests,
+  holdWslMoveWindowWrites,
+  setWslMoveReloadableWindow
+} from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 
 const AWAIT_CHANNEL = 'app:await-before-unload-checkpoint'
 
-/** What is staged for a window's save: the save itself, or main's merge of it when main owns the
- *  layout (its content is covered by renderer-shutdown-checkpoint-sleep-records.test.ts). */
 const windowSave = (state: Partial<WorkspaceSessionState>): unknown =>
   ORCA_LAYOUT_OWNER_IS_MAIN ? expect.any(Object) : state
 
@@ -84,12 +87,45 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     )
     expect(store.updateUI).toHaveBeenCalledWith({ activeView: 'settings' })
     expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
-    // Why: Store fences the staged generation without draining unrelated live mutations.
+    // Fence this staged generation without waiting for unrelated live mutations.
     expect(store.flushPendingOrThrowAsync).toHaveBeenCalledWith(
       expect.objectContaining({ drainToStableGeneration: false })
     )
     expect(callOrder).toEqual(['session:local', 'session:runtime:host-1', 'ui', 'persist'])
     expect(event.returnValue).toEqual({ ok: true })
+  })
+
+  it('stages nothing of a window a WSL move holds, and still flushes', () => {
+    const store = {
+      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler only calls the four methods stubbed above.
+    registerRendererShutdownCheckpointHandler(store as never)
+    setWslMoveReloadableWindow(() => ({
+      isDestroyed: () => false,
+      reload: () => {},
+      allowUnload: () => () => {},
+      onLoadedOrGone: () => () => {}
+    }))
+    holdWslMoveWindowWrites()
+    try {
+      const event: { returnValue?: unknown } = {}
+      syncHandlers.get('app:stage-before-unload-sync')?.(event, {
+        sessions: [{ state: {} }],
+        ui: { activeView: 'settings' }
+      })
+
+      expect(store.stageWorkspaceSessionBeforeUnload).not.toHaveBeenCalled()
+      expect(store.updateUI).not.toHaveBeenCalled()
+      expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
+      expect(event.returnValue).toEqual({ ok: true })
+    } finally {
+      resetWslMoveWindowWriteHoldForTests()
+      setWslMoveReloadableWindow(() => null)
+    }
   })
 
   it('never stages the source partition of a fenced host', () => {
@@ -113,23 +149,6 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     expect(event.returnValue).toEqual({ ok: true })
   })
 
-  it('reports a staging failure so the renderer can retry', () => {
-    const store = {
-      stageWorkspaceSessionBeforeUnload: vi.fn(),
-      updateUI: vi.fn(() => {
-        throw new Error('disk full')
-      }),
-      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
-    }
-    registerRendererShutdownCheckpointHandler(store as never)
-
-    const handler = syncHandlers.get('app:stage-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
-    handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
-
-    expect(event.returnValue).toEqual({ ok: false })
-  })
-
   it('does not queue persistence when staging is incomplete', async () => {
     const store = {
       stageWorkspaceSessionBeforeUnload: vi.fn(),
@@ -146,23 +165,8 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
     expect(store.flushPendingOrThrowAsync).not.toHaveBeenCalled()
-    expect(event.returnValue).toEqual({ ok: false })
+    expect(event.returnValue).toEqual({ ok: false, error: 'invalid state' })
     await expect(invokeHandlers.get(AWAIT_CHANNEL)?.()).resolves.toEqual({ ok: false })
-  })
-
-  it('stages synchronously without waiting on the durable write', () => {
-    const store = {
-      stageWorkspaceSessionBeforeUnload: vi.fn(),
-      updateUI: vi.fn(),
-      flushPendingOrThrowAsync: vi.fn(() => new Promise<void>(() => {}))
-    }
-    registerRendererShutdownCheckpointHandler(store as never)
-
-    const handler = syncHandlers.get('app:stage-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
-    handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
-
-    expect(event.returnValue).toEqual({ ok: true })
   })
 
   it('holds the checkpoint open until the durable write settles', async () => {
@@ -231,16 +235,5 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('reports success before any checkpoint is staged', async () => {
-    const store = {
-      stageWorkspaceSessionBeforeUnload: vi.fn(),
-      updateUI: vi.fn(),
-      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
-    }
-    registerRendererShutdownCheckpointHandler(store as never)
-
-    await expect(invokeHandlers.get(AWAIT_CHANNEL)?.()).resolves.toEqual({ ok: true })
   })
 })

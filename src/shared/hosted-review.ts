@@ -1,3 +1,4 @@
+import type { StackedReviewFailureReason } from './stacked-hosted-review-failure-copy'
 import type {
   CheckStatus,
   GitHubRepositoryIdentity,
@@ -16,8 +17,7 @@ export type HostedReviewProvider =
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
 
-// Why: Bitbucket Cloud's API has no draft pull requests, so offering the toggle
-// there would either publish a live PR or fail at submit.
+// Bitbucket Cloud has no draft API; offering the toggle would publish live or fail.
 export function hostedReviewProviderSupportsDraft(provider: HostedReviewProvider): boolean {
   return provider !== 'bitbucket'
 }
@@ -44,8 +44,7 @@ export type HostedReviewInfo = {
   headSha?: string
   /** GitHub repository that owns the PR; absent on older runtimes and other providers. */
   githubRepository?: GitHubRepositoryIdentity
-  // Why: mirrors PRInfo.confirmedContainedHeadOid so merged-review staleness
-  // checks accept a worktree head confirmed to be part of the merged PR.
+  // Mirror PRInfo containment proof so merged-review cache checks retain confirmed worktree heads.
   confirmedContainedHeadOid?: string
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
@@ -54,6 +53,8 @@ export type HostedReviewInfo = {
 
 export type HostedReviewForBranchArgs = {
   force?: boolean
+  /** Only a manual click invalidates pre-click work; force also serves automatic polling. */
+  userRefresh?: boolean
   repoPath: string
   repoId?: string
   admissionTier?: 'interactive' | 'status' | 'background'
@@ -68,12 +69,41 @@ export type HostedReviewForBranchArgs = {
   linkedGiteaPR?: number | null
   // The worktree's checked-out HEAD oid (GitHub merged-at-head visibility).
   currentHeadOid?: string | null
-  /**
-   * Set only by surfaces scoped to the selected worktree. That tier is O(1), so
-   * the host re-checks it per minute; the worktree list is O(N) and is paced far
-   * more slowly to stay inside the shared API budget (#11532).
-   */
+  /** Only selected-worktree surfaces set active: O(1) checks refresh per minute; O(N) lists refresh more slowly within the shared API budget (#11532). */
   active?: boolean
+  /** Desktop IPC only: an explicit Refresh, which may start a stopped WSL distro (E9). */
+  wakeWslDistro?: boolean
+  /** Ask for a HostedReviewForBranchOutcome; older hosts drop it and answer with the bare review. */
+  reportReadOutcome?: boolean
+}
+
+/** 'provider' only when this caller's own request started the provider read the host stored as current; cache hits, joined lookups and last-good fallbacks are 'cached'. */
+export type HostedReviewForBranchOutcome = {
+  review: HostedReviewInfo | null
+  readOutcome: 'provider' | 'cached'
+}
+
+export type HostedReviewForBranchReply = HostedReviewInfo | null | HostedReviewForBranchOutcome
+
+export function cachedHostedReviewOutcome(
+  review: HostedReviewInfo | null
+): HostedReviewForBranchOutcome {
+  return { review, readOutcome: 'cached' }
+}
+
+/** Callers that asked for it learn whether a provider read the host stored as current answered them. */
+export function hostedReviewForBranchReply(
+  read: HostedReviewForBranchOutcome,
+  reportReadOutcome: boolean | undefined
+): HostedReviewForBranchReply {
+  return reportReadOutcome === true ? read : read.review
+}
+
+/** An older host drops reportReadOutcome and answers bare; that answer proves nothing about the provider. */
+export function hostedReviewForBranchOutcome(
+  reply: HostedReviewForBranchReply
+): HostedReviewForBranchOutcome {
+  return reply !== null && 'readOutcome' in reply ? reply : cachedHostedReviewOutcome(reply)
 }
 
 export type HostedReviewSummary = {
@@ -116,12 +146,33 @@ export type CreateHostedReviewErrorCode =
   | 'push_failed'
   | 'unknown'
 
+/** An Orca-authored create failure that clients can show in their own language. */
+export type CreateHostedReviewFailureReason =
+  | NonNullable<HostedReviewCreationBlockedReason>
+  | 'branch_changed'
+  | 'branch_status_unverified'
+  | 'review_lookup_unavailable'
+  | 'provider_not_supported'
+  | 'same_base_branch'
+  /** Bitbucket, Azure DevOps and Gitea need a base branch, head branch and title. */
+  | 'base_head_title_required'
+  | 'rejected'
+  | 'repository_not_found'
+  | 'create_failed'
+  | 'creation_unconfirmed'
+  | StackedReviewFailureReason
+
 export type CreateHostedReviewResult =
   | { ok: true; number: number; url: string }
   | {
       ok: false
       code: CreateHostedReviewErrorCode
+      /** English text for mobile, older clients and logs. */
       error: string
+      /** Absent from older hosts; clients then show `error`. */
+      reason?: CreateHostedReviewFailureReason
+      /** The base branch named by the `base_not_on_remote` reason. */
+      base?: string
       existingReview?: HostedReviewSummary
     }
 
@@ -137,6 +188,11 @@ export type CreateStackedHostedReviewResult =
       ok: false
       code: CreateHostedReviewErrorCode
       error: string
+      /** Plain create-step reason or a stacked `stack_*` reason; absent from older hosts. */
+      reason?: CreateHostedReviewFailureReason
+      base?: string
+      /** The current branch named by `stack_head_ambiguous`. */
+      head?: string
       createdReview?: HostedReviewSummary
     }
 
@@ -151,9 +207,7 @@ export type HostedReviewCreationBlockedReason =
   | 'fork_head_unsupported'
   | 'unsupported_provider'
   | 'existing_review'
-  // Why: a stacked worktree's local-only parent base is unresolvable on the
-  // remote; blocked at create-time so the submit fails with actionable copy
-  // instead of the provider's opaque error.
+  // Reject local-only stack bases before submission so unresolvable remote refs get actionable copy.
   | 'base_not_on_remote'
   | null
 
@@ -166,12 +220,7 @@ export type HostedReviewCreationNextAction =
   | 'open_existing_review'
   | null
 
-/**
- * Records whether the eligibility result observed an authoritative existing-review
- * lookup. `found` / `not_found` come only from an accepted provider lookup;
- * `unavailable` marks a local-blocker fallback returned after a swallowed or
- * skipped lookup, so it can never masquerade as authoritative no-review evidence.
- */
+/** Only accepted provider lookups yield found/not_found. Unavailable marks skipped/swallowed lookups and cannot prove no review exists. */
 export type HostedReviewLookupOutcome = 'found' | 'not_found' | 'unavailable'
 
 export type HostedReviewCreationEligibility = {
@@ -206,6 +255,8 @@ export type HostedReviewCreationEligibilityArgs = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  /** The user's Create PR: it may start the repo's stopped WSL distro (E9). */
+  wakeWslDistro?: boolean
 }
 
 export type HostedReviewDecision = 'approved' | 'changes_requested' | 'review_required' | null

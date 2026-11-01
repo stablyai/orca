@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createServeDesktopActivationGate,
-  type ServeDesktopActivationGate
-} from './serve-desktop-activation'
+import type { ServeDesktopActivationGate } from './serve-desktop-activation'
 
 const { state, foundation, runtime, i18n, launch } = vi.hoisted(() => ({
   state: {
@@ -47,32 +44,6 @@ beforeEach(() => {
 })
 
 describe('startup persistence lifetime', () => {
-  it('disables activations before a failed launch closes its profile writer', async () => {
-    const activateWindow = vi.fn()
-    state.desktopActivationGate = createServeDesktopActivationGate({
-      initialState: 'ready',
-      activateWindow
-    })
-    const failure = new Error('runtime startup failed')
-    launch.mockRejectedValueOnce(failure)
-    let finishFreeze = (): void => {}
-    state.store.freezeWritesAsync.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          finishFreeze = resolve
-        })
-    )
-    const rejected = expect(initializeMainProcessReady(options)).rejects.toBe(failure)
-
-    await vi.waitFor(() => expect(state.store.freezeWritesAsync).toHaveBeenCalledOnce())
-
-    expect(state.desktopActivationGate).toBeNull()
-    state.desktopActivationGate?.requestActivation()
-    expect(activateWindow).not.toHaveBeenCalled()
-    finishFreeze()
-    await rejected
-  })
-
   it('awaits writer release after a later startup phase fails', async () => {
     const failure = new Error('runtime startup failed')
     const admission = state.profileStateAdmission

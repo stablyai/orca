@@ -1,12 +1,4 @@
-/**
- * Host-neutral projection of everything a WSL project move must carry, used as the losslessness
- * oracle: `project(source before) == project(destination after)`. It reads the stores directly
- * rather than the mover's export, so a row the export forgets shows up as a difference.
- *
- * Normalization (wsl-move-canonical-form.ts): UNC paths of the scoped distro become Linux paths in
- * identity strings, every alias of the owning host becomes `<H>`, PTY bindings are dropped and
- * keys are sorted. Host bindings, which a move changes by definition, are dropped where they live.
- */
+// Compare stores independently of mover export so omitted rows remain visible after host/path normalization.
 import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -41,9 +33,8 @@ export type WslMoveProjectionScope = {
   distro: string
   repoIds: ReadonlySet<string>
   folderWorkspaceIds: ReadonlySet<string>
-  /** The id the moved projects' rows name their host by on this side. */
   ownerHostId: ExecutionHostId
-  /** Every id the owning host goes by on this side: `local`, `runtime:wsl:<d>`, `wsl:<d>`. */
+  /** Equivalent host IDs on this side: local, runtime:wsl:<d>, wsl:<d>. */
   hostAliases: readonly string[]
 }
 
@@ -65,15 +56,11 @@ export type WslMoveProjectionInput = {
     | 'automations'
     | 'automationRuns'
   >
-  /** The partition that holds the scoped projects on this side. */
   session: Partial<WorkspaceSessionState>
   ui?: Partial<PersistedUIState>
 }
 
-/**
- * What the move carries that this projection does not compare yet, each with the step that adds
- * it. `wsl-move-state-projection.test.ts` fails when a moved field is in neither list.
- */
+/** Explicit projection exclusions; tests require every moved field to be compared or listed here. */
 export const WSL_MOVE_PROJECTION_DEFERRED = {
   retiredWorktreeNamesByNamespace: 'D1b-3: recomputed from the Linux probe path, not mapped.',
   folderWorkspaceDiffComments:
@@ -83,7 +70,6 @@ export const WSL_MOVE_PROJECTION_DEFERRED = {
   nativeChatJournalRecords: 'D1b-6.'
 } as const
 
-/** Top-level state fields the projection compares; session and UI have per-field tables. */
 export const WSL_MOVE_PROJECTED_STATE_FIELDS = [
   'repos',
   'projects',
@@ -100,7 +86,7 @@ export const WSL_MOVE_PROJECTED_STATE_FIELDS = [
   'automationRuns'
 ] as const satisfies readonly (keyof PersistedState)[]
 
-/** Host bindings per row kind: what a move changes by definition. */
+// Host bindings necessarily change during migration.
 const HOST_BINDINGS = {
   repos: ['executionHostId', 'connectionId'],
   projectGroups: ['executionHostId', 'connectionId'],
@@ -112,7 +98,7 @@ const HOST_BINDINGS = {
     'executionTargetGeneration',
     'schedulerOwner'
   ],
-  // Re-derived with the host setup (item 4); compared through the projectId it resolves to.
+  // Host setup IDs are re-derived; compare their resolved project IDs.
   worktreeMeta: ['projectHostSetupId']
 } as const
 
@@ -156,7 +142,7 @@ export function projectWslMoveState(
       row.projectGroupId ? [row.projectGroupId] : []
     )
   )
-  // Effective metadata, identity rows first, the way every reader sees it.
+  // Match reader precedence: identity metadata outranks legacy rows.
   const worktreeMeta = pickKeys(
     getAllWorktreeMetaForHost({ state }, scope.ownerHostId),
     ownerInScope
@@ -166,7 +152,7 @@ export function projectWslMoveState(
     projects: byId(
       withoutKeys(
         state.projects.flatMap((project) => {
-          // A Windows sibling stays on the desktop, so only the moved members compare.
+          // Compare only moved members; Windows siblings stay on the desktop.
           const sourceRepoIds = project.sourceRepoIds.filter((repoId) => scope.repoIds.has(repoId))
           return sourceRepoIds.length > 0 ? [{ ...project, sourceRepoIds }] : []
         }),
@@ -201,7 +187,7 @@ export function projectWslMoveState(
     automationRuns: byId(
       state.automationRuns.filter((run) => automationIds.has(run.automationId)).map(withoutSetupId)
     ),
-    session: projectWslMoveSession(input.session, ownerInScope),
+    session: projectWslMoveSession(withoutOwnerFileBindings(input.session, aliases), ownerInScope),
     ui: projectWslMoveUi(
       input.ui ?? {},
       input.session,
@@ -221,7 +207,32 @@ export function projectWslMoveState(
   return canonical
 }
 
-/** Catalog rows are sets: their order carries no meaning, and an import may reorder them. */
+/** A file bound to its owning host is that host's file whether or not the binding is written. */
+function withoutOwnerFileBindings<T extends Partial<WorkspaceSessionState>>(
+  session: T,
+  aliases: ReadonlySet<string>
+): T {
+  if (!session.openFilesByWorktree) {
+    return session
+  }
+  return {
+    ...session,
+    openFilesByWorktree: Object.fromEntries(
+      Object.entries(session.openFilesByWorktree).map(([owner, files]) => [
+        owner,
+        files.map(({ runtimeEnvironmentId, ...file }) =>
+          runtimeEnvironmentId === undefined ||
+          runtimeEnvironmentId === null ||
+          aliases.has(runtimeEnvironmentId)
+            ? file
+            : { ...file, runtimeEnvironmentId }
+        )
+      ])
+    )
+  }
+}
+
+/** Catalog order is immaterial and may change on import. */
 function byId<T extends { id: string }>(rows: T[]): T[] {
   return rows.sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
 }
@@ -236,7 +247,7 @@ function withoutKeys<T extends object>(rows: readonly T[], keys: readonly string
   })
 }
 
-/** The run context's host setup id is re-derived on the destination (item 4). */
+// Run-context setup IDs are re-derived on the destination.
 function withoutSetupId<T extends { runContext?: object | null }>(row: T): T {
   if (!row.runContext) {
     return row
@@ -246,8 +257,7 @@ function withoutSetupId<T extends { runContext?: object | null }>(row: T): T {
   return { ...row, runContext }
 }
 
-/** The mover appends each worktree's own UNC id to `priorWorktreeIds` (item 14); normalized, that
- *  is the worktree's own id. `findMissingWslMoveAliases` checks the alias itself. */
+// Drop canonical self-aliases; findMissingWslMoveAliases separately verifies UNC alias retention.
 function dropSelfPriorIds(canonical: unknown): void {
   const meta = fieldOf(canonical, 'worktreeMeta')
   if (!isRecord(meta)) {

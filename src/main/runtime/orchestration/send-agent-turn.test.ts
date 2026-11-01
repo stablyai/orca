@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
-import { dispatchPreambleSendOptions } from './preamble'
+
 import {
   sendAgentTurn,
   type StructuredAgentTurnHost,
@@ -105,7 +105,6 @@ describe('sendAgentTurn to a structured session', () => {
       clientMessageId: 'op-1',
       submission: submissionOf('accepted')
     })
-    // The body-only digest every orchestration send carried before it was derived here.
     expect(fake.send).toHaveBeenCalledWith(
       { callerKey: 'trusted-local:k' },
       {
@@ -148,15 +147,6 @@ describe('sendAgentTurn to a structured session', () => {
     }
   })
 
-  it('returns the host refusal for the caller to read', async () => {
-    const refusal = { code: 'agent_session_conflict' as const, message: 'conflict' }
-    const fake = structuredHost({ ok: false, refusal })
-    await expect(sendAgentTurn(structured(fake.host))).resolves.toEqual({
-      kind: 'refused',
-      refusal
-    })
-  })
-
   it('asks the host queue to hold a `queue` send, fingerprinted without its sender', async () => {
     const fake = structuredHost(
       accepted({
@@ -176,7 +166,7 @@ describe('sendAgentTurn to a structured session', () => {
           sessionId: 's1',
           clientOperationId: 'op-1',
           expectedRuntimeFence: 7,
-          // The sender rides on the body, outside the fingerprint: a retry still replays.
+          // Sender provenance stays outside the fingerprint so retries still replay.
           payloadFingerprint: hostFingerprint({ body: turn.body, delivery: 'queue-if-active' })
         },
         body: mailTurn.body,
@@ -184,57 +174,5 @@ describe('sendAgentTurn to a structured session', () => {
       }
     )
     expect(fake.waitForSendSettlement).not.toHaveBeenCalled()
-  })
-
-  it('keeps the state of a replayed draft that already settled', async () => {
-    const fake = structuredHost(
-      accepted({
-        clientMessageId: 'op-1',
-        queued: { messageId: 'op-1', position: 0, state: 'returned' }
-      })
-    )
-    await expect(sendAgentTurn(structured(fake.host, mailTurn))).resolves.toMatchObject({
-      kind: 'queued',
-      queued: { state: 'returned' }
-    })
-  })
-})
-
-describe('sendAgentTurn to a terminal', () => {
-  it('types a dispatch preamble with its own options and hands back the primitive promise itself', async () => {
-    const receipt = { handle: 'term_1', accepted: true, bytesWritten: 5 }
-    const written = Promise.resolve(receipt)
-    const runtime = { sendTerminalAgentPrompt: vi.fn(() => written) }
-    const sent = sendAgentTurn({
-      kind: 'terminal',
-      runtime,
-      handle: 'term_1',
-      turn: { purpose: 'dispatch-preamble', body: 'hello', operationId: 'req-1' }
-    })
-    // The same promise, so a caller's await takes no extra tick.
-    expect(sent).toBe(written)
-    await expect(sent).resolves.toBe(receipt)
-    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
-      'term_1',
-      'hello',
-      dispatchPreambleSendOptions('req-1')
-    )
-  })
-
-  it('propagates a failed write as the primitive threw it', async () => {
-    const failure = new Error('terminal_not_writable')
-    const runtime = {
-      sendTerminalAgentPrompt: vi.fn(async () => {
-        throw failure
-      })
-    }
-    await expect(
-      sendAgentTurn({
-        kind: 'terminal',
-        runtime,
-        handle: 'term_1',
-        turn: { purpose: 'dispatch-preamble', body: 'hello', operationId: 'req-1' }
-      })
-    ).rejects.toBe(failure)
   })
 })

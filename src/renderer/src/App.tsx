@@ -1,9 +1,10 @@
 import { useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-account-dialog'
-import { DocPreviewExternalLinkConfirmation } from './components/browser-pane/workspace-doc/doc-preview-external-link-confirmation'
+import { BrowserExtensionInstallDialog } from './components/browser-extension-install-dialog'
 import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
@@ -27,6 +28,8 @@ import { useAppSessionPersistence } from './app-shell/use-app-session-persistenc
 import { useAppShellServices } from './app-shell/use-app-shell-services'
 import { useAppStartupHydration } from './app-shell/use-app-startup-hydration'
 import { startNativeChatDraftLoad } from './app-shell/native-chat-draft-startup'
+import { runWslMoveRendererStoreRewrites } from './lib/wsl-move-renderer-store-rewrites'
+import { runWslDriveUncRendererStoreRewrites } from './lib/wsl-drive-unc-renderer-store-rewrites'
 import { useDocumentAppearance } from './app-shell/use-document-appearance'
 import { useFloatingWorkspacePanel } from './app-shell/use-floating-workspace-panel'
 import { useGlobalKeybindings } from './app-shell/use-global-keybindings'
@@ -35,6 +38,7 @@ import { usePersistedUIWriter } from './app-shell/use-persisted-ui-writer'
 import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
 import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
+import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
 import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
 
 function App(): React.JSX.Element {
@@ -44,8 +48,12 @@ function App(): React.JSX.Element {
   const clearUnreadDockBadge = useUnreadDockBadge(floatingWorkspace.open)
 
   useAppShellServices()
-  // Why before the startup chain: its effect runs first, and no startup step can skip the load.
+  // Load drafts before the startup chain so no failed step can skip them.
   useEffect(startNativeChatDraftLoad, [])
+  // Committed WSL moves only: the list is empty otherwise, and always with the internal gate closed.
+  useEffect(() => void runWslMoveRendererStoreRewrites(), [])
+  // A Windows-drive conversion's own stores, after the restart that converted the project.
+  useEffect(() => void runWslDriveUncRendererStoreRewrites(), [])
   useAppStartupHydration(onboardingGate.applyStartupOnboardingState)
   useAppSessionPersistence()
   useRuntimeGraphSync()
@@ -53,12 +61,10 @@ function App(): React.JSX.Element {
   useDocumentAppearance()
   useWindowVisibilityEffects()
   useGlobalKeybindings({ layout, floatingWorkspace })
-  // Why App, not store creation: the Space window mirrors this store's selection but owns none.
+  // App owns active-selection removal; the Space window only mirrors selection.
   useEffect(() => installActiveWorktreeRemovalSuccessor(), [])
 
-  // Why: the same vars are set inline on .app-layout below, but portaled surfaces
-  // (sheets, dialogs) mount outside it and would otherwise fall back to 0px and
-  // render their controls under the Windows/Linux window-controls overlay.
+  // Portaled sheets/dialogs live outside .app-layout and need root offsets to clear Windows/Linux controls.
   useEffect(() => {
     const root = document.documentElement.style
     root.setProperty('--window-controls-width', WINDOW_CONTROLS_WIDTH)
@@ -69,7 +75,7 @@ function App(): React.JSX.Element {
   const { cancelReturnFocusFrame } = floatingWorkspace
   const setAppRootNode = useCallback(
     (node: HTMLDivElement | null): void => {
-      // Why: these best-effort App chrome cleanups share the App root lifetime.
+      // Cancel chrome cleanup work when the App root unmounts.
       if (!node) {
         cancelReturnFocusFrame()
         clearUnreadDockBadge()
@@ -96,7 +102,6 @@ function App(): React.JSX.Element {
     >
       <TooltipProvider delayDuration={400}>
         <ConfirmationDialogProvider>
-          <DocPreviewExternalLinkConfirmation />
           <BrowserPagePrompts />
           <LinkRoutingPreferenceDialogProvider>
             <AppBackgroundServices />
@@ -107,16 +112,21 @@ function App(): React.JSX.Element {
               onboardingGate={onboardingGate}
             />
             <BrowserWebAuthnAccountDialog />
+            <BrowserExtensionInstallDialog />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
-        <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+        {createPortal(
+          <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />,
+          document.body
+        )}
+        <PlainSshTerminalPanels />
       </TooltipProvider>
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />
       <ClaudeAccountSwitchDialog />
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />
-      {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
+      {/* Electron drag hit-testing follows DOM order, ignoring z-index; render controls last to keep them clickable. */}
       {hasCustomTitleBar && <WindowControls />}
     </div>
   )

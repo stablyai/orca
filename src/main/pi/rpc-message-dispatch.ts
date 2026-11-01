@@ -12,7 +12,7 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { applyPiRpcSessionOption } from './rpc-options'
-import { PiRpcPromptError, preparePiRpcPrompt } from './rpc-prompt'
+import { PiRpcPromptError, preparePiRpcPrompt, type PiRpcPrompt } from './rpc-prompt'
 import type { PiRpcSession, PiRpcSessionDeps } from './rpc-session'
 
 type DispatchInput = Parameters<StructuredAgentSessionAdapter['dispatch']>[0]
@@ -52,27 +52,17 @@ export async function dispatchPiRpcMessage(
       )
     }
   }
-  const model = input.executionOptions?.model ?? session.initialOptions.model
+  input.signal?.throwIfAborted()
+  if (!isCurrent() || session.connection.closed) {
+    return exited()
+  }
+  input.onInputPreparation?.()
   if (!input.executionOptions) {
     input.signal?.throwIfAborted()
-    return session.turns.submit(
-      input.clientMessageId,
-      input.requestedAt ?? Date.now(),
-      { ...prompt },
-      input.beforeDispatch
-    )
+    return submitPiRpcPrompt(session, input, prompt)
   }
   for (const key of ['model', 'effort'] as const) {
-    const value =
-      input.executionOptions?.[key] ??
-      (key === 'model' || model === session.initialOptions.model
-        ? session.initialOptions[key]
-        : undefined)
-    if (value === undefined && session.optionProof.writes.has(key)) {
-      throw new AgentSessionOptionRejectedError(
-        new Error(`The default ${key} for this model is unknown`)
-      )
-    }
+    const value = input.executionOptions[key]
     if (value === undefined || session.optionProof.current.get(key) === value) {
       continue
     }
@@ -103,10 +93,27 @@ export async function dispatchPiRpcMessage(
   if (!isCurrent() || session.connection.closed) {
     return exited()
   }
-  return session.turns.submit(
+  return submitPiRpcPrompt(session, input, prompt)
+}
+
+/** Pi runs the prompt on the model and effort it proved: its own state, never a stale report. */
+async function submitPiRpcPrompt(
+  session: PiRpcSession,
+  input: DispatchInput,
+  prompt: PiRpcPrompt
+): Promise<AgentSessionDispatchOutcome> {
+  let ranOptions: Record<string, string> = {}
+  const outcome = await session.submit(
     input.clientMessageId,
     input.requestedAt ?? Date.now(),
     { ...prompt },
-    input.beforeDispatch
+    async () => {
+      await input.beforeDispatch?.()
+      input.onExecutionSnapshot?.()
+      ranOptions = Object.fromEntries(session.optionProof.current)
+    }
   )
+  return outcome.state === 'accepted' || outcome.state === 'admitted'
+    ? { ...outcome, ranOptions }
+    : outcome
 }

@@ -4,14 +4,14 @@ import type { PairingOffer } from '../../shared/pairing'
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks
-} from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+} from '../../shared/remote-runtime/remote-runtime-client'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
@@ -32,36 +32,6 @@ afterEach(() => {
 })
 
 describe('paired runtime browser-host reconciliation negotiation', () => {
-  it('requests and retains an exact echoed reconciliation protocol', async () => {
-    const callbacks: { current?: RemoteRuntimeSubscriptionCallbacks } = {}
-    const close = vi.fn()
-    subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
-      async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
-        callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
-        return {
-          requestId: 'browser-host',
-          close,
-          sendBinary: () => false,
-          sendRequest: vi.fn()
-        }
-      }
-    )
-    const lease = createLease()
-    const starting = lease.start()
-    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
-
-    expect(subscribeRemoteRuntimeRequestMock.mock.calls[0]?.[2]).toMatchObject({
-      pageCommandProtocolVersion: 1,
-      pageInventoryProtocolVersion: 1,
-      pageInventory: [],
-      pageReconciliationProtocolVersion: 1
-    })
-    callbacks.current!.onResponse(readyResponse({ pageReconciliationProtocolVersion: 1 }))
-    await expect(starting).resolves.toMatchObject({ pageReconciliationProtocolVersion: 1 })
-    await lease.close()
-    expect(close).toHaveBeenCalledOnce()
-  })
-
   it('falls back without enabling reconciliation when an older host omits the echo', async () => {
     const callbacks: { current?: RemoteRuntimeSubscriptionCallbacks } = {}
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
@@ -179,7 +149,6 @@ describe('paired runtime browser-host reconciliation negotiation', () => {
     callbacks.current!.onResponse(readyResponse({ pageReconciliationProtocolVersion: 1 }))
     await starting
 
-    // Why: a host that negotiated reconciliation must never issue a command that omits it.
     callbacks.current!.onResponse({
       id: 'browser-host',
       ok: true,

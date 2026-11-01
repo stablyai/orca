@@ -1,5 +1,4 @@
-// Where a message's sender opens: the host's read of a party, over the records production keeps.
-
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -14,7 +13,6 @@ import { OrchestrationError } from './orchestration-error'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
 import type * as OrchestrationParty from './orchestration-party'
 
-// The real resolver, which a test can make fail once.
 const resolveParty = vi.hoisted(() => vi.fn())
 vi.mock('./orchestration-party', async (importOriginal) => {
   const actual = await importOriginal<typeof OrchestrationParty>()
@@ -60,7 +58,13 @@ function clearedChat(): AgentSessionRecordReader {
     ],
     [LIVE, record(LIVE)]
   ])
-  return { getRecord: (id) => records.get(id) ?? null, listRecords: () => [...records.values()] }
+  return {
+    getRecord: (id) => {
+      const record = records.get(id)
+      return record ? agentSessionConversationView(record) : null
+    },
+    listRecords: () => [...records.values()].map(agentSessionConversationView)
+  }
 }
 
 /** This run issued `term_now` for PANE; any other handle is from an earlier run. */
@@ -87,11 +91,43 @@ describe('where a sender opens', () => {
     expect(locate(`orca_session_id:${ROOT}`, { records: clearedChat() })).toEqual({
       location: { kind: 'chat', sessionId: LIVE, worktreeId: 'wt-chat' }
     })
-    expect(locate(`orca_session_id:${ROOT}`)).toEqual({ location: null, lost: 'chat' })
+    expect(locate(`orca_session_id:${ROOT}`)).toEqual({ location: null })
   })
 
-  it('opens a terminal this run issued at its handle', () => {
-    expect(locate('term_now')).toEqual({ location: { kind: 'terminal', handle: 'term_now' } })
+  it('distinguishes a missing root from an unreadable record, missing successor or cycle', () => {
+    const records = clearedChat()
+    const getRecord = records.getRecord
+    expect(
+      locate(`orca_session_id:${ROOT}`, {
+        records: { ...records, getRecord: () => null, isSessionUnreadable: () => true }
+      })
+    ).toEqual({ location: null })
+    expect(
+      locate(`orca_session_id:${ROOT}`, {
+        records: { ...records, getRecord: () => null }
+      })
+    ).toEqual({ location: null, lost: 'chat' })
+    expect(
+      locate(`orca_session_id:${ROOT}`, {
+        records: {
+          ...records,
+          getRecord: () => {
+            throw new Error('unreadable')
+          }
+        }
+      })
+    ).toEqual({ location: null })
+    expect(
+      locate(`orca_session_id:${ROOT}`, {
+        records: { ...records, getRecord: (id) => (id === ROOT ? getRecord(id) : null) }
+      })
+    ).toEqual({ location: null })
+    const root = getRecord(ROOT)
+    expect(
+      locate(`orca_session_id:${ROOT}`, {
+        records: { ...records, getRecord: () => root }
+      })
+    ).toEqual({ location: null })
   })
 
   it('finds a terminal from an earlier run through the pane its mail was sent from', () => {
@@ -110,7 +146,7 @@ describe('where a sender opens', () => {
     expect(locate('term_old', {}, [sent.id])).toEqual({
       location: { kind: 'terminal', handle: 'term_now' }
     })
-    // Only mail the sender itself sent can place it, and without mail the old handle is lost.
+    // Only the sender's own mail can recover its old handle's location.
     expect(locate('term_old', {}, [other.id])).toEqual({ location: null, lost: 'terminal' })
     expect(locate('term_old')).toEqual({ location: null, lost: 'terminal' })
   })
@@ -136,7 +172,7 @@ describe('where a sender opens', () => {
       coordinatorPaneKey: null
     })
     const task = db.createTask({ runId: run.id, spec: 'remote work' })
-    // At the run's home, a federated worker's dispatch is a row with no local assignee.
+    // At the Run home, a federated Dispatch has no local assignee.
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -150,7 +186,7 @@ describe('where a sender opens', () => {
     resolveParty.mockImplementationOnce(() => {
       throw new OrchestrationError(CODES.notLive, 'lost its identity')
     })
-    expect(locate(`orca_session_id:${ROOT}`)).toEqual({ location: null, lost: 'chat' })
+    expect(locate(`orca_session_id:${ROOT}`)).toEqual({ location: null })
     resolveParty.mockImplementationOnce(() => {
       throw new Error('database is locked')
     })

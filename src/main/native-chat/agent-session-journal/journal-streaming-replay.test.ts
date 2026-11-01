@@ -58,7 +58,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  opened.close()
+  await opened.close()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -81,7 +81,7 @@ describe('streaming journal replay', () => {
     const apply = reducer.applyJournalRow
     const spy = vi.spyOn(reducer, 'applyJournalRow')
     spy.mockImplementation((state, row) => {
-      // The probe must not retain old row bodies in Vitest's call history.
+      // Retaining spy arguments would invalidate the heap measurement.
       spy.mockClear()
       applied += 1
       if (row.seq % 256 === 0) {
@@ -94,7 +94,6 @@ describe('streaming journal replay', () => {
     expect(loaded.state.items.size).toBe(1)
     expect(loaded.state.items.get('message-1')?.revision).toBe(2049)
     expect(loaded.state.lastSequence).toBe(2049)
-    // The probe must have measured every row, or the heap bound above is vacuous.
     expect(applied).toBe(2049)
     expect(peak - initial).toBeLessThan(8 * 1024 * 1024)
   })

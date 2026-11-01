@@ -35,9 +35,6 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
-)
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
@@ -146,7 +143,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('launches setup even when primary and worktree orca.yaml scripts diverge', async () => {
-    // Why: benign orca.yaml divergence must not disable setup (regression from #1280 content-equality gate); repo trust already gates execution.
+    // Repo trust gates execution; benign primary/worktree YAML divergence must not disable setup (#1280).
     listWorktreesMock.mockResolvedValue(createdWorktreeList)
     getEffectiveHooksMock.mockImplementation((_repo, worktreePath?: string) => ({
       scripts: {
@@ -242,7 +239,6 @@ describe('registerWorktreeHandlers', () => {
         sparsePresetId: 'preset-1'
       })
     })
-    // A sparse create can never claim a prepared checkout; say so rather than looking like a miss.
     expect(result.timing?.preparedCheckout).toEqual({
       status: 'miss',
       reason: 'sparse_checkout'

@@ -6,9 +6,9 @@ import {
   recordSshConnectionOpened,
   runAttributedToSshOwner
 } from './ssh-connection-attribution'
+import { unusedSshConnection } from '../unused-host-transport.test-fixture'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution keys on identity only.
-const transport = (): SshConnection => ({}) as SshConnection
+const transport = (): SshConnection => unusedSshConnection()
 
 describe('SSH transport attribution', () => {
   it('lets a cancelled attempt own only the transport its own work opened', async () => {

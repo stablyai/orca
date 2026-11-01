@@ -1,7 +1,7 @@
 import type { Repo } from '../../../../shared/repo-types'
-import { getProjectIdentityKey } from '../../../../shared/project-host-setup-projection'
+import { applyInheritedProjectGroups } from '../../../../shared/project-group-inheritance'
 import { reconcileFetchedRepos } from '../slices/repo-identity-reconcile'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
+import { getRepoRowIdentity } from '../slices/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { mergeFetchedProjectCompatibilityForHost } from '../../../../shared/project-compatibility-host-merge'
@@ -14,50 +14,15 @@ export function mergeFetchedReposForHost(
   hostId: string
 ): readonly Repo[] {
   const fetchedWithProjectGroups = applyInheritedProjectGroups(previous, fetched)
-  const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoHostIdentity))
+  const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoRowIdentity))
   const preserved = previous.filter((repo) => {
     const existingHostId = getRepoExecutionHostId(repo)
-    return existingHostId !== hostId || fetchedIdentities.has(getRepoHostIdentity(repo))
+    return existingHostId !== hostId || fetchedIdentities.has(getRepoRowIdentity(repo))
   })
   return reconcileFetchedRepos(
     previous,
-    mergeByIdentity(preserved, fetchedWithProjectGroups, getRepoHostIdentity)
+    mergeByIdentity(preserved, fetchedWithProjectGroups, getRepoRowIdentity)
   )
-}
-
-export function applyInheritedProjectGroups(
-  previous: readonly Repo[],
-  fetched: readonly Repo[]
-): Repo[] {
-  const projectGroupIdByProject = new Map<string, string | null>()
-  for (const repo of previous) {
-    const projectGroupId =
-      repo.projectGroupId === undefined ? undefined : (repo.projectGroupId ?? null)
-    if (projectGroupId === undefined) {
-      continue
-    }
-    const projectId = getProjectIdentityKey(repo)
-    if (projectId.startsWith('repo:')) {
-      continue
-    }
-    if (!projectGroupIdByProject.has(projectId)) {
-      projectGroupIdByProject.set(projectId, projectGroupId)
-    }
-  }
-  if (projectGroupIdByProject.size === 0) {
-    return [...fetched]
-  }
-  return fetched.map((repo) => {
-    if (repo.projectGroupId !== undefined) {
-      return repo
-    }
-    const inheritedProjectGroupId = projectGroupIdByProject.get(getProjectIdentityKey(repo))
-    if (inheritedProjectGroupId === undefined) {
-      return repo
-    }
-    // Why: project groups are a local affordance; runtime copies of the same canonical project should appear in the user's existing group.
-    return { ...repo, projectGroupId: inheritedProjectGroupId }
-  })
 }
 
 export function mergeProjectCompatibilityForHostRepoChange({

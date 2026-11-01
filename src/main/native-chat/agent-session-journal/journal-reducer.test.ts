@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import {
@@ -48,6 +49,23 @@ function fold(rows: JournalRow[]): JournalReducerState {
   const state = createJournalReducerState('session-1', EPOCH)
   for (const row of rows) {
     applyJournalRow(state, row)
+    expect(
+      journalInputOrder(state)
+        .unsettledSubmissions()
+        .map((entry) => entry.clientMessageId)
+        .sort()
+    ).toEqual(
+      [...state.submissions.values()]
+        .filter((entry) => entry.dispatchState === 'pending' || entry.dispatchState === 'unknown')
+        .map((entry) => entry.clientMessageId)
+        .sort()
+    )
+    for (const entry of state.submissions.values()) {
+      if (entry.dispatchState !== 'pending') {
+        expect(journalInputOrder(state).forced(entry.clientMessageId)).toBe(false)
+        expect(journalInputOrder(state).place(entry.clientMessageId)).toBeUndefined()
+      }
+    }
   }
   return state
 }
@@ -107,8 +125,6 @@ describe('ordering', () => {
   })
 
   it('orders by sequence regardless of the order rows are applied in', () => {
-    // Live append and replay must render the same list, so the fold cannot lean
-    // on the order it happens to be handed rows in.
     const state = fold([
       { kind: 'item', itemId: 'later', revision: 1, body: text('later'), ...base(9) },
       { kind: 'item', itemId: 'earlier', revision: 1, body: text('earlier'), ...base(3) }
@@ -117,7 +133,6 @@ describe('ordering', () => {
   })
 
   it("places a batch's writes by their order in it, and keeps that place on revision", () => {
-    // One Codex ask writes all its questions in one batch; their ids are not their order.
     const state = fold([
       {
         kind: 'lifecycle-batch',
@@ -168,9 +183,7 @@ describe('ordering', () => {
   })
 
   it('pins observedAt to creation so a revision cannot relocate the row', () => {
-    // Clients sort the timeline by observedAt. The provider echoing a send revises
-    // the submission row; if that advanced the timestamp the user's own bubble
-    // would sort below rows that landed while the turn was in flight.
+    // Provider echo revisions must not move optimistic sends below later timeline entries.
     const state = fold([
       { kind: 'item', itemId: 'send', revision: 0, body: userText('ok thanks'), ...base(1) },
       { kind: 'item', itemId: 'frame', revision: 1, body: text('warning'), ...base(2) },
@@ -179,7 +192,6 @@ describe('ordering', () => {
     const items = renderJournalState(state).items
     expect(items.map((item) => item.itemId)).toEqual(['send', 'frame'])
     expect(items.map((item) => item.observedAt)).toEqual([base(1).ts, base(2).ts])
-    // The revision still lands — only its ordering keys are ignored.
     expect(items[0]?.revision).toBe(1)
   })
 
@@ -246,7 +258,6 @@ describe('submission and dispatch state machine', () => {
     const items = renderJournalState(state).items
     expect(items).toHaveLength(1)
     expect(items[0]?.itemId).toBe(agentJournalSubmissionKey('cm_1'))
-    // The echo advances the revision; the submitted bubble keeps its original slot.
     expect(items[0]?.sequence).toBe(1)
     expect(items[0]?.revision).toBe(1)
   })
@@ -338,9 +349,7 @@ describe('submission and dispatch state machine', () => {
       { kind: 'item', itemId: 'claude:session-1:user-1', revision: 1, body, ...base(4) }
     ])
 
-    // A journal written before a refused write became `rejected` still holds it as
-    // `unknown`. Replay must not let that row claim the echo of a later send that
-    // genuinely landed, which would attach the delivery to the wrong message.
+    // Legacy unknown transport failures prove non-delivery and cannot claim later genuine resend echoes.
     expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
     expect(state.submissions.get('cm_2')).toMatchObject({
       dispatchState: 'accepted',
@@ -468,7 +477,6 @@ describe('submission and dispatch state machine', () => {
       {
         kind: 'submission',
         clientMessageId: 'agent-send',
-        // Stored as the send path stores it: the sender is outside the fingerprint.
         payloadFingerprint: agentSessionSendBodyFingerprint('session-1', { ...echoed, from }),
         providerHandle: { kind: 'codex', threadId: 'thread-1' },
         body: { ...echoed, from },
@@ -602,14 +610,12 @@ describe('submission and dispatch state machine', () => {
       }
     ])
 
-    // `rejected` is terminal, so nothing can put this id back on the wire; the
-    // user's Retry sends a new message under a new id instead.
+    // Rejected IDs stay spent; user Retry must create a new message ID.
     expect(state.submissions.get('cm_1')).toMatchObject({
       dispatchState: 'rejected',
       submittedAt: submission.ts,
       reason: 'provider_write_failed: closed before enqueue'
     })
-    // It sits where it was rejected; the late `pending` moves nothing.
     expect(renderJournalState(state).items[0]?.sequence).toBe(2)
   })
 
@@ -648,8 +654,6 @@ describe('lifecycle settlement deduplication', () => {
 
 describe('malformed persisted item keys', () => {
   it('degrades a malformed-percent item id to an opaque key instead of throwing', () => {
-    // A user-message body drives identity resolution through the key parser;
-    // pre-fix `parseAgentJournalItemKey('%')` threw `URIError: URI malformed`.
     const state = fold([
       { kind: 'item', itemId: '%', revision: 1, body: userText('hi'), ...base(1) }
     ])
@@ -698,8 +702,7 @@ describe('re-adding a tombstoned row', () => {
     applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
     expect(renderJournalState(state).items).toEqual([])
 
-    // Same identity, re-added later in the session: a revision built only from
-    // `items` would restart at 1 and lose to the tombstone forever.
+    // Recreated items must outrank retained tombstones instead of restarting revision at 1.
     applyJournalRow(
       state,
       buildJournalItemRow({
@@ -715,11 +718,6 @@ describe('re-adding a tombstoned row', () => {
     expect(renderJournalState(state).items.map((item) => item.body)).toEqual([text('second')])
   })
 
-  // `upsertItem` clearing the tombstone on a re-add is a map-state invariant:
-  // `items` and `tombstones` stay disjoint, so a re-added row is never both
-  // present and removed. Revision ordering is now independent of it —
-  // `buildJournalTombstoneRow` takes `max(itemRevision, tombstoneRevision) + 1`
-  // — so what this pins is the map state itself, not the ranking.
   it('removes the row again after it was re-added', () => {
     const identity: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'roster' }
     const itemId = agentJournalItemKey(identity)
@@ -754,4 +752,35 @@ describe('re-adding a tombstoned row', () => {
     applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 4, fence: 1, ts: 1_004 }))
     expect(renderJournalState(state).items).toEqual([])
   })
+})
+
+it('retires unknown execution debt with the submission tombstone', () => {
+  const state = fold([
+    {
+      kind: 'submission',
+      clientMessageId: 'retired',
+      providerHandle: { kind: 'codex', threadId: 'thread-1' },
+      payloadFingerprint: 'retired',
+      body: userText('retired'),
+      handoverRecorded: true,
+      ...base(1)
+    },
+    {
+      kind: 'dispatch',
+      clientMessageId: 'retired',
+      state: 'unknown',
+      providerItemId: null,
+      reason: null,
+      ...base(2)
+    },
+    {
+      kind: 'tombstone',
+      itemId: agentJournalSubmissionKey('retired'),
+      revision: 1,
+      retireSubmission: true,
+      ...base(3)
+    }
+  ])
+  expect(state.submissions.has('retired')).toBe(false)
+  expect(journalInputOrder(state).unsettledSubmissions()).toEqual([])
 })

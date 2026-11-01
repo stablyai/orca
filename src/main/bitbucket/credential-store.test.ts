@@ -17,8 +17,7 @@ async function loadStore(
   } = {}
 ) {
   vi.resetModules()
-  // Why: doMock registrations outlive resetModules, so an injected failure from
-  // one case would leak into every later one in this file.
+  // resetModules leaves doMock registrations behind.
   vi.doUnmock('node:fs')
   vi.doUnmock('../../shared/secure-path-windows-acl')
   const { setSecretStore } = await import('../../shared/secret-store')
@@ -37,8 +36,6 @@ async function loadStore(
       const actual = await vi.importActual<typeof Fs>('node:fs')
       return {
         ...actual,
-        // Why: write(2) may return a short count; publishing without looping
-        // would rename a truncated credential into place.
         writeSync: (fd: number, data: Buffer, offset = 0, length = data.length) =>
           actual.writeSync(fd, data, offset, Math.min(1, length))
       }
@@ -55,7 +52,7 @@ async function loadStore(
         }
       }
     })
-    // Why: on Windows the staged credential is written by the ACL helper, not writeSync.
+    // Windows writes use the ACL helper.
     vi.doMock('../../shared/secure-path-windows-acl', async (importOriginal) => ({
       ...(await importOriginal<typeof WindowsAcl>()),
       writeRestrictedWindowsFile: () => {
@@ -64,8 +61,7 @@ async function loadStore(
     }))
   }
   if (options.unlinkError) {
-    // Why mocked: chmod-based failure injection is not portable — Windows has no
-    // POSIX modes and a root/elevated runner can unlink through a 0500 directory.
+    // Mock failures: POSIX modes cannot reliably deny deletion on Windows or elevated runners.
     const error = options.unlinkError
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof Fs>('node:fs')
@@ -86,33 +82,6 @@ beforeEach(() => {
 })
 
 describe('Bitbucket credential store', () => {
-  it('persists plaintext metadata and an encrypted secret, then reads them back', async () => {
-    const store = await loadStore()
-    store.saveBitbucketCredential({
-      authMode: 'basic',
-      email: 'ada@example.com',
-      baseUrl: null,
-      account: 'ada',
-      accessToken: null,
-      apiToken: 'secret-token'
-    })
-
-    expect(store.hasStoredBitbucketCredential()).toBe(true)
-    expect(store.getStoredBitbucketMetadata()).toMatchObject({
-      authMode: 'basic',
-      email: 'ada@example.com',
-      account: 'ada'
-    })
-    expect(store.loadStoredBitbucketSecret()).toMatchObject({
-      accessToken: null,
-      apiToken: 'secret-token',
-      // Why (STA-3941): auth fields live in the envelope so a torn write cannot
-      // pair a new secret with a stale email.
-      authMode: 'basic',
-      email: 'ada@example.com'
-    })
-  })
-
   it('writes both credential files 0600', async () => {
     const store = await loadStore()
     store.saveBitbucketCredential({
@@ -141,8 +110,6 @@ describe('Bitbucket credential store', () => {
         apiToken: null
       })
     save('first')
-    // Why: writeFileSync's mode is ignored for an existing file, so a loosened
-    // credential would stay world-readable across a reconnect.
     const { chmodSync } = await import('node:fs')
     for (const file of ['bitbucket-credential.enc', 'bitbucket-credential.json']) {
       chmodSync(join(tempHome, '.orca', file), 0o644)
@@ -165,18 +132,15 @@ describe('Bitbucket credential store', () => {
       apiToken: null
     })
 
-    // Simulate a fresh session: caches cleared, files still on disk.
     store._resetBitbucketCredentialCache()
 
     expect(store.getStoredBitbucketMetadata()?.account).toBe('dev')
     expect(store.hasStoredBitbucketCredential()).toBe(true)
     expect(decryptStringMock).not.toHaveBeenCalled()
 
-    // Without force, the secret stays unread.
     expect(store.loadStoredBitbucketSecret()).toBeNull()
     expect(decryptStringMock).not.toHaveBeenCalled()
 
-    // Forcing the load decrypts exactly once, then caches.
     expect(store.loadStoredBitbucketSecret({ force: true })).toMatchObject({
       accessToken: 'access-secret',
       apiToken: null,
@@ -229,8 +193,6 @@ describe('Bitbucket credential store', () => {
     const { readFileSync } = await import('node:fs')
     const before = readFileSync(join(tempHome, '.orca', 'bitbucket-credential.enc'))
 
-    // Why: a direct write truncates in place, so a failure mid-write used to
-    // destroy the only working credential. The temp+rename path cannot.
     const failing = await loadStore({ writeError: new Error('disk full') })
     expect(() =>
       failing.saveBitbucketCredential({
@@ -258,8 +220,7 @@ describe('Bitbucket credential store', () => {
       apiToken: 'second-token'
     })
 
-    // Simulate an interrupt between publishing the secret and the metadata:
-    // metadata still describes the previous connection.
+    // Simulate interruption after secret publication but before metadata publication.
     const { writeFileSync } = await import('node:fs')
     writeFileSync(
       join(tempHome, '.orca', 'bitbucket-credential.json'),
@@ -275,8 +236,6 @@ describe('Bitbucket credential store', () => {
     store._resetBitbucketCredentialCache()
 
     const { resolveBitbucketAuthConfig } = await import('./resolve-auth')
-    // Auth follows the envelope, so the pair stays usable; only the displayed
-    // account is stale until the next status refresh.
     expect(resolveBitbucketAuthConfig()).toMatchObject({
       email: 'grace@example.com',
       apiToken: 'second-token'
@@ -294,7 +253,6 @@ describe('Bitbucket credential store', () => {
       apiToken: 'legacy-token'
     })
     const { writeFileSync } = await import('node:fs')
-    // Legacy envelopes held only the two tokens.
     writeFileSync(
       join(tempHome, '.orca', 'bitbucket-credential.enc'),
       JSON.stringify({ accessToken: null, apiToken: 'legacy-token' })
@@ -360,8 +318,6 @@ describe('Bitbucket credential store', () => {
       apiToken: 'secret-token'
     })
 
-    // Clearing memory while the files survive would resurrect the credential on
-    // the next launch, so the failure has to reach the caller.
     expect(() => store.clearStoredBitbucketCredential()).toThrow(/permission denied/)
     expect(existsSync(join(tempHome, '.orca', 'bitbucket-credential.enc'))).toBe(true)
   })

@@ -6,20 +6,11 @@ import { devinSessionsIndexForSidecar } from './session-scanner-devin-db'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { SessionFileCandidate } from './session-scanner-types'
 
-/**
- * Merges an agent's sibling file onto the session its transcript alone
- * produced. Kept out of the fold and applied here so it is a pure function of
- * (fold result, sibling): re-running it starts from what the transcript said,
- * never from a previous merge, so a rewritten sibling replaces the fields it
- * supplied last time instead of losing to them.
- *
- * The reuse-time counterpart of session-scanner-codex-cached-title.ts, for
- * agents whose sibling the transcript key cannot see.
- */
+/** Reapply sibling metadata to the transcript fold so rewritten sidecars replace earlier enrichment. */
 
 export type SidecarEnrichment = {
   session: AiVaultSession | null
-  /** The sibling could not be read; the caller records the observation as unknown. */
+  /** Keep unreadable sidecars unknown so later scans retry. */
   refused: boolean
 }
 
@@ -52,7 +43,6 @@ export function reuseUnchangedSidecarSession(
   }
 }
 
-/** True when the sibling only adds metadata, so a change to it needs no re-parse. */
 export function sidecarEnrichesWithoutReparse(candidate: SessionFileCandidate): boolean {
   return candidate.agent === 'cursor' || candidate.agent === 'devin'
 }
@@ -93,7 +83,6 @@ export function mergeCursorChatMeta(
   },
   platform: NodeJS.Platform
 ): AiVaultSession {
-  // A generated title means the fold found none, so the sibling's may stand in.
   const named = session.title !== generatedSessionTitle(session.agent, session.sessionId)
   const cwd = session.cwd ?? meta.cwd
   const merged: AiVaultSession = {
@@ -106,7 +95,6 @@ export function mergeCursorChatMeta(
   if (cwd === session.cwd) {
     return merged
   }
-  // The resume command embeds the cwd, so it has to be rebuilt with it.
   return {
     ...merged,
     resumeCommand: buildAiVaultResumeCommand({
@@ -119,12 +107,7 @@ export function mergeCursorChatMeta(
   }
 }
 
-/**
- * Merge the Devin sessions.db row onto the transcript's session. Devin's
- * sibling is one shared index for the whole transcripts dir rather than a
- * per-session file, so this also decides membership: a row the user hid in
- * Devin's UI drops the session from the listing entirely.
- */
+/** Devin’s shared index also determines membership: hidden rows suppress their sessions. */
 function enrichDevinSessionFromDb(
   sidecar: SessionSidecarObservation | undefined,
   foldSession: AiVaultSession | null,
@@ -135,8 +118,7 @@ function enrichDevinSessionFromDb(
   }
   const { index, unreadable } = devinSessionsIndexForSidecar(sidecar)
   if (!index) {
-    // An observed-but-unreadable db must not settle as "no enrichment": the
-    // refusal keeps the sidecar unknown so the next scan retries the merge.
+    // Keep unreadable sidecars unknown so the next scan retries enrichment.
     return { session: foldSession, refused: unreadable }
   }
   const row = index.get(foldSession.sessionId)

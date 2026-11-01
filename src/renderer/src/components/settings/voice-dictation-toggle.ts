@@ -27,8 +27,7 @@ export async function handleVoiceDictationToggle({
   notifyPermissionRequired,
   notifyPermissionRequestFailed
 }: VoiceDictationToggleOptions): Promise<void> {
-  // Why: changing the Voice Dictation switch proves the user discovered the
-  // feature; disabling it later should not make the discovery modal eligible.
+  // Toggling proves discovery; later disabling must not make the introduction eligible again.
   markFeatureTipsSeen(['voice-dictation'])
 
   if (voiceEnabled) {
@@ -38,8 +37,7 @@ export async function handleVoiceDictationToggle({
 
   setPermissionPending?.(true)
   try {
-    // Why: enabling dictation is the point where users expect the macOS
-    // microphone prompt, not after their first attempted recording fails.
+    // Request the microphone when dictation is enabled, before a first recording can fail.
     const result = await requestMicrophonePermission()
     if (result.status === 'granted' || result.status === 'unsupported') {
       updateVoiceSettings({ enabled: true })

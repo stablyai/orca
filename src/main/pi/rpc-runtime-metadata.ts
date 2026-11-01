@@ -4,7 +4,7 @@ import { agentSessionAccountHome } from '../../shared/agent-session-account-home
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import type { StructuredAgentRuntimeMetadata } from '../runtime/structured-agent-runtime-registration-types'
 import { PI_RPC_AGENT } from './rpc-agent-definition'
-import { resolvePiRpcCommand, supportsPiRpcVersion } from './rpc-launch-resolution'
+import { PI_RPC_MINIMUM_VERSIONS, resolvePiRpcCommand } from './rpc-launch-resolution'
 import { createPiModelCatalogProbe } from './rpc-model-catalog-probe'
 import { PI_SESSION_HISTORY } from './pi-session-history'
 import { PI_TRANSCRIPT_IMPORT } from './pi-transcript-import'
@@ -13,10 +13,9 @@ export const PI_RPC_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
   definition: PI_RPC_AGENT,
   modelCatalog: (context) => ({
     kind: 'probe',
-    // `--list-models` marks no model as the one Pi runs by default.
+    // `get_available_models` marks no model as the one Pi runs by default.
     listingNamesConfiguredModel: false,
     probe: createPiModelCatalogProbe({
-      // The environment a chat's launch starts from too.
       resolveEnvironment: () => context.environment.resolveAgentEnvironment('pi'),
       refreshEnvironmentAfterMiss: context.environment.refreshAfterMissingProgram,
       ...(context.deps.resolveAgentCommandSettings
@@ -29,10 +28,13 @@ export const PI_RPC_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
   supportsLocation: supportsSupervisedProviderChildLocation,
   launchCheck: {
     resolveLaunch: (env, commandSettings) => ({
-      command: resolvePiRpcCommand(env, commandSettings),
+      ...resolvePiRpcCommand(env, commandSettings),
       env
     }),
-    supportsVersion: supportsPiRpcVersion
+    minimumVersions: PI_RPC_MINIMUM_VERSIONS
+  },
+  chatProgram: {
+    resolve: (env, commandSettings) => ({ ...resolvePiRpcCommand(env, commandSettings), env })
   },
   resolveAccountHome: async ({ launchEnv }) =>
     agentSessionAccountHome(

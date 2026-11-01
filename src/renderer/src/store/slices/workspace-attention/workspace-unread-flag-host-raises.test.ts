@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../../types'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
-import { persistWorktreeMeta } from '../worktrees/metadata/worktree-meta-persist'
+
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../../../shared/workspace-unread-raise-capability'
 import { createTestStore, makeWorktree, TEST_REPO } from '../store-test-helpers'
 import { makeFolderWorkspace } from '../worktrees-slice-test-fixtures'
-import { clearWorkspaceUnreadFlag, markWorkspaceUnreadFlag } from './workspace-unread-flag'
+import { markWorkspaceUnreadFlag } from './workspace-unread-flag'
+
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 
 // With the switch on, the window raises the flag exactly where the owning host does not.
@@ -89,31 +90,6 @@ beforeEach(() => {
 })
 
 describe('the window raises the unread flag only where its host does not', () => {
-  it('leaves it to this app’s own main, which covers its local and SSH workspaces', async () => {
-    const { mark, isUnread } = createStore()
-    await mark(LOCAL_WT)
-    expect(isUnread(LOCAL_WT)).toBe(false)
-    expect(persistWorktreeMeta).not.toHaveBeenCalled()
-  })
-
-  it('leaves it to a paired server that raises it', async () => {
-    const { mark, isUnread } = createStore()
-    await mark(NEW_SERVER_WT)
-    expect(isUnread(NEW_SERVER_WT)).toBe(false)
-    expect(persistWorktreeMeta).not.toHaveBeenCalled()
-  })
-
-  it('raises it on an older paired server, writing to that server', async () => {
-    const { mark, isUnread } = createStore()
-    await mark(OLD_SERVER_WT)
-    expect(isUnread(OLD_SERVER_WT)).toBe(true)
-    expect(persistWorktreeMeta).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'old' },
-      OLD_SERVER_WT,
-      expect.objectContaining({ isUnread: true })
-    )
-  })
-
   it('answers from the cached status without probing again', async () => {
     const { mark, isUnread } = createStore()
     cachedStatus.set('slow', [WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY])
@@ -138,37 +114,33 @@ describe('the window raises the unread flag only where its host does not', () =>
     expect(isUnread(UNREACHABLE_SERVER_WT)).toBe(true)
   })
 
-  it('decides a folder workspace by the host of the row it raises', async () => {
-    const { store, mark, updateFolderWorkspace } = createStore()
-    const folder = folderWorkspaceKey(FOLDER_ID)
-    store.setState({ activeWorktreeId: folder, activeWorkspaceExecutionHostId: 'runtime:new' })
-    await mark(folder)
-    expect(updateFolderWorkspace).not.toHaveBeenCalled()
-
-    store.setState({ activeWorkspaceExecutionHostId: 'runtime:old' })
-    await mark(folder)
-    expect(updateFolderWorkspace).toHaveBeenCalledWith(
-      FOLDER_ID,
-      expect.objectContaining({ isUnread: true }),
-      { executionHostId: 'runtime:old' }
-    )
+  it('drops a raise still waiting on a server’s first status once the user marks it read', async () => {
+    const { store, mark, isUnread } = createStore()
+    let answer: (capabilities: readonly string[]) => void = () => {}
+    hostCapabilities.set('slow', new Promise((resolve) => (answer = resolve)))
+    await mark(SLOW_SERVER_WT)
+    store.getState().setWorkspaceUnreadByUser(SLOW_SERVER_WT, false, 'runtime:slow')
+    answer([])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(isUnread(SLOW_SERVER_WT)).toBe(false)
   })
 
-  it('clears a flag on every owner, whichever side raised it', () => {
-    const { store, isUnread } = createStore()
-    for (const id of [LOCAL_WT, NEW_SERVER_WT, OLD_SERVER_WT]) {
-      store.setState((s) => ({
-        worktreesByRepo: {
-          repo1: s.worktreesByRepo.repo1.map((worktree) =>
-            worktree.id === id ? { ...worktree, isUnread: true } : worktree
-          )
-        }
-      }))
-      clearWorkspaceUnreadFlag(store.setState, store.getState, id)
-      expect(isUnread(id)).toBe(false)
-      expect(persistWorktreeMeta).toHaveBeenLastCalledWith(expect.anything(), id, {
-        isUnread: false
-      })
-    }
+  it('raises the folder row it decided for, even if the screen moves to the other row meanwhile', async () => {
+    const { store, mark, updateFolderWorkspace } = createStore()
+    const folder = folderWorkspaceKey(FOLDER_ID)
+    let answer: (capabilities: readonly string[]) => void = () => {}
+    hostCapabilities.set('old', new Promise((resolve) => (answer = resolve)))
+    store.setState({ activeWorktreeId: folder, activeWorkspaceExecutionHostId: 'runtime:old' })
+    await mark(folder)
+    store.setState({ activeWorkspaceExecutionHostId: 'runtime:new' })
+    answer([])
+    await vi.waitFor(() =>
+      expect(updateFolderWorkspace).toHaveBeenCalledWith(
+        FOLDER_ID,
+        expect.objectContaining({ isUnread: true }),
+        { executionHostId: 'runtime:old' }
+      )
+    )
+    expect(updateFolderWorkspace).toHaveBeenCalledTimes(1)
   })
 })

@@ -4,25 +4,18 @@ import type {
   AgentJournalPromptOption,
   AgentJournalQuestionItem
 } from '../../shared/agent-session-journal-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { boundInlineText } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { boundJournalPromptText } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import {
   CODEX_APPROVAL_DECISIONS,
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
+  CODEX_MCP_ELICITATION_METHOD,
   codexJournalPromptIdPart,
   encodeCodexJournalQuestionOptionId,
   type CodexApprovalDecision
 } from './codex-structured-prompt-replies'
-
-// Codex prompt requests → durable journal items.
-//
-// Codex blocks the turn on these, but the answer may arrive minutes later from
-// a different device, so the prompt has to exist as a journal item with its own
-// resolution state rather than as live callback state. The reply path already
-// lives in `codex-structured-prompt-replies.ts`; this is only the render model.
+import { codexMcpToolApprovalDecisions } from './codex-mcp-tool-approval'
 
 const APPROVAL_DECISION_LABELS: Record<CodexApprovalDecision, string> = {
   accept: 'Allow',
@@ -40,7 +33,7 @@ const PENDING = {
 
 const MAX_CODEX_PROMPT_QUESTIONS = 64
 const MAX_CODEX_PROMPT_OPTIONS = 64
-const PROMPT_OPTION_LIMITS = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 1024 }
+const PROMPT_OPTION_LIMITS = { inlineHeadBytes: 1024 }
 
 function readParams(params: unknown): Record<string, unknown> {
   return typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
@@ -51,20 +44,15 @@ function readString(source: Record<string, unknown>, key: string): string | null
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
-function boundPromptText(value: string): string {
-  return boundInlineText(value, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+function boundNullablePromptText(value: string | null): string | null {
+  return value === null ? null : boundJournalPromptText(value)
 }
 
 function boundPromptOptionLabel(value: string): string {
   return boundInlineText(value, PROMPT_OPTION_LIMITS).text
 }
 
-/**
- * Codex offers a per-request decision set, so the options come off the request
- * when it names them. Falling back to the full set is deliberate: a build that
- * omits the field still accepts all four, and offering nothing would leave the
- * turn blocked with no way to answer it.
- */
+/** Older providers omit availableDecisions; fall back to all supported decisions. */
 export function codexApprovalOptions(params: unknown): AgentJournalPromptOption[] {
   const available = readParams(params).availableDecisions
   const offered = Array.isArray(available)
@@ -79,11 +67,13 @@ export function codexApprovalOptions(params: unknown): AgentJournalPromptOption[
 export function codexApprovalItem(input: {
   method: string
   params: unknown
-  /** What is being approved, taken from the item Codex already announced —
-   *  the approval request itself does not repeat the command or the patch. */
+  /** Fallback from the announced item when the approval request omits its detail. */
   detail: string | null
 }): AgentJournalApprovalItem {
   const params = readParams(input.params)
+  if (input.method === CODEX_MCP_ELICITATION_METHOD) {
+    return codexMcpToolApprovalItem(params)
+  }
   return {
     kind: 'approval',
     title:
@@ -98,8 +88,19 @@ export function codexApprovalItem(input: {
   }
 }
 
-function boundNullablePromptText(value: string | null): string | null {
-  return value === null ? null : boundPromptText(value)
+function codexMcpToolApprovalItem(params: Record<string, unknown>): AgentJournalApprovalItem {
+  const toolParams = readParams(params._meta).tool_params
+  return {
+    kind: 'approval',
+    title: boundJournalPromptText(readString(params, 'message') ?? 'Allow this tool call?'),
+    detail: toolParams === undefined ? null : boundJournalPromptText(JSON.stringify(toolParams)),
+    options: codexMcpToolApprovalDecisions(params).map((decision) => ({
+      id: decision,
+      // MCP cancel skips only this call and the turn continues, so it reads as Deny, not Stop.
+      label: APPROVAL_DECISION_LABELS[decision === 'cancel' ? 'decline' : decision]
+    })),
+    resolution: { ...PENDING }
+  }
 }
 
 function approvalDetail(params: Record<string, unknown>): string | null {
@@ -124,12 +125,7 @@ export type CodexQuestionItem = {
   body: AgentJournalQuestionItem
 }
 
-/**
- * One journal item per question, not one per request. Codex takes a single
- * reply covering every question, but a client answers them one at a time, and
- * each answer has to win its own compare-and-set — so each question needs its
- * own resolution state. The reply fires when the last one lands.
- */
+/** Each question needs independent answer arbitration; Codex receives one combined reply. */
 export function codexQuestionItems(input: {
   threadId: string
   promptKey: string
@@ -152,7 +148,7 @@ export function codexQuestionItems(input: {
       identity: codexPromptIdentity({ ...input, questionId }),
       body: {
         kind: 'question',
-        question: boundPromptText(prompt),
+        question: boundJournalPromptText(prompt),
         options: questionOptions(question, questionId),
         ...(questionAllowsFreeText(question)
           ? { freeTextQuestionId: codexJournalPromptIdPart(questionId) }
@@ -189,8 +185,7 @@ function questionOptions(
     const option = readParams(entry)
     const label = readString(option, 'label')
     if (label !== null && option.isOther !== true) {
-      // The option id has to name its question: Codex's reply is a map keyed by
-      // question id, and the client only ever hands back an option id.
+      // Clients return option IDs; encode the question needed by Codex's answer map.
       mapped.push({
         id: encodeCodexJournalQuestionOptionId(questionId, label),
         label: boundPromptOptionLabel(label)
@@ -200,10 +195,7 @@ function questionOptions(
   return mapped
 }
 
-/** Prompts are live-session state Codex does not persist, so they are keyed in
- *  the Orca namespace rather than by `(threadId, turnId, ordinal)`. */
-/** Keyed by the prompt, not by the tool item it is about: one shell item can
- *  ask several times, and each ask is its own journal row to answer. */
+/** Use Orca keys for nonpersisted prompts; one tool item can issue several distinct asks. */
 export function codexPromptIdentity(input: {
   threadId: string
   promptKey: string

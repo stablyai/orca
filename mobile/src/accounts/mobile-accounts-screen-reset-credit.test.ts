@@ -16,6 +16,7 @@ const dependencies = vi.hoisted(() => ({
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
@@ -309,8 +310,7 @@ describe('accounts route Codex reset credit', () => {
     const secondRenderer = await renderAccountsRoute()
     await confirmReset(secondRenderer)
 
-    // No journal on the phone, as on the desktop: a new key, the same offer, and the host's ledger
-    // answers it with the attempt it recorded.
+    // No phone journal: a new key with same offer resumes the host ledger’s recorded attempt, as desktop does.
     expect(dependencies.resetRequest).toHaveBeenCalledTimes(2)
     const [firstParams, firstOptions] = dependencies.resetRequest.mock.calls[0]!
     const [secondParams, secondOptions] = dependencies.resetRequest.mock.calls[1]!

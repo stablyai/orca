@@ -1,5 +1,12 @@
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import {
+  activateMobileUiLocale,
+  mobileI18n,
+  setMobilePseudoLocalization
+} from '../i18n/mobile-i18n'
+import { pseudoLocalizeString } from '../../../src/shared/pseudo-localization'
 import React from 'react'
+import { Text } from 'react-native'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import { CreateTerminalTab } from '../../../src/shared/rpc-contract/session-tabs-schemas-params'
 import type { RpcClient } from '../transport/rpc-client'
@@ -14,6 +21,7 @@ const state = vi.hoisted(
     legacy: boolean
     completedBoundary: boolean
     session: AiVaultSession | null
+    resumeAction?: { disabled: boolean; loading: boolean }
     onResume?: (session: AiVaultSession) => Promise<void>
   } => ({
     generation: 1,
@@ -26,30 +34,63 @@ const state = vi.hoisted(
 )
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   SectionList: 'SectionList',
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View',
+  Dimensions: { get: () => ({ width: 390, height: 844 }) },
+  Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => {} },
   Platform: { OS: 'web', select: (choices: Record<string, unknown>) => choices.web },
   AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
-  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
+  StyleSheet: { absoluteFill: {}, create: (value: unknown) => value, hairlineWidth: 1 }
 }))
 vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'SafeAreaView',
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
-vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Play: 'Icon', RefreshCw: 'Icon' }))
-const notifications = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), push: vi.fn() }))
+vi.mock('react-native-svg', () => ({
+  default: 'Svg',
+  Defs: 'Defs',
+  LinearGradient: 'LinearGradient',
+  Path: 'Path',
+  Rect: 'Rect',
+  Stop: 'Stop'
+}))
+vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'Icon',
+  ChevronLeft: 'Icon',
+  CircleAlert: 'Icon',
+  History: 'Icon',
+  RefreshCw: 'Icon',
+  Search: 'Icon',
+  SearchX: 'Icon',
+  TriangleAlert: 'Icon',
+  X: 'Icon'
+}))
+// Reanimated needs native modules; the eased height is not under test.
+vi.mock('../components/AutoHeight', () => ({
+  AutoHeight: ({ children }: { children: unknown }) => children
+}))
+const notifications = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+  replace: vi.fn(),
+  back: vi.fn()
+}))
 vi.mock('../platform/haptics', () => ({
   triggerError: notifications.error,
   triggerSuccess: notifications.success
 }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('../navigation/route-handoff', () => ({
-  useRouteHandoff: () => ({ push: notifications.push, back: vi.fn(), canGoBack: () => false })
+  useRouteHandoff: () => ({
+    replace: notifications.replace,
+    back: notifications.back,
+    canGoBack: () => false
+  })
 }))
 vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: state.client, state: state.connection }),
@@ -79,14 +120,48 @@ vi.mock('./use-mobile-agent-history-state', () => ({
 vi.mock('./MobileAgentSessionHistoryList', () => ({
   MobileAgentSessionHistoryList: (props: {
     onResume: (session: AiVaultSession) => Promise<void>
+    resumeActionStateBySessionId: ReadonlyMap<string, { disabled: boolean; loading: boolean }>
   }) => {
+    state.resumeAction = props.resumeActionStateBySessionId.get(state.session?.id ?? '')
     state.onResume = props.onResume
     return null
   }
 }))
 import { MobileAgentSessionHistoryPanel } from './MobileAgentSessionHistoryPanel'
+import { useProvideSessionScreenHandlers } from '../session/session-screen-handlers'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+afterEach(async () => {
+  vi.useRealTimers()
+  setMobilePseudoLocalization(false)
+  mobileI18n.removeResourceBundle('fr', 'translation')
+  await activateMobileUiLocale('en')
+})
+
+function ownedSession(): AiVaultSession {
+  return {
+    id: 'qoder:owned-session',
+    executionHostId: 'local',
+    agent: 'qoder',
+    sessionId: 'owned-session',
+    title: 'Owned session',
+    cwd: '/owned/workspace',
+    branch: null,
+    model: null,
+    filePath: '/owned/qoder-session.json',
+    codexHome: null,
+    createdAt: null,
+    updatedAt: null,
+    modifiedAt: '2026-10-04T00:00:00.000Z',
+    messageCount: 2,
+    totalTokens: 10,
+    previewMessages: [],
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 0,
+    resumeCommand: '',
+    subagent: null
+  }
+}
 it.each([
   ['stable', 'metadata'],
   ['generation', 'metadata'],
@@ -111,33 +186,12 @@ it.each([
   let hostId = 'owned-host'
   notifications.error.mockClear()
   notifications.success.mockClear()
-  notifications.push.mockClear()
+  notifications.replace.mockClear()
   state.legacy = boundary === 'accepted send'
   state.completedBoundary = state.legacy || boundary === 'owned create accepted'
   state.generation = 1
   state.connection = 'connected'
-  state.session = {
-    id: 'qoder:owned-session',
-    executionHostId: 'local',
-    agent: 'qoder',
-    sessionId: 'owned-session',
-    title: 'Owned session',
-    cwd: '/owned/workspace',
-    branch: null,
-    model: null,
-    filePath: '/owned/qoder-session.json',
-    codexHome: null,
-    createdAt: null,
-    updatedAt: null,
-    modifiedAt: '2026-10-04T00:00:00.000Z',
-    messageCount: 2,
-    totalTokens: 10,
-    previewMessages: [],
-    queuedMessageCount: 0,
-    subagentTranscriptCount: 0,
-    resumeCommand: '',
-    subagent: null
-  }
+  state.session = ownedSession()
   if (boundary === 'preparation' || boundary === 'terminal creation') {
     state.session.agent = 'codex'
     state.session.codexHome = '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
@@ -308,7 +362,7 @@ it.each([
       const completion = {
         errors: notifications.error.mock.calls.length,
         successes: notifications.success.mock.calls.length,
-        navigations: notifications.push.mock.calls.length
+        navigations: notifications.replace.mock.calls.length
       }
       if (scenario !== 'unmount') {
         await act(async () => {
@@ -348,3 +402,268 @@ it.each([
     await act(async () => rendered.tree?.unmount())
   }
 })
+
+it('resuming into the session it was opened from shows the resumed terminal there', async () => {
+  notifications.replace.mockClear()
+  notifications.back.mockClear()
+  state.legacy = false
+  state.generation = 1
+  state.connection = 'connected'
+  state.session = ownedSession()
+  const replies: Record<string, unknown> = {
+    'repo.list': { repos: [{ id: 'owned-repo', path: '/owned/workspace', connectionId: null }] },
+    'folderWorkspace.list': { workspaces: [] },
+    'projectGroup.list': { groups: [] },
+    'worktree.ps': {
+      worktrees: [{ worktreeId: 'owned-worktree', repoId: 'owned-repo', path: '/owned/workspace' }]
+    },
+    'settings.get': {},
+    'session.tabs.createTerminal': {
+      tab: { type: 'terminal', id: 'owned-tab', terminal: 'owned-pty', title: 'Terminal' }
+    }
+  }
+  state.client = {
+    ...createFakeRpcClient({ getGeneration: () => state.generation }),
+    sendRequest: vi.fn<RpcClient['sendRequest']>(async (method) => ({
+      id: 'owned-reply',
+      ok: true,
+      result: replies[method]
+    }))
+  }
+  const onResumedTerminal = vi.fn()
+  function SessionBelow() {
+    useProvideSessionScreenHandlers('owned-host', 'owned-worktree', {
+      onFileOpenStart: vi.fn(),
+      onOpenedFileDiff: vi.fn(),
+      onResumedTerminal
+    })
+    return null
+  }
+  let tree: ReactTestRenderer | null = null
+  await act(async () => {
+    tree = create(
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(SessionBelow),
+        React.createElement(MobileAgentSessionHistoryPanel, {
+          hostId: 'owned-host',
+          worktreeId: 'owned-worktree',
+          origin: 'session'
+        })
+      )
+    )
+  })
+  try {
+    await act(async () => {
+      if (!state.session || !state.onResume) {
+        throw new Error('missing resume callback')
+      }
+      await state.onResume(state.session)
+    })
+    expect(onResumedTerminal).toHaveBeenCalledExactlyOnceWith('owned-pty')
+    expect(notifications.back).toHaveBeenCalledTimes(1)
+    expect(notifications.replace).not.toHaveBeenCalled()
+  } finally {
+    await act(async () => tree?.unmount())
+  }
+})
+
+it.each([
+  'opened',
+  'old-host',
+  'timeout',
+  'unsupported-agent',
+  'generation without render',
+  'generation fallback'
+] as const)(
+  'a native History tap opens in place, with safe legacy fallback only: %s',
+  async (mode) => {
+    await activateMobileUiLocale('en')
+    notifications.replace.mockClear()
+    notifications.success.mockClear()
+    notifications.error.mockClear()
+    state.generation = 1
+    state.connection = 'connected'
+    state.legacy = true
+    state.completedBoundary = true
+    state.session = {
+      ...ownedSession(),
+      agent: mode === 'unsupported-agent' ? 'qoder' : 'codex',
+      sessionId: mode === 'opened' ? '' : 'provider-session',
+      structuredSession: { sessionId: 'native-root', workspaceId: 'owned-worktree' }
+    }
+    let revealed = false
+    const delayed =
+      mode === 'timeout' || mode === 'generation without render' || mode === 'generation fallback'
+    const revealReply = Promise.withResolvers<RpcResponse>()
+    if (delayed) {
+      vi.useFakeTimers()
+    }
+    const send = vi.fn<RpcClient['sendRequest']>(async (method) => {
+      if (method === 'agentSession.reveal') {
+        if (delayed) {
+          return revealReply.promise
+        }
+        if (mode === 'unsupported-agent') {
+          return {
+            id: 'unsupported-agent',
+            ok: true,
+            result: {
+              ok: false,
+              refusal: {
+                code: 'structured_agent_session_unsupported',
+                message: 'host cannot open this agent'
+              }
+            }
+          }
+        }
+        if (mode === 'old-host') {
+          return {
+            id: 'old-host',
+            ok: false,
+            error: { code: 'invalid_argument', message: 'old host' }
+          }
+        }
+        revealed = true
+      }
+      const results: Record<string, unknown> = {
+        'orchestration.partyLocation': {
+          location: { kind: 'chat', sessionId: 'native-live', worktreeId: 'owned-worktree' }
+        },
+        'session.tabs.list': {
+          tabs: revealed
+            ? [
+                {
+                  type: 'agent-session',
+                  id: 'issued-tab',
+                  sessionId: 'native-live',
+                  agent: 'codex'
+                }
+              ]
+            : []
+        },
+        'agentSession.reveal': {
+          ok: true,
+          sessionId: 'native-live',
+          workspaceId: 'owned-worktree',
+          agent: 'codex',
+          readable: true
+        },
+        'session.tabs.activate': {},
+        'repo.list': {
+          repos: [{ id: 'owned-repo', path: '/owned/workspace', connectionId: null }]
+        },
+        'folderWorkspace.list': { workspaces: [] },
+        'projectGroup.list': { groups: [] },
+        'worktree.ps': {
+          worktrees: [
+            { worktreeId: 'owned-worktree', repoId: 'owned-repo', path: '/owned/workspace' }
+          ]
+        },
+        'settings.get': {},
+        'aiVault.prepareSessionResume': { useRealCodexHome: true },
+        'session.tabs.createTerminal': {
+          tab: { type: 'terminal', id: 'fallback-tab', terminal: 'fallback-pty', title: 'Terminal' }
+        },
+        'terminal.send': { send: { accepted: true } }
+      }
+      return { id: 'reply', ok: true, result: results[method] }
+    })
+    state.client = {
+      ...createFakeRpcClient({ getGeneration: () => state.generation }),
+      sendRequest: send
+    }
+    const rendered: { tree?: ReactTestRenderer } = {}
+    await act(async () => {
+      rendered.tree = create(
+        React.createElement(MobileAgentSessionHistoryPanel, {
+          hostId: 'owned-host',
+          worktreeId: 'owned-worktree'
+        })
+      )
+    })
+    const idleTimers = delayed ? vi.getTimerCount() : 0
+    try {
+      let completion: Promise<void> | undefined
+      await act(async () => {
+        if (!state.onResume || !state.session) {
+          throw new Error('missing row')
+        }
+        completion = state.onResume(state.session)
+        if (!delayed) {
+          await completion
+        }
+      })
+      if (delayed) {
+        expect(send.mock.calls.filter(([method]) => method === 'agentSession.reveal')).toHaveLength(
+          1
+        )
+        expect(state.resumeAction).toEqual({ disabled: true, loading: true })
+        if (mode !== 'generation fallback') {
+          mobileI18n.addResourceBundle('fr', 'translation', {
+            'session.structuredOpen.unreachable': 'Conversation de {{agent}} : réessayez.',
+            'agentHistory.resume.hostConnectionChanged': 'Connexion modifiée. Réessayez.'
+          })
+          await act(async () => {
+            await activateMobileUiLocale('fr')
+            setMobilePseudoLocalization(true)
+          })
+        }
+        await act(async () => {
+          if (mode === 'timeout') {
+            await vi.advanceTimersByTimeAsync(5_000)
+          } else {
+            // Change the live generation after locale rendering, without rerendering the owner.
+            state.generation = 2
+            revealReply.resolve({
+              id: 'late',
+              ok: false,
+              error: { code: 'request_timeout', message: 'late' }
+            })
+          }
+          await completion
+        })
+        const message =
+          mode === 'timeout'
+            ? 'Conversation de Codex : réessayez.'
+            : mode === 'generation fallback'
+              ? 'Host connection changed. Retry resume.'
+              : 'Connexion modifiée. Réessayez.'
+        const expected =
+          mode === 'generation fallback' ? message : pseudoLocalizeString(message, { expand: true })
+        const banners = rendered.tree?.root.findAll(
+          (node) => node.type === Text && node.props.children === expected
+        )
+        expect(banners).toHaveLength(1)
+        expect(notifications.error).toHaveBeenCalledTimes(1)
+        expect(notifications.success).not.toHaveBeenCalled()
+        expect(notifications.replace).not.toHaveBeenCalled()
+        expect(state.resumeAction).toEqual({ disabled: false, loading: false })
+        expect(send.mock.calls.map(([method]) => method)).not.toContain(
+          'session.tabs.createTerminal'
+        )
+        expect(vi.getTimerCount()).toBe(idleTimers)
+      }
+      const methods = send.mock.calls.map(([method]) => method)
+      expect(methods.includes('session.tabs.createTerminal')).toBe(
+        mode === 'old-host' || mode === 'unsupported-agent'
+      )
+      if (mode === 'old-host' || mode === 'unsupported-agent') {
+        expect(notifications.error).not.toHaveBeenCalled()
+      }
+      if (mode === 'opened') {
+        expect(notifications.replace).toHaveBeenCalledWith(
+          expect.stringContaining('/session/owned-worktree?paneKey=issued-tab')
+        )
+        expect(methods).not.toContain('repo.list')
+      }
+      if (mode === 'timeout') {
+        expect(notifications.replace).not.toHaveBeenCalled()
+      }
+      expect(send.mock.calls.filter(([method]) => method === 'agentSession.reveal')).toHaveLength(1)
+    } finally {
+      await act(async () => rendered.tree?.unmount())
+    }
+  }
+)

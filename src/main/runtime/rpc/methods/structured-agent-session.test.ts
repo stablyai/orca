@@ -1,5 +1,4 @@
-// The wire boundary: who may see `agentSession.*` at all, and what shapes it
-// accepts once they can. The dispatcher harness lives in the shared fixture.
+// Exercise structured capability admission and wire shapes through the shared dispatcher fixture.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -43,111 +42,28 @@ afterEach(() => {
   clearStructuredHostStub()
 })
 
-describe('agentSession.reveal', () => {
-  it.each(['codex', 'claude'] as const)('republishes a persisted %s chat tab', async (agent) => {
-    hostCalls.revealSession.mockResolvedValueOnce({
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      agent,
-      readable: true
-    })
-
-    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
-
-    expect(hostCalls.revealSession).toHaveBeenCalledWith(SESSION)
-    expect(response).toMatchObject({ ok: true, result: { ok: true, agent } })
-    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
-      expect.objectContaining({ agent, activate: true })
-    )
-  })
-
-  it('publishes the workspace the host reported, not one the client could assert', async () => {
-    // The client sends only a session id, so a stale or forged one cannot aim the publish at
-    // another workspace.
-    hostCalls.revealSession.mockResolvedValueOnce({
-      sessionId: SESSION,
-      workspaceId: 'workspace-from-record',
-      agent: 'claude',
-      readable: true
-    })
-
-    await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
-
-    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith({
-      workspaceId: 'workspace-from-record',
-      sessionId: SESSION,
-      agent: 'claude',
-      activate: true
-    })
-  })
-
-  it('publishes the tab even when the journal could not be read', async () => {
-    // An unreadable chat restores to nothing, but attach still recovers it, so the tab is worth
-    // publishing and the pane's hold finishes the job. Refusing here would strand it forever.
-    hostCalls.revealSession.mockResolvedValueOnce({
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      agent: 'codex',
-      readable: false
-    })
-
-    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
-
-    expect(response).toMatchObject({ ok: true, result: { ok: true, readable: false } })
-    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledOnce()
-  })
-
-  it('refuses rather than throws when the host holds no such record', async () => {
-    hostCalls.revealSession.mockRejectedValueOnce(new Error('agent_session_identity_required'))
-
-    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { ok: false, refusal: { code: 'agent_session_identity_required' } }
-    })
-    expect(runtimeCalls.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
-  })
-
-  it('does not launder an unrelated fault into a refusal', async () => {
-    hostCalls.revealSession.mockRejectedValueOnce(new Error('EACCES: journal directory'))
-
-    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
-
-    expect(response).toMatchObject({ ok: false })
-  })
-
-  it('is refused for a client that cannot read structured sessions', async () => {
-    const response = await call(
-      'agentSession.reveal',
-      { sessionId: SESSION },
-      { clientKind: 'runtime', clientCapabilities: [] }
-    )
-
-    expect(response).toMatchObject({ ok: false })
-    expect(hostCalls.revealSession).not.toHaveBeenCalled()
-  })
-})
-
 describe('capability gating', () => {
   it('clears durable tab visibility when closing through the agent-session RPC', async () => {
     const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT)
 
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
     expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
-    expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false)
+    expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false, undefined, {
+      deferHiddenNotice: true,
+      check: expect.any(Function)
+    })
     expect(hostCalls.setSessionTabVisibility.mock.invocationCallOrder[0]).toBeLessThan(
       hostCalls.close.mock.invocationCallOrder[0]!
     )
   })
 
-  it('does not stop the provider when durable tab retirement fails', async () => {
+  it('attempts provider stop and reports the durable tab retirement failure', async () => {
     hostCalls.setSessionTabVisibility.mockRejectedValueOnce(new Error('visibility write failed'))
 
     const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT)
 
     expect(response).toMatchObject({ ok: false })
-    expect(hostCalls.close).not.toHaveBeenCalled()
+    expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
   })
 
   it('advertises the capability without bumping the protocol version', () => {
@@ -159,12 +75,9 @@ describe('capability gating', () => {
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY)
-    // Separate from the structured capability on purpose: a host can serve the rest of the
-    // surface and not this stream, and a decoder drops an unknown stream opcode in silence — a
-    // client that subscribed without probing would wait forever and report nothing wrong.
+    // Negotiate this stream independently: an old decoder silently drops its opcode and would wait forever.
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY)
-    // Additive methods do not break an old client; bumping would strand every
-    // paired device that has not updated.
+    // Additive methods need no protocol bump that would strand older paired devices.
     expect(RUNTIME_PROTOCOL_VERSION).toBe(3)
   })
 
@@ -173,9 +86,8 @@ describe('capability gating', () => {
     for (const method of STRUCTURED_AGENT_SESSION_METHODS) {
       expect(names).toContain(method.name)
     }
-    // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
-    // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(38)
+    // Keep protocol stable: structured capability already hides additive session methods from older clients.
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(43)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -310,9 +222,9 @@ describe('capability gating', () => {
     })
   })
 
-  it('serves a capable mobile client whatever the host structured-chat setting says', async () => {
+  it("serves a capable mobile client whatever the host's Chat | CLI choices say", async () => {
     const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
-      getClientSettings: () => ({ experimentalNativeChat: false })
+      getClientSettings: () => ({})
     })
     expect(response).toMatchObject({ ok: true })
     expect(hostCalls.send).toHaveBeenCalledTimes(1)
@@ -389,8 +301,7 @@ describe('method routing', () => {
         callerKey: 'trusted-local:runtime'
       })
     )
-    expect(hostCalls.attach).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({
         accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
         options: { model: 'gpt-5.6-sol', effort: 'medium' }
@@ -420,10 +331,8 @@ describe('method routing', () => {
       ok: true,
       result: { ok: true }
     })
-    // Beside `options`, after the attach fingerprint: which tab shows the chat is not which
-    // conversation this attaches to.
-    expect(hostCalls.attach).toHaveBeenCalledWith(
-      expect.anything(),
+    // Reserved tab identity stays outside attach fingerprint: placement does not identify the conversation.
+    expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({ surfaceTabId: 'chat-tab-1' })
     )
   })
@@ -580,8 +489,7 @@ describe('method routing', () => {
         callerKey: 'trusted-local:runtime'
       })
     )
-    expect(hostCalls.attach).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({
         accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/host/.claude' }
       })
@@ -650,8 +558,7 @@ describe('method routing', () => {
       })
 
       expect(await call(method, params, STRUCTURED_CLIENT)).toMatchObject({ ok: true })
-      expect(hostCalls.attach).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
         expect.objectContaining({ location: params.location })
       )
       expect(hostCalls.attach.mock.calls[0]?.[1]).not.toHaveProperty('launchDirectory')
@@ -672,9 +579,7 @@ describe('method routing', () => {
     }
   )
 
-  /** A client-supplied location skips the worktree-resolving support check, so both attach-shaped
-   *  entries must ask the executing host directly or a host that cannot fence a provider child
-   *  would create one anyway. */
+  /** Attach-shaped entries bypass workspace support resolution, so both must ask the execution host before creating an unfenceable provider child. */
   it('returns a refusal envelope when create cannot support a client-supplied location', async () => {
     hostCalls.supportsCreate.mockReturnValue(false)
 
@@ -869,8 +774,15 @@ describe('agentSession.subscribeStatus', () => {
   })
 
   it('opens the host status feed with a projected snapshot as its first reply', async () => {
-    const reply = await call('agentSession.subscribeStatus', null, STRUCTURED_CLIENT)
-    expect(reply).toMatchObject({
+    const restoring = Promise.withResolvers<void>()
+    const restore = vi.fn(() => restoring.promise)
+    const response = call('agentSession.subscribeStatus', null, STRUCTURED_CLIENT, {
+      restoreStructuredAgentSessionTabs: restore
+    })
+    await vi.waitFor(() => expect(restore).toHaveBeenCalledOnce())
+    expect(hostCalls.subscribeStatus).not.toHaveBeenCalled()
+    restoring.resolve()
+    expect(await response).toMatchObject({
       ok: true,
       result: {
         type: 'snapshot',

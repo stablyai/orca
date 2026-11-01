@@ -71,15 +71,22 @@ export function summarizeReleaseDesktopTiming(run) {
   )
   const jobs = run.jobs.filter((job) => job.conclusion !== 'skipped')
   const mac = jobs.find((job) => job.name === 'build-adhoc-mac')
+  const macJobs = jobs.filter((job) => /^build-adhoc-mac(?:-arch)?(?: \(|$)/.test(job.name))
   const windows = jobs.filter((job) => /^(?:build|stage|publish)-adhoc-win(?:\b|\/)/.test(job.name))
-  const template = jobs.find((job) => job.name === 'orcad-template / desktop_template')
+  const template = jobs.find(
+    (job) => job.name.startsWith('orcad-template / ') && job.name.endsWith('/ desktop_template')
+  )
   assert(mac && windows.length > 0 && template, 'Missing Mac, Windows, or qualified template job')
   assert(
-    [mac, ...windows, template].every((job) => job.conclusion === 'success'),
+    [...macJobs, ...windows, template].every((job) => job.conclusion === 'success'),
     'Desktop or template job failed'
   )
   const qualification = jobs.filter((job) => job.name.startsWith('orcad-template / '))
-  const macInterval = interval(mac)
+  const macIntervals = macJobs.map(interval)
+  const macInterval = {
+    start: Math.min(...macIntervals.map(({ start }) => start)),
+    end: Math.max(...macIntervals.map(({ end }) => end))
+  }
   const windowsIntervals = windows.map(interval)
   const desktopStart = Math.min(macInterval.start, ...windowsIntervals.map(({ start }) => start))
   const desktopEnd = Math.max(macInterval.end, ...windowsIntervals.map(({ end }) => end))
@@ -113,7 +120,7 @@ export function summarizeReleaseDesktopTiming(run) {
         /^(?:Stage Windows artifacts for gated publishing|Download the staged Windows artifacts)$/
       )
     },
-    desktopJobs: [mac, ...windows].map((job) => {
+    desktopJobs: [...macJobs, ...windows].map((job) => {
       const { start, end } = interval(job)
       return {
         name: job.name,

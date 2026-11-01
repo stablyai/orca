@@ -1,3 +1,5 @@
+import { makeTabSessionHistoryRow as row } from './tab-session-history-test-fixture'
+import { applyProviderSessionOnlyUpdate } from '@/hooks/ipc-events/agent-status-partial-updates'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -5,9 +7,13 @@ import { makeRepo, makeTerminalTab, makeWorktree } from '../worktree-jump-palett
 import { makeAgentStatusEntry } from '@/runtime/sync-runtime-graph-test-harness'
 import { collectAiVaultTitleRequests } from '@/lib/ai-vault-tab-title-requests'
 import { resolveCliChatResumeSource } from './cli-chat-resume-source'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { AiVaultListArgs, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
@@ -24,6 +30,7 @@ import {
   findTabSessionHistoryRow,
   lookupTabSessionHistoryRow,
   resolveTabSessionHistorySubject,
+  resolveNativeChatCliForkIdentity,
   resolveTabSessionSwitch,
   type TabSessionHistorySubject
 } from './tab-session-history-switch'
@@ -64,32 +71,6 @@ vi.mock('../right-sidebar/ai-vault-session-resume-in-chat-workspace', () => ({
 
 const WORKTREE_ID = 'repo-1::/repo/wt'
 
-function row(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
-  return {
-    id: 'row-1',
-    executionHostId: 'local',
-    agent: 'claude',
-    sessionId: 'claude-session-1',
-    title: 'Fix the build',
-    cwd: '/repo/wt',
-    branch: 'main',
-    model: null,
-    filePath: '/home/.claude/projects/repo/claude-session-1.jsonl',
-    codexHome: null,
-    createdAt: null,
-    updatedAt: null,
-    modifiedAt: '2026-10-08T00:00:00.000Z',
-    messageCount: 2,
-    totalTokens: 10,
-    previewMessages: [{ role: 'user', text: 'Fix the build', timestamp: null }],
-    queuedMessageCount: 0,
-    subagentTranscriptCount: 0,
-    resumeCommand: 'claude --resume claude-session-1',
-    subagent: null,
-    ...overrides
-  }
-}
-
 const SIBLING_ID = 'repo-1::/repo/sibling'
 
 function makeState(
@@ -115,8 +96,6 @@ function makeState(
   return useAppStore.getState()
 }
 
-// What the Session History panel sends for its default Workspace scope, at the panel's default
-// depth, on the workspace's own host.
 const PANEL_REQUEST = {
   scopePaths: ['/repo/wt'],
   executionHostScope: 'local',
@@ -201,6 +180,100 @@ describe('resolveTabSessionHistorySubject', () => {
       executionHostId: 'local'
     })
   })
+  it.each([
+    [true, 'git'],
+    [false, 'git'],
+    [true, 'folder'],
+    [false, 'folder']
+  ] as const)(
+    'offers remote CLI continuation only with history support %s in %s workspaces',
+    (supported, kind) => {
+      const state = makeState(liveClaudeEntry, { executionHostId: 'runtime:server-1' })
+      const workspaceId = kind === 'folder' ? folderWorkspaceKey('folder-1') : WORKTREE_ID
+      if (kind === 'folder') {
+        state.folderWorkspaces = [
+          makeFolderWorkspace({
+            id: 'folder-1',
+            folderPath: '/repo/wt',
+            executionHostId: 'runtime:server-1'
+          })
+        ]
+        state.activeWorktreeId = workspaceId
+        state.activeWorkspaceExecutionHostId = 'runtime:server-1'
+        state.tabsByWorktree = { [workspaceId]: [makeTerminalTab('term-1', workspaceId, 'claude')] }
+        state.agentStatusByPaneKey = {
+          'term-1:leaf-1': { ...liveClaudeEntry['term-1:leaf-1'], worktreeId: workspaceId }
+        }
+      }
+
+      state.runtimeStatusByEnvironmentId = new Map([
+        [
+          'server-1',
+          {
+            checkedAt: 1,
+            status: {
+              runtimeId: 'server-runtime',
+              rendererGraphEpoch: 0,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 1,
+              liveLeafCount: 1,
+              capabilities: [
+                STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+                STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+                STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+                ...(supported ? [STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY] : [])
+              ]
+            }
+          }
+        ]
+      ])
+      const source = resolveCliChatResumeSource(state, {
+        tab: { id: 'term-1', worktreeId: workspaceId }
+      })
+      if (supported) {
+        expect(source).toMatchObject({
+          executionHostId: 'runtime:server-1',
+          providerSessionId: 'claude-session-1',
+          paneKey: 'term-1:leaf-1'
+        })
+        expect(source?.hostUpdateRequired).toBeUndefined()
+      } else {
+        // A verified host without resume-history keeps the action, disabled, asking for an update.
+        expect(source).toMatchObject({ hostUpdateRequired: true })
+      }
+    }
+  )
+
+  it.each(['runtime:server-1', 'ssh:dev-box'] as const)(
+    'does not offer unsupported or unprobed host %s',
+    (executionHostId) => {
+      const state = makeState(liveClaudeEntry, { executionHostId })
+      expect(
+        resolveCliChatResumeSource(state, { tab: { id: 'term-1', worktreeId: WORKTREE_ID } })
+      ).toBeNull()
+    }
+  )
+
+  it.each(['local', 'runtime:server-1', 'ssh:dev-box', null] as const)(
+    'keeps lightweight native eligibility and the public request on workspace host %s',
+    (executionHostId) => {
+      const state = makeState({}, executionHostId ? { executionHostId } : {})
+      if (!executionHostId) {
+        state.repos = []
+      }
+      const args = {
+        tab: { id: 'chat-tab', worktreeId: WORKTREE_ID },
+        nativeChat: { sessionId: 'chat-1', agent: 'claude' as const }
+      }
+      const expected = executionHostId === 'ssh:dev-box' ? null : executionHostId
+      const identity = resolveNativeChatCliForkIdentity(state, args)
+      const full = resolveTabSessionHistorySubject(state, args)
+      expect(identity?.executionHostScope ?? null).toBe(expected)
+      expect(full?.request.executionHostScope ?? null).toBe(expected)
+    }
+  )
+
   it('finds a native chat tab by the chat it shows', () => {
     expect(
       resolveTabSessionHistorySubject(makeState(), {
@@ -347,7 +420,7 @@ describe('resolveTabSessionHistorySubject', () => {
     ).toBeNull()
   })
 
-  it('looks a chat up on a remote Orca server, which owns its chats, but never a CLI there', () => {
+  it('looks up both Chat and CLI conversations on their remote Orca server', () => {
     const state = makeState(liveClaudeEntry, {
       executionHostId: 'runtime:server-1'
     })
@@ -364,7 +437,7 @@ describe('resolveTabSessionHistorySubject', () => {
       resolveTabSessionHistorySubject(state, {
         tab: { id: 'term-1', worktreeId: WORKTREE_ID }
       })
-    ).toBeNull()
+    ).toMatchObject({ kind: 'cli', request: { executionHostScope: 'runtime:server-1' } })
   })
 
   it('skips a plain shell tab', () => {
@@ -474,6 +547,82 @@ describe('one pane of a terminal tab', () => {
     expect(paneGate(makeState(liveClaudeEntry, { connectionId: 'dev-box' }), claudePane)).toBe(
       false
     )
+  })
+  it('identifies a provider-only Continue source without a live turn or selecting its sibling', () => {
+    makeState()
+    const [L1, L2] = [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222'
+    ]
+    const pane = `term-1:${L1}`
+    const layout = (ptyIdsByLeafId: Record<string, string>) =>
+      useAppStore.setState({
+        terminalLayoutsByTabId: {
+          'term-1': { root: null, activeLeafId: L1, expandedLeafId: null, ptyIdsByLeafId }
+        }
+      })
+    layout({ [L1]: 'pty-1', [L2]: 'pty-2' })
+    applyProviderSessionOnlyUpdate({
+      store: useAppStore.getState(),
+      batch: undefined,
+      paneKey: pane,
+      routing: { tabId: 'term-1', worktreeId: WORKTREE_ID },
+      data: {
+        paneKey: pane,
+        connectionId: null,
+        receivedAt: 1,
+        stateStartedAt: 1,
+        state: 'done',
+        prompt: '',
+        agentType: 'codex',
+        providerSession: { key: 'session_id', id: 'thread-c' },
+        providerSessionOnly: true
+      }
+    })
+    const state = useAppStore.getState()
+    expect(state.agentStatusByPaneKey).toEqual({})
+    expect(
+      resolveCliChatResumeSource(state, {
+        tab: { id: 'term-1', worktreeId: WORKTREE_ID },
+        paneKey: pane
+      })
+    ).toMatchObject({ agent: 'codex', providerSessionId: 'thread-c' })
+    expect(paneGate(state, `term-1:${L2}`)).toBe(false)
+    useAppStore
+      .getState()
+      .setAgentStatus(
+        pane,
+        { state: 'done', prompt: 'first', agentType: 'codex' },
+        undefined,
+        undefined,
+        { tabId: 'term-1', worktreeId: WORKTREE_ID },
+        { providerSession: { key: 'session_id', id: 'thread-c' } }
+      )
+    useAppStore
+      .getState()
+      .setAgentStatus(pane, { state: 'working', prompt: 'second', agentType: 'codex' })
+    expect(
+      resolveCliChatResumeSource(useAppStore.getState(), {
+        tab: { id: 'term-1', worktreeId: WORKTREE_ID },
+        paneKey: pane
+      })
+    ).toBeNull()
+    expect(paneGate(useAppStore.getState(), pane)).toBe(false)
+    useAppStore
+      .getState()
+      .recordAgentProviderSession(
+        pane,
+        'codex',
+        { key: 'session_id', id: 'thread-next' },
+        undefined,
+        { tabId: 'term-1', worktreeId: WORKTREE_ID }
+      )
+    expect(
+      resolveCliChatResumeSource(useAppStore.getState(), {
+        tab: { id: 'term-1', worktreeId: WORKTREE_ID },
+        paneKey: pane
+      })
+    ).toMatchObject({ providerSessionId: 'thread-next' })
   })
 })
 

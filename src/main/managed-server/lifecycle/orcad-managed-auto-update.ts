@@ -1,15 +1,7 @@
-/**
- * Updating a managed orcad on connect, through the same update the Managed servers action runs.
- *
- * The connect only picks whether to try: the update planner still defers over live or uncounted
- * terminals, and a rejected candidate is restored through the activation journal, so the old
- * version keeps serving. A host a newer Orca activated is never downgraded.
- */
-import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import {
-  refuseOrcadHostDowngrade,
-  type OrcadHostVersionRefusal
-} from '../../ssh/orcad-host-version-admission'
+  planManagedOrcadAutoUpdate,
+  type ManagedOrcadAutoUpdateSkip
+} from './orcad-managed-update-decision'
 import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
 import {
   OrcadArtifactsUnavailableError,
@@ -25,54 +17,12 @@ import {
 import type { OrcadUpdateDeferCode } from '../../ssh/orcad-update-plan'
 import { readLocalFullVersion } from '../install/remote-versioned-install'
 
-export type ManagedOrcadAutoUpdateSkip =
-  | 'current'
-  | 'no-template'
-  | 'rolled-back'
-  | 'failed-before'
-  | 'migrating'
-  | OrcadHostVersionRefusal
-
-export type ManagedOrcadAutoUpdatePlan =
-  | { action: 'update' }
-  | { action: 'skip'; reason: ManagedOrcadAutoUpdateSkip }
-
 export type ManagedOrcadAutoUpdateOutcome =
   | { outcome: 'skipped'; reason: ManagedOrcadAutoUpdateSkip }
   | { outcome: 'updated'; activeVersion: string }
-  /** The update planner chose to wait, e.g. for terminals to close; a later connect retries. */
   | { outcome: 'deferred'; code: string; reason: string }
-  /** The candidate was rejected or the update threw; the incumbent keeps serving. */
+  /** Candidate rejection or update failure; consult host state before assuming the incumbent serves. */
   | { outcome: 'failed'; reason: string }
-
-export function planManagedOrcadAutoUpdate(input: {
-  record: OrcadActivationRecord
-  /** This app's bundled build for the host's target; null when the template lacks it. */
-  candidateVersion: string | null
-  appVersion: string
-  /** An update to this app version already failed on this host. */
-  failedBefore: boolean
-}): ManagedOrcadAutoUpdatePlan {
-  const { record, candidateVersion } = input
-  if (!candidateVersion) {
-    return { action: 'skip', reason: 'no-template' }
-  }
-  if (record.active === candidateVersion) {
-    return { action: 'skip', reason: 'current' }
-  }
-  if (record.rolledBackFrom === candidateVersion) {
-    return { action: 'skip', reason: 'rolled-back' }
-  }
-  const refusal = refuseOrcadHostDowngrade(record, candidateVersion, input.appVersion)
-  if (refusal) {
-    return { action: 'skip', reason: refusal }
-  }
-  // Why no `failedBefore` skip on a stopped host: nothing serves, so retrying is the only way back.
-  if (record.active === null && record.previous !== null) {
-    return { action: 'update' }
-  }
-  return input.failedBefore ? { action: 'skip', reason: 'failed-before' } : { action: 'update' }
-}
 
 const WAITING_CODES: ReadonlySet<string> = new Set<
   OrcadUpdateDeferCode | typeof ORCAD_ACTIVATION_FENCE_BUSY_CODE
@@ -85,10 +35,7 @@ const WAITING_CODES: ReadonlySet<string> = new Set<
   'orcad_update_ends_in_process_terminals'
 ])
 
-/**
- * Deferrals that mean "not now", as opposed to a candidate that was tried and rejected. An
- * interrupted activation is not one: no later connect clears it, so it surfaces as a failure.
- */
+/** Temporary deferrals retry on later connects; interrupted activations require recovery. */
 export function isWaitingOrcadUpdateDeferral(code: string): boolean {
   return WAITING_CODES.has(code)
 }
@@ -98,18 +45,18 @@ export function autoUpdateManagedOrcadEnvironment(
   args: {
     environmentId: string
     appVersion: string
-    /** Read under the host's lifecycle lock, so overlapping checks see an earlier attempt's result. */
+    /** Read under the lifecycle lock to observe prior overlapping attempts. */
     failedBefore: () => boolean
     onUpdating: () => void
   }
 ): Promise<ManagedOrcadAutoUpdateOutcome> {
   return withManagedOrcadLifecycle(userDataPath, args.environmentId, async (managed) => {
-    // Why: a restart mid-migration would race the staging the cutover journal is driving.
+    // Restarting during migration would race cutover staging.
     if (findIncompleteManagedOrcadMigration(userDataPath, managed.environment.id)) {
       return { outcome: 'skipped', reason: 'migrating' }
     }
     const context = await resolveLinkedOrcadContext(managed.environment, managed.deployment)
-    const candidateVersion = await bundledOrcadVersion(context.serverTarget)
+    const candidateVersion = await bundledManagedOrcadVersion(context.serverTarget)
     const plan = planManagedOrcadAutoUpdate({
       record: context.activationRecord,
       candidateVersion,
@@ -123,7 +70,7 @@ export function autoUpdateManagedOrcadEnvironment(
     let lockedSkip: ManagedOrcadAutoUpdateSkip | null = null
     try {
       const result = await runManagedOrcadUpdate(userDataPath, managed, context, {
-        // Why again under the fence: another desktop may activate or stop a newer build mid-upload.
+        // Another desktop may activate or stop a newer build during upload; recheck under the fence.
         admitRecord: (record) => {
           const locked = planManagedOrcadAutoUpdate({
             record,
@@ -155,10 +102,11 @@ export function autoUpdateManagedOrcadEnvironment(
 
 type OrcadTarget = Parameters<typeof materializeOrcadArtifact>[0]
 
-// Why per session: the packaged template can't change while the app runs, and hashing it costs a read.
+// Packaged templates cannot change during this session; avoid repeated hashing.
 const bundledVersions = new Map<OrcadTarget, Promise<string | null>>()
 
-function bundledOrcadVersion(target: OrcadTarget): Promise<string | null> {
+/** This build's orcad version for `target`; null when the build bundles none for it. */
+export function bundledManagedOrcadVersion(target: OrcadTarget): Promise<string | null> {
   let version = bundledVersions.get(target)
   if (!version) {
     version = materializeOrcadArtifact(target).then(readLocalFullVersion, (error: unknown) => {

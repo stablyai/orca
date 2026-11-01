@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, type Mock } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   acquireReadyCodexForTest,
   codexStartReport,
@@ -7,13 +7,9 @@ import {
   adapterFor,
   answerWithOpenedTurn,
   fakeCodex,
-  identityFor,
-  type Route
+  identityFor
 } from './codex-structured-session-adapter-fixture'
-import {
-  AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
-  AgentModelCatalogStore
-} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentModelCatalogSessionAccess } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import type { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
@@ -52,7 +48,7 @@ function finishTurn(codex: ReturnType<typeof fakeCodex>, turnId: string) {
 }
 
 describe('Codex structured service tier without send-path catalog waits', () => {
-  it('starts the chat and sends the saved tier when its own listing rejects', async () => {
+  it('starts the chat and sends the saved tier without asking its child for an inventory', async () => {
     const codex = fakeCodex({
       'model/list': () => {
         throw new Error('model listing unavailable')
@@ -71,27 +67,8 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     ).toMatchObject({ serviceTier: 'priority' })
   })
 
-  it('sends the saved tier while its own bounded listing is still pending', async () => {
-    const pending = Promise.withResolvers<unknown>()
-    const codex = fakeCodex({ 'model/list': () => pending.promise })
-    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'first-turn')
-    const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
-      modelCatalog: new AgentModelCatalogStore()
-    })
-    await acquire(adapter)
-    await vi.waitFor(() =>
-      expect(codex.connections[0].calls.some((call) => call.method === 'model/list')).toBe(true)
-    )
-    await send(adapter, 'first')
-    expect(
-      codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
-    ).toMatchObject({ serviceTier: 'priority' })
-    pending.resolve(listing())
-  })
-
-  it('steers an active turn while catalog discovery remains pending', async () => {
-    const pending = Promise.withResolvers<unknown>()
-    const codex = fakeCodex({ 'model/list': () => pending.promise })
+  it('steers an active turn without querying the child inventory', async () => {
+    const codex = fakeCodex()
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'running-turn')
     codex.routes['turn/steer'] = () => ({ turn: { id: 'running-turn' } })
     const adapter = adapterFor(codex)
@@ -100,14 +77,12 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     await send(adapter, 'follow-up')
     expect(codex.connections[0].calls.some((call) => call.method === 'turn/steer')).toBe(true)
     expect(codex.connections[0].calls.filter((call) => call.method === 'model/list')).toHaveLength(
-      1
+      0
     )
-    pending.resolve(listing())
   })
 
-  it('stops a running turn and starts its replacement on the saved tier while listing stalls', async () => {
-    const pending = Promise.withResolvers<unknown>()
-    const codex = fakeCodex({ 'model/list': () => pending.promise })
+  it('stops a running turn and starts its replacement on the saved tier', async () => {
+    const codex = fakeCodex()
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'running-turn')
     const adapter = adapterFor(codex)
     await acquire(adapter)
@@ -122,69 +97,6 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     const starts = codex.connections[0].calls.filter((call) => call.method === 'turn/start')
     expect(starts).toHaveLength(2)
     expect(starts[1]?.params).toMatchObject({ serviceTier: 'priority' })
-    pending.resolve(listing())
-  })
-
-  it('records a background failure without delaying a send and retries after the failure TTL', async () => {
-    let now = 1_000
-    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
-    const modelCatalog = new AgentModelCatalogStore({ now: () => now })
-    const listModels: Mock<Route> = vi
-      .fn<Route>()
-      .mockImplementationOnce(() => {
-        throw new Error('catalog unavailable')
-      })
-      .mockImplementation(() => listing())
-    const codex = fakeCodex({ 'model/list': listModels })
-    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-tier')
-    const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], { modelCatalog })
-    const access = agentModelCatalogSessionAccess(
-      modelCatalog,
-      CODEX_STRUCTURED_AGENT,
-      '/codex/home'
-    )!
-    try {
-      await acquire(adapter)
-      await vi.waitFor(() => expect(modelCatalog.hasActiveFailure(access.fingerprint)).toBe(true))
-      await send(adapter, 'first')
-      expect(
-        codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
-      ).toMatchObject({ serviceTier: 'priority' })
-      await acquire(adapter, 'session-2')
-      expect(listModels).toHaveBeenCalledOnce()
-      now += AGENT_MODEL_CATALOG_FAILURE_TTL_MS
-      await acquire(adapter, 'session-3')
-      await vi.waitFor(() => expect(listModels).toHaveBeenCalledTimes(2))
-    } finally {
-      clock.mockRestore()
-    }
-  })
-
-  it('does not record an obsolete child’s catalog over its replacement’s', async () => {
-    const oldListing = Promise.withResolvers<unknown>()
-    const newListing = Promise.withResolvers<unknown>()
-    const codex = fakeCodex({
-      'model/list': vi
-        .fn<Route>()
-        .mockImplementationOnce(() => oldListing.promise)
-        .mockImplementationOnce(() => newListing.promise)
-    })
-    const modelCatalog = new AgentModelCatalogStore()
-    const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], { modelCatalog })
-    const access = agentModelCatalogSessionAccess(
-      modelCatalog,
-      CODEX_STRUCTURED_AGENT,
-      '/codex/home'
-    )!
-    await acquire(adapter)
-    await acquire(adapter)
-    oldListing.resolve(listing('priority-old'))
-    newListing.resolve(listing('priority-new'))
-    await vi.waitFor(() =>
-      expect(modelCatalog.get(access.fingerprint)?.models[0]?.serviceTiers?.[0]?.value).toBe(
-        'priority-new'
-      )
-    )
   })
 
   it('restores the saved model and tier over the resumed thread’s', async () => {
@@ -201,6 +113,7 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     expect(codex.connections[0].calls.some((call) => call.method === 'thread/resume')).toBe(true)
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-next',
+      reportedPermissionMode: null,
       serviceTier: 'ultrafast'
     })
     await send(adapter, 'first')
@@ -211,6 +124,74 @@ describe('Codex structured service tier without send-path catalog waits', () => 
 })
 
 describe('Codex service tier across clients and rest', () => {
+  it.each([
+    ['opening null', null, 'default'],
+    ['configured tier', undefined, 'priority'],
+    ['configuration failure', undefined, undefined]
+  ] as const)(
+    'seeds exact-child tier knowledge from %s without filling a sparse request',
+    async (name, openingTier, expected) => {
+      const codex = fakeCodex({
+        'thread/start': () => ({
+          thread: { id: THREAD_ID },
+          model: 'gpt-live',
+          reasoningEffort: 'high',
+          ...(openingTier === null ? { serviceTier: null } : {})
+        }),
+        'config/read': () => {
+          if (name === 'configuration failure') {
+            throw new Error('config unavailable')
+          }
+          return {
+            config: {
+              service_tier: 'priority',
+              model: 'unrelated-config-model',
+              model_reasoning_effort: 'low'
+            }
+          }
+        }
+      })
+      codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'sparse')
+      const adapter = adapterFor(codex)
+      try {
+        const acquired = await acquireReadyCodexForTest(adapter, {
+          identity: identityFor('session-1'),
+          fence: 7,
+          spawnToken: 'spawn-1'
+        })
+        const applied = adapter.readAppliedInputOptions({
+          sessionId: 'session-1',
+          fence: 7,
+          acquisitionGeneration: acquired.acquisitionGeneration,
+          next: {}
+        })
+        expect(applied?.active).toEqual({
+          model: 'gpt-live',
+          effort: 'high',
+          ...(expected ? { serviceTier: expected } : {})
+        })
+        const config = codex.connections[0].calls.filter((call) => call.method === 'config/read')
+        expect(config).toHaveLength(openingTier === null ? 0 : 1)
+        if (config.length) {
+          expect(config[0].params).toEqual({ cwd: '/work/repo' })
+        }
+        await adapter.dispatch({
+          sessionId: 'session-1',
+          fence: 7,
+          clientMessageId: 'sparse',
+          body: USER_MESSAGE,
+          executionOptions: {}
+        })
+        const sent = codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
+        expect(sent).not.toHaveProperty('model')
+        expect(sent).not.toHaveProperty('effort')
+        expect(sent).not.toHaveProperty('serviceTier')
+      } finally {
+        await adapter.closeAll()
+      }
+    }
+  )
+
   it('applies an older client Fast toggle through the adapter as the Fast tier', async () => {
     const codex = fakeCodex({ 'model/list': () => listing() })
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-fast')
@@ -233,7 +214,8 @@ describe('Codex service tier across clients and rest', () => {
             serviceTiers: [{ value: 'priority', label: 'Fast' }]
           }
         ],
-        origin: 'probe'
+        origin: 'probe',
+        complete: true
       },
       'discovery'
     )
@@ -254,6 +236,21 @@ describe('Codex service tier across clients and rest', () => {
     const turn = codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
     expect(turn).toMatchObject({ serviceTier: 'priority' })
     expect(turn).not.toHaveProperty('fastMode')
+    finishTurn(codex, 'turn-fast')
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'captured-fast')
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      fence: 7,
+      clientMessageId: 'captured-fast',
+      body: USER_MESSAGE,
+      executionOptions: { fastMode: 'true' }
+    })
+    const captured = codex.connections[0].calls.findLast(
+      (call) => call.method === 'turn/start'
+    )?.params
+    expect(captured).toMatchObject({ serviceTier: 'priority' })
+    expect(captured).not.toHaveProperty('model')
+    expect(captured).not.toHaveProperty('effort')
   })
 
   it('takes a tier at rest but not an older client Fast toggle', () => {

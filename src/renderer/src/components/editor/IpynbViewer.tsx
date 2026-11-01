@@ -30,6 +30,7 @@ import {
 import { useIpynbCellExecution } from './useIpynbCellExecution'
 import { resolveNotebookExecutionHost } from './ipynb-execution-host'
 import { useIpynbScrollRestoration } from './useIpynbScrollRestoration'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type IpynbViewerProps = {
   content: string
@@ -53,7 +54,9 @@ export default function IpynbViewer({
   onSave
 }: IpynbViewerProps): React.JSX.Element {
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
-  const rootPath = useAppStore((s) => findWorktreeById(s.worktreesByRepo, worktreeId)?.path ?? null)
+  const rootPath = useAppStore(
+    (s) => findWorktreeById(selectWorktreesByRepo(s), worktreeId)?.path ?? null
+  )
   const executionHost = useAppStore((s) => resolveNotebookExecutionHost(s, worktreeId))
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null)
   const parsed = useMemo(() => {
@@ -62,7 +65,10 @@ export default function IpynbViewer({
     } catch (error) {
       return {
         notebook: null,
-        error: error instanceof Error ? error.message : 'Invalid notebook'
+        error:
+          error instanceof Error
+            ? error.message
+            : translate('auto.components.editor.IpynbViewer.invalidNotebook', 'Invalid notebook')
       }
     }
   }, [content])
@@ -70,6 +76,7 @@ export default function IpynbViewer({
   const {
     rootRef,
     setRootRef,
+    flushOnFocusLeave,
     sourceDrafts,
     flushSourceDrafts,
     applyContent,
@@ -93,7 +100,7 @@ export default function IpynbViewer({
     flushSourceDrafts,
     applyContent
   })
-  useIpynbScrollRestoration(rootRef, scrollCacheKey, content)
+  useIpynbScrollRestoration(rootRef, scrollCacheKey, parsed.notebook !== null)
   const saveShortcut = useShortcutKeyDetails('editor.save')
   const fontSize = computeEditorFontSize(13, editorFontZoomLevel)
 
@@ -120,7 +127,6 @@ export default function IpynbViewer({
     index: number
   ): void => {
     const mod = getShortcutPlatform() === 'darwin' ? event.metaKey : event.ctrlKey
-    // Exactly one of Shift or Cmd/Ctrl.
     if (
       isImeOwnedKeyboardEvent(event) ||
       event.key !== 'Enter' ||
@@ -166,12 +172,15 @@ export default function IpynbViewer({
       className="h-full min-h-0 overflow-auto bg-editor-surface scrollbar-editor"
       style={{ fontSize }}
       onKeyDownCapture={handleNotebookKeyDownCapture}
+      onBlur={flushOnFocusLeave}
     >
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-2 text-xs text-muted-foreground backdrop-blur">
         <span className="font-medium text-foreground">{filePath.split(/[/\\]/).pop()}</span>
         <span>
-          {notebook.cells.length}{' '}
-          {translate('auto.components.editor.IpynbViewer.07e7d96612', 'cells')}
+          {translate('auto.components.editor.IpynbViewer.cellCount', '{{count}} cells', {
+            count: notebook.cells.length,
+            defaultValue_one: '{{count}} cell'
+          })}
         </span>
         <span>{notebook.language}</span>
         <div className="ml-auto flex items-center gap-2">
@@ -222,6 +231,9 @@ export default function IpynbViewer({
                 </div>
                 <div className="min-w-0 flex-1">
                   <IpynbCellSource
+                    modelKey={
+                      cell.id === null ? null : JSON.stringify([fileId, scrollCacheKey, cell.id])
+                    }
                     cell={cell}
                     source={source}
                     active={editingCellKey === cellKey}

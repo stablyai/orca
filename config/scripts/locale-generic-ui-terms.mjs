@@ -1,12 +1,6 @@
-// Ordinary UI vocabulary that reads like a brand but is not one. Every locale should translate
-// these, so the policy must neither pin the whole value to English nor revert the translation
-// inside a sentence. The product-name homonyms (Continue.dev, the agent entries) stay Latin
-// through ENGLISH_ONLY_KEY_PREFIXES, which matches on the catalog key rather than the word.
+// Translate ordinary UI vocabulary; pin product-name homonyms (Continue.dev/agent entries) by catalog-key prefixes, not words.
 
-// Renderings a locale is expected to use. They are translations, never machine-translation
-// errors, so a brand revert must leave them alone. Nonsense forms that share the same English
-// term (zh 回购 "repurchase agreement", ja 端子 "electrical connector", es "Comprometerse")
-// stay in BRAND_MISTRANSLATIONS and keep getting reverted.
+// Valid translations must survive brand repair; nonsense homonyms (回购/端子/Comprometerse) remain in BRAND_MISTRANSLATIONS.
 const GENERIC_TERM_FAMILIES = [
   {
     terms: ['Agent', 'Agents', 'agent', 'agents'],

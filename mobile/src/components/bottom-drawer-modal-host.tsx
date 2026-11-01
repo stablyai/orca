@@ -10,12 +10,7 @@ type Props = {
   children: ReactNode
 }
 
-// Why: iOS cannot reliably dismiss one native modal and present another in the same
-// beat, and refuses outright to present one while a sibling is presented. Flows that
-// swap or stack sibling drawer modals (e.g. the Create Workspace form → its pickers, or
-// an issue detail → Create Workspace) dropped the incoming modal, leaving the sheet
-// dead to taps. Hosting every drawer in ONE native Modal makes those swaps and stacks
-// in-window view changes instead, ordered by zIndex.
+// Host swapping/stacked drawers in one native Modal ordered by zIndex: iOS cannot reliably dismiss/present in same beat or present over sibling modal.
 export function BottomDrawerModalHost({ visible, onRequestClose, children }: Props) {
   const [holds, setHolds] = useState(0)
   const backClaims = useRef<(() => void)[]>([])
@@ -49,8 +44,7 @@ export function BottomDrawerModalHost({ visible, onRequestClose, children }: Pro
   )
 
   if (!shown) {
-    // Why: a self-showing host keeps its drawers mounted while down so a request can raise it.
-    // They remount inside the Modal, which is safe because none of them is showing anything yet.
+    // Keep hidden self-showing drawers mounted so requests can raise host; remount inside Modal is safe before they show content.
     return selfShowing ? content : null
   }
   return (

@@ -17,7 +17,6 @@ export function registerOrcaRuntimeMoveHeadlessMobileSessionTabTests(): void {
     }
   }
 
-  // No notifier, so moves take the headless (serve) path.
   function headlessRuntime(): {
     runtime: OrcaRuntimeService
     snapshots: Map<string, RuntimeMobileSessionTabsSnapshot>

@@ -1,4 +1,3 @@
-// Terminal focus context and the orca-first / terminal-first policy gate.
 import { describe, expect, it } from 'vitest'
 import {
   getEffectiveKeybindingsForAction,

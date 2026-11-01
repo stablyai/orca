@@ -1,17 +1,14 @@
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
-import type { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
-import type { StructuredAgentSessionConversationLifetime } from './structured-agent-session-conversation-lifetime'
 import { StructuredAgentSessionUsageLimitContinue } from './structured-agent-session-usage-limit-continue'
-import { sleepStructuredAgentSessionWorkspace } from './structured-agent-session-workspace-sleep'
 
-export function createUsageLimitContinue(
+export function start(
   context: StructuredAgentSessionMutationContext,
   host: Pick<StructuredAgentSessionHost, 'send'>,
   delivery: Pick<StructuredAgentSessionClientDelivery, 'publishStatus' | 'readUsageLimitCut'>
 ): StructuredAgentSessionUsageLimitContinue {
-  return new StructuredAgentSessionUsageLimitContinue({
+  const limit = new StructuredAgentSessionUsageLimitContinue({
     host: context.deps,
     sessions: context.sessions,
     readLoadedCut: delivery.readUsageLimitCut,
@@ -20,21 +17,16 @@ export function createUsageLimitContinue(
     publish: delivery.publishStatus,
     now: context.now
   })
+  limit.start()
+  return limit
 }
 
-export function sleepWorkspace(
-  context: StructuredAgentSessionMutationContext,
-  tasks: StructuredAgentSessionTaskQueue,
-  lifetime: StructuredAgentSessionConversationLifetime,
-  deliveryRunning: (id: string) => boolean,
-  workspaceId: string
-): Promise<{ stoppedSessionIds: string[] }> {
-  return sleepStructuredAgentSessionWorkspace(
-    { ...context, tasks, lifetime, deliveryRunning },
-    workspaceId
-  )
-}
-
-export function stopDeliveryWork(...work: { dispose: () => void }[]): void {
-  work.forEach((item) => item.dispose())
+/** A reopened chat re-reads its cut from the loaded journal. */
+export function opened(
+  limit: Pick<StructuredAgentSessionUsageLimitContinue, 'forget'> | undefined,
+  queued: { onOpened: (id: string) => void },
+  id: string
+): void {
+  limit?.forget(id)
+  queued.onOpened(id)
 }

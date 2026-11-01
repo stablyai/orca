@@ -1,4 +1,4 @@
-import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat-usage-limit-cut'
+import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import {
   structuredSessionRecoveryOptions,
   type RecoveryContextCache

@@ -10,8 +10,14 @@ import {
   persistRuntimeManagedWorktreeSortOrder,
   updateRuntimeManagedWorktreeMetadata
 } from '../runtime-managed-worktree-metadata'
-import { resolveRuntimeGitHubWorktreeBase } from '../runtime-github-worktree-base'
-import { resolveRuntimeGitLabWorktreeBase } from '../runtime-gitlab-worktree-base'
+import {
+  resolveRuntimeGitHubWorktreeBase,
+  type RuntimeGitHubWorktreeBaseArgs
+} from '../runtime-github-worktree-base'
+import {
+  resolveRuntimeGitLabWorktreeBase,
+  type RuntimeGitLabWorktreeBaseArgs
+} from '../runtime-gitlab-worktree-base'
 import { listWorktreesStrict } from '../../git/worktree-listing'
 import {
   adoptRuntimeProvisionedRoot,
@@ -93,12 +99,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     await this.worktreeBaseReconciliation.reconcile(args)
   }
 
-  /**
-   * Probe how far the worktree's HEAD is behind its tracking remote. Returns
-   * null when the probe cannot establish a signal (no default base ref, or
-   * git failure). Dispatch treats null as "unknown — proceed" (§3.1); only
-   * knowing-and-stale refuses.
-   */
+  /** Null means unknown HEAD drift and permits dispatch; only confirmed staleness refuses (§3.1). */
   async probeWorktreeDrift(worktreeSelector: string): Promise<{
     base: string
     behind: number
@@ -107,7 +108,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     return probeRuntimeWorktreeDrift({
       selector: worktreeSelector,
       store: this.store ? this.requireStore() : null,
-      resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+      resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
       resolveRemoteTrackingBase: (repoPath, base, options) =>
         this.resolveRemoteTrackingBase(repoPath, base, options),
       fetchRemote: (repoPath, remote, options) =>
@@ -133,7 +134,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
       updates,
       store: this.store,
       ports: {
-        resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+        resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
         invalidateScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
@@ -186,26 +187,18 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     })
   }
 
-  async resolveManagedPrBase(args: {
-    repoSelector: string
-    prNumber: number
-    headRefName?: string
-    baseRefName?: string
-    isCrossRepository?: boolean
-  }): Promise<GitHubPrStartPoint | { error: string }> {
+  async resolveManagedPrBase(
+    args: RuntimeGitHubWorktreeBaseArgs
+  ): Promise<GitHubPrStartPoint | { error: string }> {
     return resolveRuntimeGitHubWorktreeBase(args, {
       store: this.store ? this.requireStore() : null,
       resolveRepo: (selector) => this.resolveRepoSelector(selector)
     })
   }
 
-  async resolveManagedMrBase(args: {
-    repoSelector: string
-    mrIid: number
-    sourceBranch?: string
-    targetBranch?: string
-    isCrossRepository?: boolean
-  }): Promise<
+  async resolveManagedMrBase(
+    args: RuntimeGitLabWorktreeBaseArgs
+  ): Promise<
     { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
   > {
     return resolveRuntimeGitLabWorktreeBase(args, {

@@ -1,15 +1,4 @@
-// Round-trip guards for two @xterm/addon-serialize defects that garbled
-// hidden-terminal snapshot restores (serialize a buffer, replay into a fresh
-// identical terminal, compare):
-//
-// BUG B (fixed by config/patches/@xterm__addon-serialize@*.patch): the SGR
-// attribute diff emitted bold/dim set params before the shared intensity
-// reset 22, so "1;22" wiped a freshly set bold and a bare "22" dropped a
-// still-set bold/dim.
-//
-// BUG C (hardened Orca-side via serializeWithAbsoluteCursor): a final content
-// row filled exactly to the right margin leaves replay wrap-pending, and the
-// addon's RELATIVE cursor restore then lands one column short.
+// Pin SGR intensity-reset ordering and cursor restoration after wrap-pending replay.
 import './xterm-env-polyfill'
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
@@ -75,8 +64,7 @@ describe('out-of-range SGR state serialization', () => {
     const { terminal, addon } = createTerminal()
     await write(terminal, '\x1b[31;44;1m')
 
-    // This deliberately pins unsupported SerializeAddon behavior used by
-    // terminal-frame-restore-sequences under Orca's vendored addon patch.
+    // Frame restoration relies on this undocumented behavior of the vendored addon.
     const outOfRangeRow = terminal.buffer.normal.length
     expect(
       addon.serialize({
@@ -160,8 +148,7 @@ describe('cursor restore after wrap-pending replay (BUG C, absolute-cursor harde
   const REPRO = '0123456789\x1b[3;5H'
 
   it('documents the upstream defect: plain serialize lands one column short', async () => {
-    // Why this pin: the Orca hardening exists only because of this relative-
-    // restore defect. If an addon bump makes this fail, the hardening can go.
+    // Reassess absolute-cursor hardening if an addon upgrade fixes this pinned relative-restore defect.
     const { terminal, addon } = createTerminal(10, 5)
     await write(terminal, REPRO)
     expect(terminal.buffer.active.cursorX).toBe(4)
@@ -217,7 +204,6 @@ describe('cursor restore after wrap-pending replay (BUG C, absolute-cursor harde
 
   it('handles a wrap-pending row that is NOT the final content row', async () => {
     const { terminal, addon } = createTerminal(10, 5)
-    // Row 0 fills to the margin and wraps into row 1, then the cursor moves.
     await write(terminal, '0123456789ABC\x1b[2;2H')
     expect(terminal.buffer.active.cursorY).toBe(1)
     expect(terminal.buffer.active.cursorX).toBe(1)

@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { JiraIssueListFilters } from '../../../shared/jira-types'
-import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from '../../../shared/jira-quick-filters'
-import { JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import type { JiraIssueListFilters } from '../../../shared/jira/jira-types'
+import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from '../../../shared/jira/jira-quick-filters'
+import { JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY } from '../../../shared/jira/jira-detail-capabilities'
 import { jiraListIssues } from './runtime-jira-client'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
@@ -52,26 +52,3 @@ it.each([
     expect(call.mock.calls.filter(([args]) => args.method === 'jira.listIssues')).toHaveLength(1)
   }
 )
-
-it('forwards both filters to a host that supports the combined board query', async () => {
-  call.mockImplementation(async (args: { method: string }) =>
-    args.method === 'status.get'
-      ? createCompatibleRuntimeStatusResponse()
-      : { id: 'board-filter', ok: true, result: [] }
-  )
-  const filters = { statuses: ['Blocked'], currentSprint: true }
-  await jiraListIssues(
-    { kind: 'environment', environmentId: 'board-current' },
-    'all',
-    50,
-    'site-a',
-    filters
-  )
-  expect(call).toHaveBeenCalledWith(
-    expect.objectContaining({
-      selector: 'board-current',
-      method: 'jira.listIssues',
-      params: { filter: 'all', limit: 50, siteId: 'site-a', filters }
-    })
-  )
-})

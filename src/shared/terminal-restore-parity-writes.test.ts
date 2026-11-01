@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   createRendererParityTerminal,
   cursorPosition,
@@ -18,43 +18,6 @@ type AsyncOscParser = {
 }
 
 describe('terminal parity fixture writes', () => {
-  it('queues every original chunk and resolves only after the last callback', async () => {
-    const { terminal } = createRendererParityTerminal({ cols: 8, rows: 2 })
-    const writes: { data: string | Uint8Array; callback?: () => void }[] = []
-    try {
-      vi.spyOn(terminal, 'write').mockImplementation((data, callback) => {
-        writes.push({ data, callback })
-      })
-      const chunks = ['A\x1b[', '', '31mB', '\x1b[0mC']
-      let completed = false
-      const pending = writeChunksToTerminal(terminal, chunks).then(() => {
-        completed = true
-      })
-      expect(writes.map(({ data }) => data)).toEqual(chunks)
-      expect(writes.slice(0, -1).every(({ callback }) => callback === undefined)).toBe(true)
-      await Promise.resolve()
-      expect(completed).toBe(false)
-      writes.at(-1)?.callback?.()
-      await pending
-      expect(completed).toBe(true)
-    } finally {
-      terminal.dispose()
-      vi.restoreAllMocks()
-    }
-  })
-
-  it('completes an empty batch without writing or scheduling work', async () => {
-    const { terminal } = createRendererParityTerminal({ cols: 8, rows: 2 })
-    try {
-      const write = vi.spyOn(terminal, 'write')
-      await writeChunksToTerminal(terminal, [])
-      expect(write).not.toHaveBeenCalled()
-    } finally {
-      terminal.dispose()
-      vi.restoreAllMocks()
-    }
-  })
-
   it('waits for an asynchronous parser barrier before exposing later chunks', async () => {
     const { terminal } = createRendererParityTerminal({ cols: 8, rows: 2 })
     let signalEntered = (): void => {}

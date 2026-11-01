@@ -311,7 +311,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
 
-    // Fire an event for an unknown paneKey while not ready — must NOT call setAgentStatus.
     onSetListenerRef.current({
       paneKey: FUTURE_PANE_KEY,
       state: 'working',
@@ -359,12 +358,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
-  it('applies a large snapshot with one status and two bounded title publications', async () => {
+  it('applies a large snapshot with one status and bounded title publications', async () => {
     const paneCount = 100
     const snapshot: AgentStatusSetData[] = []
     const worktrees: AppState['worktreesByRepo'][string] = []
     const tabsByWorktree: AppState['tabsByWorktree'] = {}
-    // Tab-bar entries, so a layout-owner build sends the titles to main.
     const unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] = {}
     const terminalLayoutsByTabId: AppState['terminalLayoutsByTabId'] = {}
     for (let index = 0; index < paneCount; index += 1) {
@@ -448,20 +446,27 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
     resolveSnapshot?.(snapshot)
 
+    const renamed = () =>
+      main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
     await vi.waitFor(() => {
       expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
       expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.title).toBe(
         'Pi - action required'
       )
-      expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeTruthy()
+      // Main derives layout-owner tab titles; its unmodeled frames draw them without renderer writes.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeFalsy()
+      } else {
+        expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeTruthy()
+      }
     })
+    for (let turn = 0; turn < 10; turn += 1) {
+      await Promise.resolve()
+    }
 
-    expect(relevantPublications).toBe(3)
+    expect(relevantPublications).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 2 : 3)
     unsubscribe()
-    // A layout-owner build sends main the snapshot's titles as one rename.
-    expect(
-      main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
-    ).toEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? [paneCount] : [])
+    expect(renamed()).toEqual([])
   })
 
   it('indexes one 100-pane tab and its split tree once per snapshot', async () => {
@@ -664,8 +669,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(tabIdLookupCount).toBe(paneCount)
     expect(getMigrationUnsupportedSnapshot).toHaveBeenCalledTimes(1)
 
-    // The routing index is memoized on the tab map, so a second snapshot against the same tabs
-    // reuses it instead of re-indexing every owner.
+    // Repeated snapshots with unchanged tabs must reuse the ownership index.
     tabIdLookupCount = 0
     resolveUnsupportedSnapshot(unsupportedSnapshot)
     await vi.waitFor(() => {

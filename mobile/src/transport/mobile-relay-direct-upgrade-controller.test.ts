@@ -56,7 +56,7 @@ function logicalClient(initial: ConnectionState) {
 }
 
 describe('direct pairing upgrade controller', () => {
-  it('upgrades immediately after an authenticated direct connection', async () => {
+  it('forwards a completed upgrade for an already connected client', async () => {
     const logical = logicalClient('connected')
     const upgrade = vi.fn(async () => upgraded)
     const onUpgraded = vi.fn(async () => {})
@@ -83,7 +83,9 @@ describe('direct pairing upgrade controller', () => {
     await controller.start()
     controller.setForeground(false)
     controller.setForeground(true)
-    await vi.waitFor(() => expect(onUpgraded).toHaveBeenCalledOnce())
+    await Promise.resolve()
+
+    expect(onUpgraded).toHaveBeenCalledOnce()
 
     expect(upgrade).toHaveBeenCalledTimes(2)
   })

@@ -1,8 +1,4 @@
-/**
- * The window event is the only place the publisher's identity can be lost, so
- * these cover the whole attribution path: a scoped runtime event must reach one
- * host, and an unattributed one must still reach a whole authority.
- */
+/** Preserve publisher attribution end to end: scoped runtime events reach one host; unattributed events still refresh their authority. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'

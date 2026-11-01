@@ -5,6 +5,7 @@ import { RpcDispatcher } from './dispatcher'
 import { ALL_RPC_METHODS } from './methods'
 import type { RpcCallerScope } from './rpc-caller-scope'
 import { RPC_METHOD_PERMISSIONS } from './rpc-method-permission'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from '../runtime-rpc/runtime-rpc-mobile-method-allowlist'
 
 const PAIRED: RpcCallerScope = { kind: 'runtime-paired', grants: [] }
 
@@ -49,6 +50,21 @@ describe('every RPC method declares a known permission', () => {
     expect(permissionOf('pairing.provisionRelay')).toBe('pairing-admin')
     expect(permissionOf('ssh.connect')).toBe('host-admin')
     expect(permissionOf('network.browserTunnel')).toBe('host-admin')
+  })
+
+  // Why: hosts open any absolute path for these callers, which is safe only because terminal access already reaches it.
+  it.each([
+    'files.resolveTerminalPath',
+    'files.readTerminalArtifact',
+    'files.readTerminalArtifactPreview',
+    'files.writeTerminalArtifact'
+  ])('gates %s exactly like opening a terminal', (name) => {
+    const permissionOf = (method: string) =>
+      ALL_RPC_METHODS.find((m) => m.name === method)?.permission
+    expect(permissionOf(name)).toBe(permissionOf('terminal.create'))
+    expect(MOBILE_RPC_METHOD_ALLOWLIST.has(name)).toBe(
+      MOBILE_RPC_METHOD_ALLOWLIST.has('terminal.create')
+    )
   })
 })
 

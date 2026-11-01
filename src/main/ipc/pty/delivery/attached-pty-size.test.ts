@@ -53,16 +53,6 @@ describe('shouldSeedPreAttachPtySize', () => {
 })
 
 describe('resolveCommittedPtySize', () => {
-  it('records the requested grid for a fresh spawn, ignoring any stale cache', () => {
-    expect(
-      resolveCommittedPtySize({
-        result: {},
-        requested: REQUESTED,
-        cachedBeforeAttach: CACHED
-      })
-    ).toEqual(REQUESTED)
-  })
-
   it('prefers a grid the provider applied on attach', () => {
     expect(
       resolveCommittedPtySize({

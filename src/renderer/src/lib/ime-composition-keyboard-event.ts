@@ -24,21 +24,17 @@ type ImeEnterGestureEvent = Pick<
   'key' | 'keyCode' | 'nativeEvent' | 'preventDefault' | 'shiftKey'
 > & { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }
 
-/**
- * Why: the confirming Enter of a CJK composition arrives as two keydowns, and the
- * two orderings differ by platform. Windows/Linux redispatch the unmarked
- * `Enter`/13 *before* keyup; macOS delivers keyup first and redispatches after.
- * A token that expires synchronously on keyup therefore regresses macOS, so the
- * carry survives until the next animation frame. Identity-scoped so an older
- * gesture's expiry cannot clear a newer one.
- */
+// Hangul has no candidate step, so the Enter that commits it is the user's own Enter.
+const HANGUL_ONLY = /^\p{Script=Hangul}+$/u
+
+/** Carry confirmation through the next frame: Windows/Linux redispatch bare Enter before keyup, macOS after. Scope expiry by gesture identity so older frames cannot clear newer carry. */
 export function useImeEnterGestureOwnership(): {
   isComposing: () => boolean
   ownsKeyDown: (event: ImeEnterGestureEvent) => boolean
   onKeyUp: (event: ImeEnterGestureEvent) => void
-  onCompositionEnd: () => void
+  onCompositionEnd: (committedText?: string) => void
   reset: () => void
-  setComposing: (active: boolean) => void
+  setComposing: (active: boolean, committedText?: string) => void
 } {
   const stateRef = useRef<{ composing: boolean; pendingEnter: object | null }>({
     composing: false,
@@ -62,8 +58,7 @@ export function useImeEnterGestureOwnership(): {
     // Shift+Enter is a newline, never a submit — it must never be owned or swallowed.
     const isPlainEnter = (event: ImeEnterGestureEvent): boolean =>
       event.key === 'Enter' && event.keyCode === 13 && !event.shiftKey
-    // The redispatched Enter of a confirm carries no modifiers, so a chorded one is the
-    // user's own submit aimed past the IME. It must still ARM, and must never be swallowed.
+    // Chorded Enter is deliberate submit, not bare IME redispatch; arm carry but do not swallow the chord.
     const hasChordModifier = (event: ImeEnterGestureEvent): boolean =>
       Boolean(event.altKey || event.ctrlKey || event.metaKey)
     return {
@@ -91,8 +86,7 @@ export function useImeEnterGestureOwnership(): {
           isPlainEnter(event) &&
           !event.nativeEvent.isComposing
         ) {
-          // The gesture resolves either way, so the carry is spent either way; only a bare
-          // Enter is also swallowed, because a chorded one is the user's own submit.
+          // Spend carry for either outcome; swallow only bare Enter, never the user’s chorded submit.
           stateRef.current.pendingEnter = null
           if (hasChordModifier(event)) {
             return false
@@ -106,30 +100,29 @@ export function useImeEnterGestureOwnership(): {
         // Any keyup can precede the redispatch, including an IME-owned Process/229 release.
         expirePendingEnter()
       },
-      onCompositionEnd: () => {
+      onCompositionEnd: (committedText = '') => {
         const compositionWasActive = stateRef.current.composing
         stateRef.current.composing = false
-        if (compositionWasActive && !stateRef.current.pendingEnter) {
+        if (HANGUL_ONLY.test(committedText)) {
+          stateRef.current.pendingEnter = null
+        } else if (compositionWasActive && !stateRef.current.pendingEnter) {
           // IBus can finish composition before its only unmarked confirming Enter.
           stateRef.current.pendingEnter = {}
           expirePendingEnter()
         }
       },
       reset,
-      setComposing: (active: boolean) => {
+      setComposing: (active: boolean, committedText = '') => {
         stateRef.current.composing = active
+        if (!active && HANGUL_ONLY.test(committedText)) {
+          stateRef.current.pendingEnter = null
+        }
       }
     }
   }, [])
 }
 
-/**
- * Why: CJK IMEs (Japanese/Chinese/Korean) fire a keydown for the Enter that
- * only confirms a conversion candidate. Rename/title inputs that commit on
- * `Enter` must ignore that keydown, otherwise they submit mid-composition with a
- * half-converted value. `isComposing` covers most browsers; `keyCode === 229` is
- * a defensive fallback for IMEs that don't set `isComposing` on keydown.
- */
+/** Ignore candidate-confirming Enter in commit inputs; isComposing covers most browsers and keyCode 229 covers IMEs missing that flag. */
 export function isImeCompositionKeyDown(event: ReactKeyboardEvent): boolean {
   return isImeOwnedKeyboardEvent(event)
 }

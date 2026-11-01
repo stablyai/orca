@@ -1,13 +1,4 @@
-/**
- * The host script's state ops on Windows: the pre-activation snapshot, its comparison and
- * restore, the newest-write probe, and the first-activation owner admission.
- *
- * Same contract and tokens as the POSIX commands in `orcad-state-snapshot.ts` and
- * `orcad-initial-activation-admission.ts`. The snapshot is a directory copy (`state/`) rather
- * than a tar: there is no tar in Node, and spawning `tar.exe` would be a second process. It is
- * built under a partial name and renamed into place, so a half-written snapshot is never
- * `PRESENT`. Symlinks and junctions anywhere in captured state fail closed, as on POSIX.
- */
+// Match POSIX state verdicts using staged directory snapshots; avoid extra tar processes and reject symlinks/junctions throughout.
 import { PRIMARY_RUNTIME_METADATA_FILE } from '../../../shared/runtime-bootstrap'
 import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
 import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../../shared/orcad-artifacts'
@@ -37,7 +28,7 @@ export type OrcadWindowsHostStateOp =
 const OWNER_RECORD_MAX_BYTES = 64 * 1024
 const text = JSON.stringify
 
-/** Evaluated inside the host script, after `fs`, `path`, `answer` and `ops` exist. */
+/** Inject after the host script defines fs, path, answer and ops. */
 export const ORCAD_WINDOWS_HOST_STATE_OPS = `
 const MEMBERS = ${text(ORCAD_SNAPSHOT_MEMBERS)}
 const STATE_DIR = ${text(ORCAD_WINDOWS_SNAPSHOT_STATE_DIRNAME)}
@@ -178,7 +169,15 @@ function renameWithRetry(from, to) {
 }
 
 const removeTree = (target) => fs.rmSync(target, { recursive: true, force: true, maxRetries: 5 })
-const removeTreeAsync = (target) => fs.promises.rm(target, { recursive: true, force: true, maxRetries: 5 })
+// Async rm retries each nested entry separately (multiplying per level); retry whole passes instead.
+async function removeTreeAsync(target) {
+  for (const delay of [0, 100, 200, 300, 400, 500]) {
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay))
+    try { await fs.promises.rm(target, { recursive: true, force: true }); return } catch (error) {
+      if (!['EPERM', 'EBUSY', 'ENOTEMPTY'].includes(error.code) || delay === 500) throw error
+    }
+  }
+}
 
 Object.assign(ops, {
   'snapshot-capture': withStateMutationLock(async (root, snapshotDir) => {

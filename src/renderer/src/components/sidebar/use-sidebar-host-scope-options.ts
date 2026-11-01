@@ -8,9 +8,7 @@ import {
   type SidebarHostScopeOption
 } from './sidebar-host-options'
 
-/** Shared host-scope derivation for the sidebar scope strip and the workspace
- * options menu so both surfaces consume the same live runtime status without
- * duplicating store wiring. */
+/** Share live host derivation between the scope strip and workspace options. */
 export function useSidebarHostScopeOptions(): {
   hostOptions: SidebarHostOption[]
   hostScopeOptions: SidebarHostScopeOption[]

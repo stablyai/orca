@@ -1,7 +1,4 @@
-/**
- * The terminal daemon this app kept although its AppImage files are gone. New terminals avoid it
- * until the user restarts it; this record is what the notice and the restart action read.
- */
+// Preserve severed AppImage daemon identity for the notice and guarded restart.
 import type { DaemonHostImageInspection } from './daemon-host-image'
 
 export type SeveredDaemonIncarnation = {
@@ -10,13 +7,12 @@ export type SeveredDaemonIncarnation = {
   bootId: string
 }
 
-/** `liveSessionCount`: every running terminal a restart would end, daemon and local fallback. */
+/** Counts all running terminals a restart would end, including the local fallback. */
 export type SeveredDaemonStatus = SeveredDaemonIncarnation & { liveSessionCount: number | null }
 
 export type SeveredDaemonRestartResult =
   | { status: 'restarted'; killedCount: number }
-  /** `replaced`: another incarnation owns the daemon now; `unverifiable`: the host could not
-   *  prove the process is the one the caller saw, so nothing was killed. */
+  /** Refuse a replaced or unverified incarnation without killing it. */
   | { status: 'refused'; reason: 'not-severed' | 'replaced' | 'unverifiable' }
 
 /** Supplied by the desktop daemon provider; hosts without one (orcad) report nothing severed. */

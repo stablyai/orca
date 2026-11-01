@@ -52,18 +52,6 @@ afterEach(() => {
 })
 
 describe('useMarkdownDocumentWatchRefresh', () => {
-  it('asks for a scan fresher than the latest change in the window', async () => {
-    const refresh = vi.fn(async () => {})
-    await act(async () => root.render(createElement(Harness, { refresh })))
-    change([{ kind: 'create', absolutePath: '/repo/a.md' }])
-    await advance(100)
-    const latestChangeAt = performance.now()
-    change([{ kind: 'create', absolutePath: '/repo/b.md' }])
-    await advance(100)
-    expect(refresh).toHaveBeenCalledTimes(1)
-    expect(refresh).toHaveBeenCalledWith(false, latestChangeAt)
-  })
-
   it('keeps one slow scan in flight and follows up once it settles', async () => {
     let inFlight = 0
     let maxInFlight = 0

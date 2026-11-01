@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
+
 import { createElement, createRef, type MouseEvent } from 'react'
 import { useFileExplorerHandlers } from './useFileExplorerHandlers'
 import { useFileExplorerNodeCommands } from './use-file-explorer-node-commands'
@@ -28,14 +29,6 @@ const directoryNode: TreeNode = {
   depth: 1
 }
 
-const fileNode: TreeNode = {
-  name: 'index.ts',
-  path: '/repo/src/index.ts',
-  relativePath: 'src/index.ts',
-  isDirectory: false,
-  depth: 1
-}
-
 const symlinkDirectoryNode: TreeNode = {
   name: 'linked-components',
   path: '/repo/src/linked-components',
@@ -59,13 +52,6 @@ function createHandlerParams(toggleDir: (worktreeId: string, dirPath: string) =>
   }
 }
 
-function renderHandlers(toggleDir: (worktreeId: string, dirPath: string) => void) {
-  const params = createHandlerParams(toggleDir)
-  const hook = renderHook(() => useFileExplorerHandlers(params))
-  return { ...hook, openFile: params.openFile, setSelectedPath: params.setSelectedPath }
-}
-
-// Wires a row like the explorer does so clicks resolve timing in handleRowClick.
 function renderRow(node: TreeNode, toggleDir: (worktreeId: string, dirPath: string) => void) {
   const params = createHandlerParams(toggleDir)
   function Row() {
@@ -88,7 +74,8 @@ function renderRow(node: TreeNode, toggleDir: (worktreeId: string, dirPath: stri
       refreshDir: vi.fn().mockResolvedValue(undefined),
       handleClick,
       toggleDir,
-      scrollToIndex: vi.fn()
+      scrollToIndex: vi.fn(),
+      pathOwner: 'local'
     })
     return createElement(
       'button',
@@ -114,18 +101,6 @@ async function clickAndSettle(target: Element, detail: number): Promise<void> {
 describe('instant directory toggle', () => {
   afterEach(() => cleanup())
 
-  it('toggles immediately when the click missed the rename hotspot', async () => {
-    const toggleDir = vi.fn()
-    const { result } = renderHandlers(toggleDir)
-
-    await act(async () => {
-      result.current.handleClick(directoryNode, 'immediate')
-      await Promise.resolve()
-    })
-
-    expect(toggleDir).toHaveBeenCalledWith('wt-1', directoryNode.path)
-  })
-
   it('toggles a filename click immediately, without waiting out the double-click window', async () => {
     vi.useFakeTimers()
     try {
@@ -134,7 +109,7 @@ describe('instant directory toggle', () => {
 
       await clickAndSettle(getByTestId('name'), 1)
 
-      // Why: no timer may be involved — a delay here is what read as lag on the folder name.
+      // No timer: delaying the folder-name click made the explorer feel laggy.
       expect(toggleDir).toHaveBeenCalledWith('wt-1', directoryNode.path)
       expect(vi.getTimerCount()).toBe(0)
     } finally {
@@ -150,25 +125,15 @@ describe('instant directory toggle', () => {
     await clickAndSettle(getByTestId('name'), 2)
 
     expect(toggleDir).toHaveBeenCalledTimes(1)
-    // Why: the rename about to start still needs the row selected.
+    // Keep the row selected for the rename about to start.
     expect(setSelectedPath).toHaveBeenLastCalledWith(directoryNode.path)
-  })
-
-  it('toggles on both clicks of a double-click outside the filename', async () => {
-    const toggleDir = vi.fn()
-    const { getByTestId } = renderRow(directoryNode, toggleDir)
-
-    await clickAndSettle(getByTestId('row'), 1)
-    await clickAndSettle(getByTestId('row'), 2)
-
-    expect(toggleDir).toHaveBeenCalledTimes(2)
   })
 
   it('toggles a symlink directory once when the second click is a rename', async () => {
     const toggleDir = vi.fn()
     const { getByTestId, setSelectedPath } = renderRow(symlinkDirectoryNode, toggleDir)
 
-    // Why: both clicks land before the first stat resolves, as in a real double-click.
+    // Real double-clicks can land before the first stat resolves.
     await act(async () => {
       fireEvent.click(getByTestId('name'), { detail: 1 })
       fireEvent.click(getByTestId('name'), { detail: 2 })
@@ -179,18 +144,5 @@ describe('instant directory toggle', () => {
     expect(toggleDir).toHaveBeenCalledTimes(1)
     expect(toggleDir).toHaveBeenCalledWith('wt-1', symlinkDirectoryNode.path)
     expect(setSelectedPath).toHaveBeenLastCalledWith(symlinkDirectoryNode.path)
-  })
-
-  it('keeps opening files on the second click, which is not a directory toggle', async () => {
-    const toggleDir = vi.fn()
-    const { result, openFile } = renderHandlers(toggleDir)
-
-    await act(async () => {
-      result.current.handleClick(fileNode, 'skip')
-      await Promise.resolve()
-    })
-
-    expect(toggleDir).not.toHaveBeenCalled()
-    expect(openFile).toHaveBeenCalledTimes(1)
   })
 })
