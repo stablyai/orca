@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionCommandItemIds } from '../../../../shared/structured-agent-session-message-projection'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'

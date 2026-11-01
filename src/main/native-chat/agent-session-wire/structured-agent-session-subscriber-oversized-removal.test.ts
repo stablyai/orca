@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,

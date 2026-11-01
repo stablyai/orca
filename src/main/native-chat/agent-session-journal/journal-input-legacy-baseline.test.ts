@@ -17,7 +17,7 @@ import {
 } from '../../../shared/agent-session-provider-handle-encoding'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalReducerState } from './journal-reducer'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { holdUnsentSends } from './journal-unsent-send-hold'
 import {
   createTrackedJournalOpener,

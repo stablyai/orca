@@ -4,7 +4,7 @@ import type { QueuedEditHostFixtureModule } from './queued-edit-host.test-fixtur
 import type {
   AgentSessionQueuedMessageEditHoldParams,
   AgentSessionQueuedMessageEditHoldResult
-} from './agent-session-wire'
+} from './agent-session/requests/agent-session-queued-message-wire'
 
 let queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost']
 beforeAll(async () => {

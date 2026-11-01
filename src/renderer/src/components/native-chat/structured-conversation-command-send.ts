@@ -11,7 +11,7 @@ import type { StructuredPromptItem } from '../../../../shared/structured-agent-s
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import type {
   StructuredAgentSessionCommandOutcome,

@@ -1,9 +1,9 @@
+import type { AgentJournalCursor } from './agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import { isAgentSessionProviderContextBoundary } from './agent-session-provider-context'
 import type { NativeChatMessage } from './native-chat/native-chat-types'
 

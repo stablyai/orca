@@ -1,6 +1,6 @@
 import { assert, describe, expect, it } from 'vitest'
 import { acquired, fakeCodex } from './codex-structured-session-adapter-fixture'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { queuedMessageWithEdit, type QueuedMessageEdit } from '../../shared/queued-message-edit'
 
 function skill(name: string, path: string, enabled = true) {

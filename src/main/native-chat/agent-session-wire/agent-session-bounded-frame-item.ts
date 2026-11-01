@@ -1,5 +1,5 @@
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import { boundJournalKeyComponent } from '../../../shared/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { boundJournalKeyComponent } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   BOUNDED_FRAME_CONTENT_BUDGET_BYTES,
   measureHistoryItem,

@@ -16,7 +16,7 @@ import type {
   AgentJournalProducerLinkage,
   AgentJournalToolCallEnding,
   AgentJournalToolCallState
-} from '../agent-session-journal-types'
+} from '../agent-session/journal/agent-session-journal-types'
 import type { AgentType } from '../agent-status-types'
 import type { NativeChatToolMetadata } from './tools/native-chat-tool-identity'
 import type { AgentMessageSource } from '../agent-session/agent-session-message-source'

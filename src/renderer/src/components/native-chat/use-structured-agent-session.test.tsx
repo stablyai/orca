@@ -62,7 +62,7 @@ vi.mock('./use-structured-agent-session-sends', () => ({
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   OPTIONS,
   FAST_OPTIONS,

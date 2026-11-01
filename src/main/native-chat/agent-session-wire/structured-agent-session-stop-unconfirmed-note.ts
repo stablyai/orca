@@ -2,10 +2,8 @@
 
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import type {
-  AgentJournalStatusItem,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalStatusItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
 import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
 import { structuredAgentSessionNamedTurnScope } from './structured-agent-session-turn-stop-notes'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'

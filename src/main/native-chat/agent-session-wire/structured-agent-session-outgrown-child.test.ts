@@ -41,7 +41,7 @@ import type { StructuredAgentSessionProviderChild } from './structured-agent-ses
 import type {
   AgentJournalItemBody,
   AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { JournalItemLinkageVisitor } from '../agent-session-journal/journal-store-contracts'
 import type { LegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'

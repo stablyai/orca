@@ -6,7 +6,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalTurnBody } from '../../../../shared/agent-session-turn-record'
 import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing'
 

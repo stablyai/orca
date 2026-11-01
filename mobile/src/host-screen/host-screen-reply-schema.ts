@@ -162,6 +162,16 @@ export const hostViewSettingsSchema = z
 // headlessActivationNeedsHostRenderer is a total guard inside a fire-and-forget startup task: a throwing reader would cause an unhandled rejection and skip terminal loading.
 export const hostScreenUnreadReplySchema = z.unknown()
 
+// null: no orca.yaml archive script needs trust. Absent (older host) or malformed: unknown, so the hook does not run.
+export const worktreeArchiveHookTrustSchema = z
+  .looseObject({
+    archiveTrust: salvagedOptional(
+      'archiveTrust',
+      z.looseObject({ contentHash: z.string().min(1), scriptContent: z.string() }).nullable()
+    )
+  })
+  .transform((reply) => reply.archiveTrust)
+
 export type HostRepoCatalogRow = z.output<typeof hostRepoCatalogSchema>[number]
 
 export type MobileHostRepoIcon = NonNullable<

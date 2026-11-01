@@ -6,7 +6,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type {
   AgentJournalSnapshot,
   AgentJournalItemBody
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
 import { readStructuredSessionRecovery } from './structured-agent-session-recovery-read'
