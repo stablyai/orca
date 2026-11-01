@@ -309,7 +309,7 @@ export type RuntimeTerminalClose = {
   pendingKillRecorded?: true
 }
 
-export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
+export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle' | 'waiting'
 
 // Keep published codex-* reasons readable forever; emit them only for plausibly Codex-specific wording.
 // Agent-agnostic matchers use agent-* reasons.

@@ -202,9 +202,12 @@ export const TerminalViewport = z.object({
 })
 
 export const TerminalWait = TerminalHandle.extend({
-  for: z.custom<'exit' | 'tui-idle'>((value) => value === 'exit' || value === 'tui-idle', {
-    message: 'Invalid --for value. Supported: exit, tui-idle'
-  }),
+  for: z.custom<'exit' | 'tui-idle' | 'waiting'>(
+    (value) => value === 'exit' || value === 'tui-idle' || value === 'waiting',
+    {
+      message: 'Invalid --for value. Supported: exit, tui-idle, waiting'
+    }
+  ),
   timeoutMs: OptionalFiniteNumber
 })
 

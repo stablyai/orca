@@ -23,7 +23,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   force:
     '--force                Force worktree removal when supported; does not force branch deletion',
   focus: '--focus                Reveal the created terminal session in Orca',
-  for: '--for exit|tui-idle    Wait condition to satisfy',
+  for: '--for exit|tui-idle|waiting Wait condition to satisfy',
   'from-element-index': '--from-element-index <n> Source element index from get-app-state',
   'from-x': '--from-x <x>           Source window-local x coordinate',
   'from-y': '--from-y <y>           Source window-local y coordinate',

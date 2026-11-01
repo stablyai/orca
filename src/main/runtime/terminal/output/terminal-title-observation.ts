@@ -154,8 +154,12 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
         this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
       }
       ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
-      // Re-offer idle-to-idle upgrades from name-only to explicit evidence; exclude permission-to-idle and unchanged repaints to avoid tail rescans.
-      if (agentStatus === 'idle' && prevStatus !== 'permission' && ptyRecordChanged) {
+      // Re-offer idle-to-idle upgrades from name-only to explicit evidence; resolve permission/waiting waiters on permission transition.
+      if (
+        ((agentStatus === 'idle' && prevStatus !== 'permission') ||
+          (agentStatus === 'permission' && prevStatus !== 'permission')) &&
+        ptyRecordChanged
+      ) {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
       }
       const shouldDelayMobileSnapshot =

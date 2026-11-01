@@ -82,7 +82,7 @@ export class RuntimeTerminalIdlePolls {
       this.sweepTimer = setInterval(() => this.sweep(), this.deps.intervalMs)
     }
     // Probe weak ready immediately; short automation waits may expire before the next sweep.
-    if (verdict?.kind === 'ready-weak') {
+    if (verdict?.kind === 'ready-weak' && waiter.condition !== 'waiting') {
       void this.tick(entry)
     } else if (verdict) {
       this.armRecheck(entry, verdict)
@@ -126,8 +126,9 @@ export class RuntimeTerminalIdlePolls {
         launchReadiness: entry.waiter.launchReadiness
       }),
       ptyId: pty.ptyId,
-      ready: () => buildPtyTerminalWaitResult(handle, 'tui-idle', pty),
-      blocked: (reason) => buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, reason),
+      ready: () => buildPtyTerminalWaitResult(handle, entry.waiter.condition, pty),
+      blocked: (reason) =>
+        buildPtyTerminalWaitBlockedResult(handle, entry.waiter.condition, pty, reason),
       isQuiet: (lane) =>
         isQuietForQuiescence(outputClockOf(this.deps, pty), this.deps.quiescenceMs, lane, () =>
           this.deps.hasCommandPainted(pty.ptyId)
@@ -145,6 +146,27 @@ export class RuntimeTerminalIdlePolls {
       const { verdict, ptyId } = sample
       if (verdict.kind === 'blocked') {
         this.settle(entry, sample.blocked(verdict.reason))
+        return
+      }
+      if (entry.waiter.condition === 'waiting' && entry.pty.lastAgentStatus === 'permission') {
+        this.settle(entry, sample.blocked('agent-interactive-prompt'))
+        return
+      }
+      if (entry.waiter.condition === 'waiting') {
+        if (verdict.kind === 'working' || entry.screenReadInFlight) {
+          this.armRecheck(entry, verdict)
+          return
+        }
+        const screenRead = this.readScreenBlockedReason(entry, ptyId)
+        const screenBlockedReason = screenRead ? await screenRead : null
+        if (!this.entries.has(entry)) {
+          return
+        }
+        if (screenBlockedReason) {
+          this.settle(entry, sample.blocked(screenBlockedReason))
+          return
+        }
+        this.armRecheck(entry, verdict)
         return
       }
       // Strong readiness outranks unscoped dialog wording elsewhere on the screen.

@@ -47,7 +47,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   protected resolvePtyTuiIdleWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
     const waiters = this.terminalWaiters
       .forPty(ptyId)
-      .filter((waiter) => waiter.condition === 'tui-idle')
+      .filter((waiter) => waiter.condition === 'tui-idle' || waiter.condition === 'waiting')
     if (waiters.length === 0) {
       return
     }
@@ -57,9 +57,19 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       if (verdict.kind === 'blocked') {
         this.resolveWaiter(
           waiter,
-          buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, verdict.reason)
+          buildPtyTerminalWaitBlockedResult(waiter.handle, waiter.condition, pty, verdict.reason)
         )
-      } else if (verdict.kind === 'ready-strong') {
+      } else if (waiter.condition === 'waiting' && pty.lastAgentStatus === 'permission') {
+        this.resolveWaiter(
+          waiter,
+          buildPtyTerminalWaitBlockedResult(
+            waiter.handle,
+            waiter.condition,
+            pty,
+            'agent-interactive-prompt'
+          )
+        )
+      } else if (verdict.kind === 'ready-strong' && waiter.condition === 'tui-idle') {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
       }
     }
