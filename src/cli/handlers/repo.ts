@@ -32,7 +32,7 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
           throw attachCliErrorData(error, {
             ...(error.data && typeof error.data === 'object' ? error.data : {}),
             nextSteps: [
-              'To open this directory as a folder workspace without Git worktrees or source control, rerun this command with --kind folder.'
+              'This directory is not itself a Git repository (for example, a parent folder of separate Git repositories). To open it as a folder workspace without Git worktrees or source control, rerun this command with --kind folder.'
             ]
           })
         }

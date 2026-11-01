@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
 import type { Repo } from '../../../shared/repo-types'
 import { RuntimeRepositoryRegistrationController } from '../runtime-repository-registration-controller'
@@ -117,7 +118,11 @@ it('opens a repo-tool root through the CLI folder route and keeps subproject Git
     const subproject = repoReply.parse(
       await cli(['repo', 'add', '--path', project, '--kind', 'git'])
     ).result.repo
-    expect(subproject).toMatchObject({ path: project, kind: 'git' })
+    // Windows Git registration stores the resolved root with forward slashes.
+    expect(normalizeRuntimePathForComparison(subproject.path)).toBe(
+      normalizeRuntimePathForComparison(project)
+    )
+    expect(subproject.kind).toBe('git')
     expect(repos).toHaveLength(2)
 
     const beforeInvalid = requests.length
