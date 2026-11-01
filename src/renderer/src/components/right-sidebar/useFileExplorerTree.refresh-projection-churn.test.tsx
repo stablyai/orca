@@ -28,6 +28,7 @@ import {
   visibleProps,
   initializeExplorerSubscriptions
 } from './file-explorer-lifecycle-test-support'
+import { Virtualizer } from '@tanstack/react-virtual'
 
 const WORKTREE_PATH = '/repo'
 const SRC_DIR = '/repo/src'
@@ -259,12 +260,22 @@ describe('file explorer directory refresh churn', () => {
   })
 
   it('renders the folder spinner from the loading dir set', () => {
+    const virtualizer = new Virtualizer<HTMLDivElement, Element>({
+      count: 1,
+      getScrollElement: () => null,
+      estimateSize: () => 26,
+      scrollToFn: vi.fn(),
+      observeElementRect: vi.fn(),
+      observeElementOffset: vi.fn()
+    })
+    virtualizer.getTotalSize = () => 26
+    virtualizer.getVirtualItems = Object.assign(
+      () => [{ index: 0, key: 'src', start: 0, end: 26, size: 26, lane: 0 }],
+      { updateDeps: virtualizer.getVirtualItems.updateDeps }
+    )
+    virtualizer.measureElement = vi.fn()
     const rowProps = {
-      virtualizer: {
-        getTotalSize: () => 26,
-        getVirtualItems: () => [{ index: 0, key: 'src', start: 0 }],
-        measureElement: vi.fn()
-      } as never,
+      virtualizer,
       inlineInputIndex: -1,
       rowProjection: createFileExplorerRowProjection([directoryNode]),
       inlineInput: null,
