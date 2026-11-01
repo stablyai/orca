@@ -1,13 +1,13 @@
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   journalLifecycleItemMutation,
   journalLifecycleMutationItemId,
   type JournalLifecycleIdentityMutationInput,
   type JournalLifecycleMutationInput
-} from '../native-chat/agent-session-journal/journal-lifecycle-mutation'
-import type { ProviderTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
-import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
+} from '../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+import type { ProviderTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
+import type { StructuredAgentSessionTransitionJournal } from '../../native-chat/agent-session-wire/structured-agent-session-transition'
 
 /** Pure per-turn scratch: held durable rows never affect replay translation. */
 export type AcpHistoryItem = Extract<JournalLifecycleIdentityMutationInput, { kind: 'item' }>

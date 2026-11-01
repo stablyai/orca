@@ -2,33 +2,31 @@ import {
   agentJournalItemKey,
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session/journal/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
-} from '../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { nativeChatRowRendersContent } from '../../shared/native-chat/transcript/native-chat-row-content'
-import { projectNativeChatTranscriptMessages } from '../../shared/native-chat/transcript/native-chat-transcript-projection'
-import { projectStructuredAgentSessionMessages } from '../../shared/agent-session/view/structured-agent-session-message-projection'
-import { usableJournalHistoryOrigin } from '../native-chat/agent-session-journal/journal-history-origin'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { nativeChatRowRendersContent } from '../../../shared/native-chat/transcript/native-chat-row-content'
+import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { usableJournalHistoryOrigin } from '../../native-chat/agent-session-journal/journal-history-origin'
 import {
   journalLifecycleItemMutation,
   type JournalLifecycleIdentityMutationInput
-} from '../native-chat/agent-session-journal/journal-lifecycle-mutation'
-import { isHistoricalProviderTimelineItem } from '../native-chat/agent-session-timeline/provider-timeline-history'
-import { isProviderTimelineTurnInNamespace } from '../native-chat/agent-session-timeline/provider-timeline-identity'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionHistoryJournal
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
+import { isProviderTimelineTurnInNamespace } from '../../native-chat/agent-session-timeline/provider-timeline-identity'
+import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/structured-agent-session-journal-views'
 import {
   HISTORY_CATCH_UP_MAX_BYTES,
   continuedOutsideRecordId,
   createHistoryCatchUpBatch,
   runHistoryCatchUp
-} from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import {
   acpHistoryTurns,
   type AcpIdentifiedHistoryTurn,
@@ -36,7 +34,7 @@ import {
 } from './acp-history-replay'
 import { translateHistoryTurn, type AcpHistoryScope } from './acp-history-translation'
 import { matchAcpHistoryTurns, type AcpHistoryCandidate } from './acp-history-turn-matching'
-import { acpAgentName } from './acp-structured-agent-definitions'
+import { acpAgentName } from '../acp-structured-agent-definitions'
 import { acpHistoryBoundary } from './acp-history-boundary'
 
 export type AcpHistoryCatchUpInput = AcpHistoryScope & {

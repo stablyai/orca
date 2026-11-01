@@ -1,12 +1,12 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT,
   SESSION,
@@ -14,16 +14,16 @@ import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,
   providerTurnItemId
-} from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
-import { isHistoricalProviderTimelineItem } from '../native-chat/agent-session-timeline/provider-timeline-history'
-import { settleObservedExitForTest } from '../native-chat/agent-session-wire/structured-agent-session-observed-exit.test-fixture'
-import { captureUnfinishedStructuredAgentSessionWork } from '../native-chat/agent-session-wire/structured-agent-session-unfinished-work'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
+import { settleObservedExitForTest } from '../../native-chat/agent-session-wire/structured-agent-session-observed-exit.test-fixture'
+import { captureUnfinishedStructuredAgentSessionWork } from '../../native-chat/agent-session-wire/structured-agent-session-unfinished-work'
+import { createDeferredStructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   recordingStructuredAgentSessionLogger,
   testEventSinkLogging
-} from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+} from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import {
   hasArrayKey,
   operationStack,
@@ -39,11 +39,11 @@ import {
 } from './acp-history-replay'
 import { translateHistoryTurn, type AcpHistoryScope } from './acp-history-translation'
 import { matchAcpHistoryTurns } from './acp-history-turn-matching'
-import { acpNamedTextKey } from './acp-turn-messages'
-import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
-import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
-import * as historyBatch from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import { journalLifecycleMutationItemId } from '../native-chat/agent-session-journal/journal-lifecycle-mutation'
+import { acpNamedTextKey } from '../acp-turn-messages'
+import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
+import { GROK_ACP_DIALECT } from '../acp-dialects/grok-dialect'
+import * as historyBatch from '../../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+import { journalLifecycleMutationItemId } from '../../native-chat/agent-session-journal/journal-lifecycle-mutation'
 
 afterEach(closeProviderTimelineRigs)
 const scope: AcpHistoryScope = {

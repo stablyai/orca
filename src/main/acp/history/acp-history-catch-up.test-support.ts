@@ -2,17 +2,17 @@ import { vi } from 'vitest'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { AcpDialect } from './acp-dialects/acp-dialect'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AcpHistoryTurnIdentity, AcpLoadHistoryFrame } from './acp-history-replay'
 import {
   AGENT,
   NAMESPACE,
   SESSION
-} from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { openAcpFixtureRig } from './acp-timeline-fixture.test-support'
+} from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { openAcpFixtureRig } from '../acp-timeline-fixture.test-support'
 import { catchUpAcpHistory } from './acp-history-catch-up'
 
 export async function setup(dialect: AcpDialect, identity: AcpHistoryTurnIdentity) {

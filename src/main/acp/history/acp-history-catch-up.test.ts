@@ -11,31 +11,31 @@ import {
   answerReplay
 } from './acp-history-catch-up.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT,
   closeProviderTimelineRigs,
   NAMESPACE,
   SESSION,
   providerItemId
-} from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
-import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
+} from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { GROK_ACP_DIALECT } from '../acp-dialects/grok-dialect'
+import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { acpNamedTextKey } from './acp-turn-messages'
-import { isHistoricalProviderTimelineItem } from '../native-chat/agent-session-timeline/provider-timeline-history'
-import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/structured-agent-session-current-work'
-import { hasUnfinishedStructuredAgentSessionWork } from '../native-chat/agent-session-wire/structured-agent-session-unfinished-work'
-import { planStructuredAgentSessionDeadGeneration } from '../native-chat/agent-session-wire/structured-agent-session-dead-generation-settlement'
+} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { acpNamedTextKey } from '../acp-turn-messages'
+import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
+import { StructuredAgentSessionCurrentWork } from '../../native-chat/agent-session-wire/structured-agent-session-current-work'
+import { hasUnfinishedStructuredAgentSessionWork } from '../../native-chat/agent-session-wire/structured-agent-session-unfinished-work'
+import { planStructuredAgentSessionDeadGeneration } from '../../native-chat/agent-session-wire/structured-agent-session-dead-generation-settlement'
 import { AcpLoadHistory } from './acp-history-replay'
-import { asReattachHistory } from './acp-structured-session'
-import { readAcpFixture, type AcpFixtureFrame } from './acp-timeline-fixture.test-support'
+import { asReattachHistory } from '../acp-structured-session'
+import { readAcpFixture, type AcpFixtureFrame } from '../acp-timeline-fixture.test-support'
 
 afterEach(async () => {
   vi.restoreAllMocks()

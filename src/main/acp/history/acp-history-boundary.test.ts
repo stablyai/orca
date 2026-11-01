@@ -1,29 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import * as historyBatch from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import { journalLifecycleMutationItemId } from '../native-chat/agent-session-journal/journal-lifecycle-mutation'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { AcpAgentError } from './acp-errors'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import * as historyBatch from '../../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+import { journalLifecycleMutationItemId } from '../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { AcpAgentError } from '../acp-errors'
 import { z } from 'zod'
-import { continuedOutsideNotice } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+import { continuedOutsideNotice } from '../../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
 import {
   closeProviderTimelineRigs,
   AGENT,
   SESSION,
   NAMESPACE
-} from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
-import { readAcpFixture, type AcpFixtureFrame } from './acp-timeline-fixture.test-support'
-import { PromptRequestSchema } from './generated/acp-protocol.generated'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { createProviderTimelineAssembler } from '../native-chat/agent-session-timeline/provider-timeline-assembler'
-import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
-import { settleObservedExitForTest } from '../native-chat/agent-session-wire/structured-agent-session-observed-exit.test-fixture'
-import { AcpTimelineTranslator } from './acp-timeline-translator'
+} from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
+import { readAcpFixture, type AcpFixtureFrame } from '../acp-timeline-fixture.test-support'
+import { PromptRequestSchema } from '../generated/acp-protocol.generated'
+import { createDeferredStructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { createProviderTimelineAssembler } from '../../native-chat/agent-session-timeline/provider-timeline-assembler'
+import { providerTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
+import { settleObservedExitForTest } from '../../native-chat/agent-session-wire/structured-agent-session-observed-exit.test-fixture'
+import { AcpTimelineTranslator } from '../acp-timeline-translator'
 import { catchUpAcpHistory } from './acp-history-catch-up'
-import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
+import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import {
   setup,
   dividers,
