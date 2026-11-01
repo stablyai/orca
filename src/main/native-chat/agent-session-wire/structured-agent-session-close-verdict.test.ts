@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { describeNativeChatTurnStatus } from '../../../shared/native-chat/transcript/native-chat-turn-status'

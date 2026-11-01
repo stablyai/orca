@@ -4,12 +4,12 @@ import { agentSessionFailureWords } from '../../agent-session-failure-words'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../agent-session-journal-item-key'
+} from '../../agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalSubmission,
   AgentJournalRenderItem
-} from '../../agent-session-journal-types'
+} from '../../agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
 import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
 import { withNativeChatCutTurnNotices } from './native-chat-cut-turn-notice'

@@ -102,8 +102,7 @@
       "quitDuringMoveConfirm": "Quit anyway"
     },
     "startupWorktreeRefresh": {
-      "loading": "Discovering workspaces…",
-      "description": "More workspaces may appear while local and remote projects load."
+      "loading": "Loading workspaces…"
     },
     "createProject": {
       "errors": {

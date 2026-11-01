@@ -1,7 +1,7 @@
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import {

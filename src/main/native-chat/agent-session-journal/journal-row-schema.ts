@@ -12,16 +12,16 @@ import {
   type AgentJournalDispatchState,
   type AgentJournalItemBody,
   type AgentJournalMessageItem,
-  type AgentJournalProducerLinkage,
-  type AgentJournalTurnScope,
-  type AgentSessionJournalProviderHandle
-} from '../../../shared/agent-session-journal-types'
+  type AgentJournalProducerLinkage
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session-journal-identity'
 import {
   readAgentJournalItemBody,
   readAgentJournalMessageBody,
   type AgentJournalContentVerdict
-} from '../../../shared/agent-session-journal-body-admission'
-import { isJournalTag } from '../../../shared/agent-session-journal-open-union'
+} from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
+import { isJournalTag } from '../../../shared/agent-session/journal/agent-session-journal-open-union'
 import type { StructuredAgentSessionStopCause } from '../agent-session-wire/structured-agent-session-stop-cause'
 import { dropUnusableRowAnnotations } from './journal-row-unusable-annotations'
 import { journalRowDeclaresMore } from './journal-storage-row-schema'

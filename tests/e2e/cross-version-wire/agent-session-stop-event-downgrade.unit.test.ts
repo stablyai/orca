@@ -4,11 +4,13 @@ import { join } from 'node:path'
 import { expect, test } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
-  type AgentJournalItemIdentity,
-  type AgentSessionJournalIdentity,
-  type AgentSessionJournalProviderHandle
-} from '../../../src/shared/agent-session-journal-types'
+  AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
+} from '../../../src/shared/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import Database from '../../../src/main/sqlite/sync-database'
 import { journalDatabasePath } from '../../../src/main/native-chat/agent-session-journal/journal-host-database'
@@ -27,7 +29,7 @@ import {
   materializeReleaseCheckout,
   releaseModuleExport
 } from './release-checkout'
-import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
 import {

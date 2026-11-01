@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage
-} from '../../shared/agent-session-journal-types'
-import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalLinkageFields } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexThreadItem } from './codex-thread-item-identity'

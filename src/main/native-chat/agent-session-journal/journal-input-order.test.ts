@@ -2,7 +2,7 @@ import { journalInputOrder } from './journal-input-order'
 import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
 import { writeCommandReceiptTestRecord } from './command-receipt-test-support'
 import type { JournalRow } from './journal-row-schema'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalReducerState } from './journal-reducer'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -13,7 +13,7 @@ import {
   agentSessionJournalProviderHandle,
   claudeProviderHandle
 } from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { holdUnsentSends } from './journal-unsent-send-hold'
 import {
   createTrackedJournalOpener,

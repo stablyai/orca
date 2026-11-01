@@ -1,7 +1,7 @@
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import type { JournalHostDatabase } from './journal-host-database'
 import { JournalContextController } from './journal-context-controller'
 import { JournalEpochController } from './journal-epoch-controller'

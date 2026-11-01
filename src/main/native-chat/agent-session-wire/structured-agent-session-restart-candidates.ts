@@ -3,7 +3,7 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
-import { latestStructuredAgentSessionPrompt } from '../../../shared/structured-agent-session-latest-request'
+import { latestStructuredAgentSessionPrompt } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { hostCanStartRecord } from './structured-agent-session-provider-support'

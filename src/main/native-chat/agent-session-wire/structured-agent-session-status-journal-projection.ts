@@ -1,5 +1,5 @@
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/structured-agent-session-command-entry'
 
 import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'

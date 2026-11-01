@@ -1,6 +1,6 @@
 import '../unused-default-rpc-methods.test-fixture'
 vi.mock('node:fs/promises', { spy: true })
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session/options/agent-session-optional-model-capability'

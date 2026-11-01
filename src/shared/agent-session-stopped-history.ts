@@ -5,11 +5,11 @@ import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import {
   classifyDispatchRejection,
   dispatchWasWithdrawn
-} from './structured-agent-session-dispatch-rejection'
+} from './agent-session/requests/structured-agent-session-dispatch-rejection'
 import { MAX_PROMPT_BYTES } from './rpc-contract/structured-agent-session-message-params'
 
 /** The record Claude writes for its own Stop, carried after each stopped message. */

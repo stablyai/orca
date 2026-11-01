@@ -2,7 +2,7 @@
 
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { refuse, type AgentSessionCancelResult } from '../../../shared/agent-session-wire'
 import { AgentSessionPromptUnavailableError } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionChatStopRun } from './structured-agent-session-chat-stop'

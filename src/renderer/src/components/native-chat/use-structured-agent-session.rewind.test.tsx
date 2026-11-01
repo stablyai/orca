@@ -70,8 +70,8 @@ vi.mock('./use-structured-agent-session-sends', () => ({
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-queued-message-wire'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-chat-draft-cache'

@@ -2,10 +2,10 @@
 
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentType } from '../../../shared/agent-status-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { ResolveDispatchInput } from '../agent-session-journal/journal-store-contracts'

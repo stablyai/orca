@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { nativeChatTurnFold } from '../../shared/native-chat/transcript/native-chat-turn-fold'
 import { nativeChatTurnMembership } from '../../shared/native-chat/transcript/native-chat-turn-membership'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'

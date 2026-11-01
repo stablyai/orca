@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { ClaudeAssistantFailures } from './claude-assistant-failures'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 

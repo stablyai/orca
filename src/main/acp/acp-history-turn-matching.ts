@@ -2,11 +2,11 @@ import { OrderedAvailability } from './acp-history-ordered-availability'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { isProviderTimelineTurnInNamespace } from '../native-chat/agent-session-timeline/provider-timeline-identity'

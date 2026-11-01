@@ -7,7 +7,8 @@ import {
   hostRepoCatalogSnapshotSchema,
   hostScreenUnreadReplySchema,
   hostSshTargetSummariesSchema,
-  hostViewSettingsSchema
+  hostViewSettingsSchema,
+  worktreeArchiveHookTrustSchema
 } from './host-screen-reply-schema'
 
 // Decorative reads skip refusals and retry on refresh; malformed accepted replies throw into the refresh/settings catches. Writes read no body.
@@ -97,7 +98,18 @@ export const worktreeSleep = bindDeferredRpcOperation(
   })
 )
 
-// Deletion reads acceptance only; refusal restores the row.
+// A refused read leaves the archive hook unverified, so deletion does not run it.
+export const worktreeArchiveHookTrustRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'repo.archive-hook-trust-or-skip',
+    method: 'repo.hooks',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('archive-hook-trust', worktreeArchiveHookTrustSchema)
+  })
+)
+
+// Deletion reads acceptance only; refusal restores the row and an archive-hook refusal offers Delete Anyway.
 export const worktreeRemove = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.remove-or-skip',

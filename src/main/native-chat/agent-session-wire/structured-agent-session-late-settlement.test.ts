@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import type { AgentSessionDispatchOutcome } from './structured-agent-session-adapter'
 import {

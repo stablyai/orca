@@ -3,9 +3,9 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { DISPATCH_REJECTED_CANCELLED } from '../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_CANCELLED } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
   DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,
   DISPATCH_DOUBT_PROVIDER_IDLE

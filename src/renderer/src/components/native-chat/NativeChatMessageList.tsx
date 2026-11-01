@@ -57,7 +57,7 @@ import { useNativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
 import { isStructuredAgentSessionThinking } from '../../../../shared/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'

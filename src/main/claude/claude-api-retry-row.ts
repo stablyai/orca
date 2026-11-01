@@ -4,7 +4,7 @@ import {
   readProviderRetry
 } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import type { AgentJournalStatusItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalStatusItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 
 export const CLAUDE_API_RETRY_FRAME_KIND = 'message:system:api_retry'

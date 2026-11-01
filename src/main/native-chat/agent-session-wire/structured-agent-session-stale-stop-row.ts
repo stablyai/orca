@@ -5,7 +5,7 @@ import type { AgentSessionFailureWordsContext } from '../../../shared/agent-sess
 import type {
   AgentJournalRenderItem,
   AgentJournalStatusItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/agent-session-replaced-runtime'

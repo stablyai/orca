@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import {

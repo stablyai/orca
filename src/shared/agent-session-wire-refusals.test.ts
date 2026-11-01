@@ -9,7 +9,7 @@ import {
   withAgentSessionRefusalFacts,
   type AgentSessionWireRefusal
 } from './agent-session-wire-refusals'
-import type { AgentJournalResolution } from './agent-session-journal-types'
+import type { AgentJournalResolution } from './agent-session/journal/agent-session-journal-types'
 
 const RESOLUTION: AgentJournalResolution = {
   state: 'resolved',

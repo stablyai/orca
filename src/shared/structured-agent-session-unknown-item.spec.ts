@@ -1,8 +1,8 @@
 // Retain unknown item kinds for compatibility without rendering them or deriving host/client work state from them.
 
 import { expect, it } from 'vitest'
-import { isAdmissibleAgentJournalItemBody } from './agent-session-journal-schemas'
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from './agent-session/journal/agent-session-journal-schemas'
+import type { AgentJournalRenderItem } from './agent-session/journal/agent-session-journal-types'
 import { activeStructuredAgentSessionTurnId } from './structured-agent-session-live-turn'
 import {
   projectStructuredAgentSessionStatusSummary,

@@ -8,9 +8,9 @@ import {
 import type { AgentType } from '../../../shared/agent-status-types'
 import type {
   AgentJournalCursor,
-  AgentJournalItemBody,
   AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../session-file-resolver'
