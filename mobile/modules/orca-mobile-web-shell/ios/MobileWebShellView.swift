@@ -223,9 +223,9 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     backEdgePan.isEnabled = value
   }
 
-  /// Only touches that start at the screen's left edge, like the stack's own swipe.
+  /// Only touches that start at the shell's left edge; a landscape safe area insets it from the screen's.
   func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-    recognizer !== backEdgePan || touch.location(in: nil).x <= 20
+    recognizer !== backEdgePan || touch.location(in: self).x <= 20
   }
 
   override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {

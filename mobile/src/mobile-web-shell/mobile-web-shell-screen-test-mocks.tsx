@@ -124,7 +124,6 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         setOptions: dependencies.setScreenOptions,
         dispatch: dependencies.dispatch,
         isFocused: () => dependencies.screenFocused,
-        getState: () => undefined,
         getParent: () => undefined
       }),
       useNavigationContainerRef: () => ({ getRootState: () => dependencies.rootState }),

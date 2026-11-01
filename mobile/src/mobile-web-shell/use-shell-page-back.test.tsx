@@ -28,14 +28,9 @@ function Screen(props: {
   claimed: boolean
   sendBack: () => boolean
   setOptions: (options: { gestureEnabled: boolean }) => void
-  setParentOptions?: (options: { gestureEnabled: boolean }) => void
+  parent?: { setOptions: (options: { gestureEnabled: boolean }) => void }
 }): null {
-  useShellPageBack({
-    ...props,
-    isFocused: () => true,
-    isStackRoot: () => props.setParentOptions !== undefined,
-    setParentOptions: props.setParentOptions ?? (() => {})
-  })
+  useShellPageBack({ parent: undefined, ...props, isFocused: () => true })
   return null
 }
 
@@ -59,7 +54,7 @@ function render(props: {
   claimed: boolean
   sendBack: () => boolean
   setOptions: (options: { gestureEnabled: boolean }) => void
-  setParentOptions?: (options: { gestureEnabled: boolean }) => void
+  parent?: { setOptions: (options: { gestureEnabled: boolean }) => void }
 }): ReactTestRenderer {
   let tree!: ReactTestRenderer
   act(() => {
@@ -143,27 +138,21 @@ describe('the shell taking the device Back key for a page that claimed it', () =
   })
 
   // The host list document is its stack's only screen, so the parent screen's swipe would pop it to Home.
-  it("takes the parent screen's swipe too while it is its stack's first screen", () => {
+  // Another shell under the same parent dropping its claim must not hand that swipe back.
+  it("keeps the parent screen's swipe off until the last claim under it ends", () => {
     native.platform.os = 'ios'
-    const setParentOptions = vi.fn()
-    const tree = render({
-      claimed: true,
-      sendBack: () => true,
-      setOptions: vi.fn(),
-      setParentOptions
-    })
-    expect(setParentOptions).toHaveBeenCalledWith({ gestureEnabled: false })
-    act(() => {
-      tree.update(
-        createElement(Screen, {
-          claimed: false,
-          sendBack: () => true,
-          setOptions: vi.fn(),
-          setParentOptions
-        })
-      )
-    })
-    expect(setParentOptions).toHaveBeenLastCalledWith({ gestureEnabled: true })
+    const parent = { setOptions: vi.fn() }
+    const screen = (claimed: boolean) =>
+      createElement(Screen, { claimed, sendBack: () => true, setOptions: vi.fn(), parent })
+    const list = render({ claimed: true, sendBack: () => true, setOptions: vi.fn(), parent })
+    const session = render({ claimed: true, sendBack: () => true, setOptions: vi.fn(), parent })
+    expect(parent.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: false })
+
+    act(() => session.update(screen(false)))
+    expect(parent.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: false })
+
+    act(() => list.update(screen(false)))
+    expect(parent.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true })
   })
 
   it('writes no gesture option on Android, where the stack has no swipe to take', () => {

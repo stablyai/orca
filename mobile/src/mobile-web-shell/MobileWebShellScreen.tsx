@@ -256,8 +256,7 @@ export function MobileWebShellScreen({
     isFocused: () => navigation.isFocused(),
     sendBack: bridge.sendBack,
     setOptions: navigation.setOptions,
-    isStackRoot: () => navigation.getState()?.index === 0,
-    setParentOptions: (options) => navigation.getParent()?.setOptions(options)
+    parent: navigation.getParent()
   })
   useReportedShellOverlayLoad(onOverlayLoad, state, pageFrame, downloadProgress)
 
