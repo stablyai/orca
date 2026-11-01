@@ -196,9 +196,6 @@ importers:
 
   .:
     dependencies:
-      '@orca/history-filesystem':
-        specifier: workspace:*
-        version: link:native/history-filesystem
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.284
         version: 0.3.284(@anthropic-ai/sdk@0.122.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)
@@ -208,6 +205,9 @@ importers:
       '@linear/sdk':
         specifier: ^97.0.0
         version: 97.0.0(graphql@16.14.2)
+      '@orca/history-filesystem':
+        specifier: workspace:*
+        version: link:native/history-filesystem
       '@orca/process-host':
         specifier: workspace:*
         version: link:src/packages/process-host
