@@ -3,7 +3,7 @@ import {
   assignNativeChatRowKeys,
   type NativeChatAssignedRows
 } from '../../../../shared/native-chat-row-keys'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 export function useNativeChatTranscriptRowKeys(

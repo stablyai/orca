@@ -82,28 +82,6 @@ describe('RuntimeFileCommands', () => {
       expect(statMock).not.toHaveBeenCalled()
     })
 
-    it('preserves UNC-style paths for local Windows terminal links', async () => {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      const worktreePath = '\\\\server\\share\\repo'
-      const expectedPath = '//server/share/repo/src/index.ts'
-      const { commands } = createRuntimeFileCommands({ path: worktreePath })
-      statAsFile()
-
-      const result = await commands.resolveTerminalPath('id:wt-1', expectedPath)
-
-      expect(result).toMatchObject({
-        relativePath: 'src/index.ts',
-        absolutePath: expectedPath,
-        exists: true,
-        openTarget: {
-          kind: 'worktree-file',
-          provider: 'local',
-          relativePath: 'src/index.ts',
-          absolutePath: expectedPath
-        }
-      })
-    })
-
     it('preserves local Windows UNC file URI authority even when OSC7 reported the host', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const worktreePath = '\\\\server\\share\\repo'

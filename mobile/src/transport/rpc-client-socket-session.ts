@@ -1,4 +1,5 @@
 import type { PairedE2EEFraming } from '../../../src/shared/paired-e2ee-client-handshake'
+import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../src/shared/paired-e2ee-handshake-deadline'
 import type { PairedE2EEFramingPolicy } from '../../../src/shared/paired-e2ee-framing-policy'
 import { createDirectSocketFraming, type DirectSocketFraming } from './direct-socket-framing'
 import { isRpcResponse } from './rpc-response-shape'
@@ -9,7 +10,6 @@ import { startSocketDeadlineClock } from './socket-deadline-clock'
 import type { ConnectionLogEmitter, ConnectionState, RpcRequest, RpcResponse } from './types'
 
 const CONNECT_TIMEOUT_MS = 12_000
-const HANDSHAKE_TIMEOUT_MS = 5_000
 const WEBSOCKET_CONNECTING_STATE = 0
 const UNAUTHORIZED_CLOSE_CODE = 4001
 
@@ -238,7 +238,7 @@ export class RpcClientSocketSession {
   }
 
   private armHandshakeTimeout(): void {
-    this.armSocketDeadline('handshake', HANDSHAKE_TIMEOUT_MS)
+    this.armSocketDeadline('handshake', PAIRED_E2EE_HANDSHAKE_DEADLINE_MS)
   }
 
   private armSocketDeadline(kind: SocketDeadlineKind, timeoutMs: number): void {

@@ -4,6 +4,7 @@ import type { SetupScriptImportCandidate } from '../../../shared/setup-script-im
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { ipcOrRuntimeTargetForHostId } from './runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { repoHooksCheckWakeParams } from '../../../shared/repo-hooks-check-wake'
 
 /** The repo's own host: a server's runtime, or this app (with `hostId`) for local and SSH repos. */
 function getHookInspectionTarget(hostId: ExecutionHostId): RuntimeClientTarget {
@@ -51,7 +52,7 @@ export async function checkRuntimeHooks(
   return callRuntimeRpc<HookCheckResult>(
     target,
     'repo.hooksCheck',
-    { repo: repoId, ...(options.background ? { background: true } : {}) },
+    { repo: repoId, ...repoHooksCheckWakeParams(options.background) },
     { timeoutMs: 15_000 }
   )
 }

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { stopWslMoveHostCopies, type WslMoveHostCopyPort } from './wsl-move-host-copy-stop'
+import {
+  probeWslMoveHostCopies,
+  stopWslMoveHostCopies,
+  type WslMoveHostCopyPort
+} from './wsl-move-host-copy-stop'
 
 function port(overrides: Partial<WslMoveHostCopyPort> = {}): WslMoveHostCopyPort {
   return {
@@ -14,52 +18,11 @@ function port(overrides: Partial<WslMoveHostCopyPort> = {}): WslMoveHostCopyPort
 const SLEPT = { outcome: 'stopped', slept: true }
 
 describe("undo's stop of the host's copies", () => {
-  // The host's agent kept running beside the one undo resumed here.
-  it('sleeps every host workspace and reports them asleep once none of their terminals runs', async () => {
-    let checks = 0
-    const host = port({ liveTerminals: vi.fn(async () => (checks++ < 4 ? 1 : 0)) })
-
-    expect(await stopWslMoveHostCopies(['wt-a', 'wt-b'], host)).toEqual(SLEPT)
-    expect(host.sleepWorkspace).toHaveBeenCalledWith('wt-a')
-    expect(host.sleepWorkspace).toHaveBeenCalledWith('wt-b')
-    expect(host.wait).toHaveBeenCalled()
-  })
-
-  it('reports still running when a terminal outlives the wait, never assuming it exited', async () => {
-    const host = port({ liveTerminals: vi.fn(async () => 1) })
-    expect(await stopWslMoveHostCopies(['wt-a'], host, 1_000)).toMatchObject({
-      outcome: 'still-running'
-    })
-  })
-
-  it('reports unreachable when the host does not answer the sleep or the check', async () => {
-    expect(await stopWslMoveHostCopies(['wt-a'], port({ sleepWorkspace: async () => null }))).toBe(
-      'unreachable'
-    )
-    expect(await stopWslMoveHostCopies(['wt-a'], port({ liveTerminals: async () => null }))).toBe(
-      'unreachable'
-    )
-  })
-
   // A host that answers for one workspace only must have none of them stopped.
   it('stops nothing when the host does not answer for every workspace up front', async () => {
     const host = port({ liveTerminals: vi.fn(async (id: string) => (id === 'wt-b' ? null : 1)) })
     expect(await stopWslMoveHostCopies(['wt-a', 'wt-b'], host)).toBe('unreachable')
     expect(host.sleepWorkspace).not.toHaveBeenCalled()
-  })
-
-  it('checks exit even when the host refused the sleep itself', async () => {
-    const host = port({ sleepWorkspace: async () => false })
-    // Nothing went to sleep there, so nothing waits to be resumed.
-    expect(await stopWslMoveHostCopies(['wt-a'], host)).toBe('stopped')
-  })
-
-  it('reports stopped, not asleep, when the host has no workspace to sleep', async () => {
-    expect(await stopWslMoveHostCopies([], port())).toBe('stopped')
-  })
-
-  it('counts a workspace as asleep only when it ran a terminal', async () => {
-    expect(await stopWslMoveHostCopies(['wt-idle'], port())).toBe('stopped')
   })
 
   // The sleep already reached a running workspace, so its terminals wait in Sleep either way.
@@ -93,6 +56,38 @@ describe("undo's stop of the host's copies", () => {
     })
     expect(await stopWslMoveHostCopies([], host)).toEqual(SLEPT)
     expect(host.sleepWorkspace).toHaveBeenCalledWith('wt-host-only')
+  })
+
+  // An automatic bring-back must never end a live terminal, so it reads and refuses instead.
+  describe('refusing live terminals rather than sleeping them', () => {
+    it('probes without sleeping: running, idle, or unanswering', async () => {
+      const running = port({
+        workspacesWithTerminals: vi.fn(async () => ['wt-a']),
+        liveTerminals: vi.fn(async () => 1)
+      })
+      expect(await probeWslMoveHostCopies([], running)).toBe('still-running')
+      expect(await probeWslMoveHostCopies(['wt-a'], port())).toBe('stopped')
+      expect(
+        await probeWslMoveHostCopies([], port({ workspacesWithTerminals: vi.fn(async () => null) }))
+      ).toBe('unreachable')
+      expect(running.sleepWorkspace).not.toHaveBeenCalled()
+    })
+
+    // A sleep after the census would end a terminal started in between, so refuse-live never sleeps.
+    it('never sleeps: refuses a live terminal, and reports an idle host stopped untouched', async () => {
+      const live = port({ liveTerminals: vi.fn(async () => 1) })
+      expect(await stopWslMoveHostCopies(['wt-a'], live, undefined, undefined, 'refuse-live')).toBe(
+        'still-running'
+      )
+      expect(live.sleepWorkspace).not.toHaveBeenCalled()
+
+      const idle = port({ workspacesWithTerminals: vi.fn(async () => ['wt-host-only']) })
+      expect(await stopWslMoveHostCopies(['wt-a'], idle, undefined, undefined, 'refuse-live')).toBe(
+        'stopped'
+      )
+      expect(idle.sleepWorkspace).not.toHaveBeenCalled()
+      expect(idle.wait).not.toHaveBeenCalled()
+    })
   })
 
   describe('on a slow host', () => {

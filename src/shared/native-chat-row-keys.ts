@@ -3,7 +3,7 @@ import {
   isToolResultBlock,
   type NativeChatBlock,
   type NativeChatMessage
-} from './native-chat-types'
+} from './native-chat/native-chat-types'
 
 export type NativeChatRowSources = { identity: string[]; content: string[] }
 type Sources = NativeChatRowSources

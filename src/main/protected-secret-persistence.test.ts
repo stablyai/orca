@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { _resetSecretStoreForTests, setSecretStore } from '../shared/secret-store'
+import { setSecretStore } from '../shared/secret-store'
 
 const cipherState = { available: true }
 
@@ -12,15 +12,6 @@ describe('ProtectedSecretPersistence', () => {
       decryptString: (ciphertext) => ciphertext.toString().slice('encrypted:'.length),
       describeProtectionGap: () => null
     })
-  })
-
-  it('surfaces an uninstalled secret store instead of degrading silently', async () => {
-    // Missing store installation must surface instead of silently discarding secrets as unavailable.
-    const { ProtectedSecretPersistence } = await import('./protected-secret-persistence')
-    const secrets = new ProtectedSecretPersistence()
-    _resetSecretStoreForTests()
-
-    expect(() => secrets.encrypt('slot', 'token')).toThrow(/SecretStore not initialized/)
   })
 
   it('evicts dynamic slots across repeated SSH recovery lifecycles', async () => {

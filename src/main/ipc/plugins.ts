@@ -2,7 +2,6 @@ import { pluginThemeSettingsAfterRemoval } from '../../shared/plugin-theme-setti
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
 import type { Store } from '../persistence'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import { getUserPluginsDir, getPluginsDataDir } from '../plugins/plugin-discovery'
@@ -107,23 +106,8 @@ function rendererPanelOwner(webContentsId: number): string {
 export function registerPluginHandlers(
   store: Store,
   pluginService: PluginService,
-  runtime: OrcaRuntimeService | null,
   marketplaceServices?: PluginMarketplaceHandlerServices
 ): void {
-  // A structural delegate binds the real runtime without importing Electron into the facade.
-  if (runtime) {
-    pluginService.setRuntimeDelegate(runtime)
-  }
-
-  store.onSettingsChanged((updates) => {
-    if ('pluginSystemEnabled' in updates || 'devPluginPaths' in updates) {
-      // Main owns lifecycle refresh even when a caller crashes before its follow-up refresh.
-      void pluginService.refresh().catch((error) => {
-        console.warn('[plugins] failed to apply plugin settings change:', error)
-      })
-    }
-  })
-
   // All handlers must await startup discovery to avoid returning a pre-discovery empty list.
   ipcMain.handle('plugins:list', async () => listPluginsForClients(pluginService))
   ipcMain.handle('plugins:getInstalledManifest', async (_event, args: unknown) => {

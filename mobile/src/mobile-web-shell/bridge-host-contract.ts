@@ -1,3 +1,4 @@
+import type { HostStatusReply } from '../transport/host-status-reply-schema'
 import type {
   BridgeTerminalKeyId,
   BridgeTerminalToolbar,
@@ -72,6 +73,8 @@ export type BridgeHostOptions = {
   // Grant only this route’s implemented capabilities plus protocol fault; another route’s clipboard grant must not widen this session.
   routeGrants: readonly string[]
   ownsHostArea?: boolean
+  /** The status the shell's gate proved, read at each `init`; null while it has none. */
+  readHostStatus?: () => HostStatusReply | null
   // Inherit handshake state on client-driven rebuild: the session id/page do not change, so no new ready or BridgeShellReplaced arrives.
   sessionEstablished: boolean
   // Inherit the live Back claim alongside handshake state; the page is never told to re-claim after client replacement.

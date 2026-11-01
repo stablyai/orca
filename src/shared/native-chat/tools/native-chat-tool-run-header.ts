@@ -1,5 +1,5 @@
 import { nativeChatAskRunBlocks } from '../input/native-chat-ask-row'
-import { isToolCallBlock, type NativeChatBlock } from '../../native-chat-types'
+import { isToolCallBlock, type NativeChatBlock } from '../native-chat-types'
 import { describeLatestToolCall, selectActiveToolCall } from './native-chat-tool-activity'
 import { nativeChatToolRunIconName, type NativeChatToolIconName } from './native-chat-tool-icon'
 import {

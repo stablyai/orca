@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -66,6 +66,7 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
           {t('pullRequest.linkPrForm.title', 'Link existing pull request')}
         </Text>
         <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
           onPress={onCancel}
           disabled={submitting}
           accessibilityRole="button"

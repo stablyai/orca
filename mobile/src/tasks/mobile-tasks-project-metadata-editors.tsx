@@ -16,6 +16,7 @@ import {
   MobileMarkdown
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentationModel) {
   const {
@@ -74,7 +75,11 @@ export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentati
             return (
               <Pressable
                 key={label}
-                style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                style={({ pressed }) => [
+                  styles.detailChip,
+                  selected ? styles.detailChipSelected : undefined,
+                  pressed && pressedStyle
+                ]}
                 disabled={projectMutating}
                 onPress={() =>
                   void mutateProjectRowMetadata(
@@ -163,7 +168,11 @@ export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresent
             return (
               <Pressable
                 key={user.login}
-                style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                style={({ pressed }) => [
+                  styles.detailChip,
+                  selected ? styles.detailChipSelected : undefined,
+                  pressed && pressedStyle
+                ]}
                 disabled={projectMutating}
                 onPress={() =>
                   void mutateProjectRowMetadata(
@@ -211,7 +220,7 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
           placeholder={translate('tasks.projectMetadataEditors.title', 'Title')}
         />
         <Pressable
-          style={styles.inlineSaveButton}
+          style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
           disabled={projectMutating || projectTitleDraft.trim() === projectRowItem.content.title}
           onPress={() =>
             void mutateProjectRowIssueOrPr(projectRowItem, {

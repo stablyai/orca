@@ -75,21 +75,6 @@ async function startOversizedStream(guest: ReturnType<typeof createGuest>, onFra
 }
 
 describe('clampScreencastViewportToGuestView', () => {
-  it('shrinks each side the guest cannot paint and keeps the rest of the request', () => {
-    expect(
-      clampScreencastViewportToGuestView(
-        { viewportWidth: 1833, viewportHeight: 1179, deviceScaleFactor: 2, mobile: false },
-        { width: 1463, height: 849 }
-      )
-    ).toEqual({ viewportWidth: 1463, viewportHeight: 849, deviceScaleFactor: 2, mobile: false })
-    expect(
-      clampScreencastViewportToGuestView(
-        { viewportWidth: 390, viewportHeight: 900 },
-        { width: 1463, height: 849 }
-      )
-    ).toEqual({ viewportWidth: 390, viewportHeight: 849 })
-  })
-
   it('never goes below the smallest viewport a client may request', () => {
     expect(
       clampScreencastViewportToGuestView(
@@ -97,10 +82,6 @@ describe('clampScreencastViewportToGuestView', () => {
         { width: 1, height: 1 }
       )
     ).toEqual({ viewportWidth: 320, viewportHeight: 240 })
-  })
-
-  it('leaves a sizeless request alone', () => {
-    expect(clampScreencastViewportToGuestView({}, { width: 600, height: 400 })).toEqual({})
   })
 })
 

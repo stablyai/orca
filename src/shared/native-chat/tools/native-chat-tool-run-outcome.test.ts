@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { nativeChatToolRunOutcome } from './native-chat-tool-run-outcome'
-import type { NativeChatBlock } from '../../native-chat-types'
+import type { NativeChatBlock } from '../native-chat-types'
 
 function call(command: string, state?: 'running' | 'completed' | 'failed'): NativeChatBlock {
   return { type: 'tool-call', name: 'shell', input: { command }, state }

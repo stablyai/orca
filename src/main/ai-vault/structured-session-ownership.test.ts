@@ -9,6 +9,10 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
+import {
+  acquiredAgentSessionAccount,
+  withAcquiredAgentSessionAccount
+} from '../../shared/agent-session-acquired-account'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   assertLegacyAiVaultResumeAllowed,
@@ -117,6 +121,65 @@ describe('structured AI Vault ownership', () => {
           ?.accountHome
       ).toBeNull()
       expect(parseAiVaultListResult(result).sessions[0]?.accountHome).toBeUndefined()
+    }
+  )
+
+  it('shows the account a Claude chat was last launched under, else its founding home', () => {
+    const founding = { variable: 'CLAUDE_CONFIG_DIR', path: '/accounts/founding' } as const
+    const launched = { variable: 'CLAUDE_CONFIG_DIR', path: '/accounts/launched/home' }
+    const record = withAcquiredAgentSessionAccount(
+      agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: 'session-alpha' })),
+      { generation: 'g-1', recipe: { route: 'managed', accountId: 'b', home: launched.path } }
+    )
+    const receipt = acquiredAgentSessionAccount(record)
+    if (!receipt) {
+      throw new Error('the fixture record did not accept its acquisition receipt')
+    }
+    const result = listResult()
+    result.sessions[0]!.agent = 'claude'
+    const shown = () =>
+      projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT).sessions[0]?.accountHome
+    installOwnership({ provider: 'claude', accountHome: founding, acquiredAccount: receipt })
+    expect(shown()).toEqual(launched)
+    // A receipt the current process generation did not write no longer describes this chat.
+    installOwnership({
+      provider: 'claude',
+      accountHome: founding,
+      acquiredAccount: { ...receipt, observedThroughFence: 1 }
+    })
+    expect(shown()).toEqual(founding)
+    installOwnership({ provider: 'claude', accountHome: founding })
+    expect(shown()).toEqual(founding)
+  })
+
+  it.each([10, 100])(
+    'projects %i owned History rows with one roster read and one record lookup per owned row',
+    (n) => {
+      const records = Array.from({ length: n }, (_, index) =>
+        codexChatHolding(`session-${index}`, [`thread-${index}`])
+      )
+      const store = installChats(records)
+      const base = listResult().sessions[0]!
+      const rows = records.map((_, index) => ({
+        ...base,
+        id: `local:codex:thread-${index}`,
+        sessionId: `thread-${index}`,
+        title: `Row ${index}`
+      }))
+      const unowned = { ...base, id: 'local:codex:unowned', sessionId: 'thread-unowned' }
+      const result = { ...listResult(), sessions: [...rows, unowned] }
+      const projected = projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT)
+      expect(projected.sessions.map((session) => session.structuredSession?.sessionId)).toEqual([
+        ...records.map((record) => record.sessionId),
+        undefined
+      ])
+      expect(projected.sessions.slice(0, n).map((session) => session.accountHome)).toEqual(
+        records.map((record) => record.accountHome)
+      )
+      // One roster read per projection; one record lookup per owned row, none for unowned rows.
+      expect(store.listConversations).toHaveBeenCalledTimes(1)
+      expect(store.getRecord).toHaveBeenCalledTimes(n)
+      expect(new Set(store.getRecord.mock.calls.map(([sessionId]) => sessionId)).size).toBe(n)
     }
   )
 

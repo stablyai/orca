@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
-import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat-row-content'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
 import {
   NATIVE_CHAT_EMPTY_TURN_FOLD,
   nativeChatHistoryTurnFold,
@@ -12,8 +12,8 @@ import {
   nativeChatRowRendersProse,
   nativeChatRowSpeaksOrActs
 } from '../../../../../src/shared/native-chat/native-chat-trailing-run'
-import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat-turn-status'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   nativeChatWorkRunMember,
   nativeChatWorkRunSpans

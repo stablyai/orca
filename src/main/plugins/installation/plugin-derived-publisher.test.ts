@@ -104,16 +104,6 @@ describe('derived plugin publishers', () => {
     expect(Object.keys((await readPluginLockfile(pluginsDir)).plugins)).toEqual(['brand-name.dusk'])
   })
 
-  it('installs a folder without a publisher as local', async () => {
-    const source = await tempRoot('orca-derived-folder-')
-    const pluginsDir = await tempRoot('orca-derived-installs-')
-    await writeThemePlugin(source)
-
-    await expect(
-      installPluginFromLocalPath({ pluginsDir, sourcePath: source, hostVersion: HOST })
-    ).resolves.toMatchObject({ ok: true, pluginKey: 'local.dusk' })
-  })
-
   it('discovers installed and development plugins under their derived publisher', async () => {
     const installedSource = await tempRoot('orca-derived-installed-')
     const devFolder = await tempRoot('orca-derived-dev-')

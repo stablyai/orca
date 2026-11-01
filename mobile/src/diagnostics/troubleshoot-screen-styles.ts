@@ -1,6 +1,6 @@
-import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
+import { LIST_LEADING_INSET, LIST_ROW_PADDING } from '../components/list/ListGroup'
 
 export const troubleshootScreenStyles = themedStyleSheet(() => ({
   container: {
@@ -44,78 +44,39 @@ export const troubleshootScreenStyles = themedStyleSheet(() => ({
     marginBottom: spacing.lg
   },
   diagnosticButtonPressed: {
-    opacity: 0.7
+    opacity: feedback.pressedOpacity
   },
   diagnosticButtonDisabled: {
-    opacity: 0.5
+    opacity: feedback.disabledOpacity
   },
   diagnosticButtonLabel: {
     fontSize: typography.bodySize,
     fontWeight: '600',
     color: colors.textPrimary
   },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md + 2
-  },
-  checkLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
   checkDetail: {
-    flex: 1,
-    textAlign: 'right',
     fontSize: typography.metaSize,
     color: colors.textMuted
   },
   checkDetailFail: {
     color: colors.statusRed
   },
-  sectionHeading: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  section: {
+  // On a screen, not a sheet: one step above the page, as the other screen groups are.
+  group: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.surface,
-    overflow: 'hidden',
     marginBottom: spacing.lg
   },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  accordionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  accordionTitle: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
+  // Steps start under the issue title, past its icon.
   accordionBody: {
-    paddingHorizontal: spacing.md + 2,
+    paddingLeft: LIST_LEADING_INSET,
+    paddingRight: LIST_ROW_PADDING,
     paddingBottom: spacing.md,
-    gap: spacing.xs + 2
+    gap: spacing.xs
+  },
+  noteBody: {
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: spacing.md,
+    gap: spacing.xs
   },
   stepRow: {
     flexDirection: 'row',
