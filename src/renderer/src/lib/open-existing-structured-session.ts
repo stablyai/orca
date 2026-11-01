@@ -83,7 +83,7 @@ type DesktopInteractionOptions = {
   deps?: StructuredSessionOpenAdapterDeps
   locate?: StructuredSessionOpenDeps['locate']
   initialize?: () => boolean
-  present: (result: StructuredSessionOpenResult) => void
+  present: (result: StructuredSessionOpenResult) => boolean | void
   onError?: () => void
 }
 
@@ -133,7 +133,16 @@ export async function openDesktopStructuredSessionInteraction(
     .then(
       (result) => {
         if (initialized) {
-          options.present(result)
+          const presented = options.present(result)
+          // Why: a presentation that reports a failed workspace activation (for example a
+          // toast after the tab selection) must not be reported as "opened"; the AI Vault
+          // replacement flow closes the current chat on success.
+          if (presented === false && result.kind === 'opened') {
+            return {
+              kind: 'failed' as const,
+              failure: { reason: 'workspace-missing' as const, beforeEffects: false }
+            }
+          }
         }
         return result
       },
