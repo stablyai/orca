@@ -243,6 +243,9 @@ test.describe('Tab strip active-tab dock', () => {
         activate: false
       })
       state.createTab(worktreeId, undefined, undefined, { activate: false })
+      if (!tab.activePageId) {
+        throw new Error('Expected created browser tab to have an active page')
+      }
       return { id: tab.id, pageId: tab.activePageId }
     }, worktreeId)
     const slot = orcaPage.locator(slotSelector(browser.id))
@@ -259,9 +262,7 @@ test.describe('Tab strip active-tab dock', () => {
     for (const audible of [true, false]) {
       await orcaPage.evaluate(
         ({ pageId, audible }) => {
-          window.__store!.setState((state) => ({
-            browserAudiblePageIds: { ...state.browserAudiblePageIds, [pageId]: audible }
-          }))
+          window.__store!.getState().setBrowserPageAudible(pageId, audible)
         },
         { pageId: browser.pageId, audible }
       )

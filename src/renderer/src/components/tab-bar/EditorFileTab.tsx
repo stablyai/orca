@@ -384,7 +384,7 @@ export default function EditorFileTab({
             tabRoot
           ) : (
             <TabHoverCard
-              title={tabLabel}
+              title={getEditorDisplayLabel(file)}
               programName={customEditor?.title ?? translate('tabHoverCard.editor', 'Editor')}
               icon={tabIcon('size-4')}
               description={file.relativePath}
