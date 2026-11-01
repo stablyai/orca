@@ -122,6 +122,7 @@ describe('Session', () => {
     wslDistro?: string
     reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
     historySeedChunks?: readonly string[]
+    onWslGuestRoot?: (root: { pid: number; startTime: string }) => void
   }): Session {
     session = new Session({
       sessionId: 'test-session',
@@ -132,6 +133,7 @@ describe('Session', () => {
       wslDistro: opts?.wslDistro,
       subprocess,
       historySeedChunks: opts?.historySeedChunks,
+      ...(opts?.onWslGuestRoot ? { onWslGuestRoot: opts.onWslGuestRoot } : {}),
       ...(opts?.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       shellReadySupported: opts?.shellReadySupported ?? false,
       ...(opts?.startupIngress ? { startupIngress: opts.startupIngress } : {}),
@@ -170,6 +172,20 @@ describe('Session', () => {
   })
 
   describe('data flow', () => {
+    it('records a WSL pane’s guest root from its launch output, even split, and keeps the bytes', () => {
+      const onWslGuestRoot = vi.fn()
+      const onData = vi.fn()
+      createSession({ wslDistro: 'Ubuntu', onWslGuestRoot })
+      session.attachClient({ onData, onExit: () => {} })
+      const boot = '0b1d2c3e-4f50-4617-8293-a4b5c6d7e8f9'
+      subprocess.simulateData(`\x1b]777;orca-wsl-root:4242:${boot.slice(0, 10)}`)
+      subprocess.simulateData(`${boot.slice(10)}:98765\x07$ `)
+      // Later output is the user's own and can never name the root.
+      subprocess.simulateData(`\x1b]777;orca-wsl-root:7777:${boot}:1\x07`)
+      expect(onWslGuestRoot.mock.calls).toEqual([[{ pid: 4242, startTime: `${boot}:98765` }]])
+      expect(onData.mock.calls.map(([data]) => data).join('')).toContain('$ ')
+    })
+
     it('does not confirm shell ownership from historical replay bytes', () => {
       createSession({
         historySeedChunks: ['\x1b[?1049hOLD-TUI\x1b]133;D;137\x07old-shell-marker']

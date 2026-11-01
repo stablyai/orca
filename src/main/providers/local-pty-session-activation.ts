@@ -37,8 +37,10 @@ import {
   ptyTerminationMode,
   ptyWorktreeId,
   ptyWslDistroById,
+  ptyWslGuestRootById,
   startupIngressByPty
 } from './local-pty-provider-state'
+import { createWslGuestRootObserver } from '../../shared/wsl-guest-root-marker'
 import { createLocalPtyShellReadinessSession } from './local-pty-shell-readiness-session'
 import { destroyPtyProcess, createPtyPhysicalExit } from './local-pty-termination'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
@@ -130,8 +132,12 @@ export function activateLocalPtySession(args: {
     startupIngress
   })
   const disposables: { dispose: () => void }[] = []
+  const observeGuestRoot = spawnedWslDistro
+    ? createWslGuestRootObserver((root) => ptyWslGuestRootById.set(id, root))
+    : undefined
   const onDataDisposable = proc.onData((rawData) => {
     initialOutput?.observe(rawData)
+    observeGuestRoot?.(rawData)
     readiness.acceptData(rawData)
   })
   if (onDataDisposable) {

@@ -17,6 +17,7 @@ import {
   ptyTerminalHandle,
   ptyWorktreeId,
   ptyWslDistroById,
+  ptyWslGuestRootById,
   startupIngressByPty,
   type DataCallback,
   type ExitCallback
@@ -130,7 +131,8 @@ export async function listLocalPtyProcesses(): Promise<PtyProcessInfo[]> {
     title: proc.process || getPtyShellName(id) || 'shell',
     ...(ptyWorktreeId.get(id) ? { worktreeId: ptyWorktreeId.get(id) } : {}),
     ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {}),
-    ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {})
+    ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {}),
+    ...(ptyWslGuestRootById.has(id) ? { wslGuestRoot: ptyWslGuestRootById.get(id) } : {})
   }))
 }
 
