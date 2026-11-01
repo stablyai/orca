@@ -138,11 +138,10 @@ beforeEach(async () => {
       agentAwake: {
         getStatus: vi.fn().mockImplementation(() => Promise.resolve(awakeMocks.status)),
         onChanged: vi.fn().mockReturnValue(awakeMocks.unsubscribe),
-        getSystemSleepHold: vi
-          .fn()
-          .mockImplementation(() =>
-            Promise.resolve({ sleepDisabled: awakeMocks.sleepDisabled, observedAt: Date.now() })
-          )
+        getSystemSleepHold: vi.fn().mockImplementation(() =>
+          // ast-grep-ignore: test-no-wall-clock-tsx -- The poller compares observedAt with its own clock, so a fresh answer is stamped now.
+          Promise.resolve({ sleepDisabled: awakeMocks.sleepDisabled, observedAt: Date.now() })
+        )
       }
     }
   })

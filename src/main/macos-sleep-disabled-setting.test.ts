@@ -116,14 +116,13 @@ describe('createSystemSleepHoldReader', () => {
 
   it('stamps observedAt with the probe start and expires the cache from there', async () => {
     const started = Date.now()
-    const run = vi
-      .fn()
-      .mockImplementation(
-        () =>
-          new Promise<ProcessResult>((resolve) =>
-            setTimeout(() => resolve(result({ stdout: SLEEP_DISABLED_OUTPUT })), 1_500)
-          )
-      )
+    const run = vi.fn().mockImplementation(
+      () =>
+        new Promise<ProcessResult>((resolve) =>
+          // ast-grep-ignore: test-no-real-time-wait -- Fake timers drive this delay; nothing waits in real time.
+          setTimeout(() => resolve(result({ stdout: SLEEP_DISABLED_OUTPUT })), 1_500)
+        )
+    )
     const sleepReader = reader(run)
 
     const pending = sleepReader.read()

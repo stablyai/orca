@@ -23,6 +23,7 @@ function fakePmset(): Promise<{
   spawns += 1
   const stdout = pmsetOutput
   return new Promise((resolve) =>
+    // ast-grep-ignore: test-no-real-time-wait -- Fake timers drive this delay; nothing waits in real time.
     setTimeout(
       () => resolve({ code: 0, signal: null, stdout, stderr: '', timedOut: false }),
       PROBE_MS

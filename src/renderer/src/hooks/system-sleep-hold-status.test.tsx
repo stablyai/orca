@@ -298,6 +298,7 @@ describe('useSystemSleepHold', () => {
       }
       if (calls === 2) {
         const stale = { sleepDisabled: 'yes', observedAt: Date.now() - 3_000 } as const
+        // ast-grep-ignore: test-no-real-time-wait-tsx -- Fake timers drive this delay; nothing waits in real time.
         return new Promise((resolve) => setTimeout(() => resolve(stale), 200))
       }
       return Promise.resolve(hold('no'))
@@ -327,6 +328,7 @@ describe('useSystemSleepHold', () => {
     let current: SystemSleepHold['sleepDisabled'] = 'yes'
     const read = vi.fn().mockImplementation(() => {
       const answer = { sleepDisabled: current, observedAt: Date.now() }
+      // ast-grep-ignore: test-no-real-time-wait-tsx -- Fake timers drive this delay; nothing waits in real time.
       return new Promise((resolve) => setTimeout(() => resolve(answer), 300))
     })
     installApi(read)
@@ -360,6 +362,7 @@ describe('useSystemSleepHold', () => {
         calls === 1
           ? { sleepDisabled: 'yes', observedAt: t0 + 200 }
           : { sleepDisabled: 'no', observedAt: Date.now() }
+      // ast-grep-ignore: test-no-real-time-wait-tsx -- Fake timers drive this delay; nothing waits in real time.
       return new Promise((resolve) => setTimeout(() => resolve(answer), calls === 1 ? 600 : 0))
     })
     installApi(read)
@@ -426,6 +429,7 @@ describe('useSystemSleepHold', () => {
       if (calls === 3) {
         // Why: the poll gets main's cached value from the focus read, answered late by a busy main.
         const cached = { sleepDisabled: 'yes', observedAt: Date.now() - 4_000 } as const
+        // ast-grep-ignore: test-no-real-time-wait-tsx -- Fake timers drive this delay; nothing waits in real time.
         return new Promise((resolve) => setTimeout(() => resolve(cached), 2_000))
       }
       return Promise.resolve(hold('no'))
