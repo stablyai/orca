@@ -19,6 +19,8 @@ import {
   AgentModelCatalogStore
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import * as probeRunner from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 const AVAILABLE_MODELS = {
   models: [
@@ -77,6 +79,35 @@ function catalog(request: PiRpcRequester['request'], now = Date.now) {
 }
 
 describe('Pi model catalog', () => {
+  it('projects the recorded signed-out sentinel only when nothing is listable', async () => {
+    const frames = readFileSync(join(import.meta.dirname, '__fixtures__/signed-out.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+      .filter((frame) => frame.dir === 'out')
+      .map((frame) => JSON.parse(frame.raw))
+    const state = frames.find((frame) => frame.command === 'get_state').data
+    const empty = frames.find((frame) => frame.command === 'get_available_models').data
+    const closed = async () => {
+      throw new Error('rpc closed')
+    }
+    for (const read of [async () => empty, closed]) {
+      const { probe, record } = catalog(async (command) =>
+        command === 'get_state' ? state : read()
+      )
+      await expect(probe(record.accountHome)).rejects.toMatchObject({
+        unavailable: { reason: 'notSignedIn' }
+      })
+    }
+    const listed = catalog(async (command) => (command === 'get_state' ? state : AVAILABLE_MODELS))
+    const result = await listed.probe(listed.record.accountHome)
+    expect(result.unavailable).toBeUndefined()
+    expect(result.models.length).toBeGreaterThan(0)
+    expect(result.configured).toBeUndefined()
+    const { probe, record } = catalog(async (command) => (command === 'get_state' ? {} : empty))
+    await expect(probe(record.accountHome)).rejects.toThrow('pi listed no models')
+  })
+
   it.each(['', `"${process.execPath}" run -- pi`])(
     'lists the native menu through sessionless RPC for Command %j',
     async (command) => {

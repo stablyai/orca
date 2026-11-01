@@ -12,6 +12,7 @@ import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { AgentModelCatalogListingStoppedError } from '../native-chat/agent-model-catalog/agent-model-catalog-failures'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
+import authRequired from './__fixtures__/session-new-auth-required.json'
 
 const PREFIX = ['run', '--', 'agent']
 const launcherSettings = (agent: string) => ({
@@ -167,6 +168,20 @@ function scriptedOpenCode2(canDelete: boolean): {
 }
 
 describe('ACP model catalog probes', () => {
+  it('projects an agent-authored auth-required session/new error, retaining unknown for other failures', async () => {
+    const { agent, deps } = scriptedOpenCode2(true)
+    const { code, message, data } = authRequired.reply.error
+    agent.on('session/new', (frame) => agent.fail(frame, code, message, data))
+    const list = () =>
+      createAcpModelCatalogProbe(OPENCODE, deps)(
+        { kind: 'opencode', locator: { kind: 'unmanaged' } },
+        { workspacePath: '/work/project' }
+      )
+    await expect(list()).rejects.toMatchObject({ unavailable: { reason: 'notSignedIn' } })
+    agent.on('session/new', (frame) => agent.fail(frame, -32603, 'Internal error'))
+    await expect(list()).rejects.toMatchObject({ code: -32603 })
+  })
+
   it('lists Grok from initialize alone, under its pinned account, and closes the child', async () => {
     const { agent, deps, launches, closed } = scriptedGrok({ modelState: MODEL_STATE })
     deps.resolveCommandSettings = () => launcherSettings('grok')

@@ -1,7 +1,7 @@
 import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-session-wire'
-import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
 import { runClaudeListing, type ClaudeModelCatalogProbeDeps } from './claude-model-catalog-probe'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
+import { readClaudeControlResponses } from './claude-control-responses'
 
 const REQUEST_ID = 'orca-command-discovery'
 
@@ -11,8 +11,6 @@ const CLAUDE_COMMAND_LIST_STDIN = `${JSON.stringify({
   request_id: REQUEST_ID,
   request: { subtype: 'initialize' }
 })}\n`
-
-const INITIALIZE_JSON_LIMITS = { structuralTokens: 64 * 1024, nestingDepth: 16 } as const
 
 export type ClaudeCommandCatalogProbe = (request: {
   cwd: string
@@ -42,31 +40,8 @@ export function createClaudeCommandCatalogProbe(
 }
 
 function readInitializeCommands(stdout: string): AgentSessionSlashCommand[] | undefined {
-  for (const rawLine of stdout.split(/\r?\n/)) {
-    const line = rawLine.trim()
-    if (!line.startsWith('{') || !line.includes(REQUEST_ID)) {
-      continue
-    }
-    let parsed: unknown
-    try {
-      assertJsonTextStructureWithinLimits(line, INITIALIZE_JSON_LIMITS)
-      parsed = JSON.parse(line)
-    } catch {
-      continue
-    }
-    const response =
-      parsed && typeof parsed === 'object' && 'response' in parsed ? parsed.response : undefined
-    if (
-      response &&
-      typeof response === 'object' &&
-      'subtype' in response &&
-      response.subtype === 'success' &&
-      'request_id' in response &&
-      response.request_id === REQUEST_ID &&
-      'response' in response
-    ) {
-      return new ClaudeSlashCommandCatalog(undefined, response.response).commands
-    }
-  }
-  return undefined
+  const initialization = readClaudeControlResponses(stdout).get(REQUEST_ID)
+  return initialization === undefined
+    ? undefined
+    : new ClaudeSlashCommandCatalog(undefined, initialization).commands
 }

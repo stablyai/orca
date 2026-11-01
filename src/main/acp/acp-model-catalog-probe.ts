@@ -5,10 +5,7 @@ import {
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
-import type {
-  AgentModelCatalogProbe,
-  AgentModelCatalogSuccess
-} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { AgentModelCatalogProbe } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
   runAgentModelCatalogListing,
   runAgentModelCatalogSession
@@ -32,6 +29,8 @@ import {
 } from './acp-structured-launch-resolution'
 import { AcpStructuredOptions } from './acp-structured-options'
 import type { InitializeResponse } from './generated/acp-protocol.generated'
+import { AcpAgentError } from './acp-errors'
+import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 
 /** Session-free capability boundary: no session methods are exposed. */
 export type AcpModelCatalogConnection = {
@@ -60,7 +59,7 @@ export function createAcpModelCatalogProbe(
   spec: AcpLaunchSpec,
   deps: AcpModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
-  return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
+  const probe: AgentModelCatalogProbe = async (accountHome, options) => {
     const operation = options?.operation ?? { signal: options?.signal }
     assertStructuredAgentResolutionCurrent(operation)
     const discovery = spec.modelDiscovery
@@ -155,6 +154,16 @@ export function createAcpModelCatalogProbe(
       throw new Error(`${spec.agent} listed no models`)
     }
     return { models, origin: 'probe' }
+  }
+  return async (home, options) => {
+    try {
+      return await probe(home, options)
+    } catch (error) {
+      if (error instanceof AcpAgentError && error.code === -32000) {
+        throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
+      }
+      throw error
+    }
   }
 }
 
