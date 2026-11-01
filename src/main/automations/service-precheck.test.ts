@@ -13,8 +13,6 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import { AutomationService } from './service'
-import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
-import { createAutomationRunWriter } from './automation-run-writer'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type * as PrecheckRunner from './precheck-runner'
 
@@ -193,18 +191,10 @@ describe('AutomationService prechecks', () => {
       allowRemoteHostScheduling: true,
       headlessDispatcher
     })
-    const run = store.createAutomationRun(automation, Date.now(), 'scheduled')
-
-    await runHeadlessAutomationDispatch({
-      automation,
-      run,
-      target: { ok: true, cwd: '/repo', repo: store.getRepo('r1')! },
-      dispatcher: headlessDispatcher,
-      runs: createAutomationRunWriter(store, null),
-      runPrecheck: () => service.runPrecheck(automation.id, run.id),
-      markDispatchResult: (result) => service.markDispatchResult(result),
-      watchRun: () => {}
-    })
+    vi.setSystemTime(automation.nextRunAt + 30_000)
+    service.start()
+    await vi.advanceTimersByTimeAsync(100)
+    service.stop()
 
     expect(headlessDispatcher).not.toHaveBeenCalled()
     expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({

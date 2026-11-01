@@ -6,8 +6,8 @@ export function scheduleAgentBackgroundDraft(
   tabId: string,
   content: string,
   agent: TuiAgent
-): void {
-  void pasteDraftWhenAgentReady({
+): Promise<boolean> {
+  return pasteDraftWhenAgentReady({
     tabId,
     content,
     agent,

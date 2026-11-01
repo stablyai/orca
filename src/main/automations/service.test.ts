@@ -413,7 +413,12 @@ describe('AutomationService', () => {
       expect(run?.status).toBe('dispatched')
       expect(run?.scheduledFor).toBe(scheduledRunAt)
       expect(headlessDispatcher).toHaveBeenCalledWith(
-        expect.objectContaining({ automation: expect.objectContaining({ id: automation.id }) })
+        expect.objectContaining({
+          automation: expect.objectContaining({ id: automation.id, prompt: 'Check the repo' }),
+          agentPrompt: expect.stringMatching(
+            /^You are running an Orca automation\.[\s\S]*=== TASK ===\nCheck the repo$/
+          )
+        })
       )
       await vi.waitFor(() =>
         expect(store.listAutomations().find((entry) => entry.id === automation.id)?.nextRunAt).toBe(

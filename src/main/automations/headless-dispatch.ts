@@ -29,7 +29,20 @@ export type HeadlessAutomationDispatcher = (request: {
   automation: Automation
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
+  agentPrompt: string
 }) => Promise<HeadlessAutomationDispatchLaunch>
+
+export function automationLaunchRunTarget(launch: HeadlessAutomationDispatchLaunch) {
+  return {
+    sessionKind: launch.sessionKind ?? 'terminal',
+    chatSessionId: launch.chatSessionId ?? null,
+    workspaceId: launch.workspaceId,
+    workspaceDisplayName: launch.workspaceDisplayName ?? null,
+    terminalSessionId: launch.terminalSessionId,
+    terminalPaneKey: launch.terminalPaneKey ?? null,
+    terminalPtyId: launch.terminalPtyId ?? null
+  }
+}
 
 export class AutomationRunLaunchError extends Error {
   constructor(

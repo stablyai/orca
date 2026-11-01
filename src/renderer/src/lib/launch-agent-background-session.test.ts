@@ -81,6 +81,7 @@ vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
 
 describe('launchAgentBackgroundSession', () => {
   beforeEach(() => {
+    mockPasteDraftWhenAgentReady.mockResolvedValue(true)
     currentStoreState = state
     resetAgentBackgroundSessionTestHarness({
       state,
@@ -563,14 +564,30 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
-  it('submits prompts for stdin-after-start agents in background mode', async () => {
+  it('binds stdin-after-start agents before delivery and waits for the prompt handoff', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    const bound = Promise.withResolvers<void>()
+    const delivery = Promise.withResolvers<boolean>()
+    mockPasteDraftWhenAgentReady.mockReturnValueOnce(delivery.promise)
 
-    await launchAgentBackgroundSession({
+    const settled = vi.fn()
+    const pending = launchAgentBackgroundSession({
       agent: 'aider',
       worktreeId: 'wt-1',
-      prompt: 'run the automation'
-    })
+      prompt: 'run the automation',
+      onSurfacePublished: async (session) => {
+        expect(session.ptyId).toBe('pty-1')
+        expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+        await bound.promise
+      }
+    }).then(settled)
+    await vi.waitFor(() => expect(mockCreateTab).toHaveBeenCalledOnce())
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+    bound.resolve()
+    await vi.waitFor(() => expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledOnce())
+    expect(settled).not.toHaveBeenCalled()
+    delivery.resolve(true)
+    await pending
 
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -585,6 +602,21 @@ describe('launchAgentBackgroundSession', () => {
         submit: true
       })
     )
+  })
+
+  it('fails and retires the hidden terminal when post-start delivery is refused', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    mockPasteDraftWhenAgentReady.mockResolvedValueOnce(false)
+
+    await expect(
+      launchAgentBackgroundSession({ agent: 'aider', worktreeId: 'wt-1', prompt: 'Check the repo' })
+    ).rejects.toThrow('The automation prompt was not delivered')
+
+    expect(mockKill).toHaveBeenCalledWith('pty-1')
+    expect(mockCloseTab).toHaveBeenCalledWith(expectReservedAgentBackgroundTabId(mockSpawn), {
+      recordInteraction: false,
+      reason: 'cleanup'
+    })
   })
 
   it('passes Hermes automation prompts through the native startup query', async () => {

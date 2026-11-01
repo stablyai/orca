@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
-import type { AutomationRun } from '../../shared/automations-types'
+import type { AutomationRun, AutomationDispatchResult } from '../../shared/automations-types'
 import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
 import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
 
@@ -15,12 +15,13 @@ function fixture(launch: HeadlessAutomationDispatchLaunch) {
   const dispatched: AutomationRun = { ...run, ...launch, status: 'dispatched' }
   return {
     automation,
+    agentPrompt: automation.prompt,
     run,
     target: { ok: true as const, cwd: state.repos[0].path, repo: state.repos[0] },
     dispatcher: vi.fn(async () => launch),
     runs: {
       createRun: vi.fn(async () => run),
-      updateRun: vi.fn(async () => dispatched),
+      updateRun: vi.fn(async (_result: AutomationDispatchResult) => dispatched),
       recordReport: vi.fn(async () => ({ ok: true as const, run })),
       repeatSkip: vi.fn(async () => null),
       advanceNextRun: vi.fn(async () => automation)

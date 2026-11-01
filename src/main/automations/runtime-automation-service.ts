@@ -20,6 +20,10 @@ import {
   createRuntimeAutomationRunTerminalObserver
 } from './runtime-terminal-run-observer'
 import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
+import {
+  automationLaunchRunTarget,
+  type HeadlessAutomationDispatchLaunch
+} from './headless-dispatch'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -32,6 +36,14 @@ export function createRuntimeAutomationService(input: {
   headless: boolean
 }): AutomationService {
   const { store, runtime, claudeUsage, codexUsage } = input
+  const bindSession = (runId: string, target: HeadlessAutomationDispatchLaunch): void => {
+    // Bind synchronously so a prompt's first RPC sees this run before the durable dispatch acknowledgement.
+    store.updateAutomationRun({
+      runId,
+      status: 'dispatching',
+      ...automationLaunchRunTarget(target)
+    })
+  }
   // Launch handles remain usable before pane-key lookup resolves.
   const launchedHandles = new Map<string, string>()
   const observer = createRuntimeAutomationRunTerminalObserver(runtime, {
@@ -151,6 +163,7 @@ export function createRuntimeAutomationService(input: {
     chatDispatcher: async (request) => {
       const { terminalHandle, ...launch } = await launchAutomationChatAgent(runtime, {
         ...request,
+        bindSession: (target) => bindSession(request.run.id, target),
         runs: store.listAutomationRuns(request.automation.id)
       })
       if (launch.terminalPaneKey && terminalHandle) {
@@ -165,6 +178,7 @@ export function createRuntimeAutomationService(input: {
       ? async (request) => {
           const { terminalHandle, ...launch } = await launchHeadlessAutomationAgent(runtime, {
             ...request,
+            bindSession: (target) => bindSession(request.run.id, target),
             runs: store.listAutomationRuns(request.automation.id)
           })
           if (launch.terminalPaneKey) {
