@@ -18,6 +18,7 @@ describe('workspace activity summary subscriptions', () => {
     try {
       for (const count of [10, 100]) {
         const renders = Array.from({ length: count }, () => 0)
+        const worktreeIds = renders.map((_, index) => `folder-${index}`)
         const work: Work = { statuses: 0, tabs: 0 }
         let counting = false
         // Counts each read of a status entry or chat tab, whichever code scans it.
@@ -123,7 +124,11 @@ describe('workspace activity summary subscriptions', () => {
           }
         })
         try {
-          act(() => root.render(renders.map((_, index) => <Row key={index} index={index} />)))
+          act(() =>
+            root.render(
+              worktreeIds.map((worktreeId, index) => <Row key={worktreeId} index={index} />)
+            )
+          )
           expect(text(1)).toBe('working')
 
           measure('unrelated', () =>
