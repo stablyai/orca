@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspace-types'
-import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-doc-history'
+import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-session/workspace-doc-history'
 
 describe('createBrowserHistoryActions', () => {
   it('removes an entry from browserUrlHistory by exact url or normalized form', () => {

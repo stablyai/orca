@@ -211,10 +211,7 @@ export function BrowserToolbarMenuDropdown({
           }}
         >
           <Trash2 className="mr-2 size-3.5" />
-          {t(
-            'auto.components.browser.pane.BrowserToolbarMenu.clearHistory',
-            'Clear History'
-          )}
+          {t('auto.components.browser.pane.BrowserToolbarMenu.clearHistory', 'Clear History')}
         </DropdownMenuItem>
 
         <DropdownMenuItem

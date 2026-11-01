@@ -6,7 +6,6 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'
-import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../shared/browser-url'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { useBrowserAddressBarSuggestionsBuilder } from './use-browser-address-bar-suggestions-builder'
 import { useBrowserAddressBarInlineCompletion } from './use-browser-address-bar-inline-completion'
@@ -149,10 +148,7 @@ export default function BrowserAddressBar({
     onLeave
   })
 
-  const handleClearHistory = useClearAddressBarHistory({
-    clearSuggestionPreview,
-    restoreTypedQuery
-  })
+  const handleClearHistory = useClearAddressBarHistory(restoreTypedQuery)
 
   // Why nothing for an empty bar: row 0 always shows what Enter does, and there Enter does nothing.
   const selectedValue =
