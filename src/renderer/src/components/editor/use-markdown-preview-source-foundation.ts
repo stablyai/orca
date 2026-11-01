@@ -1,5 +1,4 @@
-import { useShallow } from 'zustand/react/shallow'
-import { selectDiffCommentOwner } from '@/store/worktree-diff-comments-selector'
+import { useDiffCommentView } from '../diff-comments/use-diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolution'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -85,12 +84,8 @@ export function useMarkdownPreviewSourceFoundation({
     resolvedSourceWorktreeId,
     filePath
   )
-  const commentOwner = useAppStore(
-    useShallow((state) =>
-      sourceWorktree ? selectDiffCommentOwner(state, sourceWorktree.id, sourceWorktree) : null
-    )
-  )
-  const allDiffComments = sourceWorktree?.diffComments
+  // Twins share an id and path; notes and owner come from the selected copy, as in every editor, not the first listed row.
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(sourceWorktree?.id)
   const sourceRoutingWorktreeId = sourceWorktree?.id ?? resolvedSourceWorktreeId
   const runtimeOwnerId = resolvedSourceRuntimeEnvironmentId?.trim()
   const sourceConnectionIdSelector = useMemo(

@@ -1,4 +1,4 @@
-import type { DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Send, Sparkles } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -102,9 +102,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   const sendableScopes = useMemo<SendableNotesScope<TNote>[]>(() => {
     void inFlightVersion
     return scopes.map(({ formatPrompt, ...scope }) => {
-      const notes = scope.notes.filter(
-        (note) => owner && !isNoteInFlight(diffCommentSendKey(owner, note))
-      )
+      const notes = scope.notes.filter((note) => !isNoteInFlight(diffCommentSendKey(owner, note)))
       return { ...scope, notes, prompt: notes.length > 0 ? formatPrompt(notes) : '' }
     })
   }, [inFlightVersion, owner, scopes])
@@ -131,7 +129,6 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   )
   const holdInFlight = useCallback(
     (notes: readonly TNote[]) => (delivered: Promise<unknown>) =>
-      owner &&
       holdNotesForSend(
         notes.map((note) => diffCommentSendKey(owner, note)),
         delivered,

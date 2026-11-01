@@ -1,15 +1,9 @@
-import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/qualified-worktree-execution-owner'
 import type { DiffComment } from '../../../shared/diff-comment-types'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from './types'
-import { getIndexedWorktreeById } from './worktree-repo-index'
-import {
-  findFolderWorkspaceOwner,
-  getExecutionHostIdForFolderWorkspace,
-  getRuntimeEnvironmentIdForFolderWorkspace
-} from '@/lib/folder-workspace-runtime-owner'
-import { namedHostForOwnerRef, runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
+import { namedHostForOwnerRef } from '@/lib/resolve-owner'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -17,20 +11,24 @@ import { selectWorktreesByRepo } from './workspace-record-selectors'
 
 const EMPTY_DIFF_COMMENTS = Object.freeze([]) as unknown as DiffComment[]
 
-type DiffCommentSelectorState = Pick<AppState, 'worktreesByRepo'> &
-  Partial<
-    Pick<
-      AppState,
-      | 'activeWorkspaceExecutionHostId'
-      | 'activeWorktreeId'
-      | 'folderWorkspaces'
-      | 'projectGroups'
-      | 'restoredRuntimeHostIdByWorkspaceSessionKey'
-      | 'runtimeEnvironments'
-      | 'settings'
-      | 'repos'
-    >
-  >
+/** Every store field note ownership is resolved from; a write changing none of them changes no owner. */
+export const DIFF_COMMENT_OWNER_INPUTS = [
+  'worktreesByRepo',
+  'detectedWorktreesByRepo',
+  'repos',
+  'folderWorkspaces',
+  'projectGroups',
+  'restoredRuntimeHostIdByWorkspaceSessionKey',
+  'activeWorktreeId',
+  'activeWorkspaceExecutionHostId',
+  'settings',
+  'runtimeEnvironments',
+  'runtimeEnvironmentCatalogHydrated',
+  'removedRuntimeEnvironmentIds'
+] as const satisfies readonly (keyof AppState)[]
+
+export type DiffCommentSelectorState = Pick<AppState, 'worktreesByRepo'> &
+  Partial<Pick<AppState, (typeof DIFF_COMMENT_OWNER_INPUTS)[number]>>
 
 /** One twin of a worktree id, as the owner index tells rows apart: its host and its paired server. */
 export type DiffCommentTwin = { hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
@@ -74,19 +72,19 @@ export function diffCommentFloorKey(worktreeId: string, twin: DiffCommentTwin | 
     : worktreeId
 }
 
-/** With host twins, pick captured write identity, then uniquely held note UUIDs, then selected host; never guess. Single-host duplicate rows still represent one workspace. */
+/** With host twins, pick the captured identity, else the selected host's copy; never guess. Single-host duplicate rows still represent one workspace. */
 export function findDiffCommentRows(
   state: Pick<
     DiffCommentSelectorState,
     'worktreesByRepo' | 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'
   >,
   worktreeId: string,
-  hint: { twin?: DiffCommentTwin; hostId?: ExecutionHostId; commentIds?: ReadonlySet<string> } = {}
+  hint: { twin?: DiffCommentTwin; hostId?: ExecutionHostId } = {}
 ): DiffCommentRows | null {
   const rows = (selectWorktreesByRepo(state)[getRepoIdFromWorktreeId(worktreeId)] ?? []).filter(
     (row) => row.id === worktreeId
   )
-  const { twin: captured, commentIds } = hint
+  const { twin: captured } = hint
   if (captured) {
     const exact = rows.filter((row) => isTwin(row, captured))
     // Listings may add the write’s host stamp; hostless writes can follow a newly stamped row only if all copies agree.
@@ -107,46 +105,30 @@ export function findDiffCommentRows(
   if (rows.length === 0) {
     return null
   }
-  const pickTwin = (row: Worktree | undefined, named?: ExecutionHostId): DiffCommentRows | null => {
-    if (!row) {
-      return null
-    }
-    const twin = twinOf(row)
-    // Selection attributes unstamped rows; notes alone cannot. Hostless writes would follow the currently open workspace.
-    const hostId = diffCommentTwinHostId(twin) ?? named
-    return hostId
-      ? { twin, hostId, worktrees: rows.filter((candidate) => isTwin(candidate, twin)) }
-      : null
-  }
-  if (rows.every((row) => isTwin(row, twinOf(rows[0])))) {
-    // Main refuses hostless writes amid twins; capture identity too so queued saves cannot switch to newly listed copies.
-    const twin = twinOf(rows[0])
-    const hostId = diffCommentTwinHostId(twin)
-    // A differently stamped row is not the selected host’s unlisted copy; named notes still identify it, while unstamped provenance remains unknown.
-    const named = namedHostForOwnerRef(state, { workspaceId: worktreeId })
-    const holdsNamedNotes = rows.some((row) => row.diffComments?.some((c) => commentIds?.has(c.id)))
-    const owner = named
-      ? findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(state), worktreeId, named)
-      : null
-    if (named && twin.hostId && !holdsNamedNotes && !rows.some((row) => row === owner)) {
-      return null
-    }
-    return { twin, ...(hostId ? { hostId } : {}), worktrees: rows }
-  }
-  const holders = commentIds?.size
-    ? rows.filter((row) => row.diffComments?.some((comment) => commentIds.has(comment.id)))
-    : []
-  if (holders.length > 0 && holders.every((row) => isTwin(row, twinOf(holders[0])))) {
-    return pickTwin(holders[0])
-  }
   const named = namedHostForOwnerRef(state, { workspaceId: worktreeId })
   const owner = named
     ? findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(state), worktreeId, named)
     : null
-  return pickTwin(
-    rows.find((row) => row === owner),
-    named ?? undefined
-  )
+  if (rows.every((row) => isTwin(row, twinOf(rows[0])))) {
+    // Main refuses hostless writes amid twins; capture identity too so queued saves cannot switch to newly listed copies.
+    const twin = twinOf(rows[0])
+    const hostId = diffCommentTwinHostId(twin)
+    // A differently stamped row is not the selected host’s unlisted copy; unstamped provenance remains unknown.
+    if (named && twin.hostId && !rows.some((row) => row === owner)) {
+      return null
+    }
+    return { twin, ...(hostId ? { hostId } : {}), worktrees: rows }
+  }
+  const row = rows.find((candidate) => candidate === owner)
+  if (!row) {
+    return null
+  }
+  const twin = twinOf(row)
+  // Selection attributes unstamped rows; notes alone cannot. Hostless writes would follow the currently open workspace.
+  const hostId = diffCommentTwinHostId(twin) ?? named ?? undefined
+  return hostId
+    ? { twin, hostId, worktrees: rows.filter((candidate) => isTwin(candidate, twin)) }
+    : null
 }
 
 /** The notes of those rows; the last duplicate wins, as in the id index the rest of the app reads. */
@@ -180,20 +162,6 @@ export function readQueuedDiffComments(
   return found ? { list: diffCommentRowNotes(found) } : null
 }
 
-/** The list a change naming these notes would edit; see {@link findDiffCommentRows}. */
-export function readDiffCommentsForChange(
-  state: DiffCommentSelectorState,
-  worktreeId: string,
-  commentIds: Iterable<string>
-): DiffComment[] {
-  const scope = parseWorkspaceKey(worktreeId)
-  if (scope?.type === 'folder') {
-    return findFolderWorkspaceOwner(state, scope.folderWorkspaceId)?.diffComments ?? []
-  }
-  const found = findDiffCommentRows(state, worktreeId, { commentIds: new Set(commentIds) })
-  return (found && diffCommentRowNotes(found)) ?? []
-}
-
 export function selectWorktreeDiffComments(
   state: DiffCommentSelectorState,
   worktreeId: string | null | undefined
@@ -205,13 +173,9 @@ export function selectWorktreeDiffComments(
   if (scope?.type === 'folder') {
     return findFolderWorkspaceOwner(state, scope.folderWorkspaceId)?.diffComments
   }
-  // Open twins need their own notes (unnamed writes refuse); scan only the open bucket per store write, using the cached ID index elsewhere.
-  const open = namedHostForOwnerRef(state, { workspaceId: worktreeId })
-    ? findDiffCommentRows(state, worktreeId)
-    : null
-  return open
-    ? diffCommentRowNotes(open)
-    : getIndexedWorktreeById(selectWorktreesByRepo(state), worktreeId)?.diffComments
+  // Only an identifiable copy shows notes: the selected host's, or the sole one. Another copy's notes would invite writes to it.
+  const found = findDiffCommentRows(state, worktreeId)
+  return found ? diffCommentRowNotes(found) : undefined
 }
 
 export function selectWorktreeDiffCommentsOrEmpty(
@@ -219,110 +183,4 @@ export function selectWorktreeDiffCommentsOrEmpty(
   worktreeId: string | null | undefined
 ): DiffComment[] {
   return selectWorktreeDiffComments(state, worktreeId) ?? EMPTY_DIFF_COMMENTS
-}
-
-export type DiffCommentOwner =
-  | ({ kind: 'worktree'; worktreeId: string; writeHostId: ExecutionHostId } & DiffCommentTwin)
-  | {
-      kind: 'folder'
-      worktreeId: string
-      executionHostId: ExecutionHostId
-      runtimeEnvironmentId: string | null
-    }
-
-/** Capture with the displayed list, before a composer, confirmation or delivery can outlive selection. */
-export function selectDiffCommentOwner(
-  state: DiffCommentSelectorState,
-  worktreeId: string | null | undefined,
-  displayedTwin?: DiffCommentTwin
-): DiffCommentOwner | null {
-  if (!worktreeId) {
-    return null
-  }
-  const scope = parseWorkspaceKey(worktreeId)
-  if (scope?.type === 'folder') {
-    if (!findFolderWorkspaceOwner(state, scope.folderWorkspaceId)) {
-      return null
-    }
-    const executionHostId = getExecutionHostIdForFolderWorkspace(state, scope.folderWorkspaceId)
-    return {
-      kind: 'folder',
-      worktreeId,
-      executionHostId,
-      runtimeEnvironmentId: getRuntimeEnvironmentIdForFolderWorkspace(
-        state,
-        scope.folderWorkspaceId,
-        executionHostId
-      )
-    }
-  }
-  const found = findDiffCommentRows(
-    state,
-    worktreeId,
-    displayedTwin
-      ? { twin: twinOf(displayedTwin), hostId: diffCommentTwinHostId(twinOf(displayedTwin)) }
-      : {}
-  )
-  if (!found?.twin) {
-    return null
-  }
-  const writeHostId = found.hostId ?? namedHostForOwnerRef(state, { workspaceId: worktreeId })
-  const target = runtimeTargetForWorkspaceOwner(state, { workspaceId: worktreeId })
-  const host =
-    writeHostId ??
-    resolveQualifiedWorktreeExecutionOwner(selectWorktreesByRepo(state), state.repos, worktreeId)
-      ?.hostId ??
-    (target?.kind === 'local'
-      ? 'local'
-      : target?.kind === 'environment'
-        ? toRuntimeExecutionHostId(target.environmentId)
-        : null)
-  return host ? { kind: 'worktree', worktreeId, ...found.twin, writeHostId: host } : null
-}
-
-export function diffCommentOwnerKey(owner: DiffCommentOwner): string {
-  return JSON.stringify(
-    owner.kind === 'folder'
-      ? [owner.worktreeId, owner.executionHostId, owner.runtimeEnvironmentId]
-      : [
-          owner.worktreeId,
-          owner.hostId ?? null,
-          owner.runtimeOwnerEnvironmentId ?? null,
-          owner.writeHostId
-        ]
-  )
-}
-
-export function readOwnedDiffComments(
-  state: DiffCommentSelectorState,
-  owner: DiffCommentOwner
-): DiffComment[] | undefined {
-  if (owner.kind === 'folder') {
-    const scope = parseWorkspaceKey(owner.worktreeId)
-    return scope?.type === 'folder'
-      ? findFolderWorkspaceOwner(state, scope.folderWorkspaceId, owner.executionHostId)
-          ?.diffComments
-      : undefined
-  }
-  const found = findDiffCommentRows(state, owner.worktreeId, {
-    twin: owner,
-    hostId: owner.writeHostId
-  })
-  return found ? diffCommentRowNotes(found) : undefined
-}
-
-export function hasDiffCommentOwner(
-  state: DiffCommentSelectorState,
-  owner: DiffCommentOwner
-): boolean {
-  if (owner.kind === 'folder') {
-    const scope = parseWorkspaceKey(owner.worktreeId)
-    return (
-      scope?.type === 'folder' &&
-      Boolean(findFolderWorkspaceOwner(state, scope.folderWorkspaceId, owner.executionHostId))
-    )
-  }
-  return Boolean(
-    findDiffCommentRows(state, owner.worktreeId, { twin: owner, hostId: owner.writeHostId })
-  )
 }

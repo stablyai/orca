@@ -1,4 +1,4 @@
-import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
+import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/diff-comment-owner'
 import { useSyncExternalStore } from 'react'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
 
@@ -75,11 +75,11 @@ export function useNotesInFlightVersion(): number {
 
 /** A note's identity for delivery: an edit makes it a new pending note, as for its removal. */
 export function diffCommentSendKey(
-  owner: DiffCommentOwner,
+  owner: DiffCommentOwner | null,
   note: DiffCommentDeliverySnapshot
 ): string {
   return JSON.stringify([
-    diffCommentOwnerKey(owner),
+    owner && diffCommentOwnerKey(owner),
     note.id,
     note.body,
     note.filePath,

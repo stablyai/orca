@@ -1,26 +1,33 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import type { DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
-import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { selectDiffCommentOwner } from '@/store/worktree-diff-comments-selector'
+import {
+  createDiffCommentViewSelector,
+  selectDiffCommentView,
+  type DiffCommentOwner,
+  type DiffCommentView
+} from '@/store/diff-comment-owner'
 
-export function useDiffCommentOwner(worktreeId: string | null | undefined) {
-  return useAppStore(useShallow((state) => selectDiffCommentOwner(state, worktreeId)))
+/** The notes shown for a workspace and the copy they belong to, from one read. */
+export function useDiffCommentView(worktreeId: string | null | undefined): DiffCommentView {
+  const select = useMemo(() => createDiffCommentViewSelector(), [])
+  return useAppStore((state) => select(state, worktreeId))
 }
 
-export function useOwnedDiffCommentTarget<T extends object>(owner: DiffCommentOwner | null) {
+/** A composer target whose owner is captured when it opens, so a later submit saves to that copy. */
+export function useOwnedDiffCommentTarget<T extends object>(worktreeId: string | null | undefined) {
   const [target, setTarget] = useState<T | null>(null)
-  const capturedOwner = useRef(owner)
+  const capturedOwner = useRef<DiffCommentOwner | null>(null)
+  // Stable per workspace: installed keyboard openers keep the first setter they were given.
   const setOwnedTarget = useCallback<Dispatch<SetStateAction<T | null>>>(
     (value) => {
-      // Position-only updates keep the owner captured at opening.
+      // Opening reads the owner the user acted on; position-only updates keep it.
       if (value && typeof value !== 'function') {
-        capturedOwner.current = owner
+        capturedOwner.current = selectDiffCommentView(useAppStore.getState(), worktreeId).owner
       }
       setTarget(value)
     },
-    [owner]
+    [worktreeId]
   )
   return [target, setOwnedTarget, capturedOwner] as const
 }

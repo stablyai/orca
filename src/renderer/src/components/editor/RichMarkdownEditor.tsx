@@ -1,10 +1,8 @@
-import { useDiffCommentOwner } from '../diff-comments/use-diff-comment-owner'
+import { useDiffCommentView } from '../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import { useEditorState, type Editor } from '@tiptap/react'
-import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store'
-import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useLocalImagePick } from './useLocalImagePick'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
@@ -64,14 +62,12 @@ export default function RichMarkdownEditor({
   const runtimeTarget = useFileOwnerRuntimeTarget(worktreeId, runtimeEnvironmentId)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
-  const commentOwner = useDiffCommentOwner(worktreeId)
+  // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
-  const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    selectWorktreeDiffComments(s, worktreeId)
-  )
   const { codec, htmlSuperscriptLinkContext, worktreeRoot } = useRichMarkdownSuperscriptLinkSetup({
     filePath,
     runtimeEnvironmentId,
@@ -103,7 +99,6 @@ export default function RichMarkdownEditor({
   const isEditingLinkRef = useRef(false)
   const typedEmptyOrderedListMarkerRef = useRef(false)
   const review = useRichMarkdownReviewController({
-    commentOwner,
     addDiffComment,
     allDiffComments,
     content,

@@ -96,8 +96,7 @@ export default function CombinedDiffViewer({
     owner: commentOwner,
     clearDiffComments,
     diffCommentsForWorktree,
-    markdownReviewNotesEnabled,
-    worktreeId: file.worktreeId
+    markdownReviewNotesEnabled
   })
   const preferences = useCombinedDiffViewPreferences({
     combinedDiffFileTreeVisibleByDefault,
@@ -410,7 +409,7 @@ export default function CombinedDiffViewer({
         </div>
       </div>
       <ClearDiffNotesDialog
-        diffCommentCount={notes.diffCommentCount}
+        diffCommentCount={notes.clearNotesCount}
         isClearingNotes={notes.isClearingNotes}
         onConfirm={() => void notes.handleConfirmClearNotes()}
         open={notes.clearNotesDialogVisible}

@@ -1,4 +1,4 @@
-import { selectDiffCommentOwner, type DiffCommentOwner } from '../worktree-diff-comments-selector'
+import { selectDiffCommentView, type DiffCommentOwner } from '../diff-comment-owner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -700,11 +700,10 @@ describe('folder workspace diff comment rollback convergence', () => {
 
 function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
   return (
-    selectDiffCommentOwner(store.getState(), worktreeId) ?? {
-      kind: 'worktree',
+    selectDiffCommentView(store.getState(), worktreeId).owner ?? {
+      kind: 'unlisted',
       worktreeId,
-      hostId: 'local',
-      writeHostId: 'local'
+      hostId: null
     }
   )
 }

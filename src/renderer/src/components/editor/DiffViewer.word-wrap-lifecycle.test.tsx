@@ -69,10 +69,9 @@ vi.mock('@monaco-editor/react', () => ({
 vi.mock('@/store', () => ({
   useAppStore: <T,>(selector: (state: typeof fixture.state) => T) => selector(fixture.state)
 }))
-vi.mock('@/store/worktree-diff-comments-selector', () => ({
-  selectDiffCommentOwner: () => null,
-  diffCommentOwnerKey: () => '',
-  selectWorktreeDiffComments: () => undefined
+vi.mock('@/store/diff-comment-owner', () => ({
+  createDiffCommentViewSelector: () => () => ({ owner: null, comments: undefined }),
+  diffCommentOwnerKey: () => ''
 }))
 vi.mock('@/lib/monaco-setup', () => ({
   monaco: { Uri: { parse: (path: string) => path }, editor: { getModel: () => null } }

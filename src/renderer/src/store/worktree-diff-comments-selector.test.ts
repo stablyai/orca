@@ -7,12 +7,14 @@ import {
   selectWorktreeDiffComments,
   selectWorktreeDiffCommentsOrEmpty
 } from './worktree-diff-comments-selector'
-import { getIndexedWorktreeById } from './worktree-repo-index'
+import { createDiffCommentViewSelector } from './diff-comment-owner'
+
+const TARGET = 'repo-9::/w/target'
 
 function makeComment(id: string): DiffComment {
   return {
     id,
-    worktreeId: 'worktree-99-99',
+    worktreeId: TARGET,
     filePath: 'src/index.ts',
     lineNumber: 1,
     body: 'Review note',
@@ -23,64 +25,76 @@ function makeComment(id: string): DiffComment {
   }
 }
 
-describe('selectWorktreeDiffComments', () => {
-  it('indexes one immutable worktree snapshot across retained editor selectors', () => {
-    let worktreeIdReads = 0
-    const targetWorktreeId = 'worktree-99-99'
-    const comments = [makeComment('comment-1')]
-    const worktreesByRepo: AppState['worktreesByRepo'] = {}
-
-    for (let repoIndex = 0; repoIndex < 100; repoIndex += 1) {
-      const repoId = `repo-${repoIndex}`
-      worktreesByRepo[repoId] = Array.from({ length: 100 }, (_, worktreeIndex) => {
-        const worktreeId = `worktree-${repoIndex}-${worktreeIndex}`
-        const worktree = {
-          repoId,
-          path: `/${repoId}/${worktreeId}`,
-          ...(worktreeId === targetWorktreeId ? { diffComments: comments } : {})
-        } as Worktree
-        Object.defineProperty(worktree, 'id', {
-          enumerable: true,
-          get: () => {
-            worktreeIdReads += 1
-            return worktreeId
-          }
-        })
-        return worktree
+/** Mounted note consumers re-run their selector on every store write; count row reads per write. */
+function measureViewSelectors(rowsPerRepo: number) {
+  let idReads = 0
+  const comments = [makeComment('comment-1')]
+  const worktreesByRepo: AppState['worktreesByRepo'] = {}
+  for (let repoIndex = 0; repoIndex < 10; repoIndex += 1) {
+    const repoId = `repo-${repoIndex}`
+    worktreesByRepo[repoId] = Array.from({ length: rowsPerRepo }, (_, index) => {
+      const id = repoIndex === 9 && index === 0 ? TARGET : `${repoId}::/w/${index}`
+      const worktree = {
+        repoId,
+        path: id.slice(repoId.length + 2),
+        hostId: 'local',
+        ...(id === TARGET ? { diffComments: comments } : {})
+      } as Worktree
+      Object.defineProperty(worktree, 'id', {
+        enumerable: true,
+        get: () => {
+          idReads += 1
+          return id
+        }
       })
-    }
+      return worktree
+    })
+  }
+  const consumers = Array.from({ length: 8 }, () => createDiffCommentViewSelector())
+  let state: Pick<
+    AppState,
+    'worktreesByRepo' | 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'
+  > = { worktreesByRepo, activeWorktreeId: TARGET, activeWorkspaceExecutionHostId: 'local' }
+  const views = consumers.map((select) => select(state, TARGET))
+  expect(views[0].comments).toBe(comments)
+  expect(views[0].owner).toMatchObject({ kind: 'worktree', hostId: 'local' })
 
-    for (let write = 0; write < 200; write += 1) {
-      // Model all seven comment selectors plus the rich-editor path selector.
-      expect(selectWorktreeDiffComments({ worktreesByRepo }, targetWorktreeId)).toBe(comments)
-      expect(selectWorktreeDiffComments({ worktreesByRepo }, targetWorktreeId)).toBe(comments)
-      expect(selectWorktreeDiffComments({ worktreesByRepo }, targetWorktreeId)).toBe(comments)
-      expect(selectWorktreeDiffComments({ worktreesByRepo }, targetWorktreeId)).toBe(comments)
-      expect(selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo }, targetWorktreeId)).toBe(
-        comments
-      )
-      expect(selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo }, targetWorktreeId)).toBe(
-        comments
-      )
-      expect(selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo }, targetWorktreeId)).toBe(
-        comments
-      )
-      expect(getIndexedWorktreeById(worktreesByRepo, targetWorktreeId)?.path).toBe(
-        '/repo-99/worktree-99-99'
-      )
-    }
+  idReads = 0
+  for (let write = 0; write < 200; write += 1) {
+    state = { ...state }
+    consumers.forEach((select, index) => expect(select(state, TARGET)).toBe(views[index]))
+  }
+  const unrelatedWriteReads = idReads
 
-    expect(worktreeIdReads).toBe(10_000)
+  // Another repo's listing changes: every consumer re-resolves once, and keeps its view.
+  idReads = 0
+  state = { ...state, worktreesByRepo: { ...worktreesByRepo, 'repo-0': [] } }
+  consumers.forEach((select, index) => expect(select(state, TARGET)).toBe(views[index]))
+  return { unrelatedWriteReads, catalogWriteReads: idReads }
+}
+
+describe('note owner view selectors', () => {
+  it('do no row work on writes that change no ownership input, at any catalog size', () => {
+    const small = measureViewSelectors(100)
+    const large = measureViewSelectors(1000)
+
+    expect(small.unrelatedWriteReads).toBe(0)
+    expect(large.unrelatedWriteReads).toBe(0)
+    // A listing change costs one pass per consumer over the open repo plus one shared index build.
+    expect(small.catalogWriteReads).toBeLessThanOrEqual(8 * 100 + 9 * 100)
+    expect(large.catalogWriteReads).toBeLessThanOrEqual(8 * 1000 + 9 * 1000)
   })
+})
 
+describe('selectWorktreeDiffComments', () => {
   it('reads a replacement worktree snapshot and handles an absent id', () => {
     const firstComments = [makeComment('comment-1')]
     const nextComments = [makeComment('comment-2')]
-    const first = { repo: [{ id: 'worktree-1', diffComments: firstComments } as Worktree] }
-    const next = { repo: [{ id: 'worktree-1', diffComments: nextComments } as Worktree] }
+    const first = { 'repo-9': [{ id: TARGET, diffComments: firstComments } as Worktree] }
+    const next = { 'repo-9': [{ id: TARGET, diffComments: nextComments } as Worktree] }
 
-    expect(selectWorktreeDiffComments({ worktreesByRepo: first }, 'worktree-1')).toBe(firstComments)
-    expect(selectWorktreeDiffComments({ worktreesByRepo: next }, 'worktree-1')).toBe(nextComments)
+    expect(selectWorktreeDiffComments({ worktreesByRepo: first }, TARGET)).toBe(firstComments)
+    expect(selectWorktreeDiffComments({ worktreesByRepo: next }, TARGET)).toBe(nextComments)
     expect(selectWorktreeDiffComments({ worktreesByRepo: next }, null)).toBeUndefined()
     expect(selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo: next }, null)).toBe(
       selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo: next }, undefined)

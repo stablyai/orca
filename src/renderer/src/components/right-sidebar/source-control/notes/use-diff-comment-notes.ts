@@ -1,5 +1,6 @@
-import type { AppState } from '@/store'
-import { diffCommentOwnerKey } from '@/store/worktree-diff-comments-selector'
+import { useAppStore, type AppState } from '@/store'
+import { readOwnedDiffComments } from '@/store/diff-comment-owner'
+import { withoutMarkdownReviewNotes } from '@/lib/markdown-review-notes-setting'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -23,11 +24,8 @@ export function useSourceControlDiffCommentNotes({
   clearDiffComments: AppState['clearDiffComments']
   clearDiffCommentsForFile: AppState['clearDiffCommentsForFile']
 }) {
-  const {
-    owner,
-    comments: diffCommentsForActive,
-    markdownReviewNotesEnabled
-  } = useVisibleWorktreeDiffComments(activeWorktreeId)
+  const { comments: diffCommentsForActive, markdownReviewNotesEnabled } =
+    useVisibleWorktreeDiffComments(activeWorktreeId)
   const diffCommentCount = diffCommentsForActive.length
   // Index counts once so each row need not refilter every comment.
   const diffCommentCountByPath = useMemo(() => {
@@ -47,10 +45,9 @@ export function useSourceControlDiffCommentNotes({
     useState<PendingDiffCommentsClear | null>(null)
   const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
   // Reset during render so workspace switches cannot paint the old confirmation.
-  const ownerKey = owner ? diffCommentOwnerKey(owner) : null
-  const [notesWorktreeId, setNotesWorktreeId] = useState(ownerKey)
-  if (notesWorktreeId !== ownerKey) {
-    setNotesWorktreeId(ownerKey)
+  const [notesWorktreeId, setNotesWorktreeId] = useState(activeWorktreeId)
+  if (notesWorktreeId !== activeWorktreeId) {
+    setNotesWorktreeId(activeWorktreeId)
     setPendingDiffCommentsClear(null)
     setIsClearingDiffComments(false)
   }
@@ -73,13 +70,23 @@ export function useSourceControlDiffCommentNotes({
     }
   }, [diffCommentsForActive, diffCommentsPrompt, showDiffCommentsCopied])
 
+  // Count the captured copy's notes, whichever twin is selected now; a copy gone since opening keeps its count so confirming reports the failure.
+  const ownedComments = useAppStore((s) =>
+    pendingDiffCommentsClear ? readOwnedDiffComments(s, pendingDiffCommentsClear.owner) : undefined
+  )
   const pendingDiffCommentsClearCount = useMemo(() => {
+    if (!pendingDiffCommentsClear || pendingDiffCommentsClear.worktreeId !== activeWorktreeId) {
+      return 0
+    }
+    if (!ownedComments) {
+      return pendingDiffCommentsClear.count
+    }
     return countPendingDiffCommentsClear(
       pendingDiffCommentsClear,
       activeWorktreeId,
-      diffCommentsForActive
+      markdownReviewNotesEnabled ? ownedComments : withoutMarkdownReviewNotes(ownedComments)
     )
-  }, [activeWorktreeId, diffCommentsForActive, pendingDiffCommentsClear])
+  }, [activeWorktreeId, markdownReviewNotesEnabled, ownedComments, pendingDiffCommentsClear])
 
   const resolvedPendingDiffCommentsClear = resolvePendingDiffCommentsClear({
     activeWorktreeId,

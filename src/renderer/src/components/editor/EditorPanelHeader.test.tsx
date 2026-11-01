@@ -13,10 +13,9 @@ vi.mock('@/store', () => ({
     })
 }))
 
-vi.mock('@/store/worktree-diff-comments-selector', () => ({
-  selectDiffCommentOwner: () => null,
-  diffCommentOwnerKey: () => '',
-  selectWorktreeDiffCommentsOrEmpty: () => []
+vi.mock('@/store/diff-comment-owner', () => ({
+  createDiffCommentViewSelector: () => () => ({ owner: null, comments: [] }),
+  diffCommentOwnerKey: () => ''
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({

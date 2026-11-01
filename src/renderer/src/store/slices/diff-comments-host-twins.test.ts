@@ -7,8 +7,13 @@ import {
   resetNotesInFlightForTests
 } from '@/lib/notes-send-in-flight'
 import type { AppState } from '../types'
-import { selectDiffCommentOwner, type DiffCommentOwner } from '../worktree-diff-comments-selector'
+import {
+  diffCommentOwnerKey,
+  selectDiffCommentView,
+  type DiffCommentOwner
+} from '../diff-comment-owner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -92,7 +97,14 @@ function rowNotes(store: ReturnType<typeof createTwinStore>, hostId: string): st
 }
 
 function addNote(store: ReturnType<typeof createTwinStore>) {
-  return store.getState().addDiffComment(capturedOwner(store, WT), {
+  return addNoteFor(store, capturedOwner(store, WT))
+}
+
+function addNoteFor(store: ReturnType<typeof createTwinStore>, owner: DiffCommentOwner | null) {
+  if (!owner) {
+    throw new Error('no workspace')
+  }
+  return store.getState().addDiffComment(owner, {
     worktreeId: WT,
     filePath: 'README.md',
     lineNumber: 1,
@@ -103,6 +115,7 @@ function addNote(store: ReturnType<typeof createTwinStore>) {
 
 beforeEach(() => {
   vi.mocked(callRuntimeRpc).mockClear()
+  vi.mocked(toast.error).mockClear()
   resetNotesInFlightForTests()
   updateMeta.mockReset()
   updateMeta.mockResolvedValue({})
@@ -512,11 +525,10 @@ describe('diff comments on twin worktrees', () => {
 
 function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
   return (
-    selectDiffCommentOwner(store.getState(), worktreeId) ?? {
-      kind: 'worktree',
+    selectDiffCommentView(store.getState(), worktreeId).owner ?? {
+      kind: 'unlisted',
       worktreeId,
-      hostId: 'ssh:unresolved',
-      writeHostId: 'ssh:unresolved'
+      hostId: null
     }
   )
 }
@@ -574,6 +586,79 @@ describe('captured note owners across delivery and selection', () => {
     expect(rowNotes(store, 'ssh:box')).toEqual([])
     expect(updateMeta).toHaveBeenCalledTimes(2)
     expect(updateMeta.mock.calls.every(([args]) => args.executionHostId === 'ssh:box')).toBe(true)
+  })
+
+  it('writes a paired SSH row through its server even when the row names no server', async () => {
+    const store = createTwinStore('ssh:box')
+    store.setState({
+      repos: [{ ...repoBase, connectionId: 'box', executionHostId: 'runtime:hub' }],
+      worktreesByRepo: { [REPO]: [worktree('ssh:box')] }
+    })
+    const owner = capturedOwner(store, WT)
+    store.setState({ activeWorkspaceExecutionHostId: 'local' })
+
+    expect(await addNoteFor(store, owner)).not.toBeNull()
+
+    expect(updateMeta).not.toHaveBeenCalled()
+    expect(callRuntimeRpc).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'environment', environmentId: 'hub' },
+      'worktree.set',
+      expect.objectContaining({ diffComments: [expect.objectContaining({ body: 'ssh note' })] }),
+      expect.anything()
+    )
+  })
+
+  it('keeps one owner and in-flight Send when a listing stamps the same copy', () => {
+    const store = createTwinStore('local')
+    const sent = note('n1', 'body')
+    store.setState({ worktreesByRepo: { [REPO]: [worktree(undefined, [sent])] } })
+    const unstamped = capturedOwner(store, WT)
+    holdNotesForSend([diffCommentSendKey(unstamped, sent)], new Promise(() => {}))
+
+    store.setState({ worktreesByRepo: { [REPO]: [worktree('local', [sent])] } })
+    const stamped = capturedOwner(store, WT)
+
+    expect(stamped).toMatchObject({ hostId: 'local' })
+    expect(diffCommentOwnerKey(stamped)).toBe(diffCommentOwnerKey(unstamped))
+    expect(isNoteInFlight(diffCommentSendKey(stamped, sent))).toBe(true)
+  })
+
+  it('shows no notes while the selected copy is unlisted, and saves to it once listed', async () => {
+    const store = createTwinStore('ssh:box')
+    store.setState({ worktreesByRepo: { [REPO]: [worktree('local', [note('l1', 'local')])] } })
+    const view = selectDiffCommentView(store.getState(), WT)
+    expect(view).toEqual({
+      owner: { kind: 'unlisted', worktreeId: WT, hostId: 'ssh:box' },
+      comments: undefined
+    })
+    expect(await addNoteFor(store, view.owner)).toBeNull()
+    expect(updateMeta).not.toHaveBeenCalled()
+
+    // A composer opened before the copy listed keeps it, whatever is selected at submit.
+    store.setState({
+      activeWorkspaceExecutionHostId: 'local',
+      worktreesByRepo: { [REPO]: [worktree('local'), worktree('ssh:box')] }
+    })
+    expect(await addNoteFor(store, view.owner)).not.toBeNull()
+    expect(rowNotes(store, 'ssh:box')).toEqual(['ssh note'])
+    expect(rowNotes(store, 'local')).toEqual([])
+  })
+
+  it('reports a copy gone since Send or edit once, through the existing failure toast', async () => {
+    const store = createTwinStore('ssh:box')
+    const sent = note('same-id', 'same body')
+    store.setState({
+      worktreesByRepo: { [REPO]: [worktree('local', [sent]), worktree('ssh:box', [sent])] }
+    })
+    const owner = capturedOwner(store, WT)
+    store.setState({ worktreesByRepo: { [REPO]: [worktree('local', [sent])] } })
+
+    expect(await store.getState().clearDeliveredDiffComments(owner, [sent])).toBe(false)
+    expect(vi.mocked(toast.error)).toHaveBeenCalledExactlyOnceWith('Failed to clear notes.')
+    vi.mocked(toast.error).mockClear()
+    expect(await store.getState().updateDiffComment(owner, sent.id, 'edited')).toBe(false)
+    expect(vi.mocked(toast.error)).toHaveBeenCalledExactlyOnceWith('Failed to save comment')
+    expect(rowNotes(store, 'local')).toEqual(['same body'])
   })
 
   it('refuses every mutation when the captured twin was removed', async () => {

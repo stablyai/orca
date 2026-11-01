@@ -74,7 +74,7 @@ describe('empty store updates', () => {
     before.clearClientHostedBrowserCloseIntents('missing', [])
     mutateDiffComments(
       store.setState,
-      { kind: 'worktree', worktreeId: 'missing', writeHostId: 'local' },
+      { kind: 'worktree', worktreeId: 'missing', writeHostId: 'local', target: { kind: 'local' } },
       () => null
     )
     store.setState((state) => browserImportStateForHostUpdate(state, 'runtime:other', null))

@@ -1,5 +1,6 @@
-import { diffCommentOwnerKey } from '@/store/worktree-diff-comments-selector'
+import { diffCommentOwnerKey } from '@/store/diff-comment-owner'
 import { useCallback } from 'react'
+import { toast } from 'sonner'
 import { Check, Copy, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import {
@@ -86,6 +87,10 @@ export function useMarkdownPreviewAnnotationRenderers({
           setActiveAnnotationBlockKey(null)
           return true
         }
+        // The composer keeps the draft for retry.
+        toast.error(
+          translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
+        )
         return false
       }
 

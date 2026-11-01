@@ -1,5 +1,5 @@
 import {
-  useDiffCommentOwner,
+  useDiffCommentView,
   useOwnedDiffCommentTarget
 } from '../diff-comments/use-diff-comment-owner'
 import {
@@ -14,8 +14,9 @@ import {
 } from 'react'
 import type { editor } from 'monaco-editor'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { formatMarkdownReviewNotes, type MarkdownReviewNote } from '@/lib/markdown-review-notes'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
@@ -67,15 +68,12 @@ export function useMonacoMarkdownAnnotations(params: {
     markdownAnnotationsEnabled
   } = params
 
-  const commentOwner = useDiffCommentOwner(worktreeId)
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
-  const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    selectWorktreeDiffComments(s, worktreeId)
-  )
 
   const markdownComments = useMemo(
     () =>
@@ -84,7 +82,7 @@ export function useMonacoMarkdownAnnotations(params: {
   )
 
   const [commentPopover, setCommentPopover, commentPopoverOwnerRef] =
-    useOwnedDiffCommentTarget<MarkdownCommentPopoverState>(commentOwner)
+    useOwnedDiffCommentTarget<MarkdownCommentPopoverState>(worktreeId)
   const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
     useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
   // Why: claim drafts synchronously so a same-tick second chord can't remount the composer before React commits state.
@@ -215,7 +213,10 @@ export function useMonacoMarkdownAnnotations(params: {
     if (result) {
       setCommentPopover(null)
     } else {
-      console.error('Failed to add markdown comment — draft preserved')
+      // The draft stays open for retry.
+      toast.error(
+        translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
+      )
     }
   }
 

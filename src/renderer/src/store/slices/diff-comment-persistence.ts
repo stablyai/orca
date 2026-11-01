@@ -9,9 +9,9 @@ import {
   diffCommentRowNotes,
   findDiffCommentRows,
   readQueuedDiffComments,
-  type DiffCommentOwner,
   type DiffCommentTwin
 } from '../worktree-diff-comments-selector'
+import type { ResolvedDiffCommentOwner } from '../diff-comment-owner'
 import {
   findFolderWorkspaceOwner,
   type getExecutionHostIdForFolderWorkspace
@@ -70,7 +70,7 @@ const lastMutationNextByQueue = new Map<string, DiffComment[]>()
 const floorSeedEpochByQueue = new Map<string, number>()
 
 export type DiffCommentMutation = {
-  owner: DiffCommentOwner
+  owner: ResolvedDiffCommentOwner
   previous: DiffComment[] | undefined
   next: DiffComment[]
   folderExecutionHostId?: ReturnType<typeof getExecutionHostIdForFolderWorkspace>
@@ -189,7 +189,7 @@ export function enqueueDiffCommentPersist(
 // Why: derive the next list inside the `set` updater so concurrent writes can't clobber each other via a stale closure.
 export function mutateDiffComments(
   set: Parameters<StateCreator<AppState>>[0],
-  owner: DiffCommentOwner,
+  owner: ResolvedDiffCommentOwner,
   mutate: (existing: DiffComment[]) => DiffComment[] | null
 ): DiffCommentMutation | null {
   const worktreeId = owner.worktreeId

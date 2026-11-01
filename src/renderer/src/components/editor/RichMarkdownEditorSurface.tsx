@@ -1,4 +1,4 @@
-import type { DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import type React from 'react'
 import { EditorContent } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'

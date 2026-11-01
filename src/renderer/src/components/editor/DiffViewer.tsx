@@ -1,4 +1,4 @@
-import { useDiffCommentOwner } from '../diff-comments/use-diff-comment-owner'
+import { useDiffCommentView } from '../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
@@ -7,12 +7,10 @@ import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
 import { monacoTypographyOptions } from '@/lib/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { useContextualCopySetup } from './useContextualCopySetup'
-import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
-import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
@@ -62,17 +60,14 @@ export default function DiffViewer({
   const settings = useAppStore((s) => s.settings)
   const monacoTheme = useMonacoTheme()
   const diffTypography = useEditorTypography('diff')
-  const commentOwner = useDiffCommentOwner(worktreeId)
+  // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const language = usePluginSyntaxLanguage(filePath, coreLanguage)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
-  // Select the stable worktree array; filter below so unrelated writes do not invalidate this viewer.
-  const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    selectWorktreeDiffComments(s, worktreeId)
-  )
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
     [allDiffComments, relativePath]

@@ -1,4 +1,4 @@
-import type { DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import type { RefObject } from 'react'
 import type { Root } from 'react-dom/client'
 import { formatDiffComments } from '@/lib/diff-comments-format'

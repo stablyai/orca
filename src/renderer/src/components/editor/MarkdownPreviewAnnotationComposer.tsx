@@ -1,4 +1,4 @@
-import type { DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'

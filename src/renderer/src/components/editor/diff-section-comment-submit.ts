@@ -1,5 +1,5 @@
 import type { AppState } from '@/store'
-import type { DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import type { DiffSection } from './diff-section-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'

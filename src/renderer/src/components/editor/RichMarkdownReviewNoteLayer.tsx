@@ -1,4 +1,4 @@
-import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
+import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/diff-comment-owner'
 import { Check, Copy } from 'lucide-react'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { DiffCommentCard } from '../diff-comments/DiffCommentCard'

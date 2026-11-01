@@ -73,7 +73,6 @@ function mountReview() {
   let comments: DiffComment[] = []
   const hook = renderHook(() =>
     useRichMarkdownReviewController({
-      commentOwner: { kind: 'worktree', worktreeId: 'wt-1', hostId: 'local', writeHostId: 'local' },
       addDiffComment,
       allDiffComments: comments,
       content: 'abc xyz',

@@ -1,7 +1,8 @@
 import { useOwnedDiffCommentTarget } from '../diff-comments/use-diff-comment-owner'
-import type { DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import type { Editor } from '@tiptap/react'
 import type { AppState } from '@/store'
 import { richMarkdownAnnotationHighlightPluginKey } from './rich-markdown-annotation-highlight'
@@ -20,7 +21,6 @@ import { useRichMarkdownReviewRailController } from './useRichMarkdownReviewRail
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 
 type UseRichMarkdownReviewControllerOptions = {
-  commentOwner: DiffCommentOwner | null
   addDiffComment: AppState['addDiffComment']
   allDiffComments: DiffComment[] | undefined
   content: string
@@ -37,7 +37,6 @@ type UseRichMarkdownReviewControllerOptions = {
 }
 
 export function useRichMarkdownReviewController({
-  commentOwner,
   addDiffComment,
   allDiffComments,
   content,
@@ -56,7 +55,7 @@ export function useRichMarkdownReviewController({
     null
   )
   const [annotationPopover, setAnnotationPopover, annotationOwnerRef] =
-    useOwnedDiffCommentTarget<RichMarkdownAnnotationTarget>(commentOwner)
+    useOwnedDiffCommentTarget<RichMarkdownAnnotationTarget>(worktreeId)
   const annotationPopoverRef = useRef<RichMarkdownAnnotationTarget | null>(null)
   const canAnnotateRichMarkdownRef = useRef(false)
   const markdownCommentsRef = useRef<DiffComment[]>([])
@@ -185,7 +184,10 @@ export function useRichMarkdownReviewController({
         side: 'modified'
       })
       if (!result) {
-        console.error('Failed to add markdown comment — draft preserved')
+        // The draft stays open for retry.
+        toast.error(
+          translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
+        )
         return
       }
       if (
@@ -210,6 +212,7 @@ export function useRichMarkdownReviewController({
     },
     [
       addDiffComment,
+      annotationOwnerRef,
       annotationPopover,
       clearAnnotationHighlight,
       editorRef,

@@ -1,4 +1,4 @@
-import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/worktree-diff-comments-selector'
+import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'

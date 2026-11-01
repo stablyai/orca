@@ -1,4 +1,4 @@
-import { useDiffCommentOwner } from '../diff-comments/use-diff-comment-owner'
+import { useDiffCommentView } from '../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useMemo } from 'react'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store'
@@ -38,7 +38,7 @@ export function DiffNotesSendMenu({
   // Enable on exactly one instance per worktree to avoid opening multiple menus for one shortcut.
   respondToOpenRequest?: boolean
 }): React.JSX.Element {
-  const owner = useDiffCommentOwner(worktreeId)
+  const { owner } = useDiffCommentView(worktreeId)
   const languageRevision = useUiLanguageRevision()
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const openRequest = useAppStore((s) => s.diffNotesSendMenuOpenRequest)

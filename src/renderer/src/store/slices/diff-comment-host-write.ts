@@ -1,8 +1,7 @@
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import type { DiffCommentOwner } from '../worktree-diff-comments-selector'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import type { ResolvedDiffCommentOwner } from '../diff-comment-owner'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { callHostRoute } from '@/runtime/host-route-call'
 import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
@@ -10,7 +9,7 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 /** Writes a workspace's whole review-note list to the host that owns it. */
 export async function writeDiffCommentsToHost(
-  owner: DiffCommentOwner,
+  owner: ResolvedDiffCommentOwner,
   diffComments: DiffComment[]
 ): Promise<void> {
   const worktreeId = owner.worktreeId
@@ -42,8 +41,7 @@ export async function writeDiffCommentsToHost(
   if (owner.kind !== 'worktree') {
     throw new Error('The workspace host is unresolved; review notes were not saved.')
   }
-  const writeHostId = owner.writeHostId
-  const target = ipcOrRuntimeTargetForHostId(writeHostId)
+  const { target, writeHostId } = owner
   if (!target) {
     throw new Error('The workspace host is unresolved; review notes were not saved.')
   }
