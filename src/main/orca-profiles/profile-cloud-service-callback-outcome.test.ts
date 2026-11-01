@@ -88,7 +88,7 @@ describe('Orca sign-in browser page', () => {
             JSON.stringify({
               accessToken: 'access-token',
               refreshToken: 'refresh-token',
-              expiresAt: Date.now() + 3_600_000,
+              expiresAt: 4_102_444_800_000,
               cloud: { cloudProfileId: 'cloud-1', userId: 'user-1', email: 'nina@example.com' }
             }),
             { status: 200, headers: { 'content-type': 'application/json' } }
