@@ -5,6 +5,7 @@ import {
   PLUGIN_ICON_SVG_MAX_BYTES,
   isPlausiblePluginIconSvg,
   parsePluginIconThemeArtifact,
+  pluginIconThemeIconRefs,
   type PluginIconThemeArtifact,
   type PluginIconThemeMetadata,
   type PluginIconThemeRegistration
@@ -99,13 +100,7 @@ export class PluginIconThemeRegistry {
 }
 
 function iconPaths(artifact: PluginIconThemeArtifact): string[] {
-  return [
-    ...new Set([
-      ...Object.values(artifact.icons),
-      ...Object.values(artifact.fileNames),
-      ...Object.values(artifact.fileExtensions)
-    ])
-  ]
+  return [...new Set(pluginIconThemeIconRefs(artifact))]
 }
 
 async function statIconFiles(rootDir: string, paths: readonly string[]): Promise<string> {
@@ -156,6 +151,8 @@ async function materialize(descriptor: IconThemeDescriptor): Promise<PluginIconT
     svgs,
     icons: indexOf(artifact.icons),
     fileNames: indexOf(artifact.fileNames),
-    fileExtensions: indexOf(artifact.fileExtensions)
+    fileExtensions: indexOf(artifact.fileExtensions),
+    folderNames: indexOf(artifact.folderNames),
+    folderNamesExpanded: indexOf(artifact.folderNamesExpanded)
   }
 }

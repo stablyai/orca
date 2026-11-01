@@ -6,8 +6,7 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../i18n/mobile-i18n'
-import { ListRow } from '../../../components/list/ListRow'
-import { LIST_ROW_PADDING } from '../../../components/list/ListGroup'
+import { LIST_ROW_PADDING, ListRow } from '../../../components/list/ListGroup'
 import {
   sessionOptionValueMarker,
   type SessionOptionDescriptor,

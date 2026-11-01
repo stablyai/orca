@@ -105,7 +105,7 @@ export function iconTheme(input: PluginTemplateInput): PluginTemplate {
       'icons/markdown.svg': MARKDOWN_ICON,
       'README.md': readme(
         input,
-        'An Orca icon theme. `icons/theme.json` maps slots, file names and extensions to SVG files (paths from the plugin root).'
+        'An Orca icon theme. `icons/theme.json` maps slots, file names, extensions and folder names (`folderNames`, `folderNamesExpanded`) to SVG files (paths from the plugin root).'
       ),
       ...COMMON_FILES
     }

@@ -15,6 +15,12 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'web' },
   StyleSheet: { create: <T,>(v: T) => v, hairlineWidth: 1, absoluteFill: {} },
   useWindowDimensions: () => ({ width: 382, height: 800 }),
+  BackHandler: { addEventListener: () => ({ remove: () => {} }) },
+  AccessibilityInfo: {
+    isReduceMotionEnabled: () => Promise.resolve(false),
+    addEventListener: () => ({ remove: () => {} })
+  },
+  Easing: { out: () => () => 1, quad: () => 1 },
   Animated: {
     View: 'AnimatedView',
     Value: class {
@@ -23,7 +29,12 @@ vi.mock('react-native', () => ({
         return this
       }
     },
-    timing: () => ({ start: () => {} })
+    // Animations finish at once, so the menu's exit fade hands off to a queued action.
+    timing: () => ({
+      start: (done?: (result: { finished: boolean }) => void) => done?.({ finished: true }),
+      stop: () => {}
+    }),
+    spring: () => ({ start: () => {}, stop: () => {} })
   }
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))

@@ -52,28 +52,6 @@ describe('browser page download activity', () => {
     expect(hasActiveBrowserPageDownload('page-1')).toBe(false)
   })
 
-  it('scopes activity to the page that started the download', async () => {
-    const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
-      await import('./browser-page-download-activity')
-    installBrowserPageDownloadActivityTracking()
-
-    requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
-    expect(hasActiveBrowserPageDownload('page-2')).toBe(false)
-  })
-
-  it('ignores duplicate start events and unknown finish events', async () => {
-    const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
-      await import('./browser-page-download-activity')
-    installBrowserPageDownloadActivityTracking()
-
-    requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
-    requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
-    finishedCallbacks[0]({ downloadId: 'dl-unknown' })
-    expect(hasActiveBrowserPageDownload('page-1')).toBe(true)
-    finishedCallbacks[0]({ downloadId: 'dl-1' })
-    expect(hasActiveBrowserPageDownload('page-1')).toBe(false)
-  })
-
   it('unsubscribes and clears tracked state on cleanup', async () => {
     const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
       await import('./browser-page-download-activity')

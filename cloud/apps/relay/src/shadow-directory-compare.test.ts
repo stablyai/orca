@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RelayAssignment } from './assignment-store.js'
+import type { RelayAssignment } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 import {
   classifyShadowSeat,

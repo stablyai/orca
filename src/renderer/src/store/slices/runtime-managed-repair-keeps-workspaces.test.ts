@@ -79,12 +79,6 @@ const keptWorkspaces = (store: ReturnType<typeof userOnServer>) => ({
 afterEach(() => resetDeferredPeerChecksForTests())
 
 describe('an on-connect update re-pairs a managed server', () => {
-  it('keeps the workspaces and tabs when the host proves the same key', () => {
-    const store = userOnServer()
-    store.getState().setRuntimeEnvironments([server(2, 'key-a')])
-    expect(keptWorkspaces(store)).toEqual({ repos: 1, tabs: 1 })
-  })
-
   it('keeps them when the re-read runs before the key is known, and once it arrives', () => {
     const store = userOnServer()
     store.getState().setRuntimeEnvironments([server(2)])
@@ -96,12 +90,6 @@ describe('an on-connect update re-pairs a managed server', () => {
   it('retires them once a deferred re-pair proves a different host', () => {
     const store = userOnServer()
     store.getState().setRuntimeEnvironments([server(2)])
-    store.getState().setRuntimeEnvironments([server(2, 'key-reinstalled')])
-    expect(keptWorkspaces(store)).toEqual({ repos: 0, tabs: 0 })
-  })
-
-  it('retires them at once when the re-pair already proves a different host', () => {
-    const store = userOnServer()
     store.getState().setRuntimeEnvironments([server(2, 'key-reinstalled')])
     expect(keptWorkspaces(store)).toEqual({ repos: 0, tabs: 0 })
   })

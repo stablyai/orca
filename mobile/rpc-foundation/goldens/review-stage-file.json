@@ -44,13 +44,11 @@
       "ordinal": 3,
       "value": {}
     },
-    "eb79a9b3682a": {
+    "84e5ca07cb7a": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
+      "value": true
     },
     "f39122ee30fc": {
       "name": "git.stage#1",
@@ -102,7 +100,7 @@
           "sender": ["fd1322e39fc5"],
           "payloads": ["f39122ee30fc"],
           "settlements": {
-            "stage": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a"
           },
           "state": "2fc890e4b748",
           "effects": ["53b792409cec"]

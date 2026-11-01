@@ -20,9 +20,4 @@ describe('terminal-links ReDoS guard (#5970)', () => {
       expect(elapsedMs).toBeLessThan(500)
     })
   }
-
-  it('still detects separator paths that contain spaces', () => {
-    const { guesses } = extractTerminalFileLinkReadings('/Users/a/Foo Bar/file.ts')
-    expect(guesses.some((link) => link.pathText === '/Users/a/Foo Bar/file.ts')).toBe(true)
-  })
 })

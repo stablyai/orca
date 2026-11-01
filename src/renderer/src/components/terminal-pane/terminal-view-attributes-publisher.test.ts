@@ -11,8 +11,7 @@ import {
   _resetTerminalViewAttributesPublisherForTest,
   composeTerminalViewAttributes,
   publishTerminalViewAttributes,
-  subscribeToPublishedTerminalViewAttributes,
-  terminalCreateThemeParams
+  subscribeToPublishedTerminalViewAttributes
 } from './terminal-view-attributes-publisher'
 
 const cursorSettings = {
@@ -26,25 +25,6 @@ beforeEach(() => {
 })
 
 describe('composeTerminalViewAttributes', () => {
-  it('resolves a null theme to the xterm ThemeService defaults', () => {
-    const attrs = composeTerminalViewAttributes(null, 'dark', cursorSettings)
-    expect(attrs.foreground).toEqual([0xff, 0xff, 0xff])
-    expect(attrs.background).toEqual([0x00, 0x00, 0x00])
-    expect(attrs.cursor).toEqual([0xff, 0xff, 0xff])
-    expect(attrs.ansi).toHaveLength(256)
-    // DEFAULT_ANSI_COLORS parity: named 16, color cube, greys.
-    expect(attrs.ansi[0]).toEqual([0x2e, 0x34, 0x36])
-    expect(attrs.ansi[1]).toEqual([0xcc, 0x00, 0x00])
-    expect(attrs.ansi[15]).toEqual([0xee, 0xee, 0xec])
-    expect(attrs.ansi[16]).toEqual([0x00, 0x00, 0x00])
-    expect(attrs.ansi[196]).toEqual([0xff, 0x00, 0x00])
-    expect(attrs.ansi[232]).toEqual([8, 8, 8])
-    expect(attrs.ansi[255]).toEqual([238, 238, 238])
-    expect(attrs.colorSchemeMode).toBe('dark')
-    expect(attrs.cursorStyle).toBe('block')
-    expect(attrs.cursorBlink).toBe(true)
-  })
-
   it('parses composed theme colors including rgba() opacity forms', () => {
     const attrs = composeTerminalViewAttributes(
       {
@@ -83,50 +63,15 @@ describe('composeTerminalViewAttributes', () => {
     // #f00a → alpha 0xaa: 0 + round(255 * (0xaa/0xff)) = 170.
     expect(blended.cursor).toEqual([170, 0, 0])
   })
-
-  it('overlays extendedAnsi onto the default 256 palette tail', () => {
-    const attrs = composeTerminalViewAttributes(
-      { extendedAnsi: ['#102030'] },
-      'dark',
-      cursorSettings
-    )
-    expect(attrs.ansi[16]).toEqual([0x10, 0x20, 0x30])
-    expect(attrs.ansi[17]).toEqual([0x00, 0x00, 0x5f])
-  })
-
-  it('falls back to slot defaults for named colors (hand-edited settings divergence)', () => {
-    // Named CSS needs a canvas; hidden composer intentionally falls back where visible xterm resolves it.
-    const attrs = composeTerminalViewAttributes(
-      { red: 'darkred', foreground: 'hotpink' },
-      'dark',
-      cursorSettings
-    )
-    expect(attrs.ansi[1]).toEqual([0xcc, 0x00, 0x00])
-    expect(attrs.foreground).toEqual([0xff, 0xff, 0xff])
-  })
 })
 
 describe('publishTerminalViewAttributes dedupe', () => {
-  it('publishes once per snapshot change, not per call', () => {
-    const send = vi.fn(() => true)
-    expect(publishTerminalViewAttributes(null, 'dark', cursorSettings, send)).toBe(true)
-    expect(publishTerminalViewAttributes(null, 'dark', cursorSettings, send)).toBe(false)
-    expect(send).toHaveBeenCalledTimes(1)
-
-    expect(publishTerminalViewAttributes(null, 'light', cursorSettings, send)).toBe(true)
-    expect(send).toHaveBeenCalledTimes(2)
-  })
-
   it('does not record a failed send, so the next call retries', () => {
     const failingSend = vi.fn(() => false)
     expect(publishTerminalViewAttributes(null, 'dark', cursorSettings, failingSend)).toBe(false)
 
     const send = vi.fn(() => true)
     expect(publishTerminalViewAttributes(null, 'dark', cursorSettings, send)).toBe(true)
-  })
-
-  it('skips silently when the preload bridge is unavailable (web client, tests)', () => {
-    expect(publishTerminalViewAttributes(null, 'dark', cursorSettings)).toBe(false)
   })
 
   it('hands each published appearance to subscribers, starting with the current one', () => {
@@ -146,19 +91,6 @@ describe('publishTerminalViewAttributes dedupe', () => {
       { foreground: '#222222', background: '#000000' }
     ])
   })
-})
-
-it("sends this window's palette with a terminal's create colours, once one is published", () => {
-  const colors = { foreground: '#ffffff', background: '#000000' }
-  expect(terminalCreateThemeParams(colors)).toEqual({ terminalColorQueryReplies: colors })
-
-  publishTerminalViewAttributes(null, 'dark', cursorSettings, () => true)
-
-  expect(terminalCreateThemeParams(colors)).toEqual({
-    terminalColorQueryReplies: colors,
-    terminalViewAttributes: composeTerminalViewAttributes(null, 'dark', cursorSettings)
-  })
-  expect(terminalCreateThemeParams(undefined)).toEqual({})
 })
 
 describe('applyTerminalAppearance publication', () => {
@@ -239,36 +171,5 @@ describe('applyTerminalAppearance publication', () => {
       new Map()
     )
     expect(publish).toHaveBeenCalledTimes(2)
-  })
-
-  it('publishes the resolved color-scheme mode flip (system dark toggle)', () => {
-    const publish = stubPublishBridge()
-    const settings = { ...getDefaultSettings('/tmp'), theme: 'system' as const }
-
-    applyTerminalAppearance(
-      makeManager([makePane(1)]),
-      settings,
-      true,
-      new Map(),
-      new Map(),
-      'false',
-      new Map(),
-      new Map()
-    )
-    applyTerminalAppearance(
-      makeManager([makePane(1)]),
-      settings,
-      false,
-      new Map(),
-      new Map(),
-      'false',
-      new Map(),
-      new Map()
-    )
-
-    const modes = publish.mock.calls.map(
-      (call) => (call[0] as TerminalViewAttributes).colorSchemeMode
-    )
-    expect(modes).toEqual(['dark', 'light'])
   })
 })

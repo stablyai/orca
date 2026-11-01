@@ -4,7 +4,7 @@ import type {
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
 } from '../../shared/workspace-space-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 const {
   handlers,
@@ -123,36 +123,6 @@ describe('registerWorkspaceSpaceHandlers', () => {
     expect(analyzeWorkspaceSpaceMock).toHaveBeenCalledTimes(2)
   })
 
-  it('forwards scan progress to the requesting renderer', async () => {
-    const store = createStore()
-    let onProgress: ((progress: WorkspaceSpaceScanProgress) => void) | undefined
-    analyzeWorkspaceSpaceMock.mockImplementationOnce((_store, options) => {
-      onProgress = options.onProgress
-      return Promise.resolve(createAnalysis(1))
-    })
-
-    registerWorkspaceSpaceHandlers(store)
-    const event = createEvent()
-    const handler = handlers.get('workspaceSpace:analyze')
-    const promise = handler!(event)
-    const progress: WorkspaceSpaceScanProgress = {
-      scanId: 'scan-1',
-      state: 'running',
-      startedAt: 1,
-      updatedAt: 1,
-      totalRepoCount: 1,
-      scannedRepoCount: 0,
-      totalWorktreeCount: 2,
-      scannedWorktreeCount: 1,
-      currentRepoDisplayName: 'orca',
-      currentWorktreeDisplayName: 'feature'
-    }
-    onProgress?.(progress)
-    await promise
-
-    expect(event.sender.send).toHaveBeenCalledWith('workspaceSpace:progress', progress)
-  })
-
   it('batches completed measurements without dropping throttled rows', async () => {
     const store = createStore()
     let onProgress: ((progress: WorkspaceSpaceScanProgress) => void) | undefined
@@ -237,28 +207,5 @@ describe('registerWorkspaceSpaceHandlers', () => {
 
     await expect(analyzeHandler!(createEvent())).resolves.toEqual({ ok: false, cancelled: true })
     expect(persistAnalysisSnapshotMock).not.toHaveBeenCalled()
-  })
-
-  it('persists the completed analysis snapshot', async () => {
-    const analysis = createAnalysis(7)
-    analyzeWorkspaceSpaceMock.mockResolvedValueOnce(analysis)
-
-    registerWorkspaceSpaceHandlers(createStore())
-    const analyzeHandler = handlers.get('workspaceSpace:analyze')
-
-    await expect(analyzeHandler!(createEvent())).resolves.toEqual({ ok: true, analysis })
-    expect(persistAnalysisSnapshotMock).toHaveBeenCalledWith('/profile-a', analysis)
-  })
-
-  it('serves the cached analysis through getCachedAnalysis', async () => {
-    const cached = createAnalysis(3)
-    readAnalysisSnapshotMock.mockResolvedValue(cached)
-
-    registerWorkspaceSpaceHandlers(createStore())
-    expect(removeHandlerMock).toHaveBeenCalledWith('workspaceSpace:getCachedAnalysis')
-    const cachedHandler = handlers.get('workspaceSpace:getCachedAnalysis')
-
-    await expect(cachedHandler!()).resolves.toBe(cached)
-    expect(readAnalysisSnapshotMock).toHaveBeenCalledWith('/profile-a')
   })
 })

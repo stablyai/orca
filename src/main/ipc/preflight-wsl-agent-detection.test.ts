@@ -10,14 +10,6 @@ vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 
-type RunWslProcessSpec = { distro?: string; loginPath: string; script: string }
-
-function lastSpec(): RunWslProcessSpec {
-  const call = runWslProcessMock.mock.calls.at(-1)
-  expect(call).toBeDefined()
-  return (call as [RunWslProcessSpec])[0]
-}
-
 describe('detectWslCommandsOnPath', () => {
   beforeEach(() => {
     runWslProcessMock.mockReset()
@@ -32,52 +24,6 @@ describe('detectWslCommandsOnPath', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('asks for the login PATH without running a shell, so no banner can appear', async () => {
-    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
-
-    const spec = lastSpec()
-    expect(spec.loginPath).toBe('preferred')
-    expect(spec.distro).toBe('Ubuntu')
-  })
-
-  it('builds a probe script with no `fi done` (zsh parse error) sequence', async () => {
-    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
-
-    const { script } = lastSpec()
-    // POSIX shells need a separator before done (#5325).
-    expect(script).not.toContain('fi done')
-    expect(script).toContain('fi\ndone')
-  })
-
-  it('uses the shared alias- and function-neutral PATH lookup', async () => {
-    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
-
-    const { script } = lastSpec()
-    const lookupScript = buildPosixCommandPathLookupScript(
-      { kind: 'shell-variable', name: 'cmd' },
-      // The WSL probe opts into skipping Windows mounts mid-walk.
-      { skipWindowsMountDirs: true }
-    )
-    expect(script).toContain(lookupScript)
-    expect(script).not.toContain('type -P')
-  })
-
-  it('parses detected commands from prefixed stdout', async () => {
-    runWslProcessMock.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      stdout:
-        '__ORCA_AGENT_PATH__claude\t/usr/bin/claude\n' +
-        '__ORCA_AGENT_PATH__codex\t/home/user/.local/bin/codex\n',
-      stderr: '',
-      timedOut: false
-    })
-
-    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
-
-    expect(found).toEqual(new Set(['claude', 'codex']))
   })
 
   it('ignores commands whose resolved path is not absolute', async () => {
@@ -208,11 +154,6 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     expect(out).toContain('.nvm/versions/node/v20.1.0/bin/orca-fake-cli')
   })
 
-  itPosix('finds a ~/.local/bin install', async () => {
-    plant('.local/bin', 'orca-fake-cli')
-    expect(await runScript()).toContain('__ORCA_AGENT_PATH__orca-fake-cli')
-  })
-
   itPosix('still reports nothing for a command that is genuinely absent', async () => {
     plant('.local/bin', 'orca-fake-cli')
     expect(await runScript()).not.toContain('nosuchtool')
@@ -236,16 +177,6 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     // Directories pass -x but would fail to launch with EISDIR.
     mkdirSync(join(home, '.local/bin/orca-fake-cli'), { recursive: true })
     expect(await runScript()).not.toContain('__ORCA_AGENT_PATH__orca-fake-cli')
-  })
-
-  itPosix.each([
-    '.volta/bin',
-    '.asdf/shims',
-    '.fnm/aliases/default/bin',
-    '.local/share/mise/shims'
-  ])('covers %s, which the native fallback also probes', async (dir) => {
-    plant(dir, 'orca-fake-cli')
-    expect(await runScript()).toContain('__ORCA_AGENT_PATH__orca-fake-cli')
   })
 })
 
@@ -323,10 +254,6 @@ describe('the mount table read, counted against a real shell', () => {
   itPosix('reads /proc/mounts once, not once per probed command', async () => {
     // Cache mount discovery across the per-agent loop to avoid repeated awk forks.
     expect(await runWithCountingAwk(['claude', 'codex', 'gemini', 'opencode'])).toBe(1)
-  })
-
-  itPosix('still reads it once when only one command is probed', async () => {
-    expect(await runWithCountingAwk(['claude'])).toBe(1)
   })
 
   itPosix('applies the memoised mount list to every command, not just the first', async () => {

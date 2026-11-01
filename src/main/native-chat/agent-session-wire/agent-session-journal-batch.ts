@@ -1,13 +1,13 @@
 // Project touched items at current reduced state for idempotent delivery; adopted echoes retain submission keys.
 
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionJournalBatch } from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalBatch } from '../../../shared/agent-session/agent-session-wire'
 import { isStructuredAgentSessionStopNote } from './structured-agent-session-command-turn'
 import { findSequenceGap } from '../agent-session-journal/journal-cursor'
 import type { JournalReadRow } from '../agent-session-journal/journal-read-row'

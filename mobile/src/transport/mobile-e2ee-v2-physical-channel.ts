@@ -8,6 +8,7 @@ import {
 } from '../../../src/shared/paired-e2ee-client-handshake'
 import type { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'
+import { inflateCompressedFrame } from './compressed-frame-inflate'
 
 type ChannelState = 'awaiting-ready' | 'awaiting-authenticated' | 'ready'
 type OutboundItem = { kind: 'text'; plaintext: string } | { kind: 'binary'; plaintext: Uint8Array }
@@ -118,7 +119,12 @@ export class MobileE2EEV2PhysicalChannel {
     } else if (typeof plaintext === 'string') {
       this.args.onText(plaintext)
     } else {
-      this.args.onBinary(plaintext)
+      const inflated = inflateCompressedFrame(plaintext)
+      if (inflated?.kind === 'text') {
+        this.args.onText(inflated.text)
+      } else {
+        this.args.onBinary(inflated?.bytes ?? plaintext)
+      }
     }
   }
 

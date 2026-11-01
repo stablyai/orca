@@ -2,13 +2,13 @@ import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
 } from '../../../src/shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import {
   dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,
   type StructuredAgentSessionCommandRefusalCause,
   type StructuredAgentSessionComposerOptions
-} from '../../../src/shared/structured-agent-session-composer'
+} from '../../../src/shared/agent-session/view/structured-agent-session-composer'
 import {
   conversationCommandReply,
   heldConversationCommandParts,

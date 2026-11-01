@@ -2,8 +2,8 @@ import type { StructuredAgentSessionConversations } from './structured-agent-ses
 import { StructuredAgentSessionSavedStatus } from './structured-agent-session-saved-status'
 import { createStructuredAgentSessionHostRequestFailures } from './structured-agent-session-host-request-failures'
 import { AT_REST_COMMANDS_READ_BUDGET_MS } from './at-rest-command-catalog'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import { AgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -78,7 +78,8 @@ export class StructuredAgentSessionClientDelivery {
       sessions,
       now,
       readStatusState: (sessionId, journal) =>
-        this.statusFeed.journalProjection(sessionId, journal)?.state ?? null
+        this.statusFeed.journalProjection(sessionId, journal)?.state ?? null,
+      readChildWork: (sessionId) => this.statusFeed.readChildWork(sessionId)
     })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
       this.settlementReading(sessionId, this.requireJournal(sessionId))
@@ -173,7 +174,11 @@ export class StructuredAgentSessionClientDelivery {
     sessionId: string,
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
-  ): void => this.statusFeed.publishChildWork(sessionId, evidence, producer)
+  ): void => {
+    this.statusFeed.publishChildWork(sessionId, evidence, producer)
+    // A drain can be the moment a held turn becomes finished.
+    this.turnCompletionFeed.observe(sessionId)
+  }
 
   readStopping = (sessionId: string): boolean => {
     const projection = this.statusFeed.journalProjection(sessionId)
@@ -319,7 +324,8 @@ export class StructuredAgentSessionClientDelivery {
       submissions: () =>
         journal.submissions().map(this.currentWork(sessionId, journal).publishedSubmission),
       cursor: () => journal.cursor(),
-      activeTurnId: () => this.currentWork(sessionId, journal).activeTurnId()
+      activeTurnId: () => this.currentWork(sessionId, journal).activeTurnId(),
+      behindCommand: (id: string) => journal.inputOrder.forced(id)
     }
   }
 

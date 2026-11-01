@@ -239,7 +239,7 @@ export function AutoRenameBranchFromWorkSetting({
                   'auto.components.settings.AutoRenameBranchFromWorkSetting.c71770c455',
                   '{basePrompt}'
                 )}
-                className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+                className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
               />
               <SourceControlActionVariableChips
                 actionId="branchName"

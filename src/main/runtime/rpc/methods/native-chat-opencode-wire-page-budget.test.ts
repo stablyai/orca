@@ -37,7 +37,7 @@ import {
   boundNativeChatRpcPageByBytes,
   nativeChatRpcAppendBatches
 } from './native-chat-rpc-page-bounds'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 const roots: string[] = []
 afterEach(() => {

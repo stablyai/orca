@@ -19,6 +19,7 @@ import { type PRRefreshPacing, usesActiveRefreshPacing } from './pr-refresh-paci
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { outsideWslUserAct } from '../wsl/wsl-user-act-scope'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 import type { PRRefreshVisibility } from './pr-refresh-visibility'
 
@@ -48,7 +49,8 @@ export class PRRefreshQueueDrainer {
     }
     this.timer = setTimeout(() => {
       this.timer = null
-      void this.drain()
+      // The drain serves every queued repo; a scheduling call inside a WSL user act must not lend it that act.
+      void outsideWslUserAct(() => this.drain())
     }, delay)
   }
 

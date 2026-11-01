@@ -1,4 +1,4 @@
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatDraftDestination } from './composer/mobile-native-chat-draft-inputs'
 import {
   assignNativeChatPendingOccurrence,

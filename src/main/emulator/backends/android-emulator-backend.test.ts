@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import { AndroidEmulatorBackend } from './android-emulator-backend'
+import { scrcpyVideoRegistry } from '../scrcpy-video-registry'
+import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 import type { AndroidCommandResult, AndroidCommandRunner } from '../android/android-command-runner'
 import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
 
@@ -13,8 +15,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 const SDK: AndroidSdkPaths = {
   sdkRoot: '/sdk',
   adb: '/sdk/adb',
-  emulator: '/sdk/emulator',
-  avdmanager: '/sdk/avdmanager'
+  emulator: '/sdk/emulator'
 }
 
 const ok = (stdout: string): AndroidCommandResult => ({ stdout, stderr: '', code: 0 })
@@ -41,11 +42,14 @@ function defaultRunner(): ReturnType<typeof vi.fn> {
   })
 }
 
-function backend(runner: ReturnType<typeof vi.fn>): AndroidEmulatorBackend {
+function backend(
+  runner: ReturnType<typeof vi.fn>,
+  sleep: (ms: number) => Promise<void> = async () => {}
+): AndroidEmulatorBackend {
   return new AndroidEmulatorBackend({
     runner: runner as unknown as AndroidCommandRunner,
     sdk: SDK,
-    sleep: async () => {}
+    sleep
   })
 }
 
@@ -150,6 +154,102 @@ describe('AndroidEmulatorBackend', () => {
     ])
   })
 
+  describe('with a live scrcpy session', () => {
+    const sent: Buffer[] = []
+    const sendControl = vi.fn((message: Buffer) => {
+      sent.push(message)
+      return true
+    })
+
+    beforeEach(() => {
+      sent.length = 0
+      sendControl.mockClear()
+      scrcpyVideoRegistry.register('emulator-5554', () => {})
+      scrcpyVideoRegistry.attachControl('emulator-5554', {
+        videoSize: () => ({ width: 600, height: 1280 }),
+        sendControl
+      })
+    })
+
+    afterEach(() => {
+      scrcpyVideoRegistry.stop('emulator-5554')
+    })
+
+    const touches = (): [number, number, number][] =>
+      sent
+        .filter((message) => message[0] === 2)
+        .map((message) => [message[1], message.readInt32BE(10), message.readInt32BE(14)])
+
+    it('sends input over the control socket in video pixels without adb', async () => {
+      const sleep = vi.fn(async () => {})
+      const android = new AndroidEmulatorBackend({
+        runner: runner as unknown as AndroidCommandRunner,
+        sdk: SDK,
+        sleep
+      })
+
+      await android.tap('emulator-5554', 0.5, 0.5)
+      expect(touches()).toEqual([
+        [0, 300, 640],
+        [1, 300, 640]
+      ])
+      expect(sent[0].readUInt16BE(18)).toBe(600)
+      expect(sent[0].readUInt16BE(20)).toBe(1280)
+
+      sent.length = 0
+      await android.gesture(
+        'emulator-5554',
+        [
+          { type: 'begin', x: 0.5, y: 0.75 },
+          { type: 'end', x: 0.5, y: 0.25 }
+        ],
+        null
+      )
+      const swipe = touches()
+      expect(swipe[0]).toEqual([0, 300, 960])
+      expect(swipe.at(-1)).toEqual([1, 300, 320])
+      expect(swipe.slice(1, -1).every(([action]) => action === 2)).toBe(true)
+      expect(sleep.mock.calls.length * 16).toBeGreaterThanOrEqual(300)
+
+      sent.length = 0
+      await android.type('emulator-5554', 'héllo wörld')
+      await android.button('emulator-5554', 'back')
+      expect(sent[0][0]).toBe(1)
+      expect(sent[0].subarray(5).toString('utf8')).toBe('héllo wörld')
+      expect(
+        sent.slice(1).map((message) => [message[0], message[1], message.readInt32BE(2)])
+      ).toEqual([
+        [0, 0, 4],
+        [0, 1, 4]
+      ])
+
+      expect(runner).not.toHaveBeenCalled()
+    })
+
+    it('finds the session by serial when input names the AVD', async () => {
+      await backend(runner).tap('Pixel_7', 0, 0)
+      expect(touches()).toEqual([
+        [0, 0, 0],
+        [1, 0, 0]
+      ])
+      expect(runner.mock.calls.some(([, args]) => args.includes('input'))).toBe(false)
+    })
+
+    it('falls back to adb input once the control socket is gone', async () => {
+      sendControl.mockReturnValueOnce(false)
+      await backend(runner).tap('emulator-5554', 0.5, 0.5)
+      expect(runner).toHaveBeenCalledWith(SDK.adb, [
+        '-s',
+        'emulator-5554',
+        'shell',
+        'input',
+        'tap',
+        '540',
+        '1200'
+      ])
+    })
+  })
+
   it('rotates via user_rotation and forgets the cached screen size', async () => {
     await backend(runner).rotate('emulator-5554', 'landscape_left')
     expect(runner).toHaveBeenCalledWith(SDK.adb, [
@@ -217,7 +317,7 @@ describe('AndroidEmulatorBackend', () => {
     expect(tree.children[0]).toMatchObject({ text: 'Hi' })
   })
 
-  it('boots a shutdown AVD and waits for the new booted serial', async () => {
+  it('boots a shutdown AVD once for concurrent callers and waits for its serial', async () => {
     let bootStarted = false
     vi.mocked(spawn).mockImplementation(() => {
       bootStarted = true
@@ -243,12 +343,72 @@ describe('AndroidEmulatorBackend', () => {
       }
       return ok('')
     })
-    const serial = await backend(bootRunner).ensureBooted('Pixel_Tablet')
-    expect(serial).toBe('emulator-5556')
+    const android = backend(bootRunner)
+    const serials = await Promise.all([
+      android.ensureBooted('Pixel_Tablet'),
+      android.ensureBooted('Pixel_Tablet')
+    ])
+    expect(serials).toEqual(['emulator-5556', 'emulator-5556'])
+    expect(spawn).toHaveBeenCalledOnce()
     expect(spawn).toHaveBeenCalledWith(
       SDK.emulator,
       ['-avd', 'Pixel_Tablet', '-no-window'],
       expect.objectContaining({ windowsHide: true })
+    )
+  })
+
+  function launchExitsWith(output: string): void {
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = createFakeSpawnedChild()
+      child.stdout.end(output)
+      setImmediate(() => child.emit('exit', 1, null))
+      return child
+    })
+  }
+  const yieldToExit = () => new Promise<void>((resolve) => setImmediate(resolve))
+
+  it('fails with the emulator output when the AVD exits before booting', async () => {
+    launchExitsWith(
+      'INFO         | Android emulator version 37.2.12.0\n' +
+        'WARNING      | /sdk/system-images/android-35/google_apis/arm64-v8a/ is not a valid directory.\n' +
+        'WARNING      | emulator has searched the above paths but found no valid sdk root directory.\n' +
+        'FATAL        | Cannot find AVD system path. Please define ANDROID_SDK_ROOT\n\n'
+    )
+    await expect(backend(runner, yieldToExit).ensureBooted('Pixel_Tablet')).rejects.toThrow(
+      'AVD "Pixel_Tablet" stopped before it finished booting: ' +
+        'WARNING | /sdk/system-images/android-35/google_apis/arm64-v8a/ is not a valid directory.\n' +
+        'WARNING | emulator has searched the above paths but found no valid sdk root directory.\n' +
+        'FATAL | Cannot find AVD system path. Please define ANDROID_SDK_ROOT'
+    )
+  })
+
+  it('waits for an instance booting elsewhere when the launch exits on the AVD lock', async () => {
+    // The third listing fails, which must not read as "no instance".
+    launchExitsWith(
+      'FATAL        | Running multiple emulators with the same AVD is an experimental feature.\n'
+    )
+    const states = ['offline', 'offline', 'failed', 'device']
+    const bootRunner = vi.fn(async (binary: string, args: readonly string[]) => {
+      const a = args.join(' ')
+      if (binary === SDK.adb && a === 'devices -l') {
+        const state = states.shift() ?? 'device'
+        return state === 'failed'
+          ? { stdout: '', stderr: 'adb server not responding', code: 1 }
+          : ok(`List of devices attached\nemulator-5556\t${state}`)
+      }
+      if (binary === SDK.adb && a === '-s emulator-5556 emu avd name') {
+        return ok('Pixel_Tablet\nOK\n')
+      }
+      if (binary === SDK.adb && a === '-s emulator-5556 shell getprop sys.boot_completed') {
+        return ok(states.length === 0 ? '1' : '')
+      }
+      if (binary === SDK.emulator && a === '-list-avds') {
+        return ok('Pixel_Tablet')
+      }
+      return ok('')
+    })
+    await expect(backend(bootRunner, yieldToExit).ensureBooted('Pixel_Tablet')).resolves.toBe(
+      'emulator-5556'
     )
   })
 

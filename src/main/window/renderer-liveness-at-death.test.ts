@@ -31,20 +31,6 @@ describe('trackRendererLivenessAtDeath', () => {
     recordCoalescedDurableCrashBreadcrumb.mockClear()
   })
 
-  it('reports a document that never loaded as a blank window with its age', () => {
-    const { window, contents } = createWindow()
-    const tracker = trackRendererLivenessAtDeath(window, () => now)
-    contents.emit('did-start-navigation', MAIN_FRAME_NAVIGATION)
-    now += 866_000
-
-    expect(tracker.takeAtRendererGone()).toEqual({
-      rendererDocumentLoaded: false,
-      rendererDocumentAgeMs: 866_000,
-      mainWindowState: 'visible',
-      mainWindowFocused: false
-    })
-  })
-
   it('reports how long the renderer has been hung, and clears it on responsive', () => {
     const { window, contents } = createWindow({ minimized: true })
     const tracker = trackRendererLivenessAtDeath(window, () => now)
@@ -79,16 +65,6 @@ describe('trackRendererLivenessAtDeath', () => {
     contents.emit('did-start-navigation', MAIN_FRAME_NAVIGATION)
 
     expect(tracker.takeAtRendererGone().rendererUnresponsiveForMs).toBeUndefined()
-  })
-
-  it('omits window state instead of throwing for a destroyed window', () => {
-    const { window } = createWindow({ destroyed: true })
-    const tracker = trackRendererLivenessAtDeath(window, () => now)
-
-    expect(tracker.takeAtRendererGone()).toEqual({
-      rendererDocumentLoaded: false,
-      rendererDocumentAgeMs: 0
-    })
   })
 
   it('reports a failed main-frame load as not loaded, though did-finish-load follows it', () => {

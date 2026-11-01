@@ -1,4 +1,4 @@
-import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 /** Refused conversions replay as returned cards, avoiding duplicate Retry rows; null means never queued. */

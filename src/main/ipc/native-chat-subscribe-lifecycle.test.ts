@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import type { NativeChatTurnLifecycle } from '../../shared/native-chat/native-chat-types'
 
 const { handlers, listeners, subscribeTranscript } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),

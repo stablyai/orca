@@ -1,6 +1,6 @@
 import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
 import * as startupShell from './tui-agent-startup-shell'
-import * as launchCompiler from './agent-session-option-launch'
+import * as launchCompiler from './agent-session/options/agent-session-option-launch'
 import * as reconciliation from './agent-choice-reconciliation'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
 import { getDefaultSettings } from './constants'

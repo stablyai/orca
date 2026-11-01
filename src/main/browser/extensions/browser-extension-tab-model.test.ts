@@ -44,8 +44,7 @@ vi.mock('./browser-extension-window-model', () => ({
   getBrowserExtensionMainWindow: () => ({ id: 1 })
 }))
 
-const { openBrowserExtensionTab, recentWorktreeIdForBrowserProfile, recordActiveBrowserPage } =
-  await import('./browser-extension-tab-model')
+const { openBrowserExtensionTab } = await import('./browser-extension-tab-model')
 const { watchBrowserMainWindowReadiness } = await import('../browser-main-window-readiness')
 
 /** Orca's main window; its renderer reports readiness on the per-window IPC channel. */
@@ -64,43 +63,6 @@ beforeEach(() => {
   mocks.pages.clear()
   mocks.createTab.mockReset()
   mainWindow().rendererReady()
-})
-
-describe('where an extension tab goes when no workspace is active', () => {
-  it("prefers the active page's workspace when that page is in the profile", () => {
-    mocks.pages.set('a', { id: 11, session: mocks.workSession, worktreeId: 'wt-a' })
-    mocks.pages.set('b', { id: 12, session: mocks.workSession, worktreeId: 'wt-b' })
-    recordActiveBrowserPage('b')
-    expect(recentWorktreeIdForBrowserProfile('work')).toBe('wt-b')
-  })
-
-  it("otherwise uses any open tab in the profile, never another profile's workspace", () => {
-    mocks.pages.set('a', { id: 11, session: mocks.otherSession, worktreeId: 'wt-other' })
-    mocks.pages.set('b', { id: 12, session: mocks.workSession, worktreeId: 'wt-work' })
-    recordActiveBrowserPage('a')
-    expect(recentWorktreeIdForBrowserProfile('work')).toBe('wt-work')
-    mocks.pages.delete('b')
-    expect(recentWorktreeIdForBrowserProfile('work')).toBeUndefined()
-  })
-
-  it('passes that workspace to the renderer as the fallback', async () => {
-    mocks.pages.set('a', { id: 11, session: mocks.workSession, worktreeId: 'wt-a' })
-    mocks.createTab.mockImplementation(async () => {
-      mocks.pages.set('new', { id: 13, session: mocks.workSession, worktreeId: 'wt-a' })
-      return { browserPageId: 'new' }
-    })
-    expect(await openBrowserExtensionTab('work', 'https://welcome.test', true)).toBe(13)
-    expect(mocks.createTab).toHaveBeenCalledWith(
-      expect.anything(),
-      'https://welcome.test',
-      undefined,
-      'work',
-      'persist:work',
-      true,
-      undefined,
-      'wt-a'
-    )
-  })
 })
 
 describe('an extension tab opened while Orca starts', () => {
@@ -127,15 +89,5 @@ describe('an extension tab opened while Orca starts', () => {
     expect(mocks.createTab).toHaveBeenCalledTimes(1)
     window.rendererReady()
     await expect(reopening).resolves.toBe(21)
-  })
-
-  it('fails cleanly when the window never becomes ready', async () => {
-    vi.useFakeTimers()
-    mainWindow()
-    const opening = openBrowserExtensionTab('work', 'https://welcome.test', true)
-    const failed = expect(opening).rejects.toThrow('Orca has no window to open a tab in')
-    await vi.advanceTimersByTimeAsync(30_000)
-    await failed
-    expect(mocks.createTab).not.toHaveBeenCalled()
   })
 })

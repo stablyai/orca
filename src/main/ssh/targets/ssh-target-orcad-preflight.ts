@@ -1,6 +1,6 @@
 /** Read-only export preflight: catalog rows and representable dormant state can migrate; ownership, live leases and untransferred dependencies block. */
 import { isLiveSshPtyLease } from '../../../shared/ssh-types'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type {
   OrcadMigrationBlocker,
   OrcadMigrationPreflight

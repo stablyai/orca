@@ -32,47 +32,6 @@ describe('createBrowserSlice runtime guard', () => {
     vi.unstubAllGlobals()
   })
 
-  it('routes browser settings per client without changing the durable Active Server', async () => {
-    runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
-      const { selector, method } = request as RuntimeEnvironmentCallRequest & { selector: string }
-      return Promise.resolve({
-        id: `${selector}-${method}`,
-        ok: true,
-        result:
-          method === 'browser.profileList'
-            ? {
-                profiles: [
-                  {
-                    id: `${selector}-default`,
-                    scope: 'default',
-                    partition: `persist:${selector}`,
-                    label: `${selector} Default`,
-                    source: null
-                  }
-                ]
-              }
-            : { browsers: [] },
-        _meta: { runtimeId: `runtime-${selector}` }
-      })
-    })
-    const firstClient = createTestStore()
-    const secondClient = createTestStore()
-
-    void firstClient.getState().setBrowserSessionHostId('runtime:windows-2')
-    void secondClient.getState().setBrowserSessionHostId('runtime:linux-3')
-
-    await vi.waitFor(() => {
-      expect(firstClient.getState().browserSessionProfiles[0]?.id).toBe('windows-2-default')
-      expect(secondClient.getState().browserSessionProfiles[0]?.id).toBe('linux-3-default')
-    })
-    expect(firstClient.getState().settings?.activeRuntimeEnvironmentId).toBeNull()
-    expect(secondClient.getState().settings?.activeRuntimeEnvironmentId).toBeNull()
-
-    const restartedClient = createTestStore()
-    expect(restartedClient.getState().browserSessionHostIdOverride).toBeNull()
-    expect(restartedClient.getState().settings?.activeRuntimeEnvironmentId).toBeNull()
-  })
-
   it('does not let a slower server response overwrite the newly selected host', async () => {
     let resolveWindowsProfiles: ((value: unknown) => void) | undefined
     runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {

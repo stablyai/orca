@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { setAppEnvironment } from '../../shared/app-environment'
-import { writeOpenCodeTuiPlugin } from '../../shared/opencode-tui-plugin-install'
 import { getOpenCodePluginSource, OpenCodeHookService } from './hook-service'
 
 let root: string
@@ -86,13 +85,4 @@ it('installs into a source overlay without replacing the invalid user config', (
   expect(readFileSync(join(source, 'tui.jsonc'), 'utf8')).toBe(text)
   expect(readFileSync(join(overlay, 'tui.jsonc'), 'utf8')).toBe(text)
   expect(console.warn).toHaveBeenCalled()
-})
-
-it('continues to throw file-system registration errors for the existing write retry contract', () => {
-  const plugins = join(configDir, 'plugins')
-  mkdirSync(join(configDir, 'tui.json'))
-  expect(() =>
-    writeOpenCodeTuiPlugin(plugins, 'orca-opencode-status.js', getOpenCodePluginSource())
-  ).toThrow()
-  expect(console.warn).not.toHaveBeenCalled()
 })

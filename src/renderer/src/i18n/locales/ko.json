@@ -407,6 +407,8 @@
       "claudeRemoveFolder": "Orca는 이 컴퓨터에서 해당 계정의 Claude 폴더와 로그인 정보를 삭제합니다. 시스템 기본 계정과 공유하는 채팅 기록은 유지됩니다. 삭제한 계정이 선택되어 있었다면, 다음에 시작하는 Claude는 시스템 기본 계정을 사용합니다."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "다른 곳에서 Git 작업 실행 중",
+      "remoteOperationInAnotherWorkspace": "다른 워크스페이스에서 Git 작업(푸시, 풀, 강제 푸시 등)을 실행 중입니다. 작업이 겹치지 않도록 완료된 후 이 작업을 사용하세요.",
       "actionModel": {
         "on": "켜짐",
         "off": "꺼짐",
@@ -1320,7 +1322,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "워크스페이스 외부의 파일은 아직 페어링된 서버에서 미리 볼 수 없습니다.",
           "webClientUnavailable": "문서 미리보기는 웹 클라이언트에서 사용할 수 없습니다."
         }
       },
@@ -5888,7 +5889,9 @@
           "9a5381eb09": "워크스페이스 폴더를 열 수 없습니다.",
           "0bed8727db": "이동되었거나 삭제되었을 수 있습니다. 워크스페이스를 새로고침하거나 Orca에서 제거하세요.",
           "3921d3d9a5": "워크스페이스 폴더를 찾을 수 없습니다.",
+          "pathNotFound": "파일 또는 폴더를 찾을 수 없습니다. 이동되었거나 삭제되었을 수 있습니다.",
           "f387af445b": "워크스페이스 경로가 유효한 로컬 경로가 아닙니다.",
+          "pathInvalid": "경로가 유효한 로컬 경로가 아닙니다.",
           "localOnly": "Local only",
           "remoteSsh": "Remote SSH",
           "remoteRuntimeUnsupported": "로컬 앱에서는 이 경로를 열 수 없습니다.",
@@ -5903,8 +5906,8 @@
           "remoteEditorUnsupportedDetail": "VS Code, Cursor 또는 Zed를 선택하거나 앱을 로컬에서 사용하세요.",
           "remotePathInvalid": "SSH 호스트에 대한 경로가 유효하지 않습니다.",
           "remotePathInvalidDetail": "워크스페이스의 새로고침을 실행한 후 다시 시도하세요.",
-          "remoteLaunchFailed": "편집기에서 경로를 열 수 없습니다.",
-          "remoteLaunchFailedDetail": "이 컴퓨터에 구성된 편집기 명령을 확인하세요.",
+          "pathLaunchFailed": "편집기에서 경로를 열 수 없습니다.",
+          "pathLaunchFailedDetail": "이 컴퓨터에 구성된 편집기 명령을 확인하세요.",
           "wsl": "WSL",
           "remoteRuntimeEditorHint": "Orca가 SSH로 이 서버에 연결된 경우에만 이 컴퓨터의 앱에서 서버 파일을 열 수 있습니다.",
           "remoteEditorHint": "VS Code, Cursor, Zed만 SSH 호스트의 폴더를 열 수 있습니다."
@@ -6511,12 +6514,14 @@
           "added": "이미 호스트로 추가됨",
           "running": "실행 중",
           "stopped": "중지됨",
+          "unverifiable": "알 수 없음",
           "title": "WSL 배포판 추가",
           "description": "Orca는 배포판 안에서 서버를 실행하므로 git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다. 이 배포판에서 \\\\wsl.localhost를 통해 연 프로젝트는 터미널이 유휴 상태가 되면 자동으로 이 호스트로 옮겨지며, Windows 드라이브(/mnt/…)에 있는 프로젝트는 이 컴퓨터에 남습니다. 옮겨진 프로젝트는 사이드바에서 다시 가져올 수 있습니다.",
           "distro": "배포판",
           "loading": "WSL 배포판 찾는 중…",
           "placeholder": "배포판 선택",
           "stoppedHint": "{{value0}}이(가) 중지되어 있습니다. 추가하면 시작됩니다.",
+          "unverifiableHint": "WSL이 {{value0}} 실행 여부를 알려 주지 않았습니다. 추가하면 필요할 때 시작합니다.",
           "addingHint": "배포판에 Orca 서버를 설치하고 시작하는 중입니다. 처음에는 1분 정도 걸릴 수 있습니다.",
           "adding": "설정 중…",
           "startAndAdd": "시작 및 추가",
@@ -6932,14 +6937,13 @@
           "932ff1fbff": "테마",
           "leftSidebarAppearance": {
             "title": "왼쪽 사이드바 모양",
-            "rowDescription": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다.",
             "default": "기본값",
-            "matchTerminal": "Terminal에 맞춤",
             "tinted": "색조 적용",
             "tintColor": "사이드바 색조",
             "tintColorDescription": "왼쪽 사이드바 표면에 섞을 색상입니다.",
             "tintOpacity": "색조 강도",
-            "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다."
+            "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다.",
+            "tintDescription": "왼쪽 사이드바를 기본값으로 두거나 색조를 적용합니다. 터미널을 따르려면 라이트 또는 다크 테마로 Terminal에 맞춤을 선택하세요."
           },
           "interfaceDefaultFont": "기본 글꼴",
           "terminalDefaultFont": "기본 글꼴",
@@ -8635,7 +8639,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 마젠타색",
-          "03c855d15f": "모든 색상 재정의 재설정",
           "63f8d9336e": "색상 재정의",
           "e86e09b5c7": "개별 터미널 색상을 재정의합니다.",
           "1d1920dc8a": "terminal에 입력할 때 마우스 커서를 숨깁니다.",
@@ -8644,10 +8647,7 @@
           "1afcc1d973": "수직 패딩",
           "25e2f8e8e1": "터미널 그리드 주변의 수평 패딩(픽셀)입니다.",
           "36b8402015": "수평 패딩",
-          "53ce336e15": "창 흐림 변경 사항을 적용하려면 Orca를 다시 시작하십시오.",
           "c65bb9ce63": "다시 시작해야 함",
-          "97950bb087": "터미널 창에 배경 흐림을 적용합니다. 다시 시작해야 합니다.",
-          "2b82242f43": "창 흐림",
           "809f37738d": "터미널 배경의 투명도를 제어합니다. 1은 완전히 불투명하고, 0은 완전히 투명합니다.",
           "ea7b1a158e": "배경 불투명도",
           "03acb60aa0": "터미널 배경의 투명도를 제어합니다.",
@@ -8702,7 +8702,11 @@
           "cf37ff69f6": "기본",
           "8abdab9f7c": "지금 재시작",
           "907131d741": "다시 시작하는 중…",
-          "605a35d600": "아직 터미널 렌더러에는 적용되지 않습니다. xterm.js에 굵은 글씨 색상 슬롯이 없기 때문입니다. 저장된 값은 유지됩니다."
+          "605a35d600": "아직 터미널 렌더러에는 적용되지 않습니다. xterm.js에 굵은 글씨 색상 슬롯이 없기 때문입니다. 저장된 값은 유지됩니다.",
+          "color_overrides_dark_description": "다크 터미널 테마의 개별 색상을 재정의합니다.",
+          "color_overrides_light_description": "라이트 터미널 테마의 개별 색상을 재정의합니다.",
+          "reset_dark_color_overrides": "다크 테마 색상 재정의 재설정",
+          "reset_light_color_overrides": "라이트 테마 색상 재정의 재설정"
         },
         "UIZoomControl": {
           "c2c64b24d0": "재설정"
@@ -9070,11 +9074,10 @@
             },
             "leftSidebarAppearance": {
               "title": "왼쪽 사이드바 모양",
-              "description": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다.",
               "project": "프로젝트",
-              "terminal": "터미널",
               "background": "배경",
-              "tint": "색조"
+              "tint": "색조",
+              "tintDescription": "왼쪽 사이드바를 기본값으로 두거나 색조를 적용합니다. 터미널을 따르려면 라이트 또는 다크 테마로 Terminal에 맞춤을 선택하세요."
             },
             "9a115966d3": "닫을 때 트레이로 최소화",
             "4d5b9427b5": "활성화하면 창을 닫아도 Orca가 종료되지 않고 시스템 트레이에서 계속 실행됩니다.",
@@ -9129,7 +9132,8 @@
             "zcodeUsageDescription": "상태 표시줄에 ZCode Coding Plan 할당량 사용량을 표시합니다.",
             "zcode": "zcode",
             "zai": "zai",
-            "glm": "glm"
+            "glm": "glm",
+            "matchTerminal": "Terminal에 맞춤"
           }
         },
         "auto": {
@@ -10305,8 +10309,6 @@
             "f6dd9ff606": "배경",
             "71eb45e293": "흐림",
             "0838b3717b": "창",
-            "bc2054657a": "터미널 창에 배경 흐림을 적용합니다. 다시 시작해야 합니다.",
-            "72d0482137": "창 흐림",
             "7db59c4738": "알파",
             "46d99ef4bb": "불투명도",
             "4c643695aa": "터미널 배경의 투명도를 제어합니다.",
@@ -12174,7 +12176,7 @@
         "wslHosts": {
           "title": "WSL 호스트",
           "experimental": "실험적",
-          "description": "Orca는 각 배포판 안에서 서버를 실행합니다. 중지된 배포판은 해당 배포판의 프로젝트를 열거나 여기에서 연결할 때만 시작됩니다.",
+          "description": "Orca는 각 배포판 안에서 서버를 실행합니다. 프로젝트를 열어도 중지된 배포판은 시작되지 않습니다. [시작]을 클릭하거나, 새 터미널을 열거나, 여기에서 연결하세요.",
           "add": "WSL 배포판 추가",
           "connect": "연결",
           "turnOn": "실험적에서 켜기",
@@ -12393,7 +12395,9 @@
           "searchLabel": "빌드 검색"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "이 테마의 터미널 색상 사용"
+          "useTerminalTheme": "이 테마의 터미널 색상 사용",
+          "matchTerminal": "Terminal에 맞춤",
+          "dynamic": "동적"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -12578,7 +12582,9 @@
           "light": "라이트",
           "languageIncomplete": "{{value0}}% 번역됨. Orca 언어로 사용하기에는 너무 불완전합니다",
           "languageCoverage": "인터페이스 언어 · {{value0}}% 번역됨",
-          "newFileMenu": "+ 메뉴에 추가"
+          "newFileMenu": "+ 메뉴에 추가",
+          "editorReplacesViewer": "Orca 뷰어 대신 {{value0}} 파일을 엽니다",
+          "editorMayReplaceViewer": "Orca 뷰어 대신 {{value0}} 파일을 열 수 있습니다"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "다른 접근 권한 없음",
@@ -15488,16 +15494,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "확대",
-          "6c89c73d9f": "확대/축소 재설정",
           "be27304574": "축소",
-          "77bfc9b35a": "팝업으로 이미지 열기",
           "3ef9551ba2": "미리보기 로드 중...",
-          "d9d2944855": "파일 미리보기를 로드하지 못했습니다."
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "닫으려면 Esc를 누르세요.",
-          "535f4e2b56": "닫기",
-          "9e27b2ecaf": "전체 크기 이미지 미리보기"
+          "d9d2944855": "파일 미리보기를 로드하지 못했습니다.",
+          "fitToView": "화면에 맞추기",
+          "actualSize": "실제 크기",
+          "expand": "이미지 크게 보기"
         },
         "IpynbViewer": {
           "859bf9fc21": "셀 실행",
@@ -15618,7 +15620,10 @@
           "zoomOut": "축소",
           "zoomIn": "확대",
           "fit": "화면에 맞추기",
-          "close": "닫기"
+          "close": "닫기",
+          "copyPng": "PNG로 복사",
+          "copiedPng": "PNG로 복사했습니다",
+          "copyPngFailed": "이미지를 복사할 수 없습니다"
         },
         "MermaidBlock": {
           "dcc132e691": "다이어그램 오류:",
@@ -18596,6 +18601,8 @@
       },
       "composer": {
         "send": "보내기",
+        "alternateSteerHint": "{{shortcut}}(으)로 지금 보내기",
+        "alternateQueueHint": "{{shortcut}}(으)로 대기열에 추가",
         "noPty": "라이브 terminal이 없습니다. 다시 연결하려면 다시 전환하세요.",
         "locked": "입력이 다른 장치에 의해 보류됩니다.",
         "placeholder": "무엇이든 물어보세요. @로 파일 참조, /로 명령어 실행",
@@ -18809,9 +18816,7 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "채팅 UI에서 계속하려면 이 호스트의 Orca를 업데이트하세요.",
-        "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요.",
-        "exitUnconfirmedFromTerminal": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 다음 세션 기록에서 이 대화를 여세요.",
-        "exitUnconfirmed": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 다음 세션 기록에서 이 대화를 여세요."
+        "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요."
       },
       "state": {
         "loading": {
@@ -19015,6 +19020,8 @@
         "unnamedSender": "Agent",
         "messageFromCoordinator": "코디네이터의 메시지",
         "startedWorker": "워커 시작됨",
+        "handedOffToAgent": "에이전트에게 넘김",
+        "startedAgent": "에이전트 시작됨",
         "taskFromCoordinator": "코디네이터의 작업",
         "updateFromWorker": "워커의 업데이트"
       },
@@ -19104,13 +19111,15 @@
         "stopped": "{{distro}}이(가) 중지되었습니다",
         "start": "시작",
         "unverifiable": "Orca가 {{distro}}이(가) 실행 중인지 확인하지 못했습니다",
-        "startToSend": "보내려면 {{distro}}을(를) 시작하세요."
+        "startToSend": "보내려면 {{distro}}을(를) 시작하세요.",
+        "startDistro": "{{distro}} 시작"
       },
       "interruptedContinue": {
         "continue": "계속",
         "failed": "이 채팅을 계속할 수 없습니다. 다시 시도하거나 메시지를 보내세요.",
         "explanation": "계속하면 에이전트가 먼저 마지막 단계가 완료되었는지 확인합니다.",
-        "unconfirmed": "{{agent}}에 계속 요청이 전달되었는지 확인할 수 없습니다. 다시 시도하기 전에 채팅을 확인하세요."
+        "unconfirmed": "{{agent}}에 계속 요청이 전달되었는지 확인할 수 없습니다. 다시 시도하기 전에 채팅을 확인하세요.",
+        "usageLimitExplanation": "중단한 곳부터 계속하도록 에이전트에 요청합니다. 한도가 초기화된 후 사용하세요."
       },
       "rewind": {
         "unsupported": "이 채팅은 이전 메시지로 돌아갈 수 없습니다.",
@@ -19292,6 +19301,13 @@
         "effortPickerFailed": "추론 수준 선택기를 열지 못했습니다.",
         "modelApplyFailed": "{{value}} 모델을 적용하지 못했습니다.",
         "effortApplyFailed": "{{value}} 추론 수준을 적용하지 못했습니다."
+      },
+      "usageLimitActions": {
+        "continueNow": "지금 계속",
+        "leadIn": "기다리지 않고 이 채팅을 계속하세요:",
+        "switchAccount": "계정 전환",
+        "addAccount": "계정 추가…",
+        "accountUnavailable": "이 채팅을 다른 계정으로 옮길 수 없습니다. 다른 에이전트에게 인계하세요."
       }
     },
     "tab": {
@@ -20201,8 +20217,7 @@
       "quitDuringMoveConfirm": "그래도 종료"
     },
     "startupWorktreeRefresh": {
-      "loading": "워크스페이스를 찾는 중…",
-      "description": "로컬 및 원격 프로젝트를 불러오는 동안 워크스페이스가 더 표시될 수 있습니다."
+      "loading": "워크스페이스를 찾는 중…"
     },
     "createProject": {
       "errors": {
@@ -20225,6 +20240,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}}은(는) 이미 호스트입니다.",
         "distroStopped": "목록을 읽은 후 {{distro}}이(가) 중지되었습니다. 시작하려면 “시작 및 추가”를 선택하세요.",
+        "distroUnverifiable": "WSL이 {{distro}} 실행 여부에 응답하지 않았습니다. 목록을 새로 고치거나 대화 상자에서 추가하세요. 필요하면 시작합니다.",
         "wsl1": "{{distro}}은(는) Orca에서 더 이상 지원하지 않는 WSL 1을 사용합니다. Windows 터미널에서 다음 명령으로 WSL 2로 변환하세요: {{command}}",
         "notRegistered": "{{distro}}은(는) 설치된 WSL 배포판이 아닙니다. Windows 터미널에서 {{command}}을(를) 실행해 설치된 배포판을 확인하거나, 다시 설치한 후 재시도하세요.",
         "sshManaged": "{{distro}}에서 이미 “{{server}}”의 Orca 서버가 실행 중이며, 이 컴퓨터는 SSH로 해당 서버에 연결합니다. 먼저 해당 서버를 제거하세요. WSL 호스트로 옮기는 기능은 아직 지원되지 않습니다."
@@ -20289,7 +20305,8 @@
     "wslHostOffer": {
       "title": "{{distro}}을(를) 호스트로 실행(권장)",
       "why": "Git, 파일, 터미널이 Windows 파일 공유를 거치지 않고 Linux에서 기본으로 실행됩니다.",
-      "accept": "호스트로 실행"
+      "accept": "호스트로 실행",
+      "projectNotFound": "이동할 추가된 프로젝트를 찾을 수 없습니다. 사이드바의 프로젝트에서 \"{{distro}} 호스트로 이동…\"을 사용하세요."
     }
   },
   "editor": {
@@ -20974,7 +20991,7 @@
     },
     "claude": {
       "added": "계정이 추가되었습니다. 다음에 시작하는 Claude에 사용하려면 이 계정을 선택하세요.",
-      "nextLaunch": "{{value0}} → {{value1}}. 다음에 시작하는 Claude가 이를 사용합니다. 실행 중인 세션은 해당 계정을 유지합니다.",
+      "nextLaunch": "{{value0}} → {{value1}}. 다음에 시작하는 Claude 터미널은 이 계정을 사용합니다. 실행 중인 Claude 터미널은 해당 계정을 유지합니다.",
       "profileSwitching": "전환은 모든 탭에서 다음에 시작하는 Claude에 적용됩니다. 실행 중인 세션은 해당 계정을 유지합니다.",
       "systemDefault": "시스템 기본값",
       "unnamedAccount": "Claude 계정",
@@ -21005,8 +21022,8 @@
         "restartOne": "세션 다시 시작",
         "keep": "그대로 유지",
         "listLabel": "다시 시작할 Claude 세션",
-        "settingTitle": "Claude가 실행되는 동안 계정을 전환하는 경우",
-        "settingDescription": "다시 시작하면 새 계정에서 실행 중인 각 대화가 계속됩니다.",
+        "settingTitle": "터미널에서 Claude가 실행되는 동안 계정을 전환하는 경우",
+        "settingDescription": "다시 시작하면 각 터미널 대화가 새 계정에서 계속됩니다.",
         "settingRestart": "항상 다시 시작",
         "settingKeep": "다시 시작하지 않음",
         "restartingOther": "{{account}} 계정에서 Claude 세션 {{count}}개를 다시 시작하는 중",
@@ -21670,12 +21687,8 @@
       "refreshBeforeEnd": "PTY를 새로 고칠 때까지 종료할 수 없습니다.",
       "endUnsupported": "이 터미널은 종료할 수 없습니다. 호스트가 필요한 안전 검사를 지원하지 않습니다. 탭이나 호스트에서 닫으세요.",
       "checkingTabs": "탭 확인 중…",
-      "endTitle": "{{terminal}}을(를) 종료할까요?",
-      "endDescription": "이 터미널과 하위 프로세스를 종료합니다. 저장하지 않은 작업이 손실될 수 있습니다.",
       "lastProcess": "마지막으로 확인된 프로세스: {{process}}",
-      "cancel": "취소",
       "ending": "종료 중…",
-      "end": "터미널 종료",
       "unassigned": "할당되지 않음",
       "thisComputer": "이 컴퓨터",
       "localOwnedCount_one": "이 컴퓨터의 Orca PTY {{count}}개",
@@ -22681,6 +22694,7 @@
       "androidDeviceNotRunning": "\"{{device}}\" Android 장치가 실행 중이 아닙니다. 먼저 부팅하세요.",
       "unknownDeviceOrAvd": "\"{{device}}\" 항목은 실행 중인 장치도, 알려진 AVD도 아닙니다.",
       "avdBootTimeout": "AVD \"{{avdName}}\"의 부팅이 제한 시간 내에 완료되지 않았습니다.",
+      "avdExitedBeforeBoot": "AVD \"{{avdName}}\"이(가) 부팅을 마치기 전에 중지되었습니다: {{detail}}",
       "scrcpyDownloadFailed": "scrcpy 서버를 다운로드하지 못했습니다: {{detail}}",
       "scrcpyServerInvalid": "다운로드한 scrcpy 서버가 유효하지 않거나 불완전했습니다."
     },

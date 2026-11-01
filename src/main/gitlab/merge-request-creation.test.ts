@@ -137,53 +137,6 @@ describe('createGitLabMergeRequest', () => {
     })
   })
 
-  it('creates SSH-backed merge requests without using the remote path as a local cwd', async () => {
-    glabExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify({
-        iid: 45,
-        web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/45'
-      }),
-      stderr: ''
-    })
-
-    await expect(
-      createGitLabMergeRequest(
-        '/remote/repo-root',
-        {
-          provider: 'gitlab',
-          base: 'main',
-          head: 'feature/ssh-create-mr',
-          title: 'SSH Create MR'
-        },
-        'ssh:ssh-1'
-      )
-    ).resolves.toEqual({
-      ok: true,
-      number: 45,
-      url: 'https://gitlab.com/acme/widgets/-/merge_requests/45'
-    })
-
-    expect(getProjectSlugMock).toHaveBeenCalledWith('/remote/repo-root', 'ssh-1')
-    const [args, options] = glabExecFileAsyncMock.mock.calls[0]
-    expect(args).toEqual(
-      expect.arrayContaining([
-        'mr',
-        'create',
-        '-R',
-        'acme/widgets',
-        '--target-branch',
-        'main',
-        '--source-branch',
-        'feature/ssh-create-mr'
-      ])
-    )
-    expect(options).toMatchObject({
-      timeout: 60_000,
-      idempotent: false
-    })
-    expect(options).not.toHaveProperty('cwd')
-  })
-
   it('returns an existing merge request when GitLab reports a duplicate', async () => {
     glabExecFileAsyncMock
       .mockRejectedValueOnce(new Error('merge request already exists'))

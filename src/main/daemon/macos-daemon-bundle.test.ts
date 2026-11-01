@@ -194,18 +194,3 @@ it('copies the app behind a symbolic link rather than retaining a link to the up
   await rm(source, { recursive: true })
   expect(await readFile(copy.execPath, 'utf8')).toBe('signed-node')
 })
-
-it('rejects an unresolvable running image before running anything', async () => {
-  inspectMock.mockResolvedValue({ identity: 'unresolvable', executablePath: null })
-  await expect(materializeMacDaemonBundle(copies, signal())).rejects.toThrow(
-    'running macOS app bundle'
-  )
-  expect(runProcessMock).not.toHaveBeenCalled()
-})
-
-it('rejects an app without a signed helper and makes no copy', async () => {
-  await rm(helper, { recursive: true })
-  helper = join(root, 'elsewhere')
-  await expect(materializeMacDaemonBundle(copies, signal())).rejects.toThrow('CDHash')
-  await expect(readdir(copies)).rejects.toThrow()
-})

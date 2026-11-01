@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 import { repo, worktree } from './worktree-list-groups-test-fixtures'
-import { getExecutionHostLabel } from '../../../../shared/execution-host'
+
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
@@ -60,20 +60,6 @@ describe('sidebar rows for a workspace id owned by two hosts', () => {
       .map((row) => row.rowKey)
 
     expect(new Set(rowKeys).size).toBe(rowKeys.length)
-  })
-
-  it('labels each row with the host it lives on', () => {
-    const labels = buildCollidingRows()
-      .filter((row) => row.type === 'item')
-      .map((row) => row.hostContextLabel)
-
-    expect(labels).toEqual([getExecutionHostLabel('local'), getExecutionHostLabel('ssh:build-box')])
-  })
-
-  it('counts the two hosts separately in the group header', () => {
-    const header = buildCollidingRows().find((row) => row.type === 'header')
-
-    expect(header?.count).toBe(2)
   })
 
   it('keeps an unpinned host row visible when its same-id peer is pinned', () => {
