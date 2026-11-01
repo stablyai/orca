@@ -151,6 +151,59 @@ describe('useLiveWorktreeName request volume', () => {
     expect(live?.projectName).toBe('Renamed project')
   })
 
+  it.each([true, false])(
+    'bounds project transport retries after stream readiness (recovers: %s)',
+    async (recovers) => {
+      let attempts = 0
+      sendRequest.mockImplementation(async (method) => {
+        if (method === 'repo.show' && (++attempts === 1 || !recovers)) {
+          throw new Error('transport unavailable')
+        }
+        return {
+          id: method,
+          ok: true,
+          result:
+            method === 'repo.show'
+              ? { repo: { displayName: 'orca' } }
+              : { worktree: { id: 'repo-1::/worktree', displayName: 'master' } }
+        }
+      })
+      await mountHarness()
+      await emitEvent({ type: 'ready', subscriptionId: 'events' })
+      expect(live?.projectName).toBeNull()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000)
+      })
+      expect(attempts).toBe(recovers ? 2 : 4)
+      expect(live?.projectName).toBe(recovers ? 'orca' : null)
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
+  it('cancels project retry when the screen is left', async () => {
+    sendRequest.mockImplementation(async (method) => {
+      if (method === 'repo.show') {
+        throw new Error('transport unavailable')
+      }
+      return {
+        id: method,
+        ok: true,
+        result: { worktree: { id: 'repo-1::/worktree', displayName: 'master' } }
+      }
+    })
+    await mountHarness()
+    await emitEvent({ type: 'ready', subscriptionId: 'events' })
+    expect(vi.getTimerCount()).toBe(1)
+    act(() => renderer?.unmount())
+    renderer = null
+    const calls = sendRequest.mock.calls.length
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000)
+    })
+    expect(sendRequest).toHaveBeenCalledTimes(calls)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('ignores a late project reply after switching workspaces', async () => {
     let worktreeId = 'repo-1::/worktree'
     let finishFirst: (reply: RpcResponse) => void = () => {}

@@ -80,6 +80,8 @@ export function useLiveWorktreeName({
       let refreshGeneration = 0
       let refreshProjectName = true
       let projectGeneration = 0
+      let projectRetries = 0
+      let projectRetryTimer: ReturnType<typeof setTimeout> | null = null
       const repoId = getRepoIdFromWorktreeId(worktreeId)
 
       const stopFallbackPoll = (): void => {
@@ -144,26 +146,45 @@ export function useLiveWorktreeName({
             const projectHost = parseRoutableExecutionHostId(hostId)
             if (refreshProjectName && (!hostId || projectHost)) {
               refreshProjectName = false
-              const projectRequest = ++projectGeneration
-              void sessionProjectNameRead
-                .request(client, {
-                  repo: `id:${repoId}`,
-                  ...(projectHost ? { repoHostId: projectHost.id } : {})
-                })
-                .then((reply) => {
-                  if (stale || projectRequest !== projectGeneration) {
-                    return
-                  }
-                  const project = sessionProjectNameRead.interpret(reply)
-                  if (project.accepted && project.value) {
-                    setWorktreeName((current) =>
-                      current.worktreeId === worktreeId
-                        ? { ...current, projectName: project.value }
-                        : current
-                    )
-                  }
-                })
-                .catch(() => {})
+              if (projectRetryTimer !== null) {
+                clearTimeout(projectRetryTimer)
+                projectRetryTimer = null
+              }
+              const readProjectName = (): void => {
+                const projectRequest = ++projectGeneration
+                void sessionProjectNameRead
+                  .request(client, {
+                    repo: `id:${repoId}`,
+                    ...(projectHost ? { repoHostId: projectHost.id } : {})
+                  })
+                  .then((reply) => {
+                    if (stale || projectRequest !== projectGeneration) {
+                      return
+                    }
+                    const project = sessionProjectNameRead.interpret(reply)
+                    if (project.accepted && project.value) {
+                      setWorktreeName((current) =>
+                        current.worktreeId === worktreeId
+                          ? { ...current, projectName: project.value }
+                          : current
+                      )
+                    }
+                  })
+                  .catch(() => {
+                    if (stale || projectRequest !== projectGeneration || projectRetries >= 3) {
+                      return
+                    }
+                    projectRetries += 1
+                    projectRetryTimer = setTimeout(() => {
+                      projectRetryTimer = null
+                      if (stale || projectRequest !== projectGeneration) {
+                        return
+                      }
+                      readProjectName()
+                    }, WORKTREE_NAME_FALLBACK_POLL_MS)
+                  })
+              }
+              readProjectName()
             }
           }
           hasSuccessfulRefresh = true
@@ -233,6 +254,9 @@ export function useLiveWorktreeName({
       return () => {
         stale = true
         stopFallbackPoll()
+        if (projectRetryTimer !== null) {
+          clearTimeout(projectRetryTimer)
+        }
         unsubscribe()
       }
     }, [client, connState, worktreeId, isFloatingWorkspace])
