@@ -392,10 +392,20 @@ describe('MobileNativeChatMessage', () => {
           : body
       const message: NativeChatMessage = {
         ...userMessage([{ type: 'text', text: raw }]),
+        id: `notice-${kind}`,
         from,
         ...(kind === 'started' ? ({ role: 'system', agentStart: true } as const) : {})
       }
       const tree = render(message)
+      const mailNotice = kind !== 'started' && kind !== 'task'
+      if (mailNotice) {
+        expect(textIn(tree.root)).toEqual(['Orchestration mail'])
+        expect(markdownIn(tree.root)).toEqual([])
+        const disclosure = findAllByHostType(tree.root, 'Pressable').find(
+          (node) => node.props.accessibilityState?.expanded === false
+        )!
+        act(() => disclosure.props.onPress())
+      }
       const headings = {
         started: 'Started worker',
         task: 'Task from coordinator',
@@ -403,7 +413,7 @@ describe('MobileNativeChatMessage', () => {
         worker: 'Update from worker',
         generic: 'Message from'
       }
-      expect(textIn(tree.root).slice(0, 2)).toEqual([
+      expect(textIn(tree.root).slice(mailNotice ? 1 : 0, mailNotice ? 3 : 2)).toEqual([
         headings[agentMessageHeading(from, message.agentStart === true)],
         agentMessageSenderLabel({
           localChat: false,

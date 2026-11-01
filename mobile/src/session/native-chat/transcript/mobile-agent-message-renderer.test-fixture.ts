@@ -50,6 +50,7 @@ vi.mock('lucide-react-native', () => ({
   Globe: 'Globe',
   Info: 'Info',
   ListChecks: 'ListChecks',
+  Mail: 'Mail',
   MessageSquareMore: 'MessageSquareMore',
   Pencil: 'Pencil',
   Plug: 'Plug',
