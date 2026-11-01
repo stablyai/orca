@@ -313,6 +313,7 @@ import {
   ReviewThread
 } from './github-pull-request-params'
 import {
+  MarkPrDraft,
   MarkPrReadyForReview,
   MergePr,
   PRReviewComment,
@@ -1069,6 +1070,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.listIssues': IssuesList,
   'github.listLabels': RepoSelector,
   'github.listWorkItems': WorkItemsList,
+  'github.markPRDraft': MarkPrDraft,
   'github.markPRReadyForReview': MarkPrReadyForReview,
   'github.mergePR': MergePr,
   'github.prCheckDetails': PullRequestCheckDetails,
