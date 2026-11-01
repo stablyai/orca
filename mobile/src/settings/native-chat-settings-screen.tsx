@@ -1,11 +1,12 @@
 import { useRouter } from 'expo-router'
+import { ComposerUsageDisplayPicker } from '../composer-usage/ComposerUsageDisplayPicker'
+import { ComposerUsageWindowPicker } from '../composer-usage/ComposerUsageWindowPicker'
 import { ListRow } from '../components/list/ListGroup'
 import { MobileSwitch } from '../components/MobileSwitch'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsScreen, SettingsSection } from './settings-screen-frame'
-import { ComposerUsageWindowPicker } from '../composer-usage/ComposerUsageWindowPicker'
 
 export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => void }) {
   useMobileColorScheme()
@@ -50,10 +51,11 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
         title={t('settings.nativeChatSettingsScreen.composerUsageHeading', 'COMPOSER USAGE')}
         footer={t(
           'settings.nativeChatSettingsScreen.composerUsageDescription',
-          'Chat and agent terminal composers show how much of your agent plan is used. Tap the meter for every window, reset times and pace.'
+          'Chat and agent terminal composers show your agent plan as used or left. Tap the meter for every window, reset times and pace.'
         )}
       >
         <ComposerUsageWindowPicker inSettings />
+        <ComposerUsageDisplayPicker inSettings />
       </SettingsSection>
     </SettingsScreen>
   )

@@ -71,7 +71,7 @@
       "on": "On",
       "off": "Off",
       "composerUsageHeading": "COMPOSER USAGE",
-      "composerUsageDescription": "Chat and agent terminal composers show how much of your agent plan is used. Tap the meter for every window, reset times and pace."
+      "composerUsageDescription": "Chat and agent terminal composers show your agent plan as used or left. Tap the meter for every window, reset times and pace."
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Could not load delivery settings. Reopen this screen to retry.",
@@ -4520,7 +4520,16 @@
   },
   "composerUsage": {
     "meter": {
-      "label": "{{provider}} {{window}} usage: {{percent}}% used. Show details"
+      "label": "{{provider}} {{window}} usage: {{percent}}% used. Show details",
+      "labelRemaining": "{{provider}} {{window}} usage: {{percent}}% left. Show details",
+      "left": "{{percent}}% left"
+    },
+    "display": {
+      "label": "Meter shows",
+      "used": "Used",
+      "remaining": "Remaining",
+      "usedHint": "Show how much of the window is used",
+      "remainingHint": "Show how much of the window is left"
     },
     "sheet": {
       "title": "{{provider}} usage",

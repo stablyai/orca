@@ -18,6 +18,8 @@ import {
   ComposerUsageClientContext,
   ComposerUsageTabAgentContext
 } from './composer-usage-client-context'
+import { useComposerUsageDisplay } from './composer-usage-display-preference'
+import { composerUsageMeterReadout } from './composer-usage-meter-readout'
 import { useComposerUsageWindow } from './composer-usage-window-preference'
 import { ComposerUsageSheet } from './ComposerUsageSheet'
 
@@ -49,6 +51,7 @@ export function ComposerUsageMeter({
   // Agentless tabs never open the accounts stream.
   const snapshot = useAccountsSnapshot(usageProviderForAgent(usageAgent) ? client : null)
   const choice = useComposerUsageWindow()
+  const display = useComposerUsageDisplay()
   const [open, setOpen] = useState(false)
   const usage = selectAgentUsage(snapshot, usageAgent)
   // A missing chosen window (no 5-hour limit on the plan) falls back to the one the provider reports.
@@ -56,17 +59,27 @@ export function ComposerUsageMeter({
   if (!usage || !entry) {
     return null
   }
-  const used = Math.round(Math.max(0, Math.min(100, entry.window.usedPercent)))
+  const readout = composerUsageMeterReadout(entry.window.usedPercent, display)
   const length = formatUsageWindowLength(entry.window.windowMinutes)
+  const provider = USAGE_PROVIDER_NAMES[usage.provider]
+  const showingRemaining = display === 'remaining'
   return (
     <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={t(
-          'composerUsage.meter.label',
-          '{{provider}} {{window}} usage: {{percent}}% used. Show details',
-          { provider: USAGE_PROVIDER_NAMES[usage.provider], window: length, percent: used }
-        )}
+        accessibilityLabel={
+          showingRemaining
+            ? t(
+                'composerUsage.meter.labelRemaining',
+                '{{provider}} {{window}} usage: {{percent}}% left. Show details',
+                { provider, window: length, percent: readout.shown }
+              )
+            : t(
+                'composerUsage.meter.label',
+                '{{provider}} {{window}} usage: {{percent}}% used. Show details',
+                { provider, window: length, percent: readout.shown }
+              )
+        }
         hitSlop={6}
         onPress={() => setOpen(true)}
         style={({ pressed }) => [styles.meter, pressed && composerInputStyles.pressed]}
@@ -77,11 +90,19 @@ export function ComposerUsageMeter({
         </Text>
         <View style={styles.track}>
           <View
-            style={[styles.fill, { width: `${used}%`, backgroundColor: usageBandColor(used) }]}
+            style={[
+              styles.fill,
+              {
+                width: `${readout.shown}%`,
+                backgroundColor: usageBandColor(readout.used)
+              }
+            ]}
           />
         </View>
         <Text style={styles.text} numberOfLines={1}>
-          {`${used}%`}
+          {showingRemaining
+            ? t('composerUsage.meter.left', '{{percent}}% left', { percent: readout.shown })
+            : `${readout.shown}%`}
         </Text>
       </Pressable>
       <ComposerUsageSheet
