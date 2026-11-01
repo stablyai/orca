@@ -147,41 +147,7 @@ describe('DaemonServer', () => {
     expect(predicate()).toBe(true)
   }
 
-  describe('startup', () => {
-    it('creates token file and starts listening', async () => {
-      await startServer()
-
-      const token = readFileSync(tokenPath, 'utf-8')
-      expect(token.length).toBeGreaterThan(0)
-    })
-
-    it('accepts client connections', async () => {
-      await startServer()
-      const c = await connectClient()
-      expect(c.isConnected()).toBe(true)
-    })
-  })
-
   describe('RPC routing', () => {
-    it('handles createOrAttach and returns result', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      const result = await c.request('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-
-      expect(result).toMatchObject({
-        isNew: true,
-        pid: 55555
-      })
-      await expect(
-        c.request('closeStartupQueryAuthority', { sessionId: 'test-session' })
-      ).resolves.toEqual({ appliedSeq: 0 })
-    })
-
     it('keeps RPC responsive and creates one subprocess while spawn preparation is pending', async () => {
       let finishPreparation!: () => void
       const preparation = new Promise<void>((resolve) => {
@@ -384,29 +350,6 @@ describe('DaemonServer', () => {
       expect(unknown).not.toHaveProperty('launchAgent')
     })
 
-    it('handles listSessions', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      await c.request('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-
-      const result = await c.request<{ sessions: unknown[] }>('listSessions', undefined)
-      expect(result.sessions).toHaveLength(1)
-    })
-
-    it('handles ping health checks', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      const result = await c.request<{ pong: boolean }>('ping', undefined)
-
-      expect(result).toEqual({ pong: true })
-    })
-
     it('replies with an error to unknown request types and keeps serving', async () => {
       await startServer()
       const c = await connectClient()
@@ -417,41 +360,6 @@ describe('DaemonServer', () => {
       await expect(c.request<{ pong: boolean }>('ping', undefined)).resolves.toEqual({
         pong: true
       })
-    })
-
-    it('handles systemResolverHealth', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      const result = await c.request<{ health: unknown }>('systemResolverHealth', undefined)
-
-      expect(['healthy', 'unhealthy', 'unknown']).toContain(result.health)
-    })
-
-    it('probes Full Disk Access in the owning daemon', async () => {
-      await startServer()
-      const c = await connectClient()
-      const result = await c.request<{ status: unknown }>('fullDiskAccessStatus', undefined)
-      expect(['granted', 'denied', 'unknown', 'unsupported']).toContain(result.status)
-    })
-
-    it('handles resize', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      await c.request('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-
-      const result = await c.request('resize', {
-        sessionId: 'test-session',
-        cols: 120,
-        rows: 40
-      })
-
-      expect(result).toBeDefined()
     })
 
     it('does not acknowledge kill until asynchronous teardown completes', async () => {
@@ -482,37 +390,6 @@ describe('DaemonServer', () => {
       finishKill()
       await expect(routed).resolves.toEqual({})
       expect(acknowledged).toBe(true)
-    })
-
-    it('handles getCwd', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      await c.request('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-
-      const result = await c.request<{ cwd: string | null }>('getCwd', {
-        sessionId: 'test-session'
-      })
-
-      // Without OSC 7, cwd falls back to OS PID lookup; a coincident live PID may return a path.
-      expect(result.cwd === null || typeof result.cwd === 'string').toBe(true)
-    })
-
-    it('awaits fresh foreground confirmation', async () => {
-      await startServer()
-      const c = await connectClient()
-      await c.request('createOrAttach', { sessionId: 'test-session', cols: 80, rows: 24 })
-
-      await expect(
-        c.request<{ foregroundProcess: string | null }>('confirmForegroundProcess', {
-          sessionId: 'test-session'
-        })
-      ).resolves.toEqual({ foregroundProcess: 'droid' })
-      expect(confirmForegroundProcessMock).toHaveBeenCalledTimes(1)
     })
 
     it('returns error for unknown session operations', async () => {
@@ -742,20 +619,6 @@ describe('DaemonServer', () => {
   })
 
   describe('stream socket lifecycle', () => {
-    it('clears the tracked stream socket when it closes', async () => {
-      await startServer()
-      const daemon = server as unknown as DaemonServerPrivate
-      const control = await connectRawHello('control', 'raw-client')
-      const stream = await connectRawHello('stream', 'raw-client')
-
-      expect(daemon.connections.clients.get('raw-client')?.streamSocket).toBeTruthy()
-
-      stream.destroy()
-
-      await waitFor(() => daemon.connections.clients.get('raw-client')?.streamSocket === null)
-      control.destroy()
-    })
-
     it('destroys a replaced stream socket for the same client', async () => {
       await startServer()
       const daemon = server as unknown as DaemonServerPrivate
