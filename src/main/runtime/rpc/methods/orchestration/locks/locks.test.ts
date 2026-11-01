@@ -132,4 +132,38 @@ describe('orchestration lock and collaboration board RPC methods', () => {
     expect(listed.entries[0]?.id).toBe(posted.entry.id)
     expect(d.listBoardEntries({ scopeKey: 'w0m' })).toHaveLength(1)
   })
+
+  it('removes a timed-out non-front waiter ticket and rejects unidentified callers', async () => {
+    const { ctx } = setup()
+
+    await expect(call('orchestration.lockAcquire', { resource: 'land:w0m' }, ctx)).rejects.toThrow(
+      /Missing caller identity/
+    )
+
+    await call('orchestration.lockAcquire', { resource: 'land:w0m', from: 'term_holder' }, ctx)
+    await call('orchestration.lockAcquire', { resource: 'land:w0m', from: 'term_waiter_1' }, ctx)
+
+    const timedOutWaiter = (await call(
+      'orchestration.lockAcquire',
+      {
+        resource: 'land:w0m',
+        from: 'term_waiter_2',
+        wait: true,
+        timeoutMs: 20
+      },
+      ctx
+    )) as { timedOut?: boolean }
+    expect(timedOutWaiter.timedOut).toBe(true)
+
+    await call('orchestration.lockAcquire', { resource: 'land:w0m', from: 'term_waiter_3' }, ctx)
+
+    const listed = (await call('orchestration.lockList', { resource: 'land:w0m' }, ctx)) as {
+      locks: { owner_handle: string; position: number }[]
+    }
+    expect(listed.locks.map((l) => [l.owner_handle, l.position])).toEqual([
+      ['term_holder', 0],
+      ['term_waiter_1', 1],
+      ['term_waiter_3', 2]
+    ])
+  })
 })
