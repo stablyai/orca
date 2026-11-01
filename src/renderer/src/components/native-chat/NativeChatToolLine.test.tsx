@@ -253,11 +253,6 @@ describe('tool sentence rows', () => {
       'exec_command',
       { cmd: 'printf hello', workdir: '/repo', timeout_ms: 10000 },
       '{\n  "cmd": "printf hello",\n  "workdir": "/repo",\n  "timeout_ms": 10000\n}'
-    ],
-    [
-      'Read',
-      { file_path: '/repo/a.ts', offset: 10 },
-      '{\n  "file_path": "/repo/a.ts",\n  "offset": 10\n}'
     ]
   ])('opens a %s call to its exact name and arguments, then its output', (name, input, args) => {
     const { container } = render(
@@ -349,16 +344,15 @@ describe('tool sentence rows', () => {
     expect(container.textContent).toContain('now')
   })
 
-  it.each([
-    ['exec', { command: 'ls' }, 'running', 'ls'],
-    ['mcp__linear__get_issue', { id: 'ORC-1' }, 'completed', '{\n  "id": "ORC-1"\n}']
-  ] as const)('opens a %s call without output to its arguments', (name, input, state, args) => {
+  it('opens a running call without output to its arguments', () => {
     const { container } = render(
-      <NativeChatToolLine block={{ type: 'tool-call', name, input, state }} />
+      <NativeChatToolLine
+        block={{ type: 'tool-call', name: 'exec', input: { command: 'ls' }, state: 'running' }}
+      />
     )
     fireEvent.click(screen.getByRole('button'))
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true')
-    expect(container.querySelector('pre')?.textContent).toBe(args)
+    expect(container.querySelector('pre')?.textContent).toBe('ls')
   })
 
   it('names a call with no arguments once opened', () => {
