@@ -147,6 +147,56 @@ export function mobileNativeChatRowAbove(
   return nearestRow(rows, below - 1, -1)?.id
 }
 
+// Tops of the requested rows relative to the viewport. Missing keys are not drawn.
+export function mobileNativeChatRowViewportTops(
+  scroller: MobileNativeChatScrollNode,
+  keys: readonly string[]
+): Map<string, number> {
+  const wanted = new Set(keys)
+  const found = new Map<string, number>()
+  if (wanted.size === 0) {
+    return found
+  }
+  const viewTop = scroller.getBoundingClientRect().top
+  const take = (node: Tagged): void => {
+    const id = rowIdOf(node)
+    if (id === undefined || !wanted.has(id) || found.has(id)) {
+      return
+    }
+    found.set(id, node.getBoundingClientRect().top - viewTop)
+  }
+  const box = scroller.querySelector(`[${ROWS}]`)
+  if (!box) {
+    return found
+  }
+  for (const row of drawnRows(scroller)) {
+    take(row)
+  }
+  if (found.size >= wanted.size) {
+    return found
+  }
+  // Row ids sit on the message itself. Scan only the untagged siblings around it (status lines).
+  const scanNested = (node: Tagged): void => {
+    if (typeof node.querySelectorAll !== 'function') {
+      return
+    }
+    for (const child of Array.from(node.querySelectorAll('[data-testid]'))) {
+      take(child)
+    }
+  }
+  for (const child of Array.from(box.children)) {
+    if (rowIdOf(child) === undefined) {
+      scanNested(child)
+    }
+  }
+  for (let next = box.nextElementSibling; next; next = next.nextElementSibling) {
+    if (rowIdOf(next) === undefined) {
+      scanNested(next)
+    }
+  }
+  return found
+}
+
 export function mobileNativeChatReadingPlace(
   scroller: MobileNativeChatScrollNode,
   { placement }: Keys

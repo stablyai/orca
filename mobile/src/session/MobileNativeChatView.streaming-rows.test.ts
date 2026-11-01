@@ -44,6 +44,7 @@ vi.mock('react-native-gesture-handler', () => {
 })
 vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
+  ArrowUp: 'ArrowUp',
   Brain: 'Brain',
   ChevronRight: 'ChevronRight',
   ChevronsDownUp: 'ChevronsDownUp',
