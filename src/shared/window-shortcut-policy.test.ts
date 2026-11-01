@@ -39,6 +39,30 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'dictationKeyDown' })
   })
 
+  it('lets a digit-row legend reach the 1-9 ranges instead of zoom (AZERTY Ctrl+-)', () => {
+    // AZERTY prints '-' on Digit6: the legend keys by its physical digit (#35985), so the
+    // logical-Minus zoom chord must not eat it before the workspace range resolves.
+    const legend = { code: 'Digit6', key: '-', meta: false, control: true, alt: false, shift: false }
+    expect(resolveWindowShortcutAction(legend, 'linux')).toEqual({
+      type: 'jumpToWorktreeIndex',
+      index: 5
+    })
+    // US '-' reports code Minus, not a digit row; the zoom chord keeps working there.
+    // Zero is not a 1-9 range: Ctrl+à (Digit0) keeps the default zoom.reset chord (#35993 review).
+    const zero = { code: 'Digit0', key: 'à', meta: false, control: true, alt: false, shift: false }
+    expect(resolveWindowShortcutAction(zero, 'linux')).toEqual({ type: 'zoom', direction: 'reset' })
+    // With both digit ranges disabled, no consumer takes the legend and the zoom chord returns.
+    expect(
+      resolveWindowShortcutAction(legend, 'linux', {
+        'workspace.selectByIndex': [],
+        'tab.selectByIndex': []
+      })
+    ).toEqual({ type: 'zoom', direction: 'out' })
+
+    const us = { code: 'Minus', key: '-', meta: false, control: true, alt: false, shift: false }
+    expect(resolveWindowShortcutAction(us, 'linux')).toEqual({ type: 'zoom', direction: 'out' })
+  })
+
   it.each(['darwin', 'linux', 'win32'] as const)(
     'leaves Cmd/Ctrl+, to terminal apps on %s unless explicitly rebound',
     (platform) => {
