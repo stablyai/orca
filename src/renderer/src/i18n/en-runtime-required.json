@@ -2398,6 +2398,7 @@
         "agentNotRun": "Orca could not run the chat-name agent.",
         "antigravityFailed": "Antigravity could not name this chat. Try generating the name again.",
         "grokFailed": "Grok could not name this chat. Try generating the name again.",
+        "hermesFailed": "Hermes could not name this chat. Try generating the name again.",
         "noAgentAvailable": "No chat-name agent can run in this workspace.",
         "noName": "The chat-name agent returned no name."
       }
