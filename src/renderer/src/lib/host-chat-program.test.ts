@@ -1,3 +1,6 @@
+// @vitest-environment happy-dom
+import { act, cleanup, renderHook } from '@testing-library/react'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { agentMenuShortcutLabels } from '../components/tab-bar/agent-menu-shortcut-labels'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
@@ -17,9 +20,16 @@ const rpc = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn(), direct: vi.fn
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: rpc.call }))
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: rpc.subscribe }))
 import { useAppStore } from '@/store'
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import {
+  loadHostStructuredAgents,
+  resetHostStructuredAgentsForTests
+} from '@/runtime/host-structured-agents'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { acquireAgentLaunchChoices, holdChatProgramFacts } from './host-chat-program-acquisition'
+import {
+  acquireAgentLaunchChoices,
+  holdChatProgramFacts,
+  useAgentsOfferedForLaunch
+} from './host-chat-program-acquisition'
 import * as chat from './host-chat-program'
 import { resolveQuickWorkspaceAgentSelection } from './quick-workspace-agent-selection'
 import { resolveChecksActionAgent, startFixChecksAgent } from './fix-checks-agent-launch'
@@ -53,6 +63,7 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
+  cleanup()
   vi.useRealTimers()
   resetHostStructuredAgentsForTests()
   setLocalRuntimeCapabilitiesForTests(null)
@@ -156,4 +167,51 @@ it('adapts only absent publication on older hosts and shares the saved Checks ga
   expect(checksAgent('fixChecks')).toBeNull()
   const localChat = { executionHostId: 'local', hostCapabilities: [CHAT] }
   expect(chat.readChatProgram(useAppStore.getState(), 'antigravity', localChat, [])).toBe('missing')
+})
+
+it('updates an unchanged offered-agent caller through its real host publication without rendering on another host publication', async () => {
+  const caps = [CHAT, MODE, CATALOG, HEALTH, INSTALL]
+  useAppStore.setState({
+    runtimeStatusByEnvironmentId: new Map(
+      ['offered', 'other'].map((id) => [id, status('offered-runtime')])
+    ),
+    settings: { ...getDefaultSettings('/home/me'), nativeChatProviders: { grok: true } }
+  })
+  rpc.call.mockResolvedValue({
+    agents: [{ agent: 'grok', capabilities: {}, managedRuntime: true }]
+  })
+  await loadHostStructuredAgents('runtime:offered', caps, 'offered-runtime')
+  await loadHostStructuredAgents('runtime:other', caps, 'offered-runtime')
+  const workspace = { kind: 'git-worktree' as const, runtimeEnvironmentId: 'offered' }
+  const detected = new Set<TuiAgent>()
+  let renders = 0
+  const hook = renderHook(() => {
+    renders++
+    return useAgentsOfferedForLaunch(workspace, detected)
+  })
+  const other = renderHook(() =>
+    useAgentsOfferedForLaunch({ ...workspace, runtimeEnvironmentId: 'other' }, detected)
+  )
+  await act(async () => {})
+  expect([...(hook.result.current ?? [])]).toEqual([])
+  const stream = (environmentId: string) =>
+    rpc.subscribe.mock.calls.findLast(([target]) => target.environmentId === environmentId)![3]
+  await act(async () =>
+    stream('offered').onEvent({
+      type: 'availability',
+      agents: [{ agent: 'grok', state: 'available', chatProgram: 'available' }]
+    })
+  )
+  expect([...(hook.result.current ?? [])]).toEqual(['grok'])
+  const before = renders
+  await act(async () =>
+    stream('other').onEvent({
+      type: 'availability',
+      agents: [{ agent: 'grok', state: 'refused', reason: 'agent', chatProgram: 'missing' }]
+    })
+  )
+  expect(renders).toBe(before)
+  expect([...(hook.result.current ?? [])]).toEqual(['grok'])
+  hook.unmount()
+  other.unmount()
 })

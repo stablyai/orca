@@ -1,3 +1,4 @@
+import type { ResolvedAgentBackgroundTarget } from '@/lib/agent-background-session-contract'
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
@@ -20,7 +21,12 @@ export type UseDetectedAgentsResult = {
 }
 
 export type AgentDetectionTarget =
-  | { kind: 'local'; worktreeId?: string | null; contextKey?: string }
+  | {
+      kind: 'local'
+      worktreeId?: string | null
+      contextKey?: string
+      resolvedTarget?: ResolvedAgentBackgroundTarget
+    }
   | { kind: 'ssh'; connectionId: string }
   // worktreeId: the host resolves that workspace's runtime; absent means the host default.
   | { kind: 'runtime'; environmentId: string; worktreeId?: string | null }
@@ -56,7 +62,8 @@ export function useDetectedAgents(
       : target?.kind === 'runtime'
         ? target.environmentId
         : null
-  const localWorktreeId = target?.kind === 'local' ? target.worktreeId : undefined
+  const localWorktreeId =
+    target?.kind === 'local' ? (target.resolvedTarget ?? target.worktreeId) : undefined
   const runtimeWorktreeId = target?.kind === 'runtime' ? target.worktreeId : undefined
   // Records for a runtime host are per workspace; ssh/local records keep their own keys.
   const recordKey =

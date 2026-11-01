@@ -39,6 +39,9 @@ export function sendResolvedWindowShortcutAction(
     case 'toggleQuickCommandsMenu':
       mainWindow.webContents.send('ui:toggleQuickCommandsMenu')
       return
+    case 'quickStartChat':
+      mainWindow.webContents.send('ui:quickStartChat')
+      return
     case 'openNewWorkspace':
       mainWindow.webContents.send('ui:openNewWorkspace')
       return

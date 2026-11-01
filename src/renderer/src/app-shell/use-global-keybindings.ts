@@ -181,6 +181,13 @@ export function useGlobalKeybindings(args: {
       }
 
       if (
+        matchShortcut('chat.quickStart') &&
+        createAppCommandHandlers(state, input, context).get('chat.quickStart')?.()
+      ) {
+        return
+      }
+
+      if (
         globalShortcutTargetYields(input, shortcutPlatform, keybindings, {
           context,
           terminalShortcutPolicy

@@ -33,6 +33,25 @@ describe('repo set worktree visibility', () => {
     vi.restoreAllMocks()
   })
 
+  it('prints an ordinary Chats folder record without a new CLI protocol', async () => {
+    const folder = {
+      id: 'chats',
+      displayName: 'Renamed chats',
+      path: '/data/chats',
+      kind: 'folder'
+    }
+    vi.mocked(client.call).mockResolvedValueOnce({ ...reply, result: { repos: [folder] } })
+    const parsed = parseArgs(['repo', 'list', '--json'])
+    await dispatch(parsed.commandPath, {
+      flags: parsed.flags,
+      client,
+      cwd: '/elsewhere',
+      json: true
+    })
+    expect(client.call).toHaveBeenCalledExactlyOnceWith('repo.list')
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0]).result.repos).toEqual([folder])
+  })
+
   it.each([
     { visibility: 'show', stored: 'show', repo: 'id:repo-1' },
     { visibility: 'hide', stored: 'hide', repo: 'name:Repo with spaces' },

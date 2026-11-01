@@ -23263,5 +23263,12 @@
   "wslDistroHold": {
     "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
     "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
+  },
+  "quickChat": {
+    "newChat": "New chat",
+    "startChatting": "Start chatting",
+    "projectName": "Chats",
+    "shortcutTitle": "New chat without a project",
+    "failed": "Could not start a chat. Check the Chats folder and try again."
   }
 }

@@ -1,3 +1,4 @@
+import { requestQuickChatFromShortcut } from '@/lib/quick-chat-events'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
@@ -137,6 +138,7 @@ export function createAppCommandHandlers(
         return claim('worktree.history.forward', () => useAppStore.getState().goForwardWorktree())
       }
     ],
+    ['chat.quickStart', () => claim('chat.quickStart', requestQuickChatFromShortcut)],
     ['sidebar.left.toggle', () => claim('sidebar.left.toggle', () => actions.toggleSidebar())],
     [
       'sidebar.sleepingWorkspaces.toggle',

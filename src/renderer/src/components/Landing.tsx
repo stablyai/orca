@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
+import { QuickChatButton } from './QuickChatButton'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -289,6 +290,8 @@ export default function Landing(): React.JSX.Element {
               <FolderPlus className="size-3.5" />
               {translate('auto.components.Landing.f9eaa9e12d', 'Add project')}
             </button>
+
+            <QuickChatButton landing />
 
             <button
               className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors"

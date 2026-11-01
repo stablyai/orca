@@ -866,3 +866,26 @@ describe('buildSections', () => {
     expect(sections[0]?.data[0]?.lineageCollapsed).toBe(true)
   })
 })
+
+it('renders an ordinary branchless Chats repository as a normal renamed project section', () => {
+  const item = worktree({
+    repoId: 'chats',
+    repo: 'Renamed chats',
+    worktreeId: 'chats::/data/chats',
+    path: '/data/chats',
+    branch: '',
+    isMainWorktree: true
+  })
+  const sections = buildSections(
+    [item],
+    'name',
+    { ...NO_WORKSPACE_ROW_FILTERS },
+    '',
+    'repo',
+    new Set(),
+    catalogOf([['Renamed chats', 'chats']])
+  )
+  expect(sections).toHaveLength(1)
+  expect(sections[0].title).toBe('Renamed chats')
+  expect(sections[0].data[0].worktreeId).toBe(item.worktreeId)
+})

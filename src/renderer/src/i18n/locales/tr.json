@@ -23064,5 +23064,12 @@
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
     "launchChat": "Sohbet başlat",
     "launchTerminal": "Terminal başlat"
+  },
+  "quickChat": {
+    "newChat": "Yeni sohbet",
+    "startChatting": "Sohbete başla",
+    "projectName": "Sohbetler",
+    "shortcutTitle": "Proje olmadan yeni sohbet",
+    "failed": "Sohbet başlatılamadı. Sohbetler klasörünü kontrol edip tekrar deneyin."
   }
 }

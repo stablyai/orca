@@ -5,6 +5,15 @@
  */
 const lastSwitchAt = new Map<string, number>()
 const switchCounts = new Map<string, number>()
+const switchListeners = new Set<() => void>()
+
+export function subscribeUserWorkspaceSwitch(listener: () => void): () => void {
+  switchListeners.add(listener)
+  return () => {
+    switchListeners.delete(listener)
+  }
+}
+
 const takenCounts = new Map<string, number>()
 
 /** Notes an activation only when its caller marked it the user's own open ('user-open'). */
@@ -23,6 +32,7 @@ export function noteUserWorkspaceSwitch(workspaceKey: string | null | undefined)
   }
   lastSwitchAt.set(workspaceKey, Date.now())
   switchCounts.set(workspaceKey, (switchCounts.get(workspaceKey) ?? 0) + 1)
+  switchListeners.forEach((listener) => listener())
 }
 
 /** Wall-clock time of the user's last switch to the workspace, if any. */

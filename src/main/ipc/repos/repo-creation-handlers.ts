@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
+import { ensureQuickChatFolder } from '../../quick-chat-folder'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -50,6 +51,9 @@ function getDefaultCreateProjectParent(store: Store): string {
 }
 
 export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: Store): void {
+  ipcMain.handle('repos:ensureQuickChatFolder', () =>
+    ensureQuickChatFolder(app.getPath('userData'), store.getRepos())
+  )
   ipcMain.handle('repos:isGitAvailable', () => probeLocalGitAvailability())
   ipcMain.handle('repos:getDefaultCreateProjectParent', () => getDefaultCreateProjectParent(store))
 

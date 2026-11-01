@@ -24,6 +24,7 @@ import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shar
 import type { WslMovedProject } from '../../shared/wsl-move/wsl-moved-project'
 
 export type RepositoryApi = {
+  ensureQuickChatFolder: () => Promise<{ path: string; canonicalPath: string; repoId?: string }>
   list: () => Promise<Repo[]>
   /** Local projects a WSL host now owns: read-only, listed only for their existing chats. */
   listWslMoved: () => Promise<WslMovedProject[]>

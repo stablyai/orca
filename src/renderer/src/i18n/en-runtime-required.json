@@ -2482,5 +2482,12 @@
       "ariaActiveCount_one": "Filter: {{count}} active.",
       "ariaActiveCount_other": "Filter: {{count}} active."
     }
+  },
+  "quickChat": {
+    "newChat": "New chat",
+    "startChatting": "Start chatting",
+    "projectName": "Chats",
+    "shortcutTitle": "New chat without a project",
+    "failed": "Could not start a chat. Check the Chats folder and try again."
   }
 }

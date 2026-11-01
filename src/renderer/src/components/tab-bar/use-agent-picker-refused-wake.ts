@@ -1,3 +1,4 @@
+import type { LocalAgentWorkspace } from '@/lib/local-preflight-context'
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
@@ -13,10 +14,10 @@ export function useAgentPickerRefusedWake(
 ): void {
   const worktreeId =
     userOpened && detectionTarget?.kind === 'local'
-      ? (detectionTarget.worktreeId ?? null)
+      ? (detectionTarget.resolvedTarget ?? detectionTarget.worktreeId ?? null)
       : undefined
   // The target this open already woke; cleared on close so the next open may wake again.
-  const wokenFor = useRef<{ worktreeId: string | null } | null>(null)
+  const wokenFor = useRef<{ worktreeId: LocalAgentWorkspace } | null>(null)
   const failed = useAppStore(
     (state) =>
       worktreeId !== undefined && state.readLocalAgentInventory(worktreeId).state === 'failed'

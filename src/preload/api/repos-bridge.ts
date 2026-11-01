@@ -10,6 +10,8 @@ export const reposApi = {
 
   add: (args) => ipcRenderer.invoke('repos:add', args),
 
+  ensureQuickChatFolder: () => ipcRenderer.invoke('repos:ensureQuickChatFolder'),
+
   create: (args) => ipcRenderer.invoke('repos:create', args),
 
   isGitAvailable: (): Promise<boolean> => ipcRenderer.invoke('repos:isGitAvailable'),

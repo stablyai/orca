@@ -12,12 +12,15 @@ async function realpathKey(path: string): Promise<string | null> {
 /** Resolve symlink aliases so the same checkout cannot be registered twice. */
 export async function findProjectAtSameRealPath<T extends { path: string }>(
   projects: readonly T[],
-  path: string
+  path: string,
+  canonicalPath?: string
 ): Promise<T | null> {
   if (projects.length === 0) {
     return null
   }
-  const target = await realpathKey(path)
+  const target = canonicalPath
+    ? normalizeRuntimePathForComparison(canonicalPath)
+    : await realpathKey(path)
   if (!target) {
     return null
   }

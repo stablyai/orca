@@ -3,6 +3,8 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import {
   hostStructuredAgentsVersion,
+  hostStructuredAgentsReadFailed,
+  readHostStructuredAgentsForRuntime,
   readHostStructuredAgents,
   subscribeHostStructuredAgents,
   type HostStructuredAgentsStatuses
@@ -30,4 +32,17 @@ export function useHostStructuredAgentsVersion(): number {
     hostStructuredAgentsVersion,
     hostStructuredAgentsVersion
   )
+}
+
+/** Agent rows and failed reads both settle an addressed launch observation. */
+export function useHostStructuredAgentsSnapshot(
+  host: string,
+  runtimeId: string | null | undefined
+) {
+  const read = () =>
+    readHostStructuredAgentsForRuntime(host, runtimeId) ??
+    (runtimeId !== undefined && hostStructuredAgentsReadFailed(host, runtimeId)
+      ? 'failed'
+      : 'unlearned')
+  return useSyncExternalStore(subscribeHostStructuredAgents, read, read)
 }

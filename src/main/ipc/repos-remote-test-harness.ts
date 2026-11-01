@@ -181,7 +181,23 @@ export function resetProjectGroupMocks(
 
 export function resetLocalRepoMocks(mocks: ReposIpcMocks): void {
   mocks.mockStore.getRepos.mockReset().mockReturnValue([])
-  mocks.mockStore.addRepo.mockReset()
+  mocks.mockStore.addRepo.mockReset().mockImplementation((repo) => {
+    const repos = mocks.mockStore.getRepos()
+    if (!Array.isArray(repos)) {
+      throw new Error('Expected current repo backing collection')
+    }
+    repos.push(repo)
+  })
+  mocks.mockStore.removeProjectForHost.mockReset().mockImplementation((target: { id: string }) => {
+    const repos = mocks.mockStore.getRepos()
+    if (!Array.isArray(repos)) {
+      throw new Error('Expected current repo backing collection')
+    }
+    const index = repos.findIndex((repo) => repo.id === target.id)
+    if (index !== -1) {
+      repos.splice(index, 1)
+    }
+  })
   mocks.mockStore.updateRepo.mockReset()
   mocks.mockStore.getProjects.mockReset().mockReturnValue([])
   mocks.mockStore.getProjectHostSetups.mockReset().mockReturnValue([])

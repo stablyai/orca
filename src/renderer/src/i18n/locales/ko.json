@@ -22781,5 +22781,12 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 배포판 {{distro}}이(가) 중지되어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요.",
     "terminalUnverifiable": "WSL 배포판 {{distro}}이(가) 실행 중인지 확인할 수 없어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요."
+  },
+  "quickChat": {
+    "newChat": "새 채팅",
+    "startChatting": "채팅 시작",
+    "projectName": "채팅",
+    "shortcutTitle": "프로젝트 없이 새 채팅 시작",
+    "failed": "채팅을 시작할 수 없습니다. 채팅 폴더를 확인한 후 다시 시도하세요."
   }
 }

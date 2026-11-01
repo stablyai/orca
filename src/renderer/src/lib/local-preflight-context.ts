@@ -173,12 +173,16 @@ export function getLocalPreflightContext(
   return wslDistro ? getWslPreflightContext(wslDistro) : undefined
 }
 
+export type LocalAgentWorkspace = string | ResolvedAgentBackgroundTarget | null
+
 export function getLocalAgentPreflightContext(
   state: AppState,
   appPlatform: NodeJS.Platform = getRendererAppPlatform(),
   wslContext: LocalProjectRuntimeWslContext = getCachedLocalProjectRuntimeWslContext(),
-  worktreeId?: string | null
+  workspace?: LocalAgentWorkspace
 ): LocalPreflightContext {
+  const resolvedTarget = typeof workspace === 'object' && workspace !== null ? workspace : undefined
+  const worktreeId = typeof workspace === 'string' ? workspace : resolvedTarget?.worktree.id
   // Why: Floating owns native host authority and must not inherit any agent runtime fallback.
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return undefined
@@ -187,7 +191,8 @@ export function getLocalAgentPreflightContext(
     state,
     worktreeId,
     appPlatform,
-    wslContext
+    wslContext,
+    resolvedTarget
   )
   if (projectRuntime) {
     return getProjectRuntimePreflightContext(projectRuntime)
