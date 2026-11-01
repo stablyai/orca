@@ -339,6 +339,22 @@ describe('Claude owed task notifications outside the captures', () => {
     )
   })
 
+  it('does not hold the pane for a shell whose launch hook arrives after its notification', () => {
+    const post = listener()
+    post({ hook_event_name: 'Stop', background_tasks: [] })
+    post(notify('b1', 'completed'))
+    // Async managed hooks can deliver the launch late.
+    post({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_response: { backgroundTaskId: 'b1' }
+    })
+
+    expect(post({ hook_event_name: 'StopFailure', error: 'server_error' })?.payload.state).toBe(
+      'done'
+    )
+  })
+
   it('does not end a shell on a notification whose status is not final', () => {
     const post = listener()
     post({

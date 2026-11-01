@@ -2,6 +2,7 @@ import { retainOpenCodeWriterTopology } from './cli-writer-observation'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import type { ClaudeNonAgentTaskIds } from '../../../shared/agent-hook-listener/listener-state'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 import {
   bindOpenCodeTuiSession,
@@ -14,7 +15,7 @@ import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profil
 /** A pane's Claude background-work gate, snapshotted so a rejected hook can be undone whole. */
 type ClaudeBackgroundEvidence = {
   hasRunningTask: boolean
-  runningTaskIds: ReadonlySet<string> | undefined
+  runningTaskIds: ClaudeNonAgentTaskIds | undefined
   hasActiveCron: boolean
 }
 
