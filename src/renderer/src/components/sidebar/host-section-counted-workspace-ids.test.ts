@@ -133,4 +133,53 @@ describe('addHostSectionRows counted workspace ids', () => {
       { hostId: 'local', countedWorkspaceIds: ['wt-1'] }
     ])
   })
+
+  it('gives each host copy of a cross-host project header its own counted workspace ids', () => {
+    const sshRepo: Repo = { ...LOCAL, executionHostId: 'ssh:ssh-1' }
+    const projectHeader: Extract<Row, { type: 'header' }> = {
+      type: 'header',
+      key: 'repo:local',
+      count: 2,
+      icon: { kind: 'project' },
+      repo: LOCAL,
+      hostRepos: new Map([
+        ['local', LOCAL],
+        ['ssh:ssh-1', sshRepo]
+      ]),
+      hostWorktreeCounts: new Map([
+        ['local', 1],
+        ['ssh:ssh-1', 1]
+      ]),
+      hostWorktreeIds: new Map([
+        ['local', ['wt-1']],
+        ['ssh:ssh-1', ['wt-2']]
+      ]),
+      countedWorkspaceIds: ['local::wt-1', 'ssh:ssh-1::wt-2'],
+      hostCountedWorkspaceIds: new Map([
+        ['local', ['local::wt-1']],
+        ['ssh:ssh-1', ['ssh:ssh-1::wt-2']]
+      ])
+    }
+    const sectioned = addHostSectionRows({
+      rows: [projectHeader],
+      hostOptions: [
+        {
+          id: 'local',
+          kind: 'local',
+          label: 'Local Mac',
+          detail: 'This computer',
+          health: 'local'
+        },
+        sshHost('ssh:ssh-1', 'Builder')
+      ],
+      workspaceHostScope: 'all',
+      defaultHostId: 'local',
+      localHostLabel: 'Local Mac'
+    })
+
+    expect(sectioned.filter((row) => row.type === 'header')).toMatchObject([
+      { hostId: 'local', countedWorkspaceIds: ['local::wt-1'] },
+      { hostId: 'ssh:ssh-1', countedWorkspaceIds: ['ssh:ssh-1::wt-2'] }
+    ])
+  })
 })
