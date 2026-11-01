@@ -23,6 +23,7 @@ vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () =
 // The slide settles at once, so a back press unmounts the page in the same act.
 vi.mock('react-native-reanimated', () => ({
   default: { View: 'AnimatedView' },
+  Easing: { bezier: () => (t: number) => t },
   runOnJS:
     <Args extends unknown[]>(fn: (...args: Args) => void) =>
     (...args: Args) =>

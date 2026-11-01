@@ -9,7 +9,7 @@ import {
 import type {
   NativeChatMessage,
   NativeChatToolResultBlock
-} from '../../../src/shared/native-chat-types'
+} from '../../../src/shared/native-chat/native-chat-types'
 import type { AgentJournalBoundedPayload } from '../../../src/shared/agent-session-journal-types'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { styles } from './native-chat/transcript/mobile-native-chat-message-styles'

@@ -13,7 +13,7 @@ import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-reject
 import { structuredAgentSessionAttemptFailureParts } from './structured-agent-session-rejection-words'
 import type { AgentJournalItemBody, AgentJournalSubmission } from './agent-session-journal-types'
 import { pendingPromptsAllUnanswerableHere } from './agent-session-approval-subject'
-import type { NativeChatImageRefBlock } from './native-chat-types'
+import type { NativeChatImageRefBlock } from './native-chat/native-chat-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,

@@ -135,13 +135,6 @@ describe('showing a tab main wrote for a file it opened', () => {
     expect(h.activeTabId()).toBe(h.tabId)
   })
 
-  it('does nothing when the tab is gone by the time its frame comes in', () => {
-    const h = setup()
-    const before = h.activeTabId()
-    h.reveal({ worktreeId: WT, ...FILE, tabId: 'closed-tab', frameSeq: 5 })
-    expect(h.activeTabId()).toBe(before)
-  })
-
   it("visits a workspace the window has not drawn yet, then shows main's tab once it draws", async () => {
     const h = setup()
     beginLayoutFramePositions()

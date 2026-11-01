@@ -9,7 +9,8 @@ export const ORCHESTRATION_INBOX_COMMAND_SPEC: CommandSpec = {
   allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'run', 'full'],
   notes: [
     '--terminal reads messages addressed directly to that terminal and reports its current Run binding.',
-    '--run reads the Run mailbox and rejects a terminal that is bound to a different Run.'
+    '--run reads the Run mailbox and rejects a terminal that is bound to a different Run.',
+    'Rows preview each body in 200 characters and keep only payload ids; --full prints them whole.'
   ],
   identityFlagRoles: { terminal: 'target' }
 }

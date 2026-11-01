@@ -98,6 +98,30 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     return true
   }
 
+  reopenMobileSessionTabForClient(
+    worktreeId: string,
+    sessionId: string,
+    clientNavigationId: string
+  ): boolean {
+    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId)
+    const tab = snapshot.tabs.find(
+      (candidate) => candidate.type === 'agent-session' && candidate.sessionId === sessionId
+    )
+    if (!tab) {
+      return false
+    }
+    const projected = this.clientSessionTabSelections.reopen(
+      this.withSessionTabsHolds(snapshot, clientNavigationId),
+      clientNavigationId,
+      tab.id
+    )
+    if (!projected.tabs.some((candidate) => candidate.id === tab.id)) {
+      return false
+    }
+    this.emitMobileSessionTabsSnapshotToClient(projected, clientNavigationId)
+    return true
+  }
+
   protected shouldMaterializeHeadlessMobileSessionTab(
     snapshot: RuntimeMobileSessionTabsSnapshot,
     tab: RuntimeMobileSessionTerminalTab

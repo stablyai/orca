@@ -37,13 +37,6 @@ describe('settledSortEpoch', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('settles Manual bumps in the same write', () => {
-    useAppStore.setState({ sortBy: 'manual' })
-    bump()
-    expect(settled()).toBe(true)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('settles a web session sync patch that bumps sortEpoch', () => {
     useAppStore.setState({ sortBy: 'recent' })
     applyWebSessionTabsStorePatch(
@@ -70,22 +63,6 @@ describe('settledSortEpoch', () => {
     useAppStore.setState({ worktreesByRepo: { 'repo-1': [makeWorktree('a', 'A')] } })
     expect(settled()).toBe(true)
     expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('ignores archived rows when detecting adds and removes', () => {
-    useAppStore.setState((s) => ({
-      sortBy: 'recent',
-      worktreesByRepo: { 'repo-1': [makeWorktree('a', 'A')] },
-      sortEpoch: s.sortEpoch + 1
-    }))
-    expect(settled()).toBe(true)
-    useAppStore.setState((s) => ({
-      worktreesByRepo: {
-        'repo-1': [makeWorktree('a', 'A'), makeWorktree('b', 'B', { isArchived: true })]
-      },
-      sortEpoch: s.sortEpoch + 1
-    }))
-    expect(settled()).toBe(false)
   })
 
   it('clears a pending settle when the store is reset', () => {

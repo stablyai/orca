@@ -4,7 +4,7 @@ import {
   type NativeChatEditPatch,
   type NativeChatEditPatchHunk,
   type NativeChatMessage
-} from '../../shared/native-chat-types'
+} from '../../shared/native-chat/native-chat-types'
 import {
   asRecord,
   extractString,

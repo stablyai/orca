@@ -1,6 +1,7 @@
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
-import type { AgentSessionBackgroundTaskState, AgentSessionLatestTurn } from './agent-session-wire'
+import type { AgentSessionLatestTurn } from './agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from './agent-session/agent-session-background-task-wire'
 import {
   runningStructuredAgentSessionTurnId,
   runningStructuredAgentSessionTurnScope

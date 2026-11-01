@@ -26,7 +26,7 @@ import {
 import type { RuntimeRpcResponse } from '../../src/shared/runtime-rpc-envelope'
 import { withNativeChatCutTurnNotices } from '../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { nativeChatRowsInDrawOrder } from '../../src/shared/native-chat/transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from '../../src/shared/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import { projectStructuredAgentSessionMessages } from '../../src/shared/structured-agent-session-message-projection'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,

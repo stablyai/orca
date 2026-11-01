@@ -18,7 +18,7 @@ import {
 import {
   nativeChatReceiptAnswers,
   type NativeChatResolvedPrompt
-} from '../../../../shared/native-chat-resolution-receipt'
+} from '../../../../shared/native-chat/native-chat-resolution-receipt'
 
 afterEach(async () => {
   cleanup()

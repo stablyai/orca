@@ -21,7 +21,7 @@ import {
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import { detailPayloadBody } from './mobile-tasks-provider-detail-types'
-import { SectionHeader } from '../components/list/SectionHeader'
+import { SectionHeader } from '../components/list/ListGroup'
 
 export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationModel) {
   const {

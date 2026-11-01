@@ -242,7 +242,7 @@ export function getPRChecks(
   prNumber: number,
   headSha?: string,
   prRepo?: GitHubApiRepository | null,
-  options?: { noCache?: boolean },
+  options?: { noCache?: boolean; userRefresh?: boolean },
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckDetail[]> {
@@ -258,8 +258,13 @@ export function getPRChecks(
         ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
       )
     ])
-    return runCoalescedProbe(checksReads, key, () =>
-      readPRChecks(repoPath, prNumber, headSha, prRepo, options, connectionId, localGitOptions)
+    return runCoalescedProbe(
+      checksReads,
+      key,
+      () =>
+        readPRChecks(repoPath, prNumber, headSha, prRepo, options, connectionId, localGitOptions),
+      undefined,
+      { userRefresh: options?.userRefresh === true }
     )
   })
 }

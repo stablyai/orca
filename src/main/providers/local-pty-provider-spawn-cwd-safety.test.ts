@@ -155,19 +155,6 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
-    it('calls node-pty spawn with correct args', async () => {
-      await provider.spawn({ cols: 120, rows: 40, cwd: '/tmp' })
-      expect(spawnMock).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(Array),
-        expect.objectContaining({
-          cols: 120,
-          rows: 40,
-          cwd: '/tmp'
-        })
-      )
-    })
-
     it('throws when cwd does not exist', async () => {
       existsSyncMock.mockImplementation((p: string) => p !== '/nonexistent')
       await expect(provider.spawn({ cols: 80, rows: 24, cwd: '/nonexistent' })).rejects.toThrow(

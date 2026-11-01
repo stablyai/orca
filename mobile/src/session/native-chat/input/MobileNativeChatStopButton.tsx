@@ -3,7 +3,10 @@ import { Square } from 'lucide-react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { composerInputStyles as styles } from '../../../components/composer-input/composer-input-styles'
+import {
+  COMPOSER_CONTROL_HIT_SLOP,
+  composerInputStyles as styles
+} from '../../../components/composer-input/composer-input-styles'
 
 // held tracks this phone’s in-flight Stop request, not the host’s stopping status.
 export function MobileNativeChatStopButton({
@@ -20,6 +23,7 @@ export function MobileNativeChatStopButton({
       style={({ pressed }) => [styles.controlButton, pressed && styles.pressed]}
       onPress={onStop}
       disabled={held}
+      hitSlop={COMPOSER_CONTROL_HIT_SLOP}
       accessibilityRole="button"
       accessibilityLabel={
         held

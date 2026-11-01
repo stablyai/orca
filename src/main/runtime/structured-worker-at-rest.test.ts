@@ -62,6 +62,7 @@ function running(current: AgentSessionRecord): RunningStructuredSession {
 function installHost(current: AgentSessionRecord | null, tabs: string[]) {
   const host = {
     deps: {
+      logger: { warn: vi.fn() },
       store: {
         getRecord: () => current,
         getConversation: () => (current ? agentSessionConversationView(current) : null),
@@ -69,6 +70,7 @@ function installHost(current: AgentSessionRecord | null, tabs: string[]) {
         getVisibleSessionTabIndex: () => ({ present: true, sessionIds: tabs })
       }
     },
+    getSessionTabId: (id: string) => (tabs.includes(id) ? `agent-session:${id}` : null),
     hasSession: () => false,
     getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: tabs }),
     setSessionTabVisibility: vi.fn(async (_id: string, visible: boolean) => {

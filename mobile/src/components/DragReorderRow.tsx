@@ -21,7 +21,8 @@ import {
   orderedKeysFromDragReorderPositions,
   type DragReorderPositions
 } from './drag-reorder-positions'
-const ROW_SPRING = { damping: 28, stiffness: 350 }
+// Critically damped: Reanimated 4's default mass of 4 made the old damping/stiffness pair wobble.
+const ROW_SPRING = { dampingRatio: 1, duration: 250 } as const
 const LONG_PRESS_ACTIVATION_MS = 200
 
 export type DragSharedState = {
@@ -84,7 +85,8 @@ export function DragReorderRow({
   } = shared
   // Read on the JS thread: capturing the live `colors` in a worklet would freeze it.
   const activeBackground = colors.bgRaised
-  const restingBackground = colors.bgPanel
+  // Settings rows rest on their ListGroup's surface.
+  const restingBackground = colors.sheetGroup
 
   const pan = Gesture.Pan()
     .enabled(ready && movable && !disabled)

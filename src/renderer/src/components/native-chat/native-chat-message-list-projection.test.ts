@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { orderNativeChatMessages } from './native-chat-message-grouping'
-import { stripNoiseMessages } from './native-chat-noise'
+import { stripNoiseMessages } from '../../../../shared/native-chat/native-chat-noise'
 import { foldToolMessages } from '../../../../shared/native-chat/tools/native-chat-tool-fold'
 import { pairToolBlocks } from '../../../../shared/native-chat/tools/native-chat-tool-pairs'
 

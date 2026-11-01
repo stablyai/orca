@@ -303,7 +303,7 @@ export function TabBarQuickCommandsMenu({
           align="end"
           side="bottom"
           sideOffset={6}
-          className="w-80 p-0"
+          className="w-120 max-w-[calc(100vw-1rem)]"
           onCloseAutoFocus={(event) => {
             if (!isFocused) {
               event.preventDefault()

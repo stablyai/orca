@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { MobileLoadErrorState } from '../components/MobileStateView'
 import { MobileNativeChatImageViewer } from '../session/native-chat/visual/MobileNativeChatImageViewer'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { loadMarkdownPreviewImage } from './mobile-markdown-image-source'
@@ -62,7 +62,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
     <View style={styles.frame}>
       {load.error ? (
         <MobileLoadErrorState
-          message={load.error}
+          error={load.error}
           onRetry={() => {
             setLoad({})
             setAttempt((value) => value + 1)

@@ -9,7 +9,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MarkdownDocState } from './mobile-session-route-types'
-import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { MobileLoadErrorState, MobileStateView } from '../components/MobileStateView'
 
 export function MarkdownReader({
   documentId,
@@ -39,13 +39,11 @@ export function MarkdownReader({
   const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
   if (!doc || doc.status === 'loading') {
     return (
-      <View style={styles.markdownState}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
+      <MobileStateView loading title={t('session.markdownReader.loading', 'Loading document…')} />
     )
   }
   if (doc.status === 'error') {
-    return <MobileLoadErrorState message={doc.message} onRetry={onRefresh} />
+    return <MobileLoadErrorState error={doc.message} onRetry={onRefresh} />
   }
 
   const statusText = markdownReaderStatusText(doc)

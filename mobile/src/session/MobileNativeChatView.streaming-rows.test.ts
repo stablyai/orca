@@ -10,7 +10,7 @@ import { MobileNativeChatPageList } from './MobileNativeChatPageList'
 import type {
   NativeChatMessage,
   NativeChatToolResultBlock
-} from '../../../src/shared/native-chat-types'
+} from '../../../src/shared/native-chat/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type * as MobileNativeChatItemReadModule from './mobile-native-chat-item-read'
 import type * as MobileNativeChatRowPropsModule from './native-chat/transcript/use-mobile-native-chat-row-props'

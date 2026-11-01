@@ -16,6 +16,7 @@ import {
   X,
   GitBranch
 } from './mobile-tasks-dependencies'
+import { LIST_LEADING_INSET, ListGroup, ListRow } from '../components/list/ListGroup'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
   projectRowStatusLabel,
@@ -65,41 +66,36 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
             </Text>
           </View>
 
-          <View style={styles.actionGroup}>
+          <ListGroup separatorInset={LIST_LEADING_INSET}>
             {projectRepoNotInOrca.url ? (
-              <Pressable
-                style={styles.actionRow}
+              <ListRow
+                key="open"
+                title={translate('tasks.projectDetailDrawer.openInGitHub', 'Open in GitHub')}
+                leading={<ExternalLink size={16} color={colors.textPrimary} />}
                 onPress={() => {
                   if (projectRepoNotInOrca.url) {
                     void Linking.openURL(projectRepoNotInOrca.url)
                   }
                 }}
-              >
-                <ExternalLink size={16} color={colors.textPrimary} />
-                <Text style={styles.actionText}>
-                  {translate('tasks.projectDetailDrawer.openInGitHub', 'Open in GitHub')}
-                </Text>
-              </Pressable>
+              />
             ) : null}
-            {projectRepoNotInOrca.url ? <View style={styles.actionSeparator} /> : null}
-            <Pressable
-              style={styles.actionRow}
+            <ListRow
+              key="copy"
+              title={
+                copiedLinkKey ===
+                `project-repo:${projectRepoNotInOrca.owner}/${projectRepoNotInOrca.repo}`
+                  ? translate('common.copied', 'Copied')
+                  : translate('tasks.projectDetailDrawer.copyRepository', 'Copy repository')
+              }
+              leading={<Copy size={16} color={colors.textPrimary} />}
               onPress={() =>
                 void copyTextToClipboard(
                   `project-repo:${projectRepoNotInOrca.owner}/${projectRepoNotInOrca.repo}`,
                   `${projectRepoNotInOrca.owner}/${projectRepoNotInOrca.repo}`
                 )
               }
-            >
-              <Copy size={16} color={colors.textPrimary} />
-              <Text style={styles.actionText}>
-                {copiedLinkKey ===
-                `project-repo:${projectRepoNotInOrca.owner}/${projectRepoNotInOrca.repo}`
-                  ? translate('common.copied', 'Copied')
-                  : translate('tasks.projectDetailDrawer.copyRepository', 'Copy repository')}
-              </Text>
-            </Pressable>
-          </View>
+            />
+          </ListGroup>
         </View>
       ) : null}
     </BottomDrawer>
@@ -271,134 +267,108 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
             {renderMobileTasksProjectLoadedDetail(model)}
           </View>
 
-          <View style={styles.actionGroup}>
+          <ListGroup separatorInset={LIST_LEADING_INSET}>
             {canCreateWorkspaceFromProjectRow(projectRowItem) ? (
-              <Pressable
-                style={styles.actionRow}
+              <ListRow
+                key="create"
+                title={translate('tasks.projectDetailDrawer.createWorkspace', 'Create Workspace')}
+                leading={<Plus size={16} color={colors.textPrimary} />}
                 disabled={creatingKey === `github-project:${projectRowItem.id}`}
                 onPress={() =>
                   projectRowHandoff.closeThen(
                     () => void createWorkspaceFromProjectRow(projectRowItem)
                   )
                 }
-              >
-                <Plus size={16} color={colors.textPrimary} />
-                <Text style={styles.actionText}>
-                  {translate('tasks.projectDetailDrawer.createWorkspace', 'Create Workspace')}
-                </Text>
-              </Pressable>
+              />
             ) : (
-              <Text style={styles.emptyInlineText}>
+              <Text key="create-note" style={styles.groupNote}>
                 {translate(
                   'tasks.projectDetailDrawer.workspaceCreationRequirement',
                   'Workspaces can only be created from GitHub issues and pull requests.'
                 )}
               </Text>
             )}
-
             {projectRowItem.content.url ? (
-              <>
-                {canCreateWorkspaceFromProjectRow(projectRowItem) ? (
-                  <View style={styles.actionSeparator} />
-                ) : null}
-                <Pressable
-                  style={styles.actionRow}
-                  onPress={() => {
-                    if (projectRowItem.content.url) {
-                      void Linking.openURL(projectRowItem.content.url)
-                    }
-                  }}
-                >
-                  <ExternalLink size={16} color={colors.textPrimary} />
-                  <Text style={styles.actionText}>
-                    {translate('tasks.projectDetailDrawer.openInGitHub', 'Open in GitHub')}
-                  </Text>
-                </Pressable>
-                <View style={styles.actionSeparator} />
-                <Pressable
-                  style={styles.actionRow}
-                  onPress={() =>
-                    projectRowItem.content.url
-                      ? void copyTaskLink(
-                          `github-project:${projectRowItem.id}`,
-                          projectRowItem.content.url
-                        )
-                      : undefined
+              <ListRow
+                key="open"
+                title={translate('tasks.projectDetailDrawer.openInGitHub', 'Open in GitHub')}
+                leading={<ExternalLink size={16} color={colors.textPrimary} />}
+                onPress={() => {
+                  if (projectRowItem.content.url) {
+                    void Linking.openURL(projectRowItem.content.url)
                   }
-                >
-                  <Copy size={16} color={colors.textPrimary} />
-                  <Text style={styles.actionText}>
-                    {copiedLinkKey === `github-project:${projectRowItem.id}`
-                      ? translate('common.copied', 'Copied')
-                      : translate('tasks.projectDetailDrawer.copyGitHubLink', 'Copy GitHub link')}
-                  </Text>
-                </Pressable>
-              </>
+                }}
+              />
+            ) : null}
+            {projectRowItem.content.url ? (
+              <ListRow
+                key="copy"
+                title={
+                  copiedLinkKey === `github-project:${projectRowItem.id}`
+                    ? translate('common.copied', 'Copied')
+                    : translate('tasks.projectDetailDrawer.copyGitHubLink', 'Copy GitHub link')
+                }
+                leading={<Copy size={16} color={colors.textPrimary} />}
+                onPress={() =>
+                  projectRowItem.content.url
+                    ? void copyTaskLink(
+                        `github-project:${projectRowItem.id}`,
+                        projectRowItem.content.url
+                      )
+                    : undefined
+                }
+              />
             ) : null}
             {projectRowType(projectRowItem) &&
             projectRowItem.content.state !== 'MERGED' &&
             projectRowItem.itemType !== 'DRAFT_ISSUE' ? (
-              <>
-                <View style={styles.actionSeparator} />
-                <Pressable
-                  style={styles.actionRow}
-                  disabled={projectMutating}
-                  onPress={() => {
-                    const nextState = projectRowItem.content.state === 'CLOSED' ? 'open' : 'closed'
-                    if (projectRowItem.itemType === 'PULL_REQUEST') {
-                      setPendingHostedStateChange({
-                        source: 'project',
-                        row: projectRowItem,
-                        nextState
-                      })
-                      return
-                    }
-                    setPendingHostedStateChange({
-                      source: 'project',
-                      row: projectRowItem,
-                      nextState
-                    })
-                  }}
-                >
-                  {projectRowItem.content.state === 'CLOSED' ? (
+              <ListRow
+                key="state"
+                title={
+                  projectRowItem.content.state === 'CLOSED'
+                    ? translate('tasks.projectDetailDrawer.reopenItem', 'Reopen item')
+                    : translate('tasks.projectDetailDrawer.closeItem', 'Close item')
+                }
+                leading={
+                  projectRowItem.content.state === 'CLOSED' ? (
                     <RefreshCw size={16} color={colors.textPrimary} />
                   ) : (
                     <X size={16} color={colors.textPrimary} />
-                  )}
-                  <Text style={styles.actionText}>
-                    {projectRowItem.content.state === 'CLOSED'
-                      ? translate('tasks.projectDetailDrawer.reopenItem', 'Reopen item')
-                      : translate('tasks.projectDetailDrawer.closeItem', 'Close item')}
-                  </Text>
-                </Pressable>
-              </>
+                  )
+                }
+                disabled={projectMutating}
+                onPress={() =>
+                  setPendingHostedStateChange({
+                    source: 'project',
+                    row: projectRowItem,
+                    nextState: projectRowItem.content.state === 'CLOSED' ? 'open' : 'closed'
+                  })
+                }
+              />
             ) : null}
             {projectRowItem.itemType === 'PULL_REQUEST' &&
             projectRowItem.content.state !== 'CLOSED' &&
             projectRowItem.content.state !== 'MERGED' ? (
-              <>
-                <View style={styles.actionSeparator} />
-                <Pressable
-                  style={styles.actionRow}
-                  disabled={projectMutating || !projectRowHostedRepo}
-                  onPress={() => setMergeMethodProjectRow(projectRowItem)}
-                >
-                  <GitBranch size={16} color={colors.textPrimary} />
-                  <Text style={styles.actionText}>
-                    {translate('tasks.projectDetailDrawer.mergePullRequest', 'Merge pull request')}
-                  </Text>
-                </Pressable>
-                {!projectRowHostedRepo ? (
-                  <Text style={styles.emptyInlineText}>
-                    {translate(
-                      'tasks.projectDetailDrawer.mergeRepositoryRequirement',
-                      'Merge requires this repository in Orca.'
-                    )}
-                  </Text>
-                ) : null}
-              </>
+              <ListRow
+                key="merge"
+                title={translate(
+                  'tasks.projectDetailDrawer.mergePullRequest',
+                  'Merge pull request'
+                )}
+                subtitle={
+                  projectRowHostedRepo
+                    ? undefined
+                    : translate(
+                        'tasks.projectDetailDrawer.mergeRepositoryRequirement',
+                        'Merge requires this repository in Orca.'
+                      )
+                }
+                leading={<GitBranch size={16} color={colors.textPrimary} />}
+                disabled={projectMutating || !projectRowHostedRepo}
+                onPress={() => setMergeMethodProjectRow(projectRowItem)}
+              />
             ) : null}
-          </View>
+          </ListGroup>
         </View>
       ) : null}
     </BottomDrawer>
