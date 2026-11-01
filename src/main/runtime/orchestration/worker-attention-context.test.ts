@@ -119,4 +119,46 @@ describe('worker attention liveness', () => {
 
     expect(attention).toEqual({ categories: [], requiresAction: false })
   })
+
+  it('marks an unsettled worker with done agent status as stopped_without_worker_done', () => {
+    const attention = projectWorkerAttentionContext({
+      facts: facts({
+        outcome: 'in_progress',
+        workerState: 'ready',
+        dispatchStatus: 'dispatched',
+        hostScope: '{"kind":"local","hostId":"local"}'
+      }),
+      isRoot: false,
+      evidence: status({
+        state: 'done',
+        lastAssistantMessage: 'Where do I commit this?'
+      }),
+      now: NOW
+    })
+
+    expect(attention).toEqual({
+      categories: ['stopped_without_worker_done'],
+      requiresAction: true,
+      lastAssistantMessage: 'Where do I commit this?'
+    })
+  })
+
+  it('marks an unsettled worker with waiting agent status as stopped_without_worker_done', () => {
+    const attention = projectWorkerAttentionContext({
+      facts: facts({
+        outcome: 'in_progress',
+        workerState: 'ready',
+        dispatchStatus: 'dispatched',
+        hostScope: '{"kind":"local","hostId":"local"}'
+      }),
+      isRoot: false,
+      evidence: status({ state: 'waiting' }),
+      now: NOW
+    })
+
+    expect(attention).toEqual({
+      categories: ['stopped_without_worker_done'],
+      requiresAction: true
+    })
+  })
 })

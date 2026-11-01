@@ -263,7 +263,10 @@ export function refreshFleetWorkerVerdict(
   refreshOrchestrationFleetLivenessAttention(worker)
   const row = durable.get(worker.dispatchId)
   if (row) {
-    worker.nextAction = projectFleetNextAction(row, worker.liveness)
+    const stoppedWithoutWorkerDone = worker.attention.categories.includes(
+      'stopped_without_worker_done'
+    )
+    worker.nextAction = projectFleetNextAction(row, worker.liveness, { stoppedWithoutWorkerDone })
   }
 }
 

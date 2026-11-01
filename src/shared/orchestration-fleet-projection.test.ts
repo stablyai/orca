@@ -662,4 +662,90 @@ describe('fleet liveness and attention after a host verdict', () => {
     expect(projected.workers[0]!.liveness.verdict).toBe('live')
     expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
   })
+
+  it('reports actionable stopped_without_worker_done attention and worker-read nextAction when turn ends without worker_done', () => {
+    const now = 10_000
+    const projected = projectOrchestrationFleet({
+      workers: [
+        worker('1', {
+          workerState: 'ready',
+          dispatchStatus: 'dispatched'
+        })
+      ],
+      statuses: [
+        status('1', now - 1_000, {
+          state: 'done',
+          lastAssistantMessage: 'What branch should I use for this change?',
+          orchestration: { taskId: 'task-1', dispatchId: '1' }
+        })
+      ],
+      now
+    })
+
+    const subject = projected.workers[0]!
+    expect(subject.liveness.verdict).toBe('live')
+    expect(subject.stage.activity).toBe('done')
+    expect(subject.attention).toEqual({
+      categories: ['stopped_without_worker_done'],
+      requiresAction: true,
+      lastAssistantMessage: 'What branch should I use for this change?'
+    })
+    expect(subject.lastAssistantMessage).toBe('What branch should I use for this change?')
+    expect(subject.nextAction).toEqual({
+      kind: 'read',
+      argv: ['orchestration', 'worker-read', '--dispatch', '1']
+    })
+  })
+
+  it('reports stopped_without_worker_done when agent status is waiting with no pending question thread', () => {
+    const now = 10_000
+    const projected = projectOrchestrationFleet({
+      workers: [
+        worker('1', {
+          workerState: 'ready',
+          dispatchStatus: 'dispatched'
+        })
+      ],
+      statuses: [
+        status('1', now - 1_000, {
+          state: 'waiting',
+          orchestration: { taskId: 'task-1', dispatchId: '1' }
+        })
+      ],
+      now
+    })
+
+    const subject = projected.workers[0]!
+    expect(subject.attention.categories).toEqual(['stopped_without_worker_done'])
+    expect(subject.attention.requiresAction).toBe(true)
+    expect(subject.nextAction).toEqual({
+      kind: 'read',
+      argv: ['orchestration', 'worker-read', '--dispatch', '1']
+    })
+  })
+
+  it('prefers input attention over stopped_without_worker_done when worker has pending input', () => {
+    const now = 10_000
+    const projected = projectOrchestrationFleet({
+      workers: [
+        worker('1', {
+          workerState: 'ready',
+          dispatchStatus: 'dispatched',
+          pendingInput: true
+        })
+      ],
+      statuses: [
+        status('1', now - 1_000, {
+          state: 'waiting',
+          orchestration: { taskId: 'task-1', dispatchId: '1' }
+        })
+      ],
+      now
+    })
+
+    const subject = projected.workers[0]!
+    expect(subject.attention.categories).toEqual(['input'])
+    expect(subject.attention.categories).not.toContain('stopped_without_worker_done')
+    expect(subject.attention.requiresAction).toBe(true)
+  })
 })

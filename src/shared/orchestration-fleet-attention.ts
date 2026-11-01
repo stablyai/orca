@@ -6,7 +6,9 @@ export const ORCHESTRATION_FLEET_ATTENTION_CATEGORIES = [
   'interruption',
   'stale',
   'unverifiable',
-  'root_completion'
+  'root_completion',
+  'stopped_without_worker_done',
+  'idle_unsettled'
 ] as const
 
 export type OrchestrationFleetAttentionCategory =
@@ -15,6 +17,7 @@ export type OrchestrationFleetAttentionCategory =
 export type OrchestrationFleetAttention = {
   categories: OrchestrationFleetAttentionCategory[]
   requiresAction: boolean
+  lastAssistantMessage?: string
 }
 
 export type OrchestrationFleetAttentionFacts = {
@@ -28,6 +31,8 @@ export type OrchestrationFleetAttentionFacts = {
     verdict: 'live' | 'unverifiable' | 'exited'
     reason?: string
   }
+  stoppedWithoutWorkerDone?: boolean
+  lastAssistantMessage?: string | null
 }
 
 const ACTION_CATEGORIES = new Set<string>([
@@ -36,7 +41,9 @@ const ACTION_CATEGORIES = new Set<string>([
   'approval',
   'failure',
   'interruption',
-  'unverifiable'
+  'unverifiable',
+  'stopped_without_worker_done',
+  'idle_unsettled'
 ] satisfies OrchestrationFleetAttentionCategory[])
 
 export function isActionableOrchestrationFleetAttention(category: string): boolean {
@@ -62,6 +69,9 @@ export function projectOrchestrationFleetAttention(
   if (facts.interrupted) {
     categories.push('interruption')
   }
+  if (facts.stoppedWithoutWorkerDone) {
+    categories.push('stopped_without_worker_done')
+  }
   // Unsupervised settled dispatches never had a process to wait on; unverifiable adds no coordinator work.
   if (
     facts.liveness.verdict === 'unverifiable' &&
@@ -81,9 +91,14 @@ export function projectOrchestrationFleetAttention(
   if (facts.isRoot && facts.outcome === 'succeeded') {
     categories.push('root_completion')
   }
+  const lastAssistantMessage =
+    typeof facts.lastAssistantMessage === 'string' && facts.lastAssistantMessage.trim().length > 0
+      ? facts.lastAssistantMessage
+      : undefined
   return {
     categories,
-    requiresAction: categories.some((category) => ACTION_CATEGORIES.has(category))
+    requiresAction: categories.some((category) => ACTION_CATEGORIES.has(category)),
+    ...(lastAssistantMessage ? { lastAssistantMessage } : {})
   }
 }
 
@@ -94,7 +109,12 @@ export function orchestrationFleetAttentionEqual(
   if (left === right) {
     return true
   }
-  if (!left || !right || left.requiresAction !== right.requiresAction) {
+  if (
+    !left ||
+    !right ||
+    left.requiresAction !== right.requiresAction ||
+    left.lastAssistantMessage !== right.lastAssistantMessage
+  ) {
     return false
   }
   return (

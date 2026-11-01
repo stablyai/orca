@@ -50,4 +50,20 @@ describe('orchestration fleet attention', () => {
     expect(child.categories).toEqual([])
     expect(root).toEqual({ categories: ['root_completion'], requiresAction: false })
   })
+
+  it('marks stopped_without_worker_done as actionable and includes last assistant message', () => {
+    const attention = projectOrchestrationFleetAttention({
+      isRoot: false,
+      outcome: 'in_progress',
+      liveness: { verdict: 'live' },
+      stoppedWithoutWorkerDone: true,
+      lastAssistantMessage: 'Which branch should I target?'
+    })
+
+    expect(attention).toEqual({
+      categories: ['stopped_without_worker_done'],
+      requiresAction: true,
+      lastAssistantMessage: 'Which branch should I target?'
+    })
+  })
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { inspectWorkerTerminal } from './worker-observation'
+import { inspectWorkerTerminal, projectFleetWorker } from './worker-observation'
 
 import { exposeDispatchContext } from './dispatch-context-exposure'
 import type { DispatchContextRow } from '../../../../orchestration/types'
@@ -77,5 +77,91 @@ describe('worker-show receipt shape', () => {
     expect(exposed).not.toHaveProperty('capability_hash')
     // Retain only the legacy dispatch spelling older paired CLIs still print beside camelCase worker.
     expect(Object.keys(exposed).filter((key) => key.includes('_'))).toEqual(['task_id'])
+  })
+
+  it('projects stopped_without_worker_done attention and worker-read nextAction for an unsettled worker whose turn ended', () => {
+    const now = Date.now()
+    const runtime = {
+      getOrchestrationFleetAgentStatusSnapshot: vi.fn(() => [
+        {
+          binding: {
+            kind: 'worker' as const,
+            dispatchId: DISPATCH_ID,
+            terminalHandle: TERMINAL_HANDLE,
+            paneKey: 'tab-1:leaf-1',
+            processIncarnation: 'pty-1:inc-1'
+          },
+          clock: { kind: 'observed' as const, at: now - 500 },
+          deliveredAt: now - 500,
+          activity: {
+            paneKey: 'tab-1:leaf-1',
+            connectionId: null,
+            state: 'done' as const,
+            agentType: 'codex',
+            model: 'gpt-test',
+            worktreeId: 'wt-1',
+            restoredUnconfirmed: false,
+            providerSessionOnly: false,
+            lastAssistantMessage: 'Need confirmation to proceed.'
+          }
+        }
+      ])
+    } as unknown as OrcaRuntimeService
+
+    const db = {
+      listWorkerTerminalResources: vi.fn(() => [
+        {
+          dispatchId: DISPATCH_ID,
+          taskId: 'task-1',
+          runId: 'run-1',
+          parentTaskId: null,
+          workerState: 'ready',
+          dispatchStatus: 'dispatched',
+          workerStage: 'prompt_delivered',
+          agentTerminalHandle: TERMINAL_HANDLE,
+          paneKey: 'tab-1:leaf-1',
+          worktreeId: 'wt-1',
+          terminalState: 'active',
+          pendingInput: false,
+          pendingApproval: false,
+          terminationReason: null,
+          resource: null,
+          createdAt: '2026-11-01T00:00:00Z',
+          databaseId: 1
+        }
+      ]),
+      getWorkerAttentionFactsForDispatches: vi.fn(
+        () =>
+          new Map([
+            [
+              DISPATCH_ID,
+              {
+                outcome: 'in_progress' as const,
+                pendingInput: false,
+                pendingGuidance: false,
+                pendingApproval: false,
+                terminationReason: null,
+                isRoot: true,
+                workerState: 'ready',
+                workerStage: 'prompt_delivered',
+                dispatchStatus: 'dispatched'
+              }
+            ]
+          ])
+      )
+    } as unknown as OrchestrationDb
+
+    const projection = projectFleetWorker(runtime, db, DISPATCH_ID)
+    expect(projection).not.toBeNull()
+    expect(projection?.attention).toEqual({
+      categories: ['stopped_without_worker_done'],
+      requiresAction: true,
+      lastAssistantMessage: 'Need confirmation to proceed.'
+    })
+    expect(projection?.lastAssistantMessage).toBe('Need confirmation to proceed.')
+    expect(projection?.nextAction).toEqual({
+      kind: 'read',
+      argv: ['orchestration', 'worker-read', '--dispatch', DISPATCH_ID]
+    })
   })
 })

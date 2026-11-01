@@ -11,7 +11,12 @@ type WorkerProjection = {
   stage: { activity: string }
   liveness: { verdict: string }
   nextAction: { argv: string[] }
-  attention?: { categories: string[] }
+  attention?: {
+    categories: string[]
+    requiresAction?: boolean
+    lastAssistantMessage?: string
+  }
+  lastAssistantMessage?: string | null
   resource?: { terminalState?: string | null } | null
   autoReleaseAt?: string
 }
@@ -53,6 +58,8 @@ type WorkerShowFields = {
   terminalState?: string
   workspace?: string
   attention?: string[]
+  requiresAction?: boolean
+  lastAssistantMessage?: string
   waitingOnHuman?: string
   lastError?: string
   autoReleaseAt?: string
@@ -79,6 +86,11 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
         undefined,
       workspace: value.projection?.workspace?.id ?? value.worker.worktreeId ?? undefined,
       attention: actionableAttention(value.projection),
+      requiresAction: value.projection?.attention?.requiresAction ? true : undefined,
+      lastAssistantMessage:
+        value.projection?.attention?.lastAssistantMessage ??
+        value.projection?.lastAssistantMessage ??
+        undefined,
       // Silence means checked and clear; an older host or unreadable pane never evaluated it.
       waitingOnHuman:
         value.observation === undefined || !('agentWait' in value.observation)
