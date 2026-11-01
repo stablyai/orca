@@ -738,6 +738,85 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     expect(await listedRows()).toEqual([{ path: worktreePath, removalError: refusal }])
   })
 
+  it('does not report an unregistered leftover removed while its purge is still in flight', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // The folder vanished outside Orca and the stale registration was pruned,
+    // so the resume finishes through the unregistered branch with nothing left
+    // to delete; the branch is kept by the record.
+    await removeTree(worktreePath)
+    await git(['worktree', 'prune'])
+
+    const record: WorktreeRemovalRecord = {
+      worktreeId: `repo-1::${worktreePath}`,
+      repoId: 'repo-1',
+      repoPath,
+      worktreePath,
+      branch: 'feature',
+      head: (await git(['rev-parse', 'feature'])).trim(),
+      deleteBranch: false,
+      force: false,
+      requestedAt: 1
+    }
+    await writeWorktreeRemovalRecords(recordsDir, () => [record])
+    await loadWorktreeRemovalRecords(recordsDir)
+    const joined = waitForPendingWorktreeRemoval(record.worktreeId)
+    expect(joined).toBeDefined()
+
+    // Why parked: the unregistered finish used to skip its await, reporting
+    // the removal while the purge — and the Codex pretrust deletion inside
+    // it — was still in flight.
+    let releasePurge!: () => void
+    const purgeParked = new Promise<void>((resolve) => {
+      releasePurge = resolve
+    })
+    const purged: string[] = []
+    const storeStub = {
+      getRepo: () => repo,
+      getRepos: () => [repo],
+      getWorktreeMeta: () => undefined
+    }
+    resumeInterruptedWorktreeRemovals((interrupted) =>
+      interruptedLocalWorktreeRemovalJob(interrupted, {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the finish reads only repos and worktree metadata from the store here; git options and push-target cleanup are stubbed or short-circuit without a push target.
+        store: storeStub as unknown as Store,
+        acquireWatcherRemoval: async (path) => {
+          const gate = acquireWatcherRemovalGate(path)
+          return { finish: async () => gate.release() }
+        },
+        closeWatchers: async () => {},
+        preservedBranchCleanup: {
+          preserveHead: (result) => result ?? {},
+          remember: () => {}
+        },
+        purge: ({ worktreeId }) => {
+          purged.push(worktreeId)
+          return purgeParked
+        },
+        onRemoved: () => {},
+        publish: () => {}
+      })
+    )
+
+    // The leftover finish has reached its purge; the removal must not be
+    // reported until that purge lands.
+    await vi.waitFor(() => expect(purged).toEqual([record.worktreeId]))
+    let settledEarly = false
+    void joined!.then(
+      () => {
+        settledEarly = true
+      },
+      () => {}
+    )
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(settledEarly).toBe(false)
+    releasePurge()
+    const outcome = await joined!.then(
+      (result) => ({ status: 'removed' as const, ...result }),
+      (error: unknown) => ({ status: 'failed' as const, error: String(error) })
+    )
+    expect(outcome).toMatchObject({ status: 'removed' })
+  })
+
   it('leaves a different checkout created at the same path since the quit', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const head = (await git(['rev-parse', 'feature'])).trim()

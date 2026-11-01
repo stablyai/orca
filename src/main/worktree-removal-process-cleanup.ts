@@ -10,7 +10,15 @@ import { pruneWorkspaceSpaceAnalysisSnapshot } from './workspace-space-analysis-
 export function dropRemovedWorktreeProcessState(worktreeId: string): void {
   advertisedUrlWatcher.forgetWorktree(worktreeId)
   localhostWorktreeLabelProxy.unregisterWorktree(worktreeId)
-  deleteWorktreeHistoryDir(worktreeId)
+  // Guarded here: removal purges must degrade, not reject, when AppEnvironment
+  // is uninitialized and the history root cannot be resolved.
+  try {
+    deleteWorktreeHistoryDir(worktreeId)
+  } catch (err) {
+    console.warn(
+      `[pty:history] Failed to delete history dir: ${err instanceof Error ? err.message : String(err)}`
+    )
+  }
 }
 
 /** Removed workspaces must never resurrect from the persisted cleanup/space scan snapshots. */

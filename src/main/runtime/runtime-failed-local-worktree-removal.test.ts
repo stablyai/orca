@@ -113,7 +113,9 @@ function jobHost(purged: string[], stopPtys = vi.fn(async () => {}), pushTarget?
     closeWatchers: async () => {},
     stopPtys,
     preservedBranchCleanup: { preserveHead: (result) => result ?? {}, remember: vi.fn() },
-    purge: ({ worktreeId: id }: WorktreeRemovalRecord) => purged.push(id),
+    purge: ({ worktreeId: id }: WorktreeRemovalRecord) => {
+      purged.push(id)
+    },
     onRemoved: () => {},
     publish: () => {}
   } satisfies Parameters<typeof interruptedLocalWorktreeRemovalJob>[1]

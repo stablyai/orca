@@ -42,7 +42,7 @@ export async function removeRuntimeUnregisteredWorktree(args: {
   store: RuntimeStore
   acquireWatcherRemoval: (path: string) => Promise<RemovalGate>
   stopPtys: (worktreeId: string, allow: boolean) => Promise<void>
-  finishRemoval: () => void
+  finishRemoval: () => void | Promise<void>
 }): Promise<{}> {
   const { repo, target, registeredWorktrees, removedMeta, route } = args
   const removalHome = resolveWorktreeRemovalHome(route)
@@ -77,7 +77,7 @@ export async function removeRuntimeUnregisteredWorktree(args: {
       try {
         await cleanupPushTarget(args)
       } finally {
-        args.finishRemoval()
+        await args.finishRemoval()
       }
     } finally {
       await gate.finish(true)
@@ -105,7 +105,7 @@ async function deleteUnregisteredDirectory(
     try {
       await cleanupPushTarget(args)
     } finally {
-      args.finishRemoval()
+      await args.finishRemoval()
     }
   } finally {
     await gate.finish(completed)
