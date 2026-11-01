@@ -8,7 +8,7 @@ import { gitExecFileAsyncBuffer } from '../runner'
 import { isMaxBufferOverflowError } from '../max-buffer-overflow'
 import { MAX_GIT_SHOW_BYTES } from './git-show-max-bytes'
 import { literalPathspec } from './git-pathspec'
-import { isImageOrPdfPreviewPath, readTextconvDriver } from './textconv-driver'
+import { hasTextconvDriver, isImageOrPdfPreviewPath } from './textconv-driver'
 
 export type GitBlobReadResult = {
   content: string
@@ -32,6 +32,16 @@ const TOO_LARGE_BLOB: GitBlobReadResult = {
  * sides); `checkout` is what checkout writes, so reverts into an editable side restore real bytes.
  */
 export type BlobConversion = { mode: 'textconv' | 'checkout'; hasDriver: Promise<boolean> }
+
+/** Start one driver lookup to share between both sides of a diff. */
+export function blobConversion(
+  worktreePath: string,
+  filePath: string,
+  options: GitRuntimeOptions,
+  mode: BlobConversion['mode'] = 'textconv'
+): BlobConversion {
+  return { mode, hasDriver: hasTextconvDriver(worktreePath, filePath, options) }
+}
 
 export async function readUnstagedLeftBlob(
   worktreePath: string,
@@ -81,11 +91,7 @@ async function readGitBlob(
     ...gitReadOptionsForWorktree(worktreePath, options),
     maxBuffer: MAX_GIT_SHOW_BYTES
   }
-  const mode = conversion?.mode ?? 'textconv'
-  const hasDriver = isImageOrPdfPreviewPath(filePath)
-    ? Promise.resolve(false)
-    : (conversion?.hasDriver ??
-      readTextconvDriver(worktreePath, filePath, options).then((driver) => driver !== undefined))
+  const { mode, hasDriver } = conversion ?? blobConversion(worktreePath, filePath, options)
   let raw: Buffer
   try {
     // The raw read proves a blob is there: `cat-file --textconv` would print a tree listing.

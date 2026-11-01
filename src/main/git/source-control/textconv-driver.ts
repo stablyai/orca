@@ -11,14 +11,14 @@ export function isImageOrPdfPreviewPath(filePath: string): boolean {
   return !!IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePreviewExtension(filePath)]
 }
 
-/** The path's `diff=<driver>` when that driver sets `textconv`; never rejects. */
-export async function readTextconvDriver(
+/** Whether the path's `diff=<driver>` sets `textconv`; never rejects. */
+export async function hasTextconvDriver(
   worktreePath: string,
   filePath: string,
   options: GitRuntimeOptions = {}
-): Promise<string | undefined> {
+): Promise<boolean> {
   if (isImageOrPdfPreviewPath(filePath)) {
-    return undefined
+    return false
   }
   const gitPath = filePath.replace(/\\/g, '/')
   const readOptions = gitReadOptionsForWorktree(worktreePath, options)
@@ -30,15 +30,15 @@ export async function readTextconvDriver(
     // -z output is `<path>\0diff\0<value>\0`; set/unset/unspecified name no driver.
     const driver = stdout.split('\0')[2]
     if (!driver || driver === 'set' || driver === 'unset' || driver === 'unspecified') {
-      return undefined
+      return false
     }
     // `git config --get` exits 1 when the driver has no textconv.
     const { stdout: textconv } = await gitExecFileAsync(
       ['config', '--get', `diff.${driver}.textconv`],
       readOptions
     )
-    return textconv.trim() ? driver : undefined
+    return textconv.trim() !== ''
   } catch {
-    return undefined
+    return false
   }
 }

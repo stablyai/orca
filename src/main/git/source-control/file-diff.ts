@@ -8,14 +8,13 @@ import { gitDiffReadDedupe, settledDiffCache } from './git-read-cache-invalidati
 import { readWorktreeDiffStamp } from './worktree-diff-stamp'
 import { buildDiffResult } from './diff-result'
 import {
-  type BlobConversion,
+  blobConversion,
   type GitBlobReadResult,
   readGitBlobAtIndexPath,
   readGitBlobAtOidPath,
   readUnstagedLeftBlob,
   readWorkingTreeFile
 } from './git-blob-read'
-import { readTextconvDriver } from './textconv-driver'
 import {
   findContainingSubmodule,
   listSubmodulePaths,
@@ -129,7 +128,9 @@ async function loadDiff(
             innerPath,
             fromOid,
             toOid,
-            options
+            options,
+            // The unstaged route is editable, so it shows checkout bytes.
+            staged ? 'textconv' : 'checkout'
           )
         )
       }
@@ -150,18 +151,29 @@ async function loadDiff(
   let modifiedDeleted = false
   let readFailed = false
   let tooLarge = false
-  const hasDriver = readTextconvDriver(worktreePath, filePath, options).then(
-    (driver) => driver !== undefined
+  const conversion = blobConversion(
+    worktreePath,
+    filePath,
+    options,
+    // The working-tree side is editable, so show the Git side as checkout would write it.
+    staged ? 'textconv' : 'checkout'
   )
+  const leftConversion =
+    staged && options.oldPath !== undefined
+      ? blobConversion(worktreePath, options.oldPath, options)
+      : conversion
 
   try {
     if (staged) {
-      const conversion: BlobConversion = { mode: 'textconv', hasDriver }
       // HEAD and index blobs are independent; read them concurrently.
       const [leftBlob, rightBlob] = await Promise.all([
-        options.oldPath === undefined
-          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, conversion)
-          : readGitBlobAtOidPath(worktreePath, 'HEAD', options.oldPath, options),
+        readGitBlobAtOidPath(
+          worktreePath,
+          'HEAD',
+          options.oldPath ?? filePath,
+          options,
+          leftConversion
+        ),
         readGitBlobAtIndexPath(worktreePath, filePath, options, conversion)
       ])
       originalContent = leftBlob.content
@@ -175,8 +187,6 @@ async function loadDiff(
       // The index-to-HEAD fallback is sequential internally, but independent of the working-tree read.
       // WSL Git can use a Linux cwd while Node needs its Win32 spelling.
       const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
-      // The working-tree side is editable, so show the Git side as checkout would write it.
-      const conversion: BlobConversion = { mode: 'checkout', hasDriver }
       const [leftBlob, workingTreeBlob] = await Promise.all([
         compareAgainstHead
           ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, conversion)
@@ -206,7 +216,7 @@ async function loadDiff(
     tooLarge
   )
   // Converted output depends on config, keys and tools the stamp doesn't cover.
-  const reusable = !readFailed && !(await hasDriver)
+  const reusable = !readFailed && !(await conversion.hasDriver) && !(await leftConversion.hasDriver)
   // Mark proven deletions so previewers can distinguish them from failed empty reads.
   if (result.kind === 'binary' && modifiedDeleted) {
     return { result: { ...result, modifiedDeleted: true }, reusable }
