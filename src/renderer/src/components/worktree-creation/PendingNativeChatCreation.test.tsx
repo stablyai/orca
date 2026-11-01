@@ -7,7 +7,7 @@ import type { NativeChatComposerProps } from '@/components/native-chat/native-ch
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import PendingNativeChatCreation from './PendingNativeChatCreation'
 
-const composer = vi.hoisted(() => ({ props: null as NativeChatComposerProps | null }))
+const composer = vi.hoisted((): { props: NativeChatComposerProps | null } => ({ props: null }))
 vi.mock('@/components/native-chat/NativeChatComposer', () => ({
   NativeChatComposer: (props: NativeChatComposerProps) => {
     composer.props = props
