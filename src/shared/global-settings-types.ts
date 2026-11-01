@@ -68,6 +68,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   autoRenameBranchFromWorkDefaultedOn?: boolean
   branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
+  branchPrefixSeparator?: string
   /** Jira key casing for newly generated Jira-linked workspace and branch names.
    *  Existing workspaces and user-typed names are never rewritten. */
   jiraIssueKeyCasing?: JiraIssueKeyCasing

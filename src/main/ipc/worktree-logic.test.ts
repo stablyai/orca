@@ -287,6 +287,32 @@ describe('computeBranchName', () => {
       'jdoe/feature'
     )
   })
+
+  it('uses configured separator when joining prefix and sanitized name', () => {
+    expect(
+      computeBranchName(
+        'feat-login-form',
+        { branchPrefix: 'custom', branchPrefixCustom: 'jd', branchPrefixSeparator: '-' },
+        null
+      )
+    ).toBe('jd-feat-login-form')
+
+    expect(
+      computeBranchName(
+        'feat-login-form',
+        { branchPrefix: 'custom', branchPrefixCustom: 'jd-', branchPrefixSeparator: '-' },
+        null
+      )
+    ).toBe('jd-feat-login-form')
+
+    expect(
+      computeBranchName(
+        'feat-login-form',
+        { branchPrefix: 'git-username', branchPrefixSeparator: '-' },
+        'jdoe'
+      )
+    ).toBe('jdoe-feat-login-form')
+  })
 })
 
 describe('getConfiguredBranchPrefix', () => {
@@ -338,6 +364,23 @@ describe('computeValidatedBranchName', () => {
         null
       )
     ).toBe('team/feature')
+    expect(
+      computeValidatedBranchName(
+        'feature',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team', branchPrefixSeparator: '-' },
+        null
+      )
+    ).toBe('team-feature')
+  })
+
+  it('throws when the configured prefix separator is invalid', () => {
+    expect(() =>
+      computeValidatedBranchName(
+        'feature',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team', branchPrefixSeparator: '::' },
+        null
+      )
+    ).toThrow(/Branch prefix separator "::" contains characters git rejects/)
   })
 
   it('throws when the configured prefix is invalid', () => {
