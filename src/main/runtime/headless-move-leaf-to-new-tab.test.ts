@@ -345,6 +345,18 @@ describe('moveMobileSessionLeafToNewTab on a host with a window', () => {
     await expect(move()).resolves.toEqual({ status: 'not_held' })
     expect(commit).not.toHaveBeenCalled()
   })
+
+  it.each(['renderer_unavailable', 'terminal_pane_move_timeout'])(
+    'refuses the move when the window cannot answer (%s), so the client puts the pane back',
+    async (reason) => {
+      const { commit, move } = await setupWithWindow(() => Promise.reject(new Error(reason)))
+      await expect(move('host-new-tab')).resolves.toEqual({
+        status: 'refused',
+        reason: 'pane_unavailable'
+      })
+      expect(commit).not.toHaveBeenCalled()
+    }
+  )
 })
 
 /** A session whose worktree also has an editor open beside its two terminal tabs. */
