@@ -17,7 +17,7 @@ import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-st
 import { useHostStructuredAgentsSync } from '@/runtime/host-structured-agents-sync'
 import { readHostStructuredAgentsForRuntime } from '@/runtime/host-structured-agents'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 
 export async function exerciseInvalidatedLocalAgentFirstProbe(
   target: AgentDetectionTarget,
