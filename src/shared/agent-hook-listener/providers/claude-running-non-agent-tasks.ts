@@ -15,15 +15,13 @@ export function updateClaudeRunningNonAgentTask(
   } else {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   }
-  if (inventory.allRunningNonAgentTasksListed) {
-    // Why: ids are unique per launch, so ended can outlive inventories.
-    state.claudeRunningNonAgentTaskIdsByPaneKey.set(paneKey, {
-      running: new Set(inventory.runningNonAgentTaskIds),
-      ended: state.claudeRunningNonAgentTaskIdsByPaneKey.get(paneKey)?.ended ?? new Set()
-    })
-  } else {
-    state.claudeRunningNonAgentTaskIdsByPaneKey.delete(paneKey)
-  }
+  // Why: ids are unique per launch, so ended can outlive inventories, complete or not.
+  state.claudeRunningNonAgentTaskIdsByPaneKey.set(paneKey, {
+    running: inventory.allRunningNonAgentTasksListed
+      ? new Set(inventory.runningNonAgentTaskIds)
+      : undefined,
+    ended: state.claudeRunningNonAgentTaskIdsByPaneKey.get(paneKey)?.ended ?? new Set()
+  })
 }
 
 /** A shell launched after a complete inventory holds the pane until its own notification. */
@@ -35,7 +33,7 @@ export function recordClaudeLaunchedNonAgentTask(
   // Without a complete inventory, ids alone can never retire the pane, so only inventory holds it.
   const ids = state.claudeRunningNonAgentTaskIdsByPaneKey.get(paneKey)
   // Why: async hooks can deliver a launch after its own end, even across inventories.
-  if (ids && !ids.ended.has(taskId)) {
+  if (ids?.running && !ids.ended.has(taskId)) {
     state.claudeRunningNonAgentTaskIdsByPaneKey.set(paneKey, {
       ...ids,
       running: new Set([...ids.running, taskId])
@@ -51,16 +49,16 @@ export function retireClaudeNonAgentTask(
   taskId: string
 ): void {
   const ids = state.claudeRunningNonAgentTaskIdsByPaneKey.get(paneKey)
-  if (!ids || ids.ended.has(taskId)) {
+  if (ids?.ended.has(taskId)) {
     return
   }
-  const running = new Set(ids.running)
-  const wasRunning = running.delete(taskId)
+  const running = ids?.running && new Set(ids.running)
+  const wasRunning = running?.delete(taskId) === true
   state.claudeRunningNonAgentTaskIdsByPaneKey.set(paneKey, {
     running,
-    ended: new Set([...ids.ended, taskId])
+    ended: new Set([...(ids?.ended ?? []), taskId])
   })
-  if (wasRunning && running.size === 0) {
+  if (wasRunning && running?.size === 0) {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   }
 }

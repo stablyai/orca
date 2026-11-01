@@ -343,6 +343,8 @@ describe('Claude owed task notifications outside the captures', () => {
       [
         { hook_event_name: 'Stop', background_tasks: [] },
         notify('b1', 'completed'),
+        // An inventory with an unlisted shell, then a complete one, must not forget b1 ended.
+        { hook_event_name: 'Stop', background_tasks: [{ type: 'shell', status: 'running' }] },
         { hook_event_name: 'Stop', background_tasks: [] },
         launch('b1')
       ],

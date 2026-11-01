@@ -52,7 +52,7 @@ export type HookListenerState = {
   claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
   /** Panes whose latest authoritative Claude task inventory, or a shell launched since, still has running non-agent work. */
   claudeRunningNonAgentTaskPaneKeys: Set<string>
-  /** Running non-agent ids when the latest inventory listed them all (possibly none); notifications and launches keep it current. */
+  /** Per pane: running non-agent ids once an inventory listed them all, and ids already ended. */
   claudeRunningNonAgentTaskIdsByPaneKey: Map<string, ClaudeNonAgentTaskIds>
   /** Panes whose latest authoritative Claude cron inventory still has a scheduled job. */
   claudeActiveSessionCronPaneKeys: Set<string>
@@ -90,7 +90,8 @@ export type HookListenerState = {
 
 /** Ended ids stay with the pane so a late-delivered launch cannot revive them. */
 export type ClaudeNonAgentTaskIds = {
-  running: ReadonlySet<string>
+  /** Undefined until a complete inventory lists every running id. */
+  running: ReadonlySet<string> | undefined
   ended: ReadonlySet<string>
 }
 
