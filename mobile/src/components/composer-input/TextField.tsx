@@ -3,6 +3,7 @@ import { TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } 
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { composerInputStyles as styles } from './composer-input-styles'
+import { useInputFocus } from './use-input-focus'
 
 type TextFieldProps = Omit<TextInputProps, 'style' | 'placeholderTextColor' | 'selectionColor'> & {
   inputRef?: RefObject<TextInput | null>
@@ -22,11 +23,16 @@ export function TextField({
   monospace = false,
   style,
   editable = true,
+  onFocus,
+  onBlur,
   ...inputProps
 }: TextFieldProps): React.JSX.Element {
   useMobileColorScheme()
+  const focus = useInputFocus({ onFocus, onBlur })
   return (
-    <View style={[styles.field, !editable && styles.disabled, style]}>
+    <View
+      style={[styles.field, focus.focused && styles.focused, !editable && styles.disabled, style]}
+    >
       {leading}
       <TextInput
         ref={inputRef}
@@ -35,6 +41,8 @@ export function TextField({
         selectionColor={colors.accentBlue}
         style={[styles.fieldText, monospace && styles.mono]}
         {...inputProps}
+        onFocus={focus.onFocus}
+        onBlur={focus.onBlur}
       />
       {trailing}
     </View>

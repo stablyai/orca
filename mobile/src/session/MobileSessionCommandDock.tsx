@@ -4,6 +4,7 @@ import { hostOs } from '../platform/host-os'
 import { ComposerSendButton } from '../components/composer-input/ComposerSendButton'
 import { MessageBox } from '../components/composer-input/MessageBox'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
+import { useInputFocus } from '../components/composer-input/use-input-focus'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
@@ -43,6 +44,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   useMobileColorScheme()
   const t = useMobileTranslation()
   const rail = useSessionTerminalKeyRail(controller)
+  const liveFocus = useInputFocus()
   const {
     insets,
     bufferedTerminalDraftState,
@@ -119,7 +121,13 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           accessibilityElementsHidden={!liveInputEnabled}
           importantForAccessibility={liveInputEnabled ? 'auto' : 'no-hide-descendants'}
         >
-          <View style={[inputStyles.field, dockStyles.liveField]}>
+          <View
+            style={[
+              inputStyles.field,
+              liveFocus.focused && inputStyles.focused,
+              dockStyles.liveField
+            ]}
+          >
             <TextInput
               ref={bindLiveInputField}
               style={[
@@ -162,6 +170,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               editable={canSend}
               importantForAutofill="no"
               tabIndex={liveInputEnabled ? 0 : -1}
+              onFocus={liveFocus.onFocus}
+              onBlur={liveFocus.onBlur}
             />
             {liveInputEnabled ? (
               <MobileTerminalLiveInputStatus
@@ -190,7 +200,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
             key={hostOs() === 'android' ? `message-ac-${autocompleteEnabled}` : 'message'}
             inputRef={commandInputRef}
-            docked
             monospace={!runsAgent}
             style={dockStyles.composer}
             value={draft}

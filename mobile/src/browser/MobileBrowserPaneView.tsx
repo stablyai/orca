@@ -34,6 +34,7 @@ import type {
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 import type { MobileBrowserTab } from './MobileBrowserPane'
 import type { BrowserDialogState } from './mobile-browser-stream-events'
+import { useInputFocus } from '../components/composer-input/use-input-focus'
 
 // Why: seeds layer 0 as the visible one; the pacer owns opacity after mount, so a render must not.
 const FRAME_LAYER_STYLES: [StyleProp<ViewStyle>, StyleProp<ViewStyle>] = [
@@ -81,6 +82,7 @@ type MobileBrowserPaneViewProps = {
 export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
   const t = useMobileTranslation()
   useMobileColorScheme()
+  const keyboardFocus = useInputFocus()
   const {
     addressFocused,
     addressValue,
@@ -315,7 +317,9 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
         />
         <View style={styles.inputRow}>
           <TextInput
-            style={styles.keyboardInput}
+            style={[styles.keyboardInput, keyboardFocus.focused && styles.keyboardInputFocused]}
+            onFocus={keyboardFocus.onFocus}
+            onBlur={keyboardFocus.onBlur}
             value={keyboardValue}
             onChangeText={setKeyboardValue}
             placeholder={t('browser.paneView.keyboardPlaceholder', 'Type on page…')}

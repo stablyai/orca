@@ -17,6 +17,7 @@ import { PrCreateSheet } from './PrCreateSheet'
 import { PrReviewersSheet } from './PrReviewersSheet'
 import { livePrDetails, readyPrData, type MobilePrTab, type PrTabSheet } from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
+import { useInputFocus } from '../composer-input/use-input-focus'
 
 // Sheets for the PR tab's decisions; one Modal swaps between them so iOS never stacks presentations.
 export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
@@ -151,6 +152,7 @@ function PrEditTextSheet({ tab, field }: { tab: MobilePrTab; field: 'title' | 'b
   const current =
     field === 'title' ? (details?.item.title ?? data?.pr.title ?? '') : (details?.body ?? '')
   const [draft, setDraft] = useState(current)
+  const focus = useInputFocus()
   const { textAction } = tab
   const save = async () => {
     if (await textAction.save(field, draft, current)) {
@@ -187,7 +189,13 @@ function PrEditTextSheet({ tab, field }: { tab: MobilePrTab; field: 'title' | 'b
           multiline={field === 'body'}
           placeholderTextColor={colors.textMuted}
           selectionColor={colors.accentBlue}
-          style={[sheetStyles.field, field === 'body' && sheetStyles.multiline]}
+          style={[
+            sheetStyles.field,
+            field === 'body' && sheetStyles.multiline,
+            focus.focused && sheetStyles.fieldFocused
+          ]}
+          onFocus={focus.onFocus}
+          onBlur={focus.onBlur}
         />
         {textAction.error ? <Text style={sheetStyles.error}>{textAction.error}</Text> : null}
       </View>

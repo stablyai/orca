@@ -1,4 +1,3 @@
-import { StyleSheet } from 'react-native'
 import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
@@ -37,12 +36,29 @@ const labelControl = {
 
 const surface = () =>
   ({
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.composerBorder,
     backgroundColor: colors.composerSurface
   }) as const
 
-// The chat composer's look, shared by every text input so they cannot drift apart.
+/** A field with no controls of its own is told apart by its edge alone, so the edge carries the 3:1. */
+export const inputEdge = () =>
+  ({
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    backgroundColor: colors.composerSurface
+  }) as const
+
+/** The focused field: the edge thickens to a 2pt accent ring, drawn as an outline so nothing moves. */
+export const inputFocusRing = () =>
+  ({
+    borderColor: colors.accentBlue,
+    outlineColor: colors.accentBlue,
+    outlineStyle: 'solid',
+    outlineWidth: 1
+  }) as const
+
+// The chat composer's look, shared by every text input so they cannot drift apart; plain fields add the edge.
 export const composerInputStyles = themedStyleSheet(() => ({
   box: {
     ...surface(),
@@ -50,8 +66,10 @@ export const composerInputStyles = themedStyleSheet(() => ({
     borderRadius: radii.floating
   },
   formBox: {
+    ...inputEdge(),
     borderRadius: radii.surface
   },
+  focused: inputFocusRing(),
   inlineBox: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -70,14 +88,6 @@ export const composerInputStyles = themedStyleSheet(() => ({
   },
   formText: {
     minHeight: FORM_MESSAGE_MIN_HEIGHT
-  },
-  // Only bars floating over content cast a shadow; an inline box would shade its own thread.
-  docked: {
-    shadowColor: '#000',
-    shadowOpacity: 0.45,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8
   },
   messageText: {
     width: '100%',
@@ -128,7 +138,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     opacity: feedback.pressedOpacity
   },
   field: {
-    ...surface(),
+    ...inputEdge(),
     minHeight: FIELD_MIN_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',

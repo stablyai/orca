@@ -2,6 +2,7 @@ import { StyleSheet } from 'react-native'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
+import { inputEdge, inputFocusRing } from '../components/composer-input/composer-input-styles'
 
 export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
   root: {
@@ -155,9 +156,9 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     paddingBottom: spacing.xs + 2
   },
   keyboardInput: {
+    ...inputEdge(),
     flex: 1,
     height: 34,
-    backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     borderRadius: radii.control,
     paddingHorizontal: spacing.md,
@@ -166,6 +167,7 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
   },
+  keyboardInputFocused: inputFocusRing(),
   sendButton: {
     width: 34,
     height: 34,

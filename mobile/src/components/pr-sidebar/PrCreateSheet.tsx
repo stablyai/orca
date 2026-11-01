@@ -35,6 +35,7 @@ import { MobileCommitFailurePanel } from '../../source-control/MobileCommitFailu
 import type { MobilePrTab } from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { PrBasePicker } from './PrBasePicker'
+import { useInputFocus } from '../composer-input/use-input-focus'
 
 type Fields = { title: string; body: string; base: string; draft: boolean }
 
@@ -51,6 +52,8 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
   const [generating, setGenerating] = useState(false)
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null)
   const [commitFailure, setCommitFailure] = useState<MobileCommitFailureRecovery | null>(null)
+  const titleFocus = useInputFocus()
+  const bodyFocus = useInputFocus()
   const commitFailureAction = useMobileCommitFailureRecovery({
     client,
     connState: tab.connState,
@@ -266,7 +269,9 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
               multiline
               placeholderTextColor={colors.textMuted}
               selectionColor={colors.accentBlue}
-              style={sheetStyles.field}
+              style={[sheetStyles.field, titleFocus.focused && sheetStyles.fieldFocused]}
+              onFocus={titleFocus.onFocus}
+              onBlur={titleFocus.onBlur}
               accessibilityLabel={t('pullRequest.createSheet.titleLabel', 'Title')}
             />
           </View>
@@ -300,7 +305,13 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
               placeholder={t('pullRequest.createSheet.descriptionPlaceholder', 'Optional')}
               placeholderTextColor={colors.textMuted}
               selectionColor={colors.accentBlue}
-              style={[sheetStyles.field, sheetStyles.multiline]}
+              style={[
+                sheetStyles.field,
+                sheetStyles.multiline,
+                bodyFocus.focused && sheetStyles.fieldFocused
+              ]}
+              onFocus={bodyFocus.onFocus}
+              onBlur={bodyFocus.onBlur}
               accessibilityLabel={t('pullRequest.createSheet.descriptionLabel', 'Description')}
             />
           </View>

@@ -5,6 +5,7 @@ import { Pressable, Text, TextInput, View } from 'react-native'
 import { PickerModal, type PickerOption } from '../components/PickerModal'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { automationStyles as styles } from './automation-styles'
+import { useInputFocus } from '../components/composer-input/use-input-focus'
 
 export function AutomationButton(props: {
   label: string
@@ -50,12 +51,19 @@ export function AutomationField(props: {
 }) {
   useMobileColorScheme()
   const literal = props.literal || props.numeric
+  const focus = useInputFocus()
   return (
     <View style={styles.field}>
       <Text style={styles.meta}>{props.label}</Text>
       <TextInput
         accessibilityLabel={props.label}
-        style={[styles.input, props.multiline && styles.multiline]}
+        style={[
+          styles.input,
+          props.multiline && styles.multiline,
+          focus.focused && styles.inputFocused
+        ]}
+        onFocus={focus.onFocus}
+        onBlur={focus.onBlur}
         placeholderTextColor={colors.textMuted}
         value={props.value}
         onChangeText={props.onChange}

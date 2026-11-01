@@ -1,5 +1,6 @@
 import { colors, getMobileColorScheme, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
+import { inputEdge, inputFocusRing } from './composer-input/composer-input-styles'
 
 export const customKeyModalStyles = themedStyleSheet(() => ({
   header: {
@@ -10,10 +11,8 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   keyInput: {
     width: '100%',
     height: 56,
+    ...inputEdge(),
     borderRadius: radii.control,
-    backgroundColor: colors.sheetGroup,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
     // Keep 22px key capture above input floor; binding seam would lower it to 16px merely to satisfy census (C7 ruling 12).
@@ -21,6 +20,7 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     fontWeight: '600',
     textAlign: 'center'
   },
+  keyInputFocused: inputFocusRing(),
   backButton: {
     width: 30,
     height: 30,

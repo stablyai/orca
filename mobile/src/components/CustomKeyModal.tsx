@@ -18,6 +18,7 @@ import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileSwitch } from './MobileSwitch'
 import { ListGroup, ListRow } from './list/ListGroup'
+import { useInputFocus } from './composer-input/use-input-focus'
 
 type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
 
@@ -72,6 +73,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
   const [macroLabel, setMacroLabel] = useState('')
   const [macroText, setMacroText] = useState('')
   const [macroEnter, setMacroEnter] = useState(true)
+  const keyFocus = useInputFocus()
   const [previousVisible, setPreviousVisible] = useState(visible)
 
   // Reset draft before opening commit to avoid old-key flash; retain close state through slide-out.
@@ -290,7 +292,9 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t('components.customKeyModal.key', 'Key')}</Text>
             <TextInput
-              style={styles.keyInput}
+              style={[styles.keyInput, keyFocus.focused && styles.keyInputFocused]}
+              onFocus={keyFocus.onFocus}
+              onBlur={keyFocus.onBlur}
               value={shortcutKey.length === 1 ? shortcutKey.toUpperCase() : ''}
               onChangeText={handleShortcutKeyInput}
               placeholder={SPECIAL_KEY_BY_ID[shortcutKey]?.label ?? 'C'}
