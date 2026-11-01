@@ -3,7 +3,7 @@ import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { isAdmissibleAgentJournalRenderItem } from './agent-session-journal-schemas'
 import { readAgentSessionErrorRefusal } from './agent-session-write-failure'
 import { isFinalAgentSessionReadRefusal } from './structured-agent-session-read-refusal'
-import { createReconnectScheduler } from './structured-agent-session-reconnect'
+import { createReconnectScheduler } from './agent-session/structured-agent-session-reconnect'
 import type {
   AgentSessionCurrentRequestsMarker,
   AgentSessionCurrentRequestsPiece,

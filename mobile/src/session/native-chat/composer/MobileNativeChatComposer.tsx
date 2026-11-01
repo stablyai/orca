@@ -1,4 +1,4 @@
-import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
 import {
   recordMobileNativeChatSkillPick,
   useMobileNativeChatDraft

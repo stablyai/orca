@@ -26,7 +26,7 @@ it.skipIf(process.platform === 'win32')(
         args: ['init', '-q', '--separate-git-dir', join(root, 'metadata'), checkout]
       })
       expect(initialized.code, initialized.stderr).toBe(0)
-      const setup = createSetupRunnerScript(
+      const setup = await createSetupRunnerScript(
         makeHookTestRepo(),
         checkout,
         'trap \'printf "user-trap\\n"\' EXIT\nexit 17'
@@ -100,7 +100,7 @@ it.skipIf(process.platform === 'win32')(
         const script = `#!/bin/bash -e\nprintf 'body:%s:%s\\n' "$PWD" "$SETUP_PROFILE_VALUE"\ntrap 'printf "user-trap\\n"' EXIT\n${ending}`
         const basePath = join(root, 'base.sh')
         await writeFile(basePath, buildPosixRunnerScript(script))
-        const setup = createSetupRunnerScript(makeHookTestRepo(), checkout, script)
+        const setup = await createSetupRunnerScript(makeHookTestRepo(), checkout, script)
         expect(await readFile(setup.runnerScriptPath, 'utf8')).toBe(buildPosixRunnerScript(script))
         const run = (runner: string) =>
           runProcess({

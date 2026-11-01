@@ -4,7 +4,7 @@ import type { AgentType } from './agent-status-types'
 import {
   isNativeChatSupportedAgent,
   nativeChatRequiresLocalTranscript
-} from './native-chat-agent-support'
+} from './native-chat/native-chat-agent-support'
 
 /** Resolve launched/detected identity from the tab and status before applying this pure toggle policy. */
 export type NativeChatAvailabilityInput = {

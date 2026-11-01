@@ -1047,6 +1047,16 @@
       "title": "Algo deu errado",
       "tryAgain": "Tentar novamente",
       "home": "Início"
+    },
+    "svgPreview": {
+      "drawFailed": "Não foi possível desenhar este SVG",
+      "label": "Desenho {{title}}",
+      "previewDrawing": "Pré-visualizar desenho",
+      "viewSource": "Ver código-fonte SVG"
+    },
+    "mermaidDiagram": {
+      "expand": "Expandir diagrama",
+      "label": "Diagrama Mermaid"
     }
   },
   "connection": {

@@ -126,6 +126,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} ist bereits ein Host.",
         "distroStopped": "{{distro}} wurde nach dem Einlesen der Liste gestoppt. Zum Starten „Starten und hinzufügen“ auswählen.",
+        "distroUnverifiable": "WSL hat nicht beantwortet, ob {{distro}} läuft. Aktualisiere die Liste oder füge sie über den Dialog hinzu; sie wird dann bei Bedarf gestartet.",
         "wsl1": "{{distro}} läuft unter WSL 1, das Orca nicht mehr unterstützt. In einem Terminal unter Windows mit folgendem Befehl auf WSL 2 umstellen: {{command}}",
         "notRegistered": "{{distro}} ist keine installierte WSL-Distribution. In einem Terminal unter Windows {{command}} ausführen, um die installierten Distributionen anzuzeigen, oder die Distribution neu installieren und erneut versuchen.",
         "sshManaged": "In {{distro}} läuft bereits der Orca-Server für „{{server}}“, den dieser Computer über SSH erreicht. Diesen Server zuerst entfernen; der Wechsel zu einem WSL-Host wird noch nicht unterstützt."
@@ -7136,12 +7137,14 @@
           "added": "Bereits als Host hinzugefügt",
           "running": "Läuft",
           "stopped": "Gestoppt",
+          "unverifiable": "Unbekannt",
           "title": "WSL-Distribution hinzufügen",
           "description": "Orca führt seinen Server innerhalb der Distribution aus, sodass git, Dateien und Terminals nativ unter Linux laufen. Projekte in dieser Distribution, die über \\\\wsl.localhost geöffnet wurden, werden automatisch auf diesen Host verschoben, sobald ihre Terminals inaktiv sind; Projekte auf einem Windows-Laufwerk (/mnt/…) bleiben auf diesem Computer. Ein verschobenes Projekt lässt sich über die Seitenleiste auf diesen Computer zurückholen.",
           "distro": "Distribution",
           "loading": "WSL-Distributionen werden gesucht…",
           "placeholder": "Distribution auswählen",
           "stoppedHint": "{{value0}} ist gestoppt. Das Hinzufügen startet die Distribution.",
+          "unverifiableHint": "WSL hat nicht gemeldet, ob {{value0}} läuft. Beim Hinzufügen wird sie bei Bedarf gestartet.",
           "addingHint": "Der Orca-Server wird in der Distribution installiert und gestartet. Beim ersten Mal kann dies eine Minute dauern.",
           "adding": "Wird eingerichtet…",
           "startAndAdd": "Starten und hinzufügen",
@@ -13300,7 +13303,9 @@
           "light": "Hell",
           "languageIncomplete": "{{value0}} % übersetzt, zu unvollständig, um als Orca-Sprache verwendet zu werden",
           "languageCoverage": "Oberflächensprache · {{value0}} % übersetzt",
-          "newFileMenu": "Ergänzt das +-Menü"
+          "newFileMenu": "Ergänzt das +-Menü",
+          "editorReplacesViewer": "Öffnet {{value0}} anstelle des Orca-Viewers",
+          "editorMayReplaceViewer": "Öffnet möglicherweise {{value0}} anstelle des Orca-Viewers"
         },
         "PluginPageAction": {
           "failedTitle": "{{value0}} konnte nicht installiert werden",
@@ -16156,16 +16161,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Vergrößern",
-          "6c89c73d9f": "Zoom zurücksetzen",
           "be27304574": "Verkleinern",
-          "77bfc9b35a": "Bild in separatem Fenster öffnen",
           "3ef9551ba2": "Vorschau wird geladen…",
-          "d9d2944855": "Dateivorschau konnte nicht geladen werden"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Zum Schließen Esc drücken",
-          "535f4e2b56": "Schließen",
-          "9e27b2ecaf": "Bildvorschau in Originalgröße"
+          "d9d2944855": "Dateivorschau konnte nicht geladen werden",
+          "fitToView": "An Ansicht anpassen",
+          "actualSize": "Originalgröße",
+          "expand": "Bild vergrößert anzeigen"
         },
         "IpynbViewer": {
           "859bf9fc21": "Zelle ausführen",
@@ -16287,7 +16288,10 @@
           "zoomOut": "Verkleinern",
           "zoomIn": "Vergrößern",
           "fit": "An Bildschirm anpassen",
-          "close": "Schließen"
+          "close": "Schließen",
+          "copyPng": "Als PNG kopieren",
+          "copiedPng": "Als PNG kopiert",
+          "copyPngFailed": "Bild konnte nicht kopiert werden"
         },
         "MermaidBlock": {
           "dcc132e691": "Diagrammfehler:",
@@ -19849,7 +19853,8 @@
         "stopped": "{{distro}} ist gestoppt",
         "start": "Starten",
         "unverifiable": "Orca konnte nicht prüfen, ob {{distro}} läuft",
-        "startToSend": "Starte {{distro}}, um zu senden."
+        "startToSend": "Starte {{distro}}, um zu senden.",
+        "startDistro": "{{distro}} starten"
       },
       "interruptedContinue": {
         "continue": "Fortfahren",
@@ -22189,12 +22194,8 @@
       "refreshBeforeEnd": "Beenden ist erst nach dem Aktualisieren der PTYs verfügbar.",
       "endUnsupported": "Beenden ist für dieses Terminal nicht verfügbar. Sein Host unterstützt die erforderlichen Sicherheitsprüfungen nicht. Das Terminal über seinen Tab oder auf seinem Host schließen.",
       "checkingTabs": "Tabs werden geprüft…",
-      "endTitle": "{{terminal}} beenden?",
-      "endDescription": "Dadurch werden das Terminal und seine untergeordneten Prozesse beendet. Nicht gespeicherte Arbeit kann verloren gehen.",
       "lastProcess": "Zuletzt beobachteter Prozess: {{process}}",
-      "cancel": "Abbrechen",
       "ending": "Wird beendet…",
-      "end": "Terminal beenden",
       "unassigned": "Nicht zugewiesen",
       "thisComputer": "Dieser Computer",
       "localOwnedCount_one": "{{count}} Orca-PTY auf diesem Computer",

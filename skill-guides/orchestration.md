@@ -38,7 +38,9 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
 - `--worktree current` uses your workspace. Use a new one only when the user
   asks or sharing would conflict:
   `--worktree new-top-level --repo id:<repoId> --name <short-name>`
-  (`ORCA repo list --json` gives the id).
+  (`ORCA repo list --json` gives the id). A worker in a new workspace stays open
+  after it reports; if the user won't use that chat, run
+  `ORCA orchestration worker-release --dispatch <dispatch_id>` once it reports.
 - Add `--model` only if the user named one.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
@@ -71,11 +73,12 @@ Never:
   shows mail `check` already handled.
 
 Finished workers close on their own; `send` reopens one when you need it again.
-Start a worker with `--keep-open` when the user will keep using its chat after it
-reports: they want to watch it, talk to it, or the fan-out sets up workspaces or
-sessions to work in rather than tasks to finish. To keep one already started, run
+Start a worker in your workspace with `--keep-open` when the user will keep using
+its chat after it reports: they want to watch it or talk to it. To keep one already
+started, run
 `ORCA orchestration worker-keep-open --dispatch <dispatch_id>`.
-If `worker-list` shows no `autoReleaseAt` for a finished worker, release it yourself.
+If a finished worker you did not keep open shows no `autoReleaseAt` in `worker-list`,
+release it yourself.
 
 ## Task spec
 

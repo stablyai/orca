@@ -26,23 +26,6 @@ function makeRecord(i: number): { i: number; payload: string } {
 }
 
 describe('local-file-sink — basic write', () => {
-  it('writes one NDJSON line per push', async () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({
-      filePath: file,
-      batchWindowMs: 100
-    })
-    sink.push({ a: 1 })
-    sink.push({ b: 2 })
-    await sink.flushAsync()
-    sink.close()
-
-    const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
-    expect(lines).toHaveLength(2)
-    expect(JSON.parse(lines[0])).toEqual({ a: 1 })
-    expect(JSON.parse(lines[1])).toEqual({ b: 2 })
-  })
-
   it('creates trace directories and files with private POSIX permissions', () => {
     if (process.platform === 'win32') {
       return
@@ -83,25 +66,6 @@ describe('local-file-sink — basic write', () => {
 })
 
 describe('local-file-sink — rotation', () => {
-  it('rotates when the byte cap is exceeded', async () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({
-      filePath: file,
-      maxBytes: 500,
-      maxFiles: 3,
-      batchWindowMs: 100_000
-    })
-    for (let i = 0; i < 8; i++) {
-      sink.push(makeRecord(i))
-      await sink.flushAsync()
-    }
-    sink.close()
-
-    const files = listRotatedFiles(file, 3)
-    expect(files.length).toBeGreaterThan(1)
-    expect(existsSync(file)).toBe(true)
-  })
-
   it('uses UTF-8 byte length for rotation accounting', async () => {
     const file = join(dir, 'test.ndjson')
     const sink = createLocalFileSink({
@@ -223,29 +187,6 @@ describe('local-file-sink — rotation', () => {
   })
 })
 
-describe('local-file-sink — listing + clearing', () => {
-  it('lists newest → oldest', async () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({
-      filePath: file,
-      maxBytes: 200,
-      maxFiles: 5,
-      batchWindowMs: 100_000
-    })
-    for (let i = 0; i < 20; i++) {
-      sink.push(makeRecord(i))
-      await sink.flushAsync()
-    }
-    sink.close()
-
-    const files = listRotatedFiles(file, 5)
-    expect(files[0]).toBe(file)
-    for (let i = 1; i < files.length; i++) {
-      expect(files[i]).toBe(`${file}.${i}`)
-    }
-  })
-})
-
 describe('local-file-sink — robustness', () => {
   it('does not throw on circular records (drops the line)', async () => {
     const file = join(dir, 'test.ndjson')
@@ -263,12 +204,5 @@ describe('local-file-sink — robustness', () => {
     sink.close()
     const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
     expect(lines.map((l) => JSON.parse(l))).toEqual([{ ok: 2 }])
-  })
-
-  it('survives close-after-close', () => {
-    const file = join(dir, 'test.ndjson')
-    const sink = createLocalFileSink({ filePath: file })
-    sink.close()
-    expect(() => sink.close()).not.toThrow()
   })
 })

@@ -680,7 +680,7 @@ describe('registerWorktreeHandlers', () => {
     getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     shouldRunSetupForCreateMock.mockReturnValue(true)
-    createSetupRunnerScriptMock.mockImplementationOnce(() => {
+    createSetupRunnerScriptMock.mockImplementationOnce(async () => {
       expect(
         withoutInFlightWorktreeCreates('repo-1', [{ path: '/workspace/improve-dashboard' }])
       ).toEqual([])
