@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatImageRefBlock } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatImageRefBlock } from '../../../../../src/shared/native-chat/native-chat-types'
 import { stubRpcClient } from '../../../transport/rpc-client-test-stub'
 import type { RpcClient } from '../../../transport/rpc-client'
 import {
