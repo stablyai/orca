@@ -468,6 +468,15 @@ describe('notice rows', () => {
       )
     ).toBeInTheDocument()
   })
+  it("rewords the host's missing saved conversation words in the reader's language", async () => {
+    await i18n.changeLanguage('fr')
+    const failure = { kind: 'savedConversationMissing' } as const
+    const words = agentSessionFailureWords(failure, { agentName: 'Claude', surface: 'row' })
+    renderStatus({ kind: 'status', tone: 'error', ...words }, null, false, false, 'Claude')
+    const french =
+      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Démarrez un nouveau chat pour continuer.'
+    expect(screen.getByText(french)).toBeInTheDocument()
+  })
   it.each([
     ['fr', 'Grok', 'Connectez-vous à Grok avec `grok login` sur l’ordinateur qui exécute ce chat.'],
     [

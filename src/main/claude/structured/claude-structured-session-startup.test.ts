@@ -72,6 +72,41 @@ describe('Claude host-awaited open', () => {
     expect(appendItem.mock.calls.filter(([, body]) => body.kind === 'status')).toHaveLength(0)
   })
 
+  it('keeps the failure row of a result that answers a send before its echo', async () => {
+    const result = readFileSync(
+      new URL('../__fixtures__/claude-lifecycle-capture-auth-failed.jsonl', import.meta.url),
+      'utf8'
+    )
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line).frame)
+      .find((frame) => frame?.type === 'result')
+    const claude = fakeClaude({ replayUuid: null })
+    const { adapter } = adapterFor(claude)
+    const appendItem = vi.fn()
+    await adapter.acquire({ ...ACQUIRE, events: { ...recordingJournalSink(), appendItem } })
+    await claudeOpened(adapter, 'session-1')
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'unechoed',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    const sentUuid = claude.connections[0]!.sent[0]!.uuid
+    // The recorded failure, correlated to this dispatch with no user or assistant echo first.
+    claudeFrame(claude.connections[0], {
+      ...result,
+      session_id: PROVIDER_SESSION_ID,
+      user_message_uuid: sentUuid,
+      user_message_uuids: [sentUuid]
+    })
+    expect(
+      appendItem.mock.calls.filter(([, body]) => body.kind === 'status' && body.tone === 'error')
+    ).toHaveLength(1)
+  })
+
   // SDK-typed shape; ordering constructed
   it.each([
     ['bypassPermissions', 'full-access'],

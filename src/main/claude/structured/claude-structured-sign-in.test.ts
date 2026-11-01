@@ -115,9 +115,11 @@ describe('captured Claude authentication failure', () => {
         expect(
           bodies.filter((body) => body.kind === 'status' && body.tone === 'error')
         ).toHaveLength(1)
+        // The adapter publishes the send each later result answered.
         translator.handle({
           type: 'message',
           sessionId: 'session',
+          startedSend: { clientMessageId: 'send-2' },
           message: {
             ...frames.find((frame) => frame.type === 'result'),
             uuid: 'unrelated-result',
@@ -147,8 +149,10 @@ describe('captured Claude authentication failure', () => {
           publish: () => {}
         }
       })
-      const handle = (message: Record<string, unknown>) =>
-        translator.handle({ type: 'message', sessionId: 'session', message })
+      const handle = (
+        message: Record<string, unknown>,
+        startedSend?: { clientMessageId: string }
+      ) => translator.handle({ type: 'message', sessionId: 'session', message, startedSend })
       const assistant = frames.find((frame) => frame.type === 'assistant')!
       const result = frames.find((frame) => frame.type === 'result')!
       handle({ ...assistant, error: 'model_not_found', user_message_uuid: 'u1' })
@@ -174,13 +178,16 @@ describe('captured Claude authentication failure', () => {
           text: 'API Error: 529 upstream overloaded'
         })
       }
-      handle({
-        ...result,
-        uuid: 'later-result',
-        user_message_uuid: 'u1',
-        user_message_uuids: ['u1'],
-        result: 'API Error: 500 later failure'
-      })
+      handle(
+        {
+          ...result,
+          uuid: 'later-result',
+          user_message_uuid: 'u1',
+          user_message_uuids: ['u1'],
+          result: 'API Error: 500 later failure'
+        },
+        { clientMessageId: 'send-1' }
+      )
       expect(bodies.at(-1)).toMatchObject({ kind: 'status', text: 'API Error: 500 later failure' })
       translator.dispose()
     }

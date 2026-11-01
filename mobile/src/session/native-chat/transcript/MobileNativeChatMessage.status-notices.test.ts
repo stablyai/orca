@@ -141,6 +141,21 @@ describe('MobileNativeChatMessage status notices', () => {
     )
   })
 
+  it("rewords the host's missing saved conversation words in the reader's language", async () => {
+    await activateMobileUiLocale('fr')
+    const host = agentSessionFailureWords(agentSessionFailureFact('savedConversationMissing'), {
+      surface: 'row',
+      agentName: 'Claude'
+    })
+    const text = renderNotice(
+      { kind: 'status', tone: 'error', ...host },
+      { hostName: null, agentName: 'Claude' }
+    )
+    expect(text.props.children).toBe(
+      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Démarrez un nouveau chat pour continuer.'
+    )
+  })
+
   it.each(['without reset', 'with reset', 'from an old host'] as const)(
     'draws an OpenCode usage warning %s',
     (source) => {

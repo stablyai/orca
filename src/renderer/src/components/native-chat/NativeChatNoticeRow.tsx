@@ -185,9 +185,9 @@ export function NativeChatNoticeRow({
   const usageLimitContinue =
     block.usageLimitTurnItemId !== undefined &&
     block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
-  // Only reword auth text fully described by its fact; host text may also carry command advice.
-  const authSurface =
-    failure?.kind === 'notSignedIn'
+  // Only reword auth and missing-conversation text fully described by its fact; host text may also carry command advice.
+  const factSurface =
+    failure?.kind === 'notSignedIn' || failure?.kind === 'savedConversationMissing'
       ? (['row', 'rejection'] as const).find(
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
@@ -216,10 +216,10 @@ export function NativeChatNoticeRow({
           },
           sayAgentSessionFailureTranslated
         )
-      : failure && authSurface
+      : failure && factSurface
         ? agentSessionFailureSentence(
             failure,
-            authSurface,
+            factSurface,
             { agentName },
             sayAgentSessionFailureTranslated
           )
