@@ -5,6 +5,62 @@ import {
 } from './terminal-composer-draft'
 
 describe('detectTerminalComposerDraft', () => {
+  // Why: ordinary tool output prints labelled rules too (`──────── build ─`), and the row
+  // above a plain shell prompt is the only evidence the `❯` branch has. Regression for #16290.
+  it('does not read a shell prompt under a labelled tool rule as composer input', () => {
+    const shellScreen = (above: string) => ({
+      rows: [above, '❯ ls'],
+      typedRows: [above, '❯ ls'],
+      promptGlyphBoldRows: [false, false],
+      rowsBelow: [],
+      typedRowsBelow: [],
+      beforeCursor: '❯ ls',
+      afterCursor: '',
+      rawAfterCursor: '',
+      cursorHidden: false,
+      cursorViewportRow: 12
+    })
+    for (const rule of [
+      '──────── build ─',
+      '──────── Running tests ────────',
+      '-------- coverage --------'
+    ]) {
+      expect(detectTerminalComposerDraft(shellScreen(rule))).toBeNull()
+    }
+  })
+
+  it('accepts a Claude frame line that carries a mode label', () => {
+    const frame = `${'─'.repeat(88)} ultracode ─`
+    expect(
+      detectTerminalComposerDraft({
+        rows: [frame, '❯ Refactor the login page so that it'],
+        typedRows: [frame, '❯ Refactor the login page so that it'],
+        promptGlyphBoldRows: [false, false],
+        rowsBelow: ['─'.repeat(100), '  ⏵⏵ auto mode on (shift+tab to cycle)'],
+        typedRowsBelow: ['─'.repeat(100), ''],
+        beforeCursor: '❯ Refactor the login page so that it',
+        afterCursor: '',
+        rawAfterCursor: '',
+        cursorHidden: false,
+        cursorViewportRow: 26
+      })?.text
+    ).toBe('Refactor the login page so that it')
+    expect(
+      detectTerminalComposerDraft({
+        rows: ['some transcript text ending in ─', '❯ not a composer'],
+        typedRows: ['some transcript text ending in ─', '❯ not a composer'],
+        promptGlyphBoldRows: [false, false],
+        rowsBelow: [],
+        typedRowsBelow: [],
+        beforeCursor: '❯ not a composer',
+        afterCursor: '',
+        rawAfterCursor: '',
+        cursorHidden: false,
+        cursorViewportRow: 1
+      })
+    ).toBeNull()
+  })
+
   it('keeps a typed draft whose stock placeholder is still rendered to its right', () => {
     // Repaints can leave the placeholder beside typed text; do not mask that user draft.
     const context = {
@@ -232,6 +288,28 @@ describe('detectTerminalComposerDraft', () => {
         cursorViewportRow: 8
       })
     ).toMatchObject({ text: 'first line\n\nsecond line', endRow: 10 })
+  })
+
+  // Why: the mode-label tolerance belongs to the top rule alone. A draft row that opens with
+  // rule characters (`-------- coverage --------`) would otherwise read as the bottom border
+  // and silently truncate the draft, so the refusal reports only part of what the user typed.
+  it('keeps a draft continuation row that looks like a labelled rule', () => {
+    expect(
+      detectTerminalComposerDraft({
+        rows: ['\u2500'.repeat(8), '\u276F first line'],
+        typedRows: ['\u2500'.repeat(8), '\u276F first line'],
+        promptGlyphBoldRows: [false, false],
+        rowsWrapped: [false, false],
+        rowsBelow: ['-------- coverage --------', '  third line', '\u2500'.repeat(8)],
+        typedRowsBelow: ['-------- coverage --------', '  third line', '\u2500'.repeat(8)],
+        rowsBelowWrapped: [false, false, false],
+        beforeCursor: '\u276F first',
+        afterCursor: ' line',
+        rawAfterCursor: ' line',
+        cursorHidden: false,
+        cursorViewportRow: 8
+      })?.text
+    ).toBe('first line\n-------- coverage --------\nthird line')
   })
 
   it('keeps a model-like Claude paragraph above the bottom composer frame', () => {
