@@ -102,10 +102,15 @@ function presentDesktopStructuredSession(
     const agent = source.kind === 'sender' ? (source.displayName ?? '') : (source.agent ?? '')
     if (result.failure.reason === 'workspace-missing') {
       toast.error(
-        translate(
-          'auto.store.slices.worktrees.c6cf133786',
-          'This workspace is no longer available.'
-        )
+        result.failure.workspaceKind === 'folder'
+          ? translate(
+              'auto.lib.activateAiVaultStructuredSession.folderWorkspaceRemoved',
+              'The folder workspace was removed.'
+            )
+          : translate(
+              'auto.lib.activateAiVaultStructuredSession.worktreeDeleted',
+              'The worktree was deleted.'
+            )
       )
     } else if (result.failure.reason === 'gone') {
       if (result.failure.surface === 'terminal') {

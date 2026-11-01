@@ -1310,7 +1310,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "结构化智能体会话尚不可用。稍后重试。",
         "gone": "此聊天不再在此主机上，因此无法在此处重新打开。",
-        "hostCannotOpen": "在 Orca 更新之前，无法重新打开此聊天。"
+        "hostCannotOpen": "在 Orca 更新之前，无法重新打开此聊天。",
+        "worktreeDeleted": "工作树已删除。",
+        "folderWorkspaceRemoved": "文件夹工作区已移除。"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "预配置根配方不支持稀疏结帐。"

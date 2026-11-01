@@ -2512,6 +2512,10 @@
       "terminal": "Terminal",
       "tapToFocusPane": "{{title}}, odaklamak için dokunun",
       "inputPane": "{{title}} · Girdi"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "Çalışma ağacı silindi.",
+      "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
     }
   },
   "settings": {

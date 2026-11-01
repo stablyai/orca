@@ -1310,7 +1310,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "구조화된 에이전트 세션은 아직 사용할 수 없습니다. 잠시 후 다시 시도하세요.",
         "gone": "이 채팅은 더 이상 이 호스트에 없으므로 여기에서 다시 열 수 없습니다.",
-        "hostCannotOpen": "Orca가 업데이트될 때까지 이 채팅을 다시 열 수 없습니다."
+        "hostCannotOpen": "Orca가 업데이트될 때까지 이 채팅을 다시 열 수 없습니다.",
+        "worktreeDeleted": "워크트리가 삭제되었습니다.",
+        "folderWorkspaceRemoved": "폴더 워크스페이스가 제거되었습니다."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "프로비저닝된 루트 레시피는 스파스 체크아웃을 지원하지 않습니다."

@@ -1852,7 +1852,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "The structured agent session is not available yet. Retry in a moment.",
         "gone": "This chat is no longer on this host, so it cannot be reopened here.",
-        "hostCannotOpen": "This chat can't be reopened until Orca is updated."
+        "hostCannotOpen": "This chat can't be reopened until Orca is updated.",
+        "worktreeDeleted": "The worktree was deleted.",
+        "folderWorkspaceRemoved": "The folder workspace was removed."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."

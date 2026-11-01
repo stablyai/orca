@@ -1,5 +1,23 @@
 import type { AgentMessageSender } from './agent-session/agent-session-message-source'
 import type { OrchestrationPartyLocationResult } from './orchestration-caller-status'
+import type { AgentSessionWorkspaceKind } from './agent-session/lifecycle/agent-session-record'
+import { workspaceKindForWorktreeId } from './workspace-launch-kind'
+
+export type StructuredSessionWorkspaceRemovedDetails = {
+  workspaceKind: AgentSessionWorkspaceKind
+}
+
+export function readStructuredSessionWorkspaceRemovedDetails(
+  value: unknown
+): StructuredSessionWorkspaceRemovedDetails | undefined {
+  if (value !== null && typeof value === 'object' && 'workspaceKind' in value) {
+    const { workspaceKind } = value
+    if (workspaceKind === 'folder' || workspaceKind === 'git-worktree') {
+      return { workspaceKind }
+    }
+  }
+  return undefined
+}
 
 export type StructuredSessionOpenTarget = { sessionId: string; worktreeId: string; agent?: string }
 export type StructuredSessionOpenSource =
@@ -21,6 +39,7 @@ export type StructuredSessionOpenFailure = {
   beforeEffects: boolean
   code?: string
   surface?: 'terminal'
+  workspaceKind?: AgentSessionWorkspaceKind
 }
 export type StructuredSessionOpenTab = { id: string; sessionId: string; agent?: string }
 export type StructuredSessionOpenResult =
@@ -57,7 +76,10 @@ export function structuredSessionOpenFailure(error: unknown): StructuredSessionO
     return { reason: 'unsupported', beforeEffects: true, code }
   }
   if (code === 'agent_session_workspace_removed') {
-    return { reason: 'workspace-missing', beforeEffects: true }
+    const details = readStructuredSessionWorkspaceRemovedDetails(
+      error !== null && typeof error === 'object' && 'details' in error ? error.details : undefined
+    )
+    return { reason: 'workspace-missing', beforeEffects: true, ...details }
   }
   if (code === 'agent_session_identity_required') {
     return { reason: 'gone', beforeEffects: true }
@@ -218,6 +240,13 @@ export async function openStructuredAgentSession(
   let revealed = false
   const failure = (value: StructuredSessionOpenFailure): StructuredSessionOpenFailure => ({
     ...value,
+    ...(value.reason === 'workspace-missing'
+      ? {
+          workspaceKind:
+            value.workspaceKind ??
+            (workspaceKindForWorktreeId(target.worktreeId) === 'folder' ? 'folder' : 'git-worktree')
+        }
+      : {}),
     beforeEffects: value.beforeEffects && !revealed
   })
   try {

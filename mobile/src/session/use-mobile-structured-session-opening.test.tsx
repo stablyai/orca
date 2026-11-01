@@ -159,7 +159,7 @@ it.each(
   }
 })
 
-it('routes a removed workspace notification to the existing host notice without a tab or duplicate toast', async () => {
+it('toasts a removed workspace in place without navigation or a tab', async () => {
   mocks.executionHost = 'local'
   mocks.open.mockResolvedValue({
     kind: 'failed',
@@ -190,10 +190,10 @@ it('routes a removed workspace notification to the existing host notice without 
     await act(async () => {
       await open?.(source)
     })
-    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith('/h/host?notice=worktree-missing')
+    expect(mocks.replace).not.toHaveBeenCalled()
     expect(mocks.push).not.toHaveBeenCalled()
     expect(scope.switchSessionTab).not.toHaveBeenCalled()
-    expect(scope.showToast).not.toHaveBeenCalled()
+    expect(scope.showToast).toHaveBeenCalledExactlyOnceWith('The worktree was deleted.', 3_000)
   } finally {
     await act(async () => tree?.unmount())
   }

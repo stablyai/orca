@@ -2675,7 +2675,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "A sessão estruturada do agente ainda não está disponível. Tente novamente em um momento.",
         "gone": "Este chat não está mais neste host, então não pode ser reaberto aqui.",
-        "hostCannotOpen": "Este chat não pode ser reaberto até que o Orca seja atualizado."
+        "hostCannotOpen": "Este chat não pode ser reaberto até que o Orca seja atualizado.",
+        "worktreeDeleted": "A árvore de trabalho foi excluída.",
+        "folderWorkspaceRemoved": "O espaço de trabalho da pasta foi removido."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Receitas de raiz provisionada não suportam sparse checkout."

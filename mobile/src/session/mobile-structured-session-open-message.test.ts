@@ -82,3 +82,22 @@ it('translates proven terminal loss without changing ordinary gone-chat feedback
     pseudoLocalizeString('Le panneau de l’agent n’est plus disponible.', { expand: true })
   )
 })
+
+it('explains a removed History workspace with one short toast sentence', () => {
+  expect(mobileStructuredSessionOpenMessage('workspace-missing', 'codex')).toBe(
+    'The worktree was deleted.'
+  )
+  expect(
+    mobileStructuredSessionOpenMessage('workspace-missing', 'claude', undefined, 'folder')
+  ).toBe('The folder workspace was removed.')
+})
+
+it('uses the translated deleted-workspace sentences from the phone catalog', async () => {
+  await activateMobileUiLocale('fr')
+  expect(mobileStructuredSessionOpenMessage('workspace-missing', 'codex')).toBe(
+    'L’arbre de travail a été supprimé.'
+  )
+  expect(
+    mobileStructuredSessionOpenMessage('workspace-missing', 'claude', undefined, 'folder')
+  ).toBe('L’espace de travail du dossier a été retiré.')
+})
