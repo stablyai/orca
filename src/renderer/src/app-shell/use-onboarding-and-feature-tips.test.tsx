@@ -12,7 +12,18 @@ import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { useOnboardingAndFeatureTips } from './use-onboarding-and-feature-tips'
 
-vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
+const telemetryMock = vi.hoisted(() => ({ passThrough: false }))
+// Pass-through lets one test drive the real bridge wrapper against a rejecting main.
+vi.mock('@/lib/telemetry', async (importOriginal) => {
+  const actual = await importOriginal<typeof telemetry>()
+  return {
+    track: vi.fn((...args: Parameters<typeof actual.track>) => {
+      if (telemetryMock.passThrough) {
+        actual.track(...args)
+      }
+    })
+  }
+})
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -50,7 +61,8 @@ async function launch(cohort: TelemetrySettings['chatUiLaunchTipCohort']): Promi
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
-  vi.mocked(track).mockReset()
+  vi.mocked(track).mockClear()
+  telemetryMock.passThrough = false
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
@@ -101,8 +113,7 @@ describe('Chat UI launch tip holdout', () => {
   it.each(['treatment', 'control'] as const)(
     'keeps the %s tip consumed when main rejects the exposure event',
     async (cohort) => {
-      const actual = await vi.importActual<typeof telemetry>('@/lib/telemetry')
-      vi.mocked(track).mockImplementation(actual.track)
+      telemetryMock.passThrough = true
       const telemetryTrack = vi.fn().mockResolvedValue(false)
       Object.assign(window.api, { telemetryTrack })
       await launch(cohort)
