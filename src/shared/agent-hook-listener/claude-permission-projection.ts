@@ -1,5 +1,6 @@
 import { isRecord } from '../agent-status-child-work-value-guards'
 import type { ClaudeSettledRequest } from './claude-settled-permission-requests'
+import { claudePermissionToolUseId } from './claude-permission-table'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 
@@ -75,11 +76,10 @@ export function projectClaudePermissionState(
   if (lead?.state === 'waiting') {
     return { ...event, claudePermissionState: { version: 1, knowledge: 'unknown' } }
   }
+  const toolUseId = tracked ? claudePermissionToolUseId(table, tracked) : undefined
   const descriptor = pending
     ? {
-        ...(tracked?.candidates.size === 1
-          ? { toolUseId: table.calls.get([...tracked.candidates][0])?.id }
-          : {}),
+        ...(toolUseId ? { toolUseId } : {}),
         ...(pending.call.owner ? { toolAgentId: pending.call.owner } : {}),
         ...(pending.agentType ? { toolAgentType: pending.agentType } : {})
       }

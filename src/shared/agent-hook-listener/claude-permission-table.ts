@@ -15,10 +15,13 @@ type ClaudeToolCall = {
 export type ClaudeCallIdentity = Omit<ClaudeToolCall, 'id' | 'settled'>
 type ClaudePermission = {
   call: ClaudeCallIdentity
-  /** Unresolved invocations this request may belong to; resolved ones leave the set. */
+  /** Set when the request named its invocation; the entry then stands for that call alone. */
+  key?: string
+  /** Unresolved invocations these requests may belong to; resolved ones leave the set. */
   candidates: Set<string>
-  /** False until some invocation corresponds; only fresh correspondence or the owner's end settles it. */
-  bound: boolean
+  /** Equal-input requests can be distinct invocations, so each needs its own resolved invocation. */
+  requests: number
+  resolved: number
   snapshot: ParsedAgentStatusPayload
   startedAt: number
   agentType?: string
@@ -68,6 +71,20 @@ export function admitClaudeCall(
   }
   table.calls.set(key, call)
   return true
+}
+
+export function claudePermissionOpen(permission: ClaudePermission): boolean {
+  return permission.candidates.size > 0 || permission.resolved < permission.requests
+}
+
+/** An exact id names the request only while one candidate could still answer it. */
+export function claudePermissionToolUseId(
+  table: ClaudePermissionTable,
+  permission: ClaudePermission
+): string | undefined {
+  return permission.candidates.size === 1 && permission.requests - permission.resolved <= 1
+    ? table.calls.get([...permission.candidates][0])?.id
+    : undefined
 }
 
 export function addClaudePermission(

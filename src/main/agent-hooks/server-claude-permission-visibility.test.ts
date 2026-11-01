@@ -654,6 +654,42 @@ describe('recorded Claude decline and continuation', () => {
   )
 })
 
+it('keeps a second equal-input request waiting when the first invocation ends, until its own invocation resolves', async () => {
+  const server = new AgentHookServer()
+  await server.start({ env: 'production' })
+  try {
+    const [start, prompt, preA, request] = captures.claudeDecline
+    const post = async (raw: Record<string, unknown>): Promise<string> => {
+      await postHookEvent(server, buildBody(raw))
+      return server.getStatusSnapshot()[0].state
+    }
+    const done = (pre: Record<string, unknown>) => ({ ...pre, hook_event_name: 'PostToolUse' })
+    const preB = { ...preA, tool_use_id: 'toolu_second_same_input' }
+    for (const raw of [start, prompt, preA, request]) {
+      await post(raw)
+    }
+    // Constructed reordering: the second invocation's request arrives before its late PreToolUse.
+    expect(await post(request)).toBe('waiting')
+    expect(await post(done(preA))).toBe('waiting')
+    expect(await post(preB)).toBe('waiting')
+    expect(await post(done(preB))).toBe('working')
+
+    // Constructed: requests that name different invocations stay separate obligations.
+    const [preC, preD] = ['toolu_named_c', 'toolu_named_d'].map((id) => ({
+      ...preA,
+      tool_use_id: id
+    }))
+    for (const raw of [preC, preD, { ...request, tool_use_id: preC.tool_use_id }]) {
+      await post(raw)
+    }
+    expect(await post({ ...request, tool_use_id: preD.tool_use_id })).toBe('waiting')
+    expect(await post(done(preC))).toBe('waiting')
+    expect(await post(done(preD))).toBe('working')
+  } finally {
+    server.stop()
+  }
+})
+
 it('holds OSC working behind a projected request and preserves the existing done fallback', async () => {
   const server = new AgentHookServer()
   await server.start({ env: 'production' })

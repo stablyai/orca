@@ -8,6 +8,8 @@ import { readString } from './tool-input-preview'
 import {
   addClaudePermission,
   admitClaudeCall,
+  claudePermissionOpen,
+  claudePermissionToolUseId,
   retireClaudePermissions,
   retireClaudeSessionPermissions,
   sameClaudeCall,
@@ -36,20 +38,22 @@ function callKey(owner: string | undefined, id: string): string {
   return JSON.stringify([owner, id])
 }
 
-function coalesces(
+/** Anonymous equal-signature requests share one entry that counts them; identified requests never merge. */
+function equalAnonymousRequest(
   table: ClaudePermissionTable,
   call: ClaudeCallIdentity,
   toolName: string | undefined
-): boolean {
-  return table.pending.some(
+) {
+  return table.pending.find(
     (pending) =>
-      sameClaudeCall(pending.call, call) ||
-      (call.fingerprint === undefined &&
-        pending.call.fingerprint === undefined &&
-        pending.call.owner === call.owner &&
-        pending.call.session === call.session &&
-        pending.call.prompt === call.prompt &&
-        pending.snapshot.toolName === toolName)
+      pending.key === undefined &&
+      (sameClaudeCall(pending.call, call) ||
+        (call.fingerprint === undefined &&
+          pending.call.fingerprint === undefined &&
+          pending.call.owner === call.owner &&
+          pending.call.session === call.session &&
+          pending.call.prompt === call.prompt &&
+          pending.snapshot.toolName === toolName))
   )
 }
 
@@ -103,32 +107,43 @@ export function observeClaudePermissionEvent(
     const key = callKey(owner, id)
     if (!table.calls.has(key) && admitClaudeCall(table, key, { ...call, id, settled: false })) {
       for (const pending of table.pending) {
-        if (sameClaudeCall(pending.call, call)) {
+        if (pending.key === undefined && sameClaudeCall(pending.call, call)) {
           pending.candidates.add(key)
-          pending.bound = true
         }
       }
     }
   }
   let toolUseId: string | undefined
   if (permission) {
-    const matches = [...table.calls].filter(([, tracked]) =>
-      id
-        ? tracked.id === id && tracked.owner === owner && tracked.session === session
-        : sameClaudeCall(call, tracked)
-    )
-    const candidates = matches.filter(([, tracked]) => !tracked.settled)
-    toolUseId = candidates.length === 1 ? candidates[0][1].id : undefined
-    // Only an identified repeat is a duplicate; equal input never proves an anonymous request already ended.
-    const duplicate = id !== undefined && matches.length > 0 && candidates.length === 0
-    if (!duplicate && !coalesces(table, call, readString(raw, 'tool_name'))) {
+    const key = id ? callKey(owner, id) : undefined
+    const candidates = [...table.calls]
+      .filter(([tracked, entry]) =>
+        key ? tracked === key && entry.session === session : sameClaudeCall(call, entry)
+      )
+      .filter(([, entry]) => !entry.settled)
+      .map(([tracked]) => tracked)
+    const settledRepeat = key !== undefined && table.calls.get(key)?.settled === true
+    const toolName = readString(raw, 'tool_name')
+    let request = key
+      ? table.pending.find((pending) => pending.key === key)
+      : equalAnonymousRequest(table, call, toolName)
+    if (request && !key) {
+      // Equal input cannot tell a repeat from another invocation, so the entry now needs one more resolution.
+      request.requests += 1
+      for (const candidate of candidates) {
+        request.candidates.add(candidate)
+      }
+      table.complete = false
+    } else if (!request && !settledRepeat) {
       if (!call.fingerprint || !session || candidates.length === 0) {
         table.complete = false
       }
-      addClaudePermission(table, {
+      request = {
         call,
-        candidates: new Set(candidates.map(([key]) => key)),
-        bound: candidates.length > 0,
+        key,
+        candidates: new Set(candidates),
+        requests: 1,
+        resolved: 0,
         snapshot: {
           agentType: 'claude',
           state: 'waiting',
@@ -138,8 +153,10 @@ export function observeClaudePermissionEvent(
         },
         startedAt: Date.now(),
         agentType: readString(raw, 'agent_type')
-      })
+      }
+      addClaudePermission(table, request)
     }
+    toolUseId = request ? claudePermissionToolUseId(table, request) : undefined
   }
   const resolutions =
     event === 'PostToolBatch'
@@ -172,13 +189,23 @@ export function observeClaudePermissionEvent(
         fingerprint: fingerprint(item) ?? tracked?.fingerprint
       }
       for (const pending of table.pending) {
-        if (
-          pending.candidates.delete(key) ||
-          (!pending.bound && sameClaudeCall(pending.call, resolved))
-        ) {
-          pending.bound = true
+        if (pending.candidates.delete(key) || pending.key === key) {
+          pending.resolved += 1
           wasPending = true
         }
+      }
+      // An invocation no request claimed may be the one an unmatched anonymous request asked about.
+      const unmatched = wasPending
+        ? undefined
+        : table.pending.find(
+            (pending) =>
+              pending.key === undefined &&
+              pending.resolved < pending.requests &&
+              sameClaudeCall(pending.call, resolved)
+          )
+      if (unmatched) {
+        unmatched.resolved += 1
+        wasPending = true
       }
       if (tracked) {
         tracked.settled = true
@@ -197,6 +224,6 @@ export function observeClaudePermissionEvent(
       settled.push(proof)
     }
   }
-  table.pending = table.pending.filter((pending) => !pending.bound || pending.candidates.size > 0)
+  table.pending = table.pending.filter(claudePermissionOpen)
   return { permission, toolUseId, ...(settled.length ? { settled: settled.slice(0, 16) } : {}) }
 }
