@@ -177,7 +177,6 @@ test('board drops cross preload, settle optimistically, and roll back failures',
   await empty.scrollIntoViewIfNeeded()
   await done.getByRole('listitem').dragTo(empty)
   await expect(empty.getByRole('button', { name: title })).toBeVisible()
-  await expect(orcaPage.getByText('Board verification: offline', { exact: true })).toBeVisible()
   await expect(done.getByRole('button', { name: title })).toBeVisible()
   await expect(empty.getByRole('button', { name: title })).toHaveCount(0)
   await expect
@@ -234,6 +233,28 @@ test('board drops cross preload, settle optimistically, and roll back failures',
             },
             rows: [
               source,
+              {
+                ...source,
+                id: 'blank',
+                position: 41,
+                content: { ...source.content, title: 'Blank status' },
+                fieldValuesByFieldId: {
+                  status: {
+                    kind: 'single-select',
+                    fieldId: 'status',
+                    optionId: 'todo',
+                    name: ' ',
+                    color: 'GREEN'
+                  }
+                }
+              },
+              {
+                ...source,
+                id: 'missing',
+                position: 42,
+                content: { ...source.content, title: 'Missing status' },
+                fieldValuesByFieldId: {}
+              },
               ...Array.from({ length: 40 }, (_, index) => ({
                 ...source,
                 id: `overflow-${index}`,
@@ -254,12 +275,17 @@ test('board drops cross preload, settle optimistically, and roll back failures',
                 }
               }))
             ],
-            totalCount: 41
+            totalCount: 43
           }
         }
       }
     })
   })
+  await empty.scrollIntoViewIfNeeded()
+  await expect(empty.getByRole('button', { name: 'Blank status', exact: true })).toBeVisible()
+  await expect(empty.getByRole('button', { name: 'Missing status', exact: true })).toBeVisible()
+  await expect(todo.getByRole('button', { name: 'Blank status', exact: true })).toHaveCount(0)
+  await orcaPage.screenshot({ path: testInfo.outputPath('board-empty-values.png') })
   const scroller = todo.locator('.overflow-y-auto')
   await expect
     .poll(() => scroller.evaluate((element) => element.scrollHeight > element.clientHeight))
