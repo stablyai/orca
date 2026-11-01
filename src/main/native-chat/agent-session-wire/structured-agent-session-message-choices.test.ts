@@ -10,13 +10,13 @@ import { AgentJournalSubmissionSchema } from '../../../shared/agent-session/jour
 import {
   structuredAgentSessionRecordedRejectionParts,
   structuredAgentSessionAttemptFailureParts
-} from '../../../shared/structured-agent-session-rejection-words'
-import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session-refusal-notice'
+} from '../../../shared/agent-session/failures/structured-agent-session-rejection-words'
+import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session/failures/agent-session-refusal-notice'
 import {
   providerDiagnostic,
   readWholeAgentSessionFailureFact,
   withProviderDiagnostic
-} from '../../../shared/agent-session-failure'
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createQueuedMessageTestRig,

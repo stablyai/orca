@@ -2,7 +2,7 @@ import { structuredAgentSessionSendBody } from '../../../shared/agent-session/re
 import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
-import { agentSessionThrownFailure } from '../../../shared/agent-session-write-failure'
+import { agentSessionThrownFailure } from '../../../shared/agent-session/failures/agent-session-write-failure'
 import { handBackStructuredAgentSessionMessage } from '@/components/native-chat/structured-agent-session-message-hand-back'
 import {
   dropStructuredAgentSessionSends,

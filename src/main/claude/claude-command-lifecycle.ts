@@ -3,7 +3,7 @@
 import {
   agentSessionFailureFact,
   type SubmissionRejectionKind
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,
   DISPATCH_DOUBT_PROVIDER_IDLE

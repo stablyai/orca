@@ -1,4 +1,4 @@
-import type { ProviderDiagnostic } from '../../shared/agent-session-failure'
+import type { ProviderDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentJournalTurnJoin } from '../../shared/agent-session/journal/agent-session-journal-types'
 

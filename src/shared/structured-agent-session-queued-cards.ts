@@ -5,12 +5,12 @@ import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact,
   type UnreadAgentSessionFailureFact
-} from './agent-session-failure'
-import { agentSessionFailureStatedByRow } from './agent-session-visible-failures'
-import { agentSessionWriteNotDoneParts } from './agent-session-refusal-notice'
-import type { AgentSessionWriteNoticePart } from './agent-session-write-notice-copy'
+} from './agent-session/failures/agent-session-failure'
+import { agentSessionFailureStatedByRow } from './agent-session/failures/agent-session-visible-failures'
+import { agentSessionWriteNotDoneParts } from './agent-session/failures/agent-session-refusal-notice'
+import type { AgentSessionWriteNoticePart } from './agent-session/failures/agent-session-write-notice-copy'
 import { dispatchWasWithdrawn } from './agent-session/requests/structured-agent-session-dispatch-rejection'
-import { structuredAgentSessionAttemptFailureParts } from './structured-agent-session-rejection-words'
+import { structuredAgentSessionAttemptFailureParts } from './agent-session/failures/structured-agent-session-rejection-words'
 import type {
   AgentJournalItemBody,
   AgentJournalSubmission

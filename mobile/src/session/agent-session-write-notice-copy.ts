@@ -1,8 +1,8 @@
-import { agentSessionFailureSentence } from '../../../src/shared/agent-session-failure-words'
+import { agentSessionFailureSentence } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentSessionWriteNoticePart,
   AgentSessionWriteNoticeSentence
-} from '../../../src/shared/agent-session-write-notice-copy'
+} from '../../../src/shared/agent-session/failures/agent-session-write-notice-copy'
 import { translate } from '../i18n/mobile-i18n'
 import { sayMobileAgentSessionFailure } from './agent-session-failure-copy'
 

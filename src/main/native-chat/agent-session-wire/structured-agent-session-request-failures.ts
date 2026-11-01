@@ -16,7 +16,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
 export type StructuredAgentSessionRequestFailure = {
   sessionId: string

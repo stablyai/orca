@@ -1,6 +1,6 @@
 /** Evaluate reservation identity/replay/CAS without I/O; commit applies the winning record and operation row in one store transaction. */
 
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionAdmissionModels } from '../../agent-session-record-options'
 import { chatAgentsShareConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {

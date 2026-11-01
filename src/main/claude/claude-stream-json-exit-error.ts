@@ -1,4 +1,7 @@
-import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
 import { providerExitStatusText } from '../provider-process/provider-process-exit-status'
 import { providerStderrForDisplay } from '../provider-process/provider-spawn-failure-report'

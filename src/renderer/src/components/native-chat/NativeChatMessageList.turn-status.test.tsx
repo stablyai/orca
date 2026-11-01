@@ -26,7 +26,7 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,

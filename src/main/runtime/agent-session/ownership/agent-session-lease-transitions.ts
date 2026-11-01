@@ -2,7 +2,7 @@ import { acquiredAccountAcrossLease } from '../../../../shared/agent-session-acq
 /** Pure transitions applied by the store in one durable transaction.
  * Writer admission requires reservation, observed process identity and provider-handle proof at one fence. */
 
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   adjudicateAgentSessionRestart,
   evaluateAgentSessionAcquisition,

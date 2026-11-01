@@ -26,10 +26,10 @@ import {
   agentSessionRefusalReference,
   isAgentSessionWireRefusalCode,
   refuse,
-  type AgentSessionMutationEnvelope,
   type AgentSessionRefusalReference,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint

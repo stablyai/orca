@@ -9,8 +9,8 @@ import {
   SELECTED_B
 } from './structured-agent-session-receiving-account.test-support'
 import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 const ordinary: AgentJournalMessageItem = {

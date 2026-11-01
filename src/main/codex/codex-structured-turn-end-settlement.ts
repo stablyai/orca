@@ -3,11 +3,11 @@ import {
   providerDiagnostic,
   type ProviderDiagnostic,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
-} from '../../shared/agent-session-failure-words'
+} from '../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalAnsweredTurnIdentity } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { CodexTurnEnd } from './codex-structured-dispatch-echo'
 import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'

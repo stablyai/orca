@@ -1,7 +1,7 @@
 import {
   readAgentSessionFailureFact,
   type UnreadAgentSessionFailureFact
-} from '../../../shared/agent-session-failure'
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalAnsweredTurn } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'

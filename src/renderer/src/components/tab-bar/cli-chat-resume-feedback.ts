@@ -7,7 +7,7 @@ import { agentSessionWriteFailureText } from '../native-chat/agent-session-write
 import { agentLabel } from '../../../../shared/ai-vault-session-filters'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
-import type { AgentSessionConversationOwner } from '../../../../shared/agent-session-refusal-details'
+import type { AgentSessionConversationOwner } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 
 /** Main's answer to a chat that already holds the conversation: the header opens it, the menu says so. */

@@ -9,7 +9,7 @@ import type {
   AgentSessionUsageLimit,
   AgentSessionUsageLimitWindow
 } from './agent-session-usage-limit'
-import { joinSentences } from './sentence-joining'
+import { joinSentences } from '../../sentence-joining'
 
 /** Render reset in the reader's clock; the host timezone may differ and persisted waits become stale. */
 export type AgentSessionUsageLimitResetWords = (resetsAt: number) => string | null
