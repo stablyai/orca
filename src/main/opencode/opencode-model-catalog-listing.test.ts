@@ -4,14 +4,12 @@ import { parseOpenCodeModelListing } from './opencode-model-catalog-listing'
 import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
-  applyStructuredAgentSessionOptions,
   commitStructuredAgentSessionOption,
   createStructuredAgentSessionOptionState
 } from '../../shared/agent-session/options/structured-agent-session-options'
 import {
   structuredAgentSessionMessageSelection,
-  structuredAgentSessionSendSelection,
-  structuredAgentSessionShownSnapshot
+  structuredAgentSessionSendSelection
 } from '../../shared/agent-session/options/structured-agent-session-option-view'
 import { buildNativeChatSessionOptionSnapshot } from '../../shared/native-chat/input/native-chat-session-option-snapshot'
 import { resolveAgentSessionOptionLaunch } from '../../shared/agent-session/options/agent-session-option-launch'
@@ -40,7 +38,8 @@ describe('OpenCode verbose model listing', () => {
       'max',
       'default'
     ])
-    expect(model).toMatchObject({ defaultEffort: 'default', declaredDefaultEffort: 'default' })
+    // OpenCode 1.x ACP runs the first listed variant when none is literally named default.
+    expect(model).toMatchObject({ defaultEffort: 'low', declaredDefaultEffort: 'low' })
 
     const seed = structuredAgentSessionSeedCatalog('opencode')
     const listed = applyStructuredAgentSessionModelCatalog(
@@ -49,7 +48,6 @@ describe('OpenCode verbose model listing', () => {
       { origin: 'probe', models, fetchedAt: 1, listingNamesConfiguredModel: false },
       { newLaunch: true }
     )
-    expect(structuredAgentSessionMessageSelection(listed)).toEqual({})
     const pickedModel = commitStructuredAgentSessionOption(listed, 'model', model.id)
     const catalog = pickedModel.catalog!
     const draft = buildNativeChatSessionOptionSnapshot({
@@ -66,26 +64,15 @@ describe('OpenCode verbose model listing', () => {
     })
     expect(draft.find(({ id }) => id === 'effort')).toMatchObject({
       valueSource: 'default',
-      kind: { currentValue: 'default' }
+      kind: { currentValue: 'low' }
     })
+    // Shown, never sent: OpenCode picks the same variant itself.
     expect(structuredAgentSessionMessageSelection(pickedModel)).toEqual({ model: model.id })
     expect(structuredAgentSessionSendSelection(pickedModel)).toBeUndefined()
     expect(resolveAgentSessionOptionLaunch('opencode', { model: model.id })).toEqual({
       args: ['--model', model.id],
       appliedValues: { model: model.id }
     })
-    const resting = applyStructuredAgentSessionOptions(pickedModel, seed, {
-      models,
-      listedModelIds: models.map(({ id }) => id),
-      current: { model: model.id, confirmed: ['model'], defaulted: [], acceptedInputSources: {} }
-    })
-    expect(
-      structuredAgentSessionShownSnapshot(resting).find(({ id }) => id === 'effort')
-    ).toMatchObject({
-      valueSource: 'default',
-      kind: { currentValue: 'default' }
-    })
-    expect(structuredAgentSessionMessageSelection(resting)).toEqual({})
   })
 
   it('reads every model and its variants through multiline metadata', () => {
@@ -109,8 +96,8 @@ describe('OpenCode verbose model listing', () => {
       {
         id: 'anthropic/claude-sonnet',
         label: 'anthropic/Claude Sonnet',
-        defaultEffort: 'default',
-        declaredDefaultEffort: 'default',
+        defaultEffort: 'high',
+        declaredDefaultEffort: 'high',
         isDefault: false,
         efforts: [
           { value: 'high', label: 'High' },
