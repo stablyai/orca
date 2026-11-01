@@ -76,16 +76,23 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
         )
       )
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [isVisible, shouldMeasureHiddenStartup])
+  }, [
+    isVisible,
+    shouldMeasureHiddenStartup,
+    setShouldMeasureHiddenStartup,
+    setTerminalError,
+    setTerminalErrorsByPaneId
+  ])
 
-  const clearSessionRestoredBannerForPane = useCallback((paneId: number): void => {
-    setSessionRestoredBannerPaneIds((previous) => {
-      const next = removeSessionRestoredBannerPaneId(previous, paneId)
-      return next === previous ? previous : next
-    })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [])
+  const clearSessionRestoredBannerForPane = useCallback(
+    (paneId: number): void => {
+      setSessionRestoredBannerPaneIds((previous) => {
+        const next = removeSessionRestoredBannerPaneId(previous, paneId)
+        return next === previous ? previous : next
+      })
+    },
+    [setSessionRestoredBannerPaneIds]
+  )
   const showRestoredSessionBanner = useCallback(
     (paneId: number, reason: SessionRestoredBannerReason = 'restored'): void => {
       setSessionRestoredBannerPaneIds((previous) => {
@@ -93,8 +100,7 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
         return next === previous ? previous : next
       })
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    []
+    [setSessionRestoredBannerPaneIds]
   )
   const dismissSessionRestoredBanner = useCallback(
     (event: SessionRestoredBannerDismissEvent): void => {
@@ -102,8 +108,7 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
         dismissSessionRestoredBannerPaneIds(previous, event, managerRef.current?.getPanes() ?? [])
       )
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    []
+    [managerRef, setSessionRestoredBannerPaneIds]
   )
   useSessionRestoredBannerDismiss(
     sessionRestoredBannerPaneIds.size > 0,
@@ -117,8 +122,7 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     void refreshWorkspaceSpace().catch((error: unknown) => {
       console.warn('Failed to refresh Space Analyzer after terminal session save failure:', error)
     })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [openSpacePage, refreshWorkspaceSpace])
+  }, [openSpacePage, refreshWorkspaceSpace, setSessionStateSaveFailureMessage])
 
   const quickCommandRepoId =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? null : getRepoIdFromWorktreeId(worktreeId)
@@ -143,8 +147,7 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
       setQuickCommandEditorHostId(hostId)
       setQuickCommandEditorOpen(true)
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    []
+    [setQuickCommandDraft, setQuickCommandEditorHostId, setQuickCommandEditorOpen]
   )
   const saveQuickCommand = useCallback(
     (command: TerminalQuickCommand): Promise<boolean> =>

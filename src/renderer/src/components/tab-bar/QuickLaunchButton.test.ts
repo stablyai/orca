@@ -1,4 +1,5 @@
 import React from 'react'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
@@ -79,7 +80,8 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     DropdownMenuItem: ({ children, ...props }: { children: React.ReactNode }) =>
       ReactActual.createElement('div', props, children),
     DropdownMenuShortcut: ({ children }: { children: React.ReactNode }) =>
-      ReactActual.createElement('span', { 'data-dropdown-shortcut': 'true' }, children)
+      ReactActual.createElement('span', { 'data-dropdown-shortcut': 'true' }, children),
+    DropdownMenuSeparator: () => ReactActual.createElement('hr')
   }
 })
 
@@ -122,6 +124,8 @@ function rowMarkup(html: string, label: string): string {
 }
 
 beforeEach(() => {
+  // A host without chats lists every agent as a terminal.
+  setLocalRuntimeCapabilitiesForTests([])
   shortcutLabelMock.mockReset()
   shortcutLabelMock.mockReturnValue(null)
   useDetectedAgentsMock.mockClear()
@@ -158,8 +162,7 @@ describe('QuickLaunchAgentMenuItems', () => {
   })
 
   it('routes agent detection to the worktree-owning runtime host, not the local client', () => {
-    // Repro for the "Remote Server lists local agents" bug: a worktree owned by
-    // a paired runtime must probe that runtime, never the client's PATH.
+    // Detect agents on the workspace’s execution host; client PATH cannot describe a paired runtime.
     storeState.worktreesByRepo = {
       'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'runtime:env-1' }]
     }
@@ -215,7 +218,7 @@ describe('QuickLaunchAgentMenuItems', () => {
 
     const html = renderAgentMenuItems()
 
-    expect(html).toContain('reach this workspace')
+    expect(html).toContain('list terminal agents for this workspace')
     expect(html).not.toContain('No agents detected')
   })
 

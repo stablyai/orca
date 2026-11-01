@@ -1,6 +1,6 @@
 import type { ResourceViewAdmission } from '../../../../shared/resource-view-admission'
 import { assertResourceViewVisible } from '../../../window/resource-view-admission'
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
@@ -80,7 +80,7 @@ export function installPtySessionListingIpcHandler(deps: {
           }
           for (const rawSession of sessions) {
             const session = admission.admit(rawSession)
-            // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
+            // Rebuild routing for reconnect-discovered sessions; later kill requests carry only the PTY ID.
             ptyOwnership.set(session.id, hostId)
             deduped.set(diagnostic ? ptySessionIdentity(session) : session.id, {
               id: session.id,
@@ -102,10 +102,9 @@ export function installPtySessionListingIpcHandler(deps: {
                 hostId === LOCAL_EXECUTION_HOST_ID &&
                 provider.supportsFencedTermination?.(session.id) === true,
               ...(session.worktreeId !== undefined ? { worktreeId: session.worktreeId } : {}),
+              ...(session.paneKey !== undefined ? { paneKey: session.paneKey } : {}),
               ...(session.exiting === true ? { exiting: true as const } : {}),
-              // Why: the renderer's binding map is empty during restore, so ownership is the only
-              // liveness evidence it has. Absence is authoritative only from a provider that
-              // serializes claims — otherwise it is 'unknown', never 'absent' (#8459).
+              // During restore, claims provide liveness evidence; only listing-capable providers can prove ownership absent (#8459).
               agentOwnership:
                 (session.agentSessionOwners?.length ?? 0) > 0
                   ? 'present'

@@ -20,7 +20,7 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>
@@ -168,6 +168,57 @@ describe('RuntimeFileCommands', () => {
     )
   })
 
+  it.each(['ignored', 'erroring'] as const)(
+    'publishes capped results and detaches when termination is %s',
+    async (termination) => {
+      const { commands } = createRuntimeFileCommands()
+      const child = createRuntimeSearchChild()
+      if (termination === 'erroring') {
+        child.kill.mockImplementation(() => {
+          child.emit('error', Object.assign(new Error('kill EPERM'), { code: 'EPERM' }))
+          return false
+        })
+      }
+      resolveAuthorizedPathMock.mockResolvedValue('/repo')
+      wslAwareSpawnMock.mockReturnValue(child)
+      const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
+        query: 'needle',
+        maxResults: 2
+      })
+      let settled = false
+      void resultPromise.then(() => {
+        settled = true
+      })
+      await flushRuntimeSearchMicrotasks()
+      const record = JSON.stringify({
+        type: 'match',
+        data: {
+          path: { text: './example.txt' },
+          lines: { text: 'needle needle\n' },
+          line_number: 1,
+          submatches: [
+            { start: 0, end: 6 },
+            { start: 7, end: 13 }
+          ]
+        }
+      })
+      expect(() => child.stdout.emit('data', `${record}\n{"type":"match"`)).not.toThrow()
+      await flushRuntimeSearchMicrotasks()
+
+      expect(settled).toBe(true)
+      await expect(resultPromise).resolves.toMatchObject({
+        totalMatches: 2,
+        truncated: true,
+        files: [{ matches: [{ column: 1 }, { column: 8 }] }]
+      })
+      expect(child.kill).toHaveBeenCalledOnce()
+      expect(child.stdout.listenerCount('data')).toBe(0)
+      expect(child.stderr.listenerCount('data')).toBe(0)
+      expect(child.listenerCount('close')).toBe(0)
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
   it.each(['error-first', 'close-first'] as const)(
     'rejects with the bundled-ripgrep error when runtime rg native launch failure is %s',
     async (order) => {
@@ -179,8 +230,7 @@ describe('RuntimeFileCommands', () => {
       const child = createRuntimeSearchChild()
       Object.defineProperty(child, 'pid', { value: undefined })
       Object.defineProperties(child, { stdout: { value: undefined }, stderr: { value: undefined } })
-      // Why a root that exists: an ENOENT spawn failure is also what a vanished workspace looks
-      // like, so this stays about the binary only while the search root is reachable.
+      // Keep root reachable so ENOENT proves missing binary rather than vanished workspace.
       resolveAuthorizedPathMock.mockResolvedValue(process.cwd())
       wslAwareSpawnMock.mockReturnValue(child)
 
@@ -205,8 +255,7 @@ describe('RuntimeFileCommands', () => {
     }
   )
 
-  // Why close(97): the WSL wrapper's "cd failed" code. It is above rg's own 0/1/2, so a handler
-  // that checks it after the unavailable branch reports a broken install instead.
+  // WSL cd failure 97 exceeds rg's 0/1/2; classify it before binary-unavailable errors.
   it('names the unreachable root when the WSL wrapper cannot enter it', async () => {
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },

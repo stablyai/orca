@@ -1,8 +1,4 @@
-/**
- * The phone page's workspace list, built from the host's sidebar feed by the page's own modules,
- * matches the desktop sidebar row for row: headers, order, nesting, the single highlight and
- * collapse. Desktop, then a desktop that is a paired server's client.
- */
+// Compare phone feed modules to the desktop sidebar’s headers/order/nesting/highlight/collapse for local and paired-server workspaces.
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import { execFileSync } from 'node:child_process'
@@ -26,8 +22,7 @@ type PhoneList = Awaited<ReturnType<typeof openPhoneFeedList>>
 
 const AddedRepoSchema = z.object({ repo: z.object({ id: z.string() }) })
 
-/** Both sides inside one poll: either may still be catching up with the last change. */
-/** Waits until both sides agree on a list that already shows the change (`showsChange`). */
+// Require both lists to agree after the requested change, not merely on their shared old state.
 async function expectPhoneMatchesDesktop(
   page: Page,
   phone: PhoneList,

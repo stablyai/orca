@@ -40,8 +40,7 @@ const files = await collectFiles(FEATURE_WALL_ASSET_DIR)
 const fileNames = new Set(files.map((file) => path.relative(FEATURE_WALL_ASSET_DIR, file)))
 const missingFiles = EXPECTED_FILES.filter((file) => !fileNames.has(file))
 if (missingFiles.length > 0) {
-  // Why: a byte-budget-only check lets an empty asset directory pass, which
-  // ships the feature tour as text-only cards instead of the recorded media.
+  // Byte limits alone accept empty directories and ship text-only tours without recorded media.
   console.error(`Feature wall assets are missing: ${missingFiles.join(', ')}`)
   process.exit(1)
 }

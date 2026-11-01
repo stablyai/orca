@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import type { PointerSensorOptions, SensorProps } from '@dnd-kit/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDragPointer } from './tab-drag-pointer'
 import { TabDragPointerSensor } from './tab-drag-pointer-sensor'
 
 function startSensor(options: PointerSensorOptions = {}) {
@@ -110,5 +111,25 @@ describe('tab drag pointer sensor cancellation', () => {
     expect(current.onMove).toHaveBeenCalledOnce()
     expect(current.onCancel).toHaveBeenCalledOnce()
     expect(current.onEnd).not.toHaveBeenCalled()
+  })
+})
+
+describe('tab drag pointer sensor pointer tracking', () => {
+  it('reports the real cursor after the sensor ends, ignoring a scroll-adjusted delta', () => {
+    startSensor()
+    movePointer()
+    document.dispatchEvent(new PointerEvent('pointerup'))
+
+    // dnd-kit's delta subtracts a scrolled source strip's initial scrollLeft (300 here).
+    const dragEnd = {
+      activatorEvent: new PointerEvent('pointerdown', { clientX: 10, clientY: 10 }),
+      delta: { x: 90 - 300, y: 40 },
+      active: {
+        id: 'tab-1',
+        data: { current: undefined },
+        rect: { current: { initial: null, translated: null } }
+      }
+    }
+    expect(getDragPointer(dragEnd)).toEqual({ x: 100, y: 50 })
   })
 })

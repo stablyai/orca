@@ -4,6 +4,7 @@ import { TerminalTitlebarTabs } from './TerminalTitlebarTabs'
 import { TerminalSplitWorkspaceSurfaces } from './TerminalSplitWorkspaceSurfaces'
 import { TerminalLegacyWorkspaceSurface } from './TerminalLegacyWorkspaceSurface'
 import { TerminalWorkspaceDialogs } from './TerminalWorkspaceDialogs'
+import { WslHostStoppedWorkspaceNotice } from './wsl-host-stopped/WslHostStoppedWorkspaceNotice'
 import type { TerminalController } from './use-terminal-controller'
 
 export function TerminalSurface({
@@ -15,9 +16,8 @@ export function TerminalSurface({
   const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(!renderedActiveWorktreeId)
   return (
     <div
-      // Why: already out of flow via the workbench container when hidden, so retention only
-      // has to drop `hidden` — it does not need to leave the flex column a second time.
-      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
+      // The workbench already removes hidden content from flow; only keep this ancestor paintable.
+      className={`relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         renderedActiveWorktreeId
           ? ''
           : retainBrowserGuestPaint
@@ -30,6 +30,7 @@ export function TerminalSurface({
       <TerminalTitlebarTabs controller={controller} />
       <TerminalSplitWorkspaceSurfaces controller={controller} />
       <TerminalLegacyWorkspaceSurface controller={controller} />
+      <WslHostStoppedWorkspaceNotice worktreeId={renderedActiveWorktreeId} />
       <TerminalWorkspaceDialogs controller={controller} />
     </div>
   )

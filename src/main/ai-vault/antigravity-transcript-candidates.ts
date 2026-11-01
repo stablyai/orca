@@ -2,7 +2,7 @@ import { dirname, join } from 'node:path'
 import { wslGatedLstat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { recordSessionScanIssue } from './session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 
 function transcriptDirectory(file: FileWithMtime): string {
@@ -91,7 +91,7 @@ export async function completeAntigravityTranscriptPairs(
         recordSessionScanIssue(issues, {
           agent: 'antigravity',
           path: sibling,
-          message: error.message
+          ...scanIssueTextFromError(error)
         })
       }
     }

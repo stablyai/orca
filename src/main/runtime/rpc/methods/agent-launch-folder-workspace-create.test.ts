@@ -1,16 +1,12 @@
-/**
- * `agent.launch` with a `create-folder-workspace` target: the host creates the folder workspace,
- * then starts the agent in it exactly as it would in a folder workspace that already existed.
- */
-
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../../shared/agent-launch-target-forbidden'
 import { FolderWorkspaceCreateRefusedError } from '../../../project-groups/folder-workspace-create-refusal'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'
 import {
   CAPABLE_CLIENT,
@@ -184,6 +180,7 @@ describe('a replayed folder launch', () => {
 
   afterEach(async () => {
     setAgentLaunchRecordStore(null)
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   })
 
@@ -241,7 +238,7 @@ describe('a replayed folder launch', () => {
 
   it('stays unknown when the failure came after the workspace was created', async () => {
     const first = folderRuntime({ settings: {} })
-    // The same words as a refused create, but untyped: only the create's own refusal proves nothing.
+    // Only a typed create refusal proves no effects; identical untyped error text does not.
     first.showTerminalWorkspaceLaunchScope.mockRejectedValueOnce(new Error(PATH_UNAVAILABLE))
 
     await expect(replay(first)).rejects.toThrow('agent_session_operation_unknown')

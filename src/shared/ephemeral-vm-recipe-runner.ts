@@ -4,10 +4,15 @@ import { statSync } from 'node:fs'
 import type { OrcaVmRecipe } from './orca-yaml-hook-types'
 import { parseEphemeralVmRecipeResult, type EphemeralVmRecipeResult } from './ephemeral-vm-recipes'
 import {
-  getEphemeralVmRecipeCheckoutModeError,
+  getEphemeralVmRecipeCheckoutModeFailure,
   getEphemeralVmRecipeResultSchemaVersion
 } from './ephemeral-vm-recipe-checkout-mode'
 import { runRecipeCommand } from './ephemeral-vm-recipe-process'
+import {
+  ephemeralVmExitFailure,
+  pickEphemeralVmFailureCode,
+  type EphemeralVmFailure
+} from './ephemeral-vm-failure-copy'
 import { getEphemeralVmRecipeDestroyFailure } from './ephemeral-vm-recipe-destroy-result'
 import {
   buildEphemeralVmRecipeCleanupPayload,
@@ -57,13 +62,12 @@ export type EphemeralVmRecipeStartSuccess = {
 export type EphemeralVmRecipeStartFailure = {
   ok: false
   context: EphemeralVmRecipeContext
-  error: string
   stdout: string
   stderr: string
   exitCode: number | null
   signal: NodeJS.Signals | null
   recipeResult?: EphemeralVmRecipeResult
-}
+} & EphemeralVmFailure
 
 export type EphemeralVmRecipeStartResult =
   | EphemeralVmRecipeStartSuccess
@@ -87,12 +91,11 @@ export type EphemeralVmRecipeLifecycleArgs = EphemeralVmRecipeCleanupArgs
 export type EphemeralVmRecipeCleanupResult = {
   ok: boolean
   skipped: boolean
-  error?: string
   stdout: string
   stderr: string
   exitCode: number | null
   signal: NodeJS.Signals | null
-}
+} & Partial<EphemeralVmFailure>
 
 export type EphemeralVmRecipeResumeResult =
   | (EphemeralVmRecipeStartSuccess & { skipped: false })
@@ -128,7 +131,7 @@ export async function runEphemeralVmRecipeStart(
     return {
       ok: false,
       context,
-      error: `Recipe exited with code ${processResult.exitCode ?? 'unknown'}.`,
+      ...ephemeralVmExitFailure('recipe', processResult.exitCode),
       ...processResult
     }
   }
@@ -139,15 +142,16 @@ export async function runEphemeralVmRecipeStart(
       ok: false,
       context,
       error: parsed.error,
+      ...pickEphemeralVmFailureCode(parsed),
       ...processResult
     }
   }
-  const checkoutModeError = getEphemeralVmRecipeCheckoutModeError(args.recipe, parsed.result)
-  if (checkoutModeError) {
+  const checkoutModeFailure = getEphemeralVmRecipeCheckoutModeFailure(args.recipe, parsed.result)
+  if (checkoutModeFailure) {
     return {
       ok: false,
       context,
-      error: checkoutModeError,
+      ...checkoutModeFailure,
       recipeResult: parsed.result,
       ...processResult
     }
@@ -277,16 +281,17 @@ export async function runEphemeralVmRecipeResume(
       skipped: false,
       context: args.context,
       error: parsed.error,
+      ...pickEphemeralVmFailureCode(parsed),
       ...processResult
     }
   }
-  const checkoutModeError = getEphemeralVmRecipeCheckoutModeError(args.recipe, parsed.result)
-  if (checkoutModeError) {
+  const checkoutModeFailure = getEphemeralVmRecipeCheckoutModeFailure(args.recipe, parsed.result)
+  if (checkoutModeFailure) {
     return {
       ok: false,
       skipped: false,
       context: args.context,
-      error: checkoutModeError,
+      ...checkoutModeFailure,
       recipeResult: parsed.result,
       ...processResult
     }

@@ -11,11 +11,7 @@ export type StaleCodexPane = {
   activeAccountId: string | null
 }
 
-/**
- * Reports which of the given PTYs still launch Codex as a previously selected
- * account, so the restart prompt survives an app restart the shells outlive.
- * Why only the account: a pane on an older Codex home keeps working, refreshed from ~/.codex.
- */
+// Only account changes need prompts; older runtime homes remain usable.
 export function listStaleCodexPanes(args: {
   ptyIds: readonly string[]
   settings: GlobalSettings
@@ -38,13 +34,7 @@ export function listStaleCodexPanes(args: {
   return stalePanes
 }
 
-/**
- * Drops the launch record for panes the user chose to keep on the old account.
- *
- * Why: keeping the old account is an answer to the prompt, but the record is
- * what the startup sweep re-raises from — without this the same dismissed pane
- * is prompted again (and has its input blocked again) after every app restart.
- */
+/** Persist dismissal so keeping an old account does not prompt again after restart. */
 export function forgetStaleCodexPanes(ptyIds: readonly string[]): void {
   for (const ptyId of ptyIds) {
     forgetCodexPaneAccount(ptyId)
@@ -59,7 +49,6 @@ function parseSelectionLaneKey(selectionKey: string): {
     return { runtime: 'host', wslDistro: null }
   }
   const distro = selectionKey.slice('wsl:'.length)
-  // Why: the lane key round-trips through getCodexSelectionLaneKey, whose
-  // default-distro sentinel must resolve back to "no specific distro".
+  // Decode the default-distro sentinel from getCodexSelectionLaneKey.
   return { runtime: 'wsl', wslDistro: distro === '__default__' ? null : distro }
 }

@@ -26,7 +26,18 @@ describe('mobile Linear sorting', () => {
       return new NativeCollator(locales, options)
     })
     const compare = vi.spyOn(String.prototype, 'localeCompare')
-    sortLinearIssues(issues, mode)
+    const before = [...issues]
+    const actual = sortLinearIssues(issues, mode)
+    const expectedFirstIds = {
+      updated: ['0', '1', '2'],
+      priority: ['1', '16', '26'],
+      identifier: ['1', '8', '15']
+    }
+    const ordered =
+      mode === 'identifier' ? actual.filter((issue) => issue.identifier.startsWith('ENG-')) : actual
+    expect(ordered.slice(0, 3).map((issue) => issue.id)).toEqual(expectedFirstIds[mode])
+    expect(actual).toHaveLength(issues.length)
+    expect(issues).toEqual(before)
     expect(parse).toHaveBeenCalledTimes(mode === 'identifier' ? 0 : issues.length)
     expect(collator).toHaveBeenCalledTimes(mode === 'identifier' ? 1 : 0)
     expect(compare).not.toHaveBeenCalled()

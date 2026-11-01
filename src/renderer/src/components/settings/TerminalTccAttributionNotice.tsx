@@ -5,13 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { openTerminalManageSessions } from './open-terminal-manage-sessions'
 export { MANAGE_SESSIONS_SECTION_ID } from './open-terminal-manage-sessions'
 
-/**
- * Why this exists: macOS pins the TCC "responsible process" of the detached terminal
- * daemon to the app binary that forked it. Once that binary is deleted (packaged
- * updates replace the bundle), Accessibility/Automation grants on Orca silently stop
- * covering every daemon-hosted terminal (osascript -25211) with no OS-side signal —
- * so the remedy has to be surfaced here, next to the permissions it breaks (STA-3491).
- */
+/** Updates delete the daemon’s responsible app binary, silently severing macOS TCC grants for terminals (osascript -25211); surface recovery beside affected permissions (STA-3491). */
 export function useMacTccAttributionSevered(refreshRevision = 0): boolean {
   const [severed, setSevered] = useState(false)
 
@@ -26,7 +20,7 @@ export function useMacTccAttributionSevered(refreshRevision = 0): boolean {
 
   useEffect(() => {
     void refresh()
-    // Why: a daemon restart or drain changes the verdict without a pane remount.
+    // Daemon restart/drain changes attribution without remounting the pane.
     const onFocus = (): void => {
       void refresh()
     }

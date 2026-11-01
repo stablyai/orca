@@ -31,7 +31,6 @@ afterEach(() => {
   }
 })
 
-/** What a serve host with no window stores for a client-created terminal, as main writes it. */
 async function windowlessHostWithTerminal(): Promise<{ store: Store; directory: string }> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-windowless-restart-'))
   directories.push(directory)
@@ -54,7 +53,7 @@ async function windowlessHostWithTerminal(): Promise<{ store: Store; directory: 
   return { store, directory }
 }
 
-/** The reported loss: the pane's binding is gone; the tab, its pane tree and the PTY stay. */
+/** Reproduce binding loss while retaining tab, pane tree and live PTY. */
 function withoutPaneBinding(session: WorkspaceSessionState): WorkspaceSessionState {
   const layout = session.terminalLayoutsByTabId[TAB]!
   return {

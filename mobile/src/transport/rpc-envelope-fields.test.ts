@@ -150,6 +150,7 @@ describe('direct transport envelope', () => {
     streams.handleResponse(streaming('rpc-1', { type: 'ready', subscriptionId: 'server-1' }))
     expect(socket.frames().at(-1)).toMatchObject({
       method: 'runtime.clientEvents.unsubscribe',
+      params: { subscriptionId: 'server-1' },
       ...ENVELOPE
     })
   })
@@ -180,6 +181,7 @@ describe('relay transport envelope', () => {
     streams.handleResponse(streaming(frames[0]!.id, { type: 'snapshot', tabs: [] }))
     expect(frames.at(-1)).toMatchObject({
       method: 'session.tabs.unsubscribe',
+      params: { worktree: 'w', subscriptionId: 'relay-1' },
       envelope: ENVELOPE
     })
   })
@@ -195,6 +197,7 @@ describe('relay transport envelope', () => {
     streams.handleResponse(streaming(frames[0]!.id, { type: 'ready', subscriptionId: 'server-1' }))
     expect(frames.at(-1)).toMatchObject({
       method: 'runtime.clientEvents.unsubscribe',
+      params: { subscriptionId: 'server-1' },
       envelope: ENVELOPE
     })
   })

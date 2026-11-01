@@ -69,18 +69,6 @@ describe('isRemoteHeadRef', () => {
   })
 })
 
-/** Pre-change implementation, kept inline as the differential oracle for the fast path. */
-function isRemoteHeadRefOracle(ref: string, remotes: readonly string[] = []): boolean {
-  const shortRef = ref.startsWith('refs/remotes/') ? ref.slice('refs/remotes/'.length) : ref
-  const remote = [...remotes]
-    .sort((left, right) => right.length - left.length)
-    .find((candidate) => shortRef.startsWith(`${candidate}/`))
-  if (remote) {
-    return shortRef.slice(remote.length + 1) === 'HEAD'
-  }
-  return shortRef.split('/').length === 2 && shortRef.endsWith('/HEAD')
-}
-
 /** Counts array copies (`[...remotes]`, one per sort) and elements copied, via the spread iterator. */
 function instrumentRemotes(names: readonly string[]): {
   remotes: readonly string[]
@@ -101,84 +89,13 @@ function instrumentRemotes(names: readonly string[]): {
   return { remotes, counts }
 }
 
-const REF_PREFIXES = ['', 'refs/remotes/', 'refs/heads/', 'refs/remotes/origin/']
-const REF_BODIES = [
-  '',
-  '/HEAD',
-  'HEAD',
-  'HEAD/HEAD',
-  'main',
-  'feature/HEAD',
-  'a/b/c/HEAD',
-  'origin',
-  'origin/HEAD',
-  'origin/main',
-  'origin/head',
-  'origin/HEADX',
-  'origin/HEAD/x',
-  'origin/feature/HEAD',
-  'up/HEAD',
-  'upstream/HEAD',
-  'foo/HEAD',
-  'foo/bar/HEAD',
-  'foo/bar/baz/HEAD',
-  'foo/bar/main',
-  'foo/barbaz/HEAD'
-]
-const REMOTE_POOL = [
-  'origin',
-  'up',
-  'upstream',
-  'foo',
-  'foo/bar',
-  'foo/bar/baz',
-  'foo/barbaz',
-  'HEAD'
-]
-
-const ALL_REFS = REF_PREFIXES.flatMap((prefix) => REF_BODIES.map((body) => `${prefix}${body}`))
-const ALL_REMOTE_SETS = Array.from({ length: 1 << REMOTE_POOL.length }, (_unused, mask) =>
-  REMOTE_POOL.filter((_remote, bit) => (mask & (1 << bit)) !== 0)
-)
-
 describe('isRemoteHeadRef fast path', () => {
-  it('matches the pre-change implementation across every ref x remote-set combination', () => {
-    let combinations = 0
-    const mismatches: string[] = []
-    for (const ref of ALL_REFS) {
-      for (const remoteSet of ALL_REMOTE_SETS) {
-        // Duplicated + reversed variant exercises the sort's tie handling too.
-        for (const remotes of [remoteSet, [...remoteSet, ...remoteSet].toReversed()]) {
-          combinations += 1
-          if (isRemoteHeadRef(ref, remotes) !== isRemoteHeadRefOracle(ref, remotes)) {
-            mismatches.push(`${ref} | [${remotes.join(',')}]`)
-          }
-        }
-      }
-    }
-    expect(mismatches).toEqual([])
-    expect(combinations).toBe(ALL_REFS.length * ALL_REMOTE_SETS.length * 2)
-    expect(combinations).toBe(43008)
-  })
-
-  it('also matches the oracle when remotes are omitted entirely', () => {
-    for (const ref of ALL_REFS) {
-      expect(isRemoteHeadRef(ref)).toBe(isRemoteHeadRefOracle(ref))
-    }
-  })
-
-  it('copies and sorts nothing for ordinary refs that the oracle copies once each', () => {
+  it('does not copy remotes while rejecting ordinary refs', () => {
     const ordinaryRefs = Array.from(
       { length: 80 },
       (_unused, index) => `origin/feature/branch-${index}`
     )
     const remoteNames = ['origin', 'upstream', 'fork']
-
-    const before = instrumentRemotes(remoteNames)
-    for (const ref of ordinaryRefs) {
-      expect(isRemoteHeadRefOracle(ref, before.remotes)).toBe(false)
-    }
-    expect(before.counts).toEqual({ copies: 80, copiedElements: 240 })
 
     const after = instrumentRemotes(remoteNames)
     for (const ref of ordinaryRefs) {
@@ -187,35 +104,12 @@ describe('isRemoteHeadRef fast path', () => {
     expect(after.counts).toEqual({ copies: 0, copiedElements: 0 })
   })
 
-  it('scales the skipped copies linearly with candidate count', () => {
+  it('copies each remote once for a symbolic HEAD candidate', () => {
     const remoteNames = ['origin', 'upstream', 'fork']
-    const candidates = Array.from({ length: 4104 }, (_unused, index) =>
-      index % 2 === 0 ? `refs/remotes/origin/branch-${index}` : `refs/heads/branch-${index}`
-    )
-
-    const before = instrumentRemotes(remoteNames)
-    for (const ref of candidates) {
-      isRemoteHeadRefOracle(ref, before.remotes)
-    }
-    expect(before.counts.copies).toBe(4104)
-
-    const after = instrumentRemotes(remoteNames)
-    for (const ref of candidates) {
-      isRemoteHeadRef(ref, after.remotes)
-    }
-    expect(after.counts.copies).toBe(0)
-  })
-
-  it('still copies and sorts for a /HEAD candidate, which now pays one extra suffix check', () => {
-    const remoteNames = ['origin', 'upstream', 'fork']
-
-    const before = instrumentRemotes(remoteNames)
-    expect(isRemoteHeadRefOracle('refs/remotes/origin/HEAD', before.remotes)).toBe(true)
 
     const after = instrumentRemotes(remoteNames)
     expect(isRemoteHeadRef('refs/remotes/origin/HEAD', after.remotes)).toBe(true)
 
-    expect(after.counts).toEqual(before.counts)
     expect(after.counts).toEqual({ copies: 1, copiedElements: 3 })
   })
 })

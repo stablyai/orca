@@ -2,10 +2,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { isBackgroundTaskBlock, isSubagentBlock } from '../../../shared/native-chat-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  isBackgroundTaskBlock,
+  isSubagentBlock
+} from '../../../shared/native-chat/native-chat-types'
 import {
   ClaudeBackgroundTaskIdentityResolver,
   writeClaudeBackgroundTaskRow
@@ -20,8 +23,7 @@ import {
   type AgentChildWorkRowView
 } from './structured-agent-session-subagent-rows'
 
-// A subagent or Claude background task that run 1 started and run 2 resumed is run 2's work: run 1's
-// death must not settle it, though its row was created at run 1's fence.
+// Resumed child work belongs to the new run despite older row creation; old-owner death cannot settle it.
 
 const journals = createTrackedJournalOpener()
 let root: string
@@ -72,7 +74,6 @@ it('keeps a resumed subagent and background task working when the run that creat
     }
   })
   const tasks = new ClaudeBackgroundTaskIdentityResolver()
-  // One provider process: it reports the subagent and writes the task row through its own sink.
   const run = async () => {
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({ journal, fence, publish: () => {} })
@@ -119,7 +120,7 @@ it('keeps a resumed subagent and background task working when the run that creat
   fence = 2
   await run()
   await settleRunOne()
-  // A rewind rebuilds the epoch from these rows with both provenance facts, as it stores them.
+  // Epoch rebuild preserves both creation and execution provenance.
   await journal.replaceEpochItems(
     'handle_forked',
     2,

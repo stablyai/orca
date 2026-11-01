@@ -1,13 +1,9 @@
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
-// Whether an Agent Session History row can be resumed into a structured native chat, and where.
-//
-// Separate from `ai-vault-session-resume.ts` because the answer is not the same question: the
-// terminal resume asks whether a workspace can host a PTY, this asks whether a provider will still
-// find the conversation from the workspace we would run it in.
+// Native resume requires provider conversation lookup, unlike terminal resume's PTY-hosting gate.
 
-import { isWslStoredAiVaultSessionFile } from '@/lib/ai-vault-resume-target'
+import { isWslStoredAiVaultSessionFile } from '../../../../shared/ai-vault-resume-target'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../../shared/execution-host'
 import { adoptsCliConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   isAiVaultSessionResumableContent,
@@ -25,16 +21,7 @@ export type AiVaultResumeInChatEligibility =
   | { available: true; workspaceId: string }
   | { available: false; reason: AiVaultResumeInChatBlockedReason }
 
-/**
- * Agents do not have the same freedom about *where* a conversation may be resumed.
- *
- * Codex is handed the rollout file and a cwd, so it can resume into any workspace. Claude, Grok and
- * OMP store conversations under a folder derived from the launch cwd, so resuming from a workspace
- * other than the one the conversation was recorded in looks in a folder the conversation is not in,
- * OpenCode refuses a conversation that does not belong to the launch cwd, and a Pi chat forks a
- * conversation recorded elsewhere into a copy instead of taking it over.
- * That is a resume that silently yields nothing, which is worse than a disabled affordance.
- */
+/** Codex can resume anywhere; other providers require the original cwd or silently miss/refuse/fork the conversation. */
 export function aiVaultSessionResumeInChatWorkspaceMatters(
   agent: AiVaultSession['agent']
 ): boolean {
@@ -48,48 +35,49 @@ export function aiVaultSessionResumeInChatWorkspaceMatters(
   )
 }
 
-/**
- * Does the row's recorded directory name the same place as the target workspace?
- *
- * Uses the shared runtime-path comparison rather than a local normalizer, which also keeps POSIX
- * paths case-SENSITIVE — folding their case would call two genuinely different directories the same.
- */
+/** Compare with shared runtime rules; POSIX case folding would conflate distinct directories. */
 export function aiVaultSessionCwdMatchesWorkspace(
   cwd: string | null | undefined,
-  workspacePath: string | null | undefined
+  workspacePath: string | null | undefined,
+  cwdAliases: readonly string[] = []
 ): boolean {
   if (!cwd || !workspacePath) {
     return false
   }
-  return (
-    normalizeRuntimePathForComparison(cwd.trim()) ===
-    normalizeRuntimePathForComparison(workspacePath.trim())
+  const workspace = normalizeRuntimePathForComparison(workspacePath.trim())
+  return [cwd, ...cwdAliases].some(
+    (path) => normalizeRuntimePathForComparison(path.trim()) === workspace
   )
 }
 
 export function resolveAiVaultSessionResumeInChatEligibility(args: {
   session: Pick<
     AiVaultSession,
-    'agent' | 'cwd' | 'filePath' | 'executionHostId' | 'messageCount' | 'previewMessages'
+    | 'agent'
+    | 'cwd'
+    | 'cwdAliases'
+    | 'filePath'
+    | 'executionHostId'
+    | 'messageCount'
+    | 'previewMessages'
   > & { structuredSession?: AiVaultSession['structuredSession'] }
   targetWorkspaceId: string | null
   targetWorkspacePath: string | null
-  /** Whether the same (workspace, agent) pair can host a structured chat; the Chat UI switch does
-   *  not apply. Reused rather than re-derived: it already encodes host capability, platform refusals
-   *  and the WSL/repair refusal, and a second copy of those conditions would drift from it. */
+  /** Reuse structured route capability/platform/WSL gates to prevent drift; the Chat | CLI choice does not apply. */
   structuredRouteAvailable: boolean
 }): AiVaultResumeInChatEligibility {
   const { session } = args
   if (isAntigravityReferenceSession(session) || !adoptsCliConversations(session.agent)) {
     return { available: false, reason: 'agent' }
   }
-  // An already-adopted row reopens its own chat instead; offering a second resume of it would ask
-  // for a conflict the host would rightly refuse.
+  // Already-adopted rows reopen their owner; a second adoption would conflict.
   if (session.structuredSession) {
     return { available: false, reason: 'already-structured' }
   }
+  const recordingHost = parseRoutableExecutionHostId(session.executionHostId)
   if (
-    session.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
+    !recordingHost ||
+    (recordingHost.kind !== 'local' && recordingHost.kind !== 'runtime') ||
     isWslStoredAiVaultSessionFile(session.filePath)
   ) {
     return { available: false, reason: 'remote' }
@@ -102,7 +90,7 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   }
   if (
     aiVaultSessionResumeInChatWorkspaceMatters(session.agent) &&
-    !aiVaultSessionCwdMatchesWorkspace(session.cwd, args.targetWorkspacePath)
+    !aiVaultSessionCwdMatchesWorkspace(session.cwd, args.targetWorkspacePath, session.cwdAliases)
   ) {
     return { available: false, reason: 'workspace' }
   }

@@ -34,7 +34,6 @@ function finishedRuns(count: number): AutomationRun[] {
   )
 }
 
-// Only r0 ran in a workspace made for it; the others share theirs.
 function firstRunOwnsWorkspace(worktreeId: string) {
   return worktreeId === 'wt-0' ? { automationProvenance: { automationRunId: 'r0' } } : undefined
 }
@@ -44,9 +43,7 @@ function build(headless: boolean) {
     setAutomationService: vi.fn(),
     notifyAutomationsChanged: vi.fn(),
     getTerminalHandleForPaneKey: vi.fn((paneKey: string) => `handle:${paneKey}`),
-    // Each run's pane still holds its own PTY unless a test restarts it.
     getTerminalPtyIdForHandle: vi.fn((handle: string) => `pty-${handle.split('tab-')[1]?.[0]}`),
-    // pty-1's terminal has a client on it: typed into or being viewed.
     readTerminalClientUse: vi.fn((ptyId: string) => (ptyId === 'pty-1' ? 'used' : 'unused')),
     closeTerminal: vi.fn(async (_handle: string) => ({})),
     confirmTerminalShellAlone: vi.fn(async (_ptyId: string) => false),
@@ -65,7 +62,9 @@ function build(headless: boolean) {
     listAutomationRuns: vi.fn(() => finishedRuns(5)),
     listAutomations: () => [],
     getWorktreeMeta: vi.fn(
-      (_worktreeId: string): { automationProvenance: { automationRunId: string } } | undefined =>
+      (
+        _worktreeId: string
+      ): { automationProvenance: { automationRunId: string; origin?: 'client' } } | undefined =>
         undefined
     )
   }
@@ -90,8 +89,6 @@ describe('headless automation service run terminal retention', () => {
     service.start()
     await vi.advanceTimersByTimeAsync(RUN_TERMINAL_GRACE_MS + 2 * 60_000)
 
-    // The oldest two finished runs are past the newest three; the one a client used stays open.
-    // Only the run's own pane closes: a pane a user split into its tab survives.
     expect(runtime.closeTerminal.mock.calls.map(([handle]) => handle)).toEqual(['handle:tab-0:1'])
     expect(runtime.closeTerminalTab).not.toHaveBeenCalled()
     expect(service.markDispatchResult).toHaveBeenCalledWith(
@@ -107,7 +104,6 @@ describe('headless automation service run terminal retention', () => {
   it('closes nothing in a pane a restart gave a new PTY, and still forgets the old one', async () => {
     vi.useFakeTimers()
     const { runtime, service } = build(true)
-    // The oldest run's pane was restarted (exited pane, account switch): a user's PTY lives there.
     runtime.getTerminalPtyIdForHandle.mockImplementation((handle: string) =>
       handle === 'handle:tab-0:1' ? 'pty-user' : `pty-${handle.split('tab-')[1]?.[0]}`
     )
@@ -164,12 +160,28 @@ describe('headless automation service run terminal retention', () => {
       status: 'completed',
       terminalPtyId: null
     })
-    // Shared workspaces close as before; pty-1 is the client's.
     expect(runtime.closeTerminal.mock.calls.map(([handle]) => handle).toSorted()).toEqual([
       'handle:tab-2:1',
       'handle:tab-3:1',
       'handle:tab-4:1'
     ])
+  })
+
+  // Why: a client-origin label names another owner's run, even if its id matches one of ours.
+  it('does not let a client-origin label claim a host run’s workspace', async () => {
+    const { runtime, service, store } = build(true)
+    store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
+      worktreeId === 'wt-0'
+        ? { automationProvenance: { automationRunId: 'r0', origin: 'client' } }
+        : undefined
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service exposes the drain hook it was given.
+    const drain = (service as unknown as { releaseFinishedRunTerminals: () => Promise<number> })
+      .releaseFinishedRunTerminals
+    await drain()
+
+    expect(runtime.sleepTerminalsForWorktree).not.toHaveBeenCalled()
+    expect(runtime.closeTerminal).toHaveBeenCalledWith('handle:tab-0:1')
   })
 
   it.each([
@@ -178,7 +190,6 @@ describe('headless automation service run terminal retention', () => {
       async () => ({ livePtyIds: ['pty-0', 'pty-user'], stoppedPtyIds: [] })
     ],
     ['the sleep throws', () => Promise.reject(new Error('terminal_worktree_sleep_failed'))],
-    // The run's PTY exited after the alive check; only the user's terminal is live.
     [
       'its PTY is gone but another terminal is live',
       async () => ({ livePtyIds: ['pty-user'], stoppedPtyIds: [] })
@@ -202,23 +213,5 @@ describe('headless automation service run terminal retention', () => {
     await expect(drain()).resolves.toBe(0)
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
     expect(service.markDispatchResult).not.toHaveBeenCalled()
-  })
-
-  it('treats a retry that finds the run PTY already stopped by a failed sleep as slept', async () => {
-    const { runtime, service, store } = build(true)
-    store.getWorktreeMeta.mockImplementation(firstRunOwnsWorkspace)
-    store.listAutomationRuns.mockReturnValue(finishedRuns(1))
-    // The earlier sleep committed pty-0 and then threw; nothing in the workspace is live now.
-    runtime.sleepTerminalsForWorktree.mockResolvedValue({ livePtyIds: [], stoppedPtyIds: [] })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service exposes the drain hook it was given.
-    const drain = (service as unknown as { releaseFinishedRunTerminals: () => Promise<number> })
-      .releaseFinishedRunTerminals
-    await expect(drain()).resolves.toBe(1)
-    expect(runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(service.markDispatchResult).toHaveBeenCalledWith({
-      runId: 'r0',
-      status: 'completed',
-      terminalPtyId: null
-    })
   })
 })

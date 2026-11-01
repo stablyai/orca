@@ -7,14 +7,12 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../orca-runtime-test-fixtures.spec'
 
-// #29975: a paired desktop ranks its own saved-session title over the host's live title, so a
-// CLI rename on a headless host only reaches it when the host says the name is manual.
+// #29975: paired desktops prefer saved names; publish CLI-renamed headless titles as manual.
 function headlessRuntime() {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements every method these headless paths call; it is the shared runtime spec fixture.
-  return { runtime: new OrcaRuntimeService(runtimeStore as never), getSession }
+  return { runtime: new OrcaRuntimeService(runtimeStore), getSession }
 }
 
 describe('headless terminal rename publication', () => {
@@ -62,7 +60,7 @@ describe('headless terminal rename publication', () => {
       customTitle: '  Sleeping  '
     })
 
-    // `title` too: phones and older desktops read only that.
+    // Phones/older desktops read only title.
     expect(await publishedSurface(runtime)).toMatchObject({
       title: 'Sleeping',
       customTitle: 'Sleeping'

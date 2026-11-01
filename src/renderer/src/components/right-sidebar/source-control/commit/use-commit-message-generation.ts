@@ -1,3 +1,4 @@
+import { textGenerationCopyText } from '@/lib/text-generation-error-copy'
 import { useCallback, useEffect } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import {
@@ -23,10 +24,7 @@ import type { SourceControlWorktreeContext } from '../listing/use-worktree-conte
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import { writeCommitDraftForWorktree } from './commit-drafts'
 
-/**
- * Drives AI commit-message generation for the active worktree: start, cancel, and the store record
- * that lets a run which outlived an unmount hydrate the textarea exactly once on remount.
- */
+/** Persist generation records so results completed after unmount hydrate the textarea once on return. */
 export function useSourceControlCommitMessageGeneration({
   activeRepo,
   activeRepoTarget,
@@ -104,11 +102,8 @@ export function useSourceControlCommitMessageGeneration({
       ) {
         const command = resolvedCommitMessageAi.value.params.customAgentCommand?.trim() ?? ''
         if (!command) {
-          setGenerateErrors((prev) => ({
-            ...prev,
-            [activeWorktreeId]:
-              'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
-          }))
+          const message = textGenerationCopyText('sourceControlCustomCommandEmpty')
+          setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: message }))
           return
         }
       }
@@ -131,7 +126,7 @@ export function useSourceControlCommitMessageGeneration({
       try {
         const result = await generateRuntimeCommitMessage(
           {
-            // Why: route generation by the repo OWNER host, not the focused runtime.
+            // Route generation through workspace ownership rather than focused runtime.
             target: activeRepoTarget,
             prefs: settings,
             worktreeId: activeWorktreeId,
@@ -142,7 +137,7 @@ export function useSourceControlCommitMessageGeneration({
         )
 
         if (!result.success) {
-          // Why: cancellation is a deliberate user action, not a failure to surface.
+          // Cancellation is an intentional action and must not surface as failure.
           if (result.canceled) {
             setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
             updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
@@ -178,9 +173,7 @@ export function useSourceControlCommitMessageGeneration({
         if (succeeded) {
           setCommitMessageGenerationRecord(activeCommitMessageGenerationKey, succeeded)
         }
-        // Why: race protection — drop the generated message if the user typed into the textarea while the agent ran, rather than overwrite their edits.
-        // A run canceled (by Stop or by a commit) may still succeed on the host; its message
-        // describes changes the box no longer holds.
+        // Preserve typed edits and drop cancelled runs even if the host succeeds; their message may describe obsolete changes.
         updateCommitDrafts((prev) => {
           const current = prev[activeWorktreeId]
           return !succeeded || (current && current.length > 0)
@@ -259,9 +252,9 @@ export function useSourceControlCommitMessageGeneration({
     if (!activeRepoTarget) {
       return
     }
-    // Why: fire-and-forget; the in-flight promise resolves {canceled: true} where the spinner clears, so awaiting would just delay UI feedback.
+    // Do not await cancellation; the running promise clears the spinner when it reports cancelled.
     void cancelRuntimeGenerateCommitMessage({
-      // Why: route the cancel by the repo OWNER host, not the focused runtime.
+      // Cancel through the workspace owner rather than focused runtime.
       target: activeRepoTarget,
       worktreeId: activeWorktreeId,
       worktreePath,
@@ -277,7 +270,7 @@ export function useSourceControlCommitMessageGeneration({
   ])
 
   useEffect(() => {
-    // Why: generation can finish after Source Control unmounts; the store record lets the remounted textarea consume it once.
+    // Consume stored results once after generation completes across Source Control unmounts.
     if (
       !activeCommitMessageGenerationKey ||
       !activeWorktreeId ||

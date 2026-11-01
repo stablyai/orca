@@ -3,6 +3,7 @@ import { GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-reac
 import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon } from '../../checks-panel/check-presentation'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 function hostedReviewStateClass(review: HostedReviewInfo): string {
   if (review.state === 'merged') {
@@ -17,8 +18,7 @@ function hostedReviewStateClass(review: HostedReviewInfo): string {
   return 'text-muted-foreground/50'
 }
 
-// Why: draft and closed only differed by a near-identical muted tone on the same
-// glyph, so a draft review read as closed.
+// Distinct glyphs keep muted draft reviews from looking closed.
 function hostedReviewStateIcon(
   review: HostedReviewInfo
 ): React.ComponentType<{ className?: string }> | null {
@@ -68,8 +68,7 @@ export function HostedReviewHeaderLink({
         className={className}
         onClick={(e) => {
           e.stopPropagation()
-          // Why: GitHub PR and GitLab MR details live in Orca's Checks tab; keep
-          // the sidebar workflow in-app instead of opening the browser.
+          // Keep review details in Orca’s Checks tab.
           onOpenHostedReviewInChecks()
         }}
       >
@@ -84,7 +83,10 @@ export function HostedReviewHeaderLink({
       target="_blank"
       rel="noreferrer"
       className={className}
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation()
+        openAppHttpLinkFromAnchor(e)
+      }}
     >
       {label}
     </a>

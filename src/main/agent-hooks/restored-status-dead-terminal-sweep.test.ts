@@ -44,7 +44,6 @@ type PersistedRow = {
   providerSessionOnly?: boolean
 }
 
-/** Start a server over the last-status.json an Orca that closed mid-turn leaves behind. */
 async function restartWith(rows: PersistedRow[] = [{}]): Promise<AgentHookServer> {
   const now = Date.now()
   const entries = Object.fromEntries(
@@ -174,7 +173,7 @@ describe('restored status dead-terminal sweep', () => {
         expect(response.status).toBe(204)
       }
 
-      // Why: a stranded restored child would hold the next agent's finished turn `working`.
+      // A stranded restored child could keep the next finished turn working.
       expect(paneState(server)).toBe('done')
     } finally {
       server.stop()

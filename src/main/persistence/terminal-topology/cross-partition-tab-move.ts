@@ -1,6 +1,4 @@
-// Moving editor tabs between workspaces held in two partitions (a local and an SSH workspace):
-// main reads both, moves the tabs as it would within one, and writes back only what each
-// partition's records changed. A window save no longer carries the move.
+// Main moves editor tabs across partitions and writes only changed records, retaining in-memory views.
 
 import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -25,15 +23,14 @@ import { editorViewsOfModel, type PartitionEditorViews } from '../loading-store/
 type PartitionSession = {
   hostId: ExecutionHostId
   session: WorkspaceSessionState
-  /** Main's in-memory editor views (layout-editor-views); absent where none are kept. */
+  /** In-memory views may be absent for this partition. */
   views?: PartitionEditorViews
 }
 
 export type CrossPartitionTabMove = {
   value: LayoutApplyOutcome
-  /** Each partition's session after the move; null when nothing changes. */
+  /** Null means no session changes. */
   sessions: { from: WorkspaceSessionState; to: WorkspaceSessionState } | null
-  /** Each partition's views after the move, when seeded. */
   views?: { from: PartitionEditorViews; to: PartitionEditorViews }
 }
 
@@ -58,7 +55,7 @@ function withLoadedWorkspace(
   return { ...model, workspaces }
 }
 
-/** `stored` with only the records the move changed in its loaded partition rewritten. */
+/** Patch changed loaded records back into stored form. */
 function written(
   stored: WorkspaceSessionState,
   loaded: LoadedWorkspaceLayout,
@@ -72,7 +69,6 @@ function written(
   )
 }
 
-/** The move of `command` from its workspace in `from` to its target workspace in `to`. */
 export function moveTabAcrossPartitions(
   from: PartitionSession,
   to: PartitionSession,
@@ -83,7 +79,7 @@ export function moveTabAcrossPartitions(
   if (!loadedFrom.layout.workspaces[command.workspace]) {
     return { value: { ok: false, code: 'workspace_not_found' }, sessions: null }
   }
-  // Both partitions' workspaces, so a new tab id either one holds is refused.
+  // Include both partitions so generated tab IDs cannot collide in either.
   const joined = withLoadedWorkspace(
     {
       ...loadedFrom.layout,

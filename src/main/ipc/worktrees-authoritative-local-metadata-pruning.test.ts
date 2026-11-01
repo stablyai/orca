@@ -22,6 +22,11 @@ import {
 
 const localWorktreePathPresenceMock = vi.hoisted(() => vi.fn())
 
+// The WSL distros these fixtures route through count as running, so the boot gate lets Git run.
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: async () => 'running'
+}))
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
@@ -155,18 +160,9 @@ function scanExpectation(
   }
 }
 
-function listDetected(): Promise<unknown> {
-  return handlers['worktrees:listDetected'](null, { repoId: REPO_ID }) as Promise<unknown>
+async function listDetected(): Promise<unknown> {
+  return await handlers['worktrees:listDetected'](null, { repoId: REPO_ID })
 }
-
-const localListingCalls = [
-  ['worktrees:listDetected', listDetected],
-  [
-    'worktrees:list',
-    () => handlers['worktrees:list'](null, { repoId: REPO_ID }) as Promise<unknown>
-  ],
-  ['worktrees:listAll', () => handlers['worktrees:listAll'](null, undefined) as Promise<unknown>]
-] as const
 
 describe('authoritative local worktree metadata pruning integration', () => {
   beforeEach(() => {
@@ -205,10 +201,13 @@ describe('authoritative local worktree metadata pruning integration', () => {
       await Promise.resolve()
       return rows
     })
-    // A worktree deleted outside Orca strands its status row unless the prune retires it.
     const stalePane = makePaneKey('tab-stale', '11111111-1111-4111-8111-111111111111')
     const livePane = makePaneKey('tab-live', '22222222-2222-4222-8222-222222222222')
-    const working = { state: 'working', prompt: 'p', agentType: 'codex' } as const
+    const working = {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'codex'
+    } as const
     agentHookServer.ingestTerminalStatus({
       paneKey: stalePane,
       worktreeId: staleId,
@@ -265,8 +264,7 @@ describe('authoritative local worktree metadata pruning integration', () => {
     await Promise.resolve()
     notifyWorktreesChanged(mainWindow as never, REPO_ID)
     resolveScan([worktree(REPO_PATH), worktree('/workspace/live')])
-    // Why: the overtaken scan is re-run, and the mutation it missed brought the stale checkout back,
-    // so a prune can only come from the overtaken scan's own expectation -- which must not run.
+    // The replacement scan restores the stale checkout; only the overtaken scan could prune it.
     await vi.waitFor(() => expect(listWorktreesMock).toHaveBeenCalledTimes(2))
     resolveScan([worktree(REPO_PATH), worktree('/workspace/live'), worktree('/workspace/stale')])
     await pending
@@ -295,8 +293,7 @@ describe('authoritative local worktree metadata pruning integration', () => {
     await Promise.resolve()
     resolveScan([worktree(REPO_PATH)])
     queueMicrotask(() => notifyWorktreesChanged(mainWindow as never, REPO_ID))
-    // Why: the overtaken scan is re-run; its rows bring the stale checkout back, so only the
-    // overtaken scan's own expectation could prune it.
+    // The fresh scan restores this checkout; stale side effects must not prune it.
     await vi.waitFor(() => expect(listWorktreesMock).toHaveBeenCalledTimes(2))
     resolveScan([worktree(REPO_PATH), worktree('/workspace/stale')])
     await pending
@@ -304,48 +301,42 @@ describe('authoritative local worktree metadata pruning integration', () => {
     expect(store.pruneSessionlessMissingLocalWorktreeMetadataForRepo).not.toHaveBeenCalled()
   })
 
-  it.each(localListingCalls)(
-    'skips stale WSL root and lineage side effects after %s caller resumption',
-    async (channel, listWorktrees) => {
-      const orphanId = `${REPO_ID}::/workspace/orphan`
-      let resolveScan: (rows: GitWorktreeInfo[]) => void = () => {}
-      mockSelectedWslProjectRuntime()
-      store.getAllWorktreeLineage.mockReturnValue({
-        [orphanId]: {
-          worktreeId: orphanId,
-          worktreeInstanceId: 'orphan-instance',
-          parentWorktreeId: `${REPO_ID}::${REPO_PATH}`,
-          parentWorktreeInstanceId: 'main-instance',
-          origin: 'manual',
-          capture: { source: 'manual-action', confidence: 'explicit' },
-          createdAt: 0
-        }
-      })
-      // Why: the detected listing re-runs an overtaken scan, and that re-run finds the orphan alive,
-      // so a lineage removal can only come from the overtaken scan's side effects.
-      listWorktreesMock
-        .mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
-              resolveScan = resolve as (rows: GitWorktreeInfo[]) => void
-            })
-        )
-        .mockImplementation(async () => [worktree(REPO_PATH), worktree('/workspace/orphan')])
-
-      const pending = listWorktrees()
-      await Promise.resolve()
-      resolveScan([worktree(REPO_PATH)])
-      queueMicrotask(() => notifyWorktreesChanged(mainWindow as never, REPO_ID))
-      await pending
-
-      expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
-      // Only the detected listing re-derives; its fresh re-scan is what registers the roots.
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies the local repository rows read by this registry check.
-      expect(isRegisteredWorktreePath(REPO_PATH, store as never)).toBe(
-        channel === 'worktrees:listDetected'
+  it('skips stale WSL root and lineage side effects after caller resumption', async () => {
+    const orphanId = `${REPO_ID}::/workspace/orphan`
+    let resolveScan: (rows: GitWorktreeInfo[]) => void = () => {}
+    mockSelectedWslProjectRuntime()
+    store.getAllWorktreeLineage.mockReturnValue({
+      [orphanId]: {
+        worktreeId: orphanId,
+        worktreeInstanceId: 'orphan-instance',
+        parentWorktreeId: `${REPO_ID}::${REPO_PATH}`,
+        parentWorktreeInstanceId: 'main-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 0
+      }
+    })
+    // The replacement scan finds the orphan alive, isolating lineage removal to the overtaken scan.
+    listWorktreesMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveScan = resolve as (rows: GitWorktreeInfo[]) => void
+          })
       )
-    }
-  )
+      .mockImplementation(async () => [worktree(REPO_PATH), worktree('/workspace/orphan')])
+
+    const pending = listDetected()
+    // The WSL boot gate answers before the scan starts.
+    await vi.waitFor(() => expect(listWorktreesMock).toHaveBeenCalledOnce())
+    resolveScan([worktree(REPO_PATH)])
+    queueMicrotask(() => notifyWorktreesChanged(mainWindow as never, REPO_ID))
+    await pending
+
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies the local repository rows read by this registry check.
+    expect(isRegisteredWorktreePath(REPO_PATH, store as never)).toBe(true)
+  })
 
   it('preserves WSL roots and lineage created while an older Git scan is pending', async () => {
     const newPath = '/workspace/new-wsl-worktree'
@@ -360,7 +351,8 @@ describe('authoritative local worktree metadata pruning integration', () => {
     )
 
     const pending = listDetected()
-    await Promise.resolve()
+    // The WSL boot gate answers before the scan starts.
+    await vi.waitFor(() => expect(listWorktreesMock).toHaveBeenCalledOnce())
 
     resolveScan([worktree(REPO_PATH)])
     queueMicrotask(() => {
@@ -493,7 +485,9 @@ describe('authoritative local worktree metadata pruning integration', () => {
 
     await listDetected()
 
-    expect(listWorktreesMock).toHaveBeenCalledWith(REPO_PATH, { wslDistro: 'Ubuntu' })
+    expect(listWorktreesMock).toHaveBeenCalledWith(REPO_PATH, {
+      wslDistro: 'Ubuntu'
+    })
     expect(store.captureNativeLocalWorktreeMetadataScanExpectation).not.toHaveBeenCalled()
     expect(store.pruneSessionlessMissingLocalWorktreeMetadataForRepo).not.toHaveBeenCalled()
   })
@@ -516,7 +510,8 @@ describe('authoritative local worktree metadata pruning integration', () => {
     await Promise.resolve()
     mockSelectedWslProjectRuntime()
     const wslPending = listDetected()
-    await Promise.resolve()
+    // The WSL boot gate answers before the scan starts.
+    await vi.waitFor(() => expect(listWorktreesMock).toHaveBeenCalledTimes(2))
 
     resolvers[1]?.([worktree(REPO_PATH)])
     await wslPending

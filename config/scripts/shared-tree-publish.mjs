@@ -6,20 +6,8 @@ export function sharedTreeStagingPath(entryDir, uuid = randomUUID) {
   return `${entryDir}.staging-${process.pid}-${uuid()}`
 }
 
-/**
- * Move a fully built, validated `stagingDir` into place as `entryDir`, lock-free.
- *
- * Every worktree that shares the entry may be reading it, so a usable entry is never replaced,
- * and the entry is either absent, the old tree, or the new tree -- never half-written. A rename
- * onto a populated directory fails, so of two racing publishers one wins and the other just
- * removes its own staging tree. An unusable entry is quarantined first, and put back if the swap
- * fails, because a bad entry the next publisher can re-judge beats an empty one. The quarantined
- * tree must be the one judged unusable; a sibling's fresh publish that landed mid-judgement is
- * put back untouched.
- *
- * Re-checks the entry here, immediately before the rename, because staging takes long enough for
- * a sibling to publish a good one in the meantime. Returns true only when this call published.
- */
+// Publish validated sibling staging via atomic rename; usable shared entry never changes and readers never see partial tree.
+// Quarantine only the judged-bad tree; restore on failed swap or if sibling published a good one during probe. Recheck immediately before rename; return whether this call published.
 export function publishSharedTree(stagingDir, entryDir, options) {
   const { isUsable } = options
   const uuid = options.uuid ?? randomUUID

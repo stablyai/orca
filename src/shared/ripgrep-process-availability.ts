@@ -76,12 +76,7 @@ export async function isRipgrepSpawnCwdUsable(cwd: string): Promise<boolean> {
   }
 }
 
-/**
- * Exit code the WSL wrapper uses when it cannot enter the search root. Why a dedicated code:
- * ripgrep exits 1 for "no matches", so without this an unreachable workspace would report an
- * empty listing as a successful scan. Picked above ripgrep's own 0/1/2 and clear of the shell's
- * 126/127 and 128+signal range.
- */
+/** WSL cwd failures must differ from rg’s “no matches” (1); 97 also avoids shell error/signal ranges. */
 export const RIPGREP_MISSING_CWD_EXIT_CODE = 97
 
 export function isRipgrepMissingCwdExit(code: number | null): boolean {
@@ -97,8 +92,7 @@ export async function classifySynchronousRipgrepSpawnFailure(
   error: unknown,
   cwd: string
 ): Promise<Error> {
-  // Why pass an already-classified error straight through: this only diagnoses raw spawn errnos.
-  // A caller that threw a verdict of its own has more context than a cwd probe does.
+  // Preserve caller diagnoses; cwd probing only interprets raw spawn errnos.
   if (error instanceof RipgrepUnavailableError || error instanceof RipgrepLaunchFailureError) {
     return error
   }

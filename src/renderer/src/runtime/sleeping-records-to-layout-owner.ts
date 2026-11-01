@@ -1,5 +1,4 @@
-// Main's copy of the window's agent resume records in a layout-owner build. Frames do not carry
-// them, and the window still captures them from its own agent status, so main records each change.
+// Window still captures agent resume records; main must record every change because layout frames omit them.
 
 import { useAppStore } from '@/store'
 import { recordSleepingRecordChangesThroughLayoutOwner } from '@/store/terminals/terminal-sleep-layout-owner'

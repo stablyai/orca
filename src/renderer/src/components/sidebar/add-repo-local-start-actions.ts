@@ -52,8 +52,7 @@ export function getAddRepoLocalStartActions({
     onClick: onBrowse
   }
 
-  // Why disabled: a server registers no project on its SSH hosts (each runs its own managed
-  // server), so the row only says where that project can be added instead.
+  // Server-owned SSH projects need their own managed servers; explain that route instead of enabling unsupported adds.
   const remote = offersServerSshHosts
     ? {
         kind: 'remote' as const,

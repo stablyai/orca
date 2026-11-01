@@ -26,6 +26,14 @@ describe('agent sleep confirmation', () => {
       confirmAgentHibernationCandidates(first.confirmationState, [firstCandidate]).candidates
     ).toEqual([firstCandidate])
 
+    const absent = confirmAgentHibernationCandidates(first.confirmationState, [])
+    expect(absent.confirmationState).toEqual({})
+    const reappeared = confirmAgentHibernationCandidates(absent.confirmationState, [firstCandidate])
+    expect(reappeared.candidates).toEqual([])
+    expect(
+      confirmAgentHibernationCandidates(reappeared.confirmationState, [firstCandidate]).candidates
+    ).toEqual([firstCandidate])
+
     const changed = candidate({ signature: 'changed-signature' })
     expect(
       confirmAgentHibernationCandidates(first.confirmationState, [changed]).candidates

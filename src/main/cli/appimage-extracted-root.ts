@@ -4,7 +4,6 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { resolveCachedAppImagePayloadRoot } from './appimage-cache-layout'
-// Re-exported: callers in main keep importing the cache key from here.
 export {
   readAppImageSourceOfNamespace,
   resolveAppImageCacheKey
@@ -167,10 +166,7 @@ export async function ensureAppImageExtractedRoot(
   return null
 }
 
-/**
- * Unpacks the generation without publishing it as the installed CLI launcher or pruning, so a
- * desktop can prepare its daemon's copy, or an update's, without taking the `orca` command.
- */
+/** Prepare daemon/update copies without publishing a CLI endpoint or pruning generations. */
 export async function stageAppImageExtractedRoot(
   options: AppImageExtractionOptions
 ): Promise<AppImageExtractedRoot | null> {
@@ -180,7 +176,7 @@ export async function stageAppImageExtractedRoot(
   }
   if (!isAppImageExtractionComplete(root)) {
     await extractAppImageGeneration(options, root)
-    // Why: the marker fences a launcher publish, which a staged copy never makes.
+    // Staging never publishes a launcher, so it needs no publication marker.
     await rm(getAppImageActiveExtractionPath(root.rootPath), { force: true }).catch(() => {})
   }
   if (!isAppImageExtractionComplete(root)) {

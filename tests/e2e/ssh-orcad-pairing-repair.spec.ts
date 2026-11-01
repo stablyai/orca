@@ -1,9 +1,5 @@
-/**
- * A managed SSH host whose server dropped this desktop's pairing (its device removed host-side,
- * then the server restarted) is paired again over SSH, and the open pane answers typing again on
- * its own. A server that now holds another host key is never paired: connecting reports another
- * server, and the saved pairing is kept.
- */
+// After host-side device removal/restart, re-pair over SSH and restore pane input automatically.
+// A changed host key must refuse repair and retain the saved pairing.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { readPairedPaneContent } from './helpers/paired-host-terminal'
@@ -24,6 +20,10 @@ test.skip(process.platform === 'win32', 'The Docker SSH host uses POSIX tooling'
 const DEVICES = '/root/.orca/orca-devices.json'
 const KEYPAIR = '/root/.orca/orca-e2ee-keypair.json'
 const KILL_ORCAD = 'kill -TERM $(cat /root/.orca-remote/orcad-*/.orcad-pid)'
+// Ids only: the rows also hold device tokens, which must stay out of CI logs.
+const DEVICE_IDS =
+  `node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))` +
+  `.map((d)=>d.deviceId).join(","))' ${DEVICES}`
 
 async function pairing(page: Page, environmentId: string) {
   const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
@@ -64,6 +64,8 @@ test('a host that dropped this desktop is paired again over SSH and its pane ans
         `.filter((d)=>d.deviceId!==process.argv[2])))' ${DEVICES} ${before.deviceId}`
     )
     host.exec!(KILL_ORCAD)
+    // Evidence for a revoked row the old server wrote back while stopping.
+    console.log('[pairing-repair] device ids after kill', host.exec!(DEVICE_IDS))
 
     try {
       await expectTerminalAnswers(page, tabId, 4 * 60_000)
@@ -73,13 +75,17 @@ test('a host that dropped this desktop is paired again over SSH and its pane ans
         JSON.stringify({
           banner: await reconnectBanner(page, tabId),
           pane: (await readPairedPaneContent(page, tabId)).slice(-600),
-          devices: host.exec!(`cat ${DEVICES}`)
+          devices: host.exec!(DEVICE_IDS)
         })
       )
       await page.screenshot({ path: testInfo.outputPath('after-revoke.png') })
       throw error
     }
     const after = await pairing(page, environmentId)
+    console.log('[pairing-repair] device ids after reconnect', host.exec!(DEVICE_IDS), {
+      revoked: before.deviceId,
+      paired: after.deviceId
+    })
     expect(after.revision).not.toBe(before.revision)
     expect(after.deviceId).not.toBe(before.deviceId)
     await expect.poll(() => reconnectBanner(page, tabId)).toBeNull()
@@ -123,8 +129,7 @@ test('a server that now holds another host key is never paired, and connecting s
   })
 })
 
-// Relaunches the server exactly as it ran, with the network to the host down, so the desktop's
-// first look at it is the refusal, and the offer it reads over SSH is the one this test leaves.
+// Restart behind the network cut so the first client observation is the refusal from the deliberately staged offer.
 const CAPTURE_LAUNCH =
   'f=$(ls /root/.orca-remote/orcad-*/.orcad-pid) && pid=$(cat "$f") && echo "$pid" > /tmp/orcad-old-pid && dirname "$f" > /tmp/orcad-dir && ' +
   "tr '\\0' '\\n' < /proc/$pid/cmdline > /tmp/orcad-cmd && tr '\\0' '\\n' < /proc/$pid/environ > /tmp/orcad-env"

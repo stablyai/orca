@@ -41,8 +41,7 @@ export function prepareWebRuntimeBrowserCreationFailure(
 ): WebRuntimeBrowserCreationFailure {
   const { args, environmentId, guardedPageId } = context
   context.unsubscribeFocusGuard()
-  // Why: unwind the optimistic tab before the cleanup round-trips below, so a failed create
-  // does not leave a dead tab sitting in the strip for the length of browser.tabClose.
+  // Unwind optimistic rows before cleanup RPCs so failure leaves no dead tab during browser.tabClose.
   if (context.staged) {
     discardStagedWebRuntimeBrowserTab(context.staged)
   }

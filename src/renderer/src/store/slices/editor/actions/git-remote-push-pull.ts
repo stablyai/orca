@@ -27,7 +27,7 @@ export function createGitRemotePushPull(
       options = {}
     ) => {
       const runtimeTarget = resolveGitOperationTarget(get(), worktreeId, options)
-      // Why: fire-and-forget the upstream refresh (don't await) so compound flows aren't delayed, but the "Push"→"Commit" label still rotates faster than the 3s poll.
+      // Refresh upstream without awaiting so compound flows stay fast while button labels update before the 3s poll.
       get().beginRemoteOperation(
         publish ? 'publish' : options.forceWithLease === true ? 'force_push' : 'push'
       )

@@ -14,10 +14,7 @@ function findTab(strip: HTMLElement, tabId: string): HTMLElement | undefined {
   return tabElements(strip).find((tab) => tab.dataset.tabId === tabId)
 }
 
-/**
- * The active tab when it is on screen, else the first visible tab; null when nothing is visible.
- * A docked active tab never counts: it holds its x while the tabs around it move.
- */
+/** Anchor to the visible active tab or first visible tab, excluding sticky docks whose position hides surrounding scroll changes. */
 export function captureTabStripScrollAnchor(
   strip: HTMLElement,
   activeTabId: string | null

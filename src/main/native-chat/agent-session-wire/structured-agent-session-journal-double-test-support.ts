@@ -1,11 +1,7 @@
-// The journal members the event sink reaches besides a plain append, for tests whose journal double
-// has no write queue: a read, a resolved append and a run of steps each run as they are issued, as
-// on an idle queue.
+// Run journal-double steps immediately, as on an idle write queue.
 
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { JournalStep } from '../agent-session-journal/journal-step-writer'
 import type {
   JournalItemAppendOptions,
@@ -38,12 +34,11 @@ export function withJournalQueueMembers<T extends AppendingDouble>(
       options: JournalItemAppendOptions
     ): Promise<unknown> => {
       const resolved = resolve()
-      // Read at call time, so a test that swaps the double's append later is still the one called.
+      // Resolve append at call time so later spy replacements take effect.
       return resolved === null
         ? null
         : journal.appendItem(resolved.identity, resolved.body, options)
     },
-    // A settlement lands through the double's own batch append, as an unresolved one does.
     appendSteps: async (steps: readonly JournalStep[]): Promise<boolean[]> => {
       const wrote: boolean[] = []
       for (const step of steps) {

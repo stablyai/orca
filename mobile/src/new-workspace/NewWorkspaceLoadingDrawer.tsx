@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import { BOTTOM_DRAWER_SHOW_DURATION_MS } from '../components/bottom-drawer-constants'
 import { bottomDrawerStyles } from '../components/bottom-drawer-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import {
@@ -21,15 +22,12 @@ import {
 import type { ShellOverlayDownload } from '../mobile-web-shell/shell-overlay-load'
 import { SHELL_PAGE_COVER_FADE_MS } from '../mobile-web-shell/ShellWaitingFrame'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 const CANCEL_DRAG_DISTANCE = 40
 
-/**
- * A short drawer while the page's Create Workspace drawer loads: a spinner, or the download while
- * there is one. It opens and dims as the shared drawer does, but in the screen's own window: a
- * native Modal over the loading WebView stalls the page behind it. It fades once the page has
- * painted with its own drawer up. A tap on the backdrop, a drag down or Back cancels.
- */
+// Render in the loading WebView’s window: a native Modal stalls the page behind it. Fade only after the page paints its own drawer; backdrop/drag/Back cancel.
 export function NewWorkspaceLoadingDrawer({
   visible,
   download,
@@ -39,6 +37,8 @@ export function NewWorkspaceLoadingDrawer({
   download: ShellOverlayDownload | null
   onCancel: () => void
 }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const insets = useWindowSafeAreaInsets()
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const { height: screenHeight } = useWindowDimensions()
@@ -57,8 +57,7 @@ export function NewWorkspaceLoadingDrawer({
     [onCancel]
   )
   useEffect(() => {
-    // Leaving, it fades as the shell's page cover does, eased in: the page's drawer is already up
-    // beneath, and the WebView takes a frame or two after being shown to put it on screen.
+    // Ease the exit fade while the shown WebView takes its first frames with the page drawer underneath.
     const animation = visible
       ? Animated.timing(progress, {
           toValue: 1,
@@ -88,7 +87,7 @@ export function NewWorkspaceLoadingDrawer({
         <Pressable
           style={bottomDrawerStyles.backdropPressable}
           onPress={onCancel}
-          accessibilityLabel="Cancel"
+          accessibilityLabel={t('common.cancel', 'Cancel')}
         />
       </Animated.View>
       <View
@@ -116,7 +115,10 @@ export function NewWorkspaceLoadingDrawer({
           </View>
           <View style={styles.body}>
             {download === null ? (
-              <ActivityIndicator color={colors.textSecondary} accessibilityLabel="Loading" />
+              <ActivityIndicator
+                color={colors.textSecondary}
+                accessibilityLabel={t('newWorkspace.loadingDrawer.loading', 'Loading')}
+              />
             ) : (
               <DownloadProgress download={download} />
             )}
@@ -128,22 +130,26 @@ export function NewWorkspaceLoadingDrawer({
 }
 
 function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <>
       <DownloadProgressBar
         feed={download.feed}
         receivedBytes={download.receivedBytes}
         totalBytes={download.totalBytes}
-        accessibilityLabel="Downloading"
+        accessibilityLabel={t('newWorkspace.loadingDrawer.downloading', 'Downloading')}
       />
       <Text style={styles.caption}>
-        Downloading… {downloadedMegabytesCaption(download.receivedBytes, download.totalBytes)}
+        {t('newWorkspace.loadingDrawer.downloadProgress', 'Downloading… {{progress}}', {
+          progress: downloadedMegabytesCaption(download.receivedBytes, download.totalBytes)
+        })}
       </Text>
     </>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   body: {
     height: 96,
     alignItems: 'center',
@@ -155,4 +161,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontVariant: ['tabular-nums']
   }
-})
+}))

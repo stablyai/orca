@@ -18,20 +18,8 @@ import { startWebglRecovery, stopWebglRecovery } from './webgl-recovery'
 import type { TerminalDocumentScope } from './document-scope'
 import type { TerminalDocument, TerminalDocumentHost } from './document-host-seams'
 
-/**
- * One terminal document, started.
- *
- * The program both hosts run: the WebView loads it as a bundled script that calls this once with no
- * host, and the page imports it and calls it per mount with its own hooks. A call owns everything
- * it touches — the scope below is local to it — so two documents on one page are two terminals,
- * and a callback left over from a mount that has gone reads the scope it closed over rather than
- * the live one.
- *
- * The sequence is here rather than derived from a list, because it *is* the document's shape:
- * each start reads the elements and installs the listeners its module owns, and the stops undo
- * them in reverse so nothing is torn down under something still using it. The frames go last,
- * after every stop that might still be holding one (ruling 21).
- */
+// Own scope per document so overlapping mounts and stale callbacks cannot share state.
+// Start in dependency order, stop in reverse, and cancel frames after every stop that could still hold one.
 export function createTerminalDocument(host: TerminalDocumentHost = {}): TerminalDocument {
   const scope = createTerminalDocumentScope(host)
   startTerminalDocument(scope)
@@ -45,17 +33,7 @@ export function createTerminalDocument(host: TerminalDocumentHost = {}): Termina
   }
 }
 
-/**
- * Every module's start, in the order the document runs them.
- *
- * A start that throws has left the ones before it holding a document listener or the host's error
- * reporter, and there is no handle for anyone to stop with, so the undo runs here. Every stop is a
- * no-op against a start that never ran (ruling 21), which is what makes the whole sequence the
- * right undo for a partial one.
- *
- * Exported because a test that drives one module still needs the elements and listeners the others
- * put in place, and the order is not a thing to write twice.
- */
+// If startup throws before returning a handle, unwind here; each stop tolerates a start that never ran.
 export function startTerminalDocument(scope: TerminalDocumentScope) {
   try {
     startSurfaceSwap(scope)
@@ -84,7 +62,6 @@ function failDeferredStartup(scope: TerminalDocumentScope, error: unknown) {
   )
 }
 
-/** The undo, in reverse, with the frames the document is still owed taken back last (ruling 21). */
 export function stopTerminalDocument(scope: TerminalDocumentScope) {
   stopMessageBridge(scope)
   stopSurfaceTouchGestures(scope)

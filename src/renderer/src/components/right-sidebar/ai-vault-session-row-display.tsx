@@ -8,7 +8,7 @@ import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostConte
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentDotState } from '@/components/AgentStateDot'
 import { useRepoById } from '@/store/selectors'
 import { resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
@@ -41,7 +41,7 @@ export function SessionMetadata({
   sourceHostLabel
 }: {
   session: AiVaultSession
-  liveState: AgentStatusState | null
+  liveState: AgentDotState | null
   updatedAt: string
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   vaultScope: AiVaultScope
@@ -58,8 +58,7 @@ export function SessionMetadata({
         <AgentIcon agent={session.agent} size={14} />
       </span>
       <div className="flex min-w-0 items-center gap-1.5">
-        {/* Why: 'done' is the resting state of every finished pane — badging it
-            would mark most rows; only live attention states earn a dot. */}
+        {/* Most finished panes are done; reserve dots for live attention states. */}
         {liveState && liveState !== 'done' ? <AgentStateDot state={liveState} /> : null}
         <span className="min-w-0 shrink-[2] truncate">{agentLabel(session.agent)}</span>
         {sourceHostLabel ? (

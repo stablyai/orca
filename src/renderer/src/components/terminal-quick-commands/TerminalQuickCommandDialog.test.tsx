@@ -202,7 +202,6 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     expect(alert?.textContent).toContain('Too long for this host')
     const textareaEl = document.body.querySelector('textarea')
     expect(textareaEl?.getAttribute('aria-invalid')).toBe('true')
-    // The field names its reason, so focusing it announces more than "invalid".
     expect(textareaEl?.getAttribute('aria-describedby')?.split(' ')).toContain(alert?.id)
 
     const textarea = document.body.querySelector('textarea')!
@@ -227,7 +226,6 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     const alert = document.body.querySelector('[role="alert"]')
     expect(alert?.textContent).toBe('Too long to save.')
     expect(document.body.textContent).not.toContain('Update Orca')
-    // Measured in the unit the limit is: the chat message's bytes.
     expect(document.body.textContent).toContain('257 KB / 256 KB')
   })
 

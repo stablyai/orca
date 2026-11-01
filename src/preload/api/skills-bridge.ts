@@ -33,6 +33,7 @@ import type {
   SkillShareResolvedOperation
 } from '../../shared/skill-sharing-contract'
 import type {
+  BundledSkillAutoUpdateRequest,
   BundledSkillExecuteRequest,
   BundledSkillInstallResult,
   BundledSkillPlan,
@@ -47,8 +48,11 @@ export const skillsApi = {
     ipcRenderer.invoke('skills:bundledPlan', request ?? {}),
   bundledExecute: (request: BundledSkillExecuteRequest): Promise<BundledSkillInstallResult> =>
     ipcRenderer.invoke('skills:bundledExecute', request),
+  bundledAutoUpdate: (request: BundledSkillAutoUpdateRequest): Promise<BundledSkillInstallResult> =>
+    ipcRenderer.invoke('skills:bundledAutoUpdate', request),
   prepareShare: (input: {
     skillIds: string[]
+    skillDirectories?: string[]
     bundleName: string
     target?: SkillDiscoveryTarget
     packageId?: string
@@ -85,7 +89,6 @@ export const skillsApi = {
     ipcRenderer.invoke('skills:previewBundleInstall', input),
   removeInstall: (input: SkillRemoveInput): Promise<SkillRemoveOperation> =>
     ipcRenderer.invoke('skills:removeInstall', input),
-  // Desktop always registers the delete IPC handlers in its own main process.
   deleteSupported: (): Promise<boolean> => Promise.resolve(true),
   previewDelete: (request: SkillDeleteRequest): Promise<SkillDeletePlan> =>
     ipcRenderer.invoke('skills:previewDelete', request),
@@ -99,11 +102,6 @@ export const skillsApi = {
     ipcRenderer.invoke('skills:listOwnedShares'),
   revokeShare: (shareId: string): Promise<SkillCloudOperation<void>> =>
     ipcRenderer.invoke('skills:revokeShare', shareId),
-  deletePackageVersion: (input: {
-    packageId: string
-    versionId: string
-  }): Promise<SkillCloudOperation<void>> =>
-    ipcRenderer.invoke('skills:deletePackageVersion', input),
   deletePackage: (packageId: string): Promise<SkillCloudOperation<void>> =>
     ipcRenderer.invoke('skills:deletePackage', packageId),
   listWslDistros: (environmentId?: string): Promise<string[]> =>

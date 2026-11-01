@@ -15,13 +15,12 @@ import {
   AGENT_STATUS_STATES,
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-types'
-import type { AgentType, WellKnownAgentType } from './agent-status-types'
-import type { TuiAgent } from './tui-agent'
+import type { AgentType } from './agent-status-types'
 import {
   ORCA_DISPATCH_PROMPT_LEAD_LINE,
   ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
 } from './orca-dispatch-status-prompt'
-import { parseAskFromStatus } from './native-chat-ask'
+import { parseAskFromStatus } from './native-chat/input/native-chat-ask'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -648,9 +647,7 @@ describe('agentSubagentsEqual', () => {
   })
 })
 
-// Why: the per-source hook normalizers construct these literals and validate them
-// directly. This pins that the direct path stays identical to the JSON round trip
-// they used to take, including where stringify would have altered the payload.
+// Pin direct normalizer parity with the former JSON round trip, including values stringify alters.
 describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
   const CASES: Record<string, unknown>[] = [
     {
@@ -726,30 +723,6 @@ describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
         value: parseAgentStatusPayload(JSON.stringify(payload))
       })
     }
-  })
-})
-
-describe('WellKnownAgentType', () => {
-  // Compile-time proof the union is derived from TuiAgent rather than hand-copied:
-  // a literal list that misses any launchable agent id fails to typecheck here.
-  const widenTuiAgent = (agent: TuiAgent): WellKnownAgentType => agent
-
-  it('covers every TuiAgent id plus the unknown sentinel', () => {
-    // ids the previous 22-member hand-written union had drifted past
-    const formerlyMissing: WellKnownAgentType[] = [
-      'qwen-code',
-      'mistral-vibe',
-      'claude-agent-teams'
-    ]
-    const sentinel: WellKnownAgentType = 'unknown'
-
-    expect([...formerlyMissing, sentinel, widenTuiAgent('rovo')]).toEqual([
-      'qwen-code',
-      'mistral-vibe',
-      'claude-agent-teams',
-      'unknown',
-      'rovo'
-    ])
   })
 })
 

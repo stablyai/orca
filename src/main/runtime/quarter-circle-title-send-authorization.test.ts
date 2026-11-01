@@ -1,6 +1,4 @@
-// STA-4028 (regression from #13925): quarter circles are ordinary progress glyphs —
-// ora, installers, any TUI animates them — so a title carrying nothing else must not
-// authorize a guarded send, which auto-submits with Enter into whatever owns the pane.
+// Quarter-circle progress glyphs alone cannot authorize auto-Enter into an unknown pane owner (STA-4028, #13925).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { assertTerminalAgentSendable } from './rpc/terminal-agent-send-guard'
@@ -160,8 +158,7 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
   })
 
   it('refuses a guarded send when the foreground process cannot be read at all', async () => {
-    // Why: SSH and folder-workspace panes can fail the foreground read; no evidence
-    // stays a refusal rather than falling back to the glyph.
+    // SSH/folder foreground lookup can fail; missing evidence must refuse rather than trust a glyph.
     const { runtime, handle } = await createRuntimeWithTitle(SPINNER_ONLY_TITLE, null)
 
     expect(

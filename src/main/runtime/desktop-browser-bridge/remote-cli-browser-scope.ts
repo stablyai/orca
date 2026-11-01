@@ -1,8 +1,4 @@
-/**
- * The workspace a forwarded SSH-host command may touch on this desktop. While a bridged command
- * runs, every workspace selector the browser layer resolves must name exactly that workspace; any
- * other selector is refused, so a host can never widen its reach to the desktop's own worktrees.
- */
+/** Restrict every forwarded browser selector to the host-approved workspace; never widen into desktop worktrees. */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { BrowserError } from '../../browser/browser-error'
 import {
@@ -14,9 +10,8 @@ import {
 type RemoteCliBrowserScope = {
   workspaceId: string
   revoked?: AbortSignal
-  /** The host's attachment ending; unlike `revoked`, one command's cancel or deadline never fires it. */
+  /** Attachment lifetime, independent of individual command cancel/deadline. */
   hostRevoked?: AbortSignal
-  /** True only for a guest that browses through this host's SSH route right now. */
   admitGuest?: (webContentsId: number) => boolean
 }
 
@@ -40,10 +35,7 @@ export function runInRemoteCliBrowserScope<T>(
   )
 }
 
-/**
- * Captured where a browser command is queued; the returned check throws once the bridge that
- * issued it detached, so a command waiting behind another never runs after access was revoked.
- */
+/** Recheck at queue execution so a detached issuer cannot start delayed commands. */
 export function captureRemoteCliBrowserRevocation(): (webContentsId?: number) => void {
   const active = scope.getStore()
   return (webContentsId) => {
@@ -53,7 +45,7 @@ export function captureRemoteCliBrowserRevocation(): (webContentsId?: number) =>
         'The Orca desktop stopped sharing its browser before this command ran.'
       )
     }
-    // Why at execution: routing can be turned off while the command waits, remounting the page unrouted.
+    // Routing may be disabled and the guest remounted while this command queues.
     if (webContentsId !== undefined && active?.admitGuest && !active.admitGuest(webContentsId)) {
       throw new BrowserError(
         DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE,
@@ -63,15 +55,10 @@ export function captureRemoteCliBrowserRevocation(): (webContentsId?: number) =>
   }
 }
 
-/**
- * Captured where a browser command is queued: `run` puts the queued work back in exactly that
- * scope (none for a desktop-local command), never the queue runner's, which may be another host's.
- */
+/** Restore the captured command scope (including none), never the queue runner's possibly different host. */
 export function captureRemoteCliBrowserScope(): {
   bridged: boolean
-  /** Fires when the host behind the command is revoked. */
   revoked?: AbortSignal
-  /** Fires only when the host's attachment ends. */
   hostRevoked?: AbortSignal
   run<T>(work: () => T): T
 } {
@@ -84,17 +71,20 @@ export function captureRemoteCliBrowserScope(): {
   }
 }
 
-/** Runs `work` in no host's scope, so long-lived resources it creates never inherit one. */
+/** The workspace an SSH host's command is scoped to, if this call came through the bridge. */
+export function remoteCliBrowserScopeWorkspaceId(): string | undefined {
+  return scope.getStore()?.workspaceId
+}
+
+/** Prevent long-lived resources from inheriting a command's host scope. */
 export function runOutsideRemoteCliBrowserScope<T>(work: () => T): T {
   return scope.exit(work)
 }
 
-/** Throws inside a bridged command once it was revoked or `webContentsId` stopped being admitted. */
 export function assertRemoteCliBrowserAccess(webContentsId?: number): void {
   captureRemoteCliBrowserRevocation()(webContentsId)
 }
 
-/** Null outside a bridged command; inside one, the scoped workspace or a refusal. */
 export function resolveRemoteCliBrowserScopeSelector(
   selector: string
 ): Promise<{ id: string }> | null {
@@ -115,10 +105,7 @@ export function resolveRemoteCliBrowserScopeSelector(
 
 export const REMOTE_CLI_EVAL_TIMEOUT_MS = 30_000
 
-/**
- * Inside a bridged command, bounds page work by a deadline and by revocation, and runs `cancel`
- * (for example terminating the page's script) when either fires. Outside one it returns `work`.
- */
+/** Bound bridged work by deadline/revocation and cancel it on either; local work passes through. */
 export function boundRemoteCliBrowserWork<T>(
   work: Promise<T>,
   cancel: () => void,
@@ -158,7 +145,7 @@ export function boundRemoteCliBrowserWork<T>(
       active.revoked?.addEventListener('abort', onRevoked, { once: true })
     }
   })
-  // Why: a settled race leaves `interrupted` pending forever; it must not surface as unhandled.
+  // Handle interruption rejection even when work already won the race.
   interrupted.catch(() => {})
   return Promise.race([work, interrupted]).finally(() => {
     clearTimeout(timer)
@@ -166,7 +153,6 @@ export function boundRemoteCliBrowserWork<T>(
   })
 }
 
-/** Captures the bridged scope now so `boundRemoteCliBrowserWork` applies when queued work runs. */
 export function captureRemoteCliBrowserWorkBound(): <T>(
   work: Promise<T>,
   cancel: () => void

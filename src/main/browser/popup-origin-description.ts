@@ -1,5 +1,4 @@
-// Why: http on loopback is a secure context (local OAuth callback servers are
-// common); only flag plain http to a real remote host.
+// Loopback HTTP is a secure context, commonly used by local OAuth callbacks.
 function isLoopbackHost(hostname: string): boolean {
   return (
     hostname === 'localhost' ||
@@ -9,8 +8,7 @@ function isLoopbackHost(hostname: string): boolean {
   )
 }
 
-// Why: the bar must show only the origin — popup URLs routinely carry OAuth
-// codes and one-time tokens in path/query that must never reach UI surfaces.
+// Exclude paths and queries: popup URLs can carry OAuth codes and one-time tokens.
 export function describePopupOrigin(rawUrl: string): { label: string; insecure: boolean } {
   try {
     const parsed = new URL(rawUrl)

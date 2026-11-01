@@ -1,17 +1,11 @@
 require "minitest/autorun"
 require "ripper"
 
-# Pins the upload_to_testflight arguments that two release outages proved a
-# release cannot run without. `bundle exec fastlane lanes` loads and parses the
-# Fastfile but exits 0 with either argument missing — both failures only surface
-# once a real release is already mid-flight — so the arguments are asserted here
-# statically instead.
+# Pin arguments behind two release outages: fastlane lanes parses successfully without them, failing only mid-release.
 module FastfileTestflightArguments
   module_function
 
-  # [{ "app_platform" => "ios", ... }] for every upload_to_testflight call in
-  # `source`. Values are flattened to the first meaningful token so a keyword's
-  # presence and its literal can both be asserted.
+  # Collect each upload_to_testflight argument’s first meaningful token for presence/literal checks.
   def calls(source, action: "upload_to_testflight")
     found = []
     each_node(Ripper.sexp(source) || []) do |node|
@@ -47,8 +41,7 @@ module FastfileTestflightArguments
     arguments
   end
 
-  # Strings collapse to their content; everything else (true, a constant, a
-  # local) collapses to its first token, which is enough to assert intent.
+  # String content or first token (boolean/constant/local) suffices to assert intent.
   def describe_value(node)
     contents = []
     each_node(node) { |child| contents << child[1] if child[0] == :@tstring_content }
@@ -73,8 +66,7 @@ class FastfileTestflightArgumentsTest < Minitest::Test
     @calls = FastfileTestflightArguments.calls(File.read(FASTFILE))
   end
 
-  # Anchor: a parse that silently finds nothing would make every other
-  # assertion here pass vacuously.
+  # Reject an empty parse that would make the remaining assertions vacuous.
   def test_finds_the_upload_and_distribute_calls
     assert_operator(@calls.size, :>=, 2, "expected upload_to_testflight in the build and distribute lanes")
   end
@@ -115,8 +107,7 @@ class FastfileTestflightArgumentsTest < Minitest::Test
 
   private
 
-  # Asserting on an empty selection would pass vacuously, so the lane's presence
-  # is part of the contract.
+  # Require the lane so an empty selection cannot pass vacuously.
   def distribute_only_calls
     calls = @calls.select { |arguments| arguments["distribute_only"] == "true" }
     refute_empty(calls, "expected a distribute_only upload_to_testflight call")

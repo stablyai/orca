@@ -16,10 +16,7 @@ import {
 } from './preview/mobile-web-app-render-harness.mjs'
 import { LAYOUT_SOURCE } from './preview/mobile-web-app-terminal-probe-route.mjs'
 
-/**
- * The working rings keep turning on the page. Each is a one-second rotation loop; a loop that
- * stops after its first turn reads `rotate(360deg)` from then on.
- */
+// Require ongoing one-second rotations; stopped-after-first-turn ring stays rotate(360deg).
 
 const ROUTE = `/${MOBILE_WEB_APP_ROUTE_ROOT}/working-spinner-probe`
 const SAMPLE_SECONDS = [1.3, 1.8, 2.4]
@@ -114,14 +111,15 @@ async function openProbe() {
   return { errors, page }
 }
 
-/** The rotating ring is the only element under each wrapper that carries an inline transform. */
+// The rings turn with Web Animations, which never write inline style, so read the computed rotation.
 const readRotations = (page) =>
   page.evaluate(() =>
-    ['working-spinner', 'working-dot'].map(
-      (id) =>
-        [...document.querySelectorAll(`#${id} *`)].find((node) => node.style.transform)?.style
-          .transform ?? null
-    )
+    ['working-spinner', 'working-dot'].map((id) => {
+      const ring = [...document.querySelectorAll(`#${id} *`)].find(
+        (node) => node.getAnimations().length > 0
+      )
+      return ring ? getComputedStyle(ring).transform : null
+    })
   )
 
 describeRender('working rings on the page', () => {

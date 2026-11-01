@@ -119,11 +119,42 @@ export function unsupportedWslCliStatus(
   }
 }
 
+/** The distro was deleted (`wsl --unregister`), so nothing of Orca's is left in it. */
+export function deletedDistroWslCliStatus(distro: string): CliInstallStatus {
+  return {
+    platform: 'linux',
+    commandName: WSL_COMMAND_NAME,
+    commandPath: null,
+    pathDirectory: null,
+    pathConfigured: false,
+    launcherPath: null,
+    installMethod: null,
+    supported: false,
+    state: 'not_installed',
+    currentTarget: null,
+    unsupportedReason: null,
+    detail: `${distro} is no longer an installed WSL distro, so nothing is registered in it.`
+  }
+}
+
 /** Settings shows this instead of a raw IPC timeout; the row stays refreshable. */
 export function unreachableWslCliStatus(distro: string): CliInstallStatus {
   return unsupportedWslCliStatus(
     'wsl_unreachable',
     `WSL (${distro}) did not respond in time. It may still be starting; refresh to try again.`
+  )
+}
+
+/** A background status read found the distro stopped (E9); Settings' refresh is a user act that starts it. */
+export function notRunningWslCliStatus(
+  distro: string,
+  state: 'stopped' | 'unverifiable'
+): CliInstallStatus {
+  return unsupportedWslCliStatus(
+    'wsl_unreachable',
+    state === 'stopped'
+      ? `WSL (${distro}) is not running. Refresh to start it and check the CLI.`
+      : `WSL didn't say whether ${distro} is running. Refresh to try again.`
   )
 }
 
@@ -157,8 +188,7 @@ export async function resolveReadyWslCliState(args: {
     }
   }
 
-  // Why 'none': this first call is the one that boots a stopped distro, and a
-  // login-PATH probe would take half its budget (#29497).
+  // Leave the cold-distro startup budget for booting; this call does not need the login PATH.
   const home = (await args.run(args.distro, 'printf %s "$HOME"', { loginPath: 'none' })).trim()
   if (!home.startsWith('/')) {
     return {
@@ -174,8 +204,7 @@ export async function resolveReadyWslCliState(args: {
       await args.run(
         args.distro,
         '{ command -v powershell.exe >/dev/null 2>&1 || [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; } && command -v wslpath >/dev/null 2>&1 && printf yes || printf no',
-        // WSL appends the Windows PATH and ships wslpath in /usr/bin, so the
-        // default PATH answers this; the absolute fallback covers the rest.
+        // WSL's default PATH and absolute PowerShell fallback suffice for interop detection.
         { loginPath: 'none' }
       )
     ).trim() === 'yes'
@@ -214,9 +243,7 @@ async function readPathConfigured(
     )
     return output.trim() === 'yes'
   } catch (error) {
-    // Why null, not throw: the distro already answered the calls before this,
-    // so a blocking ~/.profile (#14288) must not hide whether the command file
-    // exists; null is "unknown", never "not on PATH".
+    // A blocked login probe means PATH is unknown; it must not hide the command's known file state.
     if (
       error instanceof WslCliLoginPathUnavailableError ||
       error instanceof WslCliUnreachableError

@@ -7,7 +7,7 @@ export function getPiAgentStatusPostQueueSourceLines(kind: PiAgentKind): string[
     ...(kind === 'pi'
       ? [
           'declare global { var __orcaPiStatusPostQueue: HookPostQueue | undefined }',
-          // Why: old delivery continuations and a reloaded registration must serialize through one queue.
+          // Reloaded registrations and old continuations must share one serialized queue.
           'const postQueue: HookPostQueue = globalThis.__orcaPiStatusPostQueue ??= { activePost: null, pendingPost: null, latestPost: null, finalPosts: [], finalRetryTimer: null, postRevision: 0, retryTimer: null }'
         ]
       : [
@@ -19,7 +19,7 @@ export function getPiAgentStatusPostQueueSourceLines(kind: PiAgentKind): string[
     '  postQueue.retryTimer = null',
     '}',
     '',
-    '// Why: a queued or scheduled post builds its body later, so it already carries newer state.',
+    '// Queued posts build their body later and already include newer state.',
     'function hasQueuedPost(): boolean {',
     '  return postQueue.pendingPost !== null || postQueue.retryTimer !== null',
     '}',
@@ -27,7 +27,7 @@ export function getPiAgentStatusPostQueueSourceLines(kind: PiAgentKind): string[
     'function resetPostQueue(): void {',
     '  cancelPostRetry()',
     '  postQueue.postRevision++',
-    // Why: preserve the original object so an in-flight acknowledgment also retires its final queue entry.
+    // Keep object identity so in-flight acknowledgements retire the matching final entry.
     '  for (const post of [postQueue.activePost, postQueue.pendingPost, postQueue.latestPost]) {',
     "    if (!post || post.hookEventName !== 'agent_end' || post.delivered || post.final) continue",
     '    post.final = true',
@@ -51,7 +51,7 @@ export function getPiAgentStatusPostQueueSourceLines(kind: PiAgentKind): string[
     '}',
     '',
     'function drainPosts(): void {',
-    // Why: a final post waiting to retry holds newer posts back, so the old session's row is never written last.
+    // Old-session final retries must finish before new posts can become the last host status.
     '  if (postQueue.activePost || postQueue.finalRetryTimer !== null) return',
     '  const next = postQueue.finalPosts[0] ?? postQueue.pendingPost',
     '  if (!next) return',

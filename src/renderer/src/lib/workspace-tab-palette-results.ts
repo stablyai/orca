@@ -5,7 +5,7 @@ import {
   matchPaletteTabDocument,
   preparePaletteTabQuery,
   isPaletteTabQueryRejected
-} from './palette-match/tab-match'
+} from '../../../shared/palette-match/tab-match'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
@@ -13,9 +13,9 @@ import {
 import { matchWorkspaceTabAgentSnippet } from './workspace-tab-agent-snippet-match'
 import { maxAgentActivityAt } from './workspace-tab-agent-metadata'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { MatchRange } from './palette-match/normalized-text'
-import type { PaletteDocumentRank } from './palette-match/palette-document'
-import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import type { MatchRange } from '../../../shared/palette-match/normalized-text'
+import type { PaletteDocumentRank } from '../../../shared/palette-match/palette-document'
+import type { PaletteResultQualityClass } from '../../../shared/palette-match/match-quality'
 import {
   createPaletteSearchContext,
   encodePaletteIdentity,
@@ -23,7 +23,7 @@ import {
   preparePaletteActivity,
   type PaletteActivityRank,
   type PaletteSearchContext
-} from './palette-match/palette-ranking'
+} from '../../../shared/palette-match/palette-ranking'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { getUnifiedTabPaletteExecutionHostId } from './unified-tab-host-ownership'
 import type {
@@ -158,8 +158,7 @@ function matchEntry(
 ): WorkspaceTabPaletteSearchResult | null {
   const unrestrictedMatch = matchPaletteTabDocument(entry.document, query)
   if (!unrestrictedMatch) {
-    // Why kept separate: agent text is not part of the structured field set, so it
-    // never contributes to token coverage — it only recovers a row nothing else found.
+    // Agent-text fallback only recovers otherwise missing rows; it never contributes structured token coverage.
     const snippet = matchWorkspaceTabAgentSnippet(entry.agentMetadata, query)
     if (!snippet) {
       return null
@@ -203,8 +202,7 @@ function matchEntry(
     repoRanges: match.repoRanges,
     worktreeRanges: match.worktreeRanges,
     branchRanges: match.branchRanges,
-    // Ranges are into the alias string, not the row: the content icon explains the
-    // hit, so nothing on the row is highlighted from them.
+    // Alias ranges index search-only text; content icons explain hits without row highlighting.
     typeAliasMatch: alias ? { text: alias, ranges: match.typeAlias?.ranges ?? NO_RANGES } : null,
     typeAliasMatches: match.typeAliasMatches.map((typeAlias) => ({
       text: (entry.typeSearchAliases ?? [])[typeAlias.index] ?? '',

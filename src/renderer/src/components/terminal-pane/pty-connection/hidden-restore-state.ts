@@ -84,8 +84,7 @@ export function bindHiddenRestoreState(session: ConnectPanePtySession): void {
   session.clearPaneMode2031State = function (): void {
     session.deps.paneMode2031Ref.current.delete(session.pane.id)
     session.deps.paneLastThemeModeRef.current.delete(session.pane.id)
-    // A partial CSI prefix belongs to the stream that produced it; carrying it into a
-    // replacement PTY would splice two unrelated byte ranges into one sequence.
+    // Drop partial CSI tails on PTY replacement so unrelated streams cannot form a fabricated sequence.
     session.mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
   }
 

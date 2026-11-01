@@ -11,7 +11,7 @@ export function serializeSelectiveProfileStateDomains(
   dirtyDomains: ReadonlySet<string>
 ): ProfileStateDomainReplacement[] {
   const payloads = new Map<string, string>()
-  // Capture keys up front, but read values after preceding getters and toJSON hooks.
+  // Read values in order so preceding getters/toJSON hooks can affect later domains.
   for (const domain of Object.keys(state)) {
     const fragment = serializeSelectiveProfileStateDomainFragment(domain, state[domain])
     if (fragment !== '{}') {
@@ -66,7 +66,7 @@ function serializeSelectiveProfileStateDomainFragment(domain: string, value: unk
     }
     return entry
   })
-  // Raw JSON and proxy key order still need the old UTF-8/parse/stringify normalization.
+  // Preserve UTF-8/parse/stringify normalization for raw JSON and proxy key ordering.
   return needsNormalization ? JSON.stringify(JSON.parse(fragment.toWellFormed())) : fragment
 }
 
@@ -75,7 +75,7 @@ function serializeProfileStateDomainFragment(
   value: unknown,
   replacer?: (key: string, value: unknown) => unknown
 ): string {
-  // The wrapper preserves the original property name passed to a value's toJSON.
+  // Preserve the domain key observed by value.toJSON.
   return JSON.stringify({ [domain]: value }, replacer)
 }
 

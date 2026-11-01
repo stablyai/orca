@@ -248,7 +248,7 @@ describe('a frame that changes only panes’ terminal bindings', () => {
     sync.close()
   })
 
-  // A status says a bound pane's terminal is not live yet; the window keeps the id to restore by.
+  // Nonlive status preserves the bound terminal ID for restore.
   it('rebuilds nothing for a frame that only gives a bound pane a status', async () => {
     const { store, sync, first, send } = await boot()
     const before = store.getState().terminalLayoutsByTabId['tab-shell']

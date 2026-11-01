@@ -1,6 +1,4 @@
-// The one layout client (design 3.1): the `layout.subscribe` stream over the same transport-agnostic
-// RPC path for the local runtime and a remote server. It holds no layout; frames go to the caller's
-// read-only cache. Unused until the switch.
+// One transport-neutral layout.subscribe client for local/paired main. Caller owns read-only cache; this client stores no layout.
 
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import {
@@ -84,8 +82,7 @@ export function subscribeRuntimeLayout(
     }
     const refusal = REFUSAL_CODES.find((code) => hasRuntimeRpcErrorCode(error, code))
     stop(refusal ? { state: 'refused', code: refusal } : { state: 'lost' })
-    // Why: layout.apply still reaches main without the stream, so main's own changes would go
-    // unseen until a relaunch; a server's would until its connection is rebuilt.
+    // Main still accepts layout.apply during stream loss; resubscribe or local changes stay invisible until relaunch (paired changes until reconnect).
     if (!refusal) {
       reopenTimer = setTimeout(() => {
         reopenTimer = null

@@ -262,8 +262,7 @@ describe('activateBrowserPagePaletteResult', () => {
         'ws-1': [makePage({ url: ORCA_BROWSER_BLANK_URL })]
       }
     })
-    // Why: the real activation drops the page, so a post-activation lookup would
-    // resolve the wrong target — the pre-capture is what keeps this correct.
+    // Capture the focus target before activation deletes the original page.
     mocks.activateAndRevealWorkspace.mockImplementation(() => {
       useAppStore.setState({ browserPagesByWorkspace: {} })
       return true
@@ -302,8 +301,7 @@ describe('activateBrowserPagePaletteResult', () => {
     expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
   })
 
-  // Deleting a worktree purges its browser workspaces and pages too, so the
-  // worktree check must win or a dead workspace reads as a stale page.
+  // Workspace removal also purges pages; check it first to report the actual missing owner.
   it('reports a deleted worktree as a missing workspace once its pages are purged', () => {
     seedStore({
       worktreesByRepo: {},
@@ -326,8 +324,7 @@ describe('activateBrowserPagePaletteResult', () => {
   })
 })
 
-// U3: group focus already rides on setActiveBrowserTab → activateTab. These pin
-// it so the extraction above cannot quietly lose cross-column jumping.
+// Preserve cross-column focus through setActiveBrowserTab → activateTab.
 describe('activateBrowserPagePaletteResult group focus', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -376,8 +373,7 @@ describe('activateBrowserPagePaletteResult group focus', () => {
     expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe('group-1')
   })
 
-  // Nothing renders the workspace without its unified tab, so reporting success
-  // would leave the previously active tab on screen.
+  // Without a unified tab, success would leave the previous tab visible.
   it('fails instead of activating when no unified tab backs the browser workspace', () => {
     seedStore({ unifiedTabsByWorktree: {}, groupsByWorktree: { 'wt-1': [] } })
 

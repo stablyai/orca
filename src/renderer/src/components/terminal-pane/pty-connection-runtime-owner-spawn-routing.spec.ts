@@ -271,7 +271,7 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:env-1@@terminal-2')
     })
 
-    it('persists a restarted pane PTY id and uses it on the next remount', async () => {
+    it('publishes a restarted pane PTY id and reuses its restored hint on remount', async () => {
       const { connectPanePty } = await import('./pty-connection')
 
       const restartedTransport = createMockTransport()
@@ -325,8 +325,7 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       expect(remountDeps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-restarted')
     })
 
-    // Why: BEL (0x07) is the attention signal — onBell raises the bell event + an OS notification.
-    it('wires onBell to the bell attention event and OS notification', async () => {
+    it('forwards onBell to pane attention and notification policy', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)

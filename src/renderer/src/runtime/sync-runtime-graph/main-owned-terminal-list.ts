@@ -1,5 +1,4 @@
-// Layout-owner builds: main lists the terminals of every workspace this app owns, so the window
-// sends only what it shows of them. A paired server's workspaces keep the window's list.
+// Main lists locally owned workspace terminals in layout-owner builds; window reports shown/parked panes. Paired workspaces retain window lists.
 import { getParkedTerminalWatcherPaneIdsByPtyId } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import type { AppState } from '@/store/types'

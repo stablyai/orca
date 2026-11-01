@@ -101,14 +101,13 @@ export function decodeProfileStateWriterError(data: ProfileStateWriterErrorData)
   return new ProfileStateWriterError(data.code, data.message, data.outcome)
 }
 
-// Why: open failures are rare and fatal to startup; without the SQLite code the log cannot tell
-// a lock race from real damage (#27333). Messages are SQLite's or our validators', not user data.
+// Preserve SQLite causes to distinguish lock races from damage (#27333); these messages exclude user data.
 function encodeOpenErrorCause(cause: unknown): ProfileStateWriterErrorData['cause'] {
   if (!(cause instanceof Error)) {
     return undefined
   }
   const code = 'code' in cause && typeof cause.code === 'string' ? cause.code : undefined
-  // node:sqlite's extended result code (e.g. 261 = SQLITE_BUSY_RECOVERY) is the precise verdict.
+  // Extended SQLite codes distinguish causes such as SQLITE_BUSY_RECOVERY.
   const errcode =
     'errcode' in cause && typeof cause.errcode === 'number' ? cause.errcode : undefined
   return {

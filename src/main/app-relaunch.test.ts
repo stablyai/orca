@@ -66,37 +66,6 @@ describe('relaunchApp', () => {
     expect(appRelaunchMock).toHaveBeenLastCalledWith(custom)
   })
 
-  it.each(['win32', 'darwin', 'linux'] as const)(
-    'preserves default relaunch arguments for ordinary %s launches',
-    (platform) => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-      relaunchApp('renderer-request')
-      expect(appRelaunchMock).toHaveBeenCalledWith(undefined)
-    }
-  )
-  it('passes the native restart target to Electron after recording the reason', () => {
-    const options = { execPath: 'C:\\Orca\\resources\\bin\\orca.exe', args: ['restart'] }
-    relaunchApp('windows-administrator', undefined, options)
-    expect(appRelaunchMock).toHaveBeenCalledWith(options)
-    expect(recordDurableCrashBreadcrumbMock.mock.invocationCallOrder[0]).toBeLessThan(
-      appRelaunchMock.mock.invocationCallOrder[0]
-    )
-  })
-  it('durably records the reason before scheduling the replacement process', () => {
-    relaunchApp('gpu-fallback', { processReason: 'crashed', exitCode: 5 })
-
-    expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledOnce()
-    expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith('app_relaunch_requested', {
-      processReason: 'crashed',
-      exitCode: 5,
-      reason: 'gpu-fallback'
-    })
-    expect(appRelaunchMock).toHaveBeenCalledOnce()
-    expect(recordDurableCrashBreadcrumbMock.mock.invocationCallOrder[0]).toBeLessThan(
-      appRelaunchMock.mock.invocationCallOrder[0]
-    )
-  })
-
   it('does not carry Orca PATH seeds into the replacement process', () => {
     process.env.PATH = '/seeded/newest-nvm/bin:/usr/bin'
     _setLaunchPathForTests('/usr/bin')

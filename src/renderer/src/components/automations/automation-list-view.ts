@@ -18,13 +18,7 @@ export type AutomationListSort = {
   direction: AutomationListSortDirection
 }
 
-/**
- * A row and an external job flattened to what the shared list renders and sorts.
- *
- * `id` is the row's own key, never the bare automation ID: under All hosts two
- * authorities can return the same ID, and the sort tie-break decides render
- * order, so a bare ID would collapse them. See `automation-list-row-identity`.
- */
+/** Flatten local/external rows for one sort; preserve authority-qualified row keys because bare IDs collide and determine the tie-break order. */
 export type AutomationListViewItem =
   | {
       kind: 'local'
@@ -216,10 +210,7 @@ export function filterExternalAutomationListEntries(
   )
 }
 
-/**
- * `locale` is a parameter, not a `getIntlLocale()` read, so callers memoizing this
- * can declare it — a hidden read is invisible to a dependency array.
- */
+/** Take locale explicitly so memoized callers can declare collation changes as dependencies. */
 export function sortAutomationListViewItems(
   items: readonly AutomationListViewItem[],
   sort: AutomationListSort | null,

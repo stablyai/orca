@@ -31,10 +31,7 @@ export type SidebarRetentionInputs = {
 
 const RETENTION_DEADLINE = 'sleeping-retention'
 
-/**
- * Main's copy of which sleeping rows "Hide sleeping" still keeps through a rebind gap. The window
- * runs its own; this one is compared against it. It stays idle until a window begins a session.
- */
+/** Compare main/window sleeping-row retention across rebind gaps; main remains idle until a window starts a list session. */
 export class SidebarRetentionOwner {
   readonly revision = new ProducerRevision()
   private sessionId: string | null = null

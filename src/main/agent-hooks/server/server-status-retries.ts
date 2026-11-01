@@ -1,3 +1,4 @@
+import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
 import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import {
@@ -12,7 +13,7 @@ import {
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-transcript-poll-scheduler'
-import type { EnrichedAgentHookEventPayload } from './server-types'
+import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
   ASSISTANT_MESSAGE_RETRY_MS,
@@ -27,13 +28,65 @@ type TranscriptPoll = {
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
+  private observedLocalHook?: { accepted: boolean; receivedAt?: number }
+  private readonly claudeHelperKills = new ClaudeHelperKillPoller(this.state, {
+    current: (paneKey) => this.state.lastStatusByPaneKey.get(paneKey),
+    publish: (event) => {
+      this.applyNormalizedStatus(event)
+    },
+    listening: () =>
+      this.server?.listening === true && this.statusHooksEnabled && this.ownerStateInitialized
+  })
+
   private readonly transcriptPollScheduler = new AgentTranscriptPollScheduler<TranscriptPoll>(
     CODEX_SUBAGENT_POLL_MS,
     (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
   )
 
+  protected applyObservedLocalHook(
+    incoming: IncomingAgentHookEvent,
+    onAccepted?: () => void,
+    receivedAt?: number
+  ): EnrichedAgentHookEventPayload | undefined {
+    const previous = this.observedLocalHook
+    const context = { accepted: false, receivedAt }
+    this.observedLocalHook =
+      incoming.payload.agentType === 'claude' && incoming.connectionId === null
+        ? context
+        : undefined
+    try {
+      return this.applyNormalizedStatus(incoming, () => {
+        onAccepted?.()
+        context.accepted = true
+      })
+    } finally {
+      this.observedLocalHook = previous
+    }
+  }
+
+  protected override commitStatusRowMutation(
+    before: EnrichedAgentHookEventPayload | null | undefined,
+    after: EnrichedAgentHookEventPayload | null | undefined,
+    emit = true
+  ): boolean {
+    const hook = this.observedLocalHook
+    // Held/restated rows retain their stamp; only a newly admitted typed hook owns observation.
+    if (hook?.accepted) {
+      hook.accepted = false
+      if (after?.observation?.origin === 'hook' && after.observation !== before?.observation) {
+        this.claudeHelperKills.schedule(after, hook.receivedAt)
+      }
+    }
+    return super.commitStatusRowMutation(before, after, emit)
+  }
+
+  protected activateClaudeHelperObservations(): void {
+    this.claudeHelperKills.activate()
+  }
+
   protected clearAllTranscriptPolls(): void {
     this.transcriptPollScheduler.clearAll()
+    this.claudeHelperKills.clearAll()
   }
 
   protected clearAssistantMessageRetry(paneKey: string): void {
@@ -47,6 +100,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
+    this.claudeHelperKills.clear(paneKey)
   }
 
   protected scheduleTranscriptPoll(
@@ -54,7 +108,10 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     body: unknown,
     original: EnrichedAgentHookEventPayload
   ): void {
-    // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
+    if (source === 'claude') {
+      return
+    }
+    // Nested CLIs inherit pane keys; another provider must not clear this transcript poll.
     if (source !== 'codex' && source !== 'muse') {
       return
     }
@@ -71,8 +128,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
     const { source, body, original } = poll
-    // Keep the identity check at callback time: a newer event supersedes this
-    // payload even when its pane still has transcript children.
+    // Recheck ownership at callback time; newer events supersede this payload even if children remain.
     if (
       paneKey !== original.paneKey ||
       !this.server ||
@@ -112,7 +168,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (!discoveryReady) {
       const discovery = preparePendingGrokResultDiscovery(source, body)
       if (discovery) {
-        // Why: slug-group discovery can outlive the bounded flush timers; its completion must drive the first retry deterministically.
+        // Discovery may outlast flush timers; retry as soon as it completes.
         void discovery
           .then(() => {
             if (this.server) {
@@ -163,8 +219,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       this.scheduleAssistantMessageRetry(source, body, original, nextAttempt, requireExactOriginal)
       return
     }
-    // Why: some agents POST Stop before their transcript line is flushed; discovery is event-driven, later content retries stay timed.
-    // The retry only adds text to the same turn end, so it restates that end instead of minting one.
+    // Stop can precede transcript flush; retries add text while preserving the same turn end.
     this.applyNormalizedStatus(
       { ...normalized.event, ...pickHostTurnEnd(current) },
       normalized.onAccepted

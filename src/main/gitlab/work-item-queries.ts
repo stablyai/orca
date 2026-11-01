@@ -39,7 +39,7 @@ export async function getWorkItemByProjectRef(
     const { stdout } = await glabExecFileAsync(
       [
         'api',
-        // Why: preserve the pasted URL's explicit host so cwd remotes can't redirect the lookup.
+        // Pasted hosts are authoritative; cwd remotes must not redirect them.
         ...(projectRef.host ? ['--hostname', projectRef.host] : []),
         `projects/${encodedProject(projectRef.path)}/${resource}/${iid}`
       ],
@@ -58,7 +58,7 @@ export async function getWorkItemByProjectRef(
 }
 
 function mrStateToIssueState(state: MRListState): IssueListState | null {
-  // Why: issues have no 'merged' state; return null so the issues fetch is skipped, not mis-mapped.
+  // Issues have no merged state; null omits the issue half entirely.
   switch (state) {
     case 'opened':
       return 'opened'
@@ -103,8 +103,7 @@ export async function listWorkItems(
       }
     }
   }
-  // Why: fan out both reads so latency is the slower of the two, not the sum.
-  // Why read the raw issues API (not listIssues): IssueInfo strips updated_at, which the combined sort needs.
+  // Read raw issue API data to preserve updated_at for the combined sort; fetch both halves concurrently.
   const [mrs, issues] = await Promise.all([
     listMergeRequests(
       repoPath,
@@ -135,13 +134,13 @@ export async function listWorkItems(
   const merged = [...mrs.items, ...issues.items].sort((a, b) =>
     (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
   )
-  // Why: MR-side error wins — issues can be disabled per project, making its error less informative.
+  // Prefer MR failures because projects can legitimately disable issues.
   const error: ClassifiedError | undefined = mrs.error ?? issues.error
   return {
     items: merged,
     page,
     perPage,
-    // Why: approximate totals — GitLab can't paginate across MRs+issues as one set, so MR totals stand in.
+    // Cross-type totals are approximate because GitLab cannot paginate MR/issue unions.
     totalCount: mrs.totalCount,
     totalPages: mrs.totalPages,
     ...(error ? { error } : {})
@@ -153,7 +152,7 @@ function issueSearchParam(query?: string): string {
   if (!trimmed) {
     return ''
   }
-  // Why: GitLab's search matches text only, so `#23` (its issue reference) needs the iid filter.
+  // GitLab text search does not interpret issue-reference syntax; use the IID filter for #N.
   const iid = /^#(\d+)$/.exec(trimmed)?.[1]
   return iid ? `&iids[]=${iid}` : `&search=${encodeURIComponent(trimmed)}`
 }
@@ -195,10 +194,7 @@ export async function fetchIssuesAsWorkItems(
   }
 }
 
-/**
- * List the authenticated user's GitLab todos (gitlab.com/dashboard/todos).
- * User-scoped, so cwd is irrelevant; repoPath only satisfies the IPC handler's path-validation guard.
- */
+/** Todos are user-scoped; repoPath satisfies IPC validation rather than selecting their project. */
 export async function listTodos(
   repoPath: string,
   connectionId?: string | null,
@@ -215,7 +211,7 @@ export async function listTodos(
   }
   await acquire()
   try {
-    // Why: per_page=50 keeps this cross-project view cheap; the UI only shows top-priority todos.
+    // Bound the cross-project snapshot to the highest-priority todos.
     const { stdout } = await glabExecFileAsync(
       [
         'api',
@@ -254,7 +250,7 @@ export async function listTodos(
       state: t.state === 'done' ? 'done' : 'pending'
     }))
   } catch {
-    // Why: silent empty-list on auth/network failure matches the read-side surface; caller UI signals connectivity.
+    // Compatibility behavior returns []; callers own connectivity presentation.
     return []
   } finally {
     release()

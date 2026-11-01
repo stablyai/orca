@@ -1,8 +1,7 @@
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-// Only the thread hop is replaced: all three implementations below are the
-// repo's own in-process readers, which the worker entry calls on the other side.
+// Replace worker transport while exercising the real SQLite readers.
 export const openCodeReadCalls: string[] = []
 vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async () => {
   const list = await import('../ai-vault/session-scanner-opencode-sqlite-list')
@@ -49,19 +48,8 @@ import {
   type SessionSearchIndexerHarness
 } from './session-search-indexer-test-fixture'
 
-/*
- * Nothing any OpenCode agent said used to be searchable. Its sessions live in
- * one SQLite database read on a worker thread, and the worker only ever
- * returned the newest few messages for the panel preview, so the index recorded
- * a placeholder row and moved on. This is the end-to-end proof that a sentence
- * an OpenCode assistant wrote comes back from a real search over a real index.
- */
-
-// Literal-looking on purpose: the `phrase` route is the one a user quoting a
-// remembered sentence takes, and only a literal query reaches it.
 const ANSWER = 'the quokkaTelemetry harness reindexes every shard'
 const OTHER = 'a completely unrelated conversation about typography'
-// Appears only in a tool part's output, so it separates the two scopes.
 const TOOL_ONLY = 'zarquonium'
 const TOOL_FILE = '/repo/app/src/telemetry/shard-reindex.ts'
 const SESSION = 'ses_capture'
@@ -113,7 +101,6 @@ async function startIndexer(): Promise<SessionSearchIndexer> {
   return started
 }
 
-/** A second connection on the index file, the way the live instance pairs them. */
 function openEngine(): SessionSearchEngine {
   const db = openSessionSearchDatabase(harness.databasePath)
   engineDbs.push(db)
@@ -137,8 +124,7 @@ function writeVault(): void {
             {
               type: 'tool',
               tool: 'read',
-              // The camelCase spelling OpenCode writes; the shared key list
-              // knows only `file_path`, so finding this proves the rename.
+              // OpenCode’s filePath spelling must normalize to the indexed file_path key.
               input: { filePath: TOOL_FILE },
               output: `export const marker = '${TOOL_ONLY}'`
             },
@@ -177,9 +163,7 @@ it('finds a sentence an OpenCode assistant wrote, through the real indexer', asy
   })
   expect(hit?.evidence?.role).toBe('assistant')
   expect(hit?.evidence?.snippet).toContain('quokkaTelemetry')
-  // The whole-session read, not the preview window: the user turn is indexed too.
   expect(openEngine().search({ query: 'reindex the shards' }).hits).toHaveLength(1)
-  // And the sibling session is a session of its own, not folded into this one.
   expect(openEngine().search({ query: OTHER }).hits[0]?.sessionId).toBe(SECOND_SESSION)
 })
 
@@ -191,8 +175,6 @@ it('searches tool output under the all scope and not under conversation', async 
   expect(all.hits).toHaveLength(1)
   expect(all.hits[0]).toMatchObject({ agent: 'opencode', sessionId: SESSION })
   expect(all.hits[0]?.evidence?.role).toBe('tool')
-  // Conversation is user and assistant turns only, so a token that lives in a
-  // tool's output has nothing to match there.
   expect(openEngine().search({ query: TOOL_ONLY, scope: 'conversation' }).hits).toEqual([])
 })
 
@@ -200,10 +182,7 @@ it('indexes a tool call by its file argument and a failed one by its error', asy
   writeVault()
   await startIndexer()
 
-  // `filePath` renamed to the spelling the shared input-key list knows: without
-  // it the call line would be the bare tool name and this would find nothing.
   expect(openEngine().search({ query: TOOL_FILE, scope: 'all' }).hits[0]?.sessionId).toBe(SESSION)
-  // A call that failed carries its error where a completed one carries output.
   const failed = openEngine().search({ query: 'reindex exited with code', scope: 'all' })
   expect(failed.hits[0]?.evidence?.role).toBe('tool')
 })
@@ -226,8 +205,6 @@ it('reads an OpenCode session once, not on every pass', async () => {
   await started.reconcile()
   await started.reconcile()
 
-  // One capture per session across three passes; nothing re-decodes a session
-  // whose `time_updated` has not moved.
   expect(openCodeReadCalls).toEqual([`capture:${SESSION}`, `capture:${SECOND_SESSION}`])
   const rows = harness.read((db) =>
     db.prepare('SELECT path, state, session_row_id FROM files ORDER BY path').all()
@@ -240,8 +217,6 @@ it('reads an OpenCode session once, not on every pass', async () => {
       ?.session_row_id
   ).not.toBeNull()
   expect(started.status()).toMatchObject({ filesDue: 0, filesFailed: 0, phase: 'current' })
-  // The count that made this bug visible: two OpenCode files, two OpenCode
-  // sessions. Before the capture channel it read two files and zero sessions.
   expect(started.status().sessionsByAgent).toMatchObject({ opencode: 2, claude: 1 })
 })
 
@@ -258,7 +233,6 @@ it('re-reads a session that gained a message and replaces its rows', async () =>
 
   const engine = openEngine()
   expect(engine.search({ query: 'orthogonal vestibule' }).hits[0]?.sessionId).toBe(SESSION)
-  // Replaced whole, not appended twice: the original turn is still one hit.
   expect(engine.search({ query: ANSWER }).hits).toHaveLength(1)
   expect(openCodeReadCalls.filter((call) => call === `capture:${SESSION}`)).toHaveLength(2)
 })

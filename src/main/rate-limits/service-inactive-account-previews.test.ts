@@ -336,12 +336,10 @@ describe('RateLimitService', () => {
     await service.fetchInactiveCodexAccountsOnOpen()
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
 
-    // The switch triggers exactly one fetch: the newly active account's.
     await service.refreshForCodexAccountChange('account-a')
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
 
-    // Why: re-opening the switcher inside the debounce window must not spawn
-    // codex in every inactive credential home again.
+    // Reopening inside debounce must not spawn Codex again in each live credential home.
     await service.fetchInactiveCodexAccountsOnOpen()
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
   })

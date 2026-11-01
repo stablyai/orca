@@ -52,7 +52,6 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-/** A delete Git never finishes on its own, like one a quit or crash cuts short. */
 function interruptedJob(): {
   run: (stopSignal: AbortSignal) => Promise<never>
   publish: () => void
@@ -120,7 +119,6 @@ describe('durable worktree removal records', () => {
 
     expect(await readWorktreeRemovalRecords(directory)).toEqual([])
     expect(isPending()).toBe(false)
-    // Once on acceptance, once after the row left the table.
     expect(publish).toHaveBeenCalledTimes(2)
   })
 
@@ -175,7 +173,7 @@ describe('durable worktree removal records', () => {
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(await readWorktreeRemovalRecords(directory)).toHaveLength(1)
-    // Only the start was published: a stopped delete is neither removed nor failed.
+    // Quit publishes no completion; the interrupted record must remain resumable.
     expect(job.publish).toHaveBeenCalledTimes(1)
   })
 
@@ -186,7 +184,6 @@ describe('durable worktree removal records', () => {
     stopBackgroundWorktreeRemovals()
     await _settlePendingWorktreeRemovalsForTests()
 
-    // Restart: nothing in memory, only the file.
     _resetPendingWorktreeRemovalsForTests()
     expect(isPending()).toBe(false)
     await loadWorktreeRemovalRecords(directory)
@@ -221,7 +218,6 @@ describe('durable worktree removal records', () => {
     expect(resumed).toEqual(['/work/feature feature true'])
     expect(isPending()).toBe(false)
     expect(await readWorktreeRemovalRecords(directory)).toEqual([])
-    // A request that joined after the restart gets the resumed delete's result.
     await expect(joined).resolves.toEqual({})
     expect(publish).toHaveBeenCalledTimes(1)
   })
@@ -270,7 +266,7 @@ describe('durable worktree removal records', () => {
       requestedAt: 5,
       failure: { message: 'Operation not permitted', failedAt: 6 }
     }
-    // Daily builds before this one may have written a checkout identity with the record.
+    // Accept the older daily-build record format with checkout identity fields.
     await writeFile(
       worktreeRemovalRecordsFile(directory),
       JSON.stringify({

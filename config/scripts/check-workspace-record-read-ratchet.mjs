@@ -2,12 +2,8 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
 
-// Ratchet on renderer reads of the workspace record fields outside their selector module. The
-// sidebar's records move to main's feed (sidebar design §2, §9), so a reader that touches the
-// store field directly would silently keep reading the old copy. Counts may only shrink.
-// A lower bound: destructuring and computed access are not seen; the compiler is the second
-// guard once the fields leave AppState. Writers stay in the baseline
-// until their cut moves them.
+// Ratchet direct renderer workspace-record reads downward as sidebar records move to main’s feed (§2/§9); old-copy readers would silently go stale.
+// Lower bound misses destructuring/computed access; compiler guards removed fields. Writers remain until their migration.
 
 const BASELINE_PATH = 'config/workspace-record-read-baseline.txt'
 const SCAN_ROOTS = ['src/renderer/src/']

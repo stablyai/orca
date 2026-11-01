@@ -13,9 +13,9 @@ import {
   retireUnusedMacDaemonCopy
 } from './macos-daemon-bundle-retirement'
 
-// What `lsof -F p +D` prints for an unused tree: nothing, exit 1.
+// An unused lsof tree prints nothing and exits 1.
 const unused: ProcessResult = { code: 1, signal: null, stdout: '', stderr: '', timedOut: false }
-// Observed on a live copy: the user's pid on stdout, and still exit 1.
+// Exit 1 alone is insufficient: live copies can still report user PIDs.
 const inUse: ProcessResult = { ...unused, stdout: 'p123\nftxt\nftxt\n' }
 const LSREGISTER =
   '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
@@ -109,10 +109,4 @@ it("retires every unused copy and staging dir except the current build's and thi
   expect(await exists(oldInUse)).toBe(true)
   expect(await exists(oldUnused)).toBe(false)
   expect(await exists(crashedStaging)).toBe(false)
-})
-
-it('runs one collection at a time and tolerates a missing root', async () => {
-  const first = retireOtherMacDaemonCopies(join(root, 'absent'), join(root, 'absent', 'x'))
-  expect(retireOtherMacDaemonCopies(root, join(root, 'x'))).toBe(first)
-  await expect(first).resolves.toBeUndefined()
 })

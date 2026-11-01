@@ -12,10 +12,7 @@ import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-t
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
 import type { SourceControlLinkedReviews } from './use-linked-reviews'
 
-/**
- * The three reads the Create-PR intent takes between steps. Each is pinned to the run token's
- * worktree/host so a worktree switch mid-run cannot make the intent read the wrong repo.
- */
+/** Pin between-step probes to the run’s worktree/host so navigation cannot retarget them. */
 export function useSourceControlCreatePrIntentProbes({
   activeRepo,
   activeRepoTarget,
@@ -63,7 +60,6 @@ export function useSourceControlCreatePrIntentProbes({
       beginGitBranchCompareRequest(token.worktreeId, requestKey, baseRef)
       const result = await getRuntimeGitBranchCompare(
         {
-          // Why: intent may continue after a worktree switch; use the token's original host target, not whatever is focused later.
           target: requireGitOwnerTarget(activeRepoTarget),
           worktreeId: token.worktreeId,
           worktreePath: token.worktreePath,
@@ -92,7 +88,9 @@ export function useSourceControlCreatePrIntentProbes({
       }
       let result: HostedReviewCreationEligibility
       try {
+        // The user's Create PR: it may start the repo's stopped WSL distro (E9).
         result = await getHostedReviewCreationEligibility({
+          wakeWslDistro: true,
           repoPath: activeRepo.path,
           repoId: activeRepo.id,
           worktreePath: token.worktreePath,
@@ -111,9 +109,7 @@ export function useSourceControlCreatePrIntentProbes({
         })
       } catch (error) {
         console.warn('[SourceControl] Create PR intent eligibility failed', error)
-        // Why: when local status still yields a prep step (dirty/push/sync), keep the intent
-        // moving. If nothing actionable can be synthesized, rethrow so the outer intent
-        // catch surfaces a retry notice instead of leaving "Preparing…" stuck forever.
+        // Continue with actionable local blockers; otherwise rethrow so the outer handler replaces Preparing with retry guidance.
         const fallback = buildCreatePrIntentUnavailableEligibility(token.provider, {
           branch: token.branch,
           baseRef: token.baseRef,
@@ -155,8 +151,9 @@ export function useSourceControlCreatePrIntentProbes({
       }
       const target = getCreatePrIntentOperationTarget(token)
       return await refreshGitStatusForWorktreeStrict({
-        // Why: intent can finish in the background after navigation; branch-safety checks must inspect the worktree that started it.
+        // Background completion must check the worktree that started the intent.
         target: requireGitOwnerTarget(target.target),
+        ownerHostId: target.ownerHostId ?? null,
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
         connectionId: target.connectionId,

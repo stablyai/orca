@@ -22,7 +22,7 @@ export function SectionHeader({
   onToggle: () => void
   actions?: React.ReactNode
 }): React.JSX.Element {
-  // Why: shared rounded container so the hover background spans the whole row instead of clipping around the label.
+  // Share the rounded container so hover styling spans the whole row.
   return (
     <div className="pl-1 pr-3 pt-3 pb-1">
       <div className="group/section flex items-center gap-x-1 rounded-md pr-1 hover:bg-accent hover:text-accent-foreground">
@@ -42,17 +42,18 @@ export function SectionHeader({
               <span className="min-w-0 truncate" title={label}>
                 {label}
               </span>
-              {/* Why: no aria-label here — inside the toggle button it would rewrite the
-              button's accessible name; the explanation stays a hover-only title. */}
+              {/* Use title only; aria-label here would replace the parent toggle's accessible name. */}
               <span className="shrink-0 text-[11px] font-medium tabular-nums" title={countTitle}>
                 {count}
               </span>
             </span>
             {conflictCount > 0 && (
               <span className="block truncate text-[11px] font-medium text-destructive/80">
-                {conflictCount}{' '}
-                {translate('auto.components.right.sidebar.SourceControl.413a3ba113', 'conflict')}
-                {conflictCount === 1 ? '' : 's'}
+                {translate(
+                  'auto.components.right.sidebar.SourceControl.conflictCount',
+                  '{{count}} conflicts',
+                  { count: conflictCount, defaultValue_one: '{{count}} conflict' }
+                )}
               </span>
             )}
           </span>

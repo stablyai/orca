@@ -1,22 +1,6 @@
 #!/usr/bin/env node
-/**
- * Why this script exists:
- *
- * The standard `electron-builder install-app-deps` uses @electron/rebuild
- * internally but does not expose the `ignoreModules` option (as of
- * electron-builder 26.x).  `cpu-features@0.0.10` is an optional performance
- * dependency of `ssh2`; it fails to build in common environments (missing
- * buildcheck.gypi on Windows, and Electron 42's V8 external-pointer API on
- * Linux).  This can make the entire postinstall step fail and prevent
- * `pnpm install` from completing.
- *
- * This script replaces `electron-builder install-app-deps` in the postinstall
- * lifecycle and the electron-builder beforeBuild hook. It calls
- * @electron/rebuild's JS API directly so that we can skip `cpu-features` when
- * rebuilding modules against Electron. Skipping
- * cpu-features is safe: ssh2 detects the missing native module and falls back
- * to pure-JS CPU feature detection automatically.
- */
+// Use @electron/rebuild API to skip optional ssh2 cpu-features: missing buildcheck.gypi/unsupported Electron V8 APIs can block install; ssh2 falls back to JS.
+// electron-builder install-app-deps lacks ignoreModules (26.x); this script also serves beforeBuild.
 
 import { rebuild } from '@electron/rebuild'
 import {
@@ -62,8 +46,7 @@ try {
 }
 const rebuildPlatform = cliOptions.platform ?? osPlatform()
 const rebuildArch = cliOptions.arch ?? process.arch
-// Why: resolve the Electron download target once so the child installer and the
-// usability check can never disagree about which binary should be on disk.
+// Resolve download target once so child installer and usability check agree on expected binary.
 const electronInstallPlatform =
   cliOptions.platform ||
   process.env.ELECTRON_INSTALL_PLATFORM ||
@@ -83,10 +66,7 @@ if (ignoreModules.length > 0) {
   console.log(`[rebuild] Skipping optional Electron rebuild modules: ${ignoreModules.join(', ')}`)
 }
 
-// Why: @electron/rebuild's default module walker doesn't reliably find native
-// modules inside pnpm's .pnpm/ store. Passing an explicit list of modules to
-// rebuild via `onlyModules` ensures they're recompiled against Electron's Node
-// ABI regardless of the package manager's store layout.
+// Explicit onlyModules bypasses unreliable pnpm-store walker so every native module uses Electron’s Node ABI.
 const NATIVE_MODULES = [
   'node-pty',
   'cpu-features',
@@ -95,8 +75,7 @@ const NATIVE_MODULES = [
     : [])
 ]
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
-// Why: these package dirs are shared with other worktrees (pnpm's global virtual store), so they
-// get a published per-ABI build beside build/Release instead of an in-place rebuild.
+// Global pnpm store shares packages across worktrees; publish per-ABI build beside build/Release instead of mutating it.
 const sharedModules = new Set(onlyModules.filter((m) => isSharedNativePackage(m, projectDir)))
 // Loaded only when needed, so a normal install runs exactly the code it always did.
 const sharedNativeBuild = sharedModules.size > 0 ? await import('./shared-native-build.mjs') : null
@@ -135,12 +114,7 @@ if (patchedNodePtyRebuildReason) {
   console.log(`[rebuild] Forcing native rebuild for ${rebuildPlatform}-${rebuildArch}.`)
 }
 
-// Why: cpu-features ships without `buildcheck.gypi`; its own `install` script
-// generates it by running `node buildcheck.js > buildcheck.gypi` before
-// node-gyp. @electron/rebuild with `force: true` invokes node-gyp directly
-// and bypasses that install hook, so if the file is missing (fresh install,
-// store prune, or a prior failed run) node-gyp aborts with
-// "buildcheck.gypi not found". Regenerate it here before rebuilding.
+// Forced rebuild skips cpu-features install hook; regenerate missing buildcheck.gypi before node-gyp or fresh/pruned installs fail.
 if (!ignoreModules.includes('cpu-features')) {
   const cpuFeatureDirs = globSync('node_modules/.pnpm/cpu-features@*/node_modules/cpu-features', {
     cwd: projectDir
@@ -166,10 +140,7 @@ if (!ignoreModules.includes('cpu-features')) {
 }
 
 try {
-  // Why inside the try: the patch guard deletes a stale addon binary, and that
-  // delete fails EPERM when the addon is loaded -- exactly the running-Orca case
-  // the catch below is written for. Outside, it aborted `pnpm install` with a
-  // raw stack instead of the "close running Orca/Electron processes" message.
+  // Keep stale-addon deletion inside lock-classifying try: running Orca can hold it and cause EPERM.
   assertNodePtyConptySourceDeniesMsysBreakaway()
   for (const moduleName of modulesToRebuild.filter((m) => sharedModules.has(m))) {
     buildSharedElectronModule(moduleName)
@@ -194,11 +165,7 @@ try {
       arch: rebuildArch,
       ignoreModules,
       onlyModules: modulesToRebuild,
-      // Why: without force, @electron/rebuild skips modules it considers
-      // "already built" — even when they were compiled for the wrong ABI
-      // (e.g., system Node instead of Electron's embedded Node). This is
-      // common after pnpm install, which compiles native modules for system
-      // Node before postinstall runs this script.
+      // Force rebuild: already-built detection can accept system-Node ABI output incompatible with Electron.
       force: true
     })
   }
@@ -224,17 +191,7 @@ try {
   process.exit(1)
 }
 
-/**
- * The binary this rebuild just produced is the one the packaged app ships.
- *
- * The relay build asserts its own artifact and `ensure-native-runtime.mjs`
- * asserts what it loads, but nothing checked the addon that gets copied into the
- * packaged `node_modules` -- so a rebuild that silently produced the upstream
- * reader would reach users. Anything but `clean` fails: after a rebuild that
- * reported success the binary must exist, so `missing` is a broken build, not an
- * absence to shrug at. This is the caller that needs the state to be a state and
- * not a boolean.
- */
+// Validate addon copied into packaged node_modules; runtime/relay gates inspect other artifacts. After successful rebuild, anything but clean (including missing) must fail.
 function assertWindowsProcessTreeAddonIsPatched() {
   if (
     rebuildPlatform !== 'win32' ||
@@ -258,20 +215,7 @@ function assertWindowsProcessTreeAddonIsPatched() {
   )
 }
 
-/**
- * The other half of the same problem, for the addon this rebuild just produced.
- *
- * The Electron probe below carries the marker check too, but it is skipped
- * whenever the Electron package binary is unusable -- and "covered by another
- * path" is not "this path checks". Reading the binary needs neither a loadable
- * Electron nor an executable target arch, so it runs here regardless.
- *
- * Absent is fatal on the host that will run this install: loadNativeModule
- * falls through to prebuilds/win32-<arch>, and the published prebuild predates
- * the denial, so the app would load it with nothing said. A cross-host rebuild
- * does not necessarily leave a win32 addon on this disk, and that must not fail
- * an install that was working.
- */
+// Inspect binary even if Electron probe is unavailable or target arch cannot execute. Same-host missing output falls back to unsafe prebuild and must fail; cross-host only warns.
 function assertNodePtyConptyDeniesMsysBreakaway() {
   if (rebuildPlatform !== 'win32' || !modulesToRebuild.includes('node-pty')) {
     return
@@ -284,12 +228,7 @@ function assertNodePtyConptyDeniesMsysBreakaway() {
   })
 }
 
-/**
- * Refuse to compile node-pty source that cannot yield the denial. Why before the
- * rebuild: the gate above would spend the compile and then advise "rebuild from
- * source" -- the step that just ran. Only the source is read; the addon is not
- * touched, so a locked binary cannot turn this into a spurious EPERM.
- */
+// Check source before compiling: stale source cannot produce denial and repeating rebuild cannot help. Avoid touching locked addon during source check.
 function assertNodePtyConptySourceDeniesMsysBreakaway() {
   if (rebuildPlatform !== 'win32' || !modulesToRebuild.includes('node-pty')) {
     return
@@ -368,9 +307,7 @@ function ensureElectronPackageInstalled() {
     return
   }
 
-  // Why: CI has observed Electron's postinstall exiting cleanly without
-  // writing path.txt. Electron 42's lazy require() would run install.js here,
-  // so inspect dist/ directly and keep using our strict partial-extract checks.
+  // Inspect dist directly: CI postinstall can omit path.txt, and lazy Electron 42 require would run install.js before strict partial-extract checks.
   console.log('[rebuild] Electron package binary is missing; installing Electron package binary.')
   try {
     runElectronPackageBinaryInstall()
@@ -571,8 +508,7 @@ function getPatchedNodePtyRebuildReason() {
     return null
   }
 
-  // Why: Orca patches node-pty's native Unix spawn path and Windows job-object
-  // exports; upstream prebuilds can load while missing those patches.
+  // Require patched native spawn/job ownership: loadable upstream prebuilds may lack Orca’s changes.
   const artifactPaths = nodePtyBuildArtifactPaths(
     resolve(projectDir, 'node_modules', 'node-pty'),
     rebuildPlatform
@@ -641,8 +577,8 @@ function loadNativeModule(moduleName) {
     return
   }
   if (moduleName === '@orca/windows-security') {
-    // Why: the package defers loading its .node addon until the first call.
-    projectRequire(moduleName).currentUserSid()
+    const security = projectRequire(moduleName)
+    if (!security.currentUserSid() || !security.hasNativeExport('isolatedSpawnBreaksAwayFromJob')) throw new Error('stale build without the newest export; rebuild it')
     return
   }
   if (moduleName === 'node-pty') {

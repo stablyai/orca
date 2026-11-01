@@ -1,6 +1,6 @@
-// Every agent the host registers for native chat starts as a native-chat worker, the same as a
-// chat opened any other way; an agent with no native chat still starts in a terminal.
+// Registered native-chat agents must start structured workers; agents without chat support retain terminal mode.
 
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it } from 'vitest'
 import { decideAgentLaunchMode } from '../../../agent-launch/agent-launch-mode'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -11,8 +11,7 @@ import {
 } from './orchestration-worker-start-mode'
 
 const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true,
-  nativeChatProviders: { grok: true, opencode: true, omp: true, pi: true, gemini: true }
+  nativeChatProviders: { ...EVERY_AGENT_CHAT, opencode2: true }
 } as const
 
 const REGISTERED_AGENTS = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(
@@ -54,6 +53,29 @@ describe('a worker for a registered native-chat agent', () => {
     })
   })
 
+  it('starts a terminal worker when the chat program Orca installs is missing here', async () => {
+    const mode = decideWorkerStartMode({
+      params: { agent: 'antigravity' },
+      settings: STRUCTURED_PREFERENCE
+    })
+    // A desktop chat tab can offer the install; a worker cannot, so only it asks for an installed one.
+    const host = {
+      getStructuredAgentSessionCreateSupport: async (
+        _worktree: string,
+        _agent: string,
+        options?: { requireInstalledChatProgram?: boolean }
+      ) =>
+        options?.requireInstalledChatProgram
+          ? { supported: false, reason: 'chat-program' as const }
+          : { supported: true }
+    }
+    expect(await resolveWorkerStartModeOnHost(host, mode, 'wt-1', 'antigravity')).toMatchObject({
+      mode: 'terminal',
+      preferred: 'structured',
+      reason: 'chat_runtime_not_installed'
+    })
+  })
+
   it('starts a terminal worker for an agent whose chat provider the user turned off', () => {
     expect(
       decideWorkerStartMode({
@@ -69,12 +91,12 @@ describe('a worker for a registered native-chat agent', () => {
     ).toMatchObject({ mode: 'terminal', reason: 'agent_without_structured_session' })
   })
 
-  it('starts a terminal agent while the setting is off, as Claude does', () => {
+  it('starts a terminal agent while it is set to CLI, as Claude does', () => {
     for (const agent of ['opencode', 'claude']) {
       expect(
         decideWorkerStartMode({
           params: { agent },
-          settings: { experimentalNativeChat: false }
+          settings: { nativeChatProviders: { [agent]: false } }
         })
       ).toMatchObject({ mode: 'terminal', preferred: 'terminal', reason: 'user_default' })
     }

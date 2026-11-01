@@ -1,4 +1,4 @@
-/** A host-side step that answered with something other than success, carrying what it said. */
+/** Positive host failure evidence, distinct from unanswered transport operations. */
 export class RelayHostAnsweredError extends Error {
   constructor(message: string) {
     super(message)

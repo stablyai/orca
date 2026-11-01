@@ -1,15 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { resolveAutomationListFocusRecovery } from './automation-list-focus-recovery'
 
-/**
- * Keeps keyboard focus inside the list when the row it was on disappears.
- *
- * The focused row has to be recorded as the user moves through the list, not
- * read when the change lands: by then the row is unmounted and the browser has
- * already dropped focus to `<body>`, which is exactly the state this repairs.
- * Focus is only moved when it was in this list and was actually lost — a user
- * who has tabbed away is left alone.
- */
+/** Remember focused rows before unmount drops focus to body; repair only actual loss from this list and leave users who tabbed away alone. */
 
 export const AUTOMATION_ROW_ID_ATTRIBUTE = 'data-automation-row-id'
 
@@ -41,8 +33,7 @@ export function useAutomationListFocusRecovery({
   const focusedRowKeyRef = useRef<string | null>(null)
   const previousRowKeysRef = useRef<readonly string[]>(rowKeys)
 
-  // Document-level: focus moving to the search field or any other control outside
-  // the list must erase the memory, and that event never reaches the container.
+  // Watch document focus so leaving the list clears its memory even though the container receives no event.
   useEffect(() => {
     const onFocusIn = (event: FocusEvent): void => {
       const container = containerRef.current

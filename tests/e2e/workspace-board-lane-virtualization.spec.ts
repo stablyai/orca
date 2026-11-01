@@ -6,12 +6,7 @@ const MARQUEE_WORKSPACE_COUNT = 102
 const MANY_LANE_COUNT = 21
 const CARDS_PER_LANE = 100
 
-/**
- * Why: the board used to mount every workspace card in every lane in one
- * commit, which blocked the sheet open for seconds on a large workspace set.
- * These assert the lane renders a window instead, and that each rendered card
- * still carries its true lane index so drop targeting stays correct.
- */
+// Window lane cards instead of mounting all in one blocking commit; retain true lane indices for drop targeting.
 test.describe('Workspace board lane virtualization', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
@@ -70,8 +65,7 @@ test.describe('Workspace board lane virtualization', () => {
     await orcaPage.getByRole('button', { name: 'Workspace board' }).click()
 
     const cards = orcaPage.locator('[data-workspace-board-card-id]')
-    // Why: an empty window would also satisfy "fewer than seeded"; the point of
-    // the change is a filled window, not a blank board.
+    // Require a filled window so an empty board cannot pass the upper-count bound.
     await expect.poll(() => cards.count(), { timeout: 15_000 }).toBeGreaterThan(3)
     expect(await cards.count()).toBeLessThan(SEEDED_WORKSPACE_COUNT / 2)
 
@@ -418,20 +412,14 @@ test.describe('Workspace board lane virtualization', () => {
     await orcaPage.mouse.down()
     await orcaPage.mouse.move(box.x + box.width - 18, box.y + 80, { steps: 4 })
 
-    // Why: proves the board accepted the gesture. Without it a rejected
-    // pointerdown only shows up 15s later as "0 cards previewed", which reads as
-    // a virtualization bug rather than a marquee that never started.
+    // Require gesture acceptance up front so rejected pointerdown cannot look like a delayed virtualization failure.
     await expect(orcaPage.locator('[data-workspace-board-selection-rect]')).toBeVisible()
     await expect
       .poll(() => lane.locator('[data-workspace-board-card-area-selected="true"]').count(), {
         timeout: 15_000
       })
       .toBeGreaterThan(0)
-    // Why: a measured card is much taller than the lane's row estimate, so each
-    // jump to the bottom re-measures the window and grows the spacer past the
-    // scrollTop the jump just landed on. A fixed pass budget commits the marquee
-    // mid-growth on a loaded machine — short of the last cards — so jump until
-    // the virtualizer stops moving the bottom instead.
+    // Jump until virtualizer bottom stabilizes: measured cards exceed estimates, so fixed passes can end mid-growth before final cards.
     const laneScrollSettle = await laneScroll.evaluate(async (element) => {
       let settledPasses = 0
       let passes = 0
@@ -459,8 +447,7 @@ test.describe('Workspace board lane virtualization', () => {
     await orcaPage.mouse.move(box.x + box.width - 18, box.y + box.height - 12)
     await orcaPage.mouse.up()
 
-    // Why: assert the badge's text, not its presence — a marquee that stopped
-    // short reports the count it did commit instead of a bare locator timeout.
+    // Assert count text so a short marquee reports its committed count instead of locator timeout.
     await expect(orcaPage.getByText(/^\d+ selected$/)).toHaveText(
       `${MARQUEE_WORKSPACE_COUNT} selected`
     )

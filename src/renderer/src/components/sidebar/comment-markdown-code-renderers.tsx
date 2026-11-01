@@ -10,7 +10,7 @@ import {
 const diagramClassName =
   'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]'
 
-/** The line the rendered top-level block starts on in the whole document; its nodes' lines are local. */
+/** Top-level block nodes use local lines; retain their whole-document start offset. */
 export const CommentMarkdownBlockLineContext = createContext(1)
 
 export function CommentMarkdownDocumentCode({
@@ -52,7 +52,7 @@ export function CommentMarkdownDocumentPre({
   const language = React.isValidElement<{ className?: string; children?: React.ReactNode }>(child)
     ? child.props.className?.match(/(?:^|\s)language-([^\s]+)/)?.[1]
     : undefined
-  // An element, not a call, so the renderer's hooks stay out of this early-returning component.
+  // Render as a component so its hooks cannot join this early-returning component’s hook order.
   const CodeBlock = renderCodeBlock
   const code = CodeBlock ? (
     <CodeBlock

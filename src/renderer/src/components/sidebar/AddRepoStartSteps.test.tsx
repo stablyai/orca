@@ -152,7 +152,7 @@ describe('AddRepoLocalStartStep', () => {
     const remote = secondaryActions.find((action) => action.kind === 'remote')
 
     expect(secondaryActions.map((action) => action.kind)).toEqual(['clone', 'remote', 'create'])
-    // Why: the server refuses repo.addRemote, so the row must never open the step that calls it.
+    // Servers refuse repo.addRemote; this action must use their own SSH-host flow.
     expect(remote).toMatchObject({
       title: "Project on this server's SSH host",
       description:
@@ -288,7 +288,6 @@ describe('AddRepoLocalStartStep', () => {
       )
     })
 
-    // ArrowDown from Browse moves focus — and the ⏎ chip — to the first secondary action.
     const firstSecondary = findButton(container, 'Clone from URL')
     expect(document.activeElement).toBe(firstSecondary)
     expect(firstSecondary.textContent).toContain('⏎')

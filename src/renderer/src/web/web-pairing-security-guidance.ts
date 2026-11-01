@@ -3,8 +3,7 @@ import type { WebDeviceKeySupport } from './web-device-key'
 import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
 import { MIGRATED_DEVICE_TOKEN_PREFIX } from './web-runtime-credential-source'
 
-// Why plain-http pages get none: they keep a reusable pairing code exactly as before device keys,
-// which is the expected setup for LAN and Tailscale access, so there is nothing to act on.
+// Plain HTTP retains reusable pairing codes for LAN/Tailscale access; guidance applies only to tab-limited secure browsers.
 function needsGuidance(support: WebDeviceKeySupport | null): support is 'session-no-ed25519' {
   return support === 'session-no-ed25519'
 }

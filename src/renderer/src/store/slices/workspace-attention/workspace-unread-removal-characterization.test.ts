@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { makeFolderWorkspace } from '../worktrees-slice-test-fixtures'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import {
@@ -42,7 +42,6 @@ vi.mock('../worktrees/metadata/worktree-meta-persist', async (importOriginal) =>
   return { ...actual, persistWorktreeMeta: vi.fn(async () => undefined) }
 })
 
-// Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')

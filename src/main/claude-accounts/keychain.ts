@@ -11,7 +11,7 @@ export async function readActiveClaudeKeychainCredentialsStrict(
   if (!configDir) {
     return readKeychainPassword(claudeKeychainService(), getKeychainUser())
   }
-  // Keep both lexical and canonical profile aliases scoped; never try System Default.
+  // Profile aliases must never fall back to System default credentials.
   for (const dir of claudeConfigDirKeychainAliases(configDir)) {
     const credentials = await readKeychainPassword(claudeKeychainService(dir), getKeychainUser())
     if (credentials) {
@@ -25,8 +25,7 @@ const KEYCHAIN_ACCOUNT_PATTERN = /^[a-zA-Z0-9._-]+$/
 const CLAUDE_CODE_FALLBACK_USER = 'claude-code-user'
 
 function getKeychainUser(): string {
-  // Why: Claude Code 2.1+ rejects $USER outside [a-zA-Z0-9._-] (SSO names like
-  // first@example.com) and stores the item under claude-code-user (#12857).
+  // Match Claude 2.1+ fallback naming for invalid usernames, including SSO email addresses.
   let user: string
   try {
     user = process.env.USER || process.env.USERNAME || userInfo().username
@@ -40,8 +39,7 @@ export function claudeKeychainService(configDir?: string): string {
   if (!configDir) {
     return ACTIVE_CLAUDE_SERVICE
   }
-  // Why: Claude Code 2.1+ scopes macOS Keychain credentials by config dir
-  // using the first 8 hex chars of sha256(NFC(CLAUDE_CONFIG_DIR)).
+  // Match Claude 2.1+ config-scoped Keychain naming.
   const suffix = createHash('sha256').update(configDir.normalize('NFC')).digest('hex').slice(0, 8)
   return `${ACTIVE_CLAUDE_SERVICE}-${suffix}`
 }
@@ -92,7 +90,7 @@ export function claudeConfigDirKeychainAliases(configDir: string): string[] {
   return aliases
 }
 
-/** Every spelling of a folder Claude may have hashed into its Keychain item name (superset U/profiles.ts). */
+/** Include literal home-variable spellings Claude may have hashed into Keychain names. */
 export function claudeConfigDirSpellings(configDir: string, userHome: string): string[] {
   const spellings = new Set<string>()
   for (const dir of claudeConfigDirKeychainAliases(configDir)) {

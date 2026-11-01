@@ -4,10 +4,7 @@ import { splitPaneFirstSize, splitPaneInMain } from './terminal-pane-split-in-ma
 import { runTerminalPaneBootstrapSplits } from './terminal-pane-mount-bootstrap'
 import type { PtyConnectionDeps } from './pty-connection-types'
 
-/**
- * A tab's startup split in a layout-owner build: main writes it and starts its command; main's
- * frame draws the pane. A paired server's tab splits in the window as today.
- */
+/** Main writes/starts startup splits and frames draw them; paired tabs retain window-side splitting. */
 export function runBootstrapSplitInMain(args: {
   manager: PaneManager
   worktreeId: string

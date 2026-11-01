@@ -52,7 +52,7 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   notifyInstalledAgentSkillsChanged: mocks.notifyChanged
 }))
 
-// Radix Dialog internals are exercised in Electron QA; here the content matters.
+// Stub Radix to test dialog content here; Electron QA covers its internals.
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children?: ReactNode }) =>
     open ? <div data-dialog-open="true">{children}</div> : null,

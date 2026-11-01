@@ -4,7 +4,7 @@ import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function preparePtyIpcQoderCommand(ctx: PtyIpcSpawnState): Promise<void> {
-  // A pane's own agent launch was resolved by its plan, for the runtime its PTY uses.
+  // Adopted owners and pane launch plans already determine their own runtime command.
   if (ctx.preAdoptedStablePane || ctx.paneAgentLaunch || ctx.args.launchAgent !== 'qoder') {
     return
   }

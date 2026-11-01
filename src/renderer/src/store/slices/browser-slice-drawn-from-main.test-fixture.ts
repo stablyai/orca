@@ -31,11 +31,7 @@ const DRAWN_STORE_SEED: Partial<AppState> = {
   ...onePaneGroup('wt-1')
 }
 
-/**
- * The partial store with main drawing its tabs (switch-on): seeded first, since main loads the
- * layout the store holds now. The test file installs the layout-apply transport (see
- * tabs-drawn-from-main.test-fixture.ts); main closes when the test finishes.
- */
+/** Seed before main loads layout, then install tabs-drawn-from-main.test-fixture.ts transport; main draws the partial store’s tabs and closes at test end. */
 export async function createTestStoreDrawnFromMain(
   seed?: Partial<AppState>
 ): Promise<{ store: BrowserTestStore; main: TabsDrawnFromMain }> {

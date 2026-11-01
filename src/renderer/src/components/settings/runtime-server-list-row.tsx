@@ -63,14 +63,9 @@ type ServerListRowProps = {
   /** DropdownMenu items; null keeps the slot so columns stay aligned. */
   menuItems?: React.ReactNode
   menuDisabled?: boolean
-  /** Shown below the row while present: inline details, confirmations, pending operations. */
   footer?: React.ReactNode
 }
 
-/**
- * One saved server: name and one meta line on the left; fixed-width status, primary action and
- * ⋯ slots on the right so rows line up whatever their state.
- */
 export function ServerListRow({
   sectionId,
   name,
@@ -148,7 +143,6 @@ export function ServerListRow({
   )
 }
 
-/** The inline "Details" toggle at the end of a meta line. */
 export function ServerRowDetailsToggle({
   expanded,
   onToggle

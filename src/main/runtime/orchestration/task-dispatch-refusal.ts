@@ -9,7 +9,7 @@ import {
   type InjectRejectionReason
 } from '../../../shared/orchestration-dispatch-refusal-contract'
 
-// Why: each site keeps the exact message it published before; only the code and data are shared.
+// Callers retain their published wording while code and structured error data are shared.
 
 export function taskNotFoundError(
   message: string,

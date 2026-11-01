@@ -1,8 +1,4 @@
-/**
- * The `terminal-restore-hints` blob: each moved pane's last working directory on the source, so
- * the destination reopens it there instead of at the worktree root. One JSON document per
- * migration; a later format is a new capability, never a silent reinterpretation of this one.
- */
+/** One terminal-restore-hints JSON blob restores moved panes’ source cwd. Format changes require a new capability. */
 import { z } from 'zod'
 import { MAX_PANE_KEY_LEN } from '../agent-hook-listener/listener-limits'
 import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from './orcad-migration-blob-transfer'
@@ -84,7 +80,6 @@ export function parseOrcadMigrationTerminalRestoreHintsDocument(
   }
 }
 
-/** The blob's UTF-8 JSON text, size-checked before it is parsed. */
 export function parseOrcadMigrationTerminalRestoreHintsText(
   text: string
 ): OrcadMigrationTerminalRestoreHintsDocument {

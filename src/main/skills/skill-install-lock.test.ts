@@ -43,8 +43,7 @@ describe('skill install lock', () => {
       JSON.stringify({ token: 'dead-owner', pid: 2_147_483_647, createdAt: Date.now() })
     )
 
-    // Why: reclaiming costs a fsync plus one 50ms retry, so a 100ms budget expires on a
-    // loaded CI runner and surfaces the legacy file's rename ENOTDIR instead of reclaiming.
+    // Reclaim needs fsync plus a 50ms retry; allow CI load rather than timing out on legacy ENOTDIR.
     const release = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 5_000 })
     expect((await readPublishedOwner(lockPath)).token).not.toBe('dead-owner')
     await release()

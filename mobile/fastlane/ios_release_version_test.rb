@@ -46,8 +46,7 @@ class IosReleaseVersionTest < Minitest::Test
     assert_equal("Cannot bump non-semver mobile version '0.0'", error.message)
   end
 
-  # The 0.0.34 regression: 0.0.35 shipped, so every version at or below it is
-  # closed even though 0.0.34 itself never got an App Store record.
+  # 0.0.34 regression: shipping 0.0.35 closed older versions even without an App Store record.
   def test_versions_at_or_below_the_highest_closed_version_are_closed
     assert(IosReleaseVersion.closed_train?("0.0.34", "0.0.35"))
     assert(IosReleaseVersion.closed_train?("0.0.35", "0.0.35"))

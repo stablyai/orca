@@ -3,17 +3,17 @@ import {
   forgetRuntimeWatcherProcessRoot,
   resetRuntimeWatcherProcessForTest,
   subscribeViaRuntimeWatcherProcess
-} from '../ipc/parcel-watcher-process'
-import type { WatcherProcessEvent } from '../ipc/parcel-watcher-process-protocol'
-import type { WatcherProcessSubscription } from '../ipc/parcel-watcher-process-subscription'
+} from '../ipc/filesystem/watcher-process/parcel-watcher-process'
+import type { WatcherProcessEvent } from '../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
+import type { WatcherProcessSubscription } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
 import {
   isWatcherProcessFailure,
   type WatcherProcessFailure
-} from '../ipc/parcel-watcher-process-failure'
+} from '../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import {
   WATCHER_IGNORE_DIRS,
   buildParcelWatcherIgnoreOptions
-} from '../ipc/filesystem-watcher-ignore'
+} from '../ipc/filesystem/watchers/filesystem-watcher-ignore'
 import { createRuntimeRootOwnershipReleaser } from './runtime-root-watch-ownership'
 import { closeRuntimeRootWatch } from './runtime-root-watch-teardown'
 import {
@@ -42,8 +42,7 @@ type RuntimeRootWatch = {
   terminalReleaseError: WatcherProcessFailure | null
 }
 
-// Why: paired clients watching the same worktree share one native subscription.
-// Different roots are assigned across the bounded crash-isolated child pool.
+// Share each root across clients; distribute roots over the crash-isolated child pool.
 const runtimeRootWatches = new Map<string, RuntimeRootWatch>()
 const {
   release: releaseRuntimeRootOwnership,
@@ -139,8 +138,7 @@ function subscribeRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
       onInterruption: emitOverflow,
       onOverflow: emitOverflow,
       onTerminalError: (error) => recoverRuntimeRootWatch(root, generation, error),
-      // Why: the transport bounds initial setup at 15 seconds, but a later
-      // crash-resubscribe has no request deadline and must not freeze its shard forever.
+      // Crash-resubscribe has no transport deadline; bound it to avoid freezing the shard.
       subscribeTimeoutMs: RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
       signal: root.abortController.signal
     }
@@ -246,34 +244,28 @@ export async function closeFileExplorerWatcherInWatcherProcess(rootPath: string)
   if (!root) {
     return
   }
-  // Why: destructive cleanup owns every same-root subscriber, including a
-  // setup that failed before it could publish an unsubscribe callback.
+  // Cleanup includes setup attempts that failed before publishing an unsubscribe callback.
   root.subscribers.clear()
   await closeRuntimeRootWatchOnce(root)
 }
 
-/**
- * Start a recursive runtime-file watch in the crash-isolated process pool.
- * The child owns crawl, event collapse, and stat metadata so neither native
- * faults nor event storms can consume the serve process's libuv pool.
- */
+/** Children own crawl/collapse/stat work so faults and event storms cannot exhaust the serve process's libuv pool. */
 export async function watchFileExplorerInWatcherProcess(
   rootPath: string,
   callback: (events: FsChangeEvent[]) => void,
   onTerminalError: (error: Error) => void = () => undefined,
   signal?: AbortSignal
 ): Promise<() => Promise<void>> {
+  if (signal?.aborted) {
+    throw createRuntimeRootAbortError()
+  }
   const existingRoot = runtimeRootWatches.get(rootPath)
   if (existingRoot?.closed) {
     if (!existingRoot.closePromise) {
       throw existingRoot.terminalReleaseError ?? new Error('file watcher closed during setup')
     }
-    // Why: a replacement cannot share a native root whose prior generation
-    // is still closing; join its exact release before creating the next owner.
+    // Join the prior generation's physical release before reusing its native root.
     await existingRoot.closePromise
-    if (signal?.aborted) {
-      throw createRuntimeRootAbortError()
-    }
     return watchFileExplorerInWatcherProcess(rootPath, callback, onTerminalError, signal)
   }
   const root = existingRoot ?? createRuntimeRootWatch(rootPath)
@@ -282,8 +274,7 @@ export async function watchFileExplorerInWatcherProcess(
   try {
     await waitForRuntimeRootStart(root, subscriber, signal)
   } catch (error) {
-    // Why: paired unwatch cannot acknowledge until native cancellation or
-    // physical exit releases this root for an immediate replacement watch.
+    // Unwatch must await native cancellation/exit so an immediate replacement can own the root.
     await releaseRuntimeRootWatch(root, subscriber)
     throw error
   }

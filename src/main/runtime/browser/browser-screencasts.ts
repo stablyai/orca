@@ -1,4 +1,3 @@
-import { settleBrowserDialogOnLiveScreencast } from '../browser-dialog-settlement'
 import type { BrowserScreencastResult } from '../../../shared/runtime-types'
 import { BrowserError } from '../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
@@ -89,10 +88,10 @@ export class RuntimeBrowserScreencasts {
         viewportOwnerSubscriptionId: null,
         appliedBudget: budget
       }
-      // Why: guest frames come from the window's compositor, which a throttled hidden window stops.
+      // Hidden host compositors stop producing guest frames when throttled.
       const win = this.host.getAvailableAuthoritativeWindow()
       const releaseThrottle = win ? rendererPublicationThrottle.acquire(win.webContents) : () => {}
-      // Why: on the active tab the guest is the widget a cover hides, and its attach-time unthrottle can predate it.
+      // Active-tab covers hide the guest widget independently of the host.
       const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       const started = startBrowserScreencast(guest, {
         format: params.format,
@@ -101,14 +100,12 @@ export class RuntimeBrowserScreencasts {
         onFrame: (bytes) => {
           const ghosts: string[] = []
           for (const [subscriptionId, subscriber] of pendingRecord.subscribers) {
-            // A slow viewer drops this frame without stalling every other viewer.
             deliverScreencastSubscriberFrame(subscriber, bytes)
             if (screencastSubscriberIsGhost(subscriber.delivery)) {
               ghosts.push(subscriptionId)
             }
           }
-          // Evicting after the fan-out keeps a teardown that stops the session from cutting the
-          // remaining viewers out of this frame.
+          // Finish fan-out before eviction can tear down the shared session.
           for (const subscriptionId of ghosts) {
             if (pendingRecord.session) {
               this.leaveScreencastSubscriber(pendingRecord, subscriptionId, pendingRecord.session)
@@ -125,8 +122,7 @@ export class RuntimeBrowserScreencasts {
           for (const subscriber of pendingRecord.subscribers.values()) {
             subscriber.emit?.({ type: 'error', message })
           }
-          // Why: every stream error is terminal; marking it stopping makes a newcomer start a fresh
-          // stream instead of joining this one and waiting on frames that will never come.
+          // Terminal errors must force newcomers onto a fresh stream.
           if (pendingRecord.session) {
             pendingRecord.stopping = true
             pendingRecord.session.stop()
@@ -167,8 +163,7 @@ export class RuntimeBrowserScreencasts {
       pairedDeviceId: stream.pairedDeviceId,
       delivery: INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY
     })
-    // Why: normalizeScreencastViewport keeps undefined dimensions, so a sizeless
-    // subscriber taking ownership would clear the emulation for every viewer.
+    // A sizeless viewport owner would clear emulation for every viewer.
     if (hasScreencastViewportSize(viewport)) {
       active.viewportOwnerSubscriptionId = subscriptionId
     }
@@ -180,34 +175,38 @@ export class RuntimeBrowserScreencasts {
       resolveSubscriberDone()
       throw error
     }
-    // Why: a device that force-quit and reconnected arrives on a fresh socket, so the
-    // connection-keyed replacement upstream cannot see its old subscription. Run this after the
-    // joiner is registered — the page then never empties mid-replacement and stops the stream.
-    if (stream.pairedDeviceId !== undefined) {
-      // Deleting the entry being visited is well defined for a Map, and no other entry is touched.
+    try {
+      if (!createdPageStream) {
+        if (active.viewportOwnerSubscriptionId === subscriptionId) {
+          await session.updateViewport(viewport)
+        }
+        await applySharedScreencastFrameBudget(active, session)
+      }
+    } catch (error) {
+      this.leaveScreencastSubscriber(active, subscriptionId, session)
+      throw error
+    }
+    // Retire a reconnected device's old socket only after its replacement successfully joins.
+    if (stream.pairedDeviceId !== undefined && active.subscribers.has(subscriptionId)) {
       for (const [candidateId, candidate] of active.subscribers) {
-        if (candidateId !== subscriptionId && candidate.pairedDeviceId === stream.pairedDeviceId) {
+        if (candidateId === subscriptionId) {
+          break
+        }
+        if (candidate.pairedDeviceId === stream.pairedDeviceId) {
           this.leaveScreencastSubscriber(active, candidateId, session)
         }
       }
     }
-    if (!createdPageStream) {
-      if (active.viewportOwnerSubscriptionId === subscriptionId) {
-        await session.updateViewport(viewport)
-      }
-      await applySharedScreencastFrameBudget(active, session)
-    }
     return {
       subscriptionId,
-      // Why: the frame the pre-ready gate refused goes out with ready, not a retry tick later.
+      // Flush with ready instead of waiting for the retry tick.
       flushPendingFrame: () => {
         const subscriber = active.subscribers.get(subscriptionId)
         const bytes = subscriber?.pendingFrame
         if (!subscriber || !bytes) {
           return
         }
-        // The replay is this subscriber's first chance to reach its socket, so it is also where
-        // an eviction-eligible delivery history starts.
+        // Replayed delivery is the first evidence that ghost eviction may use.
         deliverScreencastSubscriberFrame(subscriber, bytes)
       },
       session: {
@@ -225,7 +224,6 @@ export class RuntimeBrowserScreencasts {
     }
   }
 
-  // Explicit stops, ghost eviction and reconnect replacement must share the same teardown.
   private leaveScreencastSubscriber(
     active: Pick<
       ActiveBrowserScreencastPage,
@@ -255,21 +253,7 @@ export class RuntimeBrowserScreencasts {
       session.stop()
       return
     }
-    // Why: a departed subscriber's caps would otherwise pin the shared stream for
-    // the rest of its life, long after the client that asked for them is gone.
+    // Departed viewers must not pin the shared frame budget.
     void applySharedScreencastFrameBudget(active, session).catch(() => {})
-  }
-
-  settleDialog(
-    browserPageId: string | undefined,
-    accept: boolean,
-    promptText?: string
-  ): Promise<boolean> {
-    return settleBrowserDialogOnLiveScreencast(
-      this.activeScreencastsByPageId,
-      browserPageId,
-      accept,
-      promptText
-    )
   }
 }

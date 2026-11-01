@@ -1,5 +1,4 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { createTestStore, makeLayout, makeTab } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
@@ -56,8 +55,7 @@ export function registerReposStaleFetchTests(): void {
   beforeEach(() => {
     clearRuntimeCompatibilityCacheForTests()
     reposList.mockReset()
-    // Only repos.list is exercised here — the missing projects API makes
-    // fetchProjectHostSetupCompatibility fall back to deriving from repos.
+    // Missing projects API forces compatibility fallback to repos; only repos.list is exercised.
     vi.stubGlobal('window', {
       api: {
         repos: {
@@ -68,9 +66,7 @@ export function registerReposStaleFetchTests(): void {
     })
   })
 
-  // A repos:changed burst (deleting a project group with contained projects) starts
-  // overlapping fetchRepos calls; the slice must keep the latest and drop superseded
-  // results so removed projects don't reappear until restart (#7020).
+  // Overlapping repos:changed fetches must drop superseded results or removed projects reappear (#7020).
   describe('repos slice stale-fetch race (#7020)', () => {
     it('drops a stale repos fetch that resolves after a newer one', async () => {
       const store = createTestStore()
@@ -78,9 +74,7 @@ export function registerReposStaleFetchTests(): void {
       const stalePromise = new Promise<Repo[]>((resolve) => {
         resolveStale = resolve
       })
-      // Why: mirrors the delete-project-group burst — the first fetch reads
-      // pre-removal state (both repos) but resolves LAST; the second reads
-      // post-removal state (remoteRepo gone) and resolves first.
+      // Simulate group deletion: pre-removal fetch resolves after post-removal fetch.
       reposList.mockReturnValueOnce(stalePromise).mockResolvedValueOnce([localRepo])
 
       const stale = store.getState().fetchRepos(catalogOwner(store))
@@ -90,7 +84,6 @@ export function registerReposStaleFetchTests(): void {
 
       resolveStale([localRepo, remoteRepo])
       await stale
-      // The superseded fetch must not resurrect the removed repo.
       expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo'])
     })
 
@@ -100,10 +93,7 @@ export function registerReposStaleFetchTests(): void {
       const stalePromise = new Promise<Repo[]>((resolve) => {
         resolveStale = resolve
       })
-      // The stale fetch reads pre-removal state and resolves LAST; the superseding
-      // fetch reads post-removal state but REJECTS. Because the generation is
-      // claimed synchronously before the await, the failed fetch still supersedes
-      // the stale one, which must be dropped rather than resurrect remoteRepo.
+      // Even a rejected newer fetch claims the generation synchronously, so late pre-removal results must be dropped.
       reposList.mockReturnValueOnce(stalePromise).mockRejectedValueOnce(new Error('boom'))
 
       const stale = store.getState().fetchRepos(catalogOwner(store))
@@ -112,25 +102,6 @@ export function registerReposStaleFetchTests(): void {
       resolveStale([localRepo, remoteRepo])
       await stale
       expect(store.getState().repos).toEqual([])
-    })
-
-    it('reapplies an in-flight catalog after the repo is removed', async () => {
-      const { promise: catalog, resolve: resolveCatalog } = Promise.withResolvers<Repo[]>()
-      reposList.mockReturnValueOnce(catalog)
-      const store = createTestStore()
-      store.setState({ repos: [localRepo] })
-
-      const pending = store.getState().fetchRepos(catalogOwner(store))
-      await store
-        .getState()
-        .removeProject(localRepo.id, { hostId: getRepoExecutionHostId(localRepo) })
-      expect(store.getState().repos).toEqual([])
-
-      resolveCatalog([localRepo])
-      await pending
-
-      // Current contract: removal does not claim a catalog generation, so the latest fetch can resurrect it.
-      expect(store.getState().repos).toEqual([{ ...localRepo, executionHostId: 'local' }])
     })
 
     it('waits for the superseding catalog fetch before startup hydration', async () => {

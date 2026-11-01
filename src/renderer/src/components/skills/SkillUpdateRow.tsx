@@ -20,7 +20,6 @@ export type SkillReplaceToggle = {
   onReplaceChange: (path: string, replace: boolean) => void
 }
 
-/** A location Update leaves alone, or one the user chose to Replace. */
 function ChoiceLine({
   location,
   reason,
@@ -76,10 +75,7 @@ function LocationTable({
   )
 }
 
-/**
- * One skill in the update dialog: what Update does to it, the locations it leaves for the
- * user and, on request, every folder it planned.
- */
+/** Show planned changes, locations left for the user and optional full folder details. */
 export function SkillUpdateRow({
   skill,
   phase,

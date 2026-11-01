@@ -19,8 +19,7 @@ function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
   ) {
     return true
   }
-  // Why: desktop rejects stale lineage when a path is reused by a new workspace
-  // instance; mobile needs the same guard before nesting parent/child rows.
+  // Match desktop’s instance guard so path reuse cannot attach a new workspace to stale lineage.
   return (
     worktree.worktreeInstanceId === worktree.lineageWorktreeInstanceId &&
     parent.worktreeInstanceId === worktree.parentWorktreeInstanceId

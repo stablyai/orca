@@ -81,7 +81,6 @@ describe('probeCreateEventRepoFacts', () => {
 
   it('does not count a spare whose admin directory Git has not written yet', async () => {
     await registerWorktree('feature-a')
-    // A spare that has only just started has no entry under .git/worktrees, so nothing to drop.
     expect(await probeCreateEventRepoFacts(repo, 'linux')).toMatchObject({ worktreeCount: 2 })
   })
 

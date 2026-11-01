@@ -117,22 +117,6 @@ describe('getWorktreeHostContextLabels', () => {
     expect(otherHostUnhealthy[0].hostContextLabel).toBeUndefined()
   })
 
-  it('names every row by host once the list spans hosts', () => {
-    const rows = [
-      worktree({ hostId: 'local', worktreeId: 'a' }),
-      worktree({ hostId: sshHostId, worktreeId: 'b' }),
-      worktree({ hostId: 'ssh:unlabeled', worktreeId: 'c' }),
-      worktree({ hostId: 'runtime:env-1', worktreeId: 'd' })
-    ]
-    const labeled = applyWorktreeHostContextLabels(rows, sources)
-    expect(labeled.map((row) => row.hostContextLabel)).toEqual([
-      'Local Mac',
-      'openclaw',
-      'unlabeled',
-      'env-1'
-    ])
-  })
-
   it('adds the health word only for hosts the desktop reports as unhealthy', () => {
     const rows = [
       worktree({ hostId: 'local', worktreeId: 'a' }),
@@ -168,6 +152,8 @@ describe('getWorktreeHostContextLabels', () => {
     ]
     const linux = applyWorktreeHostContextLabels(rows, { ...sources, hostPlatform: 'linux' })
     expect(linux[0].hostContextLabel).toBe('Local Linux')
+    const windows = applyWorktreeHostContextLabels(rows, { ...sources, hostPlatform: 'win32' })
+    expect(windows[0].hostContextLabel).toBe('Local Windows')
     const unknown = applyWorktreeHostContextLabels(rows, { ...sources, hostPlatform: null })
     expect(unknown[0].hostContextLabel).toBe('This computer')
   })

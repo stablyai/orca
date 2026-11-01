@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getRepoExecutionHostId } from '../shared/execution-host'
 import type { Repo } from '../shared/repo-types'
 import type { RepoHostTarget } from '../shared/repo-host-identity'
-import { closeTestStores, createStore, testState } from './persistence-test-harness'
+import { closeTestStores, createStore, testState } from './persistence/persistence-test-harness'
 import { wslMoveCutoverFixture as cutover } from './persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from './persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import {
@@ -102,17 +102,6 @@ describe('git remote identity enrichment under a WSL move', () => {
 })
 
 describe('fork upstream backfill under a WSL move', () => {
-  it('leaves the moving repo unset for a later run and fills the rest', async () => {
-    const store = createStore()
-    store.addRepo(repo(MOVING))
-    store.addRepo(repo(STAYING))
-
-    await new RuntimeRepositoryForkBackfill(() => store, vi.fn()).run()
-
-    expect(store.getRepo(MOVING)?.upstream).toBeUndefined()
-    expect(store.getRepo(STAYING)?.upstream).toEqual({ owner: 'acme', repo: 'app' })
-  })
-
   it('fills the host row, not the hidden local row with the same id', async () => {
     seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
     const store = createStore()

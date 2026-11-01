@@ -1,8 +1,4 @@
-/**
- * Phone paired with a desktop that is itself a client of an `orca serve` host: the phone reaches
- * the server's workspaces through the desktop by naming them with `executionHost: runtime:<env>`.
- * The desktop relays as the phone's own delegated device on the server.
- */
+// Relay phone calls through its paired desktop using executionHost:runtime:<env>, authenticated as the phone’s delegated server device.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -173,7 +169,6 @@ test('phone paired with a desktop lists, opens and types into a workspace on its
       path: testRepoPath,
       kind: 'git'
     })
-    // The desktop window shows the server's workspace, and names its host.
     let serverHostId = ''
     await expect
       .poll(
@@ -221,7 +216,6 @@ test('phone paired with a desktop lists, opens and types into a workspace on its
     expect(serverRow, 'the phone lists the server workspace through the desktop').toBeDefined()
     expect(new Set(listed!.worktrees.map((row) => row.hostId))).toEqual(new Set([serverHostId]))
 
-    // Files and Source Control read the server's workspace there, and never on the desktop.
     const readDir = (worktreeId: string) => ({
       method: 'files.readDir',
       params: { worktree: `id:${worktreeId}`, relativePath: '' }
@@ -275,8 +269,7 @@ test('phone paired with a desktop lists, opens and types into a workspace on its
 
     await host.restartServeProcess({
       betweenProcesses: async () => {
-        // The server is down: the desktop reports it reconnecting and not relaying, which the phone
-        // shows as connecting; its workspace stays listed from its last rows.
+        // While the server is down, retain cached workspace rows and report reconnecting without relay.
         await expect
           .poll(
             async () => {
@@ -304,7 +297,6 @@ test('phone paired with a desktop lists, opens and types into a workspace on its
         }
       }
     })
-    // Back up: the desktop relays to it again, and the same phone socket reaches it.
     await expect
       .poll(async () => (await listedHost(socket, serverHostId))?.relay, {
         timeout: 90_000,

@@ -1,7 +1,5 @@
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionItemAppendOptions,
@@ -13,8 +11,7 @@ import type { StructuredAgentSessionSinkQueue } from './structured-agent-session
 
 type ResolvedItem = { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
 
-/** Resolve an item against the journal it lands in, at its own place in that journal's write
- *  queue, so what the resolver reads is every write issued before it and none after. */
+/** Resolve at execution in the journal queue, seeing prior writes and no later ones. */
 export function createStructuredAgentSessionResolvedAppend(
   queue: StructuredAgentSessionSinkQueue
 ): Required<

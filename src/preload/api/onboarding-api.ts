@@ -1,16 +1,16 @@
-import type { NativeChatUpgradeTipVariant } from '../../shared/native-chat-upgrade-tip-audience'
+import type { ChatUiLaunchTipVariant } from '../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { OnboardingState } from '../../shared/onboarding-state-types'
 
 export type OnboardingApi = {
   get: () => Promise<OnboardingState>
-  // Why: main merges the checklist field-by-field, so a partial checklist is fine.
+  // Main merges checklist fields individually.
   update: (
     updates: Partial<Omit<OnboardingState, 'checklist'>> & {
       checklist?: Partial<OnboardingState['checklist']>
     }
   ) => Promise<OnboardingState>
-  /** Read-only: main decides the audience once, from the profile as saved before the chat upgrade. */
-  getNativeChatUpgradeTipVariant: () => Promise<NativeChatUpgradeTipVariant>
+  /** Fixed from the profile saved before Chat UI left Experimental. */
+  getChatUiLaunchTipVariant: () => Promise<ChatUiLaunchTipVariant>
 }
 
 export type StarNagApi = {

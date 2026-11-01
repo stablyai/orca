@@ -9,16 +9,13 @@ import {
   type OrcadMigrationSourceScope
 } from './orcad-source-scope'
 
-/**
- * Saved rows the managed server cannot hold and that are no one's live work, removed from a copy
- * of one partition before export. The profile itself keeps them, so a downgrade still has them.
- */
+/** Filter an export copy; retain unsupported rows in the source profile for downgrade. */
 export function withoutLeftBehindSessionRows(
   session: WorkspaceSessionState,
   scope: OrcadMigrationSourceScope,
-  /** "Move anyway": also every clean host-bound file, and tabs another host runs. */
+  /** "Move anyway" also excludes clean host-bound files and foreign-host tabs. */
   leaveBehind = false,
-  /** Drafts too: only where a retained copy outlives the move (the host's own partition). */
+  /** Allow drafts only where a retained host-partition copy survives the move. */
   options: { leaveDrafts: boolean } = { leaveDrafts: false }
 ): WorkspaceSessionState {
   const owns = (ownerKey: string): boolean => orcadMigrationOwnerMatchesScope(ownerKey, scope)
@@ -40,7 +37,7 @@ export function withoutLeftBehindSessionRows(
       )
     : []
   const foreignTabIds = new Set(foreignTabs.map((tab) => tab.id))
-  // Why both ids: the legacy terminal rows and their layouts are keyed by the terminal's entity id.
+  // Legacy terminal rows/layouts use entity IDs, so exclude both identities.
   const foreignTerminalIds = new Set(
     foreignTabs.filter((tab) => tab.contentType === 'terminal').flatMap((t) => [t.id, t.entityId])
   )
@@ -57,7 +54,6 @@ export function withoutLeftBehindSessionRows(
       .map((tab) => tab.id),
     ...hiddenFileTabIds(session, hiddenFiles)
   ])
-  // Built as a new object: this is an export copy, never a write to the saved layout.
   return structuredClone({
     ...session,
     browserTabsByWorktree: mapRows(session.browserTabsByWorktree, (_key, workspaces) =>
@@ -89,7 +85,7 @@ export function withoutLeftBehindSessionRows(
   })
 }
 
-/** The legacy terminal model still hydrates these, so a skipped tab must leave them too. */
+/** Also remove legacy rows or hydration would resurrect the skipped tabs. */
 function withoutForeignTerminalRows(
   session: WorkspaceSessionState,
   tabIds: ReadonlySet<string>
@@ -98,7 +94,7 @@ function withoutForeignTerminalRows(
     return {}
   }
   const keepTab = ([tabId]: [string, unknown]): boolean => !tabIds.has(tabId)
-  // Same split as worktreeIdForPaneKey, so legacy `tab:0` keys match as well as UUID leaves.
+  // Match worktreeIdForPaneKey for legacy tab:0 keys and UUID leaves.
   const keepPane = ([paneKey]: [string, unknown]): boolean =>
     !tabIds.has(paneKey.slice(0, Math.max(0, paneKey.lastIndexOf(':'))))
   const filtered = <T>(
@@ -135,7 +131,7 @@ function withoutForeignTerminalRows(
   }
 }
 
-/** Tabs that show a dropped file: kept, they would open as a blank pane on the server. */
+/** Drop file tabs too or the server would reopen blank panes. */
 function hiddenFileTabIds(
   session: WorkspaceSessionState,
   hiddenFiles: ReadonlyMap<string, ReadonlySet<string>>
@@ -182,7 +178,6 @@ function withoutTabs(group: TabGroup, tabIds: ReadonlySet<string>): TabGroup {
   return { ...group, tabOrder, ...(recentTabIds ? { recentTabIds } : {}), activeTabId }
 }
 
-/** Whether a partition is some Orca profile's shared browser default rather than a session profile. */
 export function isOrcaProfileBrowserDefaultPartition(partition: string): boolean {
   return (
     partition === ORCA_BROWSER_PARTITION ||
@@ -192,11 +187,7 @@ export function isOrcaProfileBrowserDefaultPartition(partition: string): boolean
   )
 }
 
-/**
- * Isolated or imported login profiles are this desktop's alone and the server stores none, so the
- * tab stays behind rather than reopen on the shared profile. A tab switched back to Default keeps
- * the default partition and moves as usual.
- */
+// Desktop-only login profiles cannot migrate; tabs using Default can.
 function usesSessionProfile(workspace: BrowserWorkspace): boolean {
   const { sessionProfileId, sessionPartition } = workspace
   return (
@@ -205,10 +196,7 @@ function usesSessionProfile(workspace: BrowserWorkspace): boolean {
   )
 }
 
-/**
- * Clean editor files bound to another host that no tab shows. The user cannot see or close them,
- * and the server cannot hold them; one with an unsaved draft is never in this set.
- */
+/** Drop unseen foreign-host files only when they have no unsaved draft. */
 function hiddenHostBoundFiles(
   session: WorkspaceSessionState,
   owns: (ownerKey: string) => boolean,

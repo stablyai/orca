@@ -280,3 +280,126 @@ describe('relocated process-host package', () => {
     expect(result.stdout).toBe('daemon-closure')
   })
 })
+
+describe('relocated Windows registry package', () => {
+  const registryRel = join('resources', 'node_modules', '@orca', 'windows-registry')
+  const required = ['package.json', 'index.js', 'build/Release/orca_windows_registry.node']
+
+  it('mirrors the registry package under the name shipped by Windows packaging', () => {
+    const require = createRequire(import.meta.url)
+    const actualPackage = require('../../../native/windows-registry/package.json')
+    const {
+      WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS
+    } = require('../../../config/packaged-runtime-node-modules.cjs')
+    expect(WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS).toContain(actualPackage.name)
+    const root = materializedRoot()
+    const entry = join(root, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
+    expect(realpathSync(createRequire(entry).resolve(actualPackage.name))).toBe(
+      realpathSync(join(root, registryRel, actualPackage.main))
+    )
+  })
+
+  it('loads the real root entry and reaches the native binary after the install tree disappears', () => {
+    const root = materializedRoot()
+    const entryPath = join(root, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
+    const script = `
+      const assert = require('node:assert/strict')
+      const registry = require('node:module').createRequire(process.argv[1])('@orca/windows-registry')
+      assert.equal(registry.HK.CU, 0x80000001)
+      assert.throws(() => registry.getRegistryKey(registry.HK.CU, 'Environment'), {
+        code: 'ERR_DLOPEN_FAILED'
+      })
+      process.stdout.write('registry-root-and-native-path-resolve')
+    `
+    rmSync(installDir, { recursive: true, force: true })
+    const result = runProcessSync({
+      program: process.env.ORCA_TEST_NODE_EXECUTABLE ?? originalExecPath,
+      args: ['-e', script, entryPath],
+      cwd: tempDir,
+      env: {
+        ...process.env,
+        NODE_PATH: undefined,
+        NODE_OPTIONS: undefined,
+        ORCA_BACKGROUND_LAUNCH: '1'
+      },
+      timeoutMs: 15_000
+    })
+    expect(result.stderr).toBe('')
+    expect(result.code).toBe(0)
+    expect(result.stdout).toBe('registry-root-and-native-path-resolve')
+    expect(
+      existsSync(join(root, registryRel, 'build', 'Release', 'orca_windows_registry.pdb'))
+    ).toBe(false)
+    expect(existsSync(join(root, registryRel, 'build', 'Release', 'obj'))).toBe(false)
+  })
+
+  it.each(required)(
+    'refuses an incomplete registry source missing %s without staging a host',
+    (relative) => {
+      rmSync(join(installDir, registryRel, ...relative.split('/')))
+      expect(materializeRelocatedDaemonHost()).toBeNull()
+      expect(existsSync(hostRoot)).toBe(false)
+    }
+  )
+
+  it.each(required)(
+    'repairs a mirror missing registry %s without changing the old host',
+    (relative) => {
+      const root = materializedRoot()
+      const sentinel = join(root, 'live-host-sentinel')
+      writeFileSync(sentinel, 'keep')
+      rmSync(join(root, registryRel, ...relative.split('/')), { force: true })
+      expect(getRelocatedDaemonHost()).toBeNull()
+      const repaired = materializedRoot()
+      expect(repaired).not.toBe(root)
+      expect(existsSync(join(repaired, registryRel, ...relative.split('/')))).toBe(true)
+      expect(readFileSync(sentinel, 'utf8')).toBe('keep')
+    }
+  )
+
+  it.skipIf(originalPlatform !== 'win32')(
+    'reads the Windows registry from the mirror with the built addon',
+    () => {
+      const addonRel = 'build/Release/orca_windows_registry.node'
+      cpSync(
+        join(import.meta.dirname, '../../../native/windows-registry', addonRel),
+        join(installDir, registryRel, addonRel)
+      )
+      const root = materializedRoot()
+      const entryPath = join(
+        root,
+        'resources',
+        'app.asar.unpacked',
+        'out',
+        'main',
+        'daemon-entry.js'
+      )
+      rmSync(installDir, { recursive: true, force: true })
+      const result = runProcessSync({
+        program: process.env.ORCA_TEST_NODE_EXECUTABLE ?? originalExecPath,
+        args: [
+          '-e',
+          String.raw`
+        const assert = require('node:assert/strict')
+        const registry = require('node:module').createRequire(process.argv[1])('@orca/windows-registry')
+        const values = registry.getRegistryKey(registry.HK.LM, 'SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion')
+        assert.match(values.ProductName.value, /Windows/)
+        process.stdout.write('registry-native-read')
+      `,
+          entryPath
+        ],
+        cwd: tempDir,
+        env: {
+          ...process.env,
+          NODE_PATH: undefined,
+          NODE_OPTIONS: undefined,
+          ORCA_BACKGROUND_LAUNCH: '1'
+        },
+        timeoutMs: 15_000
+      })
+      expect(result.stderr).toBe('')
+      expect(result.code).toBe(0)
+      expect(result.stdout).toBe('registry-native-read')
+    }
+  )
+})

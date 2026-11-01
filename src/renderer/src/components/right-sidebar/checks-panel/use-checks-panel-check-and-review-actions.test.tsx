@@ -2,6 +2,9 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import type { ChecksPanelCheckAndReviewActionsInput } from './check-and-review-action-dependencies'
 import { useChecksPanelCheckAndReviewActions } from './use-checks-panel-check-and-review-actions'
 
@@ -385,4 +388,104 @@ describe('useChecksPanelCheckAndReviewActions AI details diagnostics', () => {
     expect(mocks.startFixChecksAgent).toHaveBeenCalledOnce()
     expect(JSON.stringify(mocks.startFixChecksAgent.mock.calls)).not.toContain('SYNTHETIC_SECRET')
   })
+})
+
+function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
+  return {
+    number: 12,
+    title: 'Test PR',
+    state: 'open',
+    url: 'https://github.com/acme/repo/pull/12',
+    checksStatus: 'pending',
+    updatedAt: '2026-05-12T00:00:00Z',
+    mergeable: 'MERGEABLE',
+    headSha: 'head-sha',
+    ...overrides
+  }
+}
+
+it('link refresh reads the selected GitHub PR after the action at both read seams', async () => {
+  const original = useAppStore.getState()
+  const old = Promise.withResolvers<{
+    kind: 'found'
+    pr: ReturnType<typeof makePR>
+    fetchedAt: number
+  }>()
+  const open = makePR({ number: 43, headSha: 'head-a' })
+  const selected = makePR({ number: 43, headSha: 'head-b' })
+  const refreshPRNow = vi
+    .fn()
+    .mockReturnValueOnce(old.promise)
+    .mockResolvedValueOnce({ kind: 'found', pr: selected, fetchedAt: 2 })
+  vi.stubGlobal('api', { gh: { refreshPRNow } })
+  const repo = {
+    id: 'repo-1',
+    path: '/workspace/repo',
+    displayName: 'repo',
+    badgeColor: '',
+    addedAt: 0
+  }
+  useAppStore.setState({ repos: [repo], prCache: {}, hostedReviewCache: {}, prRefreshStates: {} })
+  const input = makeInput({
+    repo,
+    linkedPR: 43,
+    linkedGitLabMR: null,
+    fetchPRForBranch: useAppStore.getState().fetchPRForBranch,
+    // The card read's failure is not the link's failure: checks still load for the new head.
+    fetchHostedReviewForBranch: vi.fn().mockRejectedValue(new Error('lookup capacity reached')),
+    fetchPRChecks: vi.fn(async () => []),
+    fetchPRComments: vi.fn(async () => [])
+  })
+  useAppStore.setState({
+    worktreesByRepo: {
+      [repo.id]: [
+        makeWorktree({
+          id: input.activeWorktreeId!,
+          repoId: repo.id,
+          branch: input.branch,
+          linkedPR: 43
+        })
+      ]
+    }
+  })
+  const before = input.fetchPRForBranch(repo.path, input.branch, {
+    force: true,
+    repoId: repo.id,
+    linkedPRNumber: 43,
+    reason: 'visible'
+  })
+  try {
+    const { result } = renderHook(() => useChecksPanelCheckAndReviewActions(input))
+    await act(async () => result.current.refreshLinkedGitHubPullRequest(43))
+    expect(refreshPRNow).toHaveBeenCalledTimes(2)
+    expect(refreshPRNow).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        candidate: expect.objectContaining({ linkedPRNumber: 43 }),
+        userRefresh: true
+      })
+    )
+    expect(input.fetchHostedReviewForBranch).toHaveBeenCalledWith(
+      repo.path,
+      input.branch,
+      expect.objectContaining({ linkedGitHubPR: 43, userRefresh: true })
+    )
+    expect(input.fetchPRChecks).toHaveBeenCalledWith(
+      repo.path,
+      43,
+      input.branch,
+      'head-b',
+      selected.prRepo,
+      expect.objectContaining({ userRefresh: true })
+    )
+    expect(input.fetchPRComments).toHaveBeenCalledWith(
+      repo.path,
+      43,
+      expect.objectContaining({ userRefresh: true })
+    )
+  } finally {
+    old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
+    await before
+    useAppStore.setState(original)
+    vi.unstubAllGlobals()
+  }
 })

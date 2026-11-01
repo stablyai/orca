@@ -112,12 +112,11 @@ describe('execution host registry', () => {
         { connectionId: 'repo-ssh' }
       ],
       settings: { activeRuntimeEnvironmentId: null },
-      // Even if a stale label leaked in, it must still be filtered out.
+      // Stale labels must not reveal hidden runtime targets.
       sshTargetLabels: new Map([['runtime-ssh-orca-instance-1', 'Hidden VM']])
     })
 
     expect(hosts.some((h) => h.id.includes('runtime-ssh-orca-instance-1'))).toBe(false)
-    // The ordinary repo SSH host is still present.
     expect(hosts.some((h) => h.id === 'ssh:repo-ssh')).toBe(true)
   })
 

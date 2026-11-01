@@ -1,5 +1,4 @@
-// Layout-owner build: a CLI send, wait or read on a saved pane main holds with no terminal yet
-// starts it through main's one starter, then delivers to the started terminal.
+// A saved unbound pane must start through main before CLI send, wait or read reaches its terminal.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 
@@ -23,10 +22,7 @@ const { TERMINAL_METHODS } = await import('./rpc/methods/terminal')
 
 type Runtime = ReturnType<typeof surfaceRuntime>['runtime']
 
-/**
- * A windowless host whose saved tab gained a third pane no terminal is bound to yet. Its start
- * records the binding before it answers, as the host's spawn commit does.
- */
+/** Start the third saved pane, recording its binding before returning the spawn reply. */
 async function restoredPane() {
   const { runtime, store, setSession } = surfaceRuntime()
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
@@ -60,7 +56,7 @@ async function restoredPane() {
       }
     })
   }
-  // The host lists what it runs, the started terminal included: a pane main owns vouches for none.
+  // Only the host process list vouches for the newly started terminal.
   const running = new Set<string>(Object.values(SURFACE_PTYS))
   const spawn = vi.fn(async () => {
     const result = await started.promise
@@ -89,6 +85,16 @@ const DRIVING = { inputKind: 'driving' } as const
 describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', () => {
   it('a send starts the pane once and delivers to it, and the handle keeps naming it', async () => {
     const { runtime, handle, spawn, started, write } = await restoredPane()
+    const observer = new AbortController()
+    const abandoned = runtime.sendTerminalAgentPrompt(handle, 'abandoned', {
+      ...DRIVING,
+      observationSignal: observer.signal
+    })
+    const refused = expect(abandoned).rejects.toThrow('request_aborted')
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
+    observer.abort()
+    await refused
+    expect(write).not.toHaveBeenCalled()
 
     const send = runtime.sendTerminal(handle, { text: 'echo hi', enter: true }, DRIVING)
     await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
@@ -100,6 +106,7 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
       runtime.sendTerminal(handle, { text: 'echo again', enter: true }, DRIVING)
     ).resolves.toMatchObject({ handle, accepted: true })
     expect(write).toHaveBeenCalledWith('pty-c', 'echo again', 'driving')
+    expect(write).toHaveBeenCalledTimes(4)
     expect(spawn).toHaveBeenCalledOnce()
   })
 
@@ -170,7 +177,6 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
 
     await expect(send).resolves.toMatchObject({ accepted: true })
     await phone
-    // The phone's row shows the one started terminal.
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(
       listed.tabs.find((tab) => tab.id === `${SURFACE_TAB_ID}::${THIRD_LEAF_ID}`)
@@ -189,7 +195,7 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
     expect(write).not.toHaveBeenCalled()
   })
 
-  // Why: main binds the pane before it registers the terminal (bind-first), so no late bind exists.
+  // Main binds before terminal registration; waits must survive that bind-first sequence.
   it('a wait that started the pane survives main binding it, and answers under the caller handle', async () => {
     const { runtime, handle, spawn, started, write } = await restoredPane()
 
@@ -197,7 +203,6 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
     await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
     started.resolve({ id: 'pty-c' })
     await new Promise((resolve) => setTimeout(resolve, 10))
-    // The caller's own handle now names the bound pane (adopted), not only the started terminal's.
     expect(runtime.resolveLiveLeafForHandle(handle)?.ptyId).toBe('pty-c')
     await expect(
       runtime.sendTerminal(handle, { text: 'echo bound', enter: true }, DRIVING)

@@ -1,9 +1,4 @@
-// What this window asked main to do to a tab's panes, in a layout-owner build: main's frames say
-// which panes a tab has, these say how the window wants a pane closed when one goes and the
-// selection of a tab it moved, and keep a tab's drawn tree while the window's own command is in
-// flight. A pane a frame drops with no intent here is left to main's notice to the window; every
-// pane a frame adds is mounted, and takes focus unless the window's own split asked to keep focus
-// where it was.
+// Track window pane-close reason, moved-tab selection and in-flight drawn-tree holds while main owns frame structure. Unrequested drops await main’s notice; added panes mount/focus unless a local split requested retained focus.
 
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 

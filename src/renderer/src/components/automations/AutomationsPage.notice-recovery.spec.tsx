@@ -1,13 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * What a refused action's recovery button actually does.
- *
- * Both notices used to swallow every verb but Retry, so Update server and
- * Reconnect rendered as buttons that performed nothing. These pin the routing:
- * the verb runs against the host the refusal came from — the row's own owner, or
- * the destination the create dialog captured — not the list's current filter.
- */
+/** Route Retry/Reconnect/Update server to the refused row owner or captured create destination; the current list filter cannot identify it. */
 
 import { act } from 'react'
 import { describe, expect, it, vi } from 'vitest'

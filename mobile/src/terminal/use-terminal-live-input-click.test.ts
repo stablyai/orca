@@ -21,7 +21,6 @@ type ClickHarness = {
   readonly unmount: () => void
 }
 
-/** `sender` decides each send's result after it is recorded, so a test can hold one in flight. */
 function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
   let activeHandle = 'terminal-a'
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
@@ -37,9 +36,9 @@ function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
   }
   const sent: string[] = []
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
-    current: async (handle, bytes) => {
+    current: async (handle, bytes, origin) => {
       sent.push(bytes)
-      return sender ? sender(handle, bytes) : true
+      return sender ? sender(handle, bytes, origin) : true
     }
   }
   let handlers: Handlers | null = null
@@ -93,9 +92,7 @@ function change(handlers: Handlers, text: string, isComposing = false): void {
   handlers.handleLiveInputChange({ nativeEvent: { text, isComposing } })
 }
 
-// A tap on the prompt sends a click the program answers by moving its cursor. The field mirrors
-// what it typed by erasing back from the end of its own text, so after the click it must restart
-// at the new cursor, and nothing typed for the old cursor may land after the click.
+// Clicks move the TUI cursor; flush old-position input first, then restart the field mirror at the new position.
 describe('terminal live input around a click', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -153,7 +150,30 @@ describe('terminal live input around a click', () => {
 
       release()
       expect(await clicked).toBe(true)
-      await vi.waitFor(() => expect(sent).toEqual(['abc', CLICK + 'X']))
+      await vi.waitFor(() => expect(sent.join('')).toBe(`abc${CLICK}X`))
+    } finally {
+      unmount()
+    }
+  })
+
+  it('retires a queued click and later text when their prefix fails', async () => {
+    let fail = (): void => {}
+    const { handlers, sent, unmount } = createClickHarness((_handle, bytes) =>
+      bytes === 'abc'
+        ? new Promise<boolean>((resolve) => {
+            fail = () => resolve(false)
+          })
+        : Promise.resolve(true)
+    )
+    try {
+      change(handlers, 'abc')
+      const clicked = handlers.sendLiveInputClick('terminal-a', CLICK)
+      change(handlers, 'X')
+      fail()
+      expect(await clicked).toBe(false)
+      expect(sent).toEqual(['abc'])
+      change(handlers, 'fresh')
+      await vi.waitFor(() => expect(sent).toEqual(['abc', 'fresh']))
     } finally {
       unmount()
     }

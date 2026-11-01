@@ -102,7 +102,7 @@ describe('AgentTransitionDetector', () => {
     ])
     h.changes.length = 0
     ingest(h.server, { state: 'done' }, { worktreeId: FOLDER })
-    // Moving workspace rests the pane where it was; a done with no turn there is no finish.
+    // Leaving rests the old workspace; done without a turn is not a completion.
     expect(h.changes).toEqual([
       {
         kind: 'moved',
@@ -136,7 +136,6 @@ describe('AgentTransitionDetector', () => {
         at: startedAt
       }
     ])
-    // The seeded turn is known, so its finish is news.
     ingest(h.server, { state: 'done' })
     expect(h.changes.at(-1)).toMatchObject({ kind: 'moved', transition: 'turn-finished' })
   })
@@ -273,7 +272,7 @@ describe('AgentTransitionDetector: hookless titles', () => {
         transition: 'turn-finished'
       })
     ])
-    // The hook row owns the pane now: its titles are not read, and its terminal's exit is the row's.
+    // Hook authority replaces title tracking for this pane.
     h.changes.length = 0
     noteTitle(h.detector, '⠋ Codex working')
     h.exits.get('pty-1')!()

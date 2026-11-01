@@ -6,8 +6,7 @@ import { useAppStore } from '@/store'
 import { restoreTerminalFitToDesktop } from '../terminal-pane/terminal-fit-restore'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
-/** Why: chat view hides the terminal's phone-driving overlay, and the editor placeholder that
- *  names the lock disappears under a draft or goal hint, so the lock and its Take back live here. */
+/** Chat hides the terminal’s phone overlay and drafts hide its placeholder; keep the lock and Take back action in a notice. */
 export function useNativeChatMobileHoldNotice(
   ptyId: string | null,
   canSend: boolean
@@ -21,7 +20,6 @@ export function useNativeChatMobileHoldNotice(
     }
     return nativeChatMobileHoldNotice(pending, () => {
       setPending(true)
-      // Same reclaim the terminal's Take back runs; the driver flip re-enables the composer.
       void restoreTerminalFitToDesktop(ptyId, useAppStore.getState().settings ?? undefined)
         .then((restored) => {
           if (restored) {

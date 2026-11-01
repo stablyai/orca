@@ -37,8 +37,7 @@ export async function fetchRelayRegionCatalog(
   return catalog
 }
 
-// Logs name the director by host so staging and production lines stay
-// distinguishable without carrying a full URL through every event.
+// Log only director host to distinguish staging/production without full URLs.
 export function relayDirectorHost(directorUrl: string): string {
   try {
     return new URL(directorUrl).hostname

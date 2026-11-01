@@ -6,8 +6,7 @@ export type BrowserRouteGuestPopupWindow = {
   onClosed: (listener: () => void) => void
 }
 
-// Why: OAuth may request size/position, but remote content must not create deceptive or
-// inescapable native chrome. Mirrors the local popup path's window hardening.
+// Allow OAuth sizing without deceptive or inescapable native chrome.
 export const ROUTE_POPUP_WINDOW_OPTIONS = {
   alwaysOnTop: false,
   closable: true,

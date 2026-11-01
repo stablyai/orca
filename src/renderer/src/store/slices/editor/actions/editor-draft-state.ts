@@ -75,7 +75,7 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         if (viewIds.every((id) => s.editorDrafts[id] === content)) {
           return s
         }
-        // Why: read-only tabs must never accrue a draft — it seeds dirty/autosave/hot-exit restore that could overwrite an agent transcript.
+        // Read-only drafts could trigger dirty/autosave/hot-exit overwrite of agent transcripts; refuse them.
         const file = s.openFiles.find((f) => f.id === fileId)
         if (file?.readOnly === true || file?.csvPreviewOnly === true) {
           return s
@@ -89,14 +89,12 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
     clearEditorDraft: (fileId) => set((s) => clearEditorDraftsOf(s, [fileId])),
     clearEditorDrafts: (fileIds) => set((s) => clearEditorDraftsOf(s, fileIds)),
 
-    // Markdown view mode
     markdownViewMode: {},
     setMarkdownViewMode: (fileId, mode) =>
       set((s) => ({
         markdownViewMode: { ...s.markdownViewMode, [fileId]: mode }
       })),
 
-    // Rich-markdown size-limit override
     markdownRichModeSizeOverride: {},
     setMarkdownRichModeSizeOverride: (fileId, enabled) =>
       set((s) => {
@@ -114,7 +112,6 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         }
       }),
 
-    // Editor view mode (edit vs changes-diff). See EditorViewMode.
     editorViewMode: {},
     setEditorViewMode: (fileId, mode) =>
       set((s) => {
@@ -130,7 +127,6 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         return { editorViewMode: { ...s.editorViewMode, [fileId]: mode } }
       }),
 
-    // Markdown preview front-matter visibility (#4468).
     markdownFrontmatterVisible: {},
     setMarkdownFrontmatterVisible: (fileId, visible) =>
       set((s) => {
@@ -146,7 +142,6 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: false } }
       }),
 
-    // Markdown table of contents visibility
     markdownTableOfContentsVisible: {},
     setMarkdownTableOfContentsVisible: (fileId, visible) =>
       set((s) => {
@@ -166,14 +161,12 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         }
       }),
 
-    // Markdown table of contents panel sizing
     markdownTocPanelWidth: 240,
     setMarkdownTocPanelWidth: (width) =>
       set((s) => ({
         markdownTocPanelWidth: clampMarkdownTocPanelWidth(width, undefined, s.markdownTocPanelWidth)
       })),
 
-    // Combined diff file tree sizing
     combinedDiffFileTreeWidth: COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH,
     setCombinedDiffFileTreeWidth: (width) =>
       set((s) => ({

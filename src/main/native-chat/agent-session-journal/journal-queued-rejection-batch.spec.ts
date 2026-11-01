@@ -1,18 +1,13 @@
-// A failed start's row and the queued messages it failed land in ONE append, the messages first:
-// no reader meets one without the other, and the messages sit above the row that says why.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionJournal } from './journal-store'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 
@@ -100,7 +95,6 @@ export function registerJournalQueuedRejectionBatchTests(): void {
     const journal = await openWithQueued('first')
     const before = journal.cursor().sequence
 
-    // An empty batch breaks the row's bound, so the transaction rolls back as a whole.
     await expect(journal.appendLifecycleBatch(startFailureBatch(0))).rejects.toThrow(
       'journal_lifecycle_batch_mutation_bound_exceeded'
     )
@@ -109,7 +103,6 @@ export function registerJournalQueuedRejectionBatchTests(): void {
     expect(journal.submissions().map((entry) => entry.dispatchState)).toEqual(['pending'])
   })
 
-  // A Stop that reaches the lane first takes the message back; the failed start then failed no one.
   it('writes nothing when a Stop withdrew every queued message first', async () => {
     const journal = await openWithQueued('first')
     const withdrawal = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {

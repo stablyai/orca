@@ -46,7 +46,6 @@ export function getRecipeDestroyLabel(recipe: EphemeralVmRecipeOption): string {
   return translate('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
 }
 
-/** One line under a recipe name: what it runs and whether it tears down. */
 export function getRecipeDetail(recipe: EphemeralVmRecipeOption): string {
   return `${getRecipeCommandDisplay(recipe.create)} · ${getRecipeDestroyLabel(recipe)}`
 }
@@ -55,11 +54,7 @@ function matches(haystack: string, query: string): boolean {
   return haystack.toLowerCase().includes(query)
 }
 
-/**
- * Ready hosts first, then hosts that still need a connection or a project location. Ready hosts
- * already hold the project, so they are few; the rest can be every configured SSH host, so they
- * are bounded and ranked by name.
- */
+/** Show ready hosts first; bound and rank unready hosts, which may include every configured SSH host. */
 function buildHostRows(
   hostOptions: readonly ProjectHostSetupOption[],
   query: string
@@ -117,7 +112,6 @@ function matchRecipes(
   )
 }
 
-/** The rows that open a nested list rather than committing. */
 function buildSubmenuRows(hasRecipes: boolean, hasAddHost: boolean): RunTargetRowModel[] {
   const rows: RunTargetRowModel[] = []
   if (hasRecipes) {
@@ -129,11 +123,7 @@ function buildSubmenuRows(hasRecipes: boolean, hasAddHost: boolean): RunTargetRo
   return rows
 }
 
-/**
- * Filters hosts and recipes by a typed query. The submenu rows survive filtering
- * only while they still have something to show — "Add host" always survives, so
- * it stays reachable in every state including no-matches.
- */
+/** Filter host/recipe rows but always keep Add host reachable; other submenus require matching contents. */
 export function buildRunTargetRows({
   hostOptions,
   recipes,

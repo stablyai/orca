@@ -30,8 +30,7 @@ export async function ensureTextEditLaunched(): Promise<void> {
   const filePath = join(textEditTempDir, 'textedit-target.txt')
   await writeFile(filePath, 'seed', 'utf8')
   await execFileAsync('open', ['-F', '-a', 'TextEdit', '-n', filePath])
-  // Why: cold CI/user launches can register the process before System Events
-  // exposes its first window; short waits make the live computer-use proof flaky.
+  // Wait for the first System Events window; cold launch can register its process before exposing it.
   await waitForMacAppWindow('TextEdit', 15000)
 }
 

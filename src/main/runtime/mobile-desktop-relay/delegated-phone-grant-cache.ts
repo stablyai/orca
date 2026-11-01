@@ -33,7 +33,6 @@ export class DelegatedPhoneGrantCache {
   get(host: MobileDesktopRelayHost, phoneKey: string | null): Promise<DelegatedPhoneGrants> {
     const cached = this.entries.get(host.environmentId)
     if (cached && !cached.settled) {
-      // Why: phones racing to one server share its sync.
       return cached.promise.then((grants) =>
         grants.fence === host.fence ? grants : this.get(host, phoneKey)
       )
@@ -42,7 +41,7 @@ export class DelegatedPhoneGrantCache {
       cached?.result?.kind === 'ready' &&
       cached.result.fence === host.fence &&
       (phoneKey === null || cached.result.asked.has(phoneKey))
-    // Why update-needed is never reused: a server upgraded in place must relay without a re-pair.
+    // Never cache update-needed: in-place server upgrades must work without re-pairing.
     return answered && cached.result ? Promise.resolve(cached.result) : this.sync(host)
   }
 
@@ -58,7 +57,7 @@ export class DelegatedPhoneGrantCache {
         entry.result = result
       },
       () => {
-        // Why: an unreachable server is not an answer; the next request syncs again.
+        // Unreachability is no answer; retry the sync on the next request.
         if (this.entries.get(host.environmentId) === entry) {
           this.entries.delete(host.environmentId)
         }

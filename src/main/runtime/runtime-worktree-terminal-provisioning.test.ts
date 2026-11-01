@@ -16,7 +16,7 @@ function fakeHost() {
   let created = 0
   return {
     canSpawn: () => true,
-    createTerminal: vi.fn(async () => {
+    createTerminal: vi.fn(async (_selector: string, _options: Record<string, unknown>) => {
       created += 1
       return { handle: `term_${created}` }
     }),
@@ -28,19 +28,15 @@ function fakeHost() {
 }
 
 function provision(host: ReturnType<typeof fakeHost>, startup: boolean) {
-  return provisionWorktreeTerminals(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every host member provisioning reaches for default tabs with no setup.
-    host as unknown as WorktreeTerminalProvisioningHost,
-    {
-      worktreeSelector: 'id:wt-1',
-      worktreeId: 'wt-1',
-      worktreePath: '/worktrees/wt-1',
-      defaultTabs: DEFAULT_TABS,
-      primaryTerminalHandle: startup ? 'term_agent' : null,
-      hasStartupTerminal: startup,
-      setupCommandPlatform: 'posix'
-    }
-  )
+  return provisionWorktreeTerminals(host, {
+    worktreeSelector: 'id:wt-1',
+    worktreeId: 'wt-1',
+    worktreePath: '/worktrees/wt-1',
+    defaultTabs: DEFAULT_TABS,
+    primaryTerminalHandle: startup ? 'term_agent' : null,
+    hasStartupTerminal: startup,
+    setupCommandPlatform: 'posix'
+  })
 }
 
 describe('default tabs beside the agent a create started', () => {
@@ -136,6 +132,13 @@ function provisionWithSetup(
 }
 
 describe('provisionWorktreeTerminals with a cleared creation choice', () => {
+  it('uses the injected setup title', async () => {
+    const { host, titles } = createHost()
+    host.getSetupTerminalTitle = () => '초기 설정'
+    await provisionWithSetup(host, true, true)
+    expect(titles()).toEqual(['초기 설정'])
+  })
+
   it('creates only Setup for an explicit setup-only choice', async () => {
     const { host, titles } = createHost()
     await provisionWithSetup(host, true, true)
@@ -204,4 +207,28 @@ describe('provisionWorktreeTerminals with a cleared creation choice', () => {
       warn.mockRestore()
     }
   )
+})
+
+describe("a create's E9 origin", () => {
+  it("starts every terminal of a person's create as their act, and an automation's as background", async () => {
+    const person = fakeHost()
+    await provisionWorktreeTerminals(person, {
+      worktreeSelector: 'id:wt-1',
+      worktreeId: 'wt-1',
+      worktreePath: '/worktrees/wt-1',
+      defaultTabs: DEFAULT_TABS,
+      hasStartupTerminal: false,
+      setupCommandPlatform: 'posix',
+      wslUserAct: true
+    })
+    expect(person.createTerminal.mock.calls.map((call) => call[1])).toEqual(
+      DEFAULT_TABS.tabs.map(() => expect.objectContaining({ wslUserAct: true }))
+    )
+
+    const automation = fakeHost()
+    await provision(automation, false)
+    for (const call of automation.createTerminal.mock.calls) {
+      expect(call[1]).not.toHaveProperty('wslUserAct')
+    }
+  })
 })

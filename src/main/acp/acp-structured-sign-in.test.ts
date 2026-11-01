@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
-import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import { agentSessionFailureSentence } from '../../shared/agent-session/failures/agent-session-failure-words'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../shared/agent-session/failures/agent-session-failure'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AcpSignInPromptError } from './acp-errors'
 import { ACP_LAUNCH_SPECS } from './acp-launch-specs'
@@ -81,7 +84,7 @@ it('ends a running turn signed out when the connection closes for sign-in', asyn
   await rig.acquire()
   await sendHello(rig, 'first')
   await rig.frame('session/prompt')
-  // The protocol close the real connection makes at a sign-in prompt line on stderr.
+  // Simulate the real connection closing on a stderr sign-in link.
   const internal = 'The agent asked to sign in in a browser'
   AcpSessionRuntime.prototype.close.call(rig.child(), new AcpSignInPromptError(internal))
   await rig.settle()
@@ -92,21 +95,20 @@ it('ends a running turn signed out when the connection closes for sign-in', asyn
       rejection: expect.objectContaining({ kind: 'notSignedIn' })
     })
   )
-  // Orca's own words for the prompt are for logs; the chat says only how to sign in.
+  // Internal prompt diagnostics must not appear as agent-authored guidance.
   const rejected = rig.settled.find((item) => 'state' in item && item.state === 'rejected')
   expect(rejected && 'reason' in rejected ? rejected.reason : '').not.toContain(internal)
 })
 
 it('starts signed out without Orca words when the connection closes for sign-in', async () => {
   const rig = await openAcpAdapterRig({ script: (agent) => agent.on('session/new', () => {}) })
-  // Session setup runs in the start's open, which the rig awaits after the acquire.
   const starting = rig.acquire()
   await rig.frame('session/new')
   const internal = 'The agent asked to sign in in a browser'
   AcpSessionRuntime.prototype.close.call(rig.child(), new AcpSignInPromptError(internal))
   await starting
   const error = rig.openFailure()
-  // Session setup re-types sign-in answers; this close must stay Orca's, words and all.
+  // Preserve Orca's prompt error when session setup retypes authentication failures.
   expect(error).toMatchObject({ reason: 'notSignedIn' })
   expect(providerDiagnosticOf(error)).toBeUndefined()
 })
@@ -119,7 +121,6 @@ it.each(ACP_LAUNCH_SPECS)(
       spec,
       script: (agent) => agent.on('session/new', (frame) => agent.fail(frame, -32000, detail))
     })
-    // The host receives the refusal from open and then closes the child.
     await rig.acquire()
     expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
     expect(providerDiagnosticOf(rig.openFailure())).toEqual({ text: detail, audience: 'person' })

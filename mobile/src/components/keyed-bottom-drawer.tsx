@@ -2,8 +2,7 @@ import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useSta
 import { MountedBottomDrawer, type MountedBottomDrawerProps } from './mounted-bottom-drawer'
 import { useBottomDrawerModalHost } from './bottom-drawer-modal-host-scope'
 
-// iOS cannot present a native Modal while another is still presented, even mid-close, so one
-// drawer owns what is on screen and swaps sheets only after the previous Modal has unmounted.
+// Own one Modal and swap only after prior unmount commit: iOS rejects second presentation even mid-close.
 
 type Props<T> = Omit<MountedBottomDrawerProps, 'visible' | 'onClose' | 'onHidden' | 'children'> & {
   /** The sheet the screen wants shown, or null for none. */

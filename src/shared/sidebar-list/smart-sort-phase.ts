@@ -1,10 +1,6 @@
 import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 
-/**
- * Smart's cold start. Agent status hydrates after the list mounts, so until the list has seen a
- * live signal Smart keeps the persisted order and never writes it back. Once latched, Smart stays
- * live for the list's lifetime, even after that activity ends.
- */
+/** Keep persisted order without writing during async hydration; latch live Smart for the list lifetime after its first signal. */
 export type SmartSortPhase = 'cold' | 'live'
 
 /** Null outside Smart. */

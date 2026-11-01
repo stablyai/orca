@@ -4,8 +4,6 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { probeAntigravityAcpServer } from './antigravity-acp-runtime-probe'
 
-// Every server here is this test's own Node answering the pinned 1.3.0 server's recorded
-// `initialize`, never the real server.
 const folders: string[] = []
 afterEach(async () => {
   vi.unstubAllEnvs()

@@ -29,8 +29,7 @@ export async function readFederatedWorkerOutput(args: {
     )
   }
   const capabilities = getOrchestrationPeerCapabilityCache(args.runtime)
-  // Hosts that serve `orchestration.federationReadOutput` shipped before the capability string
-  // did, so ask the method itself and let `method_not_found` be the only downgrade signal.
+  // Older hosts shipped federationReadOutput before its capability; downgrade only on method_not_found.
   const known = capabilities.knownSupport(
     args.federated.peer_fingerprint,
     args.federated.remote_runtime_epoch,

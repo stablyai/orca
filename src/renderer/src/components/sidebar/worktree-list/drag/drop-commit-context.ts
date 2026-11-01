@@ -29,12 +29,12 @@ export type ShouldShowWorkspaceBoardDropIndicator = (
 export type WorktreeReorderArgs = {
   groups: readonly WorktreeDragGroup[]
   sourceGroupKey: string
-  draggedIds: readonly string[]
+  /** Host identities, as the sidebar's drag groups key their members. */
+  draggedKeys: readonly string[]
   dropIndex: number
   draggedCopies?: DraggedWorktreeCopies
 }
 
-// The shared surface every drop path (pointer, native drag, document capture) commits through.
 export type WorktreeDropCommitContext = {
   scrollRef: React.RefObject<HTMLDivElement | null>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]

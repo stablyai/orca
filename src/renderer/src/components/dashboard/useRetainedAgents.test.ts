@@ -1,14 +1,27 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildWorktreeAgentRows } from '../sidebar/worktree-agent-rows'
 import { useAppStore } from '@/store'
 import { resetAgentPaneAuthorityAliasesForTests } from '@/store/slices/agent-pane-authority'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
+import {
+  ENV,
+  LEAF_ID,
+  WT,
+  makeSnapshot,
+  resetWebSessionTabsSyncTestState
+} from '@/runtime/web-session-tabs-sync-test-harness'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { collectRetainedAgentsOnDisappear, useRetainedAgentsSync } from './useRetainedAgents'
+import {
+  buildRetainedAgentsSyncSnapshot,
+  collectRetainedAgentsOnDisappear,
+  useRetainedAgentsSync
+} from './useRetainedAgents'
 
 const initialAppState = useAppStore.getInitialState()
 
@@ -98,6 +111,97 @@ function makeAgentRow(args: {
 }
 
 describe('collectRetainedAgentsOnDisappear', () => {
+  it('carries paired retained order through same-session return and resets known replacement', () => {
+    resetWebSessionTabsSyncTestState()
+    useAppStore.setState({
+      repos: [makeRepo()],
+      worktreesByRepo: { 'repo-1': [makeWorktree({ id: WT })] }
+    })
+    const entry: AgentStatusEntry = {
+      ...makeAgentRow({ paneKey: makePaneKey('host-tab-1', LEAF_ID), state: 'done' }).entry,
+      worktreeId: WT,
+      providerSession: { key: 'session_id', id: 'A' }
+    }
+    const quiet: AgentStatusEntry = {
+      ...entry,
+      paneKey: makePaneKey('host-tab-2', LEAF_ID),
+      state: 'working',
+      updatedAt: 2000,
+      stateStartedAt: 2000,
+      providerSession: { key: 'session_id', id: 'quiet' }
+    }
+    const update = (agentStatus: AgentStatusEntry | undefined, version: number) => {
+      const tabs = [agentStatus, quiet].map((status, index) => ({
+        type: 'terminal' as const,
+        id: `host-tab-${index + 1}::${LEAF_ID}`,
+        title: 'Claude',
+        parentTabId: `host-tab-${index + 1}`,
+        leafId: LEAF_ID,
+        isActive: index === 0,
+        status: 'ready' as const,
+        terminal: `terminal-${index + 1}`,
+        agentStatus: status
+      }))
+      useAppStore.setState(
+        applyWebSessionTabsSnapshot(
+          useAppStore.getState(),
+          makeSnapshot(tabs, { snapshotVersion: version }),
+          ENV,
+          1_000_000 + version
+        )
+      )
+    }
+    const snapshot = () =>
+      buildRetainedAgentsSyncSnapshot({
+        repos: [makeRepo()],
+        worktreesByRepo: { 'repo-1': [makeWorktree({ id: WT })] },
+        folderWorkspaces: [],
+        tabsByWorktree: useAppStore.getState().tabsByWorktree,
+        agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
+        now: 1_000_000
+      })
+    const rows = () =>
+      buildWorktreeAgentRows({
+        tabs: useAppStore.getState().tabsByWorktree[WT] ?? [],
+        entries: Object.values(useAppStore.getState().agentStatusByPaneKey),
+        retained: Object.values(useAppStore.getState().retainedAgentsByPaneKey),
+        now: 1_000_000
+      })
+    update({ ...entry, updatedAt: 1000, stateStartedAt: 1000, state: 'working' }, 1)
+    update({ ...entry, updatedAt: 5000, stateStartedAt: 5000 }, 2)
+    const previous = snapshot()
+    update(undefined, 3)
+    const current = snapshot()
+    const result = collectRetainedAgentsOnDisappear({
+      previousAgents: previous.currentAgents,
+      currentAgents: current.currentAgents,
+      retainedAgentsByPaneKey: useAppStore.getState().retainedAgentsByPaneKey,
+      retentionSuppressedPaneKeys: {},
+      recentlyClosedAgentStatusTabIds: {},
+      recentlyRetiredAgentStatusPaneKeys: {},
+      tabIndex: current.tabIndex
+    })
+    expect(result.toRetain).toHaveLength(1)
+    useAppStore.getState().retainAgents(result.toRetain)
+    expect(rows().map((row) => row.startedAt)).toEqual([1000, 2000])
+    update({ ...entry, updatedAt: 6000, stateStartedAt: 6000, state: 'working' }, 4)
+    expect(rows().map((row) => row.entry.providerSession?.id)).toEqual(['A', 'quiet'])
+    expect(rows().map((row) => row.startedAt)).toEqual([1000, 2000])
+    update(undefined, 5)
+    update(
+      {
+        ...entry,
+        updatedAt: 7000,
+        stateStartedAt: 6000,
+        state: 'working',
+        providerSession: { key: 'session_id', id: 'B' }
+      },
+      6
+    )
+    expect(rows().map((row) => row.entry.providerSession?.id)).toEqual(['quiet', 'B'])
+    expect(rows().map((row) => row.startedAt)).toEqual([2000, 7000])
+  })
+
   it('retains a clean done row when a different tab closed', () => {
     const previousAgents = new Map([
       ['tab-1:1', { row: makeAgentRow({ paneKey: 'tab-1:1', state: 'done' }), worktreeId: 'wt-1' }]
@@ -169,11 +273,7 @@ describe('collectRetainedAgentsOnDisappear', () => {
   })
 
   it('refreshes the retained snapshot when a reused paneKey starts a newer run', () => {
-    // Why: a reused paneKey (same tab+pane, fresh agent start after a prior
-    // retained run) produces a newer startedAt. Without the freshness check
-    // the loop would early-continue because retainedAgentsByPaneKey[paneKey]
-    // is still truthy from the prior run — leaving stale completion data
-    // visible forever for the reused pane.
+    // Reused pane keys can start newer runs; replace older retained completion snapshots instead of skipping a truthy key.
     const prevRow = makeAgentRow({ paneKey: 'tab-1:1', state: 'done' })
     prevRow.startedAt = 200
     const previousAgents = new Map([['tab-1:1', { row: prevRow, worktreeId: 'wt-1' }]])
@@ -439,5 +539,56 @@ describe('useRetainedAgentsSync', () => {
     expect(state.retainedAgentsByPaneKey[targetPaneKey]).toBeUndefined()
     expect(state.retentionSuppressedPaneKeys[sourcePaneKey]).toBeUndefined()
     hook.unmount()
+  })
+
+  it('keeps a wrapped-history completion in position through disappearance retention', () => {
+    const paneKey = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+    const store = useAppStore.getState()
+    store.setAgentStatus(
+      paneKey,
+      { state: 'working', prompt: 'task', agentType: 'pi' },
+      undefined,
+      {
+        updatedAt: 1000
+      }
+    )
+    for (let i = 0; i < 23; i++) {
+      store.setAgentStatus(
+        paneKey,
+        { state: i % 2 ? 'working' : 'done', prompt: 'task', agentType: 'pi' },
+        undefined,
+        { updatedAt: 3000 + i * 1000 }
+      )
+    }
+    const entry = useAppStore.getState().agentStatusByPaneKey[paneKey]
+    expect(entry.stateHistory[0].startedAt).toBeGreaterThan(2000)
+    const previous = buildRetainedAgentsSyncSnapshot({
+      repos: [makeRepo()],
+      worktreesByRepo: { 'repo-1': [makeWorktree()] },
+      folderWorkspaces: [],
+      tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1' })] },
+      agentStatusByPaneKey: { [paneKey]: entry },
+      now: 30000
+    })
+    const result = collectRetainedAgentsOnDisappear({
+      previousAgents: previous.currentAgents,
+      currentAgents: new Map(),
+      retainedAgentsByPaneKey: {},
+      retentionSuppressedPaneKeys: {},
+      recentlyClosedAgentStatusTabIds: {},
+      recentlyRetiredAgentStatusPaneKeys: {}
+    })
+    expect(result.toRetain[0]?.startedAt).toBe(1000)
+    const quiet = makeAgentRow({
+      paneKey: makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222'),
+      state: 'working'
+    }).entry
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab({ id: 'tab-2' })],
+      entries: [{ ...quiet, stateStartedAt: 2000 }],
+      retained: result.toRetain,
+      now: 30000
+    })
+    expect(rows.map((row) => row.paneKey)).toEqual([paneKey, quiet.paneKey])
   })
 })

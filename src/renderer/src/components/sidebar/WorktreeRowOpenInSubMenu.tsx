@@ -5,7 +5,6 @@ import { resolveWorktreeRowOpenInRuntimeOwner } from '@/lib/worktree-row-open-in
 import type { Worktree } from '../../../../shared/worktree/types'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 
-/** Open in submenu for one sidebar row, guarded by the host that owns that row. */
 export function WorktreeRowOpenInSubMenu({
   worktree,
   connectionId,
@@ -15,7 +14,7 @@ export function WorktreeRowOpenInSubMenu({
   connectionId: string | null
   disabled?: boolean
 }): React.JSX.Element {
-  // Why: resolved only while the menu is open, not per row on every store update.
+  // Resolve owner only while its menu is open, avoiding per-row work on unrelated store updates.
   const owner = useAppStore(useShallow((s) => resolveWorktreeRowOpenInRuntimeOwner(s, worktree)))
   return (
     <WorktreeOpenInSubMenu

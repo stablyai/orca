@@ -1,25 +1,6 @@
-// Where each Claude tool call this session journaled came from.
-//
-// Two questions, one registry, because both are answered by the same fact —
-// which agent's row carried a tool call:
-//
-// A task announces the tool call that spawned it. That tool call is only
-// evidence the user can act on when it was forwarded at the TOP level: a nested
-// Task spawned from inside a subagent's sidechain names a tool id that exists
-// only in that sidechain, and a row minted for it would claim a top-level
-// invocation that never appeared. So admission asks this registry, and a task
-// whose parent was never forwarded yields no row at all.
-//
-// The same sidechain tool id is also the only handle a GRANDCHILD's frames
-// carry. Recording which child journaled it is what lets a grandchild row name
-// its real parent instead of leaving the field absent, which under this
-// journal's semantics would claim the session's own agent spawned it.
+// Top-level calls gate task-row admission; child-owned calls identify grandchildren's parents.
 
-/** Both stores are event-accumulated and pruned by nothing, so both are
- *  bounded. Eviction is oldest first: a tool id old enough to fall out can no
- *  longer be the parent of a task announcement still in flight. They are kept
- *  separate so that heavy sidechain traffic cannot evict the top-level spawn
- *  ids an announcement is still expected for. */
+/** Bound stores independently so child traffic cannot evict top-level spawn evidence. */
 const MAX_TOP_LEVEL_TOOL_IDS = 512
 const MAX_CHILD_TOOL_ORIGINS = 512
 
@@ -27,7 +8,6 @@ export class ClaudeToolOriginRegistry {
   private readonly topLevel = new Set<string>()
   private readonly childOwnerRefs = new Map<string, string>()
 
-  /** Record a tool call journaled at the top level, by the session's own agent. */
   recordTopLevel(toolUseId: string): void {
     if (toolUseId.length === 0) {
       return
@@ -43,9 +23,7 @@ export class ClaudeToolOriginRegistry {
     }
   }
 
-  /** Record a tool call journaled by a CHILD, against the reference that names
-   *  the child. The reference, not an identity: the child's own identity may
-   *  still be provisional here, and is resolved when a row is stamped. */
+  /** Retain the owner reference so provisional child identity can resolve when stamping rows. */
   recordChildOwned(toolUseId: string, ownerRef: string): void {
     if (toolUseId.length === 0 || ownerRef.length === 0) {
       return
@@ -65,8 +43,7 @@ export class ClaudeToolOriginRegistry {
     return this.topLevel.has(toolUseId)
   }
 
-  /** The reference naming the child that journaled this tool call, or null when
-   *  no child did — either the session's own agent did, or it was never seen. */
+  /** Null means a root-owned or unseen call. */
   childOwnerRef(toolUseId: string): string | null {
     return this.childOwnerRefs.get(toolUseId) ?? null
   }

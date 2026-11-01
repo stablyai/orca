@@ -39,8 +39,7 @@ describe('absolute file CLI paths', () => {
     vi.restoreAllMocks()
     callMock.mockReset()
     process.exitCode = undefined
-    // Why: a contributor running this suite inside WSL inherits a real
-    // WSL_DISTRO_NAME, which would flip the rewrite on for every case below.
+    // Prevent a real WSL_DISTRO_NAME from enabling the rewrite in unrelated cases.
     vi.stubEnv('WSL_DISTRO_NAME', '')
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -142,8 +141,7 @@ describe('absolute file CLI paths', () => {
       expectOpenedWith('xxx/xxx.ts')
     })
 
-    // Why: backslash is a legal Linux filename character, but reads as a separator
-    // once the path is UNC — rewriting `a\b.ts` would open `a/b.ts` instead.
+    // Backslashes are filename characters on Linux but separators in UNC paths.
     it('leaves a Linux path containing a backslash for the runtime guard', async () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
       mockWorktreeShow(uncRoot)
@@ -162,8 +160,7 @@ describe('absolute file CLI paths', () => {
       expectOpenedWith('/root/orca/workspaces/xxx/xxx/xxx.ts')
     })
 
-    // Why: WSL_DISTRO_NAME is also set for a plain Linux CLI inside the distro, where
-    // roots are POSIX; prefixing there would strand every absolute path (#11393 regression).
+    // WSL_DISTRO_NAME also exists for Linux-native runtimes with POSIX roots.
     it('keeps relativizing POSIX roots while WSL_DISTRO_NAME is set', async () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
       mockWorktreeShow('/root/orca/workspaces/xxx')
@@ -182,7 +179,6 @@ describe('absolute file CLI paths', () => {
       expectOpenedWith('/root/orca/workspaces/xxx-2/xxx.ts')
     })
 
-    // Why: Windows folds the distro segment, so only its case may differ from the root.
     it('matches when only the distro case differs', async () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'ubuntu')
       mockWorktreeShow(uncRoot)
@@ -210,8 +206,7 @@ describe('absolute file CLI paths', () => {
       expectOpenedWith('xxx/xxx.ts')
     })
 
-    // Why: WSL_DISTRO_NAME only arrives if interop forwards it, but the launcher
-    // always sets ORCA_CLI_CWD, which reaches the handler as the invocation cwd.
+    // ORCA_CLI_CWD remains available when interop omits WSL_DISTRO_NAME.
     it('falls back to the distro named by a UNC cwd', async () => {
       mockWorktreeShow(uncRoot)
 

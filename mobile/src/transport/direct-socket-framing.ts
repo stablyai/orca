@@ -63,8 +63,7 @@ function createV2Framing(args: Parameters<typeof createDirectSocketFraming>[0]) 
     },
     onText: events.onText,
     onBinary: events.onBinary,
-    // Why: a handshake failure (a re-keyed host, or a legacy e2ee_ready answering a v2
-    // hello) counts against the auth retry budget, as a legacy 4001 did — never a downgrade.
+    // Count handshake failures against auth retries; a legacy reply to a v2 hello must never trigger downgrade.
     onError: (error) =>
       error instanceof MobileE2EEAuthenticationError || !authenticated
         ? events.onAuthRejected()
@@ -131,7 +130,6 @@ function createLegacyFraming(args: Parameters<typeof createDirectSocketFraming>[
       void sendAuth()
       return
     }
-    // The authenticated handshake messages are encrypted.
     const plaintext = keyed ? handshake.channel.openText(raw) : null
     if (plaintext === null) {
       return

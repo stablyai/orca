@@ -1,55 +1,55 @@
 import { stat } from 'node:fs/promises'
+import { PetImportError } from '../../shared/pet-import-failure-copy'
 import { isAbsolute, resolve, sep } from 'node:path'
 import { classifyFile } from './pet-image-formats'
 import { MAX_BYTES } from './pet-import-size-limits'
 import { isSymlink } from './pet-symlink-safe-copy'
 import type { PetManifestLike, ResolvedPetManifest } from './pet-bundle'
 
-/** Validated spritesheet source inside a bundle: an absolute path plus its allowlisted format. */
 export async function resolveBundleSpritesheetSource<T extends PetManifestLike>(
   manifest: ResolvedPetManifest<T>,
   bundleDir: string
 ): Promise<{ sheetSrc: string; sheetClass: { mimeType: string; ext: string } }> {
-  // Why: spritesheetPath is bundle-relative and attacker-controlled — reject absolute/escaping paths (and symlinks) so a bundle can't reach outside.
+  // Manifest paths are untrusted; require a relative path before the containment and symlink checks.
   const normalizedSpritePath = manifest.spritesheetPath.replace(/[\\/]+/g, sep)
   if (
     isAbsolute(manifest.spritesheetPath) ||
     isAbsolute(normalizedSpritePath) ||
     /^[a-zA-Z]:/.test(manifest.spritesheetPath)
   ) {
-    throw new Error('spritesheetPath must be relative to the bundle.')
+    throw new PetImportError('sheetPathNotRelative')
   }
-  // Why: bundles exported on Windows may be imported on macOS/Linux; normalize separators before resolving.
+  // Accept Windows-exported bundles on macOS/Linux.
   const sheetSrc = resolve(bundleDir, normalizedSpritePath)
   const bundleResolved = resolve(bundleDir)
   if (sheetSrc === bundleResolved) {
-    throw new Error('spritesheetPath must point to a file, not the bundle root.')
+    throw new PetImportError('sheetPathIsRoot')
   }
   const bundleRoot = bundleResolved + sep
-  // Why: Windows volumes are case-insensitive; lowercase the prefix compare so case differences can't bypass the escape check.
+  // Match paths case-insensitively on Windows.
   const cmp = process.platform === 'win32' ? (s: string) => s.toLowerCase() : (s: string) => s
   if (!cmp(sheetSrc + sep).startsWith(cmp(bundleRoot))) {
-    throw new Error('spritesheetPath escapes the bundle.')
+    throw new PetImportError('sheetPathEscapes')
   }
   if (await isSymlink(sheetSrc)) {
-    throw new Error('spritesheet must not be a symlink.')
+    throw new PetImportError('sheetSymlink')
   }
   const sheetClass = classifyFile(sheetSrc)
   if (!sheetClass || sheetClass.ext === '.svg') {
-    // SVG can't be used as a sprite sheet (no pixel grid).
-    throw new Error('Spritesheet must be a PNG, APNG, JPG, GIF, or WebP.')
+    // Sprite layouts require raster dimensions.
+    throw new PetImportError('sheetUnsupportedType')
   }
   let sheetStat: Awaited<ReturnType<typeof stat>>
   try {
     sheetStat = await stat(sheetSrc)
   } catch {
-    throw new Error('Spritesheet file not found.')
+    throw new PetImportError('sheetNotFound')
   }
   if (!sheetStat.isFile()) {
-    throw new Error('Spritesheet path is not a file.')
+    throw new PetImportError('sheetNotAFile')
   }
   if (sheetStat.size > MAX_BYTES) {
-    throw new Error(`Spritesheet is too large (${(sheetStat.size / (1024 * 1024)).toFixed(1)} MB).`)
+    throw new PetImportError('sheetTooLarge', { size: (sheetStat.size / (1024 * 1024)).toFixed(1) })
   }
   return { sheetSrc, sheetClass }
 }

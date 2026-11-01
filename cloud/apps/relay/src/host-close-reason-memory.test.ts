@@ -67,16 +67,15 @@ describe('HostCloseReasonMemory', () => {
   })
 
   it('re-recording refreshes recency so a live host is not evicted first', () => {
-    const clock = { now: 1_000 }
-    const memory = memoryAt(clock)
-    memory.record('a', RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
-    memory.record('b', RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
-    memory.record('a', RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
-
-    expect([...['a', 'b'].map((key) => memory.read(key))]).toEqual([
-      RELAY_HOST_CLOSE_REASON.SIGNED_OUT,
-      RELAY_HOST_CLOSE_REASON.SIGNED_OUT
-    ])
-    expect(memory.size()).toBe(2)
+    const memory = memoryAt({ now: 1_000 })
+    for (let index = 0; index < 50_000; index++) {
+      memory.record(`host-${index}`, RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
+    }
+    memory.record('host-0', RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
+    memory.record('overflow', RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
+    expect(memory.size()).toBe(50_000)
+    expect(memory.read('host-0')).toBe(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
+    expect(memory.read('host-1')).toBeNull()
+    expect(memory.read('overflow')).toBe(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
   })
 })

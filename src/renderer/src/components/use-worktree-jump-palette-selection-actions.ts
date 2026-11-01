@@ -1,3 +1,4 @@
+import { skipPaletteExitAnimation } from './worktree-jump-palette-exit-animation'
 import { useWorktreeJumpPaletteTaskSelection } from './use-worktree-jump-palette-task-selection'
 import type { WorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'
 import { useCallback } from 'react'
@@ -62,6 +63,13 @@ export function useWorktreeJumpPaletteSelectionActions({
   previousWorktreeIdRef,
   previousFocusElementRef
 }: WorktreeJumpPaletteSelectionActionsInput) {
+  // Why: the selection moves focus itself, so closing must not restore the prior target.
+  const dismissForSelection = useCallback(() => {
+    skipRestoreFocusRef.current = true
+    skipPaletteExitAnimation()
+    closeModal()
+    setSelectedItemId('')
+  }, [closeModal, setSelectedItemId, skipRestoreFocusRef])
   const handleSelectWorktree = useCallback(
     (worktree: Worktree) => {
       const executionHostId = getPaletteWorktreeExecutionHostId(worktree)
@@ -80,15 +88,12 @@ export function useWorktreeJumpPaletteSelectionActions({
         return
       }
       recordFeatureInteraction('cmd-j-workspace-open')
-      skipRestoreFocusRef.current = true
-      closeModal()
-      setSelectedItemId('')
+      dismissForSelection()
       if (!queueWorkspaceActivationTerminalFocus(worktree.id, activation)) {
         focusFallbackSurface()
       }
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-    [closeModal, focusFallbackSurface, recordFeatureInteraction]
+    [dismissForSelection, focusFallbackSurface, recordFeatureInteraction]
   )
   const handleSelectBrowserPage = useCallback(
     (result: BrowserPaletteSearchResult) => {
@@ -111,13 +116,10 @@ export function useWorktreeJumpPaletteSelectionActions({
         return
       }
       recordFeatureInteraction('cmd-j-browser-page-open')
-      skipRestoreFocusRef.current = true
-      closeModal()
-      setSelectedItemId('')
+      dismissForSelection()
       requestBrowserFocus({ pageId: activation.pageId, target: activation.focusTarget })
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-    [closeModal, recordFeatureInteraction, requestBrowserFocus]
+    [dismissForSelection, recordFeatureInteraction, requestBrowserFocus]
   )
   const handleSelectSimulatorTab = useCallback(
     (result: SimulatorPaletteSearchResult) => {
@@ -139,12 +141,9 @@ export function useWorktreeJumpPaletteSelectionActions({
         )
         return
       }
-      skipRestoreFocusRef.current = true
-      closeModal()
-      setSelectedItemId('')
+      dismissForSelection()
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-    [closeModal]
+    [dismissForSelection]
   )
   const handleSelectWorkspaceTab = useCallback(
     (result: WorkspaceTabPaletteSearchResult) => {
@@ -166,12 +165,9 @@ export function useWorktreeJumpPaletteSelectionActions({
         )
         return
       }
-      skipRestoreFocusRef.current = true
-      closeModal()
-      setSelectedItemId('')
+      dismissForSelection()
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-    [closeModal]
+    [dismissForSelection]
   )
   const handleSelectSettings = useCallback(
     (result: CmdJSettingsResult) => {
@@ -179,24 +175,19 @@ export function useWorktreeJumpPaletteSelectionActions({
       if (result.targetSectionId) {
         target.sectionId = result.targetSectionId
       }
-      skipRestoreFocusRef.current = true
-      closeModal()
-      setSelectedItemId('')
+      dismissForSelection()
       openSettingsTarget(target)
       openSettingsPage()
       recordFeatureInteraction('cmd-j-settings-open')
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-    [closeModal, openSettingsPage, openSettingsTarget, recordFeatureInteraction]
+    [dismissForSelection, openSettingsPage, openSettingsTarget, recordFeatureInteraction]
   )
   const handleSelectQuickAction = useCallback(
     (action: CmdJActionResult) => {
       if (action.sourceQuery !== undefined && liveQueryRef.current.trim() !== action.sourceQuery) {
         return
       }
-      skipRestoreFocusRef.current = true
-      closeModal()
-      setSelectedItemId('')
+      dismissForSelection()
       const context = buildQuickActionContext()
       void action
         .run(context)
@@ -224,8 +215,7 @@ export function useWorktreeJumpPaletteSelectionActions({
           )
         })
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-    [buildQuickActionContext, closeModal, recordFeatureInteraction]
+    [buildQuickActionContext, dismissForSelection, liveQueryRef, recordFeatureInteraction]
   )
   const handleSelectProjectTarget = useCallback(
     (result: CmdJProjectSearchResult) => {
@@ -247,13 +237,19 @@ export function useWorktreeJumpPaletteSelectionActions({
         focusFallbackSurface(previousFocusElementRef.current)
       }
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
     [
       closeModal,
       focusFallbackSurface,
+      previousActiveTabTypeRef,
+      previousBrowserFocusTargetRef,
+      previousBrowserPageIdRef,
+      previousFocusElementRef,
+      previousWorktreeIdRef,
       recordFeatureInteraction,
       requestBrowserFocus,
-      revealSidebarRow
+      revealSidebarRow,
+      setSelectedItemId,
+      skipRestoreFocusRef
     ]
   )
   const handleSelectTask = useWorktreeJumpPaletteTaskSelection({

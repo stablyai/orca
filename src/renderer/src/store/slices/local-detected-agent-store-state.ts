@@ -5,7 +5,14 @@ import type {
 } from '../../../../shared/shell-path-hydration-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
+/** `wakeWslDistro`: a user act (a click, a runtime choice) that may start a stopped WSL distro. */
+export type LocalAgentRefreshOptions = { wakeWslDistro?: boolean }
+
 export type LocalDetectedAgentState = {
+  readLocalAgentInventory: (worktreeId?: string | null) => {
+    ids: TuiAgent[] | null
+    state: 'pending' | 'successful' | 'failed'
+  }
   detectedAgentIds: TuiAgent[] | null
   isDetectingAgents: boolean
   isRefreshingAgents: boolean
@@ -14,9 +21,21 @@ export type LocalDetectedAgentState = {
   isRefreshingLocalAgentsByContext: Record<string, boolean>
   pathSource: PathSource | null
   pathFailureReason: ShellHydrationFailureReason | null
+  ensureAllDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
+  refreshAllDetectedAgents: (
+    worktreeId?: string | null,
+    options?: LocalAgentRefreshOptions
+  ) => Promise<TuiAgent[]>
   ensureNativeDetectedAgents: () => Promise<TuiAgent[]>
   ensureDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
-  refreshDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
+  /** The focused (or given) workspace's last agent probe was refused because its WSL distro was not running. */
+  isLocalAgentInventoryRefused: (worktreeId?: string | null) => boolean
+  /** Opening an agent-launch picker is a user act: a list a stopped WSL distro refused may wake it. */
+  ensureDetectedAgentsForPicker: (worktreeId?: string | null) => Promise<TuiAgent[]>
+  refreshDetectedAgents: (
+    worktreeId?: string | null,
+    options?: LocalAgentRefreshOptions
+  ) => Promise<TuiAgent[]>
   clearLocalDetectedAgentContextsForProjects: (projectIds: readonly string[]) => void
   clearLocalDetectedAgents: () => void
 }

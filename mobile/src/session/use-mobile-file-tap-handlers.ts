@@ -1,8 +1,9 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { triggerSelection } from '../platform/haptics'
 import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
-import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
+import { openMobileNativeChatFileTap } from './native-chat/visual/mobile-native-chat-open-file'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
@@ -23,22 +24,11 @@ type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
   reportChatTapFailure: (message: string) => void
 }
 
-/**
- * Tap-to-open handlers for file references, shared by the terminal (link taps
- * with the terminal's cwd) and native chat (worktree-root-relative paths, with
- * failure feedback). Handlers are identity-stable and read the latest options at
- * dispatch time; the shared activation seq lets a newer tap on either surface
- * supersede an in-flight one.
- */
+// Share stable dispatch-time handlers and activation sequence so newer terminal/chat file taps supersede in-flight opens.
 export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   options: MobileFileTapHandlerOptions<T>
 ): {
-  handleFileTap: (
-    handle: string,
-    pathText: string,
-    line: number | null,
-    column: number | null
-  ) => void
+  handleFileTap: (handle: string, candidates: readonly ParsedFileLinkLocation[]) => void
   handleNativeChatFileTap: (pathText: string) => void
 } {
   const {
@@ -102,9 +92,13 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   ])
 
   const handleFileTap = useCallback(
-    (handle: string, pathText: string, line: number | null, column: number | null) => {
+    (handle: string, candidates: readonly ParsedFileLinkLocation[]) => {
       const current = optionsRef.current
-      if (handle !== current.activeHandleRef.current || !current.client) {
+      if (
+        handle !== current.activeHandleRef.current ||
+        !current.client ||
+        candidates.length === 0
+      ) {
         return
       }
       const activationSeq = ++activationSeqRef.current
@@ -114,10 +108,8 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         worktreeId: current.worktreeId,
         worktreeName: current.worktreeName,
         terminalHandle: handle,
-        pathText,
         cwd: current.terminalCwdRef.current.get(handle) ?? null,
-        line,
-        column,
+        candidates,
         pushPreviewRoute: (href) => routerRef.current.push(href),
         openBrowser: current.openBrowser,
         triggerOpenFeedback: triggerSelection,

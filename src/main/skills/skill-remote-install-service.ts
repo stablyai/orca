@@ -28,7 +28,7 @@ import { retrySkillTransferRpc } from './skill-transfer-rpc-retry'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
-} from '../../shared/remote-runtime-client-error-classification'
+} from '../../shared/remote-runtime/remote-runtime-client-error-classification'
 
 const DIRECT_DOWNLOAD_FAILURE = 'skill-download-transport-failed'
 const DEVELOPMENT_DOWNLOAD_POLICY_FAILURES = new Set([

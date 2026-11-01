@@ -97,9 +97,7 @@ export function getActiveAgentNoteTarget(
   if (entry && isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
     return noteTarget
   }
-  // Why: freshly opened agents can be idle before their first hook event. Use
-  // renderer title/launch hints only to show the option; runtime still verifies
-  // the focused terminal is an idle agent before sending Enter.
+  // Idle-before-first-hook hints only expose the option; runtime still verifies the focused agent is idle before Enter.
   if (!hasFocusedPaneAgentHint(state, worktreeId, noteTarget)) {
     return null
   }
@@ -119,8 +117,7 @@ export function getActiveAgentRuntimeProbeDescriptor(
   if (!activePtyId) {
     return null
   }
-  // Route by the worktree's owner host so the probe targets the host that runs
-  // this worktree's agent terminal, not the focused runtime.
+  // Probe the worktree’s owner host rather than the focused runtime.
   const runtimeTarget = runtimeTargetForOwnerEnvironment(
     runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
@@ -161,7 +158,12 @@ export async function findActiveRuntimeTerminal(
   runtimeTarget: RuntimeClientTarget,
   worktreeId: string,
   noteTarget: ActiveTerminalNoteTarget,
-  timeoutMs: number
+  timeoutMs: number,
+  options: {
+    signal?: AbortSignal
+    expectedEnvironmentPairingRevision?: number
+    beforeSend?: () => void
+  } = {}
 ): Promise<RuntimeTerminalListResult['terminals'][number] | null> {
   const { terminals } = await callRuntimeRpc<RuntimeTerminalListResult>(
     runtimeTarget,
@@ -172,7 +174,7 @@ export async function findActiveRuntimeTerminal(
       limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT,
       includeVisualLayouts: false
     },
-    { timeoutMs }
+    { timeoutMs, ...options }
   )
   // Why: paired renderer tabs wrap the host id with `web-terminal-*`.
   const runtimeTabId = toHostSessionTabId(noteTarget.tabId)
@@ -195,8 +197,7 @@ function getActivePanePtyId(
   const ptyIdsByLeafId = state.terminalLayoutsByTabId[noteTarget.tabId]?.ptyIdsByLeafId
   if (ptyIdsByLeafId && Object.keys(ptyIdsByLeafId).length > 0) {
     const activeLeafPtyId = ptyIdsByLeafId[noteTarget.leafId]
-    // Why: layout maps can survive sleep/reconnect; ptyIdsByTabId is the live
-    // PTY source of truth for whether submitting with Enter is currently safe.
+    // Layout maps can survive reconnect; only live ptyIdsByTabId bindings make Enter safe.
     return activeLeafPtyId && livePtyIds.includes(activeLeafPtyId) ? activeLeafPtyId : null
   }
   return livePtyIds[0] ?? null

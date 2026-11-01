@@ -3,15 +3,9 @@ import type { SectionList, SectionListData } from 'react-native'
 
 type WithId = { worktreeId: string; isActive?: boolean }
 
-// Scrolls the highlighted (isActive) worktree into view when the highlight
-// moves to a different workspace. A highlight a search or fold hides and then
-// shows again is the same workspace, so it never yanks the list. Returns the
-// ref to attach to the SectionList and the onScrollToIndexFailed handler it
-// needs for rows that aren't measured yet (variable heights from the inline
-// agent list).
+// Scroll only when the active workspace changes; revealing the same workspace after search/unfold must not yank the list. Retry unmeasured variable-height rows.
 export function useActiveWorktreeScroll<T extends WithId, S>(
   sections: readonly (SectionListData<T, S> & { data: readonly T[] })[],
-  /** The folded sections: a highlight an unfold first reveals is not scrolled to either. */
   collapsedGroups?: ReadonlySet<string>
 ): {
   sectionListRef: React.RefObject<SectionList<T, S> | null>
@@ -33,8 +27,7 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
     return null
   }, [sections])
 
-  // Live mirror of the current active id so the deferred retry can bail if the
-  // selection changed during its timeout (avoids a brief scroll to a stale row).
+  // Use the current active id to reject deferred retries after selection changes.
   const activeWorktreeIdRef = useRef<string | null>(activeWorktreeId)
   activeWorktreeIdRef.current = activeWorktreeId
 
@@ -77,8 +70,6 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
       }
       setTimeout(
         () => {
-          // Bail if the active selection moved on while we waited — otherwise we'd
-          // scroll to a now-stale row before the effect corrects it.
           if (activeWorktreeIdRef.current === target) {
             scrollToWorktree(target)
           }

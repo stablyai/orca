@@ -1,5 +1,4 @@
-// Editor tabs whose file record the window dropped, in a layout-owner build: main closes them.
-// A single tab's close goes through `closeContentTabThroughLayoutOwner`.
+// Main closes orphaned editor tabs in layout-owner builds; single-tab close uses closeContentTabThroughLayoutOwner.
 
 import { sendLayoutApply } from '@/runtime/layout-apply-send'
 import {
@@ -13,11 +12,7 @@ import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from './editor-tab-content-type'
 
-/**
- * closeFile's tabs: main closes each, and the file's content goes once every close is in, unless
- * one was refused or the file reopened meanwhile. A repeat close joins the one in flight; so does
- * the file's cleanup, unless that close (a bulk close's) carries none.
- */
+/** Drop file content once all tab closes succeed, unless reopened/refused. Repeated closeFile joins pending closes and their existing cleanup; bulk closes may carry none. */
 export function closeFileTabsThroughLayoutOwner(
   get: () => AppState,
   tabIds: readonly string[],

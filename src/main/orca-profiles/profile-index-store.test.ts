@@ -22,9 +22,7 @@ import {
 
 const testState = { dir: '' }
 
-// Why the port and not vi.mock('electron'): profile path resolution reads AppEnvironment
-// now, so an electron mock would be inert and every case would share the global fake's
-// one temp dir instead of its own.
+// Profile resolution uses AppEnvironment; an Electron mock would leave the global fake directory.
 installFakeAppEnvironment({ getPath: () => testState.dir })
 
 async function loadProfileIndexStore() {
@@ -39,7 +37,7 @@ function readJson(path: string): unknown {
 describe('profile index store', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-profile-test-'))
-    // Why re-install per test: the global setup's beforeEach reinstates its own fake.
+    // Global test setup reinstalls its own fake before each test.
     installFakeAppEnvironment({ getPath: () => testState.dir })
   })
 
@@ -245,7 +243,6 @@ describe('profile index store', () => {
     const store = await loadProfileIndexStore()
     store.ensureActiveOrcaProfile()
     const created = store.createLocalOrcaProfile({ name: 'Work' })
-    // Trigger one more write so the backup captures the two-profile index.
     store.setActiveOrcaProfile(created.profile.id)
 
     const indexPath = store.getOrcaProfileIndexPath()

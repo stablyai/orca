@@ -9,7 +9,6 @@ import type { HostTerminalLedger, OtherDaemonsShare } from './host-terminal-ledg
 import type { HostTerminalShare } from './host-terminal-ledger-entry'
 import { TerminalSpawnDeferredError } from './terminal-spawn-deferred-error'
 
-/** This daemon's part of the host-wide terminal count and automatic-restore budget. */
 export class TerminalSpawnHostShare {
   private readonly liveSessions = new Set<string>()
   private automaticAdmits: number[] = []
@@ -24,7 +23,7 @@ export class TerminalSpawnHostShare {
     return this.automaticAdmits
   }
 
-  /** Every other daemon's share; also lets this daemon's old admits age out. */
+  /** Also expire this daemon's old admission timestamps. */
   readOthers(now: number): OtherDaemonsShare {
     this.automaticAdmits = recentAutomaticAdmits(this.automaticAdmits, now)
     return this.ledger.readOthers()
@@ -35,12 +34,12 @@ export class TerminalSpawnHostShare {
     return this.liveSessions.size + interactive + user + automatic
   }
 
-  tryReserve(state: SpawnAdmissionState): boolean {
-    return this.ledger.tryReserve(this.share(state))
+  tryReserve(state: SpawnAdmissionState, maximum = this.maxTerminals): boolean {
+    return this.ledger.tryReserve(this.share(state), maximum)
   }
 
   recordAutomaticAdmit(now: number): void {
-    // Why a new array: the ledger compares against the share it last wrote to skip rewrites.
+    // Keep published snapshots immutable so the ledger can detect changes.
     this.automaticAdmits = [...this.automaticAdmits, now]
   }
 
@@ -78,8 +77,7 @@ export class TerminalSpawnHostShare {
   }
 }
 
-/** A caller that declared a restore keeps its pane sleeping with its handle; every other
- *  caller, old ones included, gets a plain message it already renders as an error. */
+/** Declared restores retain sleeping panes; other callers need the legacy error message. */
 export function hostTerminalCapRefusal(facts: SpawnRequestFacts, charge: SpawnCharge): Error {
   return facts.declaredIntent !== null && charge !== 'interactive'
     ? new TerminalSpawnDeferredError('live_cap')

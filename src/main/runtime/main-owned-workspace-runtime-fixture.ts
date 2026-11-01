@@ -1,5 +1,4 @@
-// A windowless layout-owner runtime holding one terminal tab of a workspace main owns: its store
-// applies layout commands in memory and tells write listeners, as main's terminal list relies on.
+// Windowless main-owned layout fixture: apply in memory and notify writes so terminal listings refresh.
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
@@ -105,7 +104,6 @@ export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolea
     },
     getForegroundProcess: async () => null
   })
-  // No window: the headless graph is the one publisher.
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   const ptyIds = opts.split ? [PTY_A, PTY_B] : [PTY_A]
   for (const [index, ptyId] of ptyIds.entries()) {
@@ -119,7 +117,6 @@ export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolea
   }
   const handleOf = (ptyId: string): string =>
     internals.issuePtyHandle(internals.ptysById.get(ptyId))
-  // A paired client's layout stream: each change main makes is one frame.
   let frames = 0
   runtime.subscribeWorkspaceLayouts(() => {
     frames += 1

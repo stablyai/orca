@@ -1,4 +1,5 @@
 import type {
+  BundledSkillAutoUpdateRequest,
   BundledSkillInstallResult,
   BundledSkillExecuteRequest,
   BundledSkillPlan,
@@ -9,6 +10,7 @@ import {
   type BundledSkillSelection
 } from '../skills/bundled-skill-install/local-host'
 import {
+  autoUpdateInstalledBundledSkills,
   installBundledSkills,
   previewBundledSkillInstall,
   type BundledSkillServiceInput
@@ -26,9 +28,7 @@ function bundledSkillSelection(request: BundledSkillPlanRequest): BundledSkillSe
   }
 }
 
-// Why global: these are the user's own agents. Without names this is the app's Update skills,
-// which never adds a skill the user did not install. A paired server or SSH host plans this on
-// its own host over RPC.
+// Install globally for the user's agents; Update skills without names never adds uninstalled skills. Remote hosts plan via their own RPC.
 async function appInput(
   host: RuntimeSkillCommandHost,
   request: BundledSkillPlanRequest
@@ -37,7 +37,7 @@ async function appInput(
     { scope: 'global' },
     createSkillInstallAuthority(host)
   )
-  // Why: a cloud transaction this process is still recovering holds the same paths.
+  // Recovery may still hold these paths for a cloud transaction.
   await host.skillTransactionRecovery
   return localBundledSkillInput({
     userDataPath: host.getUserDataPath(),
@@ -60,6 +60,16 @@ export async function executeLocalBundledSkills(
 ): Promise<BundledSkillInstallResult> {
   const result = await installBundledSkills(await appInput(host, request), planDigest)
   // Discovery would otherwise serve its pre-install answer from cache.
+  clearSkillDiscoveryCaches()
+  return result
+}
+
+export async function autoUpdateLocalBundledSkills(
+  host: RuntimeSkillCommandHost,
+  { names }: BundledSkillAutoUpdateRequest
+): Promise<BundledSkillInstallResult> {
+  const input = await appInput(host, {})
+  const result = await autoUpdateInstalledBundledSkills({ ...input, names })
   clearSkillDiscoveryCaches()
   return result
 }

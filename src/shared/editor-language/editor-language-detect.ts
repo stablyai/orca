@@ -1,3 +1,4 @@
+import { parseSetupScriptShebang } from '../setup-script-shebang'
 import { detectMonacoFilenameLanguage } from './monaco-filename-language'
 
 function extname(filePath: string): string {
@@ -10,10 +11,7 @@ function extname(filePath: string): string {
 }
 
 const EXT_TO_LANGUAGE: Record<string, string> = {
-  // Why: Monaco's built-in language registry maps .tsx/.cts/.mts onto the
-  // 'typescript' language id and .jsx/.mjs/.cjs onto 'javascript' — there is
-  // no separate 'typescriptreact'/'javascriptreact' id. Returning the base id
-  // is what gives .tsx/.jsx files syntax highlighting in the editor.
+  // Monaco uses typescript/javascript for React and module extensions too; separate React IDs would lose highlighting.
   '.ts': 'typescript',
   '.tsx': 'typescript',
   '.cts': 'typescript',
@@ -24,15 +22,15 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.cjs': 'javascript',
   '.json': 'json',
   '.jsonc': 'json',
-  // Why: JSONL is one JSON value per line; a dedicated 'jsonl' language gives
-  // JSON-style color without attaching JSON whole-document diagnostics that
-  // would flag every record after line one as trailing content.
+  // Excalidraw scenes are JSON documents; Source shows them as such.
+  '.excalidraw': 'json',
+  // Dedicated jsonl coloring avoids whole-document JSON diagnostics flagging every record after the first.
   '.jsonl': 'jsonl',
+  '.env': 'dotenv',
   '.ipynb': 'notebook',
   '.md': 'markdown',
   '.mdx': 'markdown',
-  // Why: Quarto/R Markdown are Markdown plus a YAML header and executable
-  // cells; the 'markdown' grammar leaves ```{r}/```{python} cells uncolored.
+  // Quarto/R Markdown need executable-cell coloring beyond Markdown’s grammar.
   '.qmd': 'quarto',
   '.rmd': 'quarto',
   '.rmarkdown': 'quarto',
@@ -46,14 +44,14 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   // Why: stopgap until a real JSP grammar — 'html' colors the markup; <% %> and ${} stay plain.
   '.jsp': 'html',
   '.jspf': 'html',
-  // Why: Monaco declares Liquid as both '.liquid' and '.html.liquid'; the final-extension
-  // lookup below covers the compound form, so the single entry is enough.
+  // Final-extension lookup also covers Monaco’s compound .html.liquid association.
   '.liquid': 'liquid',
   '.twig': 'twig',
   '.xml': 'xml',
   '.svg': 'xml',
   '.py': 'python',
   '.rs': 'rust',
+  '.zig': 'zig',
   '.go': 'go',
   '.java': 'java',
   '.kt': 'kotlin',
@@ -64,6 +62,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.cc': 'cpp',
   '.cxx': 'cpp',
   '.hpp': 'cpp',
+  '.cu': 'cuda-cpp',
+  '.cuh': 'cuda-cpp',
   '.cs': 'csharp',
   // Why: Monaco's apex grammar claims only '.cls'; triggers and anonymous-Apex scripts share it.
   '.cls': 'apex',
@@ -73,6 +73,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.php': 'php',
   '.swift': 'swift',
   '.sh': 'shell',
+  '.just': 'shell',
   '.bash': 'shell',
   '.zsh': 'shell',
   '.fish': 'shell',
@@ -92,7 +93,14 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.proto': 'proto',
   '.lua': 'lua',
   '.r': 'r',
+  '.make': 'makefile',
   '.scala': 'scala',
+  '.groovy': 'groovy',
+  '.gvy': 'groovy',
+  '.gy': 'groovy',
+  '.gsh': 'groovy',
+  '.gradle': 'groovy',
+  '.jenkinsfile': 'groovy',
   '.dart': 'dart',
   '.ex': 'elixir',
   '.exs': 'elixir',
@@ -105,6 +113,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.vue': 'vue',
   '.svelte': 'svelte',
   '.astro': 'astro',
+  '.gjs': 'glimmer-js',
+  '.gts': 'glimmer-ts',
   '.sv': 'systemverilog',
   '.svh': 'systemverilog',
   '.v': 'verilog',
@@ -112,6 +122,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.nim': 'nim',
   '.nims': 'nim',
   '.nimble': 'nim',
+  '.lean': 'lean',
   '.typ': 'typst',
   '.tf': 'hcl',
   '.hcl': 'hcl',
@@ -123,15 +134,20 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
 
 const FILENAME_TO_LANGUAGE: Record<string, string> = {
   Dockerfile: 'dockerfile',
+  Jenkinsfile: 'groovy',
   Makefile: 'makefile',
+  Justfile: 'shell',
+  '.justfile': 'shell',
   'CMakeLists.txt': 'cmake',
   '.gitignore': 'ini',
   '.gitattributes': 'ini',
   '.editorconfig': 'ini',
-  '.env': 'ini',
-  '.env.local': 'ini',
-  '.env.development': 'ini',
-  '.env.production': 'ini',
+  '.env': 'dotenv',
+  '.env.local': 'dotenv',
+  '.env.development': 'dotenv',
+  '.env.production': 'dotenv',
+  // .envrc is sourced as a shell script.
+  '.envrc': 'shell',
   '.bashrc': 'shell',
   '.bash_profile': 'shell',
   '.bash_login': 'shell',
@@ -149,8 +165,44 @@ const FILENAME_LOWER_TO_LANGUAGE: Record<string, string> = Object.fromEntries(
   Object.entries(FILENAME_TO_LANGUAGE).map(([name, language]) => [name.toLowerCase(), language])
 )
 
-export function detectLanguage(filePath: string): string {
-  // Check exact filename first
+const SHEBANG_INTERPRETER_TO_LANGUAGE: Record<string, string> = {
+  sh: 'shell',
+  bash: 'shell',
+  zsh: 'shell',
+  dash: 'shell',
+  ksh: 'shell',
+  ash: 'shell',
+  fish: 'shell',
+  python: 'python',
+  pypy: 'python',
+  node: 'javascript',
+  nodejs: 'javascript',
+  deno: 'javascript',
+  bun: 'javascript',
+  'ts-node': 'typescript',
+  tsx: 'typescript',
+  ruby: 'ruby',
+  perl: 'perl',
+  php: 'php',
+  lua: 'lua',
+  luajit: 'lua',
+  pwsh: 'powershell',
+  powershell: 'powershell',
+  groovy: 'groovy'
+}
+
+function detectShebangLanguage(content: string): string | null {
+  // Why: scan a bounded prefix so per-keystroke detection stays cheap on large files.
+  const interpreter = parseSetupScriptShebang(content.slice(0, 256))?.interpreter.replace(
+    /[\d.]+$/,
+    ''
+  )
+  return interpreter !== undefined && Object.hasOwn(SHEBANG_INTERPRETER_TO_LANGUAGE, interpreter)
+    ? SHEBANG_INTERPRETER_TO_LANGUAGE[interpreter]
+    : null
+}
+
+export function detectLanguage(filePath: string, content?: string): string {
   const parts = filePath.split(/[\\/]/)
   const filename = parts.at(-1)!
   if (Object.hasOwn(FILENAME_TO_LANGUAGE, filename)) {
@@ -161,13 +213,18 @@ export function detectLanguage(filePath: string): string {
     return FILENAME_LOWER_TO_LANGUAGE[lowerFilename]
   }
 
-  // Check extension
   const ext = extname(filename).toLowerCase()
   const lowerName = filename.toLowerCase()
-  // Scoped dotenv names fall back to INI only when no specific extension matches.
-  return (
+  // Scoped dotenv names fall back to dotenv only when no specific extension matches.
+  const language =
     EXT_TO_LANGUAGE[ext] ??
     detectMonacoFilenameLanguage(filename) ??
-    (lowerName === '.env' || lowerName.startsWith('.env.') ? 'ini' : 'plaintext')
-  )
+    // Pipeline variants like Jenkinsfile.release; a known extension (Jenkinsfile.md) still wins.
+    (lowerName.startsWith('jenkinsfile.') ? 'groovy' : undefined) ??
+    (lowerName === '.env' || lowerName.startsWith('.env.') ? 'dotenv' : 'plaintext')
+  // Why: only extensionless names fall back to the shebang; unmapped extensions like .txt stay plaintext.
+  if (language === 'plaintext' && ext === '' && content !== undefined) {
+    return detectShebangLanguage(content) ?? 'plaintext'
+  }
+  return language
 }

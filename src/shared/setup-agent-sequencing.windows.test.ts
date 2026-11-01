@@ -5,10 +5,7 @@ import { tmpdir } from 'node:os'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import {
-  createSequencedSetupAgentCommands,
-  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
-} from './setup-agent-sequencing'
+import { createSequencedSetupAgentCommands } from './setup-agent-sequencing'
 import { quotePowerShellLiteral } from './powershell-native-argument'
 
 const TEMP_DIRS: string[] = []
@@ -85,20 +82,6 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
     },
     WINDOWS_PROCESS_TEST_TIMEOUT_MS
   )
-
-  it('keeps the startup command out of generated cmd.exe source', () => {
-    const startupCommand = 'agent --prompt "& | ^ % ! 한글 trailing\\"'
-    const commands = createSequencedSetupAgentCommands({
-      runnerScriptPath: 'C:\\repo\\setup-runner.cmd',
-      startupCommand,
-      platform: 'windows',
-      nonce: 'windows-sequence'
-    })
-
-    expect(commands.setupCommand).not.toContain(startupCommand)
-    expect(commands.startupCommand).not.toContain(startupCommand)
-    expect(commands.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]).toBe(startupCommand)
-  })
 
   it(
     'propagates setup failure without launching the agent',

@@ -7,8 +7,6 @@ import type {
   RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
 
-// Everything RemoteBrowserStreamLifecycle needs from the React pane, kept separate so the pane can
-// be read against one surface and the lifecycle can be driven from tests without one.
 export type RemoteBrowserStreamLifecycleDeps = Omit<RemoteBrowserPageSessionDeps, 'tokens'> & {
   identity: RemoteBrowserPaneIdentity
   subscribeScreencast: RemoteBrowserScreencastSubscribe
@@ -16,10 +14,7 @@ export type RemoteBrowserStreamLifecycleDeps = Omit<RemoteBrowserPageSessionDeps
   readViewportSize: () => RemoteBrowserViewportSize | null
   syncViewport: (pageId: string) => Promise<void>
   getDeviceScaleFactor: () => number
-  // Why one setter instead of separate busy/error/reconnect calls: those three always described a
-  // single thing — what this stream is doing — and writing them independently is what let them
-  // disagree. Only this class knows whether a failure still has retry budget left, so it publishes
-  // the state and the pane derives every visual from it. See remote-browser-stream-status.ts.
+  // Publish one status so busy, notice and reconnect cannot disagree; only the lifecycle knows the remaining retry budget.
   setStatus: (status: RemoteBrowserStreamStatus) => void
   clearFrame: () => void
   handleFrameBytes: (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>) => void

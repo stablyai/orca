@@ -53,7 +53,6 @@ const SKILL_DOCUMENT = {
 let modules: DraftModules
 const originalPreloadApi = window.api
 
-// Warm the same draft modules the reload cases exercise.
 beforeAll(async () => {
   storage = createMemoryNativeChatComposerDraftStorage()
   await reload()
@@ -104,7 +103,6 @@ describe('native-chat composer draft store', () => {
 
   it('replays a change storage had not confirmed when the window went away', async () => {
     const uncommitted = createMemoryNativeChatComposerDraftStorage()
-    // A write the backend never finished: its promise never settles, and nothing lands.
     uncommitted.write = () => new Promise(() => {})
     const lost = await reload({ using: uncommitted })
     lost.drafts.writeNativeChatDraftCache('tab-1:pane', 'typed, then Orca quit')
@@ -131,7 +129,6 @@ describe('native-chat composer draft store', () => {
     }
     const reloaded = await reload({ using: slow })
     reloaded.drafts.appendNativeChatDraftCache('agent-session:s1', 'returned by Stop')
-    // Typing still waiting for its deferred write is included too.
     reloaded.drafts.writeNativeChatDraftCache('agent-session:s1', 'returned by Stop, edited')
     let settled: boolean | undefined
     void reloaded.store
@@ -192,7 +189,6 @@ describe('native-chat composer draft store', () => {
     const refusing = await reload({ using: broken })
     refusing.drafts.appendNativeChatDraftCache('agent-session:s1', 'a'.repeat(150_000))
     refusing.drafts.appendNativeChatDraftCache('agent-session:s1', 'b'.repeat(150_000))
-    // The user sends it: the draft is cleared, and storage refuses that too.
     refusing.drafts.writeNativeChatDraftCache('agent-session:s1', '')
     await refusing.store.nativeChatComposerDraftWritesSettled()
     window.dispatchEvent(new Event('pagehide'))
@@ -401,7 +397,6 @@ describe('native-chat composer draft store', () => {
       [{ id: 'again', path: '/Users/me/Desktop/shot.png' }],
       { fromUser: true }
     )
-    // The prompt's chips name the placeholder's id, so they stay bound to the image.
     expect(reloaded.attachments.readNativeChatAttachmentCache('tab-1:pane')).toEqual([
       { id: 'm', path: '/Users/me/Desktop/shot.png' },
       IMAGES[0]
@@ -786,7 +781,6 @@ describe('native-chat composer draft store', () => {
     window.dispatchEvent(new Event('pagehide'))
 
     const journal = localStorage.getItem('orca:nativeChatComposerDraftJournal:v1') ?? ''
-    // Additions keep to their own cap, whole drafts to theirs.
     expect(journal.length).toBeLessThanOrEqual(800_000 + 256_000)
     // What no longer fits is reported, so its source is kept until storage confirms it.
     expect(durable).toContain(false)

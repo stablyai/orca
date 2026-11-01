@@ -14,7 +14,6 @@ type RuntimeDefaultHostRowProps = {
   onValueChange: (value: string) => void
 }
 
-/** "New projects open on": the default host for project creation. */
 export function RuntimeDefaultHostRow({
   allowLocalRuntime,
   activeValue,
@@ -23,7 +22,7 @@ export function RuntimeDefaultHostRow({
   onValueChange
 }: RuntimeDefaultHostRowProps): React.JSX.Element {
   const savedEnvironments = useAppStore((state) => state.runtimeEnvironments)
-  // Why: the default can be a host this list leaves out (a WSL distro); show it so it can be changed.
+  // Retain unlisted active defaults such as WSL distros so users can change them.
   const unlistedActive =
     activeValue !== LOCAL_RUNTIME_VALUE &&
     activeValue !== NO_RUNTIME_VALUE &&
@@ -32,7 +31,7 @@ export function RuntimeDefaultHostRow({
       : undefined
   const options = unlistedActive ? [...environments, unlistedActive] : environments
   if (options.length === 0 && allowLocalRuntime) {
-    // Why a quiet line, not the control: nothing to choose yet, but deep links still land here.
+    // No choices need only a quiet line, but retain the deep-link target.
     return (
       <p
         data-settings-section="default-runtime"

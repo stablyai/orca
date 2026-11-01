@@ -1,28 +1,37 @@
-import { createElement } from 'react'
-import { act, create } from 'react-test-renderer'
+import { createElement, type ReactElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSpinner } from './AgentSpinner'
 import { AgentStateDot } from './AgentStateDot'
 import { colors } from '../theme/mobile-theme'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const DESKTOP_WORKING_COLOR = '#eab308'
 
-type MonitoringTestRenderer = {
-  readonly root: {
-    findByType(type: string): { props: Record<string, unknown> }
-    findAllByType(type: string): { props: Record<string, unknown> }[]
+async function mount(element: ReactElement): Promise<ReactTestRenderer> {
+  const mounted: { renderer?: ReactTestRenderer } = {}
+  await act(async () => {
+    mounted.renderer = create(element)
+  })
+  if (!mounted.renderer) {
+    throw new Error('indicator did not mount')
   }
-  unmount(): void
+  return mounted.renderer
 }
 
-const { animationLoop, animationTiming, setValue } = vi.hoisted(() => ({
+const { animationLoop, animationTiming, setValue, motion } = vi.hoisted(() => ({
   animationLoop: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
   animationTiming: vi.fn(() => ({})),
-  setValue: vi.fn()
+  setValue: vi.fn(),
+  motion: { reduced: false }
 }))
 
 vi.mock('lucide-react-native', () => ({ Activity: 'Activity' }))
 vi.mock('react-native', () => ({
+  AccessibilityInfo: {
+    isReduceMotionEnabled: () => Promise.resolve(motion.reduced),
+    addEventListener: () => ({ remove: () => {} })
+  },
   Animated: {
     Value: function Value() {
       return { interpolate: vi.fn(() => 'rotation'), setValue }
@@ -38,12 +47,13 @@ vi.mock('react-native', () => ({
 }))
 
 describe('mobile monitoring indicators', () => {
-  let renderer: MonitoringTestRenderer | null = null
+  let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
     animationLoop.mockClear()
     animationTiming.mockClear()
     setValue.mockClear()
+    motion.reduced = false
   })
 
   afterEach(() => {
@@ -52,11 +62,9 @@ describe('mobile monitoring indicators', () => {
   })
 
   it('renders a static Activity heartbeat for a monitoring agent', async () => {
-    await act(async () => {
-      renderer = create(createElement(AgentStateDot, { state: 'monitoring' }))
-    })
+    renderer = await mount(createElement(AgentStateDot, { state: 'monitoring' }))
 
-    expect(renderer?.root.findByType('Activity').props).toMatchObject({
+    expect(findByHostType(renderer.root, 'Activity').props).toMatchObject({
       color: DESKTOP_WORKING_COLOR,
       size: 10
     })
@@ -65,13 +73,11 @@ describe('mobile monitoring indicators', () => {
   })
 
   it('renders a static Activity heartbeat for an all-monitoring workspace', async () => {
-    await act(async () => {
-      renderer = create(
-        createElement(AgentSpinner, { status: 'working', workingMode: 'monitoring' })
-      )
-    })
+    renderer = await mount(
+      createElement(AgentSpinner, { status: 'working', workingMode: 'monitoring' })
+    )
 
-    expect(renderer?.root.findByType('Activity').props).toMatchObject({
+    expect(findByHostType(renderer.root, 'Activity').props).toMatchObject({
       color: DESKTOP_WORKING_COLOR,
       size: 12
     })
@@ -80,23 +86,19 @@ describe('mobile monitoring indicators', () => {
   })
 
   it('keeps the spinner fallback when workingMode is absent', async () => {
-    await act(async () => {
-      renderer = create(createElement(AgentSpinner, { status: 'working' }))
-    })
+    renderer = await mount(createElement(AgentSpinner, { status: 'working' }))
 
     expect(animationTiming).toHaveBeenCalledOnce()
     expect(animationLoop).toHaveBeenCalledOnce()
   })
 
   it('keeps both native working rings off the interaction queue', async () => {
-    await act(async () => {
-      renderer = create(
-        createElement('View', null, [
-          createElement(AgentSpinner, { key: 'spinner', status: 'working' }),
-          createElement(AgentStateDot, { key: 'dot', state: 'working' })
-        ])
-      )
-    })
+    renderer = await mount(
+      createElement('View', null, [
+        createElement(AgentSpinner, { key: 'spinner', status: 'working' }),
+        createElement(AgentStateDot, { key: 'dot', state: 'working' })
+      ])
+    )
 
     expect(animationTiming).toHaveBeenCalledTimes(2)
     for (const call of animationTiming.mock.calls) {
@@ -107,16 +109,33 @@ describe('mobile monitoring indicators', () => {
     }
   })
 
+  it('holds both working rings still and closed under Reduce Motion, like desktop', async () => {
+    motion.reduced = true
+    renderer = await mount(
+      createElement('View', null, [
+        createElement(AgentSpinner, { key: 'spinner', status: 'working' }),
+        createElement(AgentStateDot, { key: 'dot', state: 'working' })
+      ])
+    )
+
+    expect(animationLoop).not.toHaveBeenCalled()
+    const rings = findAllByHostType(renderer.root, 'AnimatedView')
+    expect(rings).toHaveLength(2)
+    for (const ring of rings) {
+      expect(ring.props.style).toContainEqual({ borderTopColor: DESKTOP_WORKING_COLOR })
+    }
+  })
+
   it.each([
     // A user's Stop is not news: muted, never the fault red a failure draws.
     ['interrupted', colors.textMuted],
     ['failed', '#ef4444']
   ] as const)('draws %s with its own dot colour', async (state, color) => {
-    await act(async () => {
-      renderer = create(createElement(AgentStateDot, { state }))
-    })
+    renderer = await mount(createElement(AgentStateDot, { state }))
 
-    const dot = renderer?.root.findAllByType('View').find((view) => Array.isArray(view.props.style))
+    const dot = findAllByHostType(renderer.root, 'View').find((view) =>
+      Array.isArray(view.props.style)
+    )
     expect(dot?.props.style).toContainEqual({ backgroundColor: color })
   })
 })

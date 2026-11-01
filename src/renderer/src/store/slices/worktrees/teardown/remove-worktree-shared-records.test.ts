@@ -81,21 +81,6 @@ it("a removal with no prompt keeps the last view's dirty record; reopening the f
   expect(state().openFiles[0]?.isDirty).toBe(true)
 })
 
-it('a confirmed removal discards: nothing is kept', () => {
-  useAppStore.setState({
-    openFiles: [tab('b', 'wt-2', { isDirty: true })],
-    editorDrafts: { b: 'listed and confirmed' }
-  })
-  applyRemoveWorktreeSuccessState(
-    useAppStore.setState,
-    'wt-2',
-    new Set(),
-    'local',
-    new Map([['b', 'listed and confirmed']])
-  )
-  expect(state().editorBufferKept).toEqual({})
-})
-
 it('a removal closing tabs over several writes keeps every dirty record it closes', async () => {
   useAppStore.setState({
     openFiles: [
@@ -107,8 +92,7 @@ it('a removal closing tabs over several writes keeps every dirty record it close
   })
   const [xRecord, yRecord] = [state().editorBufferIdOf.x, state().editorBufferIdOf.y]
 
-  // As a project removal: the batch is noticed up front, the twin copy's tab closes on its own
-  // write, an unrelated write reconciles in between, and the main purge closes the rest.
+  // Simulate project batch removal: notice first, close twin separately, reconcile unrelated write, then purge the rest.
   const keep = noticeRemovedUnsavedFiles(state(), new Set(['x', 'y']))
   state().closeFile('x', { captureRecentlyClosed: false, keepEditorBuffer: keep })
   state().closeFile('z')

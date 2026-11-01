@@ -143,8 +143,7 @@ async function readComments(resolved: ResolvedIssue): Promise<{
   const nodes = response.nodes
   const items = nodes.slice(0, LINEAR_COMMENTS_CAP).map((comment) => {
     const body = comment.body ?? ''
-    // Extract media from the full body before truncating so screenshots past
-    // the body cap are still surfaced.
+    // Extract media before truncation so images beyond the body cap remain available.
     const inlineMedia = extractLinearInlineMedia(body, 'comment', comment.id)
     return {
       id: comment.id,
@@ -203,8 +202,7 @@ async function readChildren(
       capReached = true
     }
 
-    // Why: when the current level already exhausts the output cap, fetching
-    // grandchildren would add latency without returning any additional nodes.
+    // Stop nested reads when no additional nodes could fit the output cap.
     const canReadNested = level < depth && returned < LINEAR_CHILDREN_NODE_CAP
     if (!canReadNested && level >= depth && children.length > 0) {
       depthReached = true

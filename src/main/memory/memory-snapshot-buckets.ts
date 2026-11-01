@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import type { SessionMemory } from '../../shared/process-stats-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
 
@@ -88,7 +88,6 @@ export function resolveWorktreeMemoryNames(
       repoName: group?.name?.trim() || worktree.displayName
     }
   }
-  // Orca worktree ids look like `${repoId}::${absolutePath}`.
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const repoId = parsed?.repoId ?? worktreeId
   const worktreePath = parsed?.worktreePath ?? ''

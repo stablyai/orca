@@ -3,9 +3,7 @@ import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-t
 import { setTimeout as delay } from 'node:timers/promises'
 import { readPosixProcessRow, type ProcessRowRead } from './provider-process-row-read'
 
-// Covers the one stop the supervisor cannot make itself: its own SIGKILL leaves the provider's
-// detached group running, so Orca, which outlives it, finishes the stop. POSIX only: Windows
-// providers have no supervisor.
+// POSIX supervisor SIGKILL can orphan its detached provider group; Orca must finish the stop.
 
 // The supervisor disconnects right after reporting, so this bounds only a wedged channel.
 const REPORT_END_WAIT_MS = 1_000
@@ -53,13 +51,11 @@ export async function sweepOrphanedProviderGroup(
   try {
     signalGroup(identity.pgid, 0)
   } catch (error) {
-    // EPERM: the group exists but is not this user's, so it is not ours.
+    // EPERM proves existence without ownership; refuse the sweep.
     return isErrnoCode(error, 'ESRCH') ? 'absent' : 'refused'
   }
   const leader = await (deps.readProcessRow ?? readPosixProcessRow)(identity.pgid)
-  // Only a leader that re-proves its recorded identity names our group; a leaderless group has
-  // nothing to prove it by, so its survivors are left alone. The recorded start predates its
-  // read's second, so a later reuse cannot share it.
+  // Refuse leaderless or reused groups; a start proven before its read second cannot alias later reuse.
   if (
     !leader ||
     leader === 'unverifiable' ||
@@ -81,10 +77,7 @@ export async function sweepOrphanedProviderGroup(
   return 'killed'
 }
 
-/**
- * Reads the group a supervisor reports on its IPC channel, proves it by the leader's parent and
- * start time, and sweeps that group once the supervisor exits. True when it is watching.
- */
+/** Prove the reported group by leader parent/start time before arming its supervisor-exit sweep. */
 export function guardSupervisedProviderGroup(
   child: GuardedChild,
   deps: ProviderGroupGuardDeps
@@ -94,7 +87,7 @@ export function guardSupervisedProviderGroup(
     return false
   }
   if (!hasReportChannel(child)) {
-    // A launch adapter that rewrites stdio drops the channel; say so once instead of silently.
+    // Warn once when an adapter drops the report channel instead of silently losing the guard.
     if (!warnedMissingChannel) {
       warnedMissingChannel = true
       console.warn(`[provider-group-guard] ${deps.site}: supervised spawn has no report channel`)
@@ -102,7 +95,7 @@ export function guardSupervisedProviderGroup(
     return false
   }
   let identity: Promise<ProviderGroupIdentity | null> = Promise.resolve(null)
-  // A gone supervisor parents nothing, so a re-read it would wait for can only fail; skip it.
+  // A dead supervisor cannot parent the leader, so pending identity rereads can only fail.
   const proof = new AbortController()
   let channelClosed = false
   let onChannelClosed = (): void => {}
@@ -139,13 +132,8 @@ export function guardSupervisedProviderGroup(
   return true
 }
 
-/**
- * The leader's identity, read while this supervisor still parents it (so its pid was not reused).
- * lstart has one-second resolution, so a start in the read's own second is re-proven after that
- * second ends; otherwise a pid reused within that second would carry the same start time. A
- * supervisor gone by then no longer parents it, so nothing is armed. Accepted: on macOS a
- * supervisor SIGKILLed within its provider's first second leaves that group unswept.
- */
+/** Reprove second-resolution starts after the second ends to reject same-second PID reuse.
+ * Supervisor death before proof leaves the group unswept, including macOS starts killed within one second. */
 async function proveReportedGroup(
   pgid: number,
   supervisorPid: number,
@@ -156,7 +144,7 @@ async function proveReportedGroup(
   const now = deps.now ?? Date.now
   const sleep = deps.sleep ?? sleepUnref
   for (let attempt = 0; attempt < IDENTITY_READ_ATTEMPTS; attempt += 1) {
-    // The boundary before ps starts, as the descendant sweep takes it.
+    // Capture the boundary before ps starts, matching the descendant sweep.
     const capturedAtMs = now()
     const row = await readRow(pgid)
     if (!row || row === 'unverifiable' || row.ppid !== supervisorPid || row.pgid !== pgid) {
@@ -184,7 +172,7 @@ function hasReportChannel(child: GuardedChild): boolean {
   try {
     return child.connected
   } catch {
-    // A handle-less child can throw here; the guard must never fail the spawn it watches.
+    // Handle-less children can throw; observation must not fail the spawn.
     return false
   }
 }

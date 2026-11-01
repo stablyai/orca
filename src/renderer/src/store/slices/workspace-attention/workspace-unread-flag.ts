@@ -25,9 +25,7 @@ export function markWorkspaceUnreadFlag(
     raiseWorkspaceUnreadFlag(set, get, worktreeId)
     return
   }
-  // Switch point: the owning host raises the flag from the same news, unless it is older.
-  // Why the row's host now: same-id folder rows differ by host, and the screen can move to the
-  // other row while the owner is asked.
+  // Capture the row’s host before async owner check: same-ID folder focus may move meanwhile. Current owners raise flags; legacy owners need renderer fallback.
   const state = get()
   const workspaceScope = parseWorkspaceKey(worktreeId)
   const folderRow =
@@ -56,9 +54,7 @@ export function markWorkspaceUnreadFlag(
     })
 }
 
-/** Raises still waiting on their owner check, per workspace, with the reads seen meanwhile. Why
- *  not per host: a read names its row's host differently from the row's own host lookup (a
- *  group-hosted folder reads as 'local'), so a per-host count could miss the read it must see. */
+/** Track pending raises/reads by workspace: group-hosted folder reads can name local while owner lookup names another host, so per-host counters would miss reads. */
 const pendingRaises = new Map<string, { raises: number; reads: number }>()
 
 /** A read of the workspace by any path; a raise still waiting on its owner check drops. */
@@ -242,12 +238,7 @@ export function clearWorkspaceUnreadFlag(
   )
 }
 
-/**
- * The flag follows its markers — a read or removal clears it once no live marker remains.
- * Why every same-id folder row without a host: tabs are keyed by workspace id, not host, so a
- * marker can't be attributed to one host's row; a row is lowered only when the shared id has no
- * live marker at all, so purging host A's tabs lowers host B only if B holds none either.
- */
+/** Lower flags only after the last live marker disappears. Unscoped same-ID folders share workspace-keyed markers, so lower every row only when none remain. */
 export function settleWorkspaceUnreadFlag(
   set: WorkspaceAttentionSet,
   get: WorkspaceAttentionGet,

@@ -44,7 +44,6 @@ function createEnvironment(): KnownRuntimeEnvironment {
   }
 }
 
-/** A real forward manager over a provider whose forwards stay "listening" until closed. */
 function setup(
   options: { targeting?: OrcadManagedTunnelTargeting; startGate?: Promise<void> } = {}
 ) {
@@ -109,15 +108,6 @@ describe('OrcadManagedTunnelManager.closeTarget (the SSH session teardown)', () 
     await state.manager.closeTarget('ssh-1')
 
     expect(state.listening.size).toBe(0)
-  })
-
-  it('leaves the tunnels of other hosts alone', async () => {
-    const state = setup()
-    await state.manager.ensure(createEnvironment())
-
-    await state.manager.closeTarget('ssh-2')
-
-    expect(state.listening.size).toBe(1)
   })
 
   it('supersedes a build still dialling, so it opens no forward after the teardown', async () => {

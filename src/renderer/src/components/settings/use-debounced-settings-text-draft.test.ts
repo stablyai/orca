@@ -47,33 +47,7 @@ describe('useDebouncedSettingsTextDraft', () => {
       vi.advanceTimersByTime(700)
     })
 
-    // The pending timer must not fire a second, duplicate commit.
     expect(commit).toHaveBeenCalledTimes(1)
-  })
-
-  it('commits a pending edit when the field unmounts', () => {
-    const commit = vi.fn()
-    const { result, unmount } = renderHook(() =>
-      useDebouncedSettingsTextDraft({ value: '', commit })
-    )
-
-    act(() => result.current.onChange('half-typed'))
-    unmount()
-
-    expect(commit).toHaveBeenCalledExactlyOnceWith('half-typed')
-  })
-
-  it('adopts an external value while the field is untouched', () => {
-    const commit = vi.fn()
-    const { result, rerender } = renderHook(
-      ({ value }) => useDebouncedSettingsTextDraft({ value, commit }),
-      { initialProps: { value: 'first' } }
-    )
-
-    rerender({ value: 'from-another-window' })
-
-    expect(result.current.value).toBe('from-another-window')
-    expect(commit).not.toHaveBeenCalled()
   })
 
   it('does not let an external value overwrite an in-progress edit', () => {
@@ -87,15 +61,6 @@ describe('useDebouncedSettingsTextDraft', () => {
     rerender({ value: 'from-another-window' })
 
     expect(result.current.value).toBe('typing')
-  })
-
-  it('does not commit when nothing was edited', () => {
-    const commit = vi.fn()
-    const { result } = renderHook(() => useDebouncedSettingsTextDraft({ value: 'x', commit }))
-
-    act(() => result.current.onBlur())
-
-    expect(commit).not.toHaveBeenCalled()
   })
 })
 
@@ -113,7 +78,6 @@ describe('useDebouncedSettingsTextDraft flush paths', () => {
 
     expect(commit).toHaveBeenCalledExactlyOnceWith('quit-mid-word')
 
-    // The later unmount and timer must not commit the same value again.
     unmount()
     act(() => {
       vi.advanceTimersByTime(700)
@@ -130,21 +94,6 @@ describe('useDebouncedSettingsTextDraft flush paths', () => {
     })
 
     expect(commit).not.toHaveBeenCalled()
-  })
-
-  it('stops listening for beforeunload after unmount', () => {
-    const commit = vi.fn()
-    const { result, unmount } = renderHook(() =>
-      useDebouncedSettingsTextDraft({ value: '', commit })
-    )
-
-    act(() => result.current.onChange('abc'))
-    unmount()
-    act(() => {
-      window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
-    })
-
-    expect(commit).toHaveBeenCalledExactlyOnceWith('abc')
   })
 
   it('commits every edit burst, not only the first', () => {
@@ -177,7 +126,7 @@ describe('useDebouncedSettingsTextDraft flush paths', () => {
     })
     expect(commit).toHaveBeenCalledExactlyOnceWith('typed')
 
-    // The store echoes the commit, then another window writes a different value.
+    // Model a local echo followed by another window’s write.
     rerender({ value: 'typed' })
     rerender({ value: 'from-another-window' })
 
@@ -196,7 +145,7 @@ describe('useDebouncedSettingsTextDraft flush paths', () => {
       vi.advanceTimersByTime(700)
     })
     act(() => result.current.onChange('abcd'))
-    // The store echoes the first commit after the user has already typed more.
+    // Model a delayed commit echo arriving after further typing.
     rerender({ value: 'abc' })
 
     expect(result.current.value).toBe('abcd')

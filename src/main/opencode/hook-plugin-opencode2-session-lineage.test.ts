@@ -12,9 +12,7 @@ vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
 
 import { _internals } from './hook-service'
 
-// Why: live probe of opencode v2.0.12 — session.get resolves the session record
-// itself (no { data } envelope), rejects the legacy { path: { id } } argument,
-// and session.list does not exist. Anything less faithful hides the defect.
+// OpenCode 2.0.12 returns bare session records, requires sessionID and has no session.list.
 type LiveSession = { id: string; parentID?: string }
 
 const ROOT = 'ses_root'
@@ -99,7 +97,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin OpenCode 2 lineage'
     const module = await loadPlugin()
     const cleanup = await module.default?.setup?.({
       session: {
-        // Why: one declared parameter, exactly like the shipped SDK method.
+        // Match the shipped SDK’s single-parameter arity.
         get: async ({ sessionID }: { sessionID?: string }) => {
           if (!sessionID) {
             throw new Error('Missing key at ["sessionID"]')
@@ -151,7 +149,6 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin OpenCode 2 lineage'
         0
       )
     })
-    // The child rolls up under its root; it never publishes as a root itself.
     expect(posts.map((post) => post.sessionID)).not.toContain(CHILD)
     expect(lookups).toContain(CHILD)
     await cleanup?.()
@@ -184,7 +181,6 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin OpenCode 2 lineage'
     await vi.waitFor(() => {
       expect(posts.map((post) => post.hook_event_name)).toContain('AskUserQuestion')
     })
-    // The root turn is still running, so the pane goes back to busy rather than staying blocked.
     await vi.waitFor(() => {
       expect(posts.at(-1)?.hook_event_name).toBe('SessionBusy')
     })
@@ -192,10 +188,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin OpenCode 2 lineage'
     await cleanup?.()
   })
 
-  // Why this case: it is the shape reported in #22371 — a subagent asks, the lead
-  // agent truthfully reports no pending question, and the pane stays "needs input"
-  // with nothing able to clear it. With lineage unresolved the blocker keys to the
-  // child's own session id, so the root's own idle never matches it.
+  // Unresolved child lineage leaves blockers keyed to the child, unreachable by root idle.
   it('retires a child raised blocker when the root turn goes idle', async () => {
     const { posts, cleanup } = await runSetupBridge([
       created(ROOT),
@@ -239,7 +232,6 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin OpenCode 2 lineage'
     await vi.waitFor(() => {
       expect(posts.length).toBeGreaterThan(0)
     })
-    // The root arrived via session.created, so only the child needs one lookup.
     expect(lookups).toEqual([CHILD])
     await cleanup?.()
   })

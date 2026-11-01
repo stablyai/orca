@@ -73,7 +73,7 @@ function PlainSshTerminalCard({ panel }: { panel: PlainSshPanel }): React.JSX.El
         host: panel.label
       })}
       data-plain-ssh-terminal={panel.targetId}
-      // Why hidden, not unmounted: minimizing must keep the SSH session and its scrollback.
+      // Keep minimized panels mounted to preserve their SSH session and scrollback.
       className={cn(
         'pointer-events-auto flex h-[26rem] w-[min(44rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-floating',
         // A failed open has only its error to show.

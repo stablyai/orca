@@ -7,12 +7,6 @@ import { appendWorktreeRows, buildImportedWorktreesCardRow } from './row-builder
 import type { NoticeHostContext } from './host-labels'
 import type { ImportedWorktreesCardCandidate, RepoOfWorktree, Row } from './row-types'
 
-/**
- * The Pinned section's rows.
- *
- * Split out of row-builders to keep that file under the line cap; pinned
- * emission has its own ordering and imported-fallback placement rules.
- */
 export function emitPinnedGroup(
   pinnedSectionWorktrees: Worktree[],
   repoOf: RepoOfWorktree,
@@ -80,8 +74,7 @@ export function emitPinnedGroup(
   if (!allowImportedFallback) {
     return
   }
-  // Why: imported fallback sits after the last row of that repo; splice from the
-  // end so earlier inserts do not shift later targets.
+  // Insert imported fallbacks after the repo’s last row, backwards to avoid shifting later targets.
   const lastResultIndexByRepoId = new Map<string, number>()
   for (let index = firstItemIndex; index < result.length; index++) {
     const row = result[index]

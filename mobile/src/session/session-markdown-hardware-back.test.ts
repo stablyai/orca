@@ -10,6 +10,7 @@ const native = vi.hoisted(() => {
     platform,
     remove,
     dismiss: vi.fn(),
+    setLeaveDrafts: vi.fn(),
     addEventListener: vi.fn((_event: string, _handler: () => boolean) => ({ remove }))
   }
 })
@@ -38,7 +39,6 @@ import type { MarkdownDocState } from './mobile-session-route-types'
 
 const leaves: { back: (() => void) | null; replaced: string[] } = { back: null, replaced: [] }
 
-/** The three members the hook calls, which is all a probe of it can honestly stand behind. */
 const probeRouter: { canGoBack: () => boolean; back: () => void; replace: (href: string) => void } =
   {
     canGoBack: () => true,
@@ -67,11 +67,12 @@ function scopeWith(markdownDocs: Map<string, MarkdownDocState>): MobileSessionMa
     setMarkdownDocs: () => {},
     discardMarkdownTarget: null,
     setDiscardMarkdownTarget: () => {},
-    setLeaveDrafts: () => {},
+    setLeaveDrafts: native.setLeaveDrafts,
     markdownSaveSeqRef: { current: new Map() },
     markdownSaveInFlightRef: { current: new Set() },
     showToast: () => {},
-    readMarkdownTab: async () => {}
+    readMarkdownTab: async () => {},
+    dictationLeaveHold: { holdsLeave: false, hold: () => false }
   }
 }
 
@@ -107,15 +108,12 @@ beforeEach(() => {
   native.addEventListener.mockClear()
   native.remove.mockClear()
   native.dismiss.mockClear()
+  native.setLeaveDrafts.mockClear()
   leaves.back = null
   leaves.replaced = []
 })
 
-/**
- * The session's native claim on the device Back key, which had no unit test of its own (ruling
- * 33.2). Held always natively, dirty or not: the page half, claimed only while a draft is dirty, is
- * `session-markdown-page-back.test.ts`.
- */
+// Native sessions always claim Back: an unclaimed root key would exit the app; dirty-page claims are tested separately.
 describe("the session's hardware back gate", () => {
   it('arms the hardware back press natively, with nothing dirty', () => {
     render(new Map())
@@ -166,6 +164,9 @@ describe("the session's hardware back gate", () => {
     })
     expect(left).not.toHaveBeenCalled()
     expect(native.dismiss).toHaveBeenCalledTimes(1)
+    expect(native.setLeaveDrafts).toHaveBeenCalledExactlyOnceWith([
+      { tabId: 'tab-1', title: 'Markdown', content: 'edited' }
+    ])
   })
 
   it('registers once as the drafts change, and the newest drafts are what a press reads', () => {

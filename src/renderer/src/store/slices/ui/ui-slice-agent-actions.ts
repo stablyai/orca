@@ -206,8 +206,7 @@ export function createUiAgentActions(
         return false
       }
 
-      // Delivery ack, telemetry, and toast belong to the completed send, not to the
-      // picker that launched it; only the close below is scoped to this instance.
+      // Completed-send delivery/telemetry/toast outlive the picker; only closing it is scoped to this instance.
       mode.onPromptDelivered?.()
       const [{ toast }, { track }] = await Promise.all([
         import('sonner'),

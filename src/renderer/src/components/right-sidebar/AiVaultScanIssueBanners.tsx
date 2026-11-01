@@ -7,9 +7,9 @@ import {
   skippedAiVaultTranscriptReasons
 } from './ai-vault-scan-issue-state'
 import { translate } from '@/i18n/i18n'
+import { aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
 
-// Messages are scanner-authored (host name, remote path, cap), so they render raw
-// rather than through a catalog key.
+// Coded scanner copy is translated; other scanner-authored messages carry host/path details verbatim.
 export function AiVaultScanIssueBanners({
   scanResult
 }: {
@@ -26,7 +26,7 @@ export function AiVaultScanIssueBanners({
     <>
       {blocking ? (
         <div className="border-b border-sidebar-border px-3 py-2 text-xs text-destructive">
-          {blocking.message}
+          {aiVaultScanIssueDisplayText(blocking)}
         </div>
       ) : null}
       {hasNoticeRows ? (
@@ -37,22 +37,21 @@ export function AiVaultScanIssueBanners({
         >
           {notices.map((issue) => (
             <div
-              // Message is part of the key: one host can report several distinct
-              // messages for the same path, and a colliding key drops those rows.
+              // Include message identity: one host may report multiple notices for the same path.
               key={`${issue.executionHostId ?? 'local'}:${issue.kind}:${issue.agent}:${issue.path}:${issue.message}`}
               className={`border-b border-sidebar-border px-3 py-1.5 text-[11px] ${
                 issue.kind === 'host' ? 'text-destructive' : 'text-muted-foreground'
               }`}
             >
-              {issue.message}
+              {aiVaultScanIssueDisplayText(issue)}
             </div>
           ))}
           {skippedTranscriptCount > 0 ? (
             <div className="border-b border-sidebar-border px-3 py-1.5 text-[11px] text-muted-foreground">
               {translate(
-                'auto.components.right.sidebar.AiVaultPanel.transcriptsSkipped',
-                '{{count}} transcript skipped',
-                { count: skippedTranscriptCount }
+                'auto.components.right.sidebar.AiVaultPanel.transcriptsSkippedCount',
+                '{{count}} transcripts skipped',
+                { count: skippedTranscriptCount, defaultValue_one: '{{count}} transcript skipped' }
               )}
             </div>
           ) : null}

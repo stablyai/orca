@@ -20,8 +20,7 @@ vi.mock('@/lib/connection-context', () => ({
 vi.mock('@/store', () => ({
   useAppStore: { getState: mocks.getState }
 }))
-// Why: the lazy DiffViewer chunk cannot resolve under happy-dom; a stub that
-// echoes its props pins the disk-left/buffer-right wiring instead.
+// Stub the lazy diff chunk under happy-dom and expose its disk-left/buffer-right props.
 vi.mock('@/lib/lazy-with-retry', () => ({
   lazyWithRetry: () => (props: { originalContent: string; modifiedContent: string }) => (
     <div data-testid="diff-stub">

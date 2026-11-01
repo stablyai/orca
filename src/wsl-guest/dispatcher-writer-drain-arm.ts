@@ -1,12 +1,6 @@
 type DrainRegistration = { registered: boolean; remove: () => void }
 
-/**
- * Holds the writer's single outstanding drain registration on its sink.
- *
- * Why it is re-checked after registering: a sink may invoke the drain callback synchronously from
- * inside registerDrain, which disarms this arm before registration returns. Storing the remove
- * handle then would cancel a later, still-wanted arm instead of the one that already fired.
- */
+// registerDrain may fire synchronously; recheck the arm before retaining its remover or it could cancel a newer registration.
 export class DispatcherWriterDrainArm {
   private armed = false
   private remove: (() => void) | null = null

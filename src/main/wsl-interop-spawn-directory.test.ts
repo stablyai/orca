@@ -8,9 +8,6 @@ import {
   resolveWslInteropSpawnCwd
 } from './wsl-interop-spawn-directory'
 
-// #16463: an inherited cwd Linux had deleted broke every later `wsl.exe` spawn.
-// #29845: naming the profile instead let WSL hold it busy ~60s after Orca exited.
-
 const createdRoots: string[] = []
 
 function makeExistingDirectory(): string {
@@ -81,7 +78,6 @@ describe('resolveWslInteropSpawnCwd', () => {
   })
 
   it('re-answers after the directory it memoized goes away mid-session', () => {
-    // A memo that is never re-validated reproduces #16463 one layer up.
     const doomed = makeExistingDirectory()
     process.env.SystemRoot = doomed
     const survivor = makeExistingDirectory()

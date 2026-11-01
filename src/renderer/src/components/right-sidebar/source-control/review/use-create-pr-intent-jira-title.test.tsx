@@ -46,6 +46,7 @@ it.each(['github', 'gitlab'] as const)(
       branch: 'user/alt-42-fix-login',
       provider,
       baseRef: null,
+      pinnedCopy: null,
       startedAt: 1
     }
     const eligibility: HostedReviewCreationEligibility = {

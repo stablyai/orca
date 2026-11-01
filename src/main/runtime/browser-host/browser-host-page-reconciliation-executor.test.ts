@@ -221,7 +221,7 @@ describe('browser host page reconciliation executor', () => {
     expect(actions.restorePage).not.toHaveBeenCalled()
   })
 
-  it('times out an unsettled close without releasing the restore barrier', async () => {
+  it('times out an unsettled reclaim without releasing the restore barrier', async () => {
     vi.useFakeTimers()
     const plan = reconciliationPlan()
     const actions = actionSpies()

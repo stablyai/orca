@@ -153,7 +153,6 @@ describe('worktree list folder reveal', () => {
   )
 
   it('follows the parents the sidebar draws when same-id group copies disagree (#30045)', () => {
-    // The sidebar draws one header per group id, from the last copy, so reveal must open its parent.
     const localChild = makeProjectGroup({ id: 'group-child', executionHostId: 'local' })
     const remoteRoot = makeProjectGroup({ id: 'remote-root', executionHostId: 'runtime:other' })
     const remoteChild = makeProjectGroup({
@@ -184,8 +183,6 @@ describe('reveal keys under non-repo grouping', () => {
   const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
 
   it('returns the status lane key so a collapsed lane can be expanded', () => {
-    // Pre-fix only project-group headers came back, and those do not exist
-    // under status grouping, so the reveal could never expand the lane.
     const keys = getFolderWorkspaceRevealGroupKeys(workspaceKey, [folderWorkspace], [group], {
       groupBy: 'workspace-status',
       workspaceStatuses: [],

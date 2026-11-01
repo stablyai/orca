@@ -9,7 +9,6 @@ vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeFileMutationClient>()
   return { ...actual, renameRuntimePath: mocks.renameRuntimePath }
 })
-// Switch on: main renames the tabs, and its frame rekeys the session (T1 transport, apply mode).
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -29,6 +28,7 @@ import { useAppStore } from '@/store'
 import { executeOpenEditorPathMove } from './execute-open-editor-path-move'
 import { __activeEditorPathMoveCountForTests } from '@/components/editor/editor-path-move-inflight'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
+import { captureWorktreeOperationGenerationSnapshot } from './worktree-operation-generation'
 import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from '@/hooks/editor-external-watch-event-reconciliation'
 import {
   drawTabsFromMain,
@@ -98,9 +98,7 @@ describe('executeOpenEditorPathMove', () => {
     expect(moved.isDirty).toBe(true)
     expect(moved.lastKnownDiskSignature).toBe('sig-a')
     expect(useAppStore.getState().editorDrafts['/repo/sub/a.md']).toBe('unsaved work')
-    // Dirty destination gets the echo provenance.
     expect(moved.pendingSelfMoveEcho?.targetPath).toBe('/repo/sub/a.md')
-    // The in-flight transaction is settled (no leak).
     expect(__activeEditorPathMoveCountForTests()).toBe(0)
   })
 
@@ -120,6 +118,37 @@ describe('executeOpenEditorPathMove', () => {
       .openFiles.find((file) => file.runtimeEnvironmentId === 'env-server')!
     state.setEditorDraft(remote.id, 'server draft')
     state.markFileDirty(remote.id, true)
+    useAppStore.setState((current) => ({
+      openFiles: current.openFiles.map((file) =>
+        file.id === remote.id
+          ? {
+              ...file,
+              operationProvenance: {
+                ownershipProjection: 'explicit',
+                generation: captureWorktreeOperationGenerationSnapshot(
+                  { runtimeEnvironmentId: 'env-server', executionHostId: 'runtime:env-server' },
+                  { endpoint: { kind: 'environment', environmentId: 'env-server' }, at: 'ssh:box' }
+                )
+              }
+            }
+          : file
+      )
+    }))
+    await executeOpenEditorPathMove({
+      context: {
+        ...CONTEXT,
+        target: { kind: 'environment', environmentId: 'env-server' },
+        expectedExecutionHostId: 'ssh:other'
+      },
+      fromPath: '/repo/a.md',
+      toPath: '/repo/other.md',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo'
+    })
+    expect(useAppStore.getState().openFiles.every((file) => file.filePath === '/repo/a.md')).toBe(
+      true
+    )
+    expect(useAppStore.getState().editorDrafts[remote.id]).toBe('server draft')
 
     await executeOpenEditorPathMove({
       context: { ...CONTEXT, expectedExecutionHostId: 'local' },
@@ -199,18 +228,14 @@ describe('executeOpenEditorPathMove', () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
 
     const moved = useAppStore.getState().openFiles[0]!
-    // Disk matched the carried baseline: no false conflict banner.
     expect(moved.externalMutation).toBeUndefined()
     expect(moved.isDirty).toBe(true)
-    // Safety-net verify LEAVES the provenance so a destination watcher event
-    // arriving after this read is still recognized as the move's own echo.
+    // Keep echo provenance after proactive verify so a later destination watcher event remains recognized as this move’s own echo.
     expect(moved.pendingSelfMoveEcho?.targetPath).toBe('/repo/sub/a.md')
   })
 
   it('does not raise a false banner when the destination watcher event lands after the move', async () => {
-    // Regression: the proactive verify must NOT consume the echo provenance, or
-    // the real destination fs event (which on FSEvents/SSH lands after the fast
-    // local read) would fall through to the immediate changed-on-disk mark.
+    // FSEvents/SSH events may follow fast verification; consuming provenance early would mark our own rename as an external edit.
     const DISK_CONTENT = 'the file as it exists on disk\n'
     const id = openDirtyTab()
     useAppStore.getState().setLastKnownDiskSignature(id, getDiskBaselineSignature(DISK_CONTENT))
@@ -229,7 +254,6 @@ describe('executeOpenEditorPathMove', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    // The delayed destination create/update event finally arrives.
     const { handleFsChanged, dispose } = createExternalWatchEventHandler((worktreePath) =>
       worktreePath === '/repo'
         ? {
@@ -254,7 +278,6 @@ describe('executeOpenEditorPathMove', () => {
 
   it('undoes the on-disk rename when the editor rekey collides', async () => {
     openDirtyTab()
-    // A distinct live session already occupies the destination id.
     useAppStore.getState().openFile(
       {
         filePath: '/repo/sub/a.md',
@@ -278,7 +301,6 @@ describe('executeOpenEditorPathMove', () => {
       })
     ).rejects.toThrow(/retarget/)
 
-    // Forward rename then inverse rename to undo the disk move.
     expect(mocks.renameRuntimePath).toHaveBeenCalledWith(
       CONTEXT,
       '/repo/a.md',
@@ -291,7 +313,6 @@ describe('executeOpenEditorPathMove', () => {
       '/repo/a.md',
       undefined
     )
-    // The stranded source session is left intact (not rekeyed).
     expect(useAppStore.getState().openFiles.map((f) => f.id)).toEqual(before)
   })
 
@@ -341,7 +362,6 @@ describe('executeOpenEditorPathMove', () => {
       })
     ).rejects.toThrow('EACCES')
 
-    // Commit-only: no store mutation on failure.
     expect(useAppStore.getState().openFiles).toEqual(before)
     expect(__activeEditorPathMoveCountForTests()).toBe(0)
   })

@@ -10,9 +10,7 @@ function releasePreviewUrl(previewUrl: string | undefined): void {
   }
 }
 
-/** The clipboard previews a composer minted, by chip id: its own, since no store holds them. A
- *  preview whose chip left both the draft and the pending chips (sent, or removed elsewhere) is
- *  released. */
+/** Composer-owned previews outlive neither their draft/pending chip nor their composer; no store holds their URLs. */
 export function useNativeChatComposerAttachmentPreviews(
   settled: readonly NativeChatComposerImageAttachment[],
   pending: readonly NativeChatComposerImageAttachment[]

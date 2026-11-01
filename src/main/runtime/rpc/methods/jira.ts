@@ -30,8 +30,7 @@ function emitJiraPayload(value: unknown, emit: (result: unknown) => void): void 
   if (payload.length > JIRA_PAYLOAD_MAX_CHARS) {
     throw new Error('Jira payload exceeded the transfer limit.')
   }
-  // Why: remote runtime WebSocket messages are capped at 1 MiB; chunking keeps
-  // authenticated inline images usable over SSH without raising that safety cap.
+  // Chunk inline images under the remote WebSocket's 1 MiB frame cap, including SSH.
   for (let offset = 0; offset < payload.length; offset += JIRA_PAYLOAD_CHUNK_CHARS) {
     emit({ type: 'chunk', content: payload.slice(offset, offset + JIRA_PAYLOAD_CHUNK_CHARS) })
   }

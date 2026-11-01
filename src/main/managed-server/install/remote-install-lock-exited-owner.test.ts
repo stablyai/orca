@@ -35,7 +35,6 @@ afterEach(() => {
   }
 })
 
-/** A lock younger than the stale window, quiet for `quietMinutes`, naming `owner`. */
 function lockOwnedBy(owner: string, quietMinutes: number): string {
   const root = mkdtempSync(join(tmpdir(), 'orca-exited-owner-steal-'))
   roots.push(root)
@@ -66,8 +65,6 @@ async function steal(
   return result.stdout.trim()
 }
 
-// BUG-23 / Astra 26087: the steal itself checks the exited holder's token and quiet, inside its
-// arbitration, on the very lock instance it then moves aside.
 describe.each([
   ['POSIX', process.platform !== 'win32', getRemoteHostPlatform('linux-x64')],
   ['Windows PowerShell 5.1', powerShell51, getRemoteHostPlatform('win32-x64')]
@@ -96,7 +93,6 @@ describe.each([
     expect(readdirSync(join(lock, '..')).filter((name) => name.includes('.tombstone'))).toEqual([])
   })
 
-  // The fence scope: the steal holds the state-mutation lock across the takeover (Astra 26087 r2).
   it.runIf(runs)(
     'takes a fence only while no state-mutation lock exists, and releases it',
     async () => {

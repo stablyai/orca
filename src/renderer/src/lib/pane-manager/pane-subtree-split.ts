@@ -40,8 +40,7 @@ type SplitPaneAroundLeafIdsArgs = {
 export function splitPaneAroundMountedSubtree(
   args: SplitPaneAroundLeafIdsArgs
 ): ManagedPane | null {
-  // Why: live host reconciliation may need to add a sibling to an already
-  // mounted split subtree; splitting only the anchor leaf corrupts the shape.
+  // Host reconciliation may add beside a mounted split subtree; splitting only its anchor leaf corrupts the shape.
   const sourceContainer =
     findMountedSubtreeContainer(args.sourceLeafIds, args) ??
     args.panes.get(args.fallbackPaneId)?.container

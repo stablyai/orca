@@ -59,7 +59,7 @@ export function useBranchCompareRefreshTriggers({
       branchCompareRemoteStatusRef.current = null
       return
     }
-    // Why: pushing a branch can move its remote base and ahead count without changing local HEAD, which the HEAD-change effect alone misses.
+    // Pushes can move the remote base/ahead count without moving local HEAD.
     const current = {
       ahead: remoteStatus?.ahead ?? null,
       baseRef: compareBaseRef,

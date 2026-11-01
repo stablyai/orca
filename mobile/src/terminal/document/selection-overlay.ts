@@ -5,10 +5,8 @@ import { notify } from './host-notify'
 import { applyXtermSelection, selRange } from './selection-range'
 import { viewportPoint, viewportToCell } from './viewport-cell'
 
-/** How close to an edge a handle drag starts scrolling, in pixels. */
 const EDGE_SCROLL_PX = 40
 
-/** The edge-scroll tick, in milliseconds. */
 const EDGE_SCROLL_INTERVAL = 60
 
 export function repositionOverlay(scope: TerminalDocumentScope) {
@@ -20,10 +18,7 @@ export function repositionOverlay(scope: TerminalDocumentScope) {
   const ePx = cellToViewportPx(scope, r.end.col + 1, r.end.row)
   const cellH = getCellHeight(scope) * getTotalScale(scope)
   const viewport = scope.viewportRect()
-  // Why: native iOS pattern — start handle anchors at the TOP of the
-  // first selected cell (dot above, stem covers the cell going down);
-  // end handle anchors at the BOTTOM of the last selected cell (dot
-  // below, stem covers the cell going up).
+  // Match native handles: anchor start at the first cell’s top and end at the last cell’s bottom.
   scope.handleStart!.style.left = sPx.x + 'px'
   scope.handleStart!.style.top = sPx.y + 'px'
   scope.handleEnd!.style.left = ePx.x + 'px'
@@ -44,15 +39,12 @@ export function repositionOverlay(scope: TerminalDocumentScope) {
     vTransform = 'translateY(0)'
     marginTop = '12px'
   } else {
-    // selection covers full viewport — pin to visible center
     menuCenterX = viewport.width / 2
     menuY = viewport.height / 2
     vTransform = 'translateY(-50%)'
     marginTop = '0'
   }
-  // Why: clamp horizontally so the pill stays fully visible when the
-  // selection sits near a screen edge. We position via plain left
-  // (no horizontal translate) so the clamp math is straightforward.
+  // Clamp the pill to visible horizontal bounds near screen edges.
   scope.selMenu!.style.transform = vTransform
   scope.selMenu!.style.marginTop = marginTop
   scope.selMenu!.style.top = menuY + 'px'
@@ -89,8 +81,7 @@ export function syncEdgeScrollSelectionEndpoint(scope: TerminalDocumentScope) {
   if (!scope.sel || !scope.sel.activeHandle) {
     return false
   }
-  // Why: WebView may not emit new touchmove events while a handle is held
-  // at the edge; resample the stored finger point after each viewport scroll.
+  // Held edge drags may emit no touchmove; resample the stored point after each scroll.
   return syncSelectionHandleToViewportPoint(
     scope,
     scope.sel.activeHandle,
@@ -152,9 +143,6 @@ export function handleDragMove(
   }
 }
 
-// Latching document-level touch dispatcher: see tap-dispatch.ts.
-
-/** Ruling 21: the edge-scroll interval, which outlives the selection that started it. */
 export function stopSelectionOverlay(scope: TerminalDocumentScope) {
   stopEdgeScroll(scope)
 }

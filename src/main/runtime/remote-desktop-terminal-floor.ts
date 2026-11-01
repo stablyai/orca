@@ -16,13 +16,13 @@ export type RemoteDesktopTerminalFloorDependencies = {
 }
 
 export class RemoteDesktopTerminalFloor {
-  // Why: subscriptions, not clients, own floors so duplicate streams release independently.
+  // Subscriptions own floors so duplicate streams clean up independently.
   private readonly viewers = new Map<string, Map<string, Viewer>>()
   private readonly owners = new Map<string, string>()
   private readonly hostReclaimTargets = new Map<string, Viewport>()
-  // Why: an in-flight host reclaim must not consume a target after a newer viewer mutation.
+  // A newer viewer revision must prevent an older host reclaim consuming its target.
   private readonly viewerRevisions = new Map<string, number>()
-  // Why: a reaped owner's client re-registers passively after an outage; it resumes ownership unless anyone claimed since.
+  // Passively reconnecting clients resume reaped ownership unless another claim intervened.
   private readonly orphanedOwnerClientIds = new Map<string, string>()
   private activity = 0
 
@@ -63,7 +63,7 @@ export class RemoteDesktopTerminalFloor {
   }
 
   recordHostReclaimTarget(ptyId: string, cols: number, rows: number): void {
-    // Why: phone presence must not seed the separate remote-viewer cache.
+    // Phone presence must not seed desktop-viewer reclaim geometry.
     if (!this.owners.has(ptyId) || cols <= 0 || rows <= 0) {
       return
     }
@@ -107,7 +107,7 @@ export class RemoteDesktopTerminalFloor {
         }
       : { kind: 'desktop', ...this.resolveHostReclaimTarget(ptyId) }
     const result = await this.dependencies.applyLayout(ptyId, layoutTarget)
-    // Why: failed or superseded reclaim must retain true host geometry for the next attempt.
+    // Retain true host geometry after failed or superseded reclaim.
     if (
       reclaimingHost &&
       result.ok &&
@@ -183,7 +183,7 @@ export class RemoteDesktopTerminalFloor {
   claimHost(ptyId: string, cols: number, rows: number): Promise<boolean> {
     this.orphanedOwnerClientIds.delete(ptyId)
     if (!this.owners.has(ptyId)) {
-      // Why: host input during an in-flight reclaim must join it, not pass it.
+      // Host input must join an in-flight reclaim rather than overtake it.
       return this.hostReclaimTargets.has(ptyId) ? this.applyLayout(ptyId) : Promise.resolve(true)
     }
     this.hostReclaimTargets.set(ptyId, clampTerminalViewport(cols, rows))
@@ -192,7 +192,7 @@ export class RemoteDesktopTerminalFloor {
     return this.applyLayout(ptyId)
   }
 
-  // Why: host typing after a reap must cancel the orphan's resume, even though no fit override prompts a renderer claim.
+  // Host typing cancels a reaped viewer's resume even without a visible fit override.
   noteHostInput(ptyId: string): void {
     this.orphanedOwnerClientIds.delete(ptyId)
   }
@@ -220,7 +220,7 @@ export class RemoteDesktopTerminalFloor {
       this.viewers.delete(ptyId)
     }
     if (removedOwnerClientId !== null) {
-      // Why: the owner's own replacement stream (same client, re-subscribed after a reconnect) continues its ownership.
+      // A reconnect replacement stream from the same client retains ownership.
       let successor: { key: string; viewer: Viewer } | null = null
       let fallback: { key: string; activity: number } | null = null
       for (const [key, viewer] of viewers) {
@@ -245,11 +245,9 @@ export class RemoteDesktopTerminalFloor {
       return Promise.resolve(true)
     }
     if (!this.owners.has(ptyId) && !this.dependencies.hostShowsTerminals()) {
-      // Why: reclaiming would restore the spawn grid nobody sees, so the next reveal replays a
-      // snapshot at a foreign grid and TUIs redraw twice (#15997). The orphan seat resumes it.
+      // Headless hosts have no host pane to reclaim; restoring spawn size would cause duplicate TUI redraws (#15997).
       if (removedOwnerViewport) {
-        // Why the viewer's grid, not the PTY's: a phone may be fitting the PTY, and its later
-        // restore must return to the parked desktop grid rather than the spawn or phone grid.
+        // Remember the departing viewer grid, not a temporary phone-fit grid, for the later restore.
         this.hostReclaimTargets.set(ptyId, removedOwnerViewport)
       }
       return Promise.resolve(true)

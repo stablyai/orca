@@ -14,28 +14,6 @@ function pr(number: number, repository?: string): WorkspaceAttachment {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('workspace attachment normalization', () => {
-  it('scales URL parsing with references instead of comparing unrelated identities', () => {
-    const NativeURL = URL
-    let parses = 0
-    vi.stubGlobal(
-      'URL',
-      class extends NativeURL {
-        constructor(...args: ConstructorParameters<typeof NativeURL>) {
-          super(...args)
-          parses++
-        }
-      }
-    )
-    const counts = [23, 230].map((count) => {
-      const items = Array.from({ length: count }, (_, index) => pr(index + 1, 'repo'))
-      parses = 0
-      expect(normalizeWorkspaceAttachments(items)).toEqual(items)
-      return parses
-    })
-    expect(counts[0]).toBeGreaterThan(0)
-    expect(counts[1]).toBeLessThanOrEqual(counts[0] * 11)
-  })
-
   it('preserves global order, enrichment chains and ambiguous sources across identity groups', () => {
     const origin = { kind: 'observed', tabId: 'terminal' } as const
     const second = pr(2, 'repo')

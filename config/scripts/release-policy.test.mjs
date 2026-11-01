@@ -135,6 +135,15 @@ describe('release policy', () => {
 
     await expect(restoreLatestStable(github, repoRef)).resolves.toBe('v1.4.215')
     expect(github.rest.repos.updateRelease).toHaveBeenCalledTimes(1)
+    expect(github.paginate).toHaveBeenCalledWith(github.rest.repos.listReleases, {
+      ...repoRef,
+      per_page: 100
+    })
+    expect(github.rest.repos.updateRelease).toHaveBeenCalledWith({
+      ...repoRef,
+      release_id: 14215,
+      make_latest: 'true'
+    })
   })
 
   it('compares versions numerically when picking Latest', async () => {

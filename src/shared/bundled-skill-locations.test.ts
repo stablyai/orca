@@ -26,7 +26,7 @@ describe('collapseHomePath', () => {
 })
 
 describe('bundledSkillLocation', () => {
-  it('names the shared folder and agent folders, and tells a kept link from a kept copy', () => {
+  it('describes shared updates, kept agent links, and edited locations', () => {
     expect(bundledSkillLocation(op({ kind: 'update' }), '/home/u')).toMatchObject({
       displayPath: '~/.agents/skills/orca-cli',
       place: { kind: 'shared' },

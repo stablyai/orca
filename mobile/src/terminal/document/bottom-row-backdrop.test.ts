@@ -11,7 +11,6 @@ import type { TerminalDocumentCell, TerminalDocumentLine } from './document-term
 import { terminalDocumentDouble } from './document-terminal-double.test-support'
 import { handleMsg } from './host-message-router'
 
-// The phone in the report: a 55x41 grid of 17px rows, with 0.67px of frame left under row 41.
 const CELL = { width: 8, height: 17 }
 const COLS = 55
 const ROWS = 41
@@ -34,6 +33,7 @@ function cellWith(background: Background): TerminalDocumentCell {
 function rowOf(backgrounds: Background[]): TerminalDocumentLine {
   return {
     length: backgrounds.length,
+    isWrapped: false,
     translateToString: () => '',
     getCell: (x) => cellWith(backgrounds[x])
   }
@@ -44,7 +44,6 @@ const uniformRow = (background: Background) => rowOf(Array.from({ length: COLS }
 const fillFor = (color: string, bottom = GRID_BOTTOM) =>
   `linear-gradient(to bottom, transparent ${bottom}px, ${color} ${bottom}px)`
 
-/** The terminal double with a laid-out grid whose last visible row the case chooses. */
 function gridTerminal(rows: { last: TerminalDocumentLine }) {
   const double = terminalDocumentDouble()
   const terminal = Object.assign(double.terminal, {
@@ -84,7 +83,6 @@ const backdrop = () => {
 
 describe('the strip under the last terminal row', () => {
   it("takes a truecolor last row's colour", () => {
-    // A TUI that paints its own background left a theme-coloured band here.
     const scope = gridScope(uniformRow(NAVY_RGB))
     paintBottomRowBackdrop(scope)
     expect(backdrop()).toBe(fillFor(NAVY))
@@ -92,7 +90,6 @@ describe('the strip under the last terminal row', () => {
 
   it('takes the live default background, as OSC 11 left it, under a default last row', () => {
     const scope = gridScope(uniformRow('default'))
-    // xterm writes the live default background onto its element, OSC 11 included.
     scope.term!.element!.style.backgroundColor = 'rgb(26, 26, 26)'
     paintBottomRowBackdrop(scope)
     expect(backdrop()).toBe(fillFor('rgb(26, 26, 26)'))
@@ -117,7 +114,6 @@ describe('the strip under the last terminal row', () => {
     paintBottomRowBackdrop(exactRow)
     expect(backdrop()).toBe('')
 
-    // A desktop-sized grid fitted to the phone's width leaves empty space, not a sliver of a row.
     const desktopSized = gridScope(uniformRow(NAVY_RGB))
     desktopSized.currentScale = 0.5
     paintBottomRowBackdrop(desktopSized)
@@ -150,7 +146,6 @@ describe('the strip under the last terminal row', () => {
   })
 
   it('follows the strip where a scaled grid ends', () => {
-    // Just under a row of gap at this scale, so the strip is still the last row's.
     const scale = 0.99
     const scaledBottom = ROWS * (CELL.height * scale)
     const scope = gridScope(uniformRow(NAVY_RGB), {
@@ -166,7 +161,6 @@ function write(term: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => term.write(data, resolve))
 }
 
-/** A real xterm buffer read through the document's own scan. */
 function lastRowOf(term: unknown) {
   const scope = createTerminalDocumentScope()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a real xterm terminal satisfies the document's narrower shape, which is what the scope field holds.
@@ -179,7 +173,6 @@ describe("xterm's own cells", () => {
     const cases = [
       { name: 'truecolor', data: '\x1b[48;2;14;20;37m\x1b[K', expected: NAVY },
       { name: 'palette', data: '\x1b[42m\x1b[K', expected: null },
-      // Erasing carries the background but not inverse, so the row is filled with inverse text.
       { name: 'inverse', data: `\x1b[7m${' '.repeat(10)}`, expected: null },
       { name: 'mixed', data: '\x1b[48;2;14;20;37m  \x1b[0m', expected: null }
     ]
@@ -197,7 +190,6 @@ describe("xterm's own cells", () => {
   it('reads the visible bottom row while scrolled back', async () => {
     const term = new Terminal({ cols: 10, rows: 2, scrollback: 10, allowProposedApi: true })
     try {
-      // Line 1 is navy; at the bottom the viewport shows lines 2-3, scrolled to the top lines 0-1.
       await write(term, '\r\n\x1b[48;2;14;20;37m\x1b[K\x1b[0m\r\n\r\n')
       expect(lastRowOf(term)).toBe(DEFAULT_TERMINAL_THEME.background)
       term.scrollToLine(0)
@@ -216,7 +208,6 @@ afterEach(() => {
   }
 })
 
-/** A started document over the grid, with the xterm listeners it installed handed back. */
 function startedDocument(last: TerminalDocumentLine) {
   document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP
   const rows = { last }
@@ -271,7 +262,6 @@ describe('the running document', () => {
     listeners.parsed[0]()
     expect(backdrop()).toBe(fillFor(NAVY))
 
-    // A default last row follows a theme the host publishes.
     rows.last = uniformRow('default')
     handleMsg(scope, { type: 'set-theme', terminalTheme: { theme: { background: '#101010' } } })
     expect(backdrop()).toBe(fillFor('#101010'))

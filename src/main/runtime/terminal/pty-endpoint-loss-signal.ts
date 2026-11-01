@@ -1,8 +1,4 @@
-/**
- * The local provider's "this PTY's endpoint stopped taking writes" signal (a terminal daemon that
- * died), fanned out to remote terminal streams. Only the desktop window heard it before, so a
- * headless host's clients learned of the death only by typing into it.
- */
+/** Fan local provider endpoint loss to remote streams too, so headless clients learn daemon death before trying to type. */
 const listenersByPtyId = new Map<string, Set<() => void>>()
 
 export function subscribeToPtyEndpointLoss(ptyId: string, listener: () => void): () => void {

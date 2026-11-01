@@ -1,5 +1,4 @@
-// A frame build that moved a held tab the user was on out of a group main lacks (opened to the
-// side) leaves the user's group gone: they follow the tab into main's group it now shows in.
+// If main removes a user-only side group containing their held tab, follow the tab into main’s resulting group.
 
 import type { AppState } from '@/store/types'
 import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'

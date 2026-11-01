@@ -1,15 +1,6 @@
 import type { MobileSessionTab } from './mobile-session-route-types'
 
-/**
- * The tab the phone has chosen but the host's tab list has not confirmed yet.
- *
- * One value rather than one ref per identifier, so a tab choice, a terminal choice and a launch
- * cannot each leave a stale pick behind for the next snapshot to act on.
- * - `tab`: a tab the user picked, by the host's tab id.
- * - `terminal`: a terminal by its handle; its tab id when the phone already knew it.
- * - `launched`: the tab a launch is creating, which may not be in the tab list yet. `lock` names the
- *   launch, so only its own reply or landing acts on it and a pick made meanwhile replaces it.
- */
+// Use one pending choice so tab, handle and launch selections cannot each leave stale state; later picks replace launch-owned locks.
 export type PendingSessionSelection =
   | { kind: 'tab'; tabId: string }
   | { kind: 'terminal'; handle: string; tabId: string | null }
@@ -17,15 +8,10 @@ export type PendingSessionSelection =
       kind: 'launched'
       lock: string
       surface: LaunchedSurface
-      /** Null until the reply: before it, the tab is still being built. */
       snapshotsLeft: number | null
     }
 
-/**
- * How a launched tab is recognised, never by a predicted tab id: a terminal by the pane this device
- * reserved or the handle the reply named, a chat by the session id this device minted or the reply
- * named (a chat is listed under its session, not the reserved tab).
- */
+// Match launches by reserved pane, returned handle or session id; structured chats are not listed under the reserved tab id.
 export type LaunchedSurface = {
   pane: { tabId: string; leafId: string } | null
   sessionId: string | null
@@ -48,7 +34,7 @@ export function launchedSelection(
   }
 }
 
-/** Adds what the launch's reply named and starts the fallback countdown; a pick made since stays. */
+// Apply only the matching launch’s reply so later user picks survive.
 export function withLaunchReply(
   selection: PendingSessionSelection | null,
   lock: string,
@@ -64,7 +50,7 @@ export function withLaunchReply(
   }
 }
 
-/** Drops a launch's wait when it ended without a reply naming a surface; a pick made since stays. */
+// Clear only the unanswered launch’s own wait, preserving newer picks.
 export function withoutUnansweredLaunch(
   selection: PendingSessionSelection | null,
   lock: string
@@ -84,7 +70,6 @@ export function pendingSelectionHandle(selection: PendingSessionSelection | null
   return selection?.kind === 'terminal' ? selection.handle : null
 }
 
-/** Drops the tab-id half of a pick and keeps any terminal handle it carried. */
 export function withoutPendingTabId(
   selection: PendingSessionSelection | null
 ): PendingSessionSelection | null {
@@ -94,7 +79,6 @@ export function withoutPendingTabId(
   return selection?.kind === 'tab' ? null : selection
 }
 
-/** Drops the handle half of a pick and keeps any tab id it carried. */
 export function withoutPendingHandle(
   selection: PendingSessionSelection | null
 ): PendingSessionSelection | null {
@@ -104,10 +88,6 @@ export function withoutPendingHandle(
   return selection.tabId ? { kind: 'tab', tabId: selection.tabId } : null
 }
 
-/**
- * Turns a launched surface into an ordinary pick once its tab is in the list; `landedTabId` names
- * that tab on the snapshot it arrives in. The budget ends the wait.
- */
 export function resolveLaunchedSelection(
   selection: PendingSessionSelection | null,
   tabs: readonly MobileSessionTab[]
@@ -135,7 +115,6 @@ export function resolveLaunchedSelection(
   }
 }
 
-/** Whether the host lists a launch's running surface, which proves the agent started. */
 export function isLaunchedSurfaceListed(
   tabs: readonly MobileSessionTab[],
   surface: Partial<LaunchedSurface>
@@ -162,7 +141,6 @@ function isLaunchedTab(tab: MobileSessionTab, surface: LaunchedSurface): boolean
   )
 }
 
-/** Whether a terminal's webview should subscribe as the intended pane: picked or just launched. */
 export function pendingSelectionWantsHandle(
   selection: PendingSessionSelection | null,
   handle: string

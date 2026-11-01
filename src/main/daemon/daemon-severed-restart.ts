@@ -1,8 +1,4 @@
-/**
- * Restarting a daemon whose AppImage files are gone ends every process it hosts, so the action
- * re-reads the host's own evidence right before acting: it proceeds only when the pid record and
- * `/proc` still name the exact incarnation the user was shown.
- */
+/** Reverify the displayed incarnation before restarting, since every hosted process will end. */
 import { getDaemonRuntimeDir } from './daemon-launch-paths'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
 import { inspectDaemonHostImage } from './daemon-host-image'
@@ -24,7 +20,7 @@ type Dependencies = {
   inspect: () => ReturnType<typeof inspectDaemonHostImage>
   restart: (expectedDaemonPid: number) => Promise<{ killedCount: number }>
   listSessions: () => Promise<{ isAlive: boolean }[]>
-  /** Local terminals opened while quarantined; a restart ends them as well. */
+  /** Include local quarantine fallbacks in the restart impact count. */
   countFallbackSessions: () => number
 }
 
@@ -87,7 +83,6 @@ async function restartVerifiedSeveredDaemon(
   return { status: 'restarted', killedCount }
 }
 
-/** True once the endpoint's pid record names a verified incarnation other than the severed one. */
 export function hasSeveredDaemonBeenReplaced(
   pidPath: string,
   inspect: (pidPath: string) => ReturnType<typeof inspectDaemonHostImage> = (path) =>

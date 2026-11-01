@@ -7,7 +7,6 @@ import {
   type SidebarFeedTransport
 } from '../../../shared/sidebar-feed-client/sidebar-feed-reader'
 
-/** Main's sidebar inputs as this window last installed them. */
 export type DesktopSidebarFeed = {
   domains: SidebarFeedDomains
   /** The read this install answered: it reflects every write main had answered before it was sent. */
@@ -41,7 +40,6 @@ function installed({ snapshot, settledBy }: SidebarFeedReaderRead): void {
   listeners.forEach((listener) => listener())
 }
 
-/** Runs on every install, before the sidebar re-renders from it. */
 export function onDesktopSidebarFeedInstalled(
   listener: (installed: DesktopSidebarFeed) => void
 ): () => void {
@@ -49,14 +47,12 @@ export function onDesktopSidebarFeedInstalled(
   return () => installListeners.delete(listener)
 }
 
-/** Reads again now, so the next install reflects every write main has answered so far. */
 export function refreshDesktopSidebarFeed(): number {
   // Nothing is read yet; the first mount's first read is the earliest that shows the write.
   return reader ? reader.refresh() : 1
 }
 
-/** Follows main from the first mount for the window's life: main serves this window until it closes
- *  either way, and a list that remounts must not first draw rows main changed while it was hidden. */
+/** Follow main for the window’s lifetime from first mount so remounted sidebars immediately see changes made while hidden. */
 function start(): void {
   if (reader) {
     return

@@ -1,18 +1,5 @@
-/**
- * Runs the layout checks after each scenario step and records which check fired. The runtime's
- * layout is read live from its `layout.subscribe` stream.
- *
- * - rules: the runtime's layout breaks a model rule (on every published frame, so a breach that
- *   heals before the step settles is recorded as transient), or an id changed for the same pane,
- *   tab or group since the previous step; or the saved profile breaks a disk-format rule.
- * - roundTrip: a saved partition does not load and save to a fixed point.
- * - view: what the window draws differs from the runtime's layout.
- * - client: what a paired client / the CLI is told differs from the runtime's layout.
- * - expected: the runtime's layout is not the one the scenario's commands should produce.
- * - restart: the layout after a relaunch (or PTY daemon restart) differs from before it.
- * - marker: text written to a pane's terminal never shows in that pane (a frozen or crossed pane).
- * - remount: a pane's terminal view was created again in the same window outside a restart.
- */
+// Check every live frame for model-rule breaches and changed identities, including transient breaches.
+// Settled steps also compare disk rules/roundtrip, drawn/client/expected/restarted layouts, marker echo and unexpected remounts.
 
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
@@ -71,8 +58,7 @@ export type OracleTarget = {
 export type { ExpectedLayout }
 
 const SETTLE_TIMEOUT_MS = Number(process.env.ORCA_LAYOUT_ORACLE_SETTLE_MS ?? 12_000)
-// Views (the window's drawing, session.tabs.list, terminal.list) catch up after the runtime's last
-// frame with no event of their own, so the step re-reads them on this interval until they agree.
+// Views emit no convergence event; re-read after runtime frames until they agree.
 const VIEW_CONVERGENCE_POLL_MS = 300
 // Today's quiet window (three reads, ~600 ms): no frame across this many gaps between reads.
 const QUIET_GAPS = 2
@@ -138,7 +124,6 @@ export class LayoutOracle {
     }
   }
 
-  /** With a window, starts the remount counter. */
   async start(): Promise<void> {
     if (this.target.page) {
       await installRemountCounter(this.target.page)
@@ -192,10 +177,7 @@ export class LayoutOracle {
     }
   }
 
-  /**
-   * Waits until the runtime's layout is stable and every view agrees with it, then records what
-   * still differs. Views may lag the runtime; only a difference that outlives the wait counts.
-   */
+  // Wait for stable runtime layout and converged views; record only differences that outlive the wait.
   async step(
     label: string,
     expected: ExpectedLayout | null,
@@ -233,7 +215,6 @@ export class LayoutOracle {
     const settled = formatViolations(
       checkWorkspaceLayoutModelRules(models, this.previousModels ?? undefined)
     )
-    // The saved profile, which the live stream does not carry: disk-format rules and round trip.
     const saved = await this.target.readSavedPartitions()
     const savedLines = formatViolations(
       checkWorkspaceLayoutRules(saved, this.previousSaved ?? undefined)
@@ -296,7 +277,6 @@ export class LayoutOracle {
     this.viewCreations.push(counts)
   }
 
-  /** Remember the settled layout so `compareRestart` can diff the relaunched runtime against it. */
   rememberForRestart(layout: OracleLayout): void {
     this.snapshot = layout
   }

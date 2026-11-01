@@ -9,14 +9,10 @@ import { OpenHostListInstead } from './open-host-list-instead'
 
 const LOADING: ShellOverlayLoad = { kind: 'loading', download: null }
 
-/**
- * The picked desktop's Create Workspace page in the shell, as an overlay: the page draws the drawer
- * over a transparent document, and one short loading drawer stands in until it has painted.
- */
 export function NewWorkspaceOverlay({ hostId }: { hostId: string }) {
   const router = useRouter()
   const [load, setLoad] = useState(LOADING)
-  // Stable, so a drag in progress keeps its handler across the download's re-renders.
+  // Keep the drag handler stable across download rerenders.
   const cancel = useCallback(() => router.back(), [router])
   const route = shellScreenRoute({ pathname: `/h/${encodeURIComponent(hostId)}/new-workspace` })
   if (route === null || load.kind === 'unavailable') {
@@ -24,7 +20,7 @@ export function NewWorkspaceOverlay({ hostId }: { hostId: string }) {
   }
   return (
     <>
-      {/* The gate every `/h` route gets from its layout, which this one sits outside of to overlay Home. */}
+      {/* Recreate the host gate supplied by /h layout because this overlay lives over Home. */}
       <HostProtocolGate
         hostId={hostId}
         transparentWhilePending

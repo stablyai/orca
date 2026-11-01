@@ -122,8 +122,6 @@ import {
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -135,7 +133,6 @@ describe('GitHub PR local runtime routing', () => {
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
-    // Why: host-less prRepo backfill and origin resolution use getOwnerRepoForRemote.
     getOwnerRepoForRemoteMock.mockImplementation(
       async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
         remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
@@ -230,13 +227,13 @@ describe('GitHub PR local runtime routing', () => {
           stdout: JSON.stringify({ id: 13, node_id: 'PRRC_inline_13', user: null, body: 'Inline' })
         }
       }
-      if (args.length === 2 && endpoint === 'repos/acme/orca/pulls/7') {
+      if (args.includes('--include') && endpoint === 'repos/acme/orca/pulls/7') {
         return {
-          stdout: JSON.stringify({
+          stdout: `HTTP/2.0 200 OK\n\n${JSON.stringify({
             number: 7,
             head: { ref: 'feature', sha: 'head-oid' },
             base: { ref: 'main', sha: 'base-oid' }
-          })
+          })}`
         }
       }
       return { stdout: '', stderr: '' }
@@ -308,6 +305,47 @@ describe('GitHub PR local runtime routing', () => {
     expect(getRateLimitMock).not.toHaveBeenCalled()
     expect(rateLimitGuardMock).not.toHaveBeenCalled()
     expect(noteRateLimitSpendMock).not.toHaveBeenCalled()
+  })
+
+  it('answers a hover preview with one REST call, following an issue link to its PR', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'orca' })
+    const restCalls: string[] = []
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const endpoint = args[0] === 'api' ? args[1] : ''
+      restCalls.push(endpoint)
+      if (endpoint === 'repos/acme/orca/issues/7') {
+        return { stdout: JSON.stringify({ number: 7, title: 'Peek', pull_request: {} }) }
+      }
+      if (endpoint === 'repos/acme/orca/pulls/7') {
+        return {
+          stdout: JSON.stringify({
+            number: 7,
+            title: 'Peek',
+            state: 'closed',
+            merged_at: '2026-10-01T00:00:00Z',
+            additions: 3,
+            deletions: 1
+          })
+        }
+      }
+      if (endpoint === 'repos/acme/orca/issues/8') {
+        return { stdout: JSON.stringify({ number: 8, title: 'Bug', state: 'open', comments: 2 }) }
+      }
+      throw new Error(`unexpected gh ${args.join(' ')}`)
+    })
+    const ownerRepo = { owner: 'acme', repo: 'orca' }
+
+    await expect(
+      getWorkItemByOwnerRepo('/repo', ownerRepo, 7, 'issue', null, {}, { preview: true })
+    ).resolves.toMatchObject({ type: 'pr', state: 'merged', additions: 3, deletions: 1 })
+    await expect(
+      getWorkItemByOwnerRepo('/repo', ownerRepo, 8, 'issue', null, {}, { preview: true })
+    ).resolves.toMatchObject({ type: 'issue', state: 'open', commentCount: 2 })
+    expect(restCalls).toEqual([
+      'repos/acme/orca/issues/7',
+      'repos/acme/orca/pulls/7',
+      'repos/acme/orca/issues/8'
+    ])
   })
 
   it('never falls through to the default gh host for an unresolved SSH repository', async () => {
@@ -472,13 +510,13 @@ describe('GitHub PR local runtime routing', () => {
       if (endpoint.endsWith('/check-runs/88/annotations?per_page=20')) {
         return { stdout: '[]' }
       }
-      if (args.length === 2 && endpoint === 'repos/team/orca/pulls/7') {
+      if (args.includes('--include') && endpoint === 'repos/team/orca/pulls/7') {
         return {
-          stdout: JSON.stringify({
+          stdout: `HTTP/2.0 200 OK\n\n${JSON.stringify({
             number: 7,
             head: { ref: 'feature', sha: 'head-sha' },
             base: { ref: 'main', sha: 'base-sha' }
-          })
+          })}`
         }
       }
       if (query) {
@@ -578,8 +616,7 @@ describe('GitHub PR local runtime routing', () => {
     const prViewCall = ghExecFileAsyncMock.mock.calls.find(
       ([args]) => args[0] === 'pr' && args[1] === 'view'
     )
-    // The runner host-qualifies argv at spawn time from options.host, so the
-    // mocked call sees the unqualified --repo plus the host in exec options.
+    // Host qualification happens inside the real runner, after this mocked boundary.
     expect(prViewCall?.[0]).toEqual(expect.arrayContaining(['--repo', 'team/orca']))
     expect(prViewCall?.[1]).toEqual({ host: 'github.acme-corp.com:8443' })
     const prCalls = ghExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'pr')

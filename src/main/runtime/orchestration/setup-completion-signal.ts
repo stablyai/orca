@@ -13,8 +13,7 @@ export function buildObservedSetupCommand(
   runnerScriptPath: string,
   platform: SetupRunnerCommandPlatform,
   completionToken: string,
-  // Why: the observed command must reuse the shell the runner was written for, or a
-  // WSL-routed Windows-drive runner gets Git Bash `/c/...` instead of `/mnt/c/...`.
+  // Preserve runner shell selection so WSL drive paths stay /mnt/c rather than Git Bash /c.
   shell?: SetupRunnerShell
 ): { command: string; env?: Record<string, string> } {
   const resolution = resolveSetupRunnerCommand(runnerScriptPath, platform, shell)
@@ -37,8 +36,9 @@ export function buildObservedSetupCommand(
     }
   }
 
+  // Why no `( … )`: this is typed into the user's line editor, where autopair widgets corrupt it (#18059).
   const script = [
-    `( ${resolution.command} )`,
+    resolution.command,
     'status=$?',
     `printf '\\n${completionPrefix(completionToken)}%s\\n' "$status"`,
     'exit "$status"'

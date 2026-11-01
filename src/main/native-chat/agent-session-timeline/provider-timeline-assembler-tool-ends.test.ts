@@ -3,9 +3,9 @@ import {
   agentJournalToolCallLifecycle,
   interruptedAgentJournalToolCall
 } from '../../../shared/agent-journal-tool-call-lifecycle'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
-import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,
@@ -39,7 +39,7 @@ async function openTool(): Promise<ProviderTimelineRig> {
   return rig
 }
 
-/** As a person's Stop writes it, straight to the journal: the turn interrupted, as their cancellation. */
+/** Write personal cancellation directly to the journal. */
 async function personStops(rig: ProviderTimelineRig): Promise<void> {
   const running = await rig.turn('turn-1')
   const identity = parseAgentJournalItemKey(providerTurnItemId('turn-1'))
@@ -91,7 +91,6 @@ describe('provider timeline: how a call its turn or session ended reads', () => 
     async (providerEnd) => {
       const rig = await openTool()
       await personStops(rig)
-      // The Stop leaves the call the provider's to finish.
       rig.assembler.apply({ type: 'activity', text: 'Thinking' })
       expect(await toolBody(rig)).toMatchObject({ state: 'running' })
       rig.assembler.apply({ type: 'turn.end', turn: 'turn-1', at: 2_100, state: providerEnd })

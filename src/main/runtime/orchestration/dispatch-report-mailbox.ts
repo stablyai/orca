@@ -27,11 +27,7 @@ export function activeCreatorDispatch(
     : undefined
 }
 
-/**
- * Where a Dispatch's reports go: the worker that started it while that worker is still on its
- * own task, otherwise the Run. Derived on every send, so a helper whose creator settled reports
- * to the Run without anything being rewritten.
- */
+/** Resolve the live creator or Run on each send so helpers follow creator settlement without rewriting routes. */
 export function dispatchReportMailbox(
   db: OrchestrationDb,
   dispatch: Pick<DispatchContextRow, 'creator_dispatch_id' | 'run_id'>

@@ -55,10 +55,7 @@ function addLedgerRecognizedHashes(
   }
 }
 
-/**
- * Per entry main's grant recorded in this home's ledger, the hash Codex gave
- * Orca's entry, when the recorded hook is Orca's `command`.
- */
+/** Read Codex's recorded hashes only for matching Orca hook signatures. */
 export function readLedgerOrcaHashes(
   runtimeHomePath: string,
   command: string,
@@ -78,14 +75,14 @@ export function readLedgerOrcaHashes(
 
 type CodexManagedHookTrustOwnershipOptions = {
   runtimeHomePath: string
-  /** hooks.json first, then other spellings Codex may key it by (same hash). */
+  /** Primary hooks.json path first, followed by equivalent trust-key spellings. */
   sourcePaths: readonly [string, ...string[]]
   command: string
   managedEventLabels: ReadonlySet<CodexEventLabel>
   timeoutSec: number
   /** Explicit native homes resolve their parent before hook discovery. */
   sourceUsesExplicitCodexHome?: boolean
-  /** Codex's own hashes Orca may have approved its entry with, from any Codex version. */
+  /** Include prior Codex versions' hashes to recognize older approvals. */
   codexHashes?: readonly CodexHookHashes[]
 }
 
@@ -125,7 +122,7 @@ function getCodexManagedHookTrustEntryKeys(
     ])
     addLedgerRecognizedHashes(recognizedHashes, [ledgerHome], key, expectedEntry)
     if (isAlias) {
-      // Why: the ledger records Codex's grant under the primary spelling's key only.
+      // The ledger records grants under the primary path spelling only.
       addLedgerRecognizedHashes(
         recognizedHashes,
         [ledgerHome],
@@ -156,8 +153,7 @@ export function removeCodexManagedHookTrustEntries(
   if (ownedKeys.length > 0) {
     removeHookTrustEntries(options.tomlPath, ownedKeys)
   }
-  // Why: retain the ledger until trust removal succeeds so a later retry can
-  // still prove ownership of Codex-computed hashes.
+  // Keep ownership proof until trust removal succeeds, allowing safe retries.
   removeCodexTrustGrantLedgerHome(options.runtimeHomePath)
 }
 
@@ -186,8 +182,7 @@ export function removeStaleWslCodexManagedHookTrustEntries(options: {
     if (!parts || !options.managedEventLabels.has(parts.eventLabel)) {
       continue
     }
-    // Why: this cleanup owns only guest-side WSL trust. A runtime config can
-    // still contain user Windows/remote hooks, which must remain untouched.
+    // Only guest-side WSL trust is owned here; preserve user Windows/remote hooks.
     if (!parts.sourcePath.startsWith('/') || !parts.sourcePath.endsWith('/hooks.json')) {
       continue
     }

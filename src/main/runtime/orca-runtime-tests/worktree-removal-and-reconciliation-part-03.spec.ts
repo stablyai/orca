@@ -32,8 +32,7 @@ import {
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
-// Why: these fixtures register an SSH provider, which models a connected relay session — and a
-// connected session has always read the host's `$HOME`. The removal guards refuse without it.
+// Connected SSH fixtures need the host HOME for removal guards.
 
 describe('OrcaRuntimeService', () => {
   it('routes runtime preserved-branch force-delete through the selected WSL project runtime', async () => {
@@ -114,8 +113,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not coalesce concurrent same-id removals on different hosts', async () => {
     const baseRepo = store.getRepos()[0]!
-    // The second owner names its host only in the migrated spelling, so its removal must reach the
-    // SSH host rather than joining the local one and running `git worktree remove` here.
+    // Migrated executionHostId must keep remote removal separate from the same-path local owner.
     const remoteRepo = { ...baseRepo, path: '/remote/repo', executionHostId: 'ssh:host-b' }
     const runtimeStore = {
       ...store,
@@ -145,7 +143,6 @@ describe('OrcaRuntimeService', () => {
     })
 
     await localStarted.promise
-    // Joining the local removal would have resolved; the unserved host's catalog refuses instead.
     await expect(remote).rejects.toThrow('selector_not_found')
 
     finishRemovals.resolve()
@@ -171,10 +168,9 @@ describe('OrcaRuntimeService', () => {
     const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
     await removeStarted.promise
-    // Accepted means every refusal already ran; a Force Delete retry has nothing left to waive.
+    // Acceptance follows every refusal; a force retry has nothing left to waive.
     const second = runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true })
     await vi.waitFor(() => expect(resolveTarget).toHaveBeenCalledTimes(2))
-    // The retry checks the removal table right after this resolves, before Git is let finish.
     await resolveTarget.mock.results[1]?.value
     finishRemoval.resolve()
     await expect(Promise.all([first, second])).resolves.toEqual([{}, {}])
@@ -225,8 +221,7 @@ describe('OrcaRuntimeService', () => {
       await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).resolves.toEqual({})
 
       expect(removeWorktree).not.toHaveBeenCalled()
-      // The repo resolved to the local host, so the metadata purge names it —
-      // an unqualified purge would evict a same-id row owned by another host.
+      // Host-qualified metadata purge preserves same-id rows on other hosts.
       expect(removeWorktreeMeta).toHaveBeenCalledWith(
         hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
       )
@@ -253,8 +248,6 @@ describe('OrcaRuntimeService', () => {
       await expect(runtime.removeManagedWorktree(worktreeId)).resolves.toEqual({})
 
       expect(removeWorktree).not.toHaveBeenCalled()
-      // The repo resolved to the local host, so the metadata purge names it —
-      // an unqualified purge would evict a same-id row owned by another host.
       expect(removeWorktreeMeta).toHaveBeenCalledWith(
         hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
       )
@@ -316,8 +309,6 @@ describe('OrcaRuntimeService', () => {
         expect.objectContaining({ remainingMs: expect.any(Function) })
       )
       expect(removeWorktree).not.toHaveBeenCalled()
-      // The repo resolved to the local host, so the metadata purge names it —
-      // an unqualified purge would evict a same-id row owned by another host.
       expect(removeWorktreeMeta).toHaveBeenCalledWith(
         hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
       )
@@ -391,8 +382,6 @@ describe('OrcaRuntimeService', () => {
       expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
       expect(runHook).not.toHaveBeenCalled()
       expect(removeWorktree).not.toHaveBeenCalled()
-      // The repo resolved to the local host, so the metadata purge names it —
-      // an unqualified purge would evict a same-id row owned by another host.
       expect(removeWorktreeMeta).toHaveBeenCalledWith(
         hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
       )

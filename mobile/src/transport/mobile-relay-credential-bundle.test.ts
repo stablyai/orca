@@ -64,21 +64,21 @@ const journal = {
 } satisfies MobileRelayPairingJournal
 
 describe('mobile relay credential bundle', () => {
-  let stored: string | null
+  const stored = new Map<string, string>()
 
   beforeEach(() => {
     vi.clearAllMocks()
     resetPairingKeychainForTests()
     platform.OS = 'ios'
-    stored = null
+    stored.clear()
     asyncStorage.getItem.mockResolvedValue(null)
     asyncStorage.setItem.mockResolvedValue(undefined)
-    secureStore.getItemAsync.mockImplementation(async () => stored)
-    secureStore.setItemAsync.mockImplementation(async (_key: string, value: string) => {
-      stored = value
+    secureStore.getItemAsync.mockImplementation(async (key: string) => stored.get(key) ?? null)
+    secureStore.setItemAsync.mockImplementation(async (key: string, value: string) => {
+      stored.set(key, value)
     })
-    secureStore.deleteItemAsync.mockImplementation(async () => {
-      stored = null
+    secureStore.deleteItemAsync.mockImplementation(async (key: string) => {
+      stored.delete(key)
     })
   })
 
@@ -95,33 +95,67 @@ describe('mobile relay credential bundle', () => {
     })
     await writeMobileRelayCredentialBundle(bundle)
 
-    await expect(readMobileRelayCredentialBundle('host-1')).resolves.toEqual(bundle)
-    expect(stored).toContain(journal.secrets.pendingResumeToken)
-    expect(stored).not.toContain(journal.secrets.inviteToken)
+    const expected = {
+      v: 1,
+      hostId: 'host-1',
+      deviceToken: 'device-token',
+      current: {
+        token: 'D'.repeat(43),
+        hash: 'B'.repeat(43),
+        version: 3,
+        expiresAt: 50_000
+      }
+    }
+    expect(bundle).toEqual(expected)
+    await expect(readMobileRelayCredentialBundle('host-1')).resolves.toEqual(expected)
+    expect(stored.get('orca.mobile-relay.credentials.host-1')).toBe(JSON.stringify(expected))
   })
 
   it('rejects a result from another request or authorization mode', () => {
+    const installed = {
+      v: 1 as const,
+      reqId: 'install-1',
+      authorizationMode: 'authenticated-direct' as const,
+      currentVersion: 1,
+      resumeExpiresAt: 50_000
+    }
     expect(() =>
       promotePairingJournalCredential({
         journal,
-        installed: {
-          v: 1,
-          reqId: 'other-request',
-          authorizationMode: 'relay-basis',
-          currentVersion: 1,
-          resumeExpiresAt: 50_000
-        }
+        installed: { ...installed, reqId: 'other-request' }
+      })
+    ).toThrow(/does not match/)
+    expect(() =>
+      promotePairingJournalCredential({
+        journal,
+        installed: { ...installed, authorizationMode: 'relay-basis' }
       })
     ).toThrow(/does not match/)
   })
 
   it('deletes the namespaced bundle and never enables it on web', async () => {
+    const bundle = promotePairingJournalCredential({
+      journal,
+      installed: {
+        v: 1,
+        reqId: 'install-1',
+        authorizationMode: 'authenticated-direct',
+        currentVersion: 1,
+        resumeExpiresAt: 50_000
+      }
+    })
+    await writeMobileRelayCredentialBundle(bundle)
     await deleteMobileRelayCredentialBundle('host-1')
+    await expect(readMobileRelayCredentialBundle('host-1')).resolves.toBeNull()
     expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(
       'orca.mobile-relay.credentials.host-1',
       expect.any(Object)
     )
+    secureStore.deleteItemAsync.mockClear()
     platform.OS = 'web'
+    await deleteMobileRelayCredentialBundle('host-1')
+    expect(secureStore.deleteItemAsync).not.toHaveBeenCalled()
+    await expect(writeMobileRelayCredentialBundle(bundle)).rejects.toThrow(/native secret store/)
     await expect(readMobileRelayCredentialBundle('host-1')).rejects.toThrow(/native secret store/)
   })
 })

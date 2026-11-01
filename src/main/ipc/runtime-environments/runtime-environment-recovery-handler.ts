@@ -8,7 +8,7 @@ export function registerRuntimeEnvironmentRecoveryHandler(): void {
   ipcMain.removeHandler(RETRY_CONNECTIONS_NOW_CHANNEL)
   ipcMain.handle(RETRY_CONNECTIONS_NOW_CHANNEL, () => {
     retryRemoteRuntimeSharedControlConnectionsNow()
-    // Why: the window's `online` event is main's only network-return signal; SSH needs it too.
+    // Window online is main's only network-return signal, including for SSH.
     retrySshConnectionsAfterNetworkReturn()
   })
 }

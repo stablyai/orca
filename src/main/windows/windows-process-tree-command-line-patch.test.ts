@@ -4,13 +4,7 @@ import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-/**
- * The command-line reader is a patch, not repo source, so its contract is
- * asserted against the patch's post-image. MDE scored the addon for
- * `OpenProcess(PROCESS_VM_READ)` + `ReadProcessMemory` over the whole process
- * table on a timer; these cases exist so a patch refresh cannot quietly restore
- * that primitive.
- */
+/** Assert the patch post-image so refreshes cannot restore table-wide VM_READ/ReadProcessMemory, which MDE flagged as credential dumping. */
 const PATCH_PATH = resolve(
   import.meta.dirname,
   '../../../config/patches/@vscode__windows-process-tree@0.8.0.patch'
@@ -27,8 +21,7 @@ function patchedFile(patch: string, path: string): string {
   const end = rest.findIndex((line) => line.startsWith('diff --git '))
   return (
     (end === -1 ? rest : rest.slice(0, end))
-      // A context line for an empty source line is a bare space, and unified
-      // diffs may drop even that, so an empty string is context too.
+      // Unified diffs may represent empty context lines as a bare space or empty string.
       .filter((line) => line === '' || line.startsWith(' ') || line.startsWith('+'))
       .filter((line) => !line.startsWith('+++') && !line.startsWith('@@'))
       .map((line) => line.slice(1))
@@ -42,8 +35,7 @@ const processSource = patchedFile(patch, 'src/process.cc')
 
 describe('windows-process-tree command line patch', () => {
   it('reads the command line through ProcessCommandLineInformation', () => {
-    // Class 60 is Windows 8.1+; Electron's floor is Windows 10, so every OS
-    // Orca supports has it.
+    // Class60 exists since Windows8.1, below Electron's Windows10 floor.
     expect(commandLineSource).toContain('kProcessCommandLineInformation = 60')
     expect(commandLineSource).toContain('OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION')
   })
@@ -64,24 +56,19 @@ describe('windows-process-tree command line patch', () => {
     expect(commandLineSource).toMatch(
       /query\(process, kProcessCommandLineInformation, nullptr, 0, &size\)/
     )
-    // UNICODE_STRING::Length is a USHORT, so a bogus size must not become a
-    // bad_alloc that fails the whole scan.
+    // Reject oversized USHORT lengths before allocation can fail the entire scan.
     expect(commandLineSource).toContain('size > kMaxCommandLineBytes')
   })
 
   it('treats the returned UNICODE_STRING as untrusted', () => {
-    // A hooked ntdll is the environment this reader targets, so an unchecked
-    // Buffer/Length would be an over-read encoded straight into JS. The bound
-    // must be buffer.size(), not `size`, which the second query overwrites.
+    // Bound returned strings against the original buffer, not the size overwritten by the second query.
     expect(commandLineSource).toContain('const unsigned char* end = begin + buffer.size()')
     expect(commandLineSource).toMatch(/chars == nullptr \|\|/)
     expect(commandLineSource).toMatch(/command_line->Length > static_cast<ULONG>\(end - chars\)/)
   })
 
   it('has no PEB fallback and no latch that could reinstate one', () => {
-    // The fallback used to be reachable from any single anomalous NTSTATUS,
-    // which on an EDR-hooked ntdll is the realistic case -- one stray status
-    // would have silently restored the primitive for the process lifetime.
+    // Any anomalous NTSTATUS previously restored PEB reads for the process lifetime.
     expect(commandLineSource).not.toContain('ReadCommandLineFromPeb')
     expect(commandLineSource).not.toContain('PROCESS_BASIC_INFORMATION')
     expect(commandLineSource).not.toContain('InterlockedExchange')
@@ -93,14 +80,11 @@ describe('windows-process-tree command line patch', () => {
       expect(source).not.toMatch(/OpenProcess\([^)]*PROCESS_VM_READ/)
       expect(source).not.toMatch(/ReadProcessMemory\(/)
     }
-    // Memory and CPU counters kept VM_READ and never read an address space.
-    // Three sites now: those two plus GetProcessCreationTime, which needs the
-    // same limited handle for GetProcessTimes.
+    // Memory/CPU counters plus creation time now use limited handles; none need VM_READ.
     expect(processSource.match(/OpenProcess\(PROCESS_QUERY_LIMITED_INFORMATION/g)).toHaveLength(3)
   })
 
   it('value-initializes ProcessInfo so memory is not stack garbage', () => {
-    // Measured before: 82 processes reported the same bogus working set.
     expect(processSource).toContain('ProcessInfo pinfo{};')
   })
 })
@@ -121,14 +105,9 @@ function loadAddon(): Addon {
   ) as Addon
 }
 
-// Why fail rather than skip on win32: the published tarball ships a loadable
-// prebuilt built from unpatched source, and both readers emit byte-identical
-// strings, so a skipping suite would pass against the very binary this patch
-// exists to keep out. On win32 the addon must be present, and it must be ours.
+// Windows must load our binary: the unpatched prebuilt emits identical text and would pass if skipped.
 describe.runIf(process.platform === 'win32')('windows-process-tree command line addon', () => {
-  // Why not at collection time: a require that throws there fails the whole
-  // file, and the patch-text cases above need no binary at all -- a Windows
-  // checkout without a built addon would lose them to an unrelated failure.
+  // Defer require so missing binaries do not prevent platform-independent patch assertions.
   let addon: Addon
   beforeAll(() => {
     addon = loadAddon()
@@ -152,9 +131,7 @@ describe.runIf(process.platform === 'win32')('windows-process-tree command line 
     })
 
   it('was built from the patched source, not the published prebuild', () => {
-    // The patched reader never calls ReadProcessMemory, so the symbol is
-    // absent from its import table. This is the only check that tells the two
-    // binaries apart -- a bare require() cannot.
+    // Import inspection distinguishes patched binaries; successful require and matching output cannot.
     const packageEntry = addonRequire.resolve('@vscode/windows-process-tree')
     const binary = readFileSync(
       join(packageEntry, '..', '..', 'build', 'Release', 'windows_process_tree.node')

@@ -94,24 +94,23 @@ it('qualifies cache misses and permits cache publication only after the full mat
   expect(validate.run).toContain('assertNotDarkBuild')
 })
 
-it('keeps production on free GitHub runners and isolates adhoc qualification caches', () => {
+it('keeps SignPath on GitHub runners and isolates Blacksmith qualification caches', () => {
   const release = parse(readFileSync('.github/workflows/release-cut.yml', 'utf8'))
   const adhoc = parse(readFileSync('.github/workflows/adhoc-mac-build.yml', 'utf8'))
-  expect(workflow.on.workflow_call.inputs.fast_runners.default).toBe(false)
+  expect(workflow.on.workflow_call.inputs.fast_runners.default).toBe(true)
   expect(release.jobs['orcad-template'].uses).toBe(
     './.github/workflows/qualified-orcad-template.yml'
   )
   expect(release.jobs['orcad-template'].with).toEqual({
-    ref: 'refs/tags/${{ needs.cut.outputs.tag }}'
+    ref: 'refs/tags/${{ needs.cut.outputs.tag }}',
+    fast_runners: false
   })
   expect(adhoc.jobs['orcad-template'].with.fast_runners).toBe(true)
   expect(identity.env.RUNNER_PROFILE).toBe(
     "${{ inputs.fast_runners && 'fast' || 'github-hosted' }}"
   )
   for (const name of ['cache', 'save']) {
-    expect(workflow.jobs[name]['runs-on']).toBe(
-      "${{ inputs.fast_runners && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-latest' }}"
-    )
+    expect(workflow.jobs[name]['runs-on']).toBe('ubuntu-latest')
   }
 })
 

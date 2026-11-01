@@ -19,6 +19,40 @@ function getElementScrollBounds(container: HTMLElement, element: Element): Sideb
   }
 }
 
+function getRevealTargetBounds(
+  container: HTMLElement,
+  element: Element
+): SidebarRevealBounds | null {
+  const bounds = getElementScrollBounds(container, element)
+  if (
+    !element.hasAttribute('data-worktree-id') &&
+    !element.hasAttribute('data-worktree-card-surface')
+  ) {
+    return bounds
+  }
+  const first = element.firstElementChild
+  const scope = first?.hasAttribute('data-worktree-context-menu-scope')
+    ? first
+    : first?.firstElementChild
+  const surface = element.hasAttribute('data-worktree-card-surface')
+    ? element
+    : first?.hasAttribute('data-worktree-card-surface')
+      ? first
+      : scope?.hasAttribute('data-worktree-context-menu-scope')
+        ? scope.firstElementChild
+        : null
+  if (!surface?.hasAttribute('data-worktree-card-surface')) {
+    return null
+  }
+  const boundary = surface.lastElementChild
+  return boundary?.hasAttribute('data-worktree-lineage-children')
+    ? {
+        start: bounds.start,
+        end: Math.min(bounds.end, getElementScrollBounds(container, boundary).start)
+      }
+    : bounds
+}
+
 export function getScrollTopToRevealBounds(
   container: HTMLElement,
   bounds: SidebarRevealBounds,
@@ -40,16 +74,19 @@ export function revealElementInScrollContainer(
   container: HTMLElement,
   element: Element,
   behavior: ScrollBehavior,
-  // Why: any other scrollTop write cancels the scroll issued here mid-animation;
-  // callers use this to stand their scroll-position guards down until it lands.
+  // Notify guards to defer competing scrollTop writes until this smooth reveal finishes.
   onScrollIssued?: (targetTop: number) => void
 ): boolean {
   if (!container.contains(element)) {
     return false
   }
+  const bounds = getRevealTargetBounds(container, element)
+  if (!bounds) {
+    return false
+  }
   const nextScrollTop = getScrollTopToRevealBounds(
     container,
-    getElementScrollBounds(container, element),
+    bounds,
     WORKTREE_SIDEBAR_REVEAL_TOP_INSET
   )
   if (nextScrollTop === null) {
@@ -59,4 +96,13 @@ export function revealElementInScrollContainer(
   onScrollIssued?.(targetTop)
   container.scrollTo({ top: targetTop, behavior: motionSafeScrollBehavior(behavior) })
   return true
+}
+
+export function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
+  const sidebarElement = agentListRoot?.closest('[data-worktree-sidebar]')
+  const worktreeOptionElement = agentListRoot?.closest('[role="option"]')
+  if (!(sidebarElement instanceof HTMLElement) || !worktreeOptionElement) {
+    return
+  }
+  revealElementInScrollContainer(sidebarElement, worktreeOptionElement, 'auto')
 }

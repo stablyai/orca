@@ -6,13 +6,7 @@ import {
 import { resolveWslExecutablePath } from './wsl-executable-path'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
-/**
- * A distro's login-shell environment, probed once and cached.
- *
- * Probes need the user's real PATH, but paying a login shell per call is what
- * stalls behind a blocking `~/.profile` (#14288) and lags WSL git (#9768).
- * Generalised from `git/wsl-git-read-environment.ts`, which already got this right.
- */
+/** Cache the distro login environment to retain user PATH without repeated blocking profile/login-shell probes (#14288/#9768). */
 
 export type WslGuestEnvironment = {
   /** Login-shell PATH, as the user's own terminal would see it. */
@@ -24,23 +18,9 @@ export type WslGuestEnvironment = {
 
 const PROBE_TIMEOUT_MS = 10_000
 const PROBE_MAX_OUTPUT_BYTES = 64 * 1024
-/**
- * A stopped distro recovers; one that cannot produce a POSIX PATH will not.
- *
- * Why 5s and not 30: four call sites surface "Try again" on a probe failure,
- * and for the whole window that retry could not spawn wsl.exe at all -- the
- * advice was guaranteed to fail. Long enough to stop a stampede, short enough
- * that the user's next click reaches a distro that has since warmed up.
- */
+/** Keep transient cooldown short enough for a useful Try Again, but long enough to collapse cold-distro probe bursts. */
 const TRANSIENT_RETRY_MS = 5_000
-/**
- * Even a "permanent" verdict expires eventually.
- *
- * Exit 127 means no usable `env` -- but that is also what an `apt` upgrade
- * window looks like for a few seconds. With no expiry, one such moment disabled
- * every WSL feature on the distro until the app restarted, recoverable only if
- * the user happened to open Agents settings and press Refresh.
- */
+/** Explicit no-usable-env verdicts also expire: upgrades can temporarily remove env and must not disable WSL until restart. */
 const REJECTED_RETRY_MS = 10 * 60_000
 
 type ProbeOutcome =
@@ -51,9 +31,7 @@ type ProbeOutcome =
 const inFlight = new Map<string, Promise<WslGuestEnvironment | null>>()
 const resolved = new Map<string, WslGuestEnvironment>()
 const retryAfter = new Map<string, number>()
-// The budget the cached probe actually had. A caller with materially more time
-// deserves its own attempt rather than inheriting a verdict from a probe that
-// was starved -- an optional 5s read must not hard-fail the 10s scan behind it.
+// A later caller with materially more budget deserves a retry after a starved probe.
 const probedWithBudget = new Map<string, number>()
 
 /** A payload that is not three absolute, single-line POSIX values is a failed probe. */
@@ -77,8 +55,7 @@ async function probeGuestEnvironment(
   distro: string | undefined,
   budgetMs: number
 ): Promise<ProbeOutcome> {
-  // Resolve `env` rather than assume /usr/bin/env: a distro that moved it would
-  // otherwise fail every later call.
+  // Resolve env instead of assuming /usr/bin/env so relocated installs remain usable.
   const script = [
     '_orca_env=$(command -v env 2>/dev/null || true)',
     'case "$_orca_env" in /*) [ -x "$_orca_env" ] || exit 127 ;; *) exit 127 ;; esac',
@@ -88,9 +65,7 @@ async function probeGuestEnvironment(
   const result = await runProcess({
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(distro, ['sh', '-c', captured.command]),
-    // The runner sets this for every command it launches (#9010); the probe
-    // spawns wsl.exe itself, so without it wsl.exe's own errors arrive UTF-16LE
-    // and the NUL-separated payload below is read through NUL-riddled text.
+    // This path spawns wsl.exe directly; request UTF-8 or its UTF-16 errors corrupt the NUL-delimited payload (#9010).
     env: { ...process.env, WSL_UTF8: '1' },
     cwd: resolveWslInteropSpawnCwd(),
     timeoutMs: Math.min(PROBE_TIMEOUT_MS, budgetMs),
@@ -100,15 +75,11 @@ async function probeGuestEnvironment(
     return { kind: 'transient' }
   }
   if (result.code !== 0) {
-    // 127 is our own "no usable env"; anything else is the distro being
-    // unavailable, which is worth retrying.
+    // Only explicit no-usable-env exit 127 gets the longer rejected cooldown; other failures are transient.
     return result.code === 127 ? { kind: 'rejected' } : { kind: 'transient' }
   }
   const environment = parseProbePayload(captured.readStdout(result.stdout))
-  // Why transient and not rejected: an unparseable payload is usually a fence
-  // lost to a chatty rc truncated at PROBE_MAX_OUTPUT_BYTES, which recovers.
-  // Caching that permanently would disable every WSL feature on this distro
-  // for the process lifetime. Only exit 127 ("no usable env") is permanent.
+  // Malformed output often means truncated/chatty rc lost the fence; retry transiently instead of applying the longer exit-127 cooldown.
   return environment ? { kind: 'resolved', environment } : { kind: 'transient' }
 }
 
@@ -119,11 +90,7 @@ function cacheKey(distro: string | undefined): string {
 /** Null means "could not ask", never "has no PATH" -- callers fall back. */
 export function getWslGuestEnvironment(
   distro: string | undefined,
-  /**
-   * The caller's remaining budget. Without it the probe ran on its own 10s
-   * timer, so a 5s caller could reach `runProcess` with 1ms left and report a
-   * timeout for a command that would have taken milliseconds.
-   */
+  /** Respect the caller's remaining budget or probing may consume all time reserved for its actual command. */
   budgetMs = PROBE_TIMEOUT_MS
 ): Promise<WslGuestEnvironment | null> {
   const key = cacheKey(distro)
@@ -137,9 +104,7 @@ export function getWslGuestEnvironment(
     retryAfter.delete(key)
     probedWithBudget.delete(key)
   }
-  // A failed verdict from a starved probe should not bind a caller who brought
-  // more time. 1.5x is the threshold: enough to matter, not so low that every
-  // caller re-probes.
+  // Retry failed probes with >1.5x budget: meaningful headroom without reprobes for every caller.
   const failedBudget = probedWithBudget.get(key)
   if (failedBudget !== undefined && budgetMs > failedBudget * 1.5) {
     inFlight.delete(key)
@@ -147,9 +112,7 @@ export function getWslGuestEnvironment(
     probedWithBudget.delete(key)
   }
 
-  // Why an explicit gate: dropping the in-flight entry on a transient failure
-  // means nothing else stops a re-probe inside the window, so the burst this
-  // cache exists to collapse would come straight back.
+  // Dropping in-flight failures must not bypass cooldown and recreate the spawn burst.
   const cooldown = retryAfter.get(key)
   if (cooldown !== undefined && Date.now() < cooldown && !inFlight.has(key)) {
     return Promise.resolve(resolved.get(key) ?? null)
@@ -157,9 +120,7 @@ export function getWslGuestEnvironment(
 
   const existing = inFlight.get(key)
   if (existing) {
-    // Why race: joining an in-flight probe used to mean waiting out the
-    // *starter's* budget, so a joiner could reach its own command with 1ms --
-    // the exact hazard the budget plumbing was added to remove.
+    // Join only within this caller's budget, not the starter's deadline.
     let timer: ReturnType<typeof setTimeout>
     return Promise.race([
       existing,
@@ -169,11 +130,7 @@ export function getWslGuestEnvironment(
       })
     ]).finally(() => clearTimeout(timer))
   }
-  // Store before awaiting so a burst collapses into one probe.
-  // Why catch: runProcess REJECTS when the child cannot be started (ENOENT on a
-  // host without System32\wsl.exe, EAGAIN under memory pressure). Uncaught, the
-  // rejected promise stays in `inFlight` and every later call re-throws it for
-  // the process lifetime -- all WSL features wedged until restart.
+  // Publish before awaiting to collapse bursts; convert spawn rejection to transient or the cached rejection wedges WSL until restart.
   const probe = probeGuestEnvironment(distro, budgetMs)
     .catch((): ProbeOutcome => ({ kind: 'transient' }))
     .then((outcome) => {
@@ -191,9 +148,7 @@ export function getWslGuestEnvironment(
         Date.now() + (outcome.kind === 'transient' ? TRANSIENT_RETRY_MS : REJECTED_RETRY_MS)
       )
       probedWithBudget.set(key, budgetMs)
-      // Why drop the entry: keeping a null-resolving promise in `inFlight` made
-      // `retryAfter` the only way back, and the probe cap left the 1.5x budget
-      // escape unreachable. Deleting it lets the window alone gate the re-probe.
+      // Discard transient null promises so cooldown and larger-budget escape can permit a new probe.
       if (outcome.kind === 'transient' && inFlight.get(key) === probe) {
         inFlight.delete(key)
       }
@@ -205,9 +160,7 @@ export function getWslGuestEnvironment(
 
 /** Needed so a tool installed inside a running distro appears without a restart. */
 export function invalidateWslGuestEnvironment(distro?: string, all = false): void {
-  // Why an explicit flag: everywhere else in this module `undefined` means the
-  // default distro, so overloading it to mean "all" made a default-distro
-  // Refresh evict every distro and pay a login shell for each.
+  // Undefined means default distro; a separate all flag avoids evicting every distro on default Refresh.
   if (all) {
     inFlight.clear()
     resolved.clear()

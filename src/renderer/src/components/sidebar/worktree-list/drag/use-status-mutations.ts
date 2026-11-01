@@ -13,16 +13,29 @@ import {
 import { buildWorkspaceKanbanSidebarDropUpdates } from '../../workspace-kanban-sidebar-drop'
 import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import { switchSortToManualAfterDrop } from '../../manual-sort-switch-toast'
+import { isWorkspaceStatusAllowedOnHost } from '@/store/host-workspace-status-columns'
 import type { WorktreeReorderArgs, WorktreeStatusDropAtIndexArgs } from './drop-commit-context'
 import type { WorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'
 import {
   collectDropWrites,
   dropWriteRows,
+  uniqueDraggedKeys,
   type DraggedWorktreeCopies
 } from './dragged-worktree-copies'
 
-// Every write a sidebar drop can make: status changes, pin, manual order, and the board lane drop.
-// Each id is written through `dropWriteRows`, never an id-keyed map: a twin on another host shares it.
+/** Drops cards that can't take this status (another paired host's column), so they aren't re-ranked either. */
+function idsAcceptingStatus(
+  rowsFor: ReturnType<typeof dropWriteRows>,
+  worktreeIds: readonly string[],
+  status: WorkspaceStatus
+): readonly string[] {
+  const state = useAppStore.getState()
+  return worktreeIds.filter((worktreeId) =>
+    rowsFor.status(worktreeId).some((row) => isWorkspaceStatusAllowedOnHost(state, row, status))
+  )
+}
+
+// Route every status/rank write through dropWriteRows because IDs repeat across hosts.
 export function useWorktreeStatusMutations(args: {
   manualOrderCatalog: WorktreeManualOrderCatalog
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -44,7 +57,7 @@ export function useWorktreeStatusMutations(args: {
         statusIds: worktreeIds,
         status,
         workspaceStatuses,
-        orderUpdates: new Map()
+        orderUpdatesByKey: new Map()
       })
       if (updates.length > 0) {
         void updateWorktreesMeta(updates)
@@ -69,23 +82,35 @@ export function useWorktreeStatusMutations(args: {
   )
 
   const moveWorktreesToStatusAtIndex = useCallback(
-    (dropArgs: WorktreeStatusDropAtIndexArgs) => {
+    (requestedDrop: WorktreeStatusDropAtIndexArgs) => {
+      const rowsFor = dropWriteRows(useAppStore.getState(), requestedDrop.draggedCopies)
+      const worktreeIds = idsAcceptingStatus(
+        rowsFor,
+        requestedDrop.worktreeIds,
+        requestedDrop.status
+      )
+      if (worktreeIds.length === 0) {
+        return
+      }
+      const dropArgs = { ...requestedDrop, worktreeIds }
+      // Sidebar lanes key their cards by host identity: rank only the copies this drop writes.
+      const draggedKeys = uniqueDraggedKeys(dropArgs.worktreeIds.flatMap(rowsFor.status))
       const order = buildManualOrderUpdatesForGroupDrop({
         groups: dropArgs.groups,
         targetGroupKey: getWorkspaceStatusGroupKey(dropArgs.status),
-        draggedIds: dropArgs.worktreeIds,
+        draggedIds: draggedKeys,
         dropIndex: dropArgs.dropIndex,
         now: Date.now(),
-        rankByWorktreeId: manualOrderCatalog.rankByWorktreeId,
-        allWorktreeIds: manualOrderCatalog.orderedIds
+        rankByWorktreeId: manualOrderCatalog.rankByKey,
+        allWorktreeIds: manualOrderCatalog.orderedKeys
       })
-      const dragged = new Set(dropArgs.worktreeIds)
+      const dragged = new Set(draggedKeys)
       const updates = collectDropWrites({
-        rowsFor: dropWriteRows(useAppStore.getState(), dropArgs.draggedCopies),
+        rowsFor,
         statusIds: dropArgs.worktreeIds,
         status: dropArgs.status,
         workspaceStatuses,
-        orderUpdates: new Map([...order.updates].filter(([worktreeId]) => dragged.has(worktreeId)))
+        orderUpdatesByKey: new Map([...order.updates].filter(([key]) => dragged.has(key)))
       })
       if (updates.length === 0) {
         return
@@ -115,17 +140,20 @@ export function useWorktreeStatusMutations(args: {
   const reorderWorktrees = useCallback(
     (reorderArgs: WorktreeReorderArgs) => {
       const result = buildManualOrderUpdatesForVisibleGroups({
-        ...reorderArgs,
+        groups: reorderArgs.groups,
+        sourceGroupKey: reorderArgs.sourceGroupKey,
+        draggedIds: reorderArgs.draggedKeys,
+        dropIndex: reorderArgs.dropIndex,
         now: Date.now(),
-        rankByWorktreeId: manualOrderCatalog.rankByWorktreeId,
-        allWorktreeIds: manualOrderCatalog.orderedIds
+        rankByWorktreeId: manualOrderCatalog.rankByKey,
+        allWorktreeIds: manualOrderCatalog.orderedKeys
       })
       const updates = collectDropWrites({
         rowsFor: dropWriteRows(useAppStore.getState(), reorderArgs.draggedCopies),
         statusIds: [],
         status: null,
         workspaceStatuses,
-        orderUpdates: result.updates
+        orderUpdatesByKey: result.updates
       })
       if (updates.length === 0) {
         return
@@ -158,14 +186,20 @@ export function useWorktreeStatusMutations(args: {
 
   const dropWorktreesOnWorkspaceBoard = useCallback(
     (dropArgs: WorktreeStatusDropAtIndexArgs) => {
+      const rowsFor = dropWriteRows(useAppStore.getState(), dropArgs.draggedCopies)
+      const worktreeIds = idsAcceptingStatus(rowsFor, dropArgs.worktreeIds, dropArgs.status)
+      if (worktreeIds.length === 0) {
+        return
+      }
       const result = buildWorkspaceKanbanSidebarDropUpdates({
         ...dropArgs,
-        rowsFor: dropWriteRows(useAppStore.getState(), dropArgs.draggedCopies),
+        worktreeIds,
+        rowsFor,
         workspaceStatuses,
         sortBy,
         now: Date.now(),
-        allWorktreeIds: manualOrderCatalog.orderedIds,
-        rankByWorktreeId: manualOrderCatalog.rankByWorktreeId
+        allWorktreeKeys: manualOrderCatalog.orderedKeys,
+        rankByKey: manualOrderCatalog.rankByKey
       })
       if (result.updates.length === 0) {
         return

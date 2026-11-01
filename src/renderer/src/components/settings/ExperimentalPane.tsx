@@ -8,9 +8,9 @@ import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
-import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
+import { BrowserExtensionsExperimentalSetting } from './BrowserExtensionsExperimentalSetting'
 import { WslHostsExperimentalSetting } from './WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../sidebar/use-wsl-hosts-enabled'
 import {
@@ -26,8 +26,7 @@ const MS_PER_MINUTE = 60 * 1000
 type ExperimentalPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  /** Hidden-experimental group is only rendered once the user has unlocked
-   *  it via Option-clicking the Experimental page title. */
+  /** Unlocked by Option-clicking the Experimental title. */
   hiddenExperimentalUnlocked?: boolean
 }
 
@@ -38,9 +37,6 @@ export function ExperimentalPane({
 }: ExperimentalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
-  const showNativeChat = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().nativeChat
-  ])
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentDashboard
   ])
@@ -55,8 +51,7 @@ export function ExperimentalPane({
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
-  // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
-  // while displaying the same effective clamped value the planner will use.
+  // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
   )
@@ -99,10 +94,6 @@ export function ExperimentalPane({
             />
           </div>
         </SearchableSetting>
-      ) : null}
-
-      {showNativeChat ? (
-        <NativeChatExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showTerminalAttention ? (
@@ -213,7 +204,6 @@ export function ExperimentalPane({
                 )}
                 onChange={(minutes) =>
                   updateSettings({
-                    // Why: settings persist the planner contract, not the display unit.
                     agentHibernationIdleMs: minutes * MS_PER_MINUTE
                   })
                 }
@@ -248,7 +238,7 @@ export function ExperimentalPane({
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy',
-                  'Previews updated worktree-card layout and metadata behavior, including hover/context-menu ownership and status presentation.'
+                  'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
                 )}
               </p>
             </div>
@@ -269,6 +259,8 @@ export function ExperimentalPane({
       ) : null}
 
       <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
+
+      <BrowserExtensionsExperimentalSetting settings={settings} updateSettings={updateSettings} />
 
       {wslHostsAvailable() ? (
         <WslHostsExperimentalSetting settings={settings} updateSettings={updateSettings} />

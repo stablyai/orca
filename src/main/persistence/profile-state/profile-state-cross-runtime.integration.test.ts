@@ -1,8 +1,4 @@
-/**
- * Design D4 Phase 1 gate: a profile database the pinned Bun wrote, WAL included after an unclean
- * exit, opens and backs up under the pinned Node, and the reverse — the rollback direction.
- * Today's source reaches Bun's own SQLite through its node:sqlite; the Bun adapter is gone.
- */
+// Verify pinned Bun/Node databases, including unclean-exit WALs, open and back up in both directions.
 import { build } from 'esbuild'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

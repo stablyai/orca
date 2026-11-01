@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
 export type MobileMediaPlaybackProps = { uri: string; mimeType: string; title: string }
 
 export function MobileMediaPlayback({ uri, mimeType, title }: MobileMediaPlaybackProps) {
+  useMobileColorScheme()
   const mediaRef = useRef<HTMLMediaElement>(null)
   const [failure, setFailure] = useState('')
   useEffect(() => {

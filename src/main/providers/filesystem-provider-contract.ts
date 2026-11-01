@@ -2,7 +2,9 @@ import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import type {
   DocPreviewFileAccessRequest,
-  DocPreviewFileAccessResult
+  DocPreviewFileAccessResult,
+  DocPreviewFileChunk,
+  DocPreviewFileTarget
 } from '../../shared/doc-preview-file-access'
 import type { DirEntry, FsChangeEvent, MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
@@ -32,11 +34,7 @@ export type FileReadLimits = {
 }
 
 export type FileRangeReadResult = {
-  /** Raw bytes for `[position, position + bytesRead)`. `bytesRead < length`
-   *  always means end of file: the host loops until the window is filled, and
-   *  an over-cap request is rejected rather than clamped, so a short read is
-   *  never a partial syscall or a silently narrowed window. A `position` at or
-   *  past EOF yields `bytesRead === 0`. */
+  /** Hosts fill the requested range or reach EOF; over-cap requests throw, so short reads always mean EOF. */
   bytes: Buffer
   bytesRead: number
 }
@@ -45,22 +43,19 @@ export type IFilesystemProvider = {
   readDir(dirPath: string, options?: { followSymlinks?: boolean }): Promise<DirEntry[]>
   readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
   readDocPreviewFile?(request: DocPreviewFileAccessRequest): Promise<DocPreviewFileAccessResult>
-  /** Positional read. Optional because an older remote host cannot serve one.
-   *  Strict by design: it throws when unsupported rather than
-   *  silently degrading, so a caller cannot accidentally pay a whole-file
-   *  transfer per chunk while tailing.
-   *
-   *  `position` must be a non-negative safe integer and `length` a positive one
-   *  no larger than `MAX_FILE_RANGE_READ_BYTES`; anything else throws
-   *  `FileRangeReadRequestError` without reaching the host. The final byte
-   *  offset must also remain a safe integer. */
+  readDocPreviewFileChunk?(
+    request: DocPreviewFileTarget,
+    offset: number,
+    length: number
+  ): Promise<DocPreviewFileChunk>
+  /** Optional on older hosts; unsupported reads throw instead of transferring whole files per tail chunk.
+   * Position/end must be safe nonnegative offsets; length must be positive and within MAX_FILE_RANGE_READ_BYTES. */
   readFileRange?(
     filePath: string,
     position: number,
     length: number,
     options?: { signal?: AbortSignal }
   ): Promise<FileRangeReadResult>
-  /** Cached capability probe for `readFileRange`. */
   supportsFileRangeRead?(options?: { signal?: AbortSignal }): Promise<boolean>
   readTerminalArtifact?(
     filePath: string,

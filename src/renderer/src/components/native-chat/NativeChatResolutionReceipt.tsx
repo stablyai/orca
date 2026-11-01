@@ -7,7 +7,7 @@ import {
   nativeChatReceiptAnswers,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
-} from '../../../../shared/native-chat-resolution-receipt'
+} from '../../../../shared/native-chat/native-chat-resolution-receipt'
 
 export function NativeChatResolutionReceipt({
   body,
@@ -17,8 +17,7 @@ export function NativeChatResolutionReceipt({
   body: NativeChatResolvedPrompt
   /** Message this receipt stands in for; keys the question row's disclosure. */
   disclosureId?: string
-  /** False when the host says nobody waits on this pending prompt: the agent that raised it ended,
-   *  so its row reports what was asked instead of breathing. */
+  /** False once the prompting agent ends: report the pending question without implying anyone still waits. */
   awaiting?: boolean
 }): React.JSX.Element | null {
   const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`

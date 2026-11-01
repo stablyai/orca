@@ -1,8 +1,4 @@
-/**
- * Which connect attempt opened a pooled SSH transport, and who has since taken it over. A
- * cancelled attempt may close only a transport it opened itself and no newer owner adopted: a
- * replacement connect or a managed tunnel can reuse the same pooled connection.
- */
+/** A cancelled attempt closes only transports it opened without newer adoption; replacement connects and tunnels may share the pool. */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { SshConnection } from './ssh-connection'
 
@@ -12,12 +8,10 @@ const adopters = new WeakMap<SshConnection, symbol>()
 // A tunnel built outside any connect attempt (a restore, a lifecycle action) owns its transport.
 const BACKGROUND_OWNER = Symbol('ssh-connection-background-owner')
 
-/** Runs `work` so any transport the pool opens inside it is attributed to `owner`. */
 export function runAttributedToSshOwner<T>(owner: symbol, work: () => Promise<T>): Promise<T> {
   return scope.run(owner, work)
 }
 
-/** The attempt or census whose work is running now, if any. */
 export function currentSshOwner(): symbol | undefined {
   return scope.getStore()
 }

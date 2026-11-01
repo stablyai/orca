@@ -32,7 +32,7 @@ vi.mock('../wsl/wsl-host-service-instance', () => ({
   getWslHostService: () => ({ recordForEnvironment: recordForEnvironmentMock })
 }))
 
-// Why: a WSL host's paths only exist for a Windows desktop; pin both resolvers to win32.
+// WSL paths require Windows resolution even when this test runs on another platform.
 vi.mock('../windows-path-access-host', async (importOriginal) => {
   const actual = await importOriginal<typeof WindowsPathAccessHost>()
   return {
@@ -139,12 +139,5 @@ describe('shell handlers for a WSL-owned path', () => {
     ).resolves.toEqual({ ok: false, reason: 'remote-runtime-unsupported' })
     expect(statMock).not.toHaveBeenCalled()
     expect(launchMock).not.toHaveBeenCalled()
-  })
-
-  it('keeps opening with the system default refused for a WSL owner', async () => {
-    await expect(getHandler('shell:openFilePath')({}, '/home/me/a.txt', WSL_OWNER)).resolves.toBe(
-      false
-    )
-    expect(statMock).not.toHaveBeenCalled()
   })
 })

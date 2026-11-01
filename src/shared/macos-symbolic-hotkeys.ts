@@ -149,7 +149,6 @@ function chordToBinding(chord: MacCapturedDigitChord): string {
 
 const DIGIT_KEY_PATTERN = /^[1-9]$/
 
-// Expand a digit-index representative across its full 1-9 range.
 function candidateBindings(actionId: KeybindingActionId, binding: string): string[] {
   if (!isDigitIndexActionId(actionId)) {
     return [binding]

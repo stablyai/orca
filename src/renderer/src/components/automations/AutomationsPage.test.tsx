@@ -1,19 +1,11 @@
 // @vitest-environment happy-dom
 
-/**
- * Characterization tests for the automations page.
- *
- * This file pins the page's *current* observable orchestration — which requests
- * it makes, in what shape, and what it hands to its children — so the Step 6/7/9
- * rewrites have a safety net. Several assertions describe behavior those steps
- * will deliberately replace; each is marked with the step that owns the change,
- * so an edit there reads as intended rather than as a regression.
- *
- * The mount rig, child stand-ins, and preload API double live in
- * `automations-page-test-harness`; the refresh triggers and which row's history
- * they leave on screen live in `AutomationsPage.refresh-selection.test.tsx`.
- */
+/** Characterize observable page requests and child inputs. The mount/API harness lives in automations-page-test-harness; refresh/selection cases live in AutomationsPage.refresh-selection.spec.tsx. */
 
+import {
+  AutomationOwnerConflictError,
+  type AutomationOwnerConflictCode
+} from '../../../../shared/automation-owner-conflict'
 import { act } from 'react'
 import { describe, expect, it } from 'vitest'
 import {
@@ -61,8 +53,7 @@ describe('AutomationsPage list rendering', () => {
 
     const { container } = await renderPage()
 
-    // Why: a host that never answered is not an empty host, and the rows the
-    // page already had are better than none. Step 9 removes this arm.
+    // A never-answered host is not empty; preserve the legacy rows until scoped evidence exists.
     expect(rows(container, 'automation-row')).toEqual(['Unscoped'])
   })
 
@@ -77,8 +68,7 @@ describe('AutomationsPage list rendering', () => {
   })
 
   it('handles a failed list instead of leaking an unhandled rejection', async () => {
-    // Before Step 7b this was pinned as *unhandled*: refresh() was try/finally
-    // with no catch and was called as `void refresh()`.
+    // Capture unhandled rejections because refresh is called without awaiting it.
     const unhandled: unknown[] = []
     const capture = (reason: unknown): void => {
       unhandled.push(reason)
@@ -153,10 +143,7 @@ describe('AutomationsPage list rendering', () => {
     if (!entry) {
       throw new Error('no external entry to act on')
     }
-    // The second authority a multi-host build will list: same provider, same
-    // `openclaw:local` manager ID, different machine. The desktop fixture is the
-    // only host that actually answers, so a scope recovered from the manager ID
-    // would resolve BOTH rows to it and pause the wrong host's cron job.
+    // Same provider/manager ID on different authorities requires scope; deriving it from the ID would pause the wrong host’s job.
     const runtimeScope = {
       ...entry.scope,
       owner: {
@@ -263,7 +250,7 @@ describe('AutomationsPage mutations', () => {
       mocks.listPanel?.runNow(listedRow(automation.id))
     })
 
-    // Step 6: the request names the owner captured when the row was listed.
+    // Fence the request with the owner captured when the row was listed.
     expect(api.automations.runNow).toHaveBeenCalledWith({
       id: 'a-1',
       expectedOwner: SELF_PRECONDITION
@@ -308,7 +295,7 @@ describe('AutomationsPage mutations', () => {
       mocks.detailPane?.openEditDialog(automation)
     })
 
-    // Step 6: hydration re-reads the row's own scope; the ambient list is untouched.
+    // Hydrate through the row’s own scope without touching the ambient list.
     expect(api.automations.list).not.toHaveBeenCalled()
     expect(api.automations.listScoped).toHaveBeenCalledWith({ selector: { kind: 'self' } })
     expect(mocks.editorDialog?.open).toBe(true)
@@ -402,8 +389,8 @@ describe('AutomationsPage mutations', () => {
 })
 
 describe('AutomationsPage owner conflicts', () => {
-  function conflict(code: string): Error {
-    return new Error(`The host changed: ${code}`)
+  function conflict(code: AutomationOwnerConflictCode): Error {
+    return new AutomationOwnerConflictError(code)
   }
 
   function notice(container: HTMLElement): HTMLElement | null {
@@ -462,8 +449,7 @@ describe('AutomationsPage owner conflicts', () => {
       mocks.editorDialog?.onSave()
     })
 
-    // The dialog stays open over the page, so a notice posted to the page is a
-    // save that did nothing at all as far as the user can tell.
+    // Save refusals belong in the still-open dialog so users can see and repair them.
     expect(mocks.editorDialog?.open).toBe(true)
     expect(mocks.editorDialog?.notice?.message).toContain("This automation's host changed")
     expect(notice(container)).toBeNull()
@@ -507,14 +493,13 @@ describe('AutomationsPage owner conflicts', () => {
       mocks.listPanel?.openEditDialog(listedRow(automation.id))
     })
 
-    // Why: a transport failure degrades to the copy on screen, as it did before Step 6.
+    // A transport failure preserves the on-screen copy for editing.
     expect(mocks.editorDialog?.open).toBe(true)
     expect(mocks.editorDialog?.isEditing).toBe(true)
   })
 
   it('keeps the unfenced call for a row no host read has answered for', async () => {
-    // The host never answered, so no row carries an owner and none may be
-    // invented; the request goes out unfenced rather than against a guess.
+    // Without a host answer no owner was captured; retain the unfenced legacy path rather than guess.
     const automation = makeAutomation({ id: 'a-1', enabled: true })
     api.automations.list.mockResolvedValue([automation])
     api.automations.listScoped.mockRejectedValue(new Error('offline'))
@@ -524,15 +509,14 @@ describe('AutomationsPage owner conflicts', () => {
       mocks.listPanel?.toggleAutomation(listedRow(automation.id))
     })
 
-    // Why: Step 9 removes this legacy arm once every row carries a captured owner.
+    // Preserve mixed-version unfenced updates until a scoped list captures ownership.
     expect(api.automations.update).toHaveBeenCalledWith({
       id: 'a-1',
       updates: { enabled: false }
     })
   })
 
-  // A mixed-host folder workspace is the path that reaches this without a host
-  // ever being removed, so the orphan bucket has to hold rows on a healthy machine.
+  // Mixed-host folder workspaces can orphan rows even while every host remains healthy.
   it('lists an ambiguous-workspace row in the orphan bucket and keeps History on it', async () => {
     const orphaned = makeAutomation({ id: 'a-2', name: 'Ambiguous' })
     api.automations.listScoped.mockImplementation(async (params: AutomationListParams) =>
@@ -555,8 +539,7 @@ describe('AutomationsPage owner conflicts', () => {
     )
 
     const { container, rerender } = await renderPage()
-    // The orphan scope is only listed once an authority has reported a count,
-    // so the entry appears on the catalog that follows the first answer.
+    // An authority’s reported orphan count adds the entry to the next catalog.
     await rerender()
 
     expect(api.automations.listScoped).toHaveBeenCalledWith({ selector: { kind: 'orphan' } })
@@ -566,7 +549,7 @@ describe('AutomationsPage owner conflicts', () => {
     expect(mocks.listPanel?.isActionEnabled(orphanedRow, 'run-now')).toBe(false)
   })
 
-  it('greys out the actions on a row no owner could be captured for', async () => {
+  it('keeps delete enabled on a row with no captured owner metadata', async () => {
     const automation = makeAutomation({ id: 'a-1' })
     api.automations.list.mockResolvedValue([automation])
     api.automations.listScoped.mockRejectedValue(new Error('offline'))
@@ -579,8 +562,7 @@ describe('AutomationsPage owner conflicts', () => {
 })
 
 describe('AutomationsPage refresh independence', () => {
-  // The external-manager probe is per host and can hang on a dead provider; the
-  // automation list must settle without waiting for it.
+  // A stalled per-host external provider probe must not block the automation list.
   it('settles the list even when the external manager probe never answers', async () => {
     api.automations.listExternalManagerForOwner.mockReturnValue(new Promise(() => undefined))
 

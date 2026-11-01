@@ -15,8 +15,8 @@ export const ORCHESTRATION_RESET_METHODS = [
       }
       if (params.tasks) {
         runtime.stopOrchestrationFederationRelay()
-        db.resetTasks()
-        return { reset: 'tasks' }
+        const removed = db.resetTasks()
+        return removed ? { reset: 'tasks', removed } : { reset: 'tasks' }
       }
       if (params.messages) {
         db.resetMessages()

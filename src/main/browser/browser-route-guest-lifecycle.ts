@@ -60,8 +60,6 @@ export function installBrowserRouteGuestQuarantine(
     isPopupNavigationAllowed: (url: string) => boolean
   }
 ): void {
-  // Gesture-gated, same-partition popups: OAuth needs a real child window, and denying every
-  // window.open is what stranded those flows. Everything else about the envelope still applies.
   const popups = createBrowserRouteGuestPopupController({
     opener: state.guest,
     partition: state.partition,

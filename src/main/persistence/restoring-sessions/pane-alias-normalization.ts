@@ -27,7 +27,7 @@ export function legacyMigrationUnsupportedRowsToAliasEntries(
     if (!entry?.paneKey) {
       continue
     }
-    // Why: pre-stable rows lack the old numeric key; only synthesize single-pane aliases when the row is unambiguous.
+    // Pre-stable rows lack numeric keys; synthesize aliases only for unambiguous single panes.
     for (const legacyPaneKey of [`${tabId}:0`, `${tabId}:1`]) {
       aliasEntries.push({
         ptyId: entry.ptyId,
@@ -40,7 +40,7 @@ export function legacyMigrationUnsupportedRowsToAliasEntries(
   return aliasEntries
 }
 
-// Why: bound removed-SSH-target history so remove/re-add churn can't grow the file unbounded.
+// Bound history so SSH-target remove/re-add churn cannot grow state forever.
 export const MAX_REMOVED_SSH_TARGET_TOMBSTONES = 50
 
 export function normalizeMigrationUnsupportedPtyEntries(
@@ -107,7 +107,7 @@ export function registerPersistedPaneKeyAlias(entry: LegacyPaneKeyAliasEntry): v
     )
     return
   }
-  // Why: detached agents keep their UUID pane key across restarts; restore the physical-to-owner mapping before hook replay.
+  // Restore detached agents' physical-to-owner routing before replaying hook events.
   agentHookServer.transferPaneAuthority(
     entry.legacyPaneKey,
     entry.stablePaneKey,
@@ -138,7 +138,7 @@ export function legacyPaneKeyAliasEntriesEqual(
     return false
   }
   const rightByLegacyPaneKey = new Map(right.map((entry) => [entry.legacyPaneKey, entry]))
-  // Why: field-wise, not JSON.stringify — persisted key order differs from freshly built entries and would fake a dirty state.
+  // Ignore JSON key ordering to avoid false dirty-state detection.
   return left.every((entry) => {
     const other = rightByLegacyPaneKey.get(entry.legacyPaneKey)
     return (

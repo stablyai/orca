@@ -1,3 +1,6 @@
+import { isFolderRepo } from '../../shared/repo-kind'
+import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight-params'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
 import { captureHostShellEnvironment } from '../runtime/structured-agent-shell-environment'
@@ -29,8 +32,9 @@ import {
   refreshShellPathAndDetectAgents,
   type RefreshAgentsResult
 } from './agent-detection'
+import type { InstalledAgentDetectionOptions } from './installed-agent-detection'
+import { assertWslDistroRunningForExec } from '../wsl/wsl-background-exec-gate'
 
-/** Where agent CLIs are probed: this machine (optionally inside a WSL distro) or an SSH target. */
 export type AgentDetectionHost =
   | { kind: 'local'; context?: PreflightRuntimeContext }
   | { kind: 'ssh'; connectionId: string }
@@ -43,7 +47,6 @@ export type WorkspaceAgentDetectionStore = ProjectRuntimeResolutionStore & {
 
 export const HOST_DEFAULT_AGENT_DETECTION: AgentDetectionHost = { kind: 'local' }
 
-/** A workspace as this host knows it: a folder workspace, or a worktree read from its own list. */
 export type AgentDetectionWorkspace =
   | { kind: 'folder'; folderWorkspaceId: string }
   | { kind: 'worktree'; repoId: string; path: string; hostId?: string | null }
@@ -52,10 +55,7 @@ type ResolvedWorkspace =
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'local'; repo: Repo; path: string }
 
-/**
- * The host a workspace's agents run on, resolved on this machine from its own project settings.
- * A workspace this store cannot place keeps the host default older clients rely on.
- */
+/** Resolve from host-owned workspace settings; unplaced workspaces retain the legacy host default. */
 export function resolveWorkspaceAgentDetectionHost(
   store: WorkspaceAgentDetectionStore,
   workspace: AgentDetectionWorkspace
@@ -80,8 +80,7 @@ function resolveWorktree(
   store: WorkspaceAgentDetectionStore,
   worktree: Extract<AgentDetectionWorkspace, { kind: 'worktree' }>
 ): ResolvedWorkspace | null {
-  // Why the shared rule: one repo id can name rows on several hosts, and the first row is not
-  // necessarily this worktree's owner.
+  // Same repo IDs can exist on several hosts; resolve the worktree owner rather than take the first.
   const routing = resolveWorktreeHostRouting(store.getRepos?.() ?? [], worktree)
   if (routing.kind === 'ambiguous') {
     throw new Error('worktree_execution_host_unresolved')
@@ -93,7 +92,7 @@ function resolveWorktree(
   if (sshTargetId) {
     return { kind: 'ssh', connectionId: sshTargetId }
   }
-  // Why refuse: another runtime's worktree is not this host's to probe, and its list would mislead.
+  // Another runtime's CLI list cannot describe this workspace.
   if (parseExecutionHostId(routing.hostId)?.kind === 'runtime') {
     throw new Error(WORKSPACE_ON_OTHER_RUNTIME)
   }
@@ -123,7 +122,7 @@ function resolveFolderWorkspace(
   }
   const folder = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
   const candidates = findFolderWorkspaceCandidateRepos(state, folderWorkspaceId)
-  // Why one candidate: a folder spanning several repos has no single project runtime to pick.
+  // Multi-repo folders have no unique project runtime to choose.
   const repo = candidates.length === 1 ? candidates[0] : undefined
   return host.kind === 'local' &&
     folder &&
@@ -133,35 +132,72 @@ function resolveFolderWorkspace(
     : null
 }
 
-/** The one agent-detection entry point: IPC, runtime RPC, and SSH all probe through here. */
-export async function detectAgentsOnHost(host: AgentDetectionHost): Promise<string[]> {
-  // Why reject, never []: an unserved host is unverifiable, and [] would be cached as "no agents".
+export async function detectAgentsOnHost(
+  host: AgentDetectionHost,
+  options?: InstalledAgentDetectionOptions
+): Promise<string[]> {
+  // Unserved hosts are unverifiable; [] would falsely cache no installed agents.
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
-  return detectInstalledAgentsWithShellPathHydration(host.context)
+  return detectInstalledAgentsWithShellPathHydration(host.context, options)
+}
+
+/** Background detection in a WSL runtime refuses a stopped distro (E9); a user act for it passes. */
+export async function assertAgentDetectionHostRunning(host: AgentDetectionHost): Promise<void> {
+  const wslTarget = host.kind === 'local' ? getPreflightWslTarget(host.context) : null
+  if (wslTarget) {
+    await assertWslDistroRunningForExec(wslTarget.distro)
+  }
 }
 
 const agentRefreshListeners = new Set<() => void>()
 
-/** Runs after each explicit agent refresh on this host, which can find a CLI installed since. */
 export function onAgentsRefreshedOnHost(listener: () => void): () => void {
   agentRefreshListeners.add(listener)
   return () => agentRefreshListeners.delete(listener)
 }
 
-export async function refreshAgentsOnHost(host: AgentDetectionHost): Promise<RefreshAgentsResult> {
+export async function refreshAgentsOnHost(
+  host: AgentDetectionHost,
+  options?: InstalledAgentDetectionOptions
+): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
   const wsl = getPreflightWslTarget(host.context)
   const refresh = async (): Promise<RefreshAgentsResult> => {
-    const result = await refreshShellPathAndDetectAgents(host.context)
-    if (!wsl) {
-      await captureHostShellEnvironment()
-    }
+    const detect = () =>
+      options
+        ? refreshShellPathAndDetectAgents(host.context, options)
+        : refreshShellPathAndDetectAgents(host.context)
+    const result = wsl ? await detect() : await captureHostShellEnvironment(detect)
     agentRefreshListeners.forEach((listener) => listener())
     return result
   }
   return wsl ? refresh() : refreshAtRestCommandContext(refresh)
+}
+
+/** A prospective workspace uses the create route's resolved repo, never a client host guess. */
+export async function detectProjectLaunchContext(
+  store: WorkspaceAgentDetectionStore,
+  repo: Repo
+): Promise<ProjectLaunchContext> {
+  const host = getRepoExecutionHostId(repo)
+  const ssh = getSshTargetIdForExecutionHost(host)
+  if (parseExecutionHostId(host)?.kind === 'runtime') {
+    throw new Error(WORKSPACE_ON_OTHER_RUNTIME)
+  }
+  const projectRuntime = ssh ? undefined : resolveLocalWorkspaceRuntime(store, repo, repo.path)
+  if (!ssh && !projectRuntime) {
+    throw new Error('worktree_execution_host_unresolved')
+  }
+  const agents = await detectAgentsOnHost(
+    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } }
+  )
+  return {
+    agents: agents.filter(isTuiAgent),
+    workspaceKind: isFolderRepo(repo) ? 'folder' : 'git-worktree',
+    executionContext: projectRuntime ? { kind: 'host', projectRuntime } : { kind: 'ssh' }
+  }
 }

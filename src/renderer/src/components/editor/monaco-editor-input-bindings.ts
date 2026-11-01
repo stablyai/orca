@@ -14,8 +14,7 @@ import {
   getMonacoMarkdownSelectionAnnotationTarget,
   type MonacoMarkdownSelectionAnnotationTarget
 } from './monaco-markdown-selection-annotation'
-import { handleMonacoLargeTextPaste } from './monaco-large-text-paste'
-import { beginEditorLargePaste } from './editor-large-paste-in-flight'
+import { handleMonacoLargeTextPaste, MONACO_PASTE_MAX_BYTES } from './monaco-large-text-paste'
 import type { MarkdownCommentPopoverState } from './use-monaco-markdown-annotations'
 import type { MonacoEditorPropsRef } from './monaco-editor-mount-params'
 
@@ -25,8 +24,6 @@ type MonacoEditorInputBindingsParams = {
   editorContainerRef: MutableRefObject<HTMLDivElement | null>
   propsRef: MonacoEditorPropsRef
   readOnlyRef: MutableRefObject<boolean>
-  lastSyncedContentRef: MutableRefObject<string>
-  isApplyingLargePasteRef: MutableRefObject<boolean>
   commentPopoverRef: MutableRefObject<MarkdownCommentPopoverState | null>
   shouldShowMarkdownAnnotationsRef: MutableRefObject<boolean>
   setCommentPopover: Dispatch<SetStateAction<MarkdownCommentPopoverState | null>>
@@ -35,7 +32,7 @@ type MonacoEditorInputBindingsParams = {
   >
 }
 
-// Why: save/find/review-note chords, the context-menu action, and the large-paste capture share one teardown so onDidDispose keeps their original order.
+// Share teardown so editor disposal preserves shortcut and paste cleanup order.
 export function installMonacoEditorInputBindings(params: MonacoEditorInputBindingsParams): {
   disposeInputBindings: () => void
 } {
@@ -45,8 +42,6 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     editorContainerRef,
     propsRef,
     readOnlyRef,
-    lastSyncedContentRef,
-    isApplyingLargePasteRef,
     commentPopoverRef,
     shouldShowMarkdownAnnotationsRef,
     setCommentPopover,
@@ -54,21 +49,21 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
   } = params
 
   const editorDomNode = editorInstance.getContainerDomNode()
+  const pasteCaptureNode = editorContainerRef.current ?? editorDomNode
   const cleanupSaveShortcut = installEditorSaveShortcut(editorDomNode, () => {
     const value = editorInstance.getValue()
     propsRef.current.onSave(value)
   })
   const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
-  // Opens the same composer as the selection "+" button.
   const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
-    // Why: keep an open draft instead of remounting, to avoid same-tick chord races before the composer guard runs.
+    // Preserve open drafts during same-tick chords before the composer guard mounts.
     if (commentPopoverRef.current) {
       return true
     }
     if (!shouldShowMarkdownAnnotationsRef.current) {
       return false
     }
-    // Why: the rendered target ref lags selection by a render, so read Monaco's live selection to avoid opening on a stale one.
+    // Read the live selection because the rendered annotation target lags by one render.
     const target = getMonacoMarkdownSelectionAnnotationTarget(
       editorInstance,
       editorInstance.getSelection(),
@@ -104,22 +99,14 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     }
   })
   const onLargeTextPaste = (event: ClipboardEvent): void => {
-    let endSaveDeferral: (() => void) | null = null
+    if (!event.composedPath().includes(editorDomNode)) {
+      return
+    }
+    // Why: chunking re-serializes the document per chunk via @monaco-editor/react's onChange, so only enforce the cap.
     handleMonacoLargeTextPaste(editorInstance, event, {
       readOnly: readOnlyRef.current,
-      onPasteStart: () => {
-        isApplyingLargePasteRef.current = true
-        const modelUri = editorInstance.getModel()?.uri.toString()
-        endSaveDeferral = modelUri ? beginEditorLargePaste(modelUri) : null
-      },
+      directMaxBytes: MONACO_PASTE_MAX_BYTES,
       onPasteResult: (result) => {
-        isApplyingLargePasteRef.current = false
-        endSaveDeferral?.()
-        if (result.status === 'pasted' || result.status === 'cancelled') {
-          const value = editorInstance.getValue()
-          lastSyncedContentRef.current = value
-          propsRef.current.onContentChange(value)
-        }
         if (result.status === 'rejected' && result.reason === 'too-large') {
           toast.error(
             translate(
@@ -131,14 +118,14 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       }
     })
   }
-  editorDomNode.addEventListener('paste', onLargeTextPaste, { capture: true })
+  pasteCaptureNode.addEventListener('paste', onLargeTextPaste, { capture: true })
 
   return {
     disposeInputBindings: () => {
       cleanupSaveShortcut()
       cleanupFindShortcut()
       cleanupAddReviewNoteShortcut()
-      editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
+      pasteCaptureNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
       searchInFilesAction.dispose()
     }
   }

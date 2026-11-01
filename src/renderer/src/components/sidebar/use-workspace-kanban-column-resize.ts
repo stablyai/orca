@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type React from 'react'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_STEP,
@@ -21,6 +21,7 @@ export function useWorkspaceKanbanColumnResize(
   )
   const [isResizingColumn, setIsResizingColumn] = useState(false)
   const nextCommittedWidth = clampWorkspaceBoardColumnWidth(committedWidth)
+  const [renderedCommittedWidth, setRenderedCommittedWidth] = useState(nextCommittedWidth)
   const committedWidthRef = useRef(nextCommittedWidth)
   const commitWidthRef = useRef(onCommitWidth)
   const resizingRef = useRef(false)
@@ -30,17 +31,20 @@ export function useWorkspaceKanbanColumnResize(
   const frameRef = useRef<number | null>(null)
 
   commitWidthRef.current = onCommitWidth
-  if (committedWidthRef.current !== nextCommittedWidth) {
+  if (renderedCommittedWidth !== nextCommittedWidth) {
+    setRenderedCommittedWidth(nextCommittedWidth)
+    if (!resizingRef.current && columnWidth !== nextCommittedWidth) {
+      // Apply external widths before rendering children; retain the local draft during active resize.
+      setColumnWidth(nextCommittedWidth)
+    }
+  }
+  // Sync handler refs after commit so a discarded render cannot leave them on an abandoned width.
+  useLayoutEffect(() => {
     committedWidthRef.current = nextCommittedWidth
     if (!resizingRef.current) {
       draftWidthRef.current = nextCommittedWidth
-      if (columnWidth !== nextCommittedWidth) {
-        // Why: external width changes should be reflected before children
-        // render; during active drag the local draft remains authoritative.
-        setColumnWidth(nextCommittedWidth)
-      }
     }
-  }
+  }, [nextCommittedWidth])
 
   const resetDocumentStyles = useCallback(() => {
     document.body.style.cursor = ''

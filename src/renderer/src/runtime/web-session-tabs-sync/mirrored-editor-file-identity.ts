@@ -65,8 +65,7 @@ export function createMirroredEditorFileResolver(
     const mode = tab.type === 'markdown' ? tab.mode : 'edit'
     const key = ownerKey(tab.filePath, worktreeId, environmentId, mode)
     const retained = existingTab ? index.byId.get(existingTab.entityId) : undefined
-    // Retained relay tabs must cross the save-quiesce fence before changing file ownership;
-    // live ones carry route provenance and may hold an unsaved draft keyed by their current ID.
+    // Quiesce retained relay saves before changing ownership: live routes may hold drafts under the old ID.
     const preservesOwner =
       retained &&
       existingTab?.id === tab.id &&

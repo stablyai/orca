@@ -110,7 +110,7 @@ export function findRuntimeWorktreeSummaryByPath(
     runtimeWorktreeSummaryPathKey(repoId, worktreePath, platform)
   )
   const windowsCandidate = index.windowsAbsolute.get(windowsKey)
-  // Why: a malformed path can match both the POSIX and Windows indexes; keep the old pairwise scan's first-match order.
+  // Malformed paths can match both indexes; preserve the pairwise scan's first-match order.
   if (!posixCandidate) {
     return windowsCandidate?.summary ?? null
   }

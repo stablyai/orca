@@ -1,8 +1,3 @@
-/**
- * Surrogate-safe splitting for daemon stream data events: NDJSON line-size
- * chunking (the receiver's parser rejects oversized lines) and the safe-index
- * clamp shared by the batcher's bulk write slicing and keep-tail dropping.
- */
 import { resolveSynchronizedOutputSafeSplit } from '../../shared/terminal-synchronized-output-scan'
 import {
   BINARY_STREAM_FRAMING,
@@ -49,15 +44,9 @@ function isLowSurrogate(value: number): boolean {
   return value >= 0xdc00 && value <= 0xdfff
 }
 
-/**
- * Bulk-write split policy: frame-align first so a held remainder cannot strand an
- * open DEC 2026 frame's closing \x1b[?2026l (xterm then stops repainting until its
- * 1s timeout), then let the surrogate clamp have the final say.
- */
+/** Align synchronized-output frames before clamping surrogates so held tails cannot strand the closing DEC 2026 marker. */
 export function clampToSafeBulkWriteSplitIndex(value: string, end: number): number {
-  // Math.max(1): the surrogate clamp can decrement an aligned index to 0 (e.g.
-  // ('\u{1F600}aaaa', 1)), and a 0-length slice would never shift the batcher's
-  // queue entry, spinning its drain loop.
+  // A surrogate clamp can return zero; force progress to prevent an infinite drain loop.
   return Math.max(
     1,
     clampToSafeSplitIndex(value, 0, resolveSynchronizedOutputSafeSplit(value, end))
@@ -149,8 +138,7 @@ function dataPayloadMeta(
   }
 }
 
-// Mirrors the NDJSON writer's per-chunk seq/rawLength rules; only the size budget differs, and raw
-// bytes need no binary search because one UTF-16 unit never encodes to more than 3 UTF-8 bytes.
+// Budget at most three UTF-8 bytes per UTF-16 unit, retaining the NDJSON sequence rules.
 function writeBinaryStreamDataEvents(
   streamSocket: { write(data: StreamWriteChunk): void },
   sessionId: string,
@@ -255,10 +243,10 @@ export function writeStreamDataEvents(
   }
 }
 
-/** How a stream socket's events become bytes; chosen per socket by its hello. */
+/** Use the framing negotiated by each socket's hello. */
 export type StreamFrames = {
   control(event: unknown): StreamWriteChunk
-  /** An empty data event: a real frame, so its write completes only after those queued before it. */
+  /** A real frame ensures completion waits for preceding writes; an empty write does not. */
   noop(sessionId: string): StreamWriteChunk
   data(
     streamSocket: { write(data: StreamWriteChunk): void },

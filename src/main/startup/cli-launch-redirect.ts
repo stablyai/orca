@@ -33,7 +33,6 @@ const CLI_LAUNCH_VALUE_FLAG_NAMES = [...VALUE_TAKING_FLAGS].map((flag) => flag.s
 // Fence recursion if a wrapper drops ELECTRON_RUN_AS_NODE again.
 const REDIRECT_ATTEMPT_ENV = 'ORCA_CLI_LAUNCH_REDIRECTED'
 
-// Redirect packaged CLI-shaped launches before Chromium initializes.
 export function maybeRedirectCliLaunch(
   options: CliLaunchRedirectOptions = {}
 ): CliLaunchRedirectResult {
@@ -62,7 +61,7 @@ export function maybeRedirectCliLaunch(
     if (serve && execve && exists(cliEntryPath)) {
       execDirectServe(execve, execPath, cliEntryPath, serve, env)
     }
-    // In-process serve (direct `--serve`, or a CLI exec that failed) never got the CLI's X11 pin.
+    // In-process serve missed the CLI spawn that pins X11.
     reexecHeadlessServeOnX11IfNeeded({
       isServeMode: argvRequestsServeMode(argv),
       argv,
@@ -101,10 +100,7 @@ export function maybeRedirectCliLaunch(
 
 type DirectServeLaunch = { args: string[]; userDataPath: string | null; noSandbox: boolean }
 
-/**
- * A direct `<binary> serve` on Linux. It runs through the CLI like `orca-ide serve` does, so it
- * honours ORCA_USER_DATA_PATH and --supervise; exec keeps the pid, so signals still reach it.
- */
+/** Route direct serve through the CLI for profile/supervisor semantics; exec preserves PID and signal ownership. */
 export function getDirectServeLaunch(
   argv: string[],
   options: { platform: NodeJS.Platform; isPackaged: boolean; commandNames: readonly string[] }
@@ -117,7 +113,7 @@ export function getDirectServeLaunch(
   if (commandIndex === -1 || args[commandIndex] !== 'serve') {
     return null
   }
-  // Why: the CLI has no --user-data-dir; it reads the profile from ORCA_USER_DATA_PATH.
+  // The CLI reads profile identity from ORCA_USER_DATA_PATH, not --user-data-dir.
   let userDataPath: string | null = null
   const leading: string[] = []
   for (let index = 0; index < commandIndex; index += 1) {
@@ -132,7 +128,7 @@ export function getDirectServeLaunch(
   }
   const rest = [...leading, ...args.slice(commandIndex)]
   return {
-    // Why everywhere: serve has no such flags, and in-process serve tolerated them after the command.
+    // Strip everywhere: serve accepts no desktop flags, though in-process serve once tolerated trailing ones.
     args: stripDesktopFlags(rest, rest.length),
     userDataPath: userDataPath ? resolve(userDataPath) : null,
     noSandbox: rest.includes('--no-sandbox')
@@ -147,7 +143,7 @@ function execDirectServe(
   env: NodeJS.ProcessEnv
 ): void {
   const childEnv = buildElectronRunAsNodeEnv(env)
-  // Why no fence: exec sets ELECTRON_RUN_AS_NODE itself, and the server's terminals inherit this env.
+  // Do not fence server terminals with the redirect marker; exec sets ELECTRON_RUN_AS_NODE itself.
   delete childEnv[REDIRECT_ATTEMPT_ENV]
   if (serve.userDataPath) {
     childEnv.ORCA_USER_DATA_PATH = serve.userDataPath
@@ -190,8 +186,7 @@ function getEntryPathLaunchArgs(
   options: { platform: NodeJS.Platform; commandNames: readonly string[] }
 ): string[] | null {
   const expectedCliPath = normalizePathForPlatform(cliEntryPath, options.platform)
-  // The packaged launcher always passes the entrypoint as Electron's first argument.
-  // Matching later positional arguments can mistake a normal desktop launch for the CLI.
+  // Only argv[1] is the launcher entrypoint; later positionals can name the CLI during desktop launches.
   if (!argv[1] || normalizePathForPlatform(argv[1], options.platform) !== expectedCliPath) {
     return null
   }
@@ -213,7 +208,7 @@ function getCommandLaunchArgs(
   const commandIndex = findCommandIndex(args, options.commandNames)
   const cliArgs = stripDesktopFlags(args, commandIndex)
   const command = commandIndex === -1 ? null : args[commandIndex]
-  // Direct serve is exec'd into the CLI instead (getDirectServeLaunch), keeping its pid.
+  // Direct serve execs through the CLI to preserve its PID.
   if (command && command !== 'serve') {
     return cliArgs
   }
@@ -319,7 +314,6 @@ function buildPackagedCliEntryPath(platform: NodeJS.Platform, resourcesPath: str
 function normalizePathForPlatform(value: string, platform: NodeJS.Platform): string {
   const pathApi = getPathApi(platform)
   const normalized = pathApi.normalize(pathApi.isAbsolute(value) ? value : pathApi.resolve(value))
-  // Windows path comparisons are case-insensitive.
   return platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
@@ -329,7 +323,7 @@ function getPathApi(platform: NodeJS.Platform): typeof win32 | typeof posix {
 
 function buildElectronRunAsNodeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const childEnv = { ...env }
-  // Preserve user values without exposing them to Electron's bootstrap.
+  // Preserve user Node options while hiding them from Electron bootstrap.
   childEnv.ORCA_NODE_OPTIONS = env.NODE_OPTIONS ?? ''
   childEnv.ORCA_NODE_REPL_EXTERNAL_MODULE = env.NODE_REPL_EXTERNAL_MODULE ?? ''
   childEnv.ELECTRON_RUN_AS_NODE = '1'

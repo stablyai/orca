@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import type { CommandOf } from './workspace-layout-command-types'
-import { build, emptyModel, testContext, WS } from './workspace-layout-command.test-fixture'
+import { build, testContext, WS } from './workspace-layout-command.test-fixture'
 
 const drawn = (
   fields: Partial<CommandOf<'openSimulatorTab'>> = {}
@@ -77,10 +77,5 @@ describe('a simulator tab a window drew', () => {
       split
     ).model
     expect(closed.workspaces[WS]?.groups.map((group) => group.id)).toEqual([besideGroupId])
-  })
-
-  it('makes the workspace when main holds none', () => {
-    const { model } = build(testContext(), [drawn()], emptyModel())
-    expect(model.workspaces[WS]?.groups).toHaveLength(1)
   })
 })

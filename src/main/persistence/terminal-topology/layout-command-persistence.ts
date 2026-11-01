@@ -1,3 +1,4 @@
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type {
   CommandOf,
   LayoutApplyOutcome,
@@ -37,7 +38,7 @@ import {
   type DuplicatePtyPaneTransfer
 } from './duplicate-pty-pane-repair'
 
-/** A commit that writes only these partitions says so, so readers re-read just those. */
+/** Scope publication so readers reload only changed partitions. */
 function writingOnly<T>(
   hostIds: readonly ExecutionHostId[],
   mutate: () => DurableProfileStateMutation<T>
@@ -59,11 +60,10 @@ const layoutCommandPersistenceContext = Symbol('LayoutCommandPersistence')
 type LayoutCommandPersistenceContext = {
   runtime: LayoutCommandRuntime
   sessions: SessionHostPartitionOperations
-  /** Layout-owner build: saves the profile again later, after a write that failed. */
+  /** Retry failed profile writes later in layout-owner builds. */
   writeLater?: () => void
 }
 
-/** The Store's half of `layout.apply`; the commit module owns the write. */
 export class LayoutCommandPersistence {
   readonly [layoutCommandPersistenceContext]: LayoutCommandPersistenceContext
 
@@ -75,15 +75,12 @@ export class LayoutCommandPersistence {
     this[layoutCommandPersistenceContext] = { runtime, sessions, writeLater }
   }
 
-  /**
-   * Applies to each partition holding the command's tab, routed partition first (local if none).
-   * `onEffects` gets the routed partition's effects once the change is written; the reply never
-   * carries them.
-   */
+  /** Apply to every holder, routed first (local fallback); report routed effects only through onEffects. */
   applyLayoutCommand(
     command: LayoutCommand,
     hostIds: readonly string[] = [],
     run: {
+      admit?: (partitions?: readonly WorkspaceSessionState[]) => boolean
       live?: LayoutLiveContext
       stopBeforeWrite?: (ptyIds: readonly string[]) => boolean
       onEffects?: (effects: LayoutEffects) => void
@@ -102,15 +99,20 @@ export class LayoutCommandPersistence {
         noteEffects: (noted) => (effects = noted)
       })
     )
-    // Switch point: a terminal close stands once applied, as the switch-off window shows it.
+    const admitted = (): DurableProfileStateMutation<LayoutApplyOutcome> =>
+      run.admit &&
+      !run.admit(resolved.map((hostId) => context.sessions.getWorkspaceSession(hostId)))
+        ? { value: { ok: false, code: 'tab_not_found' }, persist: false }
+        : commit()
+    // Applied closes must stay closed even when persistence fails.
     const applied: Promise<LayoutApplyOutcome> =
       ORCA_LAYOUT_OWNER_IS_MAIN && context.writeLater && isTerminalClose(command)
         ? keptOnWriteFailure(
             (mutate) => context.runtime.runDurableMutation(mutate),
-            writingOnly(resolved, commit),
+            writingOnly(resolved, admitted),
             context.writeLater
           )
-        : context.runtime.runDurableMutation(writingOnly(resolved, commit))
+        : context.runtime.runDurableMutation(writingOnly(resolved, admitted))
     if (!run.onEffects) {
       return applied
     }
@@ -122,8 +124,7 @@ export class LayoutCommandPersistence {
     })
   }
 
-  /** One disk move's editor renames, a command per partition: all written in one durable write or,
-   *  on any refusal, none. They change no pane, so no binding or pane fence moves. */
+  /** Atomically rename across partitions; no panes change, so binding generations/fences stay put. */
   applyEditorFileRenamesAcrossPartitions(
     batches: readonly { hostId: string; command: CommandOf<'renameEditorFiles'> }[]
   ): Promise<LayoutApplyOutcome> {
@@ -140,7 +141,7 @@ export class LayoutCommandPersistence {
     )
   }
 
-  /** `renameTabs`: each partition's renames in one durable write of all; resolves those refused. */
+  /** Persist partition renames together and return per-tab refusals. */
   applyTabRenames(
     batches: readonly { hostId: string; renames: readonly CommandOf<'renameTab'>[] }[]
   ): Promise<{ rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[]> {
@@ -157,7 +158,6 @@ export class LayoutCommandPersistence {
     )
   }
 
-  /** Moves editor tabs between workspaces of two partitions in one durable write of both. */
   moveTabToWorkspaceAcrossPartitions(
     command: CommandOf<'moveTabToWorkspace'>,
     fromHostId: string,
@@ -202,13 +202,10 @@ export class LayoutCommandPersistence {
     })
   }
 
-  /**
-   * Layout-owner builds, once a runtime starts: one pane per terminal on disk, written only after
-   * `transfer` moved each dropped pane's owners. Resolves the number of partitions repaired.
-   */
+  /** Runtime-only repair: transfer pane owners before persisting one-pane-per-terminal layouts. */
   repairDuplicatePtyPanes(transfer: (move: DuplicatePtyPaneTransfer) => boolean): Promise<number> {
     const context = this[layoutCommandPersistenceContext]
-    // An imported or frozen profile neither writes nor moves owners.
+    // Frozen/imported profiles cannot write or transfer owners.
     if (context.runtime.writesFrozen) {
       return Promise.resolve(0)
     }

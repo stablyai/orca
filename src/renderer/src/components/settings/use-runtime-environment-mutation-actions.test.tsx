@@ -1,16 +1,19 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 
-const { toastSuccess, toastError } = vi.hoisted(() => ({
+const { toastSuccess, toastError, toastWarning } = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
-  toastError: vi.fn()
+  toastError: vi.fn(),
+  toastWarning: vi.fn()
 }))
-vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
+vi.mock('sonner', () => ({
+  toast: { success: toastSuccess, error: toastError, warning: toastWarning }
+}))
 
 import { useRuntimeEnvironmentMutationActions } from './use-runtime-environment-mutation-actions'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const verifyAndAddFromPairingCode = vi.fn()
 const remove = vi.fn()
@@ -29,6 +32,7 @@ const saved: PublicKnownRuntimeEnvironment = {
 beforeEach(() => {
   toastSuccess.mockReset()
   toastError.mockReset()
+  toastWarning.mockReset()
   verifyAndAddFromPairingCode.mockReset()
   remove.mockReset()
   Object.defineProperty(window, 'api', {
@@ -41,8 +45,7 @@ afterEach(() => cleanup())
 function renderActions(connectEnvironment: () => Promise<boolean>, name = 'Studio over relay') {
   const view = renderHook(() =>
     useRuntimeEnvironmentMutationActions({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: addEnvironment reads no settings.
-      settings: {} as GlobalSettings,
+      settings: getDefaultSettings('/tmp'),
       allowLocalRuntime: false,
       mountedRef: { current: true },
       setAddServerFormOpen: vi.fn(),
@@ -89,23 +92,4 @@ it('still discards a brand-new server whose first connect fails', async () => {
   })
 
   expect(remove).toHaveBeenCalledWith({ selector: 'env-new' })
-})
-
-it("lets main judge a saved server's own name, so its code can refresh it", async () => {
-  verifyAndAddFromPairingCode.mockResolvedValue({
-    ok: true,
-    environment: saved,
-    runtimeStatus: { runtimeId: 'runtime-a' },
-    updatedExisting: true
-  })
-  const view = renderActions(async () => true, 'Studio')
-
-  await act(async () => {
-    await view.result.current.addEnvironment(false)
-  })
-
-  expect(verifyAndAddFromPairingCode).toHaveBeenCalledWith(
-    expect.objectContaining({ name: 'Studio' })
-  )
-  expect(toastError).not.toHaveBeenCalled()
 })

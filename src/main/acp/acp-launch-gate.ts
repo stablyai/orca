@@ -1,6 +1,4 @@
-// Fences an agent's chat starts on this host off while its shared sign-in or installed runtime is
-// replaced or removed: a chat running meanwhile could save the old account back or run deleted files.
-// In memory only; a restart ends it.
+// Fence chat starts during host account/runtime changes to prevent stale writes or deleted-file use.
 
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ProviderAcquisitionConnection } from '../provider-process/provider-acquisition-starts'
@@ -15,7 +13,7 @@ export class AcpLaunchGate {
     this.refusal = `${label}'s setup is changing on this host. Try again after it finishes.`
   }
 
-  /** A start's way in: refused while an operation runs; an operation that begins aborts it. */
+  /** Refuses starts during an operation and aborts existing starts when one begins. */
   enter(signal: AbortSignal | undefined): { signal: AbortSignal; leave: () => void } {
     if (this.operating) {
       throw new AgentSessionPreSpawnError(new Error(this.refusal), {
@@ -34,15 +32,13 @@ export class AcpLaunchGate {
     }
   }
 
-  /** Held from spawn until the child exits: a start that left the gate still runs until its chat is
-   *  loaded, so an operation proves every such child gone, not only the loaded chats. */
+  /** Retain spawned children even after acquisition finishes, before their chats are loaded. */
   retain(connection: ProviderAcquisitionConnection): void {
     this.retained.add(connection)
     connection.onExit(() => this.retained.delete(connection))
   }
 
-  /** `work`, once the starts under way have ended, `stopLive` has stopped the running chats and
-   *  every retained child is proven gone; otherwise it rejects without running `work`. */
+  /** Stop starts, live chats and retained root processes before running setup changes. */
   async run<T>(stopLive: () => Promise<void>, work: () => Promise<T>): Promise<T> {
     if (this.operating) {
       throw new Error(this.refusal)

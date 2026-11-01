@@ -7,7 +7,7 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { addManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import type { SshTarget } from '../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import { stageOrcadMigrationDestination } from './orcad-migration-cutover-coordinator'
 import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
@@ -34,7 +34,6 @@ afterEach(async () => {
   }
 })
 
-/** A conversion that fenced the host and registered its server, then could not reach it. */
 async function strandedConversion() {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orcad-unreachable-setup-'))
   directories.push(userDataPath)

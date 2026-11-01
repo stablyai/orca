@@ -7,8 +7,7 @@ export function normalizeLocalhostHostname(hostname: string): string {
   return hostname.replace(/^\[|\]$/g, '').toLowerCase()
 }
 
-// Why: only http(s) loopback URLs with an explicit port can be attributed to a
-// scanned workspace port and labeled; everything else stays as-is.
+// Only explicit-port http(s) loopback URLs can be attributed to scanned workspace ports.
 export function parseLoopbackUrlWithPort(rawUrl: string): URL | null {
   let url: URL
   try {
@@ -25,9 +24,7 @@ export function parseLoopbackUrlWithPort(rawUrl: string): URL | null {
   return url
 }
 
-// Why: 0.0.0.0 and :: are wildcard bind addresses, not connectable
-// destinations (connecting to them fails on Windows). Normalize them to the
-// matching loopback before using the host as a proxy target.
+// Wildcard bind addresses are not connectable on Windows; use their matching loopback for proxy targets.
 export function connectableLoopbackHost(hostname: string): string {
   const bare = normalizeLocalhostHostname(hostname)
   if (bare === '0.0.0.0') {

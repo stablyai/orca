@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { FolderWorkspacePathStatusRequest } from '../../../shared/folder-workspace-path-status'
 import {
@@ -125,7 +125,7 @@ export function registerFolderWorkspaceHandlers(
       rawArgs,
       'invalid_folder_workspace_delete_args'
     )
-    // Why: the runtime owns PTY/browser/session teardown and notifies on success.
+    // Runtime owns teardown of PTYs, browsers and sessions, plus success notifications.
     return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId)).deleted
   })
 }

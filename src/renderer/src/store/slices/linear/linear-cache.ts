@@ -1,3 +1,7 @@
+import type { LinearIssueData } from './linear-issue-publication'
+import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { rowLessSourceTarget, type RowLessSource } from '@/lib/default-creation-host'
 import type { CacheEntry } from '../../github/cache-model'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type {
@@ -37,9 +41,76 @@ export function evictStaleEntries<T>(
   return pruned
 }
 
+export function withoutLinearAccountWorkspaces(
+  previous: LinearConnectionStatus,
+  workspaceIds: readonly string[]
+): LinearConnectionStatus {
+  if (!previous.workspaces) {
+    return previous
+  }
+  const removed = new Set(workspaceIds)
+  const workspaces = previous.workspaces.filter((workspace) => !removed.has(workspace.id))
+  if (workspaces.length === previous.workspaces.length) {
+    return previous
+  }
+  const active =
+    workspaces.find((workspace) => workspace.id === previous.activeWorkspaceId) ?? workspaces[0]
+  return {
+    ...previous,
+    connected: workspaces.length > 0,
+    workspaces,
+    viewer: active ?? null,
+    activeWorkspaceId: active?.id ?? null,
+    selectedWorkspaceId:
+      previous.selectedWorkspaceId === 'all'
+        ? 'all'
+        : workspaces.some((workspace) => workspace.id === previous.selectedWorkspaceId)
+          ? previous.selectedWorkspaceId
+          : (active?.id ?? null)
+  }
+}
+
 export function looksLikeAuthError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error)
   return /authenticat|unauthorized|401/i.test(msg)
+}
+
+export function linearHandlerRejectedWorkspaces(
+  error: unknown,
+  workspaceId: string | null | undefined,
+  source: RowLessSource
+): string[] {
+  if (!workspaceId || workspaceId === 'all' || !looksLikeAuthError(error)) {
+    return []
+  }
+  // Transport authentication can fail before the Linear handler ever runs.
+  return rowLessSourceTarget(source).kind === 'local' ||
+    (error instanceof RuntimeRpcCallError && error.code === 'runtime_error')
+    ? [workspaceId]
+    : []
+}
+
+export function linearReadAccountRejections(
+  data: LinearIssueData | undefined,
+  error: unknown,
+  workspaceId: string | null | undefined,
+  status: LinearConnectionStatus,
+  source: RowLessSource
+): readonly string[] | null {
+  const failures =
+    error === undefined && data && !Array.isArray(data) && 'errors' in data
+      ? data.errors
+      : undefined
+  const rejected = failures
+    ? failures.filter((failure) => failure.type === 'auth').map((failure) => failure.workspaceId)
+    : linearHandlerRejectedWorkspaces(error, workspaceId, source)
+  const failure = error ?? failures?.[0]?.message
+  return rejected.length ||
+    isIntegrationCredentialDecryptionError(failure) ||
+    looksLikeAuthError(failure) ||
+    (error === undefined && shouldRefreshStatusAfterRead(workspaceId, status))
+    ? rejected
+    : null
 }
 
 export function workspaceErrorType(error: unknown): LinearWorkspaceError['type'] {
@@ -51,9 +122,6 @@ export function workspaceErrorType(error: unknown): LinearWorkspaceError['type']
       : typeof (record.response as { status?: unknown } | undefined)?.status === 'number'
         ? ((record.response as { status: number }).status as number)
         : undefined
-  if (looksLikeAuthError(error)) {
-    return 'auth'
-  }
   if (status === 429 || /rate/i.test(record.name ?? '')) {
     return 'rate_limited'
   }
@@ -93,16 +161,6 @@ export function linearListCacheKey(
 ): string {
   const attributeSignature = linearIssueAttributeFilterSignature(attributeFilter)
   return `${workspaceId ?? 'default'}::list::${filter}::${limit}::${attributeSignature}`
-}
-
-export const LINEAR_LIST_INVALIDATION_VERSION_CAP = 10_000
-export let linearListInvalidationToken: { scope: string; version: number } = {
-  scope: '',
-  version: 0
-}
-
-export function setLinearListInvalidationToken(next: { scope: string; version: number }): void {
-  linearListInvalidationToken = next
 }
 
 export function linearTeamsCacheKey(
@@ -147,8 +205,7 @@ export function shouldRefreshStatusAfterRead(
   workspaceId: LinearWorkspaceSelection | null | undefined,
   status: LinearConnectionStatus
 ): boolean {
-  // Why: 'all' reads can hide per-workspace decrypt failures, and a visible
-  // credential error may have been cleared by a successful credential read.
+  // All-workspace success can hide individual decrypt failures or clear visible credential errors; recheck per-scope evidence.
   return workspaceId === 'all' || status.credentialError !== undefined
 }
 
@@ -188,9 +245,10 @@ export function largestCachedCollectionBelowLimit<T>(
   workspaceId: LinearWorkspaceSelection | null | undefined,
   mode: string,
   scopeId: string,
-  limit: number
+  limit: number,
+  cachePrefix?: string | null
 ): LinearCollectionResult<T> | null {
-  const keyPrefix = `${linearCollectionCacheKey(workspaceId, mode, scopeId)}::`
+  const keyPrefix = `${cachePrefix ? `${cachePrefix}::` : ''}${linearCollectionCacheKey(workspaceId, mode, scopeId)}::`
   let best: { limit: number; data: LinearCollectionResult<T> } | null = null
   for (const [key, entry] of Object.entries(cache)) {
     if (!entry?.data || !key.startsWith(keyPrefix)) {
@@ -222,12 +280,12 @@ export function patchLinearIssueCollectionCache(
     if (!canPatchCacheKey(key) || !entry?.data) {
       continue
     }
-    const idx = entry.data.items.findIndex((item) => item.id === issueId)
-    if (idx === -1) {
+    if (!entry.data.items.some((item) => item.id === issueId)) {
       continue
     }
-    const updatedItems = [...entry.data.items]
-    updatedItems[idx] = { ...updatedItems[idx], ...patch }
+    const updatedItems = entry.data.items.map((item) =>
+      item.id === issueId ? { ...item, ...patch } : item
+    )
     nextCache[key] = {
       ...entry,
       data: { ...entry.data, items: updatedItems }

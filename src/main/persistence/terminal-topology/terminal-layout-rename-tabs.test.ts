@@ -33,7 +33,6 @@ afterEach(() => {
 
 const leafOf = (index: number) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
 
-/** A store whose local partition holds `count` git-workspace tabs and one folder tab. */
 async function storeWithTabs(count: number): Promise<{ store: Store; directory: string }> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-rename-tabs-'))
   directories.push(directory)
@@ -85,7 +84,7 @@ describe('Store.applyTabRenames (layout.apply renameTabs)', () => {
     expect(refused).toEqual([
       { rename: rename(FIXTURE_GIT_WORKTREE_ID, 'missing', 'Gone'), code: 'tab_not_found' }
     ])
-    // Both partitions in one durable mutation: one notice for any partition, or one per partition.
+    // One mutation publishes every partition, using scoped notices only in layout-owner builds.
     expect(written).toEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? ['local', SSH] : [null])
     const reopened = await reopenTopologyStore(store, directory)
     expect(generatedTitles(reopened)).toEqual([

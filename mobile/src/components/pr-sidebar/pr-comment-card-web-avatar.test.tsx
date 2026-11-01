@@ -3,19 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import type { PRComment } from '../../../../src/shared/github/comment-types'
 
-/**
- * The comment avatar inside the shell's page, which is the one thing C4 renders differently there.
- *
- * `img-src` is `'self' data:` on both shells and stays that way (rulings-ota-c4.md ruling 3): one
- * `<Image>` per comment pointed at a provider URL is one refused request and one console violation
- * per card, for a circle the user would see blank either way. So the card renders its existing
- * empty-avatar `View` directly on web instead of letting the policy refuse the fetch.
- *
- * Asserted on the element tree rather than on the document, because the negative — no request to
- * the avatar host — is what `config/scripts/mobile-web-app/mobile-web-app-source-control-render.test.mjs` reads in
- * a real browser, and a check that only had the negative would also pass against a card that never
- * rendered at all.
- */
+// Page uses empty-avatar View instead of provider Image; assert fallback tree alongside real-browser no-avatar-request check in mobile-web-app-source-control-render.test.mjs.
+// HTTPS images are now permitted; deferred page avatar remains a capability gap (ruling 26), not a CSP requirement.
 
 const PLATFORM = { OS: 'ios' }
 
@@ -64,12 +53,7 @@ function renderCard(): ReactTestRenderer {
   return rendered
 }
 
-/**
- * By host tag rather than `findAllByType`, which takes a component and not a mocked string.
- *
- * Through `String`, because `node.type` is typed as `ElementType` and React Native declares no
- * intrinsic elements, so the compiler reads a comparison against a tag name as unreachable.
- */
+// Find mock host by String(tag): renderer ElementType/native intrinsic declarations reject direct host-string comparison.
 const imagesIn = (tree: ReactTestRenderer): unknown[] =>
   tree.root.findAll((node) => String(node.type) === 'Image')
 
@@ -79,8 +63,7 @@ describe('the PR comment avatar', () => {
     const tree = renderCard()
     const images = imagesIn(tree)
     expect(images).toHaveLength(1)
-    // The precondition for the case below: without this, a card that stopped rendering an avatar
-    // on every platform would read as the web skip working.
+    // Prove native still renders avatar so a blanket removal cannot masquerade as web-only fallback.
     expect(JSON.stringify(tree.toJSON())).toContain(AVATAR_URL)
   })
 
@@ -88,10 +71,9 @@ describe('the PR comment avatar', () => {
     PLATFORM.OS = 'web'
     const tree = renderCard()
     expect(imagesIn(tree)).toEqual([])
-    // Not merely absent: the URL is nowhere in the tree, so nothing else picked it up as a style
-    // or a background the browser would still fetch.
+    // Provider URL must be absent everywhere, including styles/backgrounds browser could fetch.
     expect(JSON.stringify(tree.toJSON())).not.toContain(AVATAR_URL)
-    // And the card still painted, so the skip is a fallback rather than a card that failed.
+    // Assert card still renders so missing avatar cannot mean missing card.
     expect(JSON.stringify(tree.toJSON())).toContain('octocat')
   })
 })

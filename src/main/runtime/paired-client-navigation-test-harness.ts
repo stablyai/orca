@@ -3,6 +3,9 @@ import WebSocket from 'ws'
 import { parsePairingCode } from '../../shared/pairing'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import type { OrcaRuntimeService } from './orca-runtime'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from '../../shared/e2ee-crypto'
 
 export const REPO_ID = 'repo-1'
@@ -28,7 +31,7 @@ export type ResponseReader = {
 }
 
 export function makeStore() {
-  const worktreeMeta = Object.fromEntries(
+  const worktreeMeta: Record<string, WorktreeMeta> = Object.fromEntries(
     [
       HOST_WORKTREE_ID,
       CLIENT_A_WORKTREE_ID,
@@ -52,7 +55,7 @@ export function makeStore() {
       }
     ])
   )
-  const repos = [
+  const repos: Repo[] = [
     {
       id: REPO_ID,
       path: '/tmp/repo',
@@ -60,7 +63,7 @@ export function makeStore() {
       badgeColor: 'blue',
       addedAt: 1
     },
-    // Why: a folder project reaches the same create-activation notifier without a real git worktree add.
+    // Folder projects exercise create activation without adding a Git worktree.
     {
       id: FOLDER_REPO_ID,
       path: '/tmp/folder-project',
@@ -74,13 +77,13 @@ export function makeStore() {
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getRepos: () => repos,
     addRepo: () => {},
-    updateRepo: () => undefined as never,
+    updateRepo: () => null,
     getAllWorktreeMeta: () => worktreeMeta,
     getWorktreeMeta: (id: string) => worktreeMeta[id],
-    setWorktreeMeta: (id: string, patch: Record<string, unknown>) => {
-      const next = { ...worktreeMeta[id], ...patch }
-      worktreeMeta[id] = next as (typeof worktreeMeta)[string]
-      return next as never
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, patch: Partial<WorktreeMeta>) => {
+      const next = { ...worktreeMeta[id]!, ...patch }
+      worktreeMeta[id] = next
+      return next
     },
     removeWorktreeMeta: () => {},
     getSettings: () => ({

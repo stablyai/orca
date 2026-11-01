@@ -1,5 +1,3 @@
-/** What orcad tells a user about how its credentials are protected at rest. */
-
 export const ORCAD_PLAINTEXT_SECRETS_ENV = 'ORCA_HEADLESS_SECRET_STORE'
 
 export function describeOrcadPlaintextOptOut(): string {
@@ -16,10 +14,7 @@ export function describeOrcadDisposableProfile(): string {
   )
 }
 
-/**
- * Why not null: the machine ID is not a secret, so a key kept beside the credentials only stops
- * a lone copied file from opening elsewhere — not someone with this account's files or a backup.
- */
+/** Machine IDs are public; adjacent keys do not protect against copying the whole account or backup. */
 export function describeOrcadHostKeyGap(hostBound: boolean): string {
   const binding = hostBound ? ', mixed with this machine ID' : ''
   return (

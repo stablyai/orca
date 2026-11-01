@@ -37,16 +37,12 @@ export type AiVaultApi = {
   ) => Promise<AiVaultSearchResponse>
   /** Status describes one index, so it never accepts the `all` scope. */
   searchStatus: (executionHostScope?: ExecutionHostId) => Promise<AiVaultSearchStatus>
-  /**
-   * Turns indexing on or off on a paired Orca server and answers its status after the change.
-   * Runtime hosts only: the local index follows this desktop's own settings write, SSH hosts
-   * reject with `unsupported`, and a server predating the method rejects with `host-too-old`.
-   */
+  /** Paired servers only; SSH rejects as unsupported, older servers as host-too-old. */
   setSearchEnabled: (
     executionHostId: ExecutionHostId,
     enabled: boolean
   ) => Promise<AiVaultSearchStatus>
-  /** Deletes and rebuilds this desktop's local search index. */
+  /** Rebuilds the local index after deletion. */
   clearSearchIndex: () => Promise<void>
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
@@ -54,13 +50,11 @@ export type AiVaultApi = {
   prepareSessionResume: (
     args: AiVaultPrepareSessionResumeRequest
   ) => Promise<AiVaultPrepareSessionResumeResult>
-  /** Lists the Task subagent transcripts of one session, on demand. */
   listSubagentSessions: (args: AiVaultSubagentListArgs) => Promise<AiVaultSubagentListResult>
-  /** Full first user prompt for copy/reuse (re-parses one transcript). */
   getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs) => Promise<AiVaultFirstUserPromptResult>
   /** Moves a deletable session's transcript to the OS trash; local sessions only. */
   deleteSession: (args: AiVaultDeleteSessionArgs) => Promise<AiVaultDeleteSessionResult>
-  /** Fires when any app window regains OS focus; returns an unsubscribe. */
+  /** Fires when any app window regains OS focus. */
   onWindowFocused: (callback: () => void) => () => void
   /** The local scan entry for a request key, if it is still retained. */
   getScanProgress: (scanKey: string) => Promise<AiVaultScanProgress | null>

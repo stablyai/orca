@@ -1,5 +1,4 @@
-// Why keyed this way: a pane's caches are stored under its pane key and under `<paneKey>\0<suffix>`
-// sub-keys, so moving or deleting a pane must take both.
+// Pane moves/deletion must include both exact keys and <paneKey>\0<suffix> cache entries.
 
 export function movePaneScopedMapEntries<T>(
   map: Map<string, T>,

@@ -1,12 +1,9 @@
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import type { WslHostConnectIntent, WslHostDeferredUpdate } from '../../shared/wsl-host-types'
+import type { WslHostCopyParams } from '../../shared/wsl-host-failure-copy'
 import type { WslLivenessUnverifiableReason } from './wsl-orcad-liveness-verdict'
 
-/**
- * What C7's UI shows for one WSL host, published with every `onChange`. `terminals` is the
- * verdict the distro itself proves for every terminal in it; null leaves terminals to orcad
- * (after a reconnect, `census` says how many its daemon still runs).
- */
+/** C7 publishes terminal verdicts proven by the distro; null leaves ownership to orcad, whose reconnect census reports surviving daemon sessions. */
 export type WslOrcadConnectionStatus =
   | { state: 'connecting' }
   | { state: 'ready'; census: OrcadTerminalCensus | null }
@@ -34,6 +31,9 @@ export type WslOrcadConnectionStatus =
   | {
       state: 'failed'
       reason: string
+      /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code; absent for verbatim connect errors. */
+      reasonCode?: string
+      reasonParams?: WslHostCopyParams
       terminals: 'exited' | 'unverifiable'
       /** A connect the host deferred: what Update or Force would retry, since nothing serves. */
       deferredUpdate?: WslHostDeferredUpdate
@@ -41,9 +41,15 @@ export type WslOrcadConnectionStatus =
   | { state: 'closed' }
 
 /** What a user-initiated connect asks of the host's update. */
-export type WslOrcadConnectIntent = { intent?: WslHostConnectIntent }
+export type WslOrcadConnectIntent = {
+  intent?: WslHostConnectIntent
+  /** E9: only reconnect a distro confirmed running; a runtime call must never boot one. */
+  noBoot?: boolean
+  /** How a no-boot connect confirms the distro runs (set by the connector). */
+  requireRunning?: (distro: string) => Promise<boolean>
+}
 
-/** A connect that failed; one the host deferred keeps its deferral, the retry nothing else offers. */
+/** Retain failed-connect deferrals so Update/Force remains available when nothing serves. */
 export function wslConnectFailedStatus(
   reason: string,
   deferral: WslHostDeferredUpdate | null

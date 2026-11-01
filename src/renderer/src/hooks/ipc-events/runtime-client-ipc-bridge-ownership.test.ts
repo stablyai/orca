@@ -54,6 +54,7 @@ function createHarness() {
           subscribeRuntimeEnvironmentFromPreload(ipc, args, callbacks, () => `sub-${nextId++}`),
         call: vi.fn(async () => ({ id: 'r', ok: true, result: [] }))
       },
+      browser: { sessionClientRouteImportSources: async () => ({}) },
       linear: { getIssue }
     }
   })
@@ -438,4 +439,39 @@ it('accepts a fresh bridge early frame while rejecting the previous bridge frame
     await h.finish()
   }
   expect(h.ipc.removeListener).toHaveBeenCalledOnce()
+})
+
+it("lists a profile created on the host once the host announces it, without touching other hosts' lists", async () => {
+  const h = createHarness()
+  const madeByCli = {
+    id: 'made-by-cli',
+    scope: 'isolated' as const,
+    partition: 'persist:orca-browser-session-made-by-cli',
+    label: 'Made by CLI',
+    source: null
+  }
+  const status = createCompatibleRuntimeStatusResponse()
+  vi.mocked(window.api.runtimeEnvironments.call).mockImplementation(async ({ method }) =>
+    method === 'status.get'
+      ? status
+      : {
+          id: 'r',
+          ok: true,
+          result: { profiles: [madeByCli] },
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+  )
+  useAppStore.setState({ browserSessionProfilesByHostId: { local: [] } })
+  try {
+    h.start()
+    h.emit(0, false, { type: 'browserProfilesChanged' })
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().browserSessionProfilesByHostId['runtime:host-a']).toEqual([
+        madeByCli
+      ])
+    )
+    expect(useAppStore.getState().browserSessionProfilesByHostId.local).toEqual([])
+  } finally {
+    await h.finish()
+  }
 })

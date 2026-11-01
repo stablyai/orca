@@ -117,11 +117,12 @@ export const createWorkItemFetchActions = (
       const weakerThanRequested =
         (options?.force && !existing.force) ||
         (options?.noCache && !existing.noCache) ||
-        (options?.requireComplete && !existing.requireComplete)
+        (options?.requireComplete && !existing.requireComplete) ||
+        (options?.wakeWslDistro && !existing.wakeWslDistro)
       if (!weakerThanRequested) {
         return existing.promise
       }
-      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      // Wait once for weaker requests to coalesce upgrades without starvation.
       if (waitedForUpgrade) {
         break
       }
@@ -136,7 +137,8 @@ export const createWorkItemFetchActions = (
         const envelope = await listGitHubWorkItemsForRepo(requestContext, {
           limit,
           query: query || undefined,
-          ...(options?.noCache ? { noCache: true } : {})
+          ...(options?.noCache ? { noCache: true } : {}),
+          ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
         })
         // Why: stamp repoId at the fetch boundary so downstream consumers can rely on it — main doesn't know Orca's Repo.id.
         const repoHostId = getGitHubWorkItemRowHostId(
@@ -176,16 +178,11 @@ export const createWorkItemFetchActions = (
         if (get().workItemsInvalidationNonce !== requestInvalidationNonce) {
           return items
         }
-        // Why: a stronger request may have replaced us on this key while we were awaiting (a
-        // force-only caller still lets gh's own cache answer), so writing here would bury its
-        // fresher rows under a new fetchedAt and keep isFresh serving them for the whole TTL.
+        // Only current key owner writes: force-only still permits gh cache, so late weaker results would bury fresher rows under new fetchedAt for a full TTL.
         if (!ownsInflightRequest(inflightWorkItemsRequests, inflightKey, requestId)) {
           return items
         }
-        // Why: TaskPage useShallow-selects cache entry refs. A new { ...entry, fetchedAt }
-        // still remaps every visible row. IPC structuredClone rebuilds nested records, so
-        // data === previous.data never holds — reconcile structurally, then either mutate
-        // fetchedAt in place or write one entry that keeps unchanged row/meta refs.
+        // TaskPage shallow-selects entries; fresh wrappers remap rows even on no-op. IPC clones nested records, so reconcile structurally and preserve unchanged refs, mutating only fetchedAt for equal data.
         set((s) => {
           const previousEntry = s.workItemsCache[key]
           const previousData = previousEntry?.data ?? []
@@ -212,8 +209,7 @@ export const createWorkItemFetchActions = (
           const previousError = previousEntry?.error
           return {
             workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
-              // Why: `reconciled` already is `previousEntry.data` when nothing changed —
-              // reconcileCatalogRows returns the previous array on a structural match.
+              // reconcileCatalogRows returns previous array on structural match.
               data: reconciled,
               fetchedAt: Date.now(),
               sources:
@@ -251,7 +247,8 @@ export const createWorkItemFetchActions = (
       requestId,
       force: Boolean(options?.force),
       noCache: Boolean(options?.noCache),
-      requireComplete: Boolean(options?.requireComplete)
+      requireComplete: Boolean(options?.requireComplete),
+      wakeWslDistro: Boolean(options?.wakeWslDistro)
     })
     return request
   }

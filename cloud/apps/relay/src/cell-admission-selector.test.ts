@@ -1,7 +1,7 @@
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { encodeMembership } from './cell-admission-selector.js'
 import {
   openInMemoryRelayDatabase,

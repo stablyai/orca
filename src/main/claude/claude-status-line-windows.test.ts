@@ -1,6 +1,3 @@
-// Why: Claude runs the statusLine under Git Bash when present, else PowerShell. The POSIX
-// runtime-home form Orca used to register is a PowerShell parse error, so a Windows box
-// without Git Bash never posted rate_limits and the live usage feed went dark.
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -41,10 +38,9 @@ const EXPECTED_RATE_LIMITS = {
   sevenDay: { used_percentage: 7, resets_at: 1790500000 }
 }
 const HOOK_TOKEN = 'statusline-delivery-token'
-// Why: claude.exe's own PowerShell argv (-ExecutionPolicy Bypass unless told to respect it).
+// Match Claude.exe's PowerShell flags.
 const POWERSHELL_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command']
 
-// The pre-fix registration; it resolves HOME at run time, so it names no profile path.
 const LEGACY_COMMAND = getManagedCommand('claude-statusline.cmd')
 
 type StatusLineSettings = { statusLine?: { type: string; command: string } }
@@ -102,7 +98,7 @@ describe.skipIf(process.platform !== 'win32')('Claude statusLine delivery on Win
   async function installInto(prefix: string, seed?: StatusLineSettings) {
     home = mkdtempSync(join(tmpdir(), prefix))
     homedirMock.mockReturnValue(home)
-    // Why: a developer's cmd AutoRun commonly targets %USERPROFILE%\.cmd_aliases.cmd.
+    // Satisfy developer cmd AutoRun entries that reference this file.
     writeFileSync(join(home, '.cmd_aliases.cmd'), '@rem\r\n', 'utf8')
     if (seed) {
       mkdirSync(join(home, '.claude'), { recursive: true })
@@ -118,7 +114,7 @@ describe.skipIf(process.platform !== 'win32')('Claude statusLine delivery on Win
     const listener = await startStatusLineListener()
     server = listener.server
     const baseEnv = Object.fromEntries(
-      // Why: never reach a live Orca, and a hosting Claude's CLAUDE_JOB_DIR would gate the script off.
+      // Isolate live Orca endpoints and inherited daemon-worker guards.
       Object.entries(process.env).filter(([key]) => !/^(ORCA|CLAUDE)_/.test(key))
     )
     const run = (program: string, args: string[], paneId: number) =>
@@ -131,7 +127,7 @@ describe.skipIf(process.platform !== 'win32')('Claude statusLine delivery on Win
           ...baseEnv,
           USERPROFILE: home,
           HOME: home,
-          // Why: keeps the per-pane throttle stamp out of the real %TEMP%.
+          // Keep throttle stamps inside the fixture.
           TEMP: home,
           TMP: home,
           ORCA_BACKGROUND_LAUNCH: '1',
@@ -151,7 +147,6 @@ describe.skipIf(process.platform !== 'win32')('Claude statusLine delivery on Win
       join(home, '.orca', 'agent-hooks', 'claude-statusline.cmd').replaceAll('\\', '/')
     )
 
-    // Pinned so this suite proves the regression it guards.
     const legacy = await run(powershellPath(), [...POWERSHELL_ARGS, LEGACY_COMMAND], 0)
     expect(legacy.code).not.toBe(0)
     expect(posts).toHaveLength(0)
@@ -168,7 +163,6 @@ describe.skipIf(process.platform !== 'win32')('Claude statusLine delivery on Win
       const result = await run(shell.program, shell.args, index + 1)
       expect(result.timedOut, `${shell.name} timed out`).toBe(false)
       expect(result.code, `${shell.name} exit code`).toBe(0)
-      // Why: parity with the POSIX script — the usage feed must not change what Claude displays.
       expect(result.stdout, `${shell.name} stdout`).toBe('')
       expect(result.stderr, `${shell.name} stderr`).toBe('')
       expect(posts[index]?.path, `${shell.name} posted`).toBe('/statusline/claude')
@@ -181,7 +175,6 @@ describe.skipIf(process.platform !== 'win32')('Claude statusLine delivery on Win
     const { command, posts, run } = await installInto('orca claude statusline space ')
     expect(command).toBe(LEGACY_COMMAND)
 
-    // Why: the xtrace shows every command Git Bash ran, so an encoded launcher would surface here.
     const result = await run(findGitBash(), ['-xc', command], 1)
     expect(result.code).toBe(0)
     expect(result.stdout).toBe('')
@@ -189,7 +182,7 @@ describe.skipIf(process.platform !== 'win32')('Claude statusLine delivery on Win
     expect(posts).toHaveLength(1)
     expect(parseClaudeStatusLineBody(posts[0])).toEqual(EXPECTED_RATE_LIMITS)
 
-    // Accepted trade-off: PowerShell-only hosts on such a path stay on the OAuth usage poll.
+    // PowerShell-only hosts with unsafe paths rely on OAuth polling.
     await run(powershellPath(), [...POWERSHELL_ARGS, command], 2)
     expect(posts).toHaveLength(1)
   }, 60_000)

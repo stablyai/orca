@@ -16,7 +16,6 @@ export async function readTerminalAutoRestoreFitMs(
   return reply?.ms ?? null
 }
 
-/** Resolves to the value the host stored, re-reading it when the save is refused. */
 export async function saveTerminalAutoRestoreFitMs(
   client: TerminalAutoRestoreFitSender,
   ms: number | null

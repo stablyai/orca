@@ -6,7 +6,7 @@ import {
   type StructuredAttentionOrigin,
   type StructuredAttentionRead,
   type StructuredAttentionState
-} from '../../shared/agent-session-attention'
+} from '../../shared/agent-session/agent-session-attention'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,
@@ -29,13 +29,14 @@ export type MobileNotificationDispatchEvent = {
   title: string
   body: string
   worktreeId?: string
+  /** The pane the phone opens on tap; old phones ignore it and open the workspace's default tab. */
+  paneKey?: string
   /** See `NotificationDispatchRequest.executionHost`; old phones ignore it and open the desktop's. */
   executionHost?: `runtime:${string}`
   notificationId?: string
   notificationSeq?: number
   notificationEpoch?: string
-  // Why: background push must tell "needs input" from "finished" without re-deriving
-  // it from the title. Optional and additive — old clients ignore it.
+  // Additive state distinguishes input-needed from finished in push; old clients ignore it.
   agentState?: AgentStatusState
   /** See `NotificationDispatchRequest.attentionKey`: cooldowns key on it instead of the workspace. */
   attentionKey?: string
@@ -121,9 +122,7 @@ export class RuntimeMobileNotificationController {
     this.desktopClients.report(connectionId, away, Date.now())
   }
 
-  // Why: undefined means unknown and must never silence a phone; only a fresh report or the local
-  // idle state proves someone is at a desktop. A host with no desktop of its own (orca serve) has
-  // only its attached desktops to ask, so their silence is away rather than unknown (#31570).
+  // Unknown must not silence phones; require fresh desktop/local activity. Headless serves use attached desktops, whose silence means away (#31570).
   private resolveDesktopAway(): boolean | undefined {
     if (this.desktopClients.anyPresent(Date.now())) {
       return false
@@ -189,6 +188,10 @@ export class RuntimeMobileNotificationController {
   }
 
   dismiss(notificationId: string): void {
+    // Reads rebuild ids for alerts that never went out (chat panes, silenced workers); each would cost a silent push.
+    if (this.dismissalStore && !this.dismissalStore.hasLiveDelivery(notificationId)) {
+      return
+    }
     this.dispatch({ type: 'dismiss', notificationId })
   }
 

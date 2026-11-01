@@ -1,19 +1,14 @@
-/**
- * A managed host's update check, shared by the connect and the launch-time tunnel restore, turned
- * into its status note and telemetry reason.
- */
 import type { SshManagedServerUpdateNote, SshTarget } from '../../shared/ssh-types'
 import type { ManagedOrcadAutoUpdateOutcome } from '../managed-server/lifecycle/orcad-managed-auto-update'
 import type { HostServerUpdateReason } from './ssh-host-server-connect-events'
 import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from '../managed-server/activation/orcad-activation-fence-hold'
 
 export type ManagedServerUpdateDeps = {
-  /** Runs the Managed servers update when the host is behind this app; `onUpdating` fires first. */
   autoUpdate: (
     environmentId: string,
     options: { failedBefore: () => boolean; onUpdating: () => void }
   ) => Promise<ManagedOrcadAutoUpdateOutcome>
-  /** Why an update to this app version already failed on the host, so it isn't retried. */
+  /** A failure for this app version suppresses retries within the same launch. */
   recordedUpdateFailure: (target: SshTarget) => string | null
   /** True once an update failed on this host during this app launch; a restart retries once. */
   failedThisLaunch: (target: SshTarget) => boolean
@@ -23,14 +18,14 @@ export type ManagedServerUpdateDeps = {
 
 export type HostServerUpdateOnConnect = {
   note: SshManagedServerUpdateNote | undefined
-  /** Deferred only because another desktop's update holds the host; worth checking again soon. */
+  /** Recheck soon when another desktop's update holds the fence. */
   fenceBusy?: true
   reason: HostServerUpdateReason
   /** True when a recorded failure for this app version skipped the update without a try. */
   recorded: boolean
 }
 
-/** The host keeps serving whatever happens here, so nothing in it can fail the caller. */
+/** Update failure must leave the host serving and cannot fail the caller. */
 export async function checkManagedServerUpdate(
   target: SshTarget,
   environmentId: string,
@@ -40,7 +35,7 @@ export async function checkManagedServerUpdate(
   let result: ManagedOrcadAutoUpdateOutcome
   try {
     result = await deps.autoUpdate(environmentId, {
-      // Why read inside: an overlapping check may record a failure while this one waits on the lock.
+      // Read under the lock: overlapping checks may record failure while this one waits.
       failedBefore: () =>
         deps.recordedUpdateFailure(target) !== null && deps.failedThisLaunch(target),
       onUpdating
@@ -56,8 +51,7 @@ export async function checkManagedServerUpdate(
       recorded: false
     }
   }
-  // Why clear on current too: a Managed servers update may have landed the build since.
-  // Why read after: an overlapping check may have recorded a failure while this one waited.
+  // An overlapping update may have landed this build or recorded failure while the check waited.
   if (
     deps.recordedUpdateFailure(target) !== null &&
     (result.outcome === 'updated' || (result.outcome === 'skipped' && result.reason === 'current'))
@@ -93,7 +87,7 @@ function skipped(
   switch (reason) {
     case 'host-newer':
       return { note: { state: 'host-newer' }, reason: 'update_host_newer', recorded: false }
-    // Why no retry: re-offering the build the host just rolled back from would make it flap.
+    // Re-offering a just-rolled-back build would make the host flap.
     case 'rolled-back':
       return { note: { state: 'rolled-back' }, reason: 'update_rolled_back', recorded: false }
     case 'failed-before':

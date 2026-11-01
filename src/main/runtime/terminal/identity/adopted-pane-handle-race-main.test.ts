@@ -1,6 +1,4 @@
-// Layout-owner build, a host's restart (L80): main's layout binds a pane to a live terminal from
-// disk before the terminal's adoption registers it and its own handle. Clients must not get a
-// handle in that gap that later stops being the pane's, or a desktop stays on a second handle.
+// Restart adoption can publish a pane before its exported handle registers; any handle issued in that gap must stay valid or become stale.
 import { expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-types'
 
@@ -43,8 +41,7 @@ it('gives a restored pane one handle: none before its adoption registers, then t
       terminalPtyIncarnationsByPaneKey: { [`${TAB}:${HEADLESS_LEAF_ID}`]: 'inc-restored' }
     })
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements every method these paths call.
-  const runtime = new OrcaRuntimeService(harness.runtimeStore as never)
+  const runtime = new OrcaRuntimeService(harness.runtimeStore)
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
@@ -53,19 +50,18 @@ it('gives a restored pane one handle: none before its adoption registers, then t
   })
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
 
-  // The adopted start's record exists before its registration (createTerminal, adoptedStablePane).
+  // Adopted starts can create the record before handle registration.
   runtime['getOrCreatePtyWorktreeRecord'](PTY)
   const before = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
   const handedOut = before.tabs.flatMap((tab) =>
     tab.type === 'terminal' && tab.status === 'ready' && tab.terminal ? [tab.terminal] : []
   )
-  // The gap only leaves the pane unnamed: it stays in main's layout, and nothing records a close.
+  // The registration gap leaves the pane unnamed, without closing or removing its binding.
   expect(harness.getSession().terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId?.[HEADLESS_LEAF_ID]).toBe(
     PTY
   )
   expect(harness.getSession().closedTerminalPanesByPaneKey ?? {}).toEqual({})
 
-  // The adoption completes: the terminal's own handle, then its registration.
   runtime.registerPreAllocatedHandleForPty(PTY, CONTROLLER_HANDLE)
   runtime.registerPty(PTY, TEST_WORKTREE_ID, null, {
     tabId: TAB,
@@ -79,7 +75,6 @@ it('gives a restored pane one handle: none before its adoption registers, then t
   )
 
   expect(settled).toEqual([CONTROLLER_HANDLE])
-  // Once adopted, the pane names the terminal again, under its exported handle.
   expect(runtime['paneOfPty'](runtime['ptysById'].get(PTY)).paneKey).toBe(
     `${TAB}:${HEADLESS_LEAF_ID}`
   )

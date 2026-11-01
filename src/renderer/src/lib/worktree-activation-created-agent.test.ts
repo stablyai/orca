@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '@/store'
+import { getWorktreeVisitTimestamp } from './worktree-visit-recency'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktree-terminal-after-wake'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
@@ -54,28 +55,39 @@ afterEach(() => {
 describe('activateAndRevealWorktree', () => {
   it('does not restamp focus recency when reselecting the already-active terminal worktree', () => {
     const worktree = makeWorktree()
-    const { markWorktreeVisited, recordWorktreeVisit, revealWorktreeInSidebar } =
-      seedAlreadyActiveWorktree(worktree)
+    const { revealWorktreeInSidebar } = seedAlreadyActiveWorktree(worktree)
+    const before = useAppStore.getState()
 
     const result = activateAndRevealWorktree(worktree.id)
 
     expect(result).toEqual({ primaryTabId: null })
-    expect(markWorktreeVisited).not.toHaveBeenCalled()
-    expect(recordWorktreeVisit).not.toHaveBeenCalled()
+    expect(useAppStore.getState().lastVisitedAtByWorktreeId).toBe(before.lastVisitedAtByWorktreeId)
+    expect(useAppStore.getState().worktreeNavHistory).toBe(before.worktreeNavHistory)
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 
   it('records a visit when activating the same worktree changes the current view', () => {
     const worktree = makeWorktree()
-    const { markWorktreeVisited, recordWorktreeVisit } = seedAlreadyActiveWorktree(worktree, {
-      activeView: 'tasks'
-    })
+    seedAlreadyActiveWorktree(worktree, { activeView: 'tasks' })
 
     const result = activateAndRevealWorktree(worktree.id)
 
     expect(result).toEqual({ primaryTabId: null })
-    expect(markWorktreeVisited).toHaveBeenCalledWith(worktree.id)
-    expect(recordWorktreeVisit).toHaveBeenCalledWith(worktree.id)
+    const state = useAppStore.getState()
+    expect(getWorktreeVisitTimestamp(state.lastVisitedAtByWorktreeId, worktree)).toBeDefined()
+    expect(state.worktreeNavHistory.at(-1)).toBe(worktree.id)
+  })
+
+  it('keeps the fresh visit stamp when the history entry is de-duplicated', () => {
+    const worktree = makeWorktree()
+    seedAlreadyActiveWorktree(worktree, { activeView: 'tasks' })
+    useAppStore.setState({ worktreeNavHistory: [worktree.id], worktreeNavHistoryIndex: 0 })
+
+    activateAndRevealWorktree(worktree.id)
+
+    const state = useAppStore.getState()
+    expect(getWorktreeVisitTimestamp(state.lastVisitedAtByWorktreeId, worktree)).toBeDefined()
+    expect(state.worktreeNavHistory).toEqual([worktree.id])
   })
 
   it('adds the activated project to an active project filter', () => {
@@ -110,9 +122,7 @@ describe('activateAndRevealWorktree', () => {
     for (let cycle = 0; cycle < 3; cycle += 1) {
       activateAndExpectNoRelaunch(worktree.id)
 
-      // Return to zero tabs, the state that used to re-arm the relaunch. Sets state
-      // directly rather than via closeTab — the sleeping-record purge is covered in
-      // worktree-reactivation-tab-forkbomb.test.ts.
+      // Return directly to zero tabs; closeTab’s sleeping purge is covered by worktree-reactivation-tab-forkbomb.test.ts.
       useAppStore.setState({ tabsByWorktree: {}, activeTabIdByWorktree: {} })
     }
   })
@@ -130,9 +140,7 @@ describe('activateAndRevealWorktree', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
 
-    // The opts shape CLI/relay navigation and notification clicks arrive with; those
-    // callers are asserted in useIpcEvents.test.ts. The host's `didSpawnStartup` leg is
-    // a main-process concern and is not reachable from here.
+    // Match CLI/relay/notification option shapes pinned in useIpcEvents; backend didSpawnStartup is main-only.
     activateAndExpectNoRelaunch(worktree.id, { notifyHostRuntime: false })
   })
 

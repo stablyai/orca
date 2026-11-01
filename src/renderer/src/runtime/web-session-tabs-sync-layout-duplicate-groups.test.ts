@@ -55,8 +55,7 @@ function stateWithLocalGroup(): WebSessionTabsSyncState {
   })
 }
 
-// Host group whose tabs are absent from this snapshot: the host names groups but
-// publishes no layout for them, which is the shape that used to duplicate leaves.
+// Host names groups with absent tabs and no layout; this shape previously duplicated leaves.
 function snapshotWithUnmappedHostGroup(): ReturnType<typeof makeSnapshot> {
   return makeSnapshot([], {
     activeGroupId: 'host-group-1',

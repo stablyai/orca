@@ -1,8 +1,4 @@
-/**
- * The workspace tab layout reduced to what every view must agree on: groups and their tab order,
- * every tab of every kind, terminal tabs' panes in tree order, which terminal each pane shows, and
- * custom titles. Per-viewer state (selection, focus, sizes, scroll) is left out on purpose.
- */
+// Compare groups/order, all tab kinds, pane tree/bindings and custom titles; omit viewer-owned selection, focus, sizes and scroll.
 
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { TerminalPaneLayoutNode } from '../../../src/shared/terminal-tab-types'

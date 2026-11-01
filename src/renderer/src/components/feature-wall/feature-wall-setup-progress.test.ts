@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { FeatureWallSetupProgressInput } from './feature-wall-setup-progress'
 import { getFeatureWallSetupProgress } from './feature-wall-setup-progress'
 import {
@@ -39,6 +40,17 @@ function makeWorktree(
 }
 
 describe('getFeatureWallSetupProgress', () => {
+  it.each([null, 'claude', 'blank'] as const)(
+    'counts an explicit default choice (%s) toward setup',
+    (defaultTuiAgent) => {
+      const progress = getFeatureWallSetupProgress(
+        makeInput({ settings: createGlobalSettingsFixture({ defaultTuiAgent }) })
+      )
+
+      expect(progress.stepDone['default-agent']).toBe(defaultTuiAgent !== null)
+    }
+  )
+
   it('tracks Add 2 projects from durable git repo count', () => {
     expect(getFeatureWallSetupProgress(makeInput({ gitRepoCount: 1 })).stepDone).toMatchObject({
       'add-two-repos': false

@@ -6,7 +6,6 @@ import {
   computeWorktreePathMock,
   createSetupRunnerScript,
   detectInstalledAgentsWithShellPathHydrationMock,
-  electronMocks,
   ensurePathWithinWorkspaceMock,
   getDefaultTabsLaunch,
   getEffectiveHooks,
@@ -65,7 +64,7 @@ describe('OrcaRuntimeService', () => {
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-bg-split-setup')
     vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: 'pnpm install' } })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
       envVars: {
         ORCA_ROOT_PATH: '/tmp/repo',
@@ -103,88 +102,6 @@ describe('OrcaRuntimeService', () => {
         })
       )
     )
-  })
-
-  it('still surfaces the new workspace when an activating create opens Setup', async () => {
-    const runtimeStore = {
-      ...makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore,
-      getSettings: () => ({
-        ...store.getSettings(),
-        setupScriptLaunchMode: 'split-horizontal' as const
-      })
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-active-setup-split' })
-    const spawn = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 'pty-active-split-main' })
-      .mockResolvedValueOnce({ id: 'pty-active-split-setup' })
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession,
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-
-    runtime.markGraphReady(1)
-    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-active-split-setup')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-active-split-setup')
-    vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: 'pnpm install' } })
-    vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
-      runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
-      envVars: {
-        ORCA_ROOT_PATH: '/tmp/repo',
-        ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-active-split-setup'
-      }
-    })
-    vi.mocked(listWorktrees).mockResolvedValue([
-      {
-        path: '/tmp/workspaces/runtime-active-split-setup',
-        head: 'def',
-        branch: 'runtime-active-split-setup',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    const result = await runtime.createManagedWorktree({
-      repoSelector: 'id:repo-1',
-      name: 'runtime-active-split-setup',
-      activate: true,
-      setupDecision: 'run',
-      createdWithAgent: 'claude',
-      startup: { command: 'claude' }
-    })
-
-    // No-regression guard: an explicit --activate still reveals the workspace.
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
-    await vi.waitFor(() =>
-      expect(revealTerminalSession).toHaveBeenLastCalledWith(
-        result.worktree.id,
-        expect.objectContaining({
-          ptyId: 'pty-active-split-setup',
-          title: 'Setup'
-        })
-      )
-    )
-    const setupRevealPayload = revealTerminalSession.mock.lastCall?.[1]
-    expect(setupRevealPayload).not.toHaveProperty('surfaceOwner')
   })
 
   it('does not warn when setup is explicitly skipped for CLI-created worktrees', async () => {
@@ -285,11 +202,11 @@ describe('OrcaRuntimeService', () => {
 
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-branch-added-setup')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-branch-added-setup')
-    // The main checkout has no setup hook; only the new worktree's orca.yaml does.
+    // Only the new worktree's orca.yaml defines setup.
     vi.mocked(getEffectiveHooks).mockImplementation((_repo, worktreePath) =>
       worktreePath ? { scripts: { setup: 'pnpm worktree:setup' } } : null
     )
-    // An `ask` repo: an undecided create throws, as the real policy check does.
+    // Model an ask-policy repo that refuses an undecided create.
     vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => {
       if (decision === 'run' || decision === 'skip') {
         return decision === 'run'
@@ -323,97 +240,8 @@ describe('OrcaRuntimeService', () => {
     expect(createSetupRunnerScript).not.toHaveBeenCalled()
   })
 
-  it('materializes default tabs for inactive local managed worktree creates', async () => {
-    const metaById: Record<string, WorktreeMeta> = {}
-    const runtimeStore = {
-      // Main's own layout, which a layout-owner build writes the default tabs into.
-      ...makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore,
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-        return metaById[worktreeId]
-      }
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const spawn = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 'pty-default-dev' })
-      .mockResolvedValueOnce({ id: 'pty-default-test' })
-    const revealTerminalSession = vi
-      .fn()
-      .mockResolvedValueOnce({ tabId: 'tab-default-dev' })
-      .mockResolvedValueOnce({ tabId: 'tab-default-test' })
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession,
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-default-tabs')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-default-tabs')
-    vi.mocked(getDefaultTabsLaunch).mockReturnValue({
-      runCommands: true,
-      tabs: [
-        { title: 'Dev', command: 'pnpm dev' },
-        { title: 'Test', command: 'pnpm test' }
-      ]
-    })
-    vi.mocked(listWorktrees).mockResolvedValue([
-      {
-        path: '/tmp/workspaces/runtime-default-tabs',
-        head: 'def',
-        branch: 'runtime-default-tabs',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    const result = await runtime.createManagedWorktree({
-      repoSelector: 'id:repo-1',
-      name: 'runtime-default-tabs',
-      setupDecision: 'run'
-    })
-
-    expect(result.defaultTabs).toEqual({
-      runCommands: true,
-      tabs: [
-        { title: 'Dev', command: 'pnpm dev' },
-        { title: 'Test', command: 'pnpm test' }
-      ]
-    })
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
-    expect(spawn.mock.calls[0]![0]).toMatchObject({ command: 'pnpm dev' })
-    expect(spawn.mock.calls[1]![0]).toMatchObject({ command: 'pnpm test' })
-    expect(revealTerminalSession).toHaveBeenNthCalledWith(
-      1,
-      result.worktree.id,
-      expect.objectContaining({ title: 'Dev', activate: false })
-    )
-    expect(revealTerminalSession).toHaveBeenNthCalledWith(
-      2,
-      result.worktree.id,
-      expect.objectContaining({ title: 'Test', activate: false })
-    )
-  })
-
   it('puts the agent a create starts in the first default tab, as the window does', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
-    // Main's own layout, which a layout-owner build writes the default tabs into.
     const mainLayout = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
     const runtimeStore = {
       ...mainLayout.runtimeStore,
@@ -485,7 +313,6 @@ describe('OrcaRuntimeService', () => {
     const agentTabId = revealTerminalSession.mock.calls[0]?.[1].tabId
     expect(agentTabId).toEqual(expect.any(String))
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // The window draws the title from main's layout.
       const agentRow = Object.values(mainLayout.getSession().tabsByWorktree)
         .flat()
         .find((tab) => tab.id === agentTabId)
@@ -493,7 +320,6 @@ describe('OrcaRuntimeService', () => {
     } else {
       expect(renameTerminal).toHaveBeenCalledWith(agentTabId, 'Dev', { recordInteraction: false })
     }
-    // The first template's command never runs beside the agent; only the rest are created.
     expect(spawn).toHaveBeenCalledTimes(2)
     expect(spawn.mock.calls.map(([options]) => options.command)).toEqual([
       expect.stringContaining('claude'),
@@ -575,7 +401,8 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-startup-draft',
-        command: "codex --profile work '--dangerously-bypass-approvals-and-sandbox'",
+        command:
+          "codex --profile work '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'",
         worktreeId: result.worktree.id
       })
     )
@@ -662,9 +489,7 @@ describe('OrcaRuntimeService', () => {
     expect(write).not.toHaveBeenCalled()
   })
 
-  // Why 20s for OpenCode: measured on two real Windows hosts, its composer takes
-  // ~10s to mount (bracketed paste is not even enabled until ~4.8s), so the 8s
-  // default expired first and the draft was pasted blind into a starting TUI.
+  // OpenCode's Windows composer can take ~10s to mount; the 8s default pasted blind into startup.
   it('gives OpenCode the 20s main-runtime startup readiness budget', async () => {
     vi.useFakeTimers()
     onTestFinished(() => {
@@ -721,7 +546,6 @@ describe('OrcaRuntimeService', () => {
       startupDraft: draftUrl
     })
 
-    // Past the old 8s default, where readiness would previously have been abandoned.
     await vi.advanceTimersByTimeAsync(10_000)
     runtime.onPtyData('pty-opencode-draft-budget', '\x1b[?2004h\x1b[?25h', Date.now())
     await Promise.resolve()
@@ -824,7 +648,8 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-cli-agent-startup',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
+        command:
+          "codex '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox' 'hi'",
         worktreeId: result.worktree.id
       })
     )

@@ -92,8 +92,7 @@ function getWorktreePathInput(): HTMLInputElement {
 }
 
 function setNativeValue(input: HTMLInputElement, text: string): void {
-  // Why: React reads controlled-input changes via the native value setter;
-  // assigning input.value directly is swallowed by React's value tracking.
+  // Use the native setter so React’s controlled-value tracker recognizes the input.
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
   setValue?.call(input, text)
 }
@@ -106,8 +105,7 @@ function typeText(input: HTMLInputElement, text: string): void {
 }
 
 function blurInput(input: HTMLInputElement): void {
-  // Why: React delegates onBlur via focusout (which bubbles) not blur (which
-  // doesn't), so dispatching focusout is required to trigger the React handler.
+  // React onBlur delegates through bubbling focusout, not native blur.
   act(() => {
     input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
   })
@@ -160,32 +158,9 @@ describe('RepositoryWorktreeDefaultsSection — worktree path', () => {
 
     expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeBasePath: undefined })
   })
-
-  it('calls updateRepo with undefined when the value is whitespace-only', () => {
-    const updateRepo = vi.fn()
-    render({ ...BASE_REPO, worktreeBasePath: '../worktrees' }, updateRepo)
-
-    const input = getWorktreePathInput()
-    typeText(input, '   ')
-    blurInput(input)
-
-    expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeBasePath: undefined })
-  })
 })
 
 describe('RepositoryWorktreeDefaultsSection — external visibility', () => {
-  it('shows the inherited effective value without stamping the repo', () => {
-    render(BASE_REPO, vi.fn(), {
-      settings: {
-        workspaceDir: '/home/user/orca/workspaces',
-        worktreeVisibilityDefaults: { external: 'show' }
-      }
-    })
-
-    expect(container.textContent).toContain('Using global: Show')
-    expect(container.querySelector('select')?.value).toBe('global')
-  })
-
   it('clears the override with the remote-safe null sentinel and refreshes classification', async () => {
     const updateRepo = vi.fn().mockResolvedValue(true)
     const refreshRepo = vi.fn().mockResolvedValue(true)

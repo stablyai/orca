@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 const MACOS_EXPECT_PATH = '/usr/bin/expect'
 const LOGIN_PREFLIGHT_MARKER = 'ORCA_LOGIN_PREFLIGHT_OK'
 const LOGIN_PROBE_USERNAME_ENV = 'ORCA_LOGIN_PROBE_USERNAME'
-// Why: expect owns the PTY without adding a long-lived native handle to the daemon.
+// expect owns the probe PTY without leaving a long-lived native handle in the daemon.
 const EXPECT_LOGIN_PROBE_SCRIPT =
   'log_user 1; ' +
   'spawn -noecho /usr/bin/login -flpq $env(ORCA_LOGIN_PROBE_USERNAME) /usr/bin/printf ORCA_LOGIN_PREFLIGHT_OK; ' +
@@ -43,7 +43,7 @@ export function runMacosLoginSessionPtyProbe(
         },
         (error, stdout) => {
           if (error !== null) {
-            // Why: a nonzero expect exit can be its own Tcl/PTY failure, not PAM authority.
+            // Tcl/PTY failures are inconclusive, never PAM rejection proof.
             resolve(
               error.killed || error.code === 'ETIMEDOUT'
                 ? { ok: false, conclusive: false, reason: 'timeout' }

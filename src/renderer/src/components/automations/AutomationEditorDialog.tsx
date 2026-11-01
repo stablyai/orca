@@ -1,4 +1,12 @@
 import React from 'react'
+import { useAppStore } from '@/store'
+import { selectAgentLaunchRouteView } from '@/lib/agent-launch-route-input'
+import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
+import {
+  automationChatSupport,
+  automationDraftSurface,
+  automationLaunchWorkspace
+} from './automation-launch-surface'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
@@ -38,6 +46,7 @@ export type AutomationDraft = {
   name: string
   prompt: string
   agentId: TuiAgent
+  surface?: 'chat' | 'terminal'
   /** Saved as-is; empty means none. */
   extraAgentArgs: string
   projectId: string
@@ -52,8 +61,7 @@ export type AutomationDraft = {
   time: string
   dayOfWeek: string
   customSchedule: string
-  // The cadence this record was opened with, or null for a new one. The strict schedule gate
-  // judges new input; a saved cadence that still runs is not re-judged against it.
+  // Validate new input strictly; do not re-judge a saved cadence that still runs.
   savedSchedule: string | null
   missedRunGraceMinutes: string
   scheduleWarning: string | null
@@ -121,6 +129,11 @@ export function AutomationEditorDialog({
   const dialogContentRef = React.useRef<HTMLDivElement>(null)
   const isCreateMode = !isEditing
   const destination = isCreateMode ? createDestination : editDestination
+  const launchWorkspace = automationLaunchWorkspace(draft, destination?.resolution)
+  useChatProgramFacts(launchWorkspace, open)
+  const routeState = useAppStore(selectAgentLaunchRouteView)
+  const chatSupported = automationChatSupport(routeState, draft, launchWorkspace)
+  const surface = automationDraftSurface(draft, settings, chatSupported)
   const visibleAgents = React.useMemo(() => {
     const enabledIds = new Set(
       filterEnabledTuiAgents(
@@ -143,8 +156,7 @@ export function AutomationEditorDialog({
           event.preventDefault()
         }}
         onEscapeKeyDown={(event) => {
-          // Why: Radix listens on document, so currentTarget is not the
-          // dialog. Use the content ref to scope find to this prompt editor.
+          // Radix listens on document; scope editor lookup through the dialog ref rather than currentTarget.
           const dialog =
             dialogContentRef.current ??
             (event.target instanceof Element
@@ -180,6 +192,8 @@ export function AutomationEditorDialog({
           />
           <AutomationEditorSettingsSidebar
             destination={destination}
+            surface={surface}
+            chatSupported={chatSupported}
             repos={repos}
             projectHostSetups={projectHostSetups}
             automationYamlHooksByRepoKey={automationYamlHooksByRepoKey}
@@ -210,7 +224,7 @@ export function AutomationEditorDialog({
         <AutomationEditorDialogFooter
           isEditing={isEditing}
           isSaving={isSaving}
-          canSave={canSave}
+          canSave={canSave && (surface !== 'chat' || chatSupported === true)}
           hasProjects={repos.length > 0}
           onOpenChange={onOpenChange}
           onSave={onSave}

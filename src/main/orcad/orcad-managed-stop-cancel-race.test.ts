@@ -33,7 +33,7 @@ it('withdraws its own request when a cancel wins between the decision check and 
     runtimeId: 'runtime-1',
     instance: { pid, startedAtMs, nonce, lockPath: lock.path }
   }
-  // The cancel lands after the first read, when there is no request file yet for it to remove.
+  // Cancel wins before the request exists, so completion must withdraw its later write.
   decisions.read.mockReturnValueOnce(null).mockReturnValue('canceled')
 
   const verdict = await completeOrcadManagedStop(request, {

@@ -1,8 +1,6 @@
 import { createContext } from 'react'
 
-/** Whether rows may grow now. The page's list holds growth while a reader who scrolled up is
- *  moving: growth below them would push the line they read, and correcting it mid-fling stops the
- *  fling. A store, so holding re-renders only the rows that would grow. */
+// Hold below-reader growth during scrolling because corrective writes stop iOS flings; notify only growing rows.
 export type MobileNativeChatGrowthHold = {
   held: () => boolean
   subscribe: (onChange: () => void) => () => void

@@ -1,8 +1,4 @@
-/**
- * A browser tab on `orca serve` survives a serve restart, as a desktop's browser tabs survive a
- * relaunch: the restarted server lists it with its last address, and starts its page only when a
- * client opens or drives it. A closed tab stays closed.
- */
+// After serve restart, retain browser URLs and closed state but start pages only on demand.
 import type { RuntimeClient } from '../../src/cli/runtime/client'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
 import { createServer, type Server } from 'node:http'

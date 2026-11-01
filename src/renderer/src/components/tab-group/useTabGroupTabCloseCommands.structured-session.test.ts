@@ -29,6 +29,12 @@ const store = vi.hoisted(() => ({
   unifiedTabsByWorktree: {} as Record<string, unknown[]>
 }))
 
+vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
+  admitStructuredAgentSession: (
+    await import('@/store/slices/store-session-test-harness')
+  ).admissionFromBusy(() => false)
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
   return {
@@ -73,7 +79,7 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
 
-vi.mock('@/lib/structured-agent-session-launch', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
 
@@ -112,14 +118,14 @@ beforeEach(() => {
 })
 
 describe('structured agent-session close ordering', () => {
-  it('removes the local tab synchronously while host retirement runs independently', async () => {
+  it('dispatches local structured-session tab removal synchronously', async () => {
     const { closeItem } = useTabGroupTabCloseCommands({ worktreeId: 'wt-1' })
     closeItem(AGENT_TAB.id)
 
     expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(AGENT_TAB.id)
   })
 
-  it('closes reconciling launches through the same synchronous path during bulk close', async () => {
+  it('dispatches local structured-session tab removal synchronously during bulk close', async () => {
     const { closeMany } = useTabGroupTabCloseCommands({ worktreeId: 'wt-1' })
 
     closeMany([AGENT_TAB.id])

@@ -45,7 +45,7 @@ import {
 import { useRepoMap } from '@/store/selectors'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-/** Single-line row: text-sm leading (20px) over py-2. Set as the row's explicit height. */
+/** 20px text leading plus py-2 matches the explicit row height. */
 const NO_PARENT_ROW_HEIGHT = 36
 const NO_PARENT_ROW_KEY = 'no-parent'
 
@@ -70,13 +70,7 @@ type ParentWorktreeCandidateListProps = {
   onSelect: (id: string | null) => void
 }
 
-/**
- * Parent picker for the composer's Advanced drawer. Nesting only — the base
- * branch is unaffected.
- *
- * Everything that enumerates worktrees lives in the inner list, which Radix
- * mounts on open, so a closed picker costs one string selector and nothing else.
- */
+/** Pick nesting without changing the base branch; enumerate only in Radix’s open-only list, leaving closed state a string selector. */
 function ComposerParentWorktreePickerImpl({
   repoId,
   executionHostId,
@@ -86,13 +80,12 @@ function ComposerParentWorktreePickerImpl({
   disabled = false,
   activeFolderWorkspaceId = null
 }: ComposerParentWorktreePickerProps): React.JSX.Element {
-  // Why: subscribe so translate() copy refreshes on language change without a remount.
+  // Subscribe so translate() refreshes on language changes.
   useTranslation()
   const [open, setOpen] = useState(false)
   const labelId = `${useId()}label`
 
-  // Why: an archived parent is already gone from the candidate list and the sidebar would
-  // drop the edge, so showing its name would promise nesting the create can't deliver.
+  // Archived parents cannot produce sidebar nesting, so do not promise it with a retained name.
   const parentName = useAppStore((s) => {
     if (!value) {
       return null
@@ -101,9 +94,7 @@ function ComposerParentWorktreePickerImpl({
     return parent && !parent.isArchived ? parent.displayName : null
   })
 
-  // Why: the trigger goes inert when the Advanced drawer collapses, but the portaled
-  // popover does not — it would linger detached from a control the user can't reach.
-  // Adjusted during render (not in an effect) so the stale-open frame never paints.
+  // Close during render when the drawer disables its trigger; portaled content would otherwise linger through a stale-open frame.
   if (open && disabled) {
     setOpen(false)
   }
@@ -145,7 +136,7 @@ function ComposerParentWorktreePickerImpl({
             'flex w-[var(--radix-popover-trigger-width)] min-w-[17rem] flex-col p-0',
             COMBOBOX_POPOVER_SURFACE
           )}
-          // Why: Radix would focus the content wrapper; the search box is the real target.
+          // Focus search instead of Radix’s content wrapper.
           onOpenAutoFocus={(event) => {
             event.preventDefault()
             const content = event.currentTarget
@@ -187,8 +178,7 @@ function getFolderWorkspaceSubtreeIds(
     if (lineage.parentWorkspaceKey !== folderKey) {
       continue
     }
-    // Why: the folder view drops archived and instance-stale rows, so accepting them here
-    // would offer a parent whose whole branch the folder never actually shows.
+    // Exclude archived/instance-stale parents whose subtree the folder view cannot show.
     const rootWorktree = getLineageChildWorktree(lineage, worktreeById)
     if (rootWorktree) {
       rootIds.add(rootWorktree.id)
@@ -267,20 +257,16 @@ function ParentWorktreeCandidateList({
     () => filterWorktreeParentCandidates(candidates, search, repoMap),
     [candidates, search, repoMap]
   )
-  // Index 0 is the pinned "No parent" row; candidates start at 1.
   const activeIndex = clampWorktreeParentPickerIndex(highlightedIndex, filtered.length + 1)
 
-  // Why: the "No parent" row is virtualized as index 0 rather than pinned above the
-  // scroller. A row outside the virtual container shifts every item's true position
-  // without the virtualizer knowing, so scrollToIndex would land short by that height.
+  // Virtualize No parent at index 0; external rows would shift geometry and make scrollToIndex land short.
   const virtualizer = useVirtualizer({
     count: filtered.length + 1,
     getScrollElement: () => listRef.current,
     estimateSize: (index) => (index === 0 ? NO_PARENT_ROW_HEIGHT : PICKER_ROW_HEIGHT),
     overscan: PICKER_ROW_OVERSCAN,
     getItemKey: (index) => (index === 0 ? NO_PARENT_ROW_KEY : (filtered[index - 1]?.id ?? index)),
-    // Why: the list mounts inside a popover that measures on the next frame, so
-    // seed the viewport to avoid a blank first paint.
+    // Seed the viewport until the popover measures next frame to avoid blank first paint.
     initialRect: { width: 0, height: PICKER_LIST_MAX_HEIGHT }
   })
 
@@ -294,9 +280,7 @@ function ParentWorktreeCandidateList({
 
   const handleSearchChange = useCallback(
     (nextSearch: string) => {
-      // Why: re-ranking on each keystroke makes any prior highlight meaningless. A query
-      // highlights the top match so Enter picks it; index 0 clears the parent, which is
-      // never what typing a name means. The clamp drops it back to 0 when nothing matches.
+      // Re-ranking invalidates the highlight; typing arms the top match, while no matches clamp to No parent.
       setSearch(nextSearch)
       setHighlightedIndex(nextSearch.trim().length > 0 ? 1 : 0)
       virtualizer.scrollToOffset(0)
@@ -332,8 +316,7 @@ function ParentWorktreeCandidateList({
     [activeIndex, filtered, moveHighlight, onSelect]
   )
 
-  // Why: cmdk's Input owns aria-activedescendant and points it at its own empty
-  // item registry while we drive selection, so re-point it after every commit.
+  // cmdk points aria-activedescendant at its empty registry; restore our virtual selection after each commit.
   useEffect(() => {
     inputRef.current?.setAttribute('aria-activedescendant', `${optionIdPrefix}-${activeIndex}`)
   })
@@ -421,8 +404,7 @@ function ParentWorktreeCandidateList({
   )
 }
 
-/** Why: every prop is a primitive or a stable callback, so the composer's per-keystroke
- *  renders stop here instead of re-rendering the popover subtree. */
+/** Stable props let memo stop per-keystroke composer renders before the popover subtree. */
 export const ComposerParentWorktreePicker = React.memo(ComposerParentWorktreePickerImpl)
 
 export default ComposerParentWorktreePicker

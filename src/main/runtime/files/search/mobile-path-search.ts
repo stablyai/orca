@@ -8,8 +8,7 @@ export type RuntimeMobileFilePathInventory = {
 
 type CacheEntry = RuntimeMobileFilePathInventory & { expiresAt: number }
 
-/** TTL/LRU cache for autocomplete inventories. It avoids launching rg for
- *  every mobile keystroke while bounding retained worktrees and paths. */
+/** Bound autocomplete inventories and avoid spawning rg per mobile keystroke. */
 export class RuntimeMobileFilePathSearchCache {
   private readonly entries = new Map<string, CacheEntry>()
   private readonly inFlight = new Map<string, Promise<RuntimeMobileFilePathInventory>>()
@@ -42,11 +41,9 @@ export class RuntimeMobileFilePathSearchCache {
     }
     const next = load()
       .then((loaded) => {
-        // Why: a slow SSH scan should receive a full TTL after it becomes usable,
-        // not arrive already expired because the clock started before its I/O.
+        // Start TTL after slow scans finish so usable results do not arrive expired.
         const expiresAt = (now ?? Date.now()) + this.ttlMs
         this.entries.set(key, { ...loaded, expiresAt })
-        // Explicit per-call clocks stay caller-controlled; production uses the wall clock.
         if (now === undefined) {
           this.scheduleExpiry(key, expiresAt)
         }
@@ -64,8 +61,7 @@ export class RuntimeMobileFilePathSearchCache {
           this.inFlight.delete(key)
         }
       })
-    // Why: debounced clients can overlap on a cold key; sharing this promise
-    // prevents duplicate local rg or SSH inventory scans.
+    // Debounced callers can overlap on cold keys; share local/SSH scans.
     this.inFlight.set(key, next)
     return next
   }
@@ -116,36 +112,4 @@ export class RuntimeMobileFilePathSearchCache {
       this.scheduleExpiry(key, entry.expiresAt)
     }
   }
-}
-
-/** Preserves composer ranking: full-path/basename prefixes first, then substring
- *  matches, while returning only the requested bounded candidate slice. */
-export function rankRuntimeMobileFilePaths(
-  paths: readonly string[],
-  query: string,
-  limit: number
-): { paths: string[]; totalCount: number } {
-  const normalizedQuery = query.trim().toLowerCase()
-  if (!normalizedQuery) {
-    return { paths: paths.slice(0, limit), totalCount: paths.length }
-  }
-  const prefix: string[] = []
-  const substring: string[] = []
-  let totalCount = 0
-  for (const path of paths) {
-    const lower = path.toLowerCase()
-    const basename = lower.slice(lower.lastIndexOf('/') + 1)
-    if (lower.startsWith(normalizedQuery) || basename.startsWith(normalizedQuery)) {
-      totalCount++
-      if (prefix.length < limit) {
-        prefix.push(path)
-      }
-    } else if (lower.includes(normalizedQuery)) {
-      totalCount++
-      if (substring.length < limit) {
-        substring.push(path)
-      }
-    }
-  }
-  return { paths: [...prefix, ...substring].slice(0, limit), totalCount }
 }

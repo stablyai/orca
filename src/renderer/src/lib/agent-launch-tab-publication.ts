@@ -1,10 +1,4 @@
-/**
- * Showing an `agent.launch` tab the host asked for before its agent exists.
- *
- * The tab is created under the host's ids so the pane key the host bakes into the agent's PTY names
- * this pane, and a retry that names the same tab finds it instead of making a second one. The pane
- * is laid out with no process; its own spawn waits in main for the host's and attaches to it.
- */
+/** Publish under host-reserved IDs before the agent exists so PTY routing names this pane and retries reuse its tab; the pane’s spawn waits in main and attaches to the host’s process. */
 
 import type { AgentLaunchPlacementReceipt } from '../../../shared/agent-launch-intent'
 import type {
@@ -67,12 +61,10 @@ export function publishAgentLaunchTab(
     if (request.prompt) {
       rememberAgentLaunchPanePrompt(tabId, request.prompt)
     }
-    // A different launch into this pane: what an earlier one left on it no longer stands. A retry of
-    // the same launch is that launch, so its tab and any final verdict stay as they are.
+    // Clear an earlier launch’s outcome only for a new launch; retries retain the same tab and verdict.
     const kept = store.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.agentLaunchPane
     if (kept?.leafId !== leafId || kept.operationId !== request.operationId) {
-      // A pane that already showed an earlier launch's outcome refused its spawn and is idle: it
-      // must spawn again, so it waits for this launch and attaches to its agent.
+      // A previously refused pane is idle; restart its spawn to await and attach to this launch.
       store.setTabAgentLaunchPane(tabId, launchPaneFor(request), {
         remount: kept?.leafId === leafId && kept.outcome !== undefined
       })

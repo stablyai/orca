@@ -18,6 +18,10 @@ import {
 } from '../../shared/codex-shell-function'
 import { resolveFishBinary } from '../../shared/fish-binary-requirement'
 import { getPowerShellAgentWrappers } from '../../shared/powershell-agent-wrappers'
+import {
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+  REMOTE_VIEWER_CLIPBOARD_ENV
+} from '../../shared/remote-viewer-clipboard-env'
 
 const isWindows = process.platform === 'win32'
 const fishLookup = resolveFishBinary()
@@ -28,11 +32,10 @@ const pwshAvailable = canRun('pwsh')
 const HELP_WITH_FLAG = 'Usage: codex [OPTIONS] [PROMPT]\n      --no-daemon  Run in-process\n'
 const HELP_WITHOUT_FLAG = 'Usage: codex [OPTIONS] [PROMPT]\n      --no-alt-screen\n'
 
-// Why argv as whole words: the rule is a whole-argument denylist (plan §4).
 const ADDED: string[][] = [
   [],
   ['fix the bug'],
-  // Why: Windows PowerShell and pwsh's .cmd passing drop embedded quotes unless the wrapper escapes them.
+  // PowerShell .cmd invocation needs embedded quotes escaped.
   ['say "hi" to "bob"'],
   ['exec the plan'],
   ['-m', 'gpt-5', '--yolo', 'x'],
@@ -99,7 +102,7 @@ function makeSandbox(help: string): Sandbox {
   writeFileSync(helpFile, help)
   writeFileSync(helpLog, '')
   if (isWindows) {
-    // Why a .cmd shim over node: the shape npm installs, and what Get-Command resolves.
+    // Match npm's .cmd entry point resolved by Get-Command.
     writeFileSync(
       join(bin, 'fake.js'),
       `const fs = require('fs')
@@ -110,6 +113,7 @@ if (a.length === 1 && a[0] === '--help') {
   process.exit(0)
 }
 let out = ['ARGV', ...a].join('|')
+if (process.env.FAKE_CODEX_READ_CLIPBOARD_ENV === '1') out += '|ssh=' + (process.env.SSH_CONNECTION ?? '<unset>')
 if (process.env.FAKE_CODEX_READ_STDIN === '1') out += '|stdin=' + fs.readFileSync(0, 'utf8').trim()
 console.log(out)
 process.exit(Number(process.env.FAKE_CODEX_EXIT || 0))
@@ -126,6 +130,7 @@ process.exit(Number(process.env.FAKE_CODEX_EXIT || 0))
 if [ "$#" -eq 1 ] && [ "$1" = --help ]; then echo help >> ${JSON.stringify(helpLog)}; cat ${JSON.stringify(helpFile)}; exit 0; fi
 out=ARGV
 for a in "$@"; do out="$out|$a"; done
+[ "\${FAKE_CODEX_READ_CLIPBOARD_ENV:-}" = 1 ] && out="$out|ssh=\${SSH_CONNECTION-<unset>}"
 [ "\${FAKE_CODEX_READ_STDIN:-}" = 1 ] && out="$out|stdin=$(cat)"
 printf '%s\\n' "$out"
 exit "\${FAKE_CODEX_EXIT:-0}"
@@ -165,14 +170,14 @@ function run(
       : isPowerShell(shell)
         ? getPowerShellAgentWrappers()
         : getPosixCodexShellLaunchPreflight()
-  // Why the guard: rows include `login`, which a real codex would run against the host's account.
+  // Cases include login; never let a fixture escape into the host's real Codex account.
   const guard = isPowerShell(shell)
     ? `if ((Get-Command codex -CommandType Application | Select-Object -First 1).Source -ne ${quote(shell, sandbox.codex)}) { exit 97 }`
     : shell === 'fish'
       ? `test (command -s codex) = ${quote(shell, sandbox.codex)}; or exit 97`
       : `[ "$(command -v codex)" = ${quote(shell, sandbox.codex)} ] || exit 97`
   const body = `${guard}\n${preamble}\n${template}\n${script}`
-  // Why a file for bash/zsh: it is read line by line like a startup file, so an alias it defines applies.
+  // Startup-file parsing lets aliases affect subsequent lines.
   const scriptFile = join(sandbox.bin, '..', 'script.sh')
   writeFileSync(scriptFile, body)
   const [command, args]: [string, string[]] =
@@ -189,8 +194,11 @@ function run(
       ...process.env,
       PATH: `${sandbox.bin}${delimiter}${process.env.PATH ?? ''}`,
       CODEX_HOME: join(sandbox.bin, '..', 'codex-home'),
-      // Why: a run inside an Orca terminal inherits its identity, which the wrapper forwards.
+      // Nested Orca tests must not forward the host pane's identity.
       ...Object.fromEntries(CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => [key, ''])),
+      SSH_CONNECTION: undefined,
+      SSH_TTY: undefined,
+      [REMOTE_VIEWER_CLIPBOARD_ENV]: undefined,
       ...env
     }
   })
@@ -210,7 +218,7 @@ const shells: [Shell, boolean][] = [
   ['zsh', !isWindows && existsSync('/bin/zsh')],
   ['fish', fishLookup.available],
   ['pwsh', pwshAvailable],
-  // Why: Windows PowerShell 5.1 turns redirected native stderr into errors, unlike pwsh.
+  // Windows PowerShell 5.1 promotes redirected native stderr to errors; pwsh does not.
   ['powershell', isWindows && canRun('powershell')]
 ]
 
@@ -221,6 +229,37 @@ describe('codex wrapper --no-daemon rule', () => {
 
   for (const [shell, available] of shells) {
     describe.skipIf(!available)(shell, () => {
+      it.each(
+        [
+          ['1', undefined, undefined, CODEX_REMOTE_VIEWER_SSH_CONNECTION, '0'],
+          ['1', undefined, undefined, CODEX_REMOTE_VIEWER_SSH_CONNECTION, '3'],
+          ['0', undefined, undefined, '<unset>', '0'],
+          ['1', '', undefined, '', '0'],
+          ['1', '10.0.0.1 5000 10.0.0.2 22', undefined, '10.0.0.1 5000 10.0.0.2 22', '0'],
+          ['1', undefined, '/dev/ttys004', '<unset>', '0']
+        ].filter(([, inherited]) => !isPowerShell(shell) || inherited !== '')
+      )(
+        'routes manual copies for remote=%s without marking the parent shell',
+        (remote, inherited, inheritedTty, expected, exitCode) => {
+          const sandbox = makeSandbox(HELP_WITH_FLAG)
+          const bareCall = isPowerShell(shell)
+            ? '$orcaClipboardExit = $LASTEXITCODE\n& (Get-Command codex -CommandType Application | Select-Object -First 1).Source shell\nexit $orcaClipboardExit'
+            : 'command codex shell'
+          const result = run(shell, `codex clipboard\n${bareCall}`, sandbox, {
+            FAKE_CODEX_READ_CLIPBOARD_ENV: '1',
+            FAKE_CODEX_EXIT: exitCode ?? '0',
+            [REMOTE_VIEWER_CLIPBOARD_ENV]: remote ?? '0',
+            ...(inherited !== undefined ? { SSH_CONNECTION: inherited } : {}),
+            ...(inheritedTty ? { SSH_TTY: inheritedTty } : {})
+          })
+          expect(result.status, result.stderr).toBe(Number(exitCode))
+          expect(lines(result.stdout)).toEqual([
+            `ARGV|--no-daemon|clipboard|ssh=${expected}`,
+            `ARGV|shell|ssh=${inherited ?? '<unset>'}`
+          ])
+        }
+      )
+
       it('adds --no-daemon first unless an argument is denylisted', () => {
         const sandbox = makeSandbox(HELP_WITH_FLAG)
         const result = run(shell, ALL.map((argv) => codexCall(shell, argv)).join('\n'), sandbox)
@@ -230,7 +269,7 @@ describe('codex wrapper --no-daemon rule', () => {
           ...ADDED.map((argv) => expectedLine(argv, true)),
           ...UNCHANGED.map((argv) => expectedLine(argv, false))
         ])
-        // Why: a denylisted launch must not pay for, or depend on, the --help probe.
+        // Denylisted calls must not depend on or pay for capability probes.
         expect(helpProbes(sandbox)).toBe(ADDED.length)
       })
 
@@ -302,7 +341,6 @@ describe('codex wrapper --no-daemon rule', () => {
       "shell_environment_policy.set.ORCA_TERMINAL_HANDLE='term_abc'",
       `shell_environment_policy.set.ORCA_USER_DATA_PATH='${identity.ORCA_USER_DATA_PATH}'`
     ]
-    // Why unordered: the overrides set distinct keys, so only which ones arrive matters.
     const splitOverrides = (line: string): { overrides: string[]; rest: string[] } => {
       const [, ...words] = line.split('|')
       const overrides: string[] = []

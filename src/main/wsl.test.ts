@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '@orca/process-host/process-spec'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 
 const { runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
   runProcessMock: vi.fn(),
@@ -12,6 +13,14 @@ vi.mock('@orca/process-host', () => ({
 }))
 vi.mock('./wsl-interop-spawn-directory', () => ({
   resolveWslInteropSpawnCwd: () => 'C:\\Windows'
+}))
+// These cases model hosts with no registered distro; the lost-output fallback has its own suite.
+vi.mock('./wsl-registered-distro-fallback', () => ({
+  listedOrRegisteredWslDistros: async (listed: string[]) => listed,
+  readRegisteredWslDistrosLater: () => {},
+  isWslListOutputLost: () => false,
+  resetWslListOutputLost: () => {},
+  runningWhenListedNone: async () => []
 }))
 
 function exited(stdout: string, code: number | null = 0): ProcessResult {
@@ -36,6 +45,7 @@ import {
   getCachedWslAvailability,
   getCachedWslDistros,
   getWslHome,
+  getWslHomeAsync,
   hasCachedWslAvailability,
   hasCachedWslDistros,
   isWslAvailableAsync,
@@ -82,7 +92,6 @@ describe('WSL distro discovery cache', () => {
       await withPlatformAsync('win32', async () => {
         await expect(listWslDistrosAsync()).resolves.toEqual([])
         expect(getCachedWslDistros()).toBeNull()
-        // Brief negative caching bounds the wsl.exe spawn rate between retries.
         await expect(listWslDistrosAsync()).resolves.toEqual([])
         expect(runProcessMock).toHaveBeenCalledTimes(1)
         vi.advanceTimersByTime(15_000)
@@ -112,10 +121,6 @@ describe('WSL distro discovery cache', () => {
     }
   })
 
-  // Why: `wsl --install` succeeds and reports zero distros while the distro is
-  // still being provisioned (or until the required reboot). Caching that empty
-  // success for the process lifetime is why users saw WSL offered during setup
-  // and then permanently absent from the terminal picker.
   it('retries asynchronous discovery after wsl.exe reports no distros yet', async () => {
     vi.useFakeTimers()
     runProcessMock.mockResolvedValueOnce(exited('')).mockResolvedValueOnce(exited('Ubuntu\n'))
@@ -147,8 +152,6 @@ describe('WSL distro discovery cache', () => {
     }
   })
 
-  // Why: an empty result must still not let every caller re-spawn a blocking
-  // wsl.exe; it reuses the same brief negative-cache window as a hard failure.
   it('bounds the wsl.exe spawn rate while no distros are installed', () => {
     runProcessSyncMock.mockReturnValue(exited(''))
 
@@ -179,10 +182,6 @@ describe('WSL distro discovery cache', () => {
     })
   })
 
-  // Why: docker-desktop entries filter to zero user distros, which is the same
-  // "nothing installed yet" state as an empty list — a distro installed later
-  // must still appear. The answer stays readable as [] so a missing distro is
-  // still visible to `isKnownMissingDistro`.
   it('re-probes a docker-desktop-only machine once a user distro can appear', () => {
     vi.useFakeTimers()
     runProcessSyncMock.mockReturnValueOnce(exited('docker-desktop\ndocker-desktop-data\n'))
@@ -202,8 +201,6 @@ describe('WSL distro discovery cache', () => {
     }
   })
 
-  // Why: a docker-desktop-only machine filters to empty on every probe, so a flat
-  // window would re-spawn wsl.exe every 15s for the whole session.
   it('backs off while the list keeps coming back empty', () => {
     vi.useFakeTimers()
     runProcessSyncMock.mockReturnValue(exited(''))
@@ -214,7 +211,6 @@ describe('WSL distro discovery cache', () => {
         vi.advanceTimersByTime(15_000)
         expect(listWslDistros()).toEqual([])
         expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
-        // Second empty result doubles the window, so 15s more is not enough.
         vi.advanceTimersByTime(15_000)
         expect(listWslDistros()).toEqual([])
         expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
@@ -246,15 +242,12 @@ describe('WSL distro discovery cache', () => {
     }
   })
 
-  // Why: the cap is the only bound on how long a distro installed mid-session stays
-  // invisible, so pin it rather than letting the doubling run away.
   it('caps the empty-list backoff at five minutes', () => {
     vi.useFakeTimers()
     runProcessSyncMock.mockReturnValue(exited(''))
 
     try {
       withPlatform('win32', () => {
-        // Windows double to 15/30/60/120/240s, so the 6th would be 480s uncapped.
         for (const delayMs of [0, 15_000, 30_000, 60_000, 120_000, 240_000]) {
           vi.advanceTimersByTime(delayMs)
           listWslDistros()
@@ -269,9 +262,6 @@ describe('WSL distro discovery cache', () => {
     }
   })
 
-  // Why: an empty list is a real probe result and must keep driving the
-  // `wsl-distro-missing` repair prompt even once stale. Going null instead fails
-  // open and silently spawns `wsl.exe -d <distro>` for a distro Orca saw was absent.
   it('keeps reporting an empty result after it goes stale', () => {
     vi.useFakeTimers()
     runProcessSyncMock.mockReturnValue(exited(''))
@@ -289,8 +279,6 @@ describe('WSL distro discovery cache', () => {
     }
   })
 
-  // Why: a genuinely missing distro yields a non-empty list, which never expires,
-  // so repair-required still fires for the case that warrants it.
   it('keeps reporting a known distro list indefinitely', () => {
     vi.useFakeTimers()
     runProcessSyncMock.mockReturnValueOnce(exited('Ubuntu\n'))
@@ -331,6 +319,58 @@ describe('WSL home cache', () => {
   })
 })
 
+describe('WSL probes under the internal distro allowlist', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    runProcessMock.mockReset()
+    _resetWslCachesForTests()
+  })
+
+  it('still lists distros, and an excluded distro home probe fails like any other probe', async () => {
+    vi.stubEnv('ORCA_INTERNAL_WSL_DISTRO_ALLOWLIST', 'orca-test-a')
+    // Stands in for process-host: the real check runs before a child would start.
+    runProcessMock.mockImplementation(async (spec: { program: string; args: string[] }) => {
+      assertWslDistroAllowed(spec.program, spec.args)
+      return spec.args.includes('--list')
+        ? exited('Ubuntu\norca-test-a\n')
+        : exited('/home/alice\n')
+    })
+    await withPlatformAsync('win32', async () => {
+      await expect(listWslDistrosAsync()).resolves.toEqual(['Ubuntu', 'orca-test-a'])
+      await expect(getWslHomeAsync('Ubuntu')).resolves.toBeNull()
+      await expect(getWslHomeAsync('orca-test-a')).resolves.toContain('alice')
+    })
+  })
+})
+
+describe('WSL home probe on a booting distro', () => {
+  afterEach(() => {
+    runProcessMock.mockReset()
+    runProcessSyncMock.mockReset()
+    _resetWslCachesForTests()
+  })
+
+  // Real host (win-lowspec): a 5 s kill mid-boot left the distro failing every wsl.exe call.
+  it('gives the async home probe time for a cold boot instead of killing it at 5 s', async () => {
+    runProcessMock.mockResolvedValueOnce(exited('/home/alice\n'))
+    await withPlatformAsync('win32', () => getWslHomeAsync('Ubuntu'))
+    expect(runProcessMock.mock.calls[0]?.[0]).toMatchObject({ program: 'wsl.exe' })
+    expect(runProcessMock.mock.calls[0]?.[0]?.timeoutMs).toBeGreaterThanOrEqual(30_000)
+  })
+
+  it('never starts a 5 s synchronous probe while the async one waits out a boot', async () => {
+    let finish!: (result: ProcessResult) => void
+    runProcessMock.mockReturnValueOnce(new Promise<ProcessResult>((resolve) => (finish = resolve)))
+    await withPlatformAsync('win32', async () => {
+      const pending = getWslHomeAsync('Ubuntu')
+      expect(getWslHome('Ubuntu')).toBeNull()
+      expect(runProcessSyncMock).not.toHaveBeenCalled()
+      finish(exited('/home/alice\n'))
+      expect(await pending).toContain('alice')
+    })
+  })
+})
+
 describe('WSL availability cache', () => {
   afterEach(() => {
     runProcessMock.mockReset()
@@ -338,9 +378,6 @@ describe('WSL availability cache', () => {
     _resetWslCachesForTests()
   })
 
-  // Why: a cold WSL2 utility-VM boot on a just-installed or just-rebooted
-  // machine routinely exceeds the 5s probe timeout. Latching false for the
-  // process lifetime is what makes WSL vanish from the picker after setup.
   it('retries availability after a probe timeout instead of latching false', async () => {
     vi.useFakeTimers()
     runProcessMock.mockResolvedValueOnce(TIMED_OUT).mockResolvedValueOnce(exited(''))
@@ -356,7 +393,6 @@ describe('WSL availability cache', () => {
     }
   })
 
-  // Why: a timeout must not let every caller re-spawn wsl.exe immediately.
   it('bounds the probe rate while the failure window is open', async () => {
     runProcessMock.mockResolvedValue(TIMED_OUT)
 
@@ -377,12 +413,6 @@ describe('WSL availability cache', () => {
     })
   })
 
-  // Why this site matters more than the other wsl.exe spawns (#16463): ENOENT is
-  // deliberately non-retryable here, so a spawn that failed only because the
-  // inherited cwd had been deleted was cached as "WSL is not installed" on the
-  // 10-minute definitive TTL with exponential backoff. Git kept working and Orca
-  // reported WSL unavailable -- a worse state than the bug being fixed. Naming
-  // the directory is what keeps ENOENT meaning "wsl.exe is not on PATH".
   it('names an explicit spawn directory, so no deleted cwd can read as ENOENT', async () => {
     runProcessMock.mockResolvedValue(exited(''))
 
@@ -436,9 +466,6 @@ describe('WSL availability cache', () => {
     })
   })
 
-  // Why: the resolver reads the cached getter, not the probe. Reporting the last
-  // observed answer keeps the `wsl-unavailable` repair prompt reachable; going null
-  // on staleness would let git and PTY silently resolve to a WSL that just failed.
   it('keeps reporting the last observed answer after it goes stale', async () => {
     vi.useFakeTimers()
     runProcessMock.mockResolvedValue(TIMED_OUT)
@@ -455,10 +482,7 @@ describe('WSL availability cache', () => {
     }
   })
 
-  // Why: an answer-shaped failure earns a long window, not a session-long latch —
-  // wsl.exe also exits non-zero while the WSL package is servicing or LxssManager is
-  // still starting, which is transient. wsl.exe ships in System32 on every modern
-  // Windows, so a host without WSL usually answers with a non-zero exit, not ENOENT.
+  // WSL servicing can return nonzero status; definitive-looking failures still need retries.
   it.each([
     ['wsl.exe reports WSL unusable', () => Promise.resolve(exited('', 1))],
     ['wsl.exe is not installed', () => Promise.reject(spawnError('ENOENT'))]
@@ -481,8 +505,6 @@ describe('WSL availability cache', () => {
     }
   })
 
-  // Why: a wedged wsl.exe must not be re-probed on every window boundary for the
-  // rest of the session.
   it('backs off after repeated probe failures', async () => {
     vi.useFakeTimers()
     runProcessMock.mockResolvedValue(TIMED_OUT)
@@ -493,7 +515,6 @@ describe('WSL availability cache', () => {
         vi.advanceTimersByTime(45_000)
         await expect(isWslAvailableAsync()).resolves.toBe(false)
         expect(runProcessMock).toHaveBeenCalledTimes(2)
-        // Second failure doubles the window, so the next boundary is not enough.
         vi.advanceTimersByTime(45_000)
         await expect(isWslAvailableAsync()).resolves.toBe(false)
         expect(runProcessMock).toHaveBeenCalledTimes(2)
@@ -503,8 +524,6 @@ describe('WSL availability cache', () => {
     }
   })
 
-  // Why: a seeded retryable failure must re-probe once its window lapses, the same
-  // as one observed live — otherwise test setup can hide the latch this fixes.
   it('re-probes a seeded retryable failure once its window lapses', async () => {
     vi.useFakeTimers()
     runProcessMock.mockResolvedValueOnce(exited(''))
@@ -521,9 +540,6 @@ describe('WSL availability cache', () => {
     }
   })
 
-  // Why: the caches expire independently and `getWslRepairReason` checks availability
-  // first, so a definitive failure held for 10min would report `wsl-unavailable` over a
-  // WSL that just listed a distro. Finding a distro must drop the stale failure.
   it.each([
     ['a definitive failure', exited('', 1)],
     ['a timeout', TIMED_OUT]
@@ -535,11 +551,9 @@ describe('WSL availability cache', () => {
       await withPlatformAsync('win32', async () => {
         await expect(isWslAvailableAsync()).resolves.toBe(false)
 
-        // A distro turns up (WSL finished provisioning / was repaired mid-session).
         runProcessSyncMock.mockReturnValueOnce(exited('Ubuntu\n'))
         expect(listWslDistros()).toEqual(['Ubuntu'])
 
-        // Without dropping the stale failure this would stay false for 10min.
         runProcessMock.mockResolvedValueOnce(exited(''))
         await expect(isWslAvailableAsync()).resolves.toBe(true)
       })
@@ -548,8 +562,6 @@ describe('WSL availability cache', () => {
     }
   })
 
-  // Why: an empty list re-probes on a 15s-to-5min schedule, so clearing the availability
-  // failure on every empty probe would re-spawn the availability probe far too often.
   it('does not drop an availability failure for an empty distro list', async () => {
     vi.useFakeTimers()
     runProcessMock.mockResolvedValueOnce(exited('', 1))
@@ -560,7 +572,6 @@ describe('WSL availability cache', () => {
         runProcessSyncMock.mockReturnValueOnce(exited(''))
         expect(listWslDistros()).toEqual([])
         expect(getCachedWslAvailability()).toBe(false)
-        // Still inside the definitive window, so no re-probe was paid.
         await expect(isWslAvailableAsync()).resolves.toBe(false)
         expect(runProcessMock).toHaveBeenCalledTimes(1)
       })

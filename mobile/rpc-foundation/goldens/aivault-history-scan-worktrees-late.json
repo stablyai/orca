@@ -4,9 +4,71 @@
   "family": "aiVault.history",
   "namedDeltas": [],
   "values": {
-    "05215ca2ea35": {
+    "1e294d39caf5": {
+      "name": "status.get#2",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "capabilities": ["aiVault.v1"]
+          }
+        }
+      }
+    },
+    "33d053404f10": {
+      "activeWorktreePath": {
+        "$rpc": "null"
+      },
+      "hostStatusResult": {
+        "capabilities": ["aiVault.v1"]
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "kind": "loading"
+      }
+    },
+    "44a27dbf05e2": {
+      "name": "status.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "595e6c3bbfed": {
       "name": "aiVault.listSessions#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
+    },
+    "6c80e490239f": {
+      "name": "status.get#2",
       "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "79fccda27236": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -32,7 +94,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-3",
+          "id": "frame-4",
           "ok": true,
           "result": {
             "issues": [],
@@ -47,56 +109,20 @@
         }
       }
     },
-    "33d053404f10": {
-      "activeWorktreePath": {
-        "$rpc": "null"
-      },
-      "hostStatusResult": {
-        "capabilities": ["aiVault.v1"]
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "loading"
-      }
+    "7e8b2964ad63": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 8,
+      "value": [
+        {
+          "cancelled": false,
+          "method": "agentSession.subscribeStatus",
+          "payload": "agentSession.subscribeStatus#1"
+        }
+      ]
     },
-    "4a76a58cbdac": {
+    "acf501fa9958": {
       "name": "status.get#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "capabilities": ["aiVault.v1"]
-          }
-        }
-      }
-    },
-    "4e35efd1ee45": {
-      "name": "status.get#2",
-      "ordinal": 3,
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -128,11 +154,6 @@
         }
       }
     },
-    "72d9a278aca3": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
-    },
     "cd739a80b7a8": {
       "activeWorktreePath": "/repo/feature",
       "hostStatusResult": {
@@ -152,10 +173,10 @@
         ]
       }
     },
-    "d08f74d65ee6": {
-      "name": "status.get#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    "e28c488ce6b2": {
+      "name": "agentSession.subscribeStatus#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -164,11 +185,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f1834177e593": {
-      "name": "status.get#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -177,8 +193,8 @@
       {
         "id": "held",
         "observation": {
-          "sender": ["4a76a58cbdac"],
-          "payloads": ["d08f74d65ee6"],
+          "sender": ["acf501fa9958"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -189,14 +205,27 @@
       {
         "id": "ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "4e35efd1ee45", "05215ca2ea35"],
-          "payloads": ["d08f74d65ee6", "f1834177e593", "72d9a278aca3"],
+          "sender": ["acf501fa9958", "1e294d39caf5", "79fccda27236"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "6c80e490239f", "595e6c3bbfed"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "worktrees-loaded": "eb79a9b3682a"
           },
           "state": "cd739a80b7a8",
           "effects": []
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": ["acf501fa9958", "1e294d39caf5", "79fccda27236"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "6c80e490239f", "595e6c3bbfed"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "worktrees-loaded": "eb79a9b3682a"
+          },
+          "state": "cd739a80b7a8",
+          "effects": ["7e8b2964ad63"]
         }
       }
     ]

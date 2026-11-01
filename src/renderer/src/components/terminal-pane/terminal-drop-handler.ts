@@ -103,8 +103,7 @@ export async function handleInternalTerminalFileDrop({
   }
   const connectionId = getConnectionId(worktreeId)
   if (!runtimeEnvironmentId && connectionId === undefined) {
-    // Why: unresolved connection metadata means we cannot know whether these
-    // worktree-owned paths belong to a local, WSL, or SSH terminal.
+    // Unresolved ownership cannot distinguish local, WSL and SSH paths; refuse rather than guess.
     toast.error(
       translate(
         'auto.components.terminal.pane.terminal.drop.handler.0c77693641',

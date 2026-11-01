@@ -3,7 +3,7 @@ import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GitHubIssueUpdate } from '../../shared/issue-mutation-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import { addIssueComment, listAssignableUsers, listLabels, updateIssue } from '../github/client'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   assertRegisteredGitHubRepo,
   getGitHubLocalGitOptionArgs,
@@ -77,7 +77,7 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
         getGitHubRepoConnectionId(repo),
         args.prRepo ?? null,
         getGitHubLocalGitOptionArgs(store, repo)[0],
-        // Why: the issue source selector only scopes issues; PR comments keep their resolution.
+        // Issue-source preference must not change PR comment resolution.
         args.type === 'pr' ? undefined : repo.issueSourcePreference
       )
       if (result.ok) {

@@ -7,10 +7,7 @@ import {
 } from './config-toml-line-scan'
 import { parseTomlKeyPath, parseTomlTableHeaderPath } from './config-toml-key-path'
 
-// Why: Codex persists plugin registration as two table families under a
-// managed CODEX_HOME — `[marketplaces.<name>]` and `[plugins."<plugin>@<market>"]`.
-// Reconciling them needs identity, not text, so the name is the parsed header
-// segment: `[plugins."a@b"]` and `[plugins.'a@b']` are one registration.
+// Decode registration names so equivalent quoted headers reconcile as one entry.
 
 export const CODEX_REGISTRATION_ROOTS = ['marketplaces', 'plugins'] as const
 
@@ -18,7 +15,7 @@ export type CodexRegistrationRoot = (typeof CODEX_REGISTRATION_ROOTS)[number]
 
 export type CodexRegistrationField = {
   raw: string
-  /** A value spanning lines cannot be replaced line-by-line, so it is never rewritten. */
+  /** Multiline values cannot be rewritten by line edits. */
   multiline: boolean
   lineIndex: number
 }
@@ -47,8 +44,7 @@ export function readCodexRegistrationEntries(config: string): Map<string, CodexR
     const header = headers[index]!
     const root = header.segments[0]
     const name = header.segments[1]
-    // Why: `[[marketplaces.x]]` is not a shape Codex writes; treating an array of
-    // tables as one registration would key it by a name it may not own.
+    // Array tables do not identify individual Codex registrations.
     if (header.isArray || !isCodexRegistrationRoot(root) || name === undefined) {
       continue
     }
@@ -71,8 +67,7 @@ export function readCodexRegistrationEntries(config: string): Map<string, CodexR
     }
     entries.set(key, {
       ...existing,
-      // Why: a duplicate owner table is invalid TOML; the first one wins, exactly
-      // as a TOML reader that rejects the second would have read the file.
+      // Keep the first owner table when invalid input repeats it.
       ownerStart: existing.ownerStart === -1 && isOwner ? header.index : existing.ownerStart,
       ownerEnd: existing.ownerStart === -1 && isOwner ? end : existing.ownerEnd,
       block: `${existing.block}\n\n${block}`,
@@ -89,10 +84,7 @@ export function hasCodexRegistrationEntries(config: string): boolean {
   return readCodexRegistrationEntries(config).size > 0
 }
 
-// Why: the block ends at the NEXT header, so its trailing blank and comment lines
-// are that table's leading comment — appending them would copy it into the wrong
-// section. Only structural lines are inspected, so a `#` inside a multiline string
-// is never mistaken for one.
+// Leave trailing structural comments with the next table; preserve comments inside values.
 function readRegistrationBlock(lines: string[], start: number, end: number): string {
   let state = createTomlLineScanState()
   let lastBodyLine = start
@@ -117,31 +109,26 @@ function isRealCalendarDate(year: number, month: number, day: number): boolean {
   if (month < 1 || month > 12 || day < 1) {
     return false
   }
-  // Day 0 of the following month is the last day of this one; setUTCFullYear avoids
-  // the two-digit-year remapping the Date constructor applies.
+  // Day 0 finds the previous month's end; setUTCFullYear avoids remapping years 0–99.
   const lastOfMonth = new Date(0)
   lastOfMonth.setUTCFullYear(year, month, 0)
   return day <= lastOfMonth.getUTCDate()
 }
 
-/** Compares values by meaning, so quote style and a trailing comment never read as a change. */
+/** Ignore string quote style and trailing comments when comparing values. */
 export function normalizeCodexRegistrationValue(raw: string): string {
   const stripped = stripTomlTrailingComment(raw)
   const quoted = parseTomlSingleLineStringValue(stripped, 0)
   return quoted && quoted.end === stripped.length ? `string:${quoted.value}` : stripped
 }
 
-/**
- * Milliseconds for a marketplace refresh timestamp, or null when the value is not
- * an RFC 3339 / TOML date-time. Anything unparseable is malformed, never "older".
- */
+/** Return timestamp milliseconds; malformed values cannot establish refresh ordering. */
 export function parseCodexRegistrationTimestamp(raw: string): number | null {
   const stripped = stripTomlTrailingComment(raw)
   const quoted = parseTomlSingleLineStringValue(stripped, 0)
   const text = quoted && quoted.end === stripped.length ? quoted.value : stripped
   const match = REGISTRATION_TIMESTAMP_PATTERN.exec(text)
-  // Why: Date.parse rolls `2025-02-30` forward to March 2 rather than rejecting it,
-  // so a malformed runtime value would read as NEWER and win against canonical.
+  // Date.parse rolls invalid dates forward, potentially making malformed values appear newer.
   if (!match || !isRealCalendarDate(Number(match[1]), Number(match[2]), Number(match[3]))) {
     return null
   }
@@ -159,9 +146,7 @@ type TomlTableHeaderMarker = {
   isArray: boolean
 }
 
-// Why: an unparseable header still ends the previous table, so it is recorded
-// with no segments rather than skipped — otherwise its lines would be attributed
-// to the registration above it.
+// Invalid headers still end the previous table so their fields cannot leak into it.
 function scanTomlTableHeaders(lines: string[]): TomlTableHeaderMarker[] {
   const markers: TomlTableHeaderMarker[] = []
   let state = createTomlLineScanState()

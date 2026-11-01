@@ -5,7 +5,7 @@
       "id": "b1",
       "operation": "workspace.file-inventory",
       "family": "legacy-inventory",
-      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-file-search.ts"],
       "schedules": ["a-b-a", "stale-inflight-cleanup"],
       "steps": [
         {
@@ -682,182 +682,6 @@
       "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"]
     },
     {
-      "id": "settings-home-providers-fulfilled",
-      "operation": "settings.home-providers",
-      "family": "settings.home-providers",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": ["settings-first"],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
-      "id": "settings-home-providers-refused",
-      "operation": "settings.home-providers",
-      "family": "settings.home-providers",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": ["settings-first"],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "refused",
-              "message": "settings refused"
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
-      "id": "settings-home-providers-transport-error",
-      "operation": "settings.home-providers",
-      "family": "settings.home-providers",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": ["settings-first"],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reject": {
-            "message": "settings disconnected",
-            "deliveryUnknown": true
-          }
-        },
-        {
-          "complete": "preflight.check#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
       "id": "settings-resume-metadata-fulfilled",
       "operation": "settings.resume-metadata",
       "family": "settings.resume-metadata",
@@ -1120,7 +944,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -1213,7 +1037,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -1324,7 +1148,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -1412,7 +1236,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -2264,127 +2088,6 @@
       ]
     },
     {
-      "id": "settings-home-coalesced",
-      "operation": "settings.home-providers",
-      "family": "settings.home-providers",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": ["stale-inflight-cleanup", "follow-up-cache-observation"],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "action": "load",
-          "id": "overlapping-load"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        },
-        {
-          "complete": "settings.get#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "follow-up-settled"
-        },
-        {
-          "action": "load",
-          "id": "third-load"
-        },
-        {
-          "checkpoint": "third-query"
-        }
-      ]
-    },
-    {
       "id": "settings-repo-cache-expiry",
       "operation": "settings.repo-metadata",
       "family": "settings.repo-metadata",
@@ -2402,7 +2105,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -2508,7 +2211,7 @@
       "id": "inventory-lifecycle",
       "operation": "workspace.file-inventory",
       "family": "legacy-inventory",
-      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-file-search.ts"],
       "schedules": ["reset", "unmount-remount", "blur-retained-route"],
       "steps": [
         {
@@ -2572,7 +2275,7 @@
       "id": "inventory-repeat-query",
       "operation": "workspace.file-inventory",
       "family": "legacy-inventory",
-      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-file-search.ts"],
       "schedules": ["normalized-repeat", "cache-cancels-debounce", "cache-stales-inflight"],
       "steps": [
         {
@@ -2725,7 +2428,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -2978,121 +2681,6 @@
       ]
     },
     {
-      "id": "settings-home-providers-refuse-after-data",
-      "operation": "settings.home-providers",
-      "family": "settings.home-providers",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": ["success-then-refused"],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        },
-        {
-          "checkpoint": "data-present"
-        },
-        {
-          "action": "load",
-          "id": "reload"
-        },
-        {
-          "checkpoint": "refresh-pending"
-        },
-        {
-          "complete": "settings.get#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "refused",
-              "message": "settings refused"
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "refused-after-data"
-        }
-      ]
-    },
-    {
       "id": "settings-resume-metadata-refuse-after-data",
       "operation": "settings.resume-metadata",
       "family": "settings.resume-metadata",
@@ -3271,7 +2859,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -3357,7 +2945,7 @@
         {
           "complete": "repo.list#2",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -4281,7 +3869,8 @@
           "complete": "worktree.set#2",
           "params": {
             "worktree": "id:repo42::/p",
-            "linkedPR": null
+            "linkedPR": null,
+            "suppressedGitHubPR": 12
           },
           "reply": {
             "ok": true,
@@ -4339,153 +3928,6 @@
         },
         {
           "checkpoint": "null-result-settled"
-        }
-      ]
-    },
-    {
-      "id": "sc-reveal-first-poll",
-      "operation": "source-control.session-diff-reveal",
-      "family": "session.tab-reveal",
-      "sites": ["mobile/src/source-control/reveal-mobile-source-control-session-diff.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "reveal",
-          "id": "reveal"
-        },
-        {
-          "checkpoint": "list-pending"
-        },
-        {
-          "complete": "session.tabs.list#1",
-          "params": {
-            "worktree": "id:repo42::/p"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "tabs": [
-                {
-                  "id": "tab-term",
-                  "type": "terminal"
-                },
-                {
-                  "id": "tab-other",
-                  "type": "file",
-                  "mode": "diff",
-                  "relativePath": "src/other.ts"
-                },
-                {
-                  "id": "tab-1",
-                  "type": "file",
-                  "mode": "diff",
-                  "relativePath": "src/app.ts",
-                  "diffSource": "unstaged"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "checkpoint": "activate-pending"
-        },
-        {
-          "complete": "session.tabs.activate#1",
-          "params": {
-            "worktree": "id:repo42::/p",
-            "tabId": "tab-1",
-            "notifyClients": false,
-            "navigation": "caller",
-            "intent": "user"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "activeTabId": "tab-1"
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
-      "id": "sc-reveal-timeout",
-      "operation": "source-control.session-diff-reveal",
-      "family": "session.tab-reveal",
-      "sites": ["mobile/src/source-control/reveal-mobile-source-control-session-diff.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "reveal",
-          "id": "reveal"
-        },
-        {
-          "complete": "session.tabs.list#1",
-          "params": {
-            "worktree": "id:repo42::/p"
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "refused",
-              "message": "no tabs"
-            }
-          }
-        },
-        {
-          "advance": 300
-        },
-        {
-          "complete": "session.tabs.list#2",
-          "params": {
-            "worktree": "id:repo42::/p"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "tabs": []
-            }
-          }
-        },
-        {
-          "checkpoint": "second-poll-empty"
-        },
-        {
-          "advance": 600
-        },
-        {
-          "complete": "session.tabs.list#3",
-          "params": {
-            "worktree": "id:repo42::/p"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "tabs": [
-                {
-                  "id": 1
-                }
-              ]
-            }
-          }
-        },
-        {
-          "advance": 900
-        },
-        {
-          "complete": "session.tabs.list#4",
-          "params": {
-            "worktree": "id:repo42::/p"
-          },
-          "reject": {
-            "message": "transport failure",
-            "deliveryUnknown": true
-          }
-        },
-        {
-          "checkpoint": "settled"
         }
       ]
     },
@@ -4695,7 +4137,12 @@
           "action": "apply",
           "id": "apply",
           "args": {
-            "blockedReason": "needs_push"
+            "blockedReason": "needs_push",
+            "upstreamStatus": {
+              "hasUpstream": true,
+              "ahead": 1,
+              "behind": 0
+            }
           }
         },
         {
@@ -4729,7 +4176,57 @@
           "action": "apply",
           "id": "apply",
           "args": {
-            "blockedReason": "no_upstream"
+            "blockedReason": "no_upstream",
+            "upstreamStatus": {
+              "hasUpstream": false,
+              "ahead": 0,
+              "behind": 0
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "baseRef": "origin/main"
+              }
+            }
+          }
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        },
+        {
+          "complete": "git.branchCompare#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "baseRef": "origin/main"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "summary": {
+                "baseRef": "origin/main",
+                "changedFiles": 1,
+                "status": "ready",
+                "commitsAhead": 2
+              },
+              "entries": []
+            }
           }
         },
         {
@@ -4762,7 +4259,12 @@
           "id": "apply",
           "args": {
             "blockedReason": "needs_sync",
-            "patchEquivalent": true
+            "upstreamStatus": {
+              "hasUpstream": true,
+              "ahead": 1,
+              "behind": 1,
+              "behindCommitsArePatchEquivalent": true
+            }
           }
         },
         {
@@ -5343,7 +4845,7 @@
               "defaultBaseRef": "main",
               "title": "Host title",
               "body": "Host body",
-              "canCreate": true,
+              "canCreate": false,
               "blockedReason": "needs_push",
               "nextAction": null,
               "reviewLookupOutcome": "not_found"
@@ -5619,7 +5121,7 @@
               "defaultBaseRef": "main",
               "title": "Host title",
               "body": "Host body",
-              "canCreate": true,
+              "canCreate": false,
               "blockedReason": "needs_push",
               "nextAction": null,
               "reviewLookupOutcome": "not_found"
@@ -7998,38 +7500,6 @@
       ]
     },
     {
-      "id": "home-host-stats",
-      "operation": "home.host-stats",
-      "family": "home.host-stats",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "stats-pending"
-        },
-        {
-          "complete": "stats.summary#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "totalWorktrees": 3,
-              "activeWorktrees": 1
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
       "id": "worktree-home-catalog",
       "operation": "worktree.home-catalog",
       "family": "worktree.home-catalog",
@@ -8047,7 +7517,9 @@
           "complete": "worktree.ps#1",
           "params": {
             "limit": 10000,
-            "supportsWorktreeVisibilitySourceDefaults": true
+            "supportsWorktreeVisibilitySourceDefaults": true,
+            "afterSnapshotId": null,
+            "acceptRowDelta": true
           },
           "reply": {
             "ok": true,
@@ -8093,7 +7565,8 @@
           "params": {
             "limit": 10000,
             "supportsWorktreeVisibilitySourceDefaults": true,
-            "afterSnapshotId": null
+            "afterSnapshotId": null,
+            "acceptRowDelta": true
           },
           "reply": {
             "ok": true,
@@ -8133,7 +7606,8 @@
           "params": {
             "limit": 10000,
             "supportsWorktreeVisibilitySourceDefaults": true,
-            "afterSnapshotId": null
+            "afterSnapshotId": null,
+            "acceptRowDelta": true
           },
           "reply": {
             "ok": true
@@ -8234,13 +7708,30 @@
           "id": "delete"
         },
         {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": false,
+              "hooks": null,
+              "setupRunPolicy": "run-by-default",
+              "source": null,
+              "setupConfig": null
+            }
+          }
+        },
+        {
           "checkpoint": "delete-optimistic"
         },
         {
           "complete": "worktree.rm#1",
           "params": {
             "worktree": "id:wt-1",
-            "force": true
+            "force": true,
+            "runHooks": false
           },
           "reply": {
             "ok": true,
@@ -8270,13 +7761,31 @@
           "id": "delete"
         },
         {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": false,
+              "hooks": null,
+              "setupRunPolicy": "run-by-default",
+              "source": null,
+              "setupConfig": null,
+              "archiveTrust": null
+            }
+          }
+        },
+        {
           "checkpoint": "delete-optimistic"
         },
         {
           "complete": "worktree.rm#1",
           "params": {
             "worktree": "id:wt-1",
-            "force": true
+            "force": true,
+            "runHooks": true
           },
           "reply": {
             "ok": false,
@@ -8288,6 +7797,181 @@
         },
         {
           "checkpoint": "restored"
+        }
+      ]
+    },
+    {
+      "id": "host-worktree-delete-archive-hook-failed",
+      "operation": "host.worktree-actions",
+      "family": "host.worktree-actions",
+      "sites": ["mobile/src/host-screen/use-host-worktree-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "delete",
+          "id": "delete"
+        },
+        {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": true,
+              "hooks": {
+                "scripts": {
+                  "archive": "make clean"
+                }
+              },
+              "setupRunPolicy": "run-by-default",
+              "source": "orca.yaml",
+              "setupConfig": null,
+              "archiveTrust": {
+                "contentHash": "archive-hash-1",
+                "scriptContent": "make clean"
+              }
+            }
+          }
+        },
+        {
+          "complete": "ui.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {
+                "trustedOrcaHooks": {}
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "trust-prompt"
+        },
+        {
+          "action": "approve-archive-trust",
+          "id": "approve-archive-trust"
+        },
+        {
+          "complete": "ui.set#1",
+          "params": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "archive": {
+                  "contentHash": "archive-hash-1",
+                  "approvedAt": 1767225600000
+                }
+              }
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "delete-optimistic"
+        },
+        {
+          "complete": "worktree.rm#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "force": true,
+            "runHooks": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "worktree_archive_hook_failed",
+              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 — exited 1.",
+              "data": {
+                "worktreePath": "/repos/marlin/wt-1",
+                "outcome": "exited",
+                "exitCode": 1,
+                "output": ""
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "archive-hook-failed"
+        },
+        {
+          "action": "delete-anyway",
+          "id": "delete-anyway"
+        },
+        {
+          "complete": "repo.hooks#2",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": true,
+              "hooks": {
+                "scripts": {
+                  "archive": "make clean"
+                }
+              },
+              "setupRunPolicy": "run-by-default",
+              "source": "orca.yaml",
+              "setupConfig": null,
+              "archiveTrust": {
+                "contentHash": "archive-hash-1",
+                "scriptContent": "make clean"
+              }
+            }
+          }
+        },
+        {
+          "complete": "ui.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {
+                "trustedOrcaHooks": {
+                  "repo-1": {
+                    "archive": {
+                      "contentHash": "archive-hash-1",
+                      "approvedAt": 1767225600000
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "complete": "worktree.rm#2",
+          "params": {
+            "worktree": "id:wt-1",
+            "force": true,
+            "runHooks": true,
+            "allowFailedArchiveHook": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
         }
       ]
     },
@@ -8359,7 +8043,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8608,7 +8294,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8631,7 +8319,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8656,7 +8346,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8709,7 +8401,7 @@
             "ok": true,
             "result": {
               "worktree": {
-                "linkedPR": 12
+                "linkedPR": null
               }
             }
           }
@@ -8722,8 +8414,11 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": 12
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
           },
+          "paramsFollowDivergence": true,
           "reply": {
             "ok": true,
             "result": {
@@ -8808,7 +8503,7 @@
             "ok": true,
             "result": {
               "worktree": {
-                "linkedPR": 12
+                "linkedPR": null
               }
             }
           }
@@ -8821,8 +8516,11 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": 12
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
           },
+          "paramsFollowDivergence": true,
           "reply": {
             "ok": true,
             "result": {
@@ -9227,6 +8925,83 @@
         },
         {
           "checkpoint": "delete-comment"
+        }
+      ]
+    },
+    {
+      "id": "pr-line-comment-and-file-viewed",
+      "operation": "session.pr-mutations",
+      "family": "github.pr-comment-mutation",
+      "sites": ["mobile/src/session/github-pr-review-line-mutations.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "line-comment",
+          "id": "line-comment"
+        },
+        {
+          "complete": "github.addPRReviewComment#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "commitId": "head-sha-1",
+            "path": "src/app.ts",
+            "line": 5,
+            "body": "recorded line comment",
+            "startLine": 3
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true,
+              "comment": {
+                "id": 57
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "line-comment"
+        },
+        {
+          "action": "file-viewed",
+          "id": "viewed"
+        },
+        {
+          "complete": "github.setPRFileViewed#1",
+          "params": {
+            "repo": "id:repo-9",
+            "pullRequestId": "PR_kwDO",
+            "path": "src/app.ts",
+            "viewed": true
+          },
+          "reply": {
+            "ok": true,
+            "result": true
+          }
+        },
+        {
+          "checkpoint": "viewed"
+        },
+        {
+          "action": "file-viewed",
+          "id": "refused"
+        },
+        {
+          "complete": "github.setPRFileViewed#2",
+          "params": {
+            "repo": "id:repo-9",
+            "pullRequestId": "PR_kwDO",
+            "path": "src/app.ts",
+            "viewed": true
+          },
+          "reply": {
+            "ok": true,
+            "result": false
+          }
+        },
+        {
+          "checkpoint": "refused"
         }
       ]
     },
@@ -10159,6 +9934,82 @@
         },
         {
           "checkpoint": "no-compare"
+        }
+      ]
+    },
+    {
+      "id": "diff-review-commit-file-diff",
+      "operation": "session.diff-review-load",
+      "family": "session.diff-review",
+      "sites": [
+        "mobile/src/session/mobile-diff-review-loaders.ts",
+        "mobile/src/session/mobile-diff-review-commit-loader.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "commit-snapshot",
+          "id": "commit"
+        },
+        {
+          "complete": "git.commitCompare#1",
+          "params": {
+            "worktree": "id:repo-9::/w",
+            "commitId": "c0ffee0123456789abcdef0123456789abcdef01"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "summary": {
+                "commitOid": "c0ffee0123456789abcdef0123456789abcdef01",
+                "parentOid": "beef0123456789abcdef0123456789abcdef0123",
+                "compareRef": "c0ffee0",
+                "baseRef": "beef012",
+                "changedFiles": 1,
+                "status": "ready"
+              },
+              "entries": [
+                {
+                  "path": "src/app.ts",
+                  "status": "modified",
+                  "added": 2,
+                  "removed": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "commit"
+        },
+        {
+          "action": "diff",
+          "id": "commit-file",
+          "args": {
+            "scope": "commit"
+          }
+        },
+        {
+          "complete": "git.commitDiff#1",
+          "params": {
+            "worktree": "id:repo-9::/w",
+            "filePath": "src/app.ts",
+            "commitOid": "c0ffee0123456789abcdef0123456789abcdef01",
+            "parentOid": "beef0123456789abcdef0123456789abcdef0123"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "text",
+              "originalContent": "a\n",
+              "modifiedContent": "a\nb\n",
+              "originalIsBinary": false,
+              "modifiedIsBinary": false
+            }
+          }
+        },
+        {
+          "checkpoint": "commit-file"
         }
       ]
     },
@@ -11646,7 +11497,10 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "type": "issue"
           },
@@ -11689,7 +11543,10 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "type": "issue"
           },
@@ -12522,7 +12379,10 @@
           "params": {
             "body": "a comment",
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12563,7 +12423,10 @@
           "params": {
             "body": "a comment",
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12859,7 +12722,10 @@
           "params": {
             "iid": 7,
             "method": "squash",
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12893,7 +12759,10 @@
           "complete": "gitlab.updateIssue#1",
           "params": {
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "state": "closed"
@@ -12955,7 +12824,10 @@
           "complete": "gitlab.updateMRState#1",
           "params": {
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "state": "closed"
           },
@@ -13027,7 +12899,10 @@
           "complete": "gitlab.updateIssue#1",
           "params": {
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -13065,7 +12940,10 @@
           "complete": "gitlab.updateMR#1",
           "params": {
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -14447,7 +14325,8 @@
           "params": {
             "audioBase64": "ACVKb5S53gM=",
             "dictationId": "dictation-1",
-            "sampleRate": 16000
+            "sampleRate": 16000,
+            "seq": 0
           },
           "reply": {
             "ok": true,
@@ -14765,10 +14644,7 @@
       "id": "terminal-raw-input-reported",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": [
-        "mobile/src/terminal/terminal-live-accessory-raw-send.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
-      ],
+      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -14796,18 +14672,6 @@
           }
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
           "checkpoint": "reported"
         }
       ]
@@ -14816,10 +14680,7 @@
       "id": "terminal-raw-input-refused",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": [
-        "mobile/src/terminal/terminal-live-accessory-raw-send.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
-      ],
+      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -14848,78 +14709,6 @@
         },
         {
           "checkpoint": "not-reported"
-        }
-      ]
-    },
-    {
-      "id": "terminal-takeover-report-retried",
-      "operation": "terminal.takeover-report",
-      "family": "terminal.takeover-report",
-      "sites": ["mobile/src/terminal/worker-terminal-takeover-report.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "report",
-          "id": "report"
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "refused",
-              "message": "busy"
-            }
-          }
-        },
-        {
-          "advance": 250
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#2",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
-          "checkpoint": "reported-on-retry"
-        }
-      ]
-    },
-    {
-      "id": "terminal-takeover-report-accepted",
-      "operation": "terminal.takeover-report",
-      "family": "terminal.takeover-report",
-      "sites": ["mobile/src/terminal/worker-terminal-takeover-report.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "report",
-          "id": "report"
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
-          "checkpoint": "reported"
         }
       ]
     },
@@ -16143,7 +15932,7 @@
       "id": "native-chat-image-paste-single",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16199,7 +15988,7 @@
       "id": "native-chat-image-paste-two-images",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16275,7 +16064,7 @@
       "id": "native-chat-image-paste-stops-on-rejection",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16331,7 +16120,7 @@
       "id": "native-chat-image-paste-trailing-image",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16387,7 +16176,7 @@
       "id": "native-chat-write-accepted",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16415,18 +16204,6 @@
           }
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
-            }
-          }
-        },
-        {
           "checkpoint": "accepted"
         }
       ]
@@ -16435,7 +16212,7 @@
       "id": "native-chat-write-rejected",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16471,7 +16248,7 @@
       "id": "native-chat-write-delivery-unknown",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16503,7 +16280,7 @@
       "id": "native-chat-write-clear-line",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16539,7 +16316,7 @@
       "id": "native-chat-write-typed-command",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16563,18 +16340,6 @@
               "send": {
                 "accepted": true
               }
-            }
-          }
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
             }
           }
         },
@@ -16656,7 +16421,9 @@
       "id": "native-chat-session-option-pick-written",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -16692,7 +16459,9 @@
       "id": "native-chat-session-option-pick-refused",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -16729,7 +16498,9 @@
       "id": "native-chat-session-option-pick-empty",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -17596,6 +17367,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
@@ -17634,6 +17406,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
@@ -17672,6 +17445,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
@@ -17702,6 +17476,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
@@ -17720,7 +17495,7 @@
       "id": "native-chat-readability-local-repo",
       "operation": "session.native-chat-readability",
       "family": "session.native-chat-readability",
-      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "sites": ["mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17753,7 +17528,7 @@
       "id": "native-chat-readability-remote-repo",
       "operation": "session.native-chat-readability",
       "family": "session.native-chat-readability",
-      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "sites": ["mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17786,7 +17561,7 @@
       "id": "native-chat-readability-refused",
       "operation": "session.native-chat-readability",
       "family": "session.native-chat-readability",
-      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "sites": ["mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17815,7 +17590,7 @@
       "id": "native-chat-stop-accepted",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17842,22 +17617,10 @@
           }
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
-            }
-          }
-        },
-        {
           "checkpoint": "first-accepted"
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",
@@ -17888,7 +17651,7 @@
       "id": "native-chat-stop-both-rejected",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17915,7 +17678,7 @@
           }
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",
@@ -17946,7 +17709,7 @@
       "id": "native-chat-stop-delivery-unknown",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17969,7 +17732,7 @@
           }
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",
@@ -18346,7 +18109,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18358,6 +18121,17 @@
           "complete": "worktree.set#1",
           "params": {
             "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -18412,7 +18186,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18424,6 +18198,17 @@
           "complete": "worktree.set#1",
           "params": {
             "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -18479,7 +18264,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18514,7 +18299,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18550,7 +18335,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18586,7 +18371,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18628,7 +18413,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18688,7 +18473,7 @@
             },
             "prompt": {
               "delivery": "submit",
-              "text": "You are reviewing the current worktree. Address the following mobile review notes.\n\nFile: src/app.ts\nLine: 4\nUser comment: \"needs a test\"\n\nAfter applying fixes:\n1. Summarize changed files.\n2. Run relevant tests.\n3. Tell me if anything remains risky."
+              "text": "File: src/app.ts\nLine: 4\nUser comment: \"needs a test\""
             },
             "launchSource": "notes_send"
           },
@@ -18983,7 +18768,7 @@
       "id": "native-chat-image-upload-start-refused",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19013,7 +18798,7 @@
       "id": "native-chat-image-upload-single",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19066,7 +18851,7 @@
       "id": "native-chat-image-upload-two",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19156,7 +18941,7 @@
       "id": "native-chat-image-upload-second-fails",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19223,7 +19008,7 @@
       "id": "native-chat-image-upload-cancelled",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19534,8 +19319,7 @@
       "family": "session.terminal-paste",
       "sites": [
         "mobile/src/session/use-mobile-terminal-paste.ts",
-        "mobile/src/session/use-mobile-session-accessory-selection.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
+        "mobile/src/session/use-mobile-session-accessory-selection.ts"
       ],
       "schedules": [],
       "steps": [
@@ -19588,18 +19372,6 @@
               "send": {
                 "accepted": true
               }
-            }
-          }
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
             }
           }
         },
@@ -19730,10 +19502,7 @@
       "id": "terminal-input-send-accepted",
       "operation": "session.terminal-input-send",
       "family": "session.terminal-input-send",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-send-actions.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-send-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19771,18 +19540,6 @@
               "send": {
                 "accepted": true
               }
-            }
-          }
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
             }
           }
         },
@@ -19877,69 +19634,7 @@
           }
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
           "checkpoint": "live-sent"
-        }
-      ]
-    },
-    {
-      "id": "home-host-accounts",
-      "operation": "home.host-accounts",
-      "family": "home.host-accounts",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "accounts-pending"
-        },
-        {
-          "complete": "accounts.list#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "claude": {
-                "accounts": [
-                  {
-                    "id": "claude-1",
-                    "email": "claude@example.test",
-                    "updatedAt": 1700000000000
-                  }
-                ],
-                "activeAccountId": "claude-1"
-              },
-              "codex": {
-                "accounts": [],
-                "activeAccountId": null
-              },
-              "rateLimits": {
-                "claude": null,
-                "codex": null,
-                "inactiveClaudeAccounts": [],
-                "inactiveCodexAccounts": []
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "accounts-published"
         }
       ]
     },
@@ -19950,7 +19645,18 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": {
+          "status": "granted",
+          "canAskAgain": true
+        },
+        "pushToken": {
+          "type": "ios",
+          "data": "fixture-apns-token"
+        }
       },
       "steps": [
         {
@@ -19989,7 +19695,18 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": {
+          "status": "granted",
+          "canAskAgain": true
+        },
+        "pushToken": {
+          "type": "ios",
+          "data": "fixture-apns-token"
+        }
       },
       "steps": [
         {
@@ -20029,7 +19746,18 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": {
+          "status": "granted",
+          "canAskAgain": true
+        },
+        "pushToken": {
+          "type": "ios",
+          "data": "fixture-apns-token"
+        }
       },
       "steps": [
         {
@@ -20069,7 +19797,18 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": {
+          "status": "granted",
+          "canAskAgain": true
+        },
+        "pushToken": {
+          "type": "ios",
+          "data": "fixture-apns-token"
+        }
       },
       "steps": [
         {
@@ -20609,7 +20348,8 @@
         {
           "complete": "git.status#1",
           "params": {
-            "worktree": "id:repo42::/p"
+            "worktree": "id:repo42::/p",
+            "includeLineStats": false
           },
           "reply": {
             "ok": true,
@@ -20704,9 +20444,9 @@
       ]
     },
     {
-      "id": "sc-history-commit-files",
-      "operation": "source-control.history-commit-files",
-      "family": "git.history-commit-files",
+      "id": "sc-history-branch-commits",
+      "operation": "source-control.history-branch-commits",
+      "family": "git.history-branch-commits",
       "sites": ["mobile/src/source-control/MobileGitHistoryList.tsx"],
       "schedules": [],
       "steps": [
@@ -20715,13 +20455,50 @@
           "id": "mount"
         },
         {
+          "checkpoint": "base-pending"
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "baseRef": "origin/main"
+              }
+            }
+          }
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo42",
+                  "worktreeBaseRef": null
+                }
+              ]
+            }
+          }
+        },
+        {
           "checkpoint": "history-pending"
         },
         {
           "complete": "git.history#1",
           "params": {
             "worktree": "id:repo42::/p",
-            "limit": 50
+            "limit": 50,
+            "skip": 0,
+            "baseRef": "origin/main",
+            "branchOnly": true
           },
           "reply": {
             "ok": true,
@@ -20733,87 +20510,33 @@
                   "subject": "first",
                   "author": "dev",
                   "parentIds": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
-                  "timestamp": 1767222000000
+                  "timestamp": 1767222000000,
+                  "pushed": false,
+                  "statistics": {
+                    "files": 2,
+                    "insertions": 13,
+                    "deletions": 1
+                  },
+                  "message": "first\n\nExplains the change.\n\nCo-authored-by: Pair <pair@example.test>"
                 }
-              ]
-            }
-          }
-        },
-        {
-          "action": "expand",
-          "id": "expand"
-        },
-        {
-          "checkpoint": "files-pending"
-        },
-        {
-          "complete": "git.commitCompare#1",
-          "params": {
-            "worktree": "id:repo42::/p",
-            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "entries": [
-                {
-                  "path": "src/app.ts",
-                  "added": 4,
-                  "removed": 1
+              ],
+              "hasMore": false,
+              "skip": 0,
+              "branch": {
+                "baseRef": {
+                  "id": "refs/remotes/origin/main",
+                  "name": "origin/main"
                 },
-                {
-                  "path": "src/other.ts",
-                  "status": "added",
-                  "added": 9,
-                  "removed": 0
-                }
-              ]
+                "ahead": 1,
+                "behind": 2,
+                "unpushed": 1
+              }
             }
           }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
-      "id": "sc-branch-diff-previewed",
-      "operation": "source-control.branch-diff-preview",
-      "family": "git.branch-diff-preview",
-      "sites": ["mobile/src/source-control/use-mobile-source-control-openers.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
         },
         {
           "action": "open",
           "id": "open"
-        },
-        {
-          "checkpoint": "diff-pending"
-        },
-        {
-          "complete": "git.branchDiff#1",
-          "params": {
-            "worktree": "id:repo42::/p",
-            "filePath": "src/app.ts",
-            "compare": {
-              "baseRef": "origin/main",
-              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
-              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
-              "mergeBase": "0123456789abcdef0123456789abcdef01234567"
-            }
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "kind": "text",
-              "originalContent": "const a = 1\nexport { a }\n",
-              "modifiedContent": "const a = 2\nexport { a }\n"
-            }
-          }
         },
         {
           "checkpoint": "settled"
@@ -21104,7 +20827,7 @@
       "id": "native-chat-page-earlier",
       "operation": "session.native-chat-page",
       "family": "session.native-chat-page",
-      "sites": ["mobile/src/session/use-mobile-native-chat-session.ts"],
+      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-session.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21122,7 +20845,8 @@
             "limit": 40,
             "subscriptionId": "claude:session-1:00000000-0000-4000-8000-000000000001",
             "capabilities": {
-              "transcriptPending": 1
+              "transcriptPending": 1,
+              "transcriptSourceOrder": 1
             },
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },
@@ -21178,6 +20902,9 @@
             "agent": "claude",
             "sessionId": "session-1",
             "limit": 60,
+            "capabilities": {
+              "transcriptSourceOrder": 1
+            },
             "beforeOffset": 1200,
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },
@@ -21233,7 +20960,8 @@
             "limit": 40,
             "subscriptionId": "claude:session-1:00000000-0000-4000-8000-000000000001",
             "capabilities": {
-              "transcriptPending": 1
+              "transcriptPending": 1,
+              "transcriptSourceOrder": 1
             },
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },
@@ -21345,18 +21073,6 @@
           "checkpoint": "sent"
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
-            }
-          }
-        },
-        {
           "checkpoint": "reported"
         },
         {
@@ -21374,7 +21090,10 @@
           "reply": {
             "ok": true,
             "result": {
-              "cleared": true
+              "clear": {
+                "handle": "terminal-1",
+                "cleared": true
+              }
             }
           }
         },
@@ -22880,7 +22599,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -22923,26 +22642,6 @@
         },
         {
           "checkpoint": "discarded"
-        },
-        {
-          "action": "stage-reviewed",
-          "id": "stage-reviewed"
-        },
-        {
-          "complete": "git.stage#2",
-          "params": {
-            "filePath": "src/app.ts",
-            "worktree": "id:workspace-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "staged": true
-            }
-          }
-        },
-        {
-          "checkpoint": "swept"
         }
       ]
     },
@@ -22955,7 +22654,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [

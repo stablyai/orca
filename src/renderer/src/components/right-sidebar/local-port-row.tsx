@@ -56,8 +56,7 @@ export function LocalPortRow({
 
   const handleOpenBrowserButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
-      // Why: keyboard activations have detail=0; only pointer clicks carry
-      // the modifier intent for the system-browser escape hatch.
+      // Keyboard clicks have detail=0; only pointer clicks carry the system-browser modifier intent.
       handleOpenBrowser(event.detail > 0 ? event : undefined)
       if (event.detail > 0) {
         event.currentTarget.blur()
@@ -76,14 +75,21 @@ export function LocalPortRow({
     [onStop, port]
   )
 
-  const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const processLabel =
+    port.processName ??
+    (port.pid
+      ? `PID ${port.pid}`
+      : translate('auto.components.right.sidebar.PortsPanel.unknownProcess', 'Unknown process'))
   const address = addressForPort(port)
   const ownerLabel =
     port.kind === 'workspace'
       ? port.owner.displayName
       : port.kind === 'container'
-        ? 'Container or forwarded service'
-        : 'Unassigned'
+        ? translate(
+            'auto.components.right.sidebar.PortsPanel.containerOrForwardedService',
+            'Container or forwarded service'
+          )
+        : translate('auto.components.right.sidebar.PortsPanel.unassigned', 'Unassigned')
   const openBrowserLabel = translate(
     'auto.components.right.sidebar.PortsPanel.b22b128b2a',
     'Open in Browser'

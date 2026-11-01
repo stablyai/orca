@@ -17,7 +17,7 @@ export type ResolvedWorktree = Worktree & {
 }
 
 export function branchSelectorMatches(branch: string, selector: string): boolean {
-  // Why: Git can report a local branch as `refs/heads/foo` or `foo` depending on the plumbing path; accept either.
+  // Git plumbing may report local branches with or without refs/heads/.
   return normalizeLocalBranchName(branch) === normalizeLocalBranchName(selector)
 }
 
@@ -40,7 +40,7 @@ export function createIncrementalResolvedWorktreeLookup(
       const worktree = resolvedWorktrees[indexedCount]
       indexedCount += 1
       const key = worktreeIdentityKey(worktree.id)
-      // Why: preserve Array.find's first match when normalized identities collide.
+      // Preserve Array.find's first match when normalized identities collide.
       if (!worktreeByIdentity.has(key)) {
         worktreeByIdentity.set(key, worktree)
       }
@@ -107,10 +107,7 @@ export function findResolvedWorktreeIdForPath(
   const matches = resolvedWorktrees
     .filter((worktree) => isPathInsideOrEqual(worktree.path, cwd))
     .sort((left, right) => right.path.length - left.path.length)
-  // Why: a cwd cannot distinguish folder-workspace siblings, which all share one
-  // directory. Break that tie toward the caller's target instead of store order,
-  // so an unattributed PTY still lands in the workspace being listed. Only ties at
-  // the deepest path qualify — a nested worktree must still beat its parent.
+  // Folder siblings share cwd: prefer the caller's target only among deepest-path ties, never over a nested worktree.
   const deepest = matches.filter((worktree) => worktree.path.length === matches[0]?.path.length)
   return (
     (deepest.length > 1

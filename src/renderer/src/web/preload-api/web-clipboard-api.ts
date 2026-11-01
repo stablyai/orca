@@ -47,9 +47,7 @@ async function readClipboardImageBlob(): Promise<Blob | null> {
   return null
 }
 
-/** Web counterpart of the main-process clipboard probe: decodes the clipboard
- *  image once and returns a small preview so the composer can show a chip while
- *  the full image is still being uploaded to the runtime. */
+/** Decode once for a small composer preview while the full clipboard image uploads to the runtime. */
 export async function readClipboardImageThumbnail(): Promise<ClipboardImageThumbnail | null> {
   const blob = await readClipboardImageBlob()
   if (!blob) {
@@ -113,6 +111,23 @@ export async function writeWebClipboardText(text: string): Promise<void> {
   if (!copyClipboardTextViaExecCommand(text)) {
     throw new Error('Clipboard write is unavailable in this browser context')
   }
+}
+
+const PNG_DATA_URL_PREFIX = 'data:image/png;base64,'
+
+export async function writeWebClipboardImage(dataUrl: string): Promise<void> {
+  if (!dataUrl.startsWith(PNG_DATA_URL_PREFIX)) {
+    return
+  }
+  if (typeof ClipboardItem === 'undefined' || typeof navigator.clipboard?.write !== 'function') {
+    throw new Error('Image clipboard is unavailable in this browser context')
+  }
+  const binary = atob(dataUrl.slice(PNG_DATA_URL_PREFIX.length))
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  assertClipboardImageBlobWithinLimit(new Blob([bytes]))
+  await navigator.clipboard.write([
+    new ClipboardItem({ 'image/png': new Blob([bytes], { type: 'image/png' }) })
+  ])
 }
 
 export async function saveClipboardImageAsTempFileInRuntime(

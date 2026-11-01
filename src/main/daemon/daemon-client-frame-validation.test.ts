@@ -31,7 +31,6 @@ function createMockSubprocess(): SubprocessHandle {
   }
 }
 
-/** Writes raw lines and resolves with whatever came back once the daemon closes the socket. */
 function sendRawFrames(socketPath: string, lines: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket: Socket = connect({ path: socketPath })

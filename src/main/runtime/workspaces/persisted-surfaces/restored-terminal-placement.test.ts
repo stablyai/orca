@@ -86,7 +86,8 @@ describe('main’s startup pass over the host census, layout-owner build', () =>
         workspace: FOLDER_KEY,
         adopt: { ptyId: 'pty-agent', incarnationId: 'inc-1' }
       }),
-      ['local']
+      ['local'],
+      {}
     )
   })
 
@@ -102,7 +103,6 @@ describe('main’s startup pass over the host census, layout-owner build', () =>
     await runtime.placeUnshownLiveTerminals()
     expect(applyLayoutCommand).not.toHaveBeenCalled()
 
-    // The terminal service restarted and reports a terminal no pane shows.
     live.push({ ...LIVE_PTY(FOLDER_KEY), id: 'pty-late' })
     notifyLocalPtyProviderRebound()
 

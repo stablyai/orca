@@ -55,6 +55,7 @@ import {
   resetSshCredentialDeclinesForTests
 } from '../ssh-credential-decline'
 import { isAuthError } from '../ssh-reconnect-error-classification'
+import { isSshSessionStartFailure } from '../ssh-session-start-failure'
 import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from '../ssh-user-disconnect'
 
 const target = {
@@ -89,6 +90,14 @@ describe('SshConnectionManager', () => {
     await expect(manager.connect(target)).rejects.toThrow('auth failed')
     expect(mockState.instances.at(-1)?.disconnect).toHaveBeenCalledWith({ quiet: true })
     expect(manager.getConnection(target.id)).toBeUndefined()
+  })
+
+  it('marks a dial that never reached the host, so setup reports SSH’s reason', async () => {
+    const refused = new Error('connect ECONNREFUSED 10.0.0.1:22')
+    mockState.connectResults.push(Promise.reject(refused))
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    await expect(manager.connect(target)).rejects.toBe(refused)
+    expect(isSshSessionStartFailure(new Error('Deploy failed', { cause: refused }))).toBe(true)
   })
 
   it('removes the registration when bulk teardown fails', async () => {
@@ -230,7 +239,6 @@ describe('SshConnectionManager after a cancelled sign-in', () => {
   })
 
   it('refuses an automatic dial as an auth failure without opening a connection', async () => {
-    // Every automatic path (managed tunnel, host status, census, deploy) dials through here.
     const manager = new SshConnectionManager({ onStateChange: vi.fn() })
     recordSshCredentialDeclined(target.id)
 
@@ -281,7 +289,6 @@ describe('SshConnectionManager after a user Disconnect', () => {
   })
 
   it('refuses the background dials that revived the host, without opening a connection', async () => {
-    // A managed server's tunnel, its status checks, a census and host-resume recovery dial here.
     const manager = new SshConnectionManager({ onStateChange: vi.fn() })
     await manager.connect(target)
     await manager.disconnect(target.id)

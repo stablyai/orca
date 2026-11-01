@@ -1,4 +1,7 @@
-import { extname } from 'node:path'
+import {
+  IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
+  filePreviewExtension
+} from '../../../shared/file-preview-kind'
 import { localLogFileIdentity } from '../../ai-vault/local-log-tail-reader'
 import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/binary-buffer'
 import {
@@ -8,25 +11,14 @@ import {
   readLocalFilePrefix
 } from './local-regular-file-read'
 
-// Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
-export const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
-// Why: previewable binaries are base64 blobs (not parsed as text), and local IPC has no frame limit (unlike the relay's 10MB), so 50MB is safe.
-export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
-export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.avif': 'image/avif',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-  '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
-}
+// Monaco degrades features on large files; a 5MB cap would reject ordinary logs and JSON.
+export const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024
+export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
 
 export type LocalFileContent = {
   mediaUrl?: string
+  /** Bytes behind `mediaUrl`, for viewers that no longer see the content. */
+  size?: number
   content: string
   isBinary: boolean
   isImage?: boolean
@@ -38,7 +30,7 @@ export type LocalFileContent = {
 export async function readLocalFileContent(filePath: string): Promise<LocalFileContent> {
   const { handle, stats } = await openLocalRegularFile(filePath)
   try {
-    const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
+    const mimeType = IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePreviewExtension(filePath)]
     const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
     if (stats.size > sizeLimit) {
       throw fileTooLargeError(stats.size, sizeLimit)
@@ -48,12 +40,12 @@ export async function readLocalFileContent(filePath: string): Promise<LocalFileC
       return {
         content: buffer.toString('base64'),
         isBinary: true,
-        // Why: the renderer keys previewable-binary rendering off `isImage`, so set it for PDFs too to stay compatible.
+        // Existing renderer preview selection uses isImage for PDFs as well.
         isImage: true,
         mimeType
       }
     }
-    // Why: probe large unknown files first so archives aren't fully buffered only to discover they aren't editable text.
+    // Probe large unknown binaries before allocating their whole body.
     if (
       stats.size > BINARY_PROBE_BYTES &&
       isBinaryBuffer(await readLocalFilePrefix(handle, BINARY_PROBE_BYTES))

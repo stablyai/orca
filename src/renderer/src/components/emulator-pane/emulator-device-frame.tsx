@@ -29,6 +29,7 @@ import {
 import { PhoneHardwareButtons } from './emulator-phone-hardware-buttons'
 import { EmulatorScreenSurface } from './emulator-screen-surface'
 import { useEmulatorControlStream } from './use-emulator-control-stream'
+import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
 import { useEmulatorPaneSize } from './use-emulator-pane-size'
 import { useEmulatorScreenKeyboard } from './use-emulator-screen-keyboard'
 import { useEmulatorStreamWindowVisible } from './use-emulator-stream-window-visibility'
@@ -82,15 +83,16 @@ export function EmulatorDeviceFrame({
   const wheelGestureRef = useRef<PendingWheelGesture | null>(null)
   const [streamError, setStreamError] = useState(false)
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
-  const visualStreamGeometry = useMemo(
-    () => resolveVisualStreamGeometry(streamSize, visualOrientation),
-    [streamSize, visualOrientation]
-  )
   const canInteract = isLive && !loading && !streamError
-  const { cancelKeyboardFrames, sendKeyboardFrames, sendTouch } = useEmulatorControlStream(
-    wsUrl,
-    canInteract
+  const scrcpyDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
+  const { cancelKeyboardFrames, reportedOrientation, sendKeyboardFrames, sendTouch } =
+    useEmulatorControlStream(wsUrl, canInteract, scrcpyDeviceId)
+  const visualStreamGeometry = useMemo(
+    () => resolveVisualStreamGeometry(streamSize, visualOrientation, reportedOrientation),
+    [reportedOrientation, streamSize, visualOrientation]
   )
+  // serve-sim takes touches in raw panel coordinates, so input undoes the picture's turn.
+  const inputRotation = scrcpyDeviceId ? 0 : visualStreamGeometry.streamRotation
   const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
     useEmulatorScreenKeyboard({
       cancelKeyboardFrames,
@@ -108,9 +110,10 @@ export function EmulatorDeviceFrame({
       mapClientPointToSimulatorScreen(
         { clientX: event.clientX, clientY: event.clientY },
         event.currentTarget.getBoundingClientRect(),
-        visualStreamGeometry.size
+        visualStreamGeometry.size,
+        inputRotation
       ),
-    [visualStreamGeometry.size]
+    [inputRotation, visualStreamGeometry.size]
   )
 
   const sendGesturePoints = useCallback(
@@ -179,9 +182,8 @@ export function EmulatorDeviceFrame({
       activePointerIdRef.current = event.pointerId
       pointerSamplesRef.current = [{ clientX: event.clientX, clientY: event.clientY }]
       lastTouchPointRef.current = point
-      liveTouchEdgeRef.current = resolveEmulatorHomeIndicatorEdge(point)
-      // Why: serve-sim's native viewer streams touch phases live; replaying the
-      // whole drag after pointer-up can be ignored by iOS gesture recognizers.
+      liveTouchEdgeRef.current = resolveEmulatorHomeIndicatorEdge(point, inputRotation)
+      // Send touch phases live; iOS gesture recognizers can ignore whole drags replayed only on pointer-up.
       liveTouchRef.current = sendTouch(
         buildEmulatorGesturePoint(point, 'begin', liveTouchEdgeRef.current)
       )
@@ -189,7 +191,7 @@ export function EmulatorDeviceFrame({
         event.currentTarget.setPointerCapture(event.pointerId)
       } catch {}
     },
-    [canInteract, enableKeyboardCapture, mapEventToScreenPoint, sendTouch]
+    [canInteract, enableKeyboardCapture, inputRotation, mapEventToScreenPoint, sendTouch]
   )
 
   const handlePointerMove = useCallback(
@@ -267,7 +269,9 @@ export function EmulatorDeviceFrame({
       const action = resolveEmulatorPointerAction(
         samples,
         event.currentTarget.getBoundingClientRect(),
-        visualStreamGeometry.size
+        visualStreamGeometry.size,
+        undefined,
+        inputRotation
       )
       if (!action) {
         return
@@ -278,7 +282,15 @@ export function EmulatorDeviceFrame({
         sendGesturePoints(action.points)
       }
     },
-    [canInteract, mapEventToScreenPoint, onTap, sendGesturePoints, sendTouch, visualStreamGeometry]
+    [
+      canInteract,
+      inputRotation,
+      mapEventToScreenPoint,
+      onTap,
+      sendGesturePoints,
+      sendTouch,
+      visualStreamGeometry
+    ]
   )
 
   const handleWheel = useCallback(
@@ -295,7 +307,9 @@ export function EmulatorDeviceFrame({
           deltaY: event.deltaY
         },
         event.currentTarget.getBoundingClientRect(),
-        visualStreamGeometry.size
+        visualStreamGeometry.size,
+        undefined,
+        inputRotation
       )
       if (!delta) {
         return
@@ -322,7 +336,7 @@ export function EmulatorDeviceFrame({
         timerId: window.setTimeout(flushWheelGesture, WHEEL_GESTURE_IDLE_MS)
       }
     },
-    [canInteract, flushWheelGesture, sendTouch, visualStreamGeometry]
+    [canInteract, flushWheelGesture, inputRotation, sendTouch, visualStreamGeometry]
   )
 
   const handleStreamSize = useCallback((size: NonNullable<StreamSize>) => {
@@ -336,16 +350,11 @@ export function EmulatorDeviceFrame({
     setStreamError(true)
   }, [])
 
-  // Why: a hidden/occluded window (or a background tab) still receives emulator
-  // frames, including over SSH; parking the stream avoids background decode/IPC
-  // churn while staying attached. isActive covers the background-tab case;
-  // windowVisibleForStream additionally parks when the whole window is hidden
-  // (minimize / occlusion / display sleep), which no tab gate catches.
+  // Park inactive tabs and hidden windows to avoid frame IPC/decode churn, including over SSH, without detaching sessions.
   const windowVisibleForStream = useEmulatorStreamWindowVisible()
   const showStream = isActive && isLive && windowVisibleForStream && Boolean(previewUrl)
   const streamAspectRatio = streamSize ? streamSize.width / streamSize.height : 9 / 19
-  // Why: serve-sim may keep portrait-sized pixels for portrait-locked apps; the
-  // physical frame still follows the last successful rotate request.
+  // Physical orientation follows successful rotate requests even if portrait-locked apps keep portrait pixels.
   const screenAspectRatio = visualStreamGeometry.aspectRatio
   const frameKind = useMemo(
     () => resolveDeviceFrameKind(deviceName, streamAspectRatio),

@@ -18,7 +18,7 @@ export function acquireInstallLockParentCommand(
   )
 }
 
-/** A file the holder writes inside the lock in the same command that creates it. */
+/** Written in the same command that acquires the lock. */
 export type InstallLockOwnerFile = { fileName: string; token: string }
 
 export function tryCreateInstallLockCommand(
@@ -36,9 +36,7 @@ export function tryCreateInstallLockCommand(
       'else echo BUSY; fi'
     ].join(' ')
   }
-  // Why: old Orca clients recognize only a directory at `.install-lock`, while
-  // concurrent New-Item calls can both report success in PowerShell 5.1. Keep
-  // that directory marker and arbitrate ownership with an atomic child file.
+  // Older clients need the directory marker; an atomic child file arbitrates PowerShell 5.1 races.
   return powerShellCommand(
     [
       `$lock = ${powerShellLiteral(lockDir)}`,
@@ -62,8 +60,7 @@ export function probeInstallLockExistsCommand(host: RemoteHostPlatform, lockPath
   if (!isWindowsRemoteHost(host)) {
     return `test -e ${quotePosixShell(lockPath)} && echo LOCKED || echo OPEN`
   }
-  // Why: one prerelease briefly wrote file locks; accept both shapes so those
-  // hosts remain recoverable after upgrading to directory-plus-owner locks.
+  // Accept prerelease file locks as well as directory-plus-owner locks.
   return powerShellCommand(
     `if (Test-Path -LiteralPath ${powerShellLiteral(lockPath)}) { 'LOCKED' } else { 'OPEN' }`
   )
@@ -83,10 +80,7 @@ export function lockAgeSecondsCommand(host: RemoteHostPlatform, lockDir: string)
   )
 }
 
-/**
- * Backdates a lock its holder is leaving behind on purpose, so stale-takeover recovery need not
- * wait out the window that only protects a holder still working.
- */
+/** Backdate abandoned locks to permit immediate stale takeover. */
 export function orphanInstallLockCommand(host: RemoteHostPlatform, lockDir: string): string {
   if (!isWindowsRemoteHost(host)) {
     return `touch -m -t 200001010000 ${quotePosixShell(lockDir)}`
@@ -97,7 +91,7 @@ export function orphanInstallLockCommand(host: RemoteHostPlatform, lockDir: stri
   )
 }
 
-/** A takeover writes the new holder's owner file too, so the holder it replaced can tell. */
+// Replacement owner tokens let displaced holders detect takeover.
 export function tryStealInstallLockCommand(
   host: RemoteHostPlatform,
   lockDir: string,

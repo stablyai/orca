@@ -50,6 +50,7 @@ describe('mock terminal stream cancellation', () => {
     expect(handle(request('new', 'terminal.subscribe'))).toBe(true)
     const oldResponses = deferred.filter(({ response }) => response.id === 'old')
     const newResponses = deferred.filter(({ response }) => response.id === 'new')
+    expect(newResponses).toHaveLength(1)
     expect(oldResponses.every(({ shouldSend }) => shouldSend?.() === false)).toBe(true)
     expect(newResponses.every(({ shouldSend }) => shouldSend?.() === true)).toBe(true)
 

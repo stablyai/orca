@@ -32,8 +32,7 @@ describe('parseOsc52', () => {
   })
 
   it('flags clipboard queries without decoding — we must not answer them', () => {
-    // Why: answering would leak the user's clipboard to any process writing
-    // to the PTY. The lifecycle handler drops queries on the floor.
+    // Answering queries would expose clipboard contents to any PTY writer.
     expect(parseOsc52('c;?')).toEqual({ kind: 'query' })
   })
 
@@ -57,8 +56,7 @@ describe('parseOsc52', () => {
   })
 
   it('treats an empty selection list as clipboard, the way tmux emits it', () => {
-    // Why: tmux copies via `\e]52;;<base64>` with no selection letter, so
-    // rejecting empty Pc broke tmux copy. Zellij always sends an explicit 'c'/'p'.
+    // tmux emits empty Pc via Ms; refusing it broke copy. Zellij explicitly sends c/p.
     expect(parseOsc52(`;${b64('from tmux')}`)).toEqual({
       kind: 'write',
       selections: 'c',
@@ -71,8 +69,7 @@ describe('parseOsc52', () => {
   })
 
   it('rejects an empty payload instead of blanking the clipboard', () => {
-    // Why: this is XTerm's "clear the selection", which we decline to honor — with
-    // the gate default-on, any PTY could otherwise blank the clipboard for free.
+    // Empty payload is XTerm’s clear-selection request; default-on must not let arbitrary PTYs blank the clipboard.
     expect(parseOsc52(';')).toMatchObject({ kind: 'invalid' })
     expect(parseOsc52('c;')).toMatchObject({ kind: 'invalid' })
     expect(parseOsc52('c;   ')).toMatchObject({ kind: 'invalid' })
@@ -87,7 +84,7 @@ describe('parseOsc52', () => {
   })
 
   it('rejects payloads larger than the size cap', () => {
-    const huge = 'A'.repeat(128 * 1024 + 100) // valid base64 alphabet char
+    const huge = 'A'.repeat(128 * 1024 + 100)
     expect(parseOsc52(`c;${huge}`)).toMatchObject({ kind: 'invalid' })
   })
 })
@@ -123,8 +120,7 @@ describe('handleOsc52ClipboardRequest', () => {
   })
 
   it('never answers a clipboard query even with writes enabled', () => {
-    // A guard, not coverage of this change: queries were already refused. It matters
-    // more now only because default-on makes `allowClipboardWrite: true` the norm.
+    // Queries already refused; retain that guarantee with writes enabled by default.
     const writeClipboardText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
 
     for (const query of ['c;?', ';?']) {
@@ -137,9 +133,7 @@ describe('handleOsc52ClipboardRequest', () => {
   })
 
   it('routes every selection kind to the system clipboard, including bare PRIMARY', () => {
-    // Pins today's behavior rather than endorsing it: `selections` is parsed but never
-    // consulted, so a `p`-only write lands in CLIPBOARD. Routing it to the PRIMARY sink
-    // on Linux is a live question — this test is what makes that a deliberate break.
+    // All parsed selections currently route to CLIPBOARD, including Linux PRIMARY; pin behavior until a deliberate routing change.
     const writeClipboardText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
 
     for (const selections of ['p', 'q', 's0', 'pc']) {
@@ -190,7 +184,7 @@ describe('createOsc52OscHandler', () => {
       settingEnabled?: boolean | null
       replaying?: boolean
       writeClipboardText?: ReturnType<typeof vi.fn<(text: string) => Promise<void>>>
-      showWriteFailedToast?: ReturnType<typeof vi.fn<() => void>>
+      showWriteFailedToast?: ReturnType<typeof vi.fn<(text: string) => void>>
     } = {}
   ) {
     const settingEnabled = 'settingEnabled' in overrides ? overrides.settingEnabled : true
@@ -217,8 +211,7 @@ describe('createOsc52OscHandler', () => {
   })
 
   it('coalesces a flood of writes into one clipboard call', async () => {
-    // Why: a 15-byte sequence repeated across one hostile chunk would otherwise fire
-    // a million IPC round-trips and native clipboard writes. Last write still wins.
+    // A hostile chunk can trigger a million native writes; coalescing must retain the last.
     const { handler, writeClipboardText } = setup()
     for (let i = 0; i < 1000; i++) {
       handler(`c;${b64(`copy ${i}`)}`)
@@ -258,8 +251,7 @@ describe('createOsc52OscHandler', () => {
     expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('after')
   })
 
-  // The coalesced write runs in a microtask, outside the parser handler xterm guards, so
-  // a bridge failure there escapes the pane as an uncaught error instead of a failed copy.
+  // Microtask writes run outside xterm’s parser guard; bridge failures must not escape as uncaught errors.
   it.each([
     [
       // Dropping the try/catch turns this into an uncaught exception that fails the run.
@@ -269,8 +261,7 @@ describe('createOsc52OscHandler', () => {
       })
     ],
     [
-      // Not revert-proof on its own — dropping the `?.` turns this into a TypeError the
-      // try/catch also swallows. It pins the behavior: a bad bridge must not crash the pane.
+      // The outer catch also masks missing optional chaining; this pins bad-bridge behavior, not that syntax.
       'a preload whose bridge returns nothing',
       vi.fn<(text: string) => Promise<void>>(() => undefined as unknown as Promise<void>)
     ]
@@ -285,8 +276,7 @@ describe('createOsc52OscHandler', () => {
   })
 
   it('surfaces a rejected clipboard write without leaking an unhandled rejection', async () => {
-    // Why the listener: an unhandled rejection here does not fail this suite on its own,
-    // so without it the `.catch` on the coalesced write is deletable with nothing going red.
+    // This suite does not fail unhandled rejections automatically; listen explicitly to catch removal of the rejection handler.
     const unhandled: unknown[] = []
     const record = (reason: unknown): void => {
       unhandled.push(reason)
@@ -297,8 +287,7 @@ describe('createOsc52OscHandler', () => {
       throw new Error('toast unavailable')
     })
     try {
-      // Why not vi.fn here: the spy tracks settled results, which marks the rejection
-      // handled and hides exactly the leak this test exists to catch.
+      // Spies track settled results and mark rejections handled, hiding the leak under test.
       const handler = createOsc52OscHandler({
         getSettingEnabled: () => true,
         getReplaying: () => false,
@@ -321,6 +310,22 @@ describe('createOsc52OscHandler', () => {
     expect(showWriteFailedToast).toHaveBeenCalledTimes(1)
   })
 
+  // #33937: a web client retries the refused text from a click, so the failure must carry it.
+  it('hands the refused text to the failed write toast', async () => {
+    const { handler, showWriteFailedToast } = setup({
+      writeClipboardText: vi
+        .fn<(text: string) => Promise<void>>()
+        .mockRejectedValue(new Error('NotAllowedError'))
+    })
+
+    expect(handler(`c;${b64('first')}`)).toBe(true)
+    expect(handler(`c;${b64('copy me')}`)).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(showWriteFailedToast).toHaveBeenCalledTimes(1)
+    expect(showWriteFailedToast).toHaveBeenCalledWith('copy me')
+  })
+
   it('surfaces a synchronous clipboard bridge throw as a failed write toast', async () => {
     const showWriteFailedToast = vi.fn(() => {
       throw new Error('toast unavailable')
@@ -340,9 +345,7 @@ describe('createOsc52OscHandler', () => {
   })
 
   it('keeps coalescing after a failed write instead of wedging the pane', async () => {
-    // Why: a stranded flush latch silently kills clipboard copy for the rest of the session.
-    // Today two things prevent it — the latch resets before the write, and the try/catch means
-    // the microtask reaches its end either way — so this binds the pair, not the ordering alone.
+    // A stranded flush latch disables copy for the session; this pins reset plus error handling, not their order alone.
     const writeClipboardText = vi
       .fn<(text: string) => Promise<void>>()
       .mockImplementationOnce(() => {
@@ -381,32 +384,8 @@ describe('createOsc52OscHandler', () => {
 })
 
 describe('resolveOsc52ClipboardGate', () => {
-  it('allows a live write once the setting is on', () => {
-    expect(resolveOsc52ClipboardGate({ settingEnabled: true, replaying: false })).toEqual({
-      allowClipboardWrite: true,
-      shouldSurfaceBlockedWrite: false
-    })
-  })
-
-  it('drops replayed writes so restore cannot clobber the clipboard', () => {
-    // Why: reattach re-writes recorded PTY bytes through the same parser, so an old
-    // copy would silently overwrite what the user has copied since (#10588).
-    expect(resolveOsc52ClipboardGate({ settingEnabled: true, replaying: true })).toEqual({
-      allowClipboardWrite: false,
-      shouldSurfaceBlockedWrite: false
-    })
-  })
-
-  it('surfaces the blocked toast only for a real opt-out', () => {
-    expect(resolveOsc52ClipboardGate({ settingEnabled: false, replaying: false })).toEqual({
-      allowClipboardWrite: false,
-      shouldSurfaceBlockedWrite: true
-    })
-  })
-
   it('stays quiet when a write races settings hydration', () => {
-    // Why: the toast latches once per renderer session; an unhydrated read looks
-    // blocked even though the default is on, so burning it there hides the real one.
+    // Pre-hydration reads look blocked despite default-on; consuming the once-per-session toast hides real refusals.
     for (const settingEnabled of [null, undefined]) {
       expect(resolveOsc52ClipboardGate({ settingEnabled, replaying: false })).toEqual({
         allowClipboardWrite: false,

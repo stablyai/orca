@@ -18,7 +18,6 @@ export function isManagedServerSshHost(
   return target.orcadFence !== undefined || target.orcadProvisioning !== undefined
 }
 
-/** Sends a host Orca runs on to its server row instead of a removal main would refuse. */
 export function SshManagedHostRemoveDialog({
   label,
   onClose

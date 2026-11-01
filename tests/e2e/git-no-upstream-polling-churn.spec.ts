@@ -20,10 +20,7 @@ test.use({
   }
 })
 
-// Repro command:
-//   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/git-no-upstream-polling-churn.spec.ts --config tests/playwright.config.ts --project electron-headless --reporter=json
-// Trigger: active worktree branch "Initi-Project" has no configured upstream
-// and no same-name origin ref, then the source-control poller runs for 7.2s.
+// Reproduce #4559: poll a branch with neither configured upstream nor a same-name origin ref.
 
 type DiagnosticsStatus = {
   localFileEnabled: boolean
@@ -234,9 +231,7 @@ test.describe('Git no-upstream polling churn repro', () => {
       'No Git activity was recorded for the measured repo'
     ).toBeGreaterThan(0)
     expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_RENDERER_TIMER_DRIFT_MS)
-    // Why: the #4559 trace showed these stable negative upstream probes being
-    // retried every poll. Under parallel e2e load one in-flight refresh can
-    // overlap the trace reset, but the count should not keep climbing.
+    // Allow one refresh overlapping trace reset; cached negative upstream probes must not grow every poll (#4559).
     expect(counts.noConfiguredUpstreamFailures).toBeLessThanOrEqual(2)
     expect(counts.missingSameNameOriginFailures).toBeLessThanOrEqual(2)
   })

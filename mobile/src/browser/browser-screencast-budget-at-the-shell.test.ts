@@ -1,21 +1,5 @@
-/**
- * The page's frame budget, checked against the frame the shell really posts.
- *
- * `browser-screencast-request.web.ts` sizes the mobile view from `binaryEventEnvelopeBytes()`, a
- * bound it derives from a skeleton it builds itself. Its own suite checks that bound against
- * another skeleton of the same shape, which is two copies of one assumption agreeing. This is the
- * case that makes it evidence: a real `event.binary` encoded by C6.1's encoder and serialized by
- * the real `BridgeHostSubscriptions`, measured, and the bound held above it.
- *
- * C6 ruling 2's pin. The frames are generated noise at the budgeted scale rather than a fixture
- * committed to the tree: the budget's worst case is the image JPEG compresses least, and a
- * downloaded photograph would sit a tenth of the way to it and prove nothing.
- *
- * Measured at this base, so a later reader can tell drift from a rewrite: the real envelope costs
- * 303 bytes against a bound of 516, and a frame at the budgeted area is an image the shell posts
- * just under the 655,360-byte cap. The area itself moved when the worst case was swept properly,
- * so the figures are derived here rather than written down.
- */
+// Hold page’s frame budget against real event.binary encoder and BridgeHostSubscriptions serialization, not matching skeleton copies.
+// Use deterministic noise at budgeted scale: JPEG compresses photos too well to test ceiling. Reconstruct envelope bound so added fields fail without hiding in numeric slack.
 import { describe, expect, it } from 'vitest'
 import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from '../mobile-web-shell/bridge/bridge-caps'
 import { clientFrame } from '../mobile-web-shell/bridge-host-test-fakes'
@@ -31,19 +15,11 @@ import {
   WORST_CASE_JPEG_BYTES_PER_PIXEL
 } from './browser-screencast-request.web'
 
-/** What the bound spends per number: seventeen significant digits and the widest fixed notation
- *  JSON writes, `-0.0000012345678901234567`, and `Number.MAX_SAFE_INTEGER` for the two counters. */
+// Bound numbers with widest fixed double notation (-0.0000012345678901234567) and MAX_SAFE_INTEGER counters.
 const WIDEST_JSON_DOUBLE_CHARS = 25
 const LARGEST_INTEGER_CHARS = JSON.stringify(Number.MAX_SAFE_INTEGER).length
 
-/**
- * A frame's metadata as Chromium sends it: all nine fields, and a `timestamp` that is a real
- * `Page.screencastFrame` value rather than a toy integer.
- *
- * The timestamp is the whole difference between a plausible envelope and the real one — epoch
- * seconds with microseconds is sixteen characters where `1` is one — so a pin written with a small
- * number would measure an envelope no frame ever has.
- */
+// Use all nine Chromium metadata fields and real epoch/microsecond timestamp; toy integer understates envelope width.
 const CDP_METADATA = {
   offsetTop: 0,
   pageScaleFactor: 1,
@@ -56,8 +32,7 @@ const CDP_METADATA = {
   timestamp: 1_758_326_400.123456
 }
 
-/** Noise, which is what the worst case is: any structure at all is something JPEG would compress.
- *  Deterministic rather than seeded off the clock, so the measured bytes are the same every run. */
+// Deterministic unstructured noise exercises JPEG worst case reproducibly.
 function noise(byteLength: number): Uint8Array {
   const bytes = new Uint8Array(byteLength)
   let state = 0x9e37_79b9
@@ -78,8 +53,7 @@ function screencastFrame(image: Uint8Array): BrowserScreencastFrame {
   }
 }
 
-/** The screencast counter the frame below carries, and the event seq the shell gives its first
- *  event, both needed to reconstruct what the bound assumed about them. */
+// Keep actual screencast counter and first event seq to reconstruct bound assumptions.
 const FRAME_SEQ = 4_096
 const FIRST_EVENT_SEQ = 1
 
@@ -96,8 +70,7 @@ function postedFrame(image: Uint8Array): { bytes: number; envelope: number; post
     })
   )
   const before = bridge.posted.length
-  // Loudly, because the optional chain below would otherwise turn a subscribe that opened no
-  // binary lane into zero posts, which is what a dropped frame looks like.
+  // Fail if no binary lane opened; optional chaining would otherwise look like a correctly dropped frame.
   const emitBinary = bridge.client.streams[0]?.emitBinary
   if (emitBinary === null || emitBinary === undefined) {
     throw new Error('the subscribe opened no binary stream')
@@ -118,19 +91,11 @@ describe('the envelope bound against a real posted frame', () => {
   })
 
   it('is the same cost whatever the image is, which is what makes it an envelope', () => {
-    // Base64 is ASCII and JSON escapes none of it, so the image contributes its characters and
-    // nothing else. This is the premise the shell prices an unencoded frame on.
+    // Base64 contributes exactly its ASCII character count; JSON escapes none.
     expect(postedFrame(noise(1_024)).envelope).toBe(postedFrame(noise(256 * 1024)).envelope)
   })
 
-  /**
-   * The bound, reconstructed from the real frame rather than merely held above it.
-   *
-   * Above-it alone is satisfied by 213 bytes of slack, which is room for the shell to grow the
-   * envelope by a field the page never hears about. The slack is not arbitrary: every byte of it
-   * is a value this frame prints narrower than a double can. Adding exactly those back is the
-   * whole difference, so an envelope field the bound does not know about fails here at one byte.
-   */
+  // Reconstruct bound by adding only numeric widening to real envelope; slack-only inequality would hide added fields.
   it('is exactly what this frame costs once every number is widened to a double', () => {
     const widen = (value: number): number => WIDEST_JSON_DOUBLE_CHARS - JSON.stringify(value).length
     const widened =
@@ -143,22 +108,13 @@ describe('the envelope bound against a real posted frame', () => {
   })
 
   it('covers every metadata field the protocol declares, not the ones this case sends', () => {
-    // If a tenth field is added, `METADATA_KEYS` grows, the bound grows with it, and the frame
-    // above keeps fitting. The guard is that this case sends all of them.
+    // Send every METADATA_KEYS entry or a new field could widen bound without appearing in fixture.
     expect(Object.keys(CDP_METADATA).sort()).toEqual([...METADATA_KEYS].sort())
   })
 })
 
-/**
- * The arithmetic between the budget and the cap, and nothing about what a JPEG really costs.
- *
- * Every case here feeds `noise(area * WORST_CASE_JPEG_BYTES_PER_PIXEL)` — a byte count the constant
- * itself produced — so they cannot falsify the constant, only the expansion and the drop rule
- * around it. Said plainly because the earlier version of this block read as if it validated the
- * worst case: it did not, and the constant it agreed with was wrong by enough to post a phone's
- * frame over the cap. `config/scripts/mobile-web-app/mobile-web-app-frame-budget-sweep.test.ts` is what encodes
- * real Chromium JPEGs across the viewport range and holds the constant to them.
- */
+// These synthetic bytes prove base64 arithmetic/drop rules, not JPEG bytes-per-pixel assumption.
+// config/scripts/mobile-web-app/mobile-web-app-frame-budget-sweep.test.ts validates constant against real Chromium JPEGs across viewports.
 describe('a frame at exactly the budgeted area', () => {
   /** The image the budget says the mobile view's worst case produces, to the byte. */
   const BUDGETED_IMAGE_BYTES = Math.floor(
@@ -173,16 +129,14 @@ describe('a frame at exactly the budgeted area', () => {
   })
 
   it('is tight: the budget spends nearly the whole cap', () => {
-    // A budget with room to spare is pixels the pane could have had. Within one base64 group plus
-    // the slack the envelope bound deliberately carries.
+    // Demand budget near cap: slack is only one base64 group plus deliberate envelope widening.
     const { bytes } = postedFrame(noise(BUDGETED_IMAGE_BYTES))
 
     expect(BRIDGE_MAX_MESSAGE_BYTES - bytes).toBeLessThan(binaryEventEnvelopeBytes())
   })
 
   it('is a ceiling: an image past it is dropped by the shell, not sent over the cap', () => {
-    // C6 ruling 1 from the budget's side. The area is a worst case, so a real frame this size is
-    // the one the page could not predict, and the shell is what keeps it off the wire.
+    // Unexpected worst-case overflow must be dropped at shell boundary (C6 ruling 1).
     const { posts } = postedFrame(noise(BUDGETED_IMAGE_BYTES + binaryEventEnvelopeBytes()))
 
     expect(posts).toBe(0)

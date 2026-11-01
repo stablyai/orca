@@ -28,6 +28,9 @@ it('keeps main code and asset paths working after a CLI build replaces its publi
       'import { writeFileSync } from "node:fs"; import { join } from "node:path"; import { getStatus } from "./controls"; import { createTracker } from "./tracker"; import { getBootLabel } from "./boot-label"; import("./late").then(({ readLabel }) => writeFileSync(join(__dirname, "result.json"), JSON.stringify({ status: getStatus(), tracker: createTracker(), directory: __dirname, label: getBootLabel(), lateLabel: readLabel() })))'
     )
     const options = electronViteConfig.main?.build?.rollupOptions
+    if (Array.isArray(options?.output)) {
+      throw new Error('Expected one main-process output')
+    }
     await build({
       configFile: false,
       root,
@@ -37,6 +40,8 @@ it('keeps main code and asset paths working after a CLI build replaces its publi
         minify: electronViteConfig.main?.build?.minify,
         rolldownOptions: {
           ...options,
+          // Plugins and the bootstrap banner guard the real main entry, not this fixture.
+          output: { ...options?.output, postBanner: undefined },
           plugins: [],
           input: { index: join(root, 'main.ts'), controls: join(root, 'controls.ts') }
         }
@@ -46,15 +51,16 @@ it('keeps main code and asset paths working after a CLI build replaces its publi
     await writeFile(join(root, 'dist', 'controls.js'), 'exports.getStatus = () => 0')
     const result = await runProcess({
       program: process.execPath,
-      args: [join(root, 'dist', 'index.js')]
+      args: [join(root, 'dist', 'index.js')],
+      env: { ...process.env, ORCA_FIXTURE_BOOT_LABEL: 'fixture-boot' }
     })
     expect(result.code, result.stderr).toBe(0)
     expect(JSON.parse(await readFile(join(root, 'dist', 'result.json'), 'utf8'))).toEqual({
       status: 0,
       tracker: { count: 0 },
       directory: join(root, 'dist'),
-      label: 'boot',
-      lateLabel: 'boot'
+      label: 'fixture-boot',
+      lateLabel: 'fixture-boot'
     })
   } finally {
     await rm(root, { recursive: true, force: true })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isTerminalLeafMoveRequest, terminalLeafMovePaneKeys } from './terminal-leaf-move'
+import { isTerminalLeafMoveRequest } from './terminal-leaf-move'
 
 const LEAF = '22222222-2222-4222-8222-222222222222'
 const valid = {
@@ -24,12 +24,5 @@ describe('isTerminalLeafMoveRequest', () => {
     ['an empty PTY id', { ptyId: '' }]
   ])('rejects %s', (_name, patch) => {
     expect(isTerminalLeafMoveRequest({ ...valid, ...patch })).toBe(false)
-  })
-
-  it('builds both pane keys of a valid move', () => {
-    expect(terminalLeafMovePaneKeys(valid)).toEqual({
-      from: `tab-source:${LEAF}`,
-      to: `tab-target:${LEAF}`
-    })
   })
 })

@@ -18,7 +18,7 @@ vi.mock('electron', () => ({ app: { getPath: () => '/tmp/userData' } }))
 
 const SCRIPT_PATH = '/home/test/.orca/agent-hooks/claude-hook.sh'
 const CURRENT_CLAUDE = { claudeVersion: '2.1.261 (Claude Code)' }
-// Why: Claude prints the command verbatim after every /compact; the full wrapper is ~3KB.
+// Claude echoes the full command after /compact, so keep it short.
 const MAX_ECHOED_COMMAND_LENGTH = 400
 
 afterEach(() => vi.restoreAllMocks())
@@ -50,7 +50,6 @@ describe('PostCompact managed hook command', () => {
     )
   })
 
-  // Why every client platform: a remote host is POSIX even when Orca runs on Windows.
   it.each(['darwin', 'linux', 'win32'] as const)(
     'uses the short POSIX form only for remote PostCompact from %s',
     (platform) => {

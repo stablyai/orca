@@ -57,7 +57,14 @@ const {
 vi.mock('../runtime-client', () => {
   class RuntimeClient {
     call = callMock
-    getCliStatus = getCliStatusMock
+    async getOfflineRuntimeAdmission() {
+      const status = await getCliStatusMock()
+      return {
+        reachable: status.result.runtime.reachable,
+        legacyPidRunning: status.result.app.running,
+        pid: status.result.app.pid ?? null
+      }
+    }
   }
 
   class RuntimeClientError extends Error {
@@ -278,6 +285,17 @@ describe('agent hooks CLI handler', () => {
       const { ensureActiveOrcaProfile } =
         await import('../../main/orca-profiles/profile-index-store.js')
       expect(ensureActiveOrcaProfile(userDataPath).profile.id).toBe(profileId)
+      const opened = openProfileStateDatabase(
+        getOrcaProfileStateDatabaseFile(profileId, userDataPath),
+        profileId
+      )
+      try {
+        expect(JSON.parse(exportProfileStateJson(opened.db)).settings.agentStatusHooksEnabled).toBe(
+          false
+        )
+      } finally {
+        opened.db.close()
+      }
     }
   )
 
@@ -462,6 +480,15 @@ describe('agent hooks CLI handler', () => {
     callMock.mockRejectedValue(new Error('method_not_found'))
 
     await expect(main(['agent', 'hooks', 'prepare-codex'], userDataPath)).resolves.toBeUndefined()
+    expect(callMock).toHaveBeenCalledExactlyOnceWith(
+      'agentHooks.prepareCodexForWslPane',
+      {
+        codexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
+        orcaCodexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
+        wslDistro: 'Ubuntu'
+      },
+      { timeoutMs: 50_000 }
+    )
     expect(process.exitCode).toBeUndefined()
   })
 
@@ -603,7 +630,9 @@ describe('agent hooks CLI handler', () => {
     await runAgentHooksOff(userDataPath)
 
     expect(process.exitCode).toBe(1)
+    expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
     expect(readFileSync(getOrcaProfileDataFile(profileId, userDataPath), 'utf-8')).toBe(before)
+    expect(readFileSync(databaseFile, 'utf-8')).toBe('not sqlite')
   })
 
   it('fails closed when a profile index is present but unreadable', async () => {
@@ -615,6 +644,7 @@ describe('agent hooks CLI handler', () => {
     await runAgentHooksOff(userDataPath)
 
     expect(process.exitCode).toBe(1)
+    expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
     expect(readFileSync(join(userDataPath, 'orca-data.json'), 'utf-8')).toBe(before)
   })
 })

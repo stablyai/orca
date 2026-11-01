@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { Terminal } from '@xterm/headless'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
+import { buildFreshShellViewportBlankingSequence } from '../../../../shared/terminal-fresh-shell-viewport'
 import {
   flushAsyncTicks,
   writeHeadlessTerminal,
@@ -15,6 +15,7 @@ import {
 } from './pty-connection-test-async'
 import { NORMAL_BUFFER_PROLOGUE } from './pty-connection-test-constants'
 import {
+  terminalWriteText,
   LEAF_1,
   createMockTransport,
   createPane,
@@ -97,7 +98,9 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         `${RESET_GRAPHIC_RENDITION}snapshot-payload`,
         expect.any(Function)
       )
-      expect(pane.terminal.write).not.toHaveBeenCalledWith('replay-payload', expect.any(Function))
+      expect(
+        pane.terminal.write.mock.calls.map(([data]) => terminalWriteText(data)).join('')
+      ).not.toContain('replay-payload')
     })
 
     it('paints only relay replay when reattach result has replay and coldRestore but no snapshot', async () => {
@@ -135,9 +138,10 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         `${RESET_GRAPHIC_RENDITION}replay-payload`,
         expect.any(Function)
       )
-      expect(pane.terminal.write).not.toHaveBeenCalledWith('cold-payload', expect.any(Function))
-      // Why: the replay branch supersedes cold-restore but must still ack, or the daemon redelivers the cold-restore payload next reattach.
-      // A layout-owner window names the pane it painted, so main releases only its current terminal.
+      expect(
+        pane.terminal.write.mock.calls.map(([data]) => terminalWriteText(data)).join('')
+      ).not.toContain('cold-payload')
+      // Replay still owes a cold-restore ack to prevent redelivery; identify the painted pane so main releases only its current terminal.
       expect(window.api.pty.ackColdRestore).toHaveBeenCalledWith(
         'tab-pty',
         ...(ORCA_LAYOUT_OWNER_IS_MAIN
@@ -174,7 +178,8 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
       const pane = createPane(1)
       pane.terminal.rows = 4
       pane.terminal.cols = 20
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         written.push(data)
         callback?.()
       })
@@ -242,12 +247,13 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
       pane.terminal.cols = destinationCols
       let sawViewportClear = false
       const preResizeBarrier = { release: null as (() => void) | null }
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         written.push(data)
         operations.push({ kind: 'write', data })
         if (data === viewportClear) {
           sawViewportClear = true
-        } else if (sawViewportClear && data === '' && preResizeBarrier.release === null) {
+        } else if (sawViewportClear && data.length === 0 && preResizeBarrier.release === null) {
           preResizeBarrier.release = callback ?? (() => {})
           return
         }

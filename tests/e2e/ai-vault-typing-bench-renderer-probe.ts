@@ -76,7 +76,10 @@ export async function triggerVaultRefresh(page: Page): Promise<void> {
     const target = window as Window & {
       __vaultBenchRefresh?: { startedAt: number; durationMs: number | null }
     }
-    const refresh = { startedAt: performance.now(), durationMs: null }
+    const refresh: { startedAt: number; durationMs: number | null } = {
+      startedAt: performance.now(),
+      durationMs: null
+    }
     target.__vaultBenchRefresh = refresh
     let sawBusy = false
     const observer = new MutationObserver(() => {

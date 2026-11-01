@@ -97,7 +97,6 @@ export function useSmartWorkspaceGitlabSearch({
     shouldQueryGitlab
   ])
 
-  // Why: state chips mirror GitLab's default opened list when no URL is pasted.
   useEffect(() => {
     if (!shouldQueryGitlab || disabled || gitlabEnabled === false) {
       if (!shouldQueryGitlab) {

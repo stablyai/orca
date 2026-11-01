@@ -1,7 +1,4 @@
-// ── Token + workspace storage ────────────────────────────────────────
-// Why: tokens remain encrypted via safeStorage, while workspace metadata stays
-// plaintext so status checks can render connected accounts without decrypting
-// and triggering OS keychain prompts after app updates.
+// Keep account metadata readable without decrypting tokens or triggering keychain prompts.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import {
   LEGACY_WORKSPACE_ID,

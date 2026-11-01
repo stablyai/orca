@@ -1,8 +1,4 @@
-// A view's shown tab after a layout change takes it away, chosen when the change is applied, with
-// the group's order from before it, as today's close does: the most recent remaining tab, else the
-// closed tab's neighbour. A read cannot do this: the record no longer knows where the tab sat.
-// An emptied group hands the view's active group to its sibling in the split, as the window's
-// collapseGroupLayout (tab-group-layout-tree.ts) does on close and move.
+// Choose post-close selection while the old order is available: most recent survivor, then closed-tab neighbour. Empty-group collapse selects its split sibling, matching the window.
 
 import { pickNextActiveTabAfterClose } from '../workspace-session-terminal-tab-close'
 import { findSiblingGroupId, removeGroupLayoutLeaf } from './tab-group-layout-tree'
@@ -20,7 +16,6 @@ export function followTabClosesInView(
       const shown = selection.activeTabId
       const was = before.workspaces[key]?.groups.find((group) => group.id === groupId)
       const now = after.workspaces[key]?.groups.find((group) => group.id === groupId)
-      // A group that is gone is dropped by the prune; its view moves with the active group.
       if (!shown || !was || !now || now.tabOrder.includes(shown)) {
         continue
       }

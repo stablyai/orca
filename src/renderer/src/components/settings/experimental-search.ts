@@ -3,8 +3,8 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
-import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
+import { getBrowserExtensionsExperimentalSearchEntry } from './browser-extensions-experimental-search'
 import { getWslHostsExperimentalSearchEntry } from './wsl-hosts-experimental-search'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
@@ -47,7 +47,6 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         )
       ]
     },
-    getNativeChatExperimentalSearchEntry(),
     {
       title: translate(
         'auto.components.settings.experimental.search.agentDashboard.title',
@@ -182,16 +181,15 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     },
     getNewWorktreeCardStyleSearchEntry(),
     getEphemeralVmsSearchEntry(),
-    // Why: only a Windows desktop shows this toggle, so only there may search find it.
+    getBrowserExtensionsExperimentalSearchEntry(),
+    // Index WSL toggles only on Windows desktops that expose them.
     ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
       ? [getWslHostsExperimentalSearchEntry()]
       : [])
   ]
 )
 
-// Why: title-keyed lookup avoids a fragile numeric-index invariant — the array
-// shape can change without breaking consumers, and a typo/rename throws loudly
-// instead of silently matching the wrong (or empty) entry.
+// Resolve by title and fail loudly on renames so changing catalog shape cannot silently retarget numeric indexes.
 function findEntry(title: string): SettingsSearchEntry {
   const entry = getExperimentalPaneSearchEntries().find((e) => e.title === title)
   if (!entry) {
@@ -203,9 +201,6 @@ function findEntry(title: string): SettingsSearchEntry {
 export function getExperimentalSearchEntry() {
   return {
     pet: findEntry(translate('auto.components.settings.experimental.search.87d99e634b', 'Pet')),
-    nativeChat: findEntry(
-      translate('auto.components.settings.experimental.search.nativeChat.title', 'Chat UI')
-    ),
     agentDashboard: findEntry(
       translate(
         'auto.components.settings.experimental.search.agentDashboard.title',
@@ -229,6 +224,12 @@ export function getExperimentalSearchEntry() {
     ),
     ephemeralVms: findEntry(
       translate('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')
+    ),
+    browserExtensions: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.browserExtensions.title',
+        'Browser extensions'
+      )
     )
   } as const
 }

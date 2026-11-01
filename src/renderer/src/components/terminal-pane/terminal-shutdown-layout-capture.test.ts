@@ -6,9 +6,7 @@ import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111' as const
 const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222' as const
 
-// Why: capture now appends an absolute cursor restore (see
-// terminal-serialize-absolute-cursor.ts), so pane mocks must expose the
-// cursor fields and content expectations carry the home-position CUP suffix.
+// Absolute cursor serialization adds a CUP suffix; mocks and byte limits must include its coordinates/bytes.
 const CURSOR_HOME = '\x1b[1;1H'
 
 function mockTerminal(scrollback: number): {
@@ -225,8 +223,7 @@ describe('captureTerminalShutdownLayout', () => {
     expect(getUtf8ByteLength(buffer)).toBeLessThanOrEqual(
       TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
     )
-    // Each 'e-acute' row is 2048 UTF-8 bytes; the CUP suffix joins the byte
-    // accounting, so one fewer row fits than the bare limit would allow.
+    // UTF-8 rows plus cursor suffix must fit together, reducing available history by one row here.
     const fittingRows = Math.floor(
       (TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT - CURSOR_HOME.length) / 2048
     )
@@ -265,8 +262,7 @@ describe('captureTerminalShutdownLayout', () => {
 
   it('keeps most of the byte budget when dense recent rows sit above sparse scrollback', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
-    // Why this shape: the common terminal profile (a long quiet prompt history under a dense
-    // build/agent run) makes bytes-per-row wildly non-uniform, which a pure secant step creeps on.
+    // Dense recent rows over sparse history defeat pure secant convergence; test nonuniform byte density.
     const DENSE_ROWS = 1_000
     const DENSE_ROW = 'x'.repeat(600)
     const serialize = vi.fn((options?: { scrollback?: number }) => {

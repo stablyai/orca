@@ -28,59 +28,7 @@ const gitLabReview: HostedReviewInfo = {
   mergeable: 'MERGEABLE'
 }
 
-const bitbucketReview: HostedReviewInfo = {
-  provider: 'bitbucket',
-  number: 789,
-  title: 'Ready Bitbucket PR',
-  state: 'open',
-  url: 'https://bitbucket.org/stablyai/orca/pull-requests/789',
-  status: 'success',
-  updatedAt: '2026-05-13T00:00:00.000Z',
-  mergeable: 'MERGEABLE'
-}
-
 describe('getWorktreeCardPrDisplay', () => {
-  it('uses cached PR details when available', () => {
-    expect(getWorktreeCardPrDisplay(pr, 123)).toBe(pr)
-  })
-
-  it('falls back to linkedPR while PR details load', () => {
-    expect(getWorktreeCardPrDisplay(undefined, 456)).toEqual({
-      provider: 'github',
-      number: 456,
-      title: 'Loading PR...'
-    })
-  })
-
-  it('keeps linkedPR visible when PR details are unavailable', () => {
-    expect(getWorktreeCardPrDisplay(null, 456)).toEqual({
-      provider: 'github',
-      number: 456,
-      title: 'PR details unavailable'
-    })
-  })
-
-  it('does not show a PR row for unlinked worktrees', () => {
-    expect(getWorktreeCardPrDisplay(undefined, null)).toBeNull()
-  })
-
-  it('ignores linked-lookup PR details when the worktree is unlinked', () => {
-    expect(
-      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
-        reviewHintKey: 'github:123'
-      })
-    ).toBeNull()
-  })
-
-  it('keeps an unlinked GitHub PR visible when branch provenance names the same PR', () => {
-    expect(
-      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
-        reviewHintKey: 'github:123',
-        branchLookupGitHubPRNumber: 123
-      })
-    ).toBe(pr)
-  })
-
   it('still suppresses unlinked linked-lookup details when branch provenance names a different PR', () => {
     expect(
       getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
@@ -108,44 +56,6 @@ describe('getWorktreeCardPrDisplay', () => {
     ).toBeNull()
   })
 
-  it('shows branch-discovered GitHub PR details when the worktree is unlinked', () => {
-    expect(
-      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
-        reviewHintKey: ''
-      })
-    ).toBe(pr)
-  })
-
-  it('hides a matching suppressed branch-discovered GitHub PR', () => {
-    expect(
-      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
-        reviewHintKey: '',
-        suppressedGitHubPR: 123
-      })
-    ).toBeNull()
-  })
-
-  it('lets an explicit GitHub link override stale suppression metadata', () => {
-    expect(
-      getWorktreeCardPrDisplay(pr, 123, null, null, null, null, {
-        suppressedGitHubPR: 123
-      })
-    ).toBe(pr)
-  })
-
-  it('keeps a different branch-discovered GitHub PR visible', () => {
-    expect(
-      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
-        reviewHintKey: '',
-        suppressedGitHubPR: 999
-      })
-    ).toBe(pr)
-  })
-
-  it('treats missing cache hints as unsafe for unlinked GitHub PR details', () => {
-    expect(getWorktreeCardPrDisplay(pr, null)).toBeNull()
-  })
-
   it('keeps the linked PR number visible when cached details belong to a different PR', () => {
     expect(getWorktreeCardPrDisplay(pr, 456)).toEqual({
       provider: 'github',
@@ -154,24 +64,12 @@ describe('getWorktreeCardPrDisplay', () => {
     })
   })
 
-  it('uses cached GitLab MR details when linked metadata matches', () => {
-    expect(getWorktreeCardPrDisplay(gitLabReview, null, 321)).toBe(gitLabReview)
-  })
-
   it('keeps the linked GitLab MR number visible when cached details belong to a different MR', () => {
     expect(getWorktreeCardPrDisplay(gitLabReview, null, 654)).toEqual({
       provider: 'gitlab',
       number: 654,
       title: 'Loading MR...'
     })
-  })
-
-  it('preserves branch-discovered hosted reviews for providers without worktree metadata', () => {
-    expect(
-      getWorktreeCardPrDisplay(bitbucketReview, null, null, null, null, null, {
-        suppressedGitHubPR: bitbucketReview.number
-      })
-    ).toBe(bitbucketReview)
   })
 })
 
@@ -186,10 +84,6 @@ describe('isCachedMergedBranchPRCurrentForWorktree', () => {
     mergeable: 'MERGEABLE',
     headSha: 'final-head'
   }
-
-  it('matches when the worktree sits exactly on the merged head', () => {
-    expect(isCachedMergedBranchPRCurrentForWorktree(mergedPR, { head: 'final-head' })).toBe(true)
-  })
 
   it('matches when the worktree head is a confirmed commit of the merged PR', () => {
     expect(

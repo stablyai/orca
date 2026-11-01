@@ -40,29 +40,24 @@ class FakeRuntimeChild extends EventEmitter {
     return true
   }
 
-  /** What a destroyed stdin does to writes still queued at teardown. */
   failQueuedWrites(): void {
     for (const callback of this.pendingWrites.splice(0)) {
       callback(new Error('ERR_STREAM_DESTROYED'))
     }
   }
 
-  /** Fail one queued write, leaving later ones outstanding. */
   failQueuedWrite(index: number): void {
     this.pendingWrites.splice(index, 1)[0](new Error('EPIPE'))
   }
 
-  /** Requests written to this child, decoded. */
   requests(): Record<string, unknown>[] {
     return this.writes.map((line) => JSON.parse(line) as Record<string, unknown>)
   }
 
-  /** The id the host is currently waiting on, so replies can echo it. */
   pendingId(): number {
     return this.requests().at(-1)?.requestId as number
   }
 
-  /** The announcement the real serve loop writes before its first read. */
   ready(): void {
     this.write('{"ready":true}\n')
   }
@@ -117,13 +112,11 @@ async function settle(): Promise<void> {
   }
 }
 
-/** The wait the host reported, read back out of its refusal message. */
 function remainingCooldownMs(error: Error | null): number {
   const match = /retrying the runtime host in (\d+)ms/.exec(error?.message ?? '')
   return match ? Number(match[1]) : Number.NaN
 }
 
-/** Kill each helper the host starts, until it stops starting them. */
 async function failEveryStart(children: FakeRuntimeChild[], stderr: string): Promise<void> {
   for (let index = 0; index < 8; index++) {
     if (index >= children.length) {
@@ -221,7 +214,6 @@ describe('DesktopScriptRuntimeHost', () => {
 
     const first = host.request({ tool: 'handshake' })
     await settle()
-    // A stray line would otherwise shift every later response by one.
     children[0].respond({ ok: true, capabilities: {} }, 999)
 
     await expect(first).rejects.toThrow(/did not match the pending request/)
@@ -288,8 +280,7 @@ describe('DesktopScriptRuntimeHost', () => {
     let clock = 1_000
     const { host, children } = createHost({ cooldownMs: 60_000, now: () => clock })
 
-    // One good answer per helper is exactly the pattern that used to respawn
-    // forever: the success reset the failure count before it could ever trip.
+    // Alternating replies and crashes must still trip the failure threshold.
     for (let round = 0; round < 3; round++) {
       const good = host.request({ tool: 'handshake' })
       await settle()
@@ -329,7 +320,6 @@ describe('DesktopScriptRuntimeHost', () => {
       await expect(next).resolves.toMatchObject({ ok: true })
     }
 
-    // A clean run clears the count, so one bad helper cannot degrade a good one.
     expect(children).toHaveLength(2)
     host.dispose()
   })
@@ -338,8 +328,7 @@ describe('DesktopScriptRuntimeHost', () => {
     let clock = 1_000
     const { host, children } = createHost({ cooldownMs: 60_000, now: () => clock })
 
-    // Desync is host-detected, so it bypassed the exit handler entirely: without
-    // its own accounting this respawned once per operation, forever.
+    // Host-detected desync must count toward cooldown even without a child exit event.
     for (let round = 0; round < 3; round++) {
       const promise = host.request({ tool: 'handshake' })
       await settle()
@@ -385,8 +374,6 @@ describe('DesktopScriptRuntimeHost', () => {
     await settle()
     children[0].exit(1, 'Add-Type : Cannot access the temporary directory')
 
-    // The click may already have landed inside the helper that died; replaying
-    // it would click twice. An observation in the same position is retried.
     await expect(promise).rejects.toSatisfy(isRuntimeHostUnavailable)
     expect(children).toHaveLength(1)
     host.dispose()
@@ -398,9 +385,7 @@ describe('DesktopScriptRuntimeHost', () => {
     const promise = host.request({ tool: 'click', app: 'Notepad', x: 10, y: 10 })
     await settle()
     children[0].ready()
-    // Past the announcement the click may already have been synthesized: the
-    // snapshot that follows it is the fault-prone part, so a missing reply
-    // proves nothing about whether the input landed.
+    // A snapshot can fault after input was delivered; missing replies do not justify replay.
     children[0].exit(1, 'faulting module gdiplus.dll')
 
     await expect(promise).rejects.toThrow(/runtime host exited/)
@@ -424,8 +409,7 @@ describe('DesktopScriptRuntimeHost', () => {
 
     const retried = host.request({ tool: 'click', app: 'Notepad', x: 1, y: 1 })
     await settle()
-    // This helper never announced, so it cannot have read the click: replaying
-    // is a fact rather than a guess, and the caller never sees the stumble.
+    // This protocol announces before reading requests, so a pre-ready failure is safe to replay.
     children[1].exit(1, 'Add-Type : Cannot access the temporary directory')
     await settle()
 
@@ -464,8 +448,6 @@ describe('DesktopScriptRuntimeHost', () => {
     children.at(-1)?.respond({ ok: true, capabilities: {} })
     await recovered
 
-    // One death after recovery must not re-enter a full cooldown; the previous
-    // outage was already paid for.
     const crashed = host.request({ tool: 'handshake' })
     await settle()
     children.at(-1)?.exit(1, 'boom')
@@ -486,9 +468,7 @@ describe('DesktopScriptRuntimeHost', () => {
     children[0].respond({ ok: true, capabilities: {} }, 999)
     await expect(promise).rejects.toThrow(/did not match the pending request/)
 
-    // stop() destroys stdin, so the queued write calls back with an error. That
-    // is the same operation failing, not a second one, and counting it twice
-    // would drive a 3-strike cooldown at half the intended rate.
+    // A destroyed stdin's late callback must not count the same operation twice.
     children[0].failQueuedWrites()
 
     expect(warnings.filter((line) => /helper stopped/.test(line))).toHaveLength(1)
@@ -507,7 +487,6 @@ describe('DesktopScriptRuntimeHost', () => {
     await settle()
     expect(children).toHaveLength(2)
 
-    // The late callback belongs to a channel and a request that are both gone.
     children[0].failQueuedWrites()
 
     expect(children[1].killed).toBe(false)
@@ -527,9 +506,7 @@ describe('DesktopScriptRuntimeHost', () => {
     const second = host.request({ tool: 'handshake' })
     await settle()
 
-    // Backpressure can hold a write callback past its own response. The channel
-    // is alive and was never stopped, so only the request id can tell that this
-    // report is stale — this is what pins the host-side guard on its own.
+    // A write callback can fail after its reply; only the request ID detects staleness on a live channel.
     children[0].failQueuedWrite(0)
 
     expect(children[0].killed).toBe(false)
@@ -601,8 +578,6 @@ describe('DesktopScriptRuntimeHost', () => {
     await expect(promise).resolves.toMatchObject({ ok: true })
     expect(warnings.some((line) => /trying Bypass/.test(line))).toBe(true)
 
-    // A helper started under Bypass, so the diagnosis is proven and the fallback
-    // is remembered for the session rather than re-probed per call.
     const next = host.request({ tool: 'handshake' })
     await settle()
     expect(children).toHaveLength(2)
@@ -616,9 +591,7 @@ describe('DesktopScriptRuntimeHost', () => {
     let clock = 1_000
     const { host, children, specs, warnings } = createHost({ cooldownMs: 60_000, now: () => clock })
 
-    // What AppLocker and WDAC constrained language mode look like: the same
-    // SecurityError category, but the block is at script load, so Bypass cannot
-    // lift it and the escalation was a misdiagnosis.
+    // AppLocker/WDAC can report SecurityError even though Bypass cannot remove the restriction.
     const promise = host.request({ tool: 'handshake' })
     await settle()
     await failEveryStart(children, POLICY_ERROR)
@@ -626,14 +599,9 @@ describe('DesktopScriptRuntimeHost', () => {
 
     expect(specs[1].args).toContain('Bypass')
     expect(warnings.some((line) => /returning to RemoteSigned/.test(line))).toBe(true)
-    // The revert lands inside the outage, not just at its end: every attempt
-    // after the fallback is disproved is back on the preferred policy, so the
-    // misdiagnosis costs one Bypass command line rather than one per attempt.
     expect(specs).toHaveLength(3)
     expect(specs[2].args).not.toContain('Bypass')
 
-    // Latching here would put the most heavily weighted MDE token on every
-    // later command line, on exactly the hardened host that is watching.
     clock += 61_000
     const recovered = host.request({ tool: 'handshake' })
     await settle()
@@ -694,12 +662,10 @@ describe('DesktopScriptRuntimeHost', () => {
     const attempts = children.length
     expect(attempts).toBe(3)
 
-    // Inside the cooldown the host stays out of the way without respawning.
     clock += 30_000
     await expect(host.request({ tool: 'handshake' })).rejects.toSatisfy(isRuntimeHostUnavailable)
     expect(children).toHaveLength(attempts)
 
-    // Past it, the next operation re-probes rather than staying degraded forever.
     clock += 31_000
     const recovered = host.request({ tool: 'handshake' })
     await settle()
@@ -717,9 +683,7 @@ describe('DesktopScriptRuntimeHost', () => {
     const promise = host.request({ tool: 'handshake' })
     await settle()
     const child = children[0]
-    // What an old runtime.ps1 sends when a request will not parse: a real error,
-    // with no id to route it by. The desync is honest, but replacing its message
-    // reports a broken stream and loses the only account of the cause.
+    // Preserve real helper errors even when the response ID is wrong.
     child.respond({ ok: false, error: 'Invalid object passed in' }, child.pendingId() + 500)
 
     await expect(promise).rejects.toThrow(
@@ -731,8 +695,6 @@ describe('DesktopScriptRuntimeHost', () => {
   it('does not charge a cooldown for requests the helper rejects as malformed', async () => {
     const { host, children } = createHost({ cooldownMs: 60_000 })
 
-    // A tagged error is the helper working, not failing. Three of them used to
-    // arrive untagged, and three desync aborts is exactly the cooldown.
     for (let round = 0; round < 3; round++) {
       const promise = host.request({ tool: 'handshake' })
       await settle()
@@ -753,14 +715,12 @@ describe('DesktopScriptRuntimeHost', () => {
     vi.useFakeTimers()
     const { host, children } = createHost({ requestTimeoutMs: 1_000 })
 
-    // Two ahead of it, because one puts the turn exactly on the deadline.
+    // Two predecessors keep the queued click behind its wait deadline.
     const first = host.request({ tool: 'get_app_state', app: 'Frozen' })
     const second = host.request({ tool: 'get_app_state', app: 'Frozen' })
     const queued = host.request({ tool: 'click', app: 'Notepad' })
-    // Asserted before the clock moves: both reject while the test is still
-    // inside advanceTimersByTimeAsync.
+    // Attach rejection handlers before advancing timers to avoid unhandled rejections.
     const firstFailed = expect(first).rejects.toMatchObject({ code: 'action_timeout' })
-    // Its own deadline, not the one it would inherit by reaching the head.
     const queuedFailed = expect(queued).rejects.toMatchObject({
       code: 'action_timeout',
       message: /waiting for earlier operations/
@@ -772,8 +732,6 @@ describe('DesktopScriptRuntimeHost', () => {
     await firstFailed
     await queuedFailed
 
-    // Drain past the abandoned request: it is never handed to a helper, because
-    // a click the caller has been told failed must not still land.
     children[1].respond({ ok: true, state: {} })
     await expect(second).resolves.toMatchObject({ ok: true })
     await settle()
@@ -781,7 +739,6 @@ describe('DesktopScriptRuntimeHost', () => {
       expect.objectContaining({ tool: 'click' })
     )
 
-    // The request that gave up does not poison the queue behind it.
     const next = host.request({ tool: 'handshake' })
     await settle()
     children[1].respond({ ok: true, capabilities: {} })
@@ -802,16 +759,13 @@ describe('DesktopScriptRuntimeHost', () => {
     await expect(head).resolves.toMatchObject({ ok: true })
     await settle()
 
-    // Past the point the enqueue deadline would have fired: waiting its turn
-    // must not eat the budget the operation itself is entitled to.
     await vi.advanceTimersByTimeAsync(900)
     children[0].respond({ ok: true, state: {} })
     await expect(queued).resolves.toMatchObject({ ok: true })
     host.dispose()
   })
 
-  // Both of these deliberately leave `now` unset: the bug was in the default the
-  // host picks, so a test that injects a clock cannot see it.
+  // Leave now unset to test the default monotonic clock rather than an injected substitute.
   it('does not stretch the cooldown when the wall clock steps backwards', async () => {
     const wallClock = vi.spyOn(Date, 'now').mockReturnValue(2_000_000_000_000)
     const { host, children } = createHost({ cooldownMs: 60_000 })
@@ -821,7 +775,6 @@ describe('DesktopScriptRuntimeHost', () => {
     await failEveryStart(children, 'The term is not recognized')
     await expect(failed).rejects.toSatisfy(isRuntimeHostUnavailable)
 
-    // An NTP correction, a VM snapshot restore, a user changing the clock.
     wallClock.mockReturnValue(2_000_000_000_000 - 3_600_000)
 
     const refused = await host.request({ tool: 'handshake' }).then(

@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionBackgroundTask } from './agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from './agent-session/agent-session-background-task-wire'
 import {
   agentChildWorkProjectionCandidateFromBackgroundTask,
   projectAgentChildWorkLegacyBackgroundTasks,
   projectAgentChildWorkLegacySubagents
 } from './agent-status-child-work-projection'
 
-// Today's inputs: the rows a host publishes on `summary.backgroundTasks`, run through the exact
-// path the status bridge uses. The expected values were captured on unmodified main.
+// Run current published backgroundTasks through the bridge path against expectations captured on unmodified main.
 const PUBLISHED_TASKS: AgentSessionBackgroundTask[] = [
   {
     id: 'task-agent',

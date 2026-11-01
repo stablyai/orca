@@ -1,12 +1,4 @@
-// Why: `pr-*` remotes Orca adds for fork-PR review are only ever pruned by
-// `worktree-push-target-cleanup.ts`, and only when a *single* worktree removal
-// triggers it. Three things escape that: (1) legacy/reused metadata missing the
-// `remoteCreated` flag, (2) a "preserve branch on delete" pinning its remote via
-// `branch.*.remote` config long after the worktree is gone, and (3) a worktree
-// removed outside Orca entirely (no removal event ever fires). This sweep
-// inverts the same safety predicates over every `pr-*` remote in the repo
-// instead of one removal, so all three eventually get reclaimed. It never adds
-// new safety logic — see `worktree-push-target-cleanup.ts` for the predicates.
+// Sweep all fork remotes with cleanup's shared predicates to reclaim leaks from legacy metadata or external worktree removal.
 
 import { gitExecFileAsync } from '../git/runner'
 import { listWorktrees } from '../git/worktree'
@@ -20,10 +12,7 @@ import {
   type WorktreePushTargetStore
 } from './worktree-push-target-cleanup'
 
-// Orca only ever mints `pr-head` or `pr-<owner>-<repo>` (see `sanitizeRemoteName`), optionally
-// disambiguated with `-2`..`-99` (see `ensureUniqueRemoteName`). The naming convention alone is
-// not proof of provenance -- a user could name a remote `pr-foo` -- so this only narrows which
-// remotes are even considered; `hasOrcaCreatedProvenance` below is the actual safety gate.
+// Orca-shaped names only narrow candidates; provenance must independently prove ownership.
 const ORCA_PR_REMOTE_NAME_PATTERN =
   /^pr-(?:head|[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?)(?:-[0-9]{1,2})?$/
 
@@ -61,8 +50,7 @@ async function shouldReclaimPrRemote(
     remoteUrl: remote.url
   }
   const referencingEntries = findWorktreeMetaReferencingRemote(store, repoId, target)
-  // Provenance gate: only touch a remote some worktree's persisted pushTarget explicitly
-  // recorded Orca creating. Naming and URL shape are necessary but not sufficient proof.
+  // Require persisted creation provenance; names and URLs cannot prove ownership.
   if (!referencingEntries.some(({ meta }) => meta.pushTarget?.remoteCreated === true)) {
     return false
   }
@@ -72,8 +60,7 @@ async function shouldReclaimPrRemote(
   if (stillClaimedByLiveWorktree) {
     return false
   }
-  // A branch that still exists may push to this fork again later; only a branch that's
-  // actually gone (force-deleted, or deleted outside the "preserve on delete" flow) frees it.
+  // Preserved branches still need their fork even after the worktree is gone.
   if (
     await hasBranchConfigUsingRemote(execGit, repoPath, target, { requireExistingBranch: true })
   ) {
@@ -82,8 +69,6 @@ async function shouldReclaimPrRemote(
   return true
 }
 
-// Exported for unit/real-git tests: the `execGit` seam and injected live-worktree paths let
-// tests drive the sweep without a real repo (or with one, for the real-git coverage).
 export async function reconcileOrphanedPrRemotesWithExec(
   repoPath: string,
   repoId: string,
@@ -104,8 +89,7 @@ export async function reconcileOrphanedPrRemotesWithExec(
   return reclaimed
 }
 
-// Why: the sweep costs a handful of git subprocesses (remote -v, worktree list, per-candidate
-// config/for-each-ref); bound to once per repo per cooldown so bursts of removals don't repeat it.
+// Rate-limit subprocess-heavy sweeps so removal bursts cannot repeat the same repo scan.
 const RECONCILE_COOLDOWN_MS = 60 * 60 * 1000
 const lastReconciledAtByRepoId = new Map<string, number>()
 

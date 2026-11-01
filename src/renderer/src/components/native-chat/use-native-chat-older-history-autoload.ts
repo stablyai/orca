@@ -1,21 +1,13 @@
-// Pages in older history before the reader reaches the top. An IntersectionObserver
-// rooted at the transcript scroller watches a sentinel above the first row, with a
-// prefetch margin on top. It is the only geometry source and is recreated whenever
-// a page settles or paging is reset, so its first report re-checks the range:
-// paging continues while the sentinel stays in range and stops once a prepend
-// pushes it out. Row measurement never asks for a page; the virtualizer keeps the
-// reader's row in place across the prepend.
+// Reobserve the prefetch sentinel after each page/reset to keep loading until prepends move it out; the virtualizer preserves position.
 
 import { useEffect, useEffectEvent, useState } from 'react'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 
-/** How far above the viewport the next page starts loading. */
 export const NATIVE_CHAT_OLDER_HISTORY_PREFETCH_PX = 600
 
 export type NativeChatOlderHistoryAutoload = {
   sentinelRef: (node: HTMLElement | null) => void
-  /** False once a page failed or made no progress (or the platform cannot observe);
-   *  the list then offers a manual load instead. */
+  /** Offer manual loading after failure/no progress or without IntersectionObserver. */
   isAutoLoadEnabled: boolean
   /** Manual load: clears a failure so auto-load resumes if it succeeds. */
   loadEarlierManually: () => void
@@ -30,8 +22,7 @@ export function useNativeChatOlderHistoryAutoload({
   loadEarlier
 }: {
   scrollRef: React.RefObject<HTMLElement | null>
-  /** Identity of the history being paged, including its paging generation; a failure
-   *  belongs to one, so a reconnect or reset re-enables auto-load. */
+  /** Include the paging generation so reconnects/resets clear old failures. */
   historyKey: string
   isVisible: boolean
   hasMore: boolean
@@ -40,16 +31,14 @@ export function useNativeChatOlderHistoryAutoload({
   loadEarlier: () => Promise<NativeChatOlderPageResult>
 }): NativeChatOlderHistoryAutoload {
   const [sentinel, setSentinel] = useState<HTMLElement | null>(null)
-  // Keyed rather than a boolean so a swapped transcript never inherits the failure.
+  // A swapped transcript must not inherit another history’s failure.
   const [failedHistoryKey, setFailedHistoryKey] = useState<string | null>(null)
 
   const canObserve = typeof IntersectionObserver !== 'undefined'
   const isAutoLoadEnabled = canObserve && failedHistoryKey !== historyKey
   const shouldObserve = isAutoLoadEnabled && isVisible && hasMore && !loadingEarlier
 
-  // The lane owns "a page is in flight"; a second latch here would strand whenever the
-  // lane abandons a read that never settles. A page that made no progress stops too, or
-  // the recreated observer would ask for it again forever.
+  // Let the lane own in-flight state so abandoned reads cannot strand a latch; stop on no progress to prevent endless observer reloads.
   const loadPage = (): void => {
     void loadEarlier().then((result) => {
       if (result === 'failed' || result === 'unchanged') {
@@ -65,7 +54,7 @@ export function useNativeChatOlderHistoryAutoload({
     loadPage()
   }
 
-  // historyKey too: a reset paging generation re-checks the range even if loading never toggled.
+  // Paging resets must recheck range even if loading never toggled.
   useEffect(() => {
     const root = scrollRef.current
     if (!shouldObserve || !sentinel || !root) {

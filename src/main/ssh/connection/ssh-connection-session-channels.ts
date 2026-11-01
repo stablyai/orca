@@ -57,7 +57,7 @@ export async function openSshExecChannel(
     }
     return spawnTrackedSystemSshChannel(host, cmd, options)
   }
-  // Why captured once: retries reuse the client this call started on, never a reconnect's replacement.
+  // Keep retries on the original client; reconnect replacements belong to new calls.
   const client = host.client()
   if (!client) {
     throw new Error('Not connected')
@@ -111,7 +111,7 @@ export async function openSshSftpChannel(
   options?: AbortSignal | { signal?: AbortSignal }
 ): Promise<SFTPWrapper> {
   assertNotDisposed(host)
-  // Why: relay transfers pass a signal directly, while filesystem factories use an options object.
+  // Relay transfers pass signals directly; filesystem factories wrap them in options.
   const signal = options && 'aborted' in options ? options : options?.signal
   if (signal?.aborted) {
     throw createSshOperationAbortError()

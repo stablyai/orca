@@ -1,19 +1,15 @@
 import type { InputEvent, KeyboardInputEvent } from 'electron'
 
-/** Translates CDP key and text input into Electron guest widget events (#20595). */
-
 type ElectronModifier = NonNullable<InputEvent['modifiers']>[number]
 
-// Why: Electron honours this NativeWebKeyboardEvent flag although its typings omit it; an
-// unhandled agent key must not be redispatched to Orca's window or application menu.
+// Electron supports this untyped flag to keep unhandled keys out of Orca shortcuts and menus.
 export type GuestKeyboardEvent = KeyboardInputEvent & { skipIfUnhandled: true }
 
 export type GuestEditCommand = 'selectAll' | 'copy' | 'cut' | 'paste' | 'undo' | 'redo' | 'delete'
 
 type GuestKeyPlan = {
   events: GuestKeyboardEvent[]
-  // Why: macOS editing shortcuts arrive as CDP `commands`; widget key events skip the
-  // browser-side key bindings that would run them.
+  // Widget events skip the browser bindings that execute macOS CDP edit commands.
   commands: GuestEditCommand[]
 }
 
@@ -24,7 +20,6 @@ const CDP_MODIFIER_NAMES: [number, ElectronModifier][] = [
   [8, 'shift']
 ]
 
-// CDP `key` -> Electron accelerator key code, for keys whose names differ or are not single characters.
 const ELECTRON_KEY_CODES: Record<string, string> = {
   Enter: 'Enter',
   Tab: 'Tab',
@@ -75,7 +70,7 @@ function electronKeyCode(key: unknown): string | null {
   if (/^F([1-9]|1\d|2[0-4])$/.test(key)) {
     return key
   }
-  // Why: Electron derives key/code from a US layout, which covers printable ASCII only.
+  // Electron derives key/code from the US layout, which covers printable ASCII.
   return key.length === 1 && key >= '!' && key <= '~' ? key : null
 }
 
@@ -84,8 +79,7 @@ function electronModifiers(mask: unknown): ElectronModifier[] {
   return CDP_MODIFIER_NAMES.filter(([bit]) => (bits & bit) !== 0).map(([, name]) => name)
 }
 
-// Why: Blink drops control characters from char events ("a\nb" types "ab"), so text that
-// carries them cannot be typed this way and must take the fallback.
+// Blink drops control characters from char events; use the fallback to preserve them.
 function typeableText(text: unknown): text is string {
   return (
     typeof text === 'string' &&
@@ -106,7 +100,6 @@ function charEvents(text: string, modifiers: ElectronModifier[]): GuestKeyboardE
   }))
 }
 
-/** Translates one CDP Input.dispatchKeyEvent into guest widget events, or null when it cannot. */
 export function planCdpKeyEvent(params: Record<string, unknown>): GuestKeyPlan | null {
   const commandsParam = params.commands ?? []
   if (!Array.isArray(commandsParam) || !commandsParam.every(isGuestEditCommand)) {
@@ -122,8 +115,7 @@ export function planCdpKeyEvent(params: Record<string, unknown>): GuestKeyPlan |
     return null
   }
   const keyCode = electronKeyCode(params.key)
-  // Why: a named key's text is a control character (Tab "\t", Backspace "\b") that the key
-  // event already acts on; only Enter's "\r" char is needed, to submit forms and insert newlines.
+  // Named keys handle their own control text; Enter alone needs a char event for forms and newlines.
   const isNamedKey =
     typeof params.key === 'string' &&
     params.key !== ' ' &&
@@ -132,14 +124,13 @@ export function planCdpKeyEvent(params: Record<string, unknown>): GuestKeyPlan |
     if (!typeableText(text)) {
       return null
     }
-    // Why: a non-US-layout character has no Electron key code; the char event alone types it.
+    // Non-US characters can be typed by char event without an Electron key code.
     const down: GuestKeyboardEvent[] =
       keyCode === null ? [] : [{ type: 'keyDown', keyCode, modifiers, skipIfUnhandled: true }]
     return { events: [...down, ...charEvents(text, modifiers)], commands }
   }
   if (keyCode === null) {
-    // Why: a character outside the US layout went down as a char event alone; its keyUp has no
-    // widget form, and the fallback would focus the guest just to release a key never pressed.
+    // Non-US char-only input has no pressed widget key to release; avoid borrowing focus.
     const isCharacterKey = typeof params.key === 'string' && Array.from(params.key).length === 1
     return type === 'keyUp' && isCharacterKey ? { events: [], commands } : null
   }
@@ -156,7 +147,6 @@ export function planCdpKeyEvent(params: Record<string, unknown>): GuestKeyPlan |
   return { events: [event, ...enterChar], commands }
 }
 
-/** Translates CDP Input.insertText into guest widget char events, or null when it cannot. */
 export function planInsertText(text: unknown): GuestKeyboardEvent[] | null {
   return typeableText(text) ? charEvents(text, []) : null
 }

@@ -1,6 +1,4 @@
-// A layout-owner build's browser tab and page commands: the window sends main each change under
-// the ids it proposes, and draws it from main's frame (content-tabs-from-main-frames.test.ts
-// covers what shows before and after main answers).
+// Layout-owner browser commands propose IDs to main and draw from frames; content-tabs-from-main-frames.test.ts covers answer boundaries.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
@@ -80,24 +78,6 @@ describe('browser tabs in a layout-owner build', () => {
     ])
   })
 
-  it('sends a close with the window’s reason while the tab still shows', async () => {
-    const user = store.getState().createBrowserTab(WT, 'about:blank')
-    const cleanup = store.getState().createBrowserTab(WT, 'about:blank')
-    await main.settle()
-    const userEntry = entryOf(user.id).id
-    const cleanupEntry = entryOf(cleanup.id).id
-    const before = sent().length
-
-    store.getState().closeBrowserTab(user.id)
-    store.getState().closeBrowserTab(cleanup.id, { reason: 'cleanup' })
-    await main.settle()
-
-    expect(sent().slice(before)).toEqual([
-      { type: 'closeTabs', workspace: WT, tabIds: [userEntry], recordClose: 'user' },
-      { type: 'closeTabs', workspace: WT, tabIds: [cleanupEntry], recordClose: 'cleanup' }
-    ])
-  })
-
   it('sends page create, convert and close, and a profile switch', async () => {
     const tab = store.getState().createBrowserTab(WT, 'about:blank')
     await main.settle()
@@ -137,14 +117,5 @@ describe('browser tabs in a layout-owner build', () => {
       }
     ])
     expect(store.getState().browserPagesByWorkspace[tab.id]).toHaveLength(1)
-  })
-
-  it('sends nothing for a page or tab the window does not hold', () => {
-    expect(store.getState().createBrowserPage('missing', 'about:blank')).toBeNull()
-    store.getState().closeBrowserPage('missing')
-    store.getState().closeBrowserTab('missing')
-    store.getState().switchBrowserTabProfile('missing', null)
-
-    expect(sent()).toEqual([])
   })
 })

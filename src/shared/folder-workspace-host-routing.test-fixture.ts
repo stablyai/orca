@@ -1,5 +1,4 @@
-// Folder rows as local main stores them (no host stamps), each with the partition the window saves
-// it to. Main's router and the window's save are both checked against this one table.
+// Share locally stored folder rows (without host stamps) and saved partitions across main routing/window-save tests.
 import type { ExecutionHostId } from './execution-host'
 import type { FolderWorkspace } from './folder-workspace-types'
 import type { ProjectGroup } from './project-group-types'

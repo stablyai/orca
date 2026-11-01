@@ -1,21 +1,5 @@
-// Scripted stand-in for the Claude Code CLI, driven by the SDK contract-pin
-// tests. It speaks just enough stream-json to satisfy the SDK: it answers every
-// inbound control_request with a success control_response, records everything it
-// observes to a report file, and plays back the steps listed in a scenario file.
-//
-// Env contract (set by the test):
-//   ORCA_SDK_CONTRACT_SCENARIO_PATH — JSON file
-//     { steps: Step[], controlResponses?: { [subtype]: <response> },
-//       controlResponseLeadingFrames?: { [subtype]: <frame>[] } } where a Step is
-//     { emit: <frame> } | { awaitUserMessage: true } | { stderr: <text> } |
-//     { awaitControlRequest: <subtype> } | { awaitControlResponse: <request_id> } | { awaitFile: { path, timeoutMs } } |
-//     { delayMs: <n> } | { exit: <code> }
-//   ORCA_SDK_CONTRACT_REPORT_PATH — where argv/env observations are written
-//   ORCA_SDK_CONTRACT_IGNORE_SIGTERM — trap SIGTERM/SIGINT and outlive stdin close
-//   ORCA_SDK_CONTRACT_IGNORE_CONTROL_REQUESTS — record control requests but never answer
-//   ORCA_SDK_CONTRACT_DESCENDANT — fork an idle grandchild and report its pid
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -26,6 +10,9 @@ if (process.argv.includes('--version')) {
 
 const scenarioPath = process.env.ORCA_SDK_CONTRACT_SCENARIO_PATH
 const reportPath = process.env.ORCA_SDK_CONTRACT_REPORT_PATH
+// Every launch shares the report path, so a later one (e.g. model discovery) overwrites it; the
+// log keeps each launch's reports, one JSON line per write.
+const reportLogPath = process.env.ORCA_SDK_CONTRACT_REPORT_LOG_PATH
 
 const report = {
   argv: process.argv.slice(1),
@@ -46,9 +33,11 @@ const writeReport = () => {
   if (reportPath) {
     writeFileSync(reportPath, JSON.stringify(report))
   }
+  if (reportLogPath) {
+    appendFileSync(reportLogPath, `${JSON.stringify(report)}\n`)
+  }
 }
-// Written immediately so a test can prove which script the SDK executed even if
-// the session dies before the scenario completes.
+// Preserve launch evidence even if the scenario never finishes.
 writeReport()
 
 const scenario = scenarioPath ? JSON.parse(readFileSync(scenarioPath, 'utf8')) : { steps: [] }
@@ -126,7 +115,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
         }
       }
     }
-    // Frames the CLI wrote just before its answer, in the same write: one read chunk.
+    // Write leading frames and the control reply together to exercise SDK delivery reordering.
     const leading = scenario.controlResponseLeadingFrames?.[frame.request?.subtype] ?? []
     process.stdout.write([...leading, response].map((line) => `${JSON.stringify(line)}\n`).join(''))
     return
@@ -144,8 +133,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   }
 })
 
-// Never outlive a wedged test: the readline subscription would otherwise hold
-// this process open forever if the SDK side stops driving the scenario.
+// Bound fixture lifetime if the SDK stops driving stdin.
 setTimeout(
   () => process.exit(3),
   Number(process.env.ORCA_SDK_CONTRACT_TIMEOUT_MS ?? 20_000)
@@ -173,7 +161,6 @@ for (const step of scenario.steps) {
   } else if (step.delayMs) {
     await new Promise((resolve) => setTimeout(resolve, step.delayMs))
   } else if (step.exit !== undefined) {
-    // A CLI that refuses to start: leave with its own status, stderr already written.
     writeReport()
     process.exit(step.exit)
   }

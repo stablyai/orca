@@ -8,7 +8,7 @@ vi.mock('../../shared/app-environment', () => ({
 }))
 
 const stored = new Map<string, SshTarget>()
-// Like the real store: reads hand out copies, writes land on the stored entry only.
+// Model store copies so writes must be re-read instead of mutating caller snapshots.
 vi.mock('../managed-server/lifecycle/orcad-managed-runtime-context', () => ({
   requireManagedOrcadTargetStore: () => ({
     getTarget: (id: string) => {
@@ -42,7 +42,7 @@ describe('remembering a managed-server update failure for this launch', () => {
 
   it('an overlapping check sees the failure the first one recorded on a copy it took earlier', async () => {
     stored.set('c', target('c'))
-    // Both checks took their copy before either ran, as connect and tunnel restore do.
+    // Both caller snapshots predate either check, as connect and tunnel restore can.
     const first = { ...stored.get('c')! }
     const second = { ...stored.get('c')! }
     const deps = managedServerUpdateDeps('/tmp/user-data')

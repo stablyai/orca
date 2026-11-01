@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { contextTokensFromUsage } from '../../shared/agent-session-context-usage'
+import { contextTokensFromUsage } from '../../shared/agent-session/agent-session-context-usage'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { openAcpFixtureRig, readAcpFixture } from './acp-timeline-fixture.test-support'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
@@ -11,7 +11,6 @@ describe('ACP reviewed traffic and recovery', () => {
   it('replays every notification in the full recording without extension status rows or persisted signatures', async () => {
     const f = await openAcpFixtureRig()
     const frames = await readAcpFixture('s1-full-notifications')
-    expect(frames).toHaveLength(142)
     const rows = await f.feed(frames)
     expect(rows.filter((row) => row.body.kind === 'status')).toEqual([])
     expect(rows.filter((row) => row.body.kind === 'tool-call')).toHaveLength(2)

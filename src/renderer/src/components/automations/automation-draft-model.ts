@@ -6,6 +6,7 @@ import {
   parseExtraAgentArgs
 } from '../../../../shared/automation-extra-agent-args'
 import type { AutomationDraft } from './AutomationEditorDialog'
+import { extraAgentArgsErrorText } from './automation-extra-agent-args-error-copy'
 
 export const AUTOMATION_DEFAULT_TIME = '09:00'
 
@@ -43,23 +44,24 @@ export function getAgentLabel(agentId: string): string {
 
 /** The field's error, or null when the draft's extras can be saved. */
 export function getDraftExtraAgentArgsError(
-  draft: Pick<AutomationDraft, 'agentId' | 'extraAgentArgs'>
+  draft: Pick<AutomationDraft, 'agentId' | 'extraAgentArgs' | 'surface'>
 ): string | null {
-  if (!hasExtraAgentArgs(draft.extraAgentArgs)) {
+  if (draft.surface === 'chat' || !hasExtraAgentArgs(draft.extraAgentArgs)) {
     return null
   }
   const parsed = parseExtraAgentArgs({
     agent: draft.agentId,
     extraAgentArgs: draft.extraAgentArgs
   })
-  return parsed.ok ? null : parsed.error
+  return parsed.ok ? null : extraAgentArgsErrorText(parsed)
 }
 
 /** Reuse can't carry extras; the field offers a switch instead of flipping it silently. */
 export function draftExtraAgentArgsNeedFreshSession(
-  draft: Pick<AutomationDraft, 'extraAgentArgs' | 'reuseSession' | 'workspaceMode'>
+  draft: Pick<AutomationDraft, 'extraAgentArgs' | 'reuseSession' | 'workspaceMode' | 'surface'>
 ): boolean {
   return (
+    draft.surface !== 'chat' &&
     hasExtraAgentArgs(draft.extraAgentArgs) &&
     draft.workspaceMode === 'existing' &&
     draft.reuseSession

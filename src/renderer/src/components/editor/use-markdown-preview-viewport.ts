@@ -1,3 +1,4 @@
+import { revealMarkdownNavigationDetails } from './markdown-navigation-details'
 import type { MarkdownPreviewDocument } from './markdown-preview-document-types'
 import type { VirtualMarkdownPreviewNavigation } from './VirtualMarkdownPreviewBody'
 import { useCallback, useEffect, useLayoutEffect, type MutableRefObject } from 'react'
@@ -40,7 +41,6 @@ export function useMarkdownPreviewViewport({
     inputRef,
     matchesRef,
     lastAppliedInitialAnchorRef,
-    pendingEditorRevealFrameIdsRef,
     isSearchOpen,
     setIsSearchOpen,
     setQuery,
@@ -116,7 +116,6 @@ export function useMarkdownPreviewViewport({
     pendingReviewActionFrameIdsRef.current = []
     const reviewTimeouts = pendingReviewActionTimeoutIdsRef.current
     pendingReviewActionTimeoutIdsRef.current = []
-    cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
     clearMarkdownPreviewReviewTimers(attentionReviewCommentTimeoutRef, reviewTimeouts)
     clearReviewNotesCopiedResetTimer()
     clearCopiedReviewNoteResetTimer()
@@ -125,7 +124,6 @@ export function useMarkdownPreviewViewport({
     attentionReviewCommentTimeoutRef,
     clearCopiedReviewNoteResetTimer,
     clearReviewNotesCopiedResetTimer,
-    pendingEditorRevealFrameIdsRef,
     pendingReviewActionFrameIdsRef,
     pendingReviewActionTimeoutIdsRef,
     reviewActionFrameGenerationRef
@@ -165,6 +163,7 @@ export function useMarkdownPreviewViewport({
         return false
       }
 
+      revealMarkdownNavigationDetails(target)
       container.scrollTo({ top: getMarkdownPreviewAnchorScrollTop(container, target) })
       target.focus({ preventScroll: true })
       return true

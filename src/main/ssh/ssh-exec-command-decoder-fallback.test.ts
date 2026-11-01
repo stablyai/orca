@@ -21,9 +21,8 @@ type HostOptions = {
   gatewayLimitBytes?: number
 }
 
-/** A host behind the transport's real wrapper, run by a real /bin/sh. */
+/** Exercise the actual transport wrapper through real /bin/sh. */
 function host(options: HostOptions = {}) {
-  // Untyped like the rc-noise host: the fake channel carries only what execCommand reads.
   const exec = vi.fn()
   exec.mockImplementation(async (command: string, execOptions?: SshExecOptions) => {
     let remote = wrapRemoteCommandForPosixShell(command, {
@@ -100,7 +99,6 @@ describe.skipIf(process.platform === 'win32')(
           snapshot,
           join(base, '.orca-remote')
         )
-        // Under the byte budget, so even uncompressed nothing is cut.
         const gatewayLimitBytes = 6 * 1024
         expect(
           Buffer.byteLength(wrapRemoteCommandForPosixShell(command, { compress: false }))

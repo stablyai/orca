@@ -118,8 +118,7 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onMoveSessionTab((move) => {
       const { tabId, targetGroupId } = move
-      // Switch point: main moves the tab first, as for a tab-bar drag. A reorder names a whole
-      // order, so it goes the reorder path below, which records it as main's moves.
+      // Main owns moves; whole-order changes use the reorder path that records equivalent main moves.
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&
         move.kind !== 'reorder' &&

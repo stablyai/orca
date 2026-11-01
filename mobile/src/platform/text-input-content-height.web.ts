@@ -21,8 +21,7 @@ const COPIED_STYLES = [
   'paddingLeft'
 ] as const
 
-/** Web sibling: a textarea keeps whatever height it was given, so measure the text in a hidden copy
- *  (resizing the live field would clamp its scrolling ancestors in WebKit) and render at that height. */
+// Measure a hidden copy: resizing the live textarea clamps scrolling ancestors in WebKit.
 export function useTextInputContentHeight(
   input: RefObject<TextInput | null>,
   value: string
@@ -80,7 +79,6 @@ export function useTextInputContentHeight(
     measure()
   }, [value, measure])
 
-  // Rotation or a resize rewraps the same text.
   useEffect(() => {
     const source: unknown = input.current
     if (!(source instanceof HTMLTextAreaElement)) {

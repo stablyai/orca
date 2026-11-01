@@ -3,7 +3,6 @@ import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
 
-/** A JSON file of browser profile id → site → entry, kept in the Orca profile directory. */
 export type BrowserProfileSiteStore<Entry> = {
   configure: (profileDirectory: string) => void
   get: (profileId: string, site: string) => Entry | undefined
@@ -21,15 +20,13 @@ export function createBrowserProfileSiteStore<Entry>({
   parseEntry
 }: {
   fileName: string
-  /** Names the file in the save-failure log. */
   description: string
-  /** Null drops an unreadable or empty entry. */
   parseEntry: (value: unknown) => Entry | null
 }): BrowserProfileSiteStore<Entry> {
   let filePathOverride: string | null = null
   let cached: { path: string; sites: StoredSites<Entry> } | null = null
 
-  // Why lazy: app.getPath('userData') throws before ready.
+  // Resolve the fallback path lazily so profile configuration can override it.
   const storePath = (): string => filePathOverride ?? join(app.getPath('userData'), fileName)
 
   const parse = (raw: string): StoredSites<Entry> => {
@@ -71,9 +68,7 @@ export function createBrowserProfileSiteStore<Entry>({
     let sites: StoredSites<Entry> = {}
     try {
       sites = parse(readFileSync(path, 'utf-8'))
-    } catch {
-      // Missing or unreadable: every site starts over.
-    }
+    } catch {}
     cached = { path, sites }
     return sites
   }
@@ -89,7 +84,7 @@ export function createBrowserProfileSiteStore<Entry>({
         `${JSON.stringify({ version: 1, profiles: sites }, null, 2)}\n`
       )
     } catch (error) {
-      // Why: the change still holds for this run; failing the user's action would punish them.
+      // Keep cached site preferences usable when a disk write fails.
       console.error(`[browser] Could not save ${description}:`, error)
     }
   }

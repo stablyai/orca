@@ -36,11 +36,7 @@ const AGENT_FRESHNESS_DEADLINE = 'agent-freshness'
 
 type AgentPane = { worktreeId: string; status: LiveAgentWorktreeStatus; staleAt: number }
 
-/**
- * Per-workspace activity facts the sidebar builder reads, kept current one workspace at a time.
- * Surfaces are re-read when the runtime publishes a workspace; agent rows follow the hook server's
- * per-row mutations, so a status ping re-derives one pane and never re-reads surfaces.
- */
+/** Refresh surfaces per workspace publication; hook mutations re-derive only their pane without re-reading surfaces. */
 export class WorkspaceActivityFactsProducer {
   private readonly facts = new Map<string, WorkspaceActivityFacts>()
   private readonly agentPanes = new Map<string, AgentPane>()

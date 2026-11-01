@@ -41,13 +41,7 @@ export {
   resetSessionParseCacheForTests
 } from './session-parse-cache-store'
 
-// Incremental append-parsing applies only to transcripts that are append-only
-// JSONL line-folds. Whole-JSON documents (grok/rovo/devin/hermes/jcode/gemini-json)
-// are rewritten in place, Kimi reads a state doc plus a sibling wire file, and
-// OpenCode reads SQLite rows or a doc plus a message dir — those formats keep
-// unchanged-file reuse only and re-parse whole when they change.
-// Returns a factory (not a state) so steady-state resumes, which clone the
-// cached state instead, never pay for a throwaway accumulator.
+// Resume only append-only folds; return factories so cached resumes avoid allocating throwaway state.
 function resumableStateFactoryFor(
   candidate: SessionFileCandidate
 ): ((messages: TranscriptMessageSink) => ResumableSessionParseState) | null {
@@ -110,16 +104,7 @@ export function createSessionParseStats(): SessionParseStats {
   }
 }
 
-/**
- * The session list's cursor over the transcript reader: it remembers what each
- * file looked like when it was last listed, reuses that work where the file is
- * provably unchanged (mtime+size), and otherwise asks the reader to resume from
- * the last consumed byte or re-read the file whole. This is what keeps the
- * renderer's ~5s forced rescans from re-reading gigabytes of transcripts
- * (STA-1278/STA-1417: main process pegging one core during multi-agent
- * workloads). Other consumers of the reader keep their own equivalent cursor
- * and never consult this one.
- */
+/** History owns this stat-keyed cursor; transcript consumers track their own read coverage. */
 export async function parseAgentSessionFileCached(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
@@ -127,17 +112,13 @@ export async function parseAgentSessionFileCached(
   requireRead?: SessionParseReadRequirement,
   signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  // The whole lookup-read-store sequence runs in the lane: a concurrent parse of
-  // the same path shares this entry's resume point and its message channel.
+  // Serialize lookup/read/store because overlapping parses share a resume point and message channel.
   return inSessionParseFileLane(candidate.file.path, () =>
     parseCachedInLane(candidate, platform, stats, requireRead, signal)
   )
 }
 
-/**
- * A Session History scan's parse. Listing the path first is what exempts its row
- * from the count bound kept for other readers.
- */
+/** Mark listed rows before parsing to exempt them from the unlisted cache bound. */
 export function parseListedSessionFile(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
@@ -148,27 +129,9 @@ export function parseListedSessionFile(
   return parseAgentSessionFileCached(candidate, platform, stats, undefined, signal)
 }
 
-/**
- * What a caller other than the session list needs out of this parse.
- *
- * `any`: some bytes must be read. A cursor already at the file's current stat
- * is dropped so the reader opens it; one that is merely behind is left alone,
- * because an append is a read.
- *
- * `whole`: the file must be re-read from zero, for a consumer whose own cursor
- * covers a span this one does not.
- *
- * Why it is a parameter and not two calls around this one: the decision reads
- * cache state and then changes it, so outside the per-path lane an overlapping
- * list parse can store its entry in between and the forced read silently
- * degrades to a reuse.
- */
+/** Enforce in the path lane: any forbids unchanged reuse; whole requires reading from zero. */
 export type SessionParseReadRequirement = 'any' | 'whole'
 
-/**
- * True when this cursor already sits at the transcript's current stat, so a
- * parse would reuse the cached fold and read no bytes at all.
- */
 function sessionParseCacheCoversTranscript(
   candidate: SessionFileCandidate,
   key: string,
@@ -206,8 +169,7 @@ async function parseCachedInLane(
     if (sidecarUnchanged(entry.sidecar, file.sidecar)) {
       return reuseCachedSession(candidate, key, entry, stats)
     }
-    // Only the sibling moved. For an agent whose sibling just adds metadata,
-    // re-merge it onto the stored fold result; the transcript is not re-read.
+    // Metadata-only sidecar changes can merge onto the saved fold without rereading the transcript.
     if (sidecarEnrichesWithoutReparse(candidate) && entry.foldSession !== undefined) {
       const enriched = await enrichSessionFromSidecar(
         candidate,
@@ -252,9 +214,7 @@ async function parseCachedInLane(
       sizeBytes: file.sizeBytes ?? null,
       platform,
       session: enriched.session,
-      // A refused sibling leaves the transcript's own work cached and resumable;
-      // only the sibling is recorded as unknown, so the next healthy scan
-      // re-merges it without re-reading the transcript.
+      // Preserve transcript work while refused sidecars stay unknown for a metadata-only retry.
       sidecar: enriched.refused ? 'unknown' : file.sidecar,
       foldSession: read.session,
       resume: read.resume
@@ -275,8 +235,6 @@ async function parseCachedInLane(
     sizeBytes: file.sizeBytes ?? null,
     platform,
     session: enriched.session,
-    // A refused sibling keeps the transcript's own result cached; only the
-    // sibling is recorded as unknown, so the next scan re-merges.
     sidecar: enriched.refused ? 'unknown' : file.sidecar,
     foldSession: session,
     resume: null
@@ -294,16 +252,12 @@ async function reuseCachedSession(
     stats.reused++
   }
   let session = entry.session
-  // A zero-turn transcript usually never changes again, but its sibling
-  // subagent dir (Claude `<session>/subagents/`, OMP's same-named artifact
-  // dir) can gain files after the parent's last write (a still-running
-  // subagent finishing). The mtime+size key can't see that, so refresh the
-  // cheap directory count on reuse.
+  // Zero-turn parents may never change again; recount late subagent transcripts outside the cached file signature.
   if (session && session.messageCount === 0) {
     const subagentTranscriptCount =
-      candidate.agent === 'claude'
+      session.agent === 'claude'
         ? await countSubagentTranscripts(candidate.file.path)
-        : candidate.agent === 'omp'
+        : session.agent === 'omp'
           ? await countOmpSubagentTranscripts(candidate.file.path)
           : null
     if (
@@ -313,8 +267,7 @@ async function reuseCachedSession(
       session = { ...session, subagentTranscriptCount }
     }
   }
-  // Codex titles come from session_index.jsonl, which mtime+size can't see.
-  // Remote counterpart: remote-session-scanner.ts's reusedCodexTitleRefresh.
+  // Index titles can change independently of the transcript signature.
   if (session && candidate.agent === 'codex') {
     session = await refreshCachedCodexTitle(candidate, session)
   }

@@ -30,11 +30,13 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     snapshot: RuntimeMobileSessionTabsResult,
     activeTabId: string,
     navigation: RuntimeNavigationTarget,
-    clientNavigationId?: string
+    clientNavigationId?: string,
+    /** The caller asked for nothing itself (a host action on its behalf), so it must be told to follow. */
+    callerFollows = false
   ): RuntimeMobileSessionTabsResult {
     let callerSnapshot: RuntimeMobileSessionTabsResult | null = null
     if (navigationTargetsClients(navigation)) {
-      // Why: follow is live intent; disconnected devices must not inherit stale navigation on reconnect.
+      // Follow is live intent; reconnecting devices must not inherit stale navigation.
       const ids = new Set(
         [...this.mobileSessionTabListeners]
           .map((subscription) => subscription.clientNavigationId)
@@ -55,13 +57,13 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
         }
       }
     } else if (clientNavigationId) {
-      // Why: follow-host still starts as caller navigation; the host is an additional target, not a replacement owner.
+      // Follow-host adds the host as a target without replacing caller navigation.
       callerSnapshot = this.clientSessionTabSelections.activate(
         this.withSessionTabsHolds(snapshot, clientNavigationId),
         clientNavigationId,
         activeTabId
       )
-      this.emitMobileSessionTabsSnapshotToClient(callerSnapshot, clientNavigationId)
+      this.emitMobileSessionTabsSnapshotToClient(callerSnapshot, clientNavigationId, callerFollows)
     }
     if (clientNavigationId) {
       return callerSnapshot ?? this.projectMobileSessionTabsForClient(snapshot, clientNavigationId)
@@ -77,11 +79,7 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     return snapshot
   }
 
-  /**
-   * Records a tab a create just published as one paired client's selection, as a create does for
-   * its own tab. Not the tap path: a tap is a wake gesture that may respawn a non-ready pane.
-   * Returns false when the tab is not in the snapshot.
-   */
+  /** Select a newly created tab for one client; false if absent. Unlike a tap, this never wakes or respawns a pending pane. */
   selectCreatedMobileSessionTabForClient(
     worktreeId: string,
     surface: { tabId: string; leafId: string } | { sessionId: string },
@@ -99,6 +97,30 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
       return false
     }
     this.applyMobileSessionTabNavigation(snapshot, tab.id, 'caller', clientNavigationId)
+    return true
+  }
+
+  reopenMobileSessionTabForClient(
+    worktreeId: string,
+    sessionId: string,
+    clientNavigationId: string
+  ): boolean {
+    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId)
+    const tab = snapshot.tabs.find(
+      (candidate) => candidate.type === 'agent-session' && candidate.sessionId === sessionId
+    )
+    if (!tab) {
+      return false
+    }
+    const projected = this.clientSessionTabSelections.reopen(
+      this.withSessionTabsHolds(snapshot, clientNavigationId),
+      clientNavigationId,
+      tab.id
+    )
+    if (!projected.tabs.some((candidate) => candidate.id === tab.id)) {
+      return false
+    }
+    this.emitMobileSessionTabsSnapshotToClient(projected, clientNavigationId)
     return true
   }
 

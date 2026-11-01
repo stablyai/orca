@@ -92,7 +92,6 @@ vi.mock('./pty/provider/state-cleanup', async () =>
   (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
 )
 
-// Why: every removal and listing reply now names the catalog it produced or scanned.
 const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
 
 describe('registerWorktreeHandlers', () => {
@@ -390,7 +389,7 @@ describe('registerWorktreeHandlers', () => {
           worktreeId: `${repo.id}::${localPath}`,
           force: true
         })
-      ).rejects.toThrow('Remote connection dropped')
+      ).rejects.toThrow('isn’t served by Orca’s server')
 
       await expect(lstat(localPath)).resolves.toBeTruthy()
       expect(removeWorktreeMock).not.toHaveBeenCalled()

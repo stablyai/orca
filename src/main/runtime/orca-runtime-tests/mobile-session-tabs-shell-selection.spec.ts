@@ -38,8 +38,7 @@ describe('OrcaRuntimeService session-tab shell selection', () => {
         shellOverride: 'git-bash'
       })
 
-      // The defect this pins: the pick rode as `command`, so the managed host typed
-      // `git-bash` into PowerShell and the tab stayed PowerShell.
+      // Passing the shell as command typed git-bash into PowerShell instead of selecting it.
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({ shellOverride: 'git-bash', command: undefined })
       )

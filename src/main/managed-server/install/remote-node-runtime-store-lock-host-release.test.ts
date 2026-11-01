@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess, spawnProcess } from '@orca/process-host'
-import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import {
   RUNTIME_STORE_LOCK_NAME,
   RUNTIME_STORE_LOCK_OWNER_FILENAME,
@@ -13,14 +12,14 @@ import {
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { tryCreateInstallLockCommand } from './remote-install-lock-commands'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedSshConnection } from '../../ssh/unused-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand, which runs it in a local shell.
-const conn = {} as SshConnection
+const conn = unusedSshConnection()
 const host = getRemoteHostPlatform('linux-x64')
 let store: string
 let lock: string
@@ -81,16 +80,15 @@ describe.skipIf(process.platform === 'win32')('runtime store lock released by th
     let orphan: Promise<string> | undefined
     await expect(
       withRuntimeStoreLock(conn, host, store, async (held) => {
-        // The client's exec timer fires while the host is still extracting (HH-3).
         orphan = sh(held.releasedByHostOnExit('sleep 1; echo ORCA_NODE_RUNTIME_READY'))
         throw unconfirmed()
       })
     ).rejects.toMatchObject({ sshChannelCloseConfirmed: false })
-    // Kept while the work runs: loss of contact is not an exit.
+    // Lost contact does not prove the host work exited.
     expect(existsSync(lock)).toBe(true)
     const started = Date.now()
     await withRuntimeStoreLock(conn, host, store, async () => {})
-    // Without the host release this waits out the 20-minute stale rule.
+    // Without host-side release this would wait for the 20-minute stale threshold.
     expect(Date.now() - started).toBeLessThan(10_000)
     await orphan
   }, 20_000)

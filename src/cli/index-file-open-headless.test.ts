@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   callMock: vi.fn(),
@@ -15,7 +15,6 @@ import { main } from './index'
 import { okFixture } from './test-fixtures'
 import { RuntimeRpcFailureError } from './runtime/types'
 
-// What a headless server (`orca serve`, orcad) answers today: the bare token, flattened (#29822).
 function headlessRefusal(): RuntimeRpcFailureError {
   return new RuntimeRpcFailureError({
     id: 'req_open',
@@ -26,6 +25,11 @@ function headlessRefusal(): RuntimeRpcFailureError {
 }
 
 describe('file commands on a server with no app window', () => {
+  const priorExitCode = process.exitCode
+  afterEach(() => {
+    process.exitCode = priorExitCode
+    vi.restoreAllMocks()
+  })
   beforeEach(() => {
     vi.restoreAllMocks()
     mocks.callMock.mockReset()
@@ -58,19 +62,33 @@ describe('file commands on a server with no app window', () => {
     expect(output.ok).toBe(false)
     expect(output.error.code).toBe('renderer_unavailable')
     expect(output.error.message).toContain('no app window')
-    expect(output.error.data.nextSteps).toHaveLength(2)
+    expect(output.error.data.nextSteps).toEqual([
+      expect.stringContaining('file explorer'),
+      expect.stringContaining('path in your reply')
+    ])
   })
 
   it('stops open-changed at the first refusal with the same explanation', async () => {
     mocks.callMock
       .mockResolvedValueOnce(
         okFixture('req_status', {
-          entries: [{ path: 'a.ts', status: 'modified', area: 'unstaged' }]
+          entries: [
+            { path: 'a.ts', status: 'modified', area: 'unstaged' },
+            { path: 'b.ts', status: 'modified', area: 'unstaged' }
+          ]
         })
       )
       .mockRejectedValueOnce(headlessRefusal())
 
     await main(['file', 'open-changed', '--worktree', 'id:wt-1'], '/tmp/repo')
+
+    expect(mocks.callMock.mock.calls).toEqual([
+      ['git.status', { worktree: 'id:wt-1' }],
+      [
+        'files.openDiff',
+        { worktree: 'id:wt-1', relativePath: 'a.ts', staged: false, navigation: 'caller' }
+      ]
+    ])
 
     expect(String(vi.mocked(console.error).mock.calls[0]?.[0])).toContain(
       'This Orca server has no app window'

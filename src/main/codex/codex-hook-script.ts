@@ -1,9 +1,12 @@
+import {
+  WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
+  buildPosixClaudeBackgroundJobGuardLines
+} from '../agent-hooks/claude-background-job-guard'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
 
@@ -12,12 +15,12 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: the endpoint file holds this install's live port/token; sourcing it lets a surviving PTY reach the current server (see claude/hook-service.ts).
+      // Reload the endpoint so surviving PTYs reach the current server after restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
+      WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
       buildWindowsAgentHookCurlPostCommand('codex'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -26,13 +29,14 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('codex'),
-    // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
+    ...buildPosixClaudeBackgroundJobGuardLines(),
+    // Reload endpoint state so surviving PTYs keep reporting after restart.
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',
     '  unset ORCA_AGENT_HOOK_TRANSPORT',
     '  case "$endpoint_path" in',
     '    *.cmd)',
-    // Why: Windows passes endpoint.cmd into WSL via WSLENV; parse only Orca's known assignments since cmd.exe `set` lines aren't shell syntax.
+    // WSLENV passes endpoint.cmd; parse known assignments because cmd set lines are not POSIX syntax.
     '      endpoint_cr=$(printf "\\r")',
     '      while IFS= read -r endpoint_line || [ -n "$endpoint_line" ]; do',
     '        endpoint_line=${endpoint_line%"$endpoint_cr"}',
@@ -61,7 +65,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  curl_bin="$1"',
     '  connect_timeout="${2:-0.5}"',
     '  max_time="${3:-1.5}"',
-    // Why: keep full hook JSON off the command line and avoid URL-encoding paths/commands into IDS-friendly traversal signatures.
+    // Send JSON through stdin to keep it off argv and avoid path-encoding IDS alerts.
     ...buildPosixAgentHookPostCommand('codex', {
       curlCommand: '"$curl_bin"',
       indent: '    '

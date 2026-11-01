@@ -10,7 +10,6 @@ import {
   type CodexTrustEntry
 } from './config-toml-trust'
 
-/** The approvals among `approvals` that config.toml does not already hold as given, under every key spelling. */
 export function findMissingCodexHookApprovals(
   approvals: readonly CodexTrustEntry[],
   tomlPath: string
@@ -30,11 +29,8 @@ export function findMissingCodexHookApprovals(
 }
 
 /**
- * Writes Orca's approvals, then its entries through `writeEntries`. When that
- * throws, an approval goes back to its prior tables only if `hooksJsonPath`
- * does not hold its entry and the approval still reads as this call wrote it,
- * so another writer's change is never overwritten. The error is rethrown. Throws
- * CodexConfigTomlRefusedError, writing nothing, when Codex could not load the result.
+ * Approve before writing entries; on failure, restore only our approvals without installed entries.
+ * Preserve other writers' changes. Refuse unloadable TOML before writing anything.
  */
 export function writeCodexHookApprovalsBeforeEntries(
   tomlPath: string,
@@ -85,7 +81,6 @@ function rollBackCodexHookApprovals(
   }
 }
 
-/** Whether `hooksJsonPath` holds the approved command at the approval's slot, read now. */
 function holdsEntryAtApprovedSlot(hooksJsonPath: string, approval: CodexTrustEntry): boolean {
   const definitions =
     readHooksJson(hooksJsonPath)?.hooks?.[CODEX_EVENT_NAME_BY_LABEL[approval.eventLabel]]

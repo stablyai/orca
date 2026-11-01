@@ -1,4 +1,4 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   codexItemIdentity,
   CodexTurnOrdinals,
@@ -7,11 +7,9 @@ import {
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
 import type {
   StructuredAgentSessionEventSink,
@@ -24,7 +22,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
-/** Invocation-local shared translation: nothing reaches the live sink until this plan is whole. */
+/** Build the entire import before anything reaches the live sink. */
 export function createCodexHistoryImportPlan(input: {
   sessionId: string
   threadId: string

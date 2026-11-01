@@ -14,7 +14,7 @@ import {
 } from './ContextualTourOverlaySurface'
 import { getContextualTourPanelHost } from './contextual-tour-gate'
 import { useAppStore } from '@/store'
-import { setRendererUiLanguage } from '@/i18n/i18n'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 
 const baseRenderState: ActiveTourRenderState = {
   rect: {
@@ -25,8 +25,7 @@ const baseRenderState: ActiveTourRenderState = {
     width: 100,
     height: 60
   } as DOMRect,
-  // Why: autoUpdate reads real element geometry, so the fixture must be a DOM
-  // node rather than a closest() stub.
+  // autoUpdate needs a real DOM node for geometry, not a closest stub.
   targetElement: document.createElement('div'),
   progress: { current: 1, total: 3 },
   title: 'Choose the work source',
@@ -382,11 +381,11 @@ function renderLocalizedSurface(isLastStep: boolean): ReactElement {
 
 describe('ContextualTourOverlaySurface localization', () => {
   afterEach(async () => {
-    await setRendererUiLanguage('en')
+    await i18n.changeLanguage(await loadRendererUiLanguage('en'))
   })
 
   it('renders default tour actions in Korean when the UI locale is Korean', async () => {
-    await setRendererUiLanguage('ko')
+    await i18n.changeLanguage(await loadRendererUiLanguage('ko'))
 
     const firstStep = renderToStaticMarkup(renderLocalizedSurface(false))
     const finalStep = renderToStaticMarkup(renderLocalizedSurface(true))

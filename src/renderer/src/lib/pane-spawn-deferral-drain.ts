@@ -1,8 +1,4 @@
-/**
- * Retries restores a host kept asleep, so a hidden agent resumes once the host has room instead of
- * only when someone opens it. One pane per host asks at a time and the host's admission gate still
- * decides each ask; while it keeps deferring, the next ask backs off to a few minutes.
- */
+// Retry host-deferred sleeping restores without waiting for reveal. Serialize asks per host under its admission gate; continued deferral backs off to minutes.
 import type { AutomaticWorkStatus } from '../../../shared/host-spawn-admission'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
@@ -30,7 +26,7 @@ export function queueDeferredRestoreRetry(
   environmentId: string | null,
   retry: Retry
 ): void {
-  // Why re-insert: a pane deferred again goes to the back, so every sleeping pane gets a turn.
+  // Reinsert deferred panes at the back so all sleepers get a turn.
   waiting.delete(paneKey)
   waiting.set(paneKey, { environmentId, retry })
   schedule(environmentId)
@@ -104,7 +100,6 @@ async function run(environmentId: string | null, drain: HostDrain): Promise<void
   }
 }
 
-/** Test seam: forgets every queued retry and timer. */
 export function resetDeferredRestoreDrainForTests(): void {
   for (const drain of hosts.values()) {
     if (drain.timer !== null) {

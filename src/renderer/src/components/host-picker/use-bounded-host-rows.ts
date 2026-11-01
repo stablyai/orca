@@ -1,10 +1,7 @@
 import { useState } from 'react'
 import { boundHostList, HOST_LIST_ROW_LIMIT, type BoundedHostList } from './bounded-host-list'
 
-/**
- * A host checklist's rows: pinned hosts plus up to the limit of the rest, narrowed by a search the
- * list shows only once there are more hosts than fit.
- */
+/** Bound pinned and other hosts separately; offer search only when the host count exceeds one page. */
 export function useBoundedHostRows<T extends { id: string; label: string }>(
   hosts: readonly T[],
   pinnedIds?: ReadonlySet<string>

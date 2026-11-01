@@ -45,7 +45,6 @@ class FakeDestination extends EventEmitter implements BrowserNetworkTunnelSocket
   }
 }
 
-/** Emits its payload only while resumed, like a net.Socket honoring the relay's backpressure. */
 class PacedDestination extends EventEmitter implements BrowserNetworkTunnelSocket {
   destroyed = false
   paused = true
@@ -98,7 +97,6 @@ class PacedDestination extends EventEmitter implements BrowserNetworkTunnelSocke
   }
 }
 
-/** Serves the WSL route through a host-side tunnel session, as a paired client reaches it. */
 function createPairedClientThroughRoute(route: BrowserNetworkExecutionRoute) {
   let session: BrowserNetworkTunnelSession
   const client = new BrowserNetworkTunnelClient({
@@ -137,7 +135,6 @@ async function waitForQuiescence(destination: PacedDestination): Promise<void> {
   const deadline = Date.now() + 5_000
   let previous = -1
   while (previous !== destination.emitted || !destination.paused) {
-    // Fail instead of spinning when backpressure never reaches the destination.
     if (destination.emitted >= destination.payload.byteLength) {
       throw new Error('destination emitted its whole payload without being paused')
     }
@@ -298,7 +295,6 @@ describe('WSL browser network execution route', () => {
     })
     duplex.on('error', () => {})
 
-    // Nothing reads the paired-client duplex, so every hop's window must fill and stop the source.
     await waitForQuiescence(destination)
     expect(destination.emitted).toBeGreaterThan(0)
     expect(destination.emitted).toBeLessThanOrEqual(3 * BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)

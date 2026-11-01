@@ -7,11 +7,7 @@ import {
   BROWSER_CHROME_ADDRESS_SLOT_HEIGHT_CLASS
 } from './browser-chrome-address-slot'
 
-/**
- * The history/reload/navigate surface a browser backend must provide to be driven by
- * browser chrome. Local and client-hosted panes back this with a <webview>, the legacy
- * remote pane with runtime RPCs.
- */
+/** Local/client-hosted panes provide webview controls; legacy streamed panes provide runtime RPCs. */
 export type BrowserNavigationControls = {
   canGoBack: boolean
   canGoForward: boolean
@@ -21,14 +17,7 @@ export type BrowserNavigationControls = {
   navigate: (url: string) => void
 }
 
-/**
- * The toolbar row every browser surface shares: back, forward, reload, then whatever names the
- * thing on screen, then that surface's tools.
- *
- * Why the middle is a slot rather than the address bar: a web page is named by a URL you may
- * retype, a workspace document by a path you may not. Both still sit in the same place, at the
- * same size, between the same controls — so the identity widget is what varies, not the row.
- */
+/** Share history/tool layout while the identity slot varies between editable URLs and read-only document paths. */
 export function BrowserNavigationControlRow({
   controls,
   addressSlot,

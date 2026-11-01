@@ -1,19 +1,5 @@
-/**
- * Which execution host a cleanup scan reads Git from.
- *
- * The family used to thread `provider: IGitProvider | null` derived from a raw `repo.connectionId`
- * read. That `null` spelled "this is local", "the host is remote but unreachable" and "the host is
- * a runtime environment" with one value, so a row naming its owner only as
- * `executionHostId: 'ssh:<target>'` listed, statted and `git status`-ed a *remote* path on this
- * client — the #11163 defect class. The `provider!` assertions in `workspace-cleanup-git-evidence`
- * were sound only because they re-read that same field, which is why the two moved together.
- *
- * `runtime:<env>` is deliberately not a variant. Its Git is executed by that environment's own
- * server, and the SSH target on its repo row is that server's *nested* one, addressable only as the
- * pair (environmentId, targetId). Handing it to this client's SSH table dials a same-named target
- * in the wrong namespace, so it throws rather than routing — the same refusal
- * `workspace-space-repo-scan` and `runtime-git-command-target` already make.
- */
+/** Route by execution host; unreachable SSH must never fall back to local paths.
+ * Runtime targets belong to their server's nested namespace and cannot use this client's SSH registry. */
 
 import {
   getRepoExecutionHostId,
@@ -30,20 +16,15 @@ import {
 
 export type WorkspaceCleanupGitRoute =
   | { kind: 'local'; hostId: typeof LOCAL_EXECUTION_HOST_ID }
-  /** This process serves no SSH git, so an `ssh` route is always unreachable — never "read it here". */
+  /** SSH is unreachable from this process, never a local fallback. */
   | { kind: 'ssh'; hostId: `ssh:${string}`; connectionId: string }
 
-/**
- * The workspace's own host is the authority, and it can disagree with the row that produced the
- * listing (legacy unqualified metadata on a repo id that has since moved hosts). Reading one host
- * while the candidate reports the other is the cross-host leak, so the disagreement is its own
- * answer and the scan refuses instead of guessing.
- */
+/** Refuse listing/metadata host disagreement rather than reading one host while labeling another. */
 export type WorkspaceCleanupWorktreeGitRoute =
   | WorkspaceCleanupGitRoute
   | { kind: 'host-mismatch'; hostId: ExecutionHostId; listedHostId: ExecutionHostId }
 
-/** Throws on a `runtime:` row; callers scan per repo and report the throw as a repo scan error. */
+/** Runtime rows belong to their server; callers report this refusal as a repo scan error. */
 export function resolveWorkspaceCleanupRepoGitRoute(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
 ): WorkspaceCleanupGitRoute {
@@ -73,7 +54,6 @@ export function resolveWorkspaceCleanupWorktreeGitRoute(
     : { kind: 'host-mismatch', hostId, listedHostId: repoRoute.hostId }
 }
 
-/** True for every host whose files this client cannot stat directly. */
 export function isRemoteWorkspaceCleanupHost(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
 ): boolean {

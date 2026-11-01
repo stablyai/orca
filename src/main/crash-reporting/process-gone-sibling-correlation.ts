@@ -1,54 +1,28 @@
 import type { CrashReportDetailValue } from '../../shared/crash-reporting'
 
-/**
- * Correlates `child-process-gone` with `render-process-gone`.
- *
- * Why: Electron delivers one event per dead process with no causal link between
- * them, so a renderer that only died because a sibling utility died is
- * indistinguishable from a genuine renderer crash while each event is
- * classified alone. The correlation is attached as evidence, never used to drop
- * a report — see #14667.
- */
+// Correlation is timing evidence only; never use it to discard a renderer crash report.
 
-// Why: a child that died before the renderer can plausibly have taken it with it,
-// so look back across the widest same-incident spread in the 1.4.184 batch (600ms,
-// whole-tree kills) with headroom.
+// Cover the observed 600 ms tree-kill spread with headroom.
 export const SIBLING_DEATH_LOOKBACK_MS = 1_000
-// Why: the forward direction is not the mirror of the backward one. A child dying
-// after the renderer is at least as likely to be an effect of it — Chromium tearing
-// down the dead renderer's service channels, or our own renderer_recovery_reload at
-// +264ms — so only the observed collateral spread (+180ms, GPU) is admitted.
+// Later child deaths may be renderer teardown effects, so use a shorter forward window.
 export const SIBLING_DEATH_LOOKAHEAD_MS = 250
 
-// Why: timing alone is not a verdict. The observed collateral pairs are tight
-// (-21ms, -2ms, +180ms), while a child looping at the observed 1459/min drops a
-// death into every window on that host. A correlation is asserted only for a
-// tight, non-repeating sibling; otherwise the offsets ship as bare evidence.
+// Attribute only tight, non-repeating sibling deaths; loops remain bare timing evidence.
 const SIBLING_ATTRIBUTION_PROXIMITY_MS = 250
 
-// Why: names the evidence (these processes died together) and not a cause. The
-// largest 1.4.184 cluster is an external taskkill /T where renderer and children
-// are co-victims — no sibling killed anything, and a consumer filtering on this
-// key must not read one.
+// Concurrent deaths may share an external cause; this label must not imply causality.
 const CONCURRENT_PROCESS_DEATHS = 'concurrent-process-deaths'
 
-// Why: one incident produces a handful of events; a deeper ring would only let
-// a pre-existing child crash loop outlive the window.
 const MAX_TRACKED_CHILD_DEATHS = 16
-// Per-renderer dedupe allows concurrent reports from many webContents.
 const MAX_PENDING_RENDERER_REPORTS = 16
 
-// Why: sanitizeCrashReportDetails caps a generic detail at 240 chars and would cut
-// the list mid-token; drop whole entries instead and say how many were dropped.
+// Drop whole entries before the generic detail cap can cut a token in half.
 const MAX_SIBLING_DEATHS_DETAIL_LENGTH = 200
 
-// Why: a child crash-looping at 1459/min would otherwise rewrite the persisted
-// record on every event, during the window in which the renderer is recovering.
-// Two attaches cover the observed shape (one late GPU death) plus its successor.
+// Bound persisted amendments so a child crash loop cannot repeatedly rewrite the report.
 const MAX_LATE_SIBLING_ATTACHES = 2
 
-// Why: `crashed` and `abnormal-exit` are one failure class split by which Chromium
-// callback reported it, and a collateral pair routinely arrives as one of each.
+// Chromium callbacks may label the same incident crashed or abnormal-exit.
 const ABNORMAL_DEATH_REASONS = new Set(['crashed', 'abnormal-exit'])
 
 export type ChildProcessDeath = {
@@ -88,10 +62,7 @@ function crashReasonClass(reason: string): string {
   return ABNORMAL_DEATH_REASONS.has(reason) ? 'abnormal' : reason
 }
 
-// Why: win32 gives every process in a collateral pair the identical crashed/-1, so
-// the exit code discriminates there. POSIX surfaces a per-process wait status
-// instead (renderer SIGSEGV vs utility SIGKILL), so gating on equality would mean
-// this never fires on macOS/Linux — there the code only corroborates.
+// Require matching Windows exit codes; POSIX siblings may have different per-process wait statuses.
 function hasMatchingFailureSignature(
   death: ChildProcessDeath,
   reason: string,
@@ -110,7 +81,6 @@ export function observeChildProcessDeath(death: ChildProcessDeath): void {
   }
 }
 
-/** Child deaths sharing the renderer's failure signature inside the window. */
 export function findSiblingChildDeaths({
   reason,
   exitCode,
@@ -151,8 +121,7 @@ function describeChildDeath(death: ChildProcessDeath, rendererAt: number): strin
   return `${childIdentity(death)} ${offsetMs >= 0 ? '+' : ''}${offsetMs}ms`
 }
 
-/** Signed offsets are the point: they let triage separate one collateral
- *  incident from a host where a child is crash-looping into every window. */
+// Signed offsets distinguish collateral incidents from children looping through every window.
 function describeSiblingDeaths(siblings: ChildProcessDeath[], rendererAt: number): string {
   const described = [...siblings]
     .sort((a, b) => Math.abs(a.at - rendererAt) - Math.abs(b.at - rendererAt))
@@ -194,10 +163,7 @@ export function siblingProcessDeathDetails(
   }
 }
 
-/**
- * Renderer reports already on disk that this later child death now explains,
- * each with its full sibling set.
- */
+/** Return late sibling evidence with each pending renderer report's full sibling set. */
 export function collectLateSiblingAttributions(death: ChildProcessDeath): LateSiblingAttribution[] {
   pendingRendererReports = pendingRendererReports.filter((report) =>
     isSiblingOfRendererDeath(death.at, report.at)

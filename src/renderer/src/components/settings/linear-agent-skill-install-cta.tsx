@@ -29,14 +29,11 @@ type LinearAgentSkillInstallCtaProps = {
   settings: LinearAgentSkillPromptSettings | null | undefined
 }
 
-// Why: the Linear task provider and the orca-linear agent skill are decoupled
-// setups; this section bridges them so connecting the provider also surfaces
-// the skill agents need to read and edit Linear tasks.
+// Bridge provider setup to its separately installed skill so connected agents can read/edit Linear tasks.
 function BundledLinearAgentSkillInstallCta({
   settings
 }: LinearAgentSkillInstallCtaProps): React.JSX.Element {
-  // Why: mirror the sidebar setup prompt's runtime resolution so both surfaces
-  // agree on which machine (host vs. WSL distro) is scanned and installed to.
+  // Match sidebar runtime resolution so both surfaces scan/install on the same host or WSL distro.
   const remote = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const activeRuntime = useActiveProjectSkillRuntime()
   const agentRuntime = activeRuntime.agentRuntime ?? { runtime: 'host', label: '' }
@@ -67,7 +64,6 @@ function BundledLinearAgentSkillInstallCta({
   const replacePaths = action.kind === 'replace' ? action.paths : undefined
   const unsupported = action.kind === 'unsupported' ? action.reason : undefined
   const needsAttention = action.kind === 'attention'
-  // Why: once installed, offer a button only when the plan would change something.
   const showInstall =
     action.kind !== 'none' &&
     !unsupported &&

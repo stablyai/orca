@@ -23,11 +23,7 @@ const PASSWORD = 'fixture-password'
 // Longer than the connection's 2s retry delay, so a retry would start while the prompt is open.
 const USER_ANSWER_DELAY_MS = 3_000
 
-/**
- * A password host whose sshd gives up on an unanswered login (LoginGraceTime) before the user has
- * typed. The open password dialog must stay the one the user answers: the dropped socket may not
- * silently close it and open a new one.
- */
+/** Keep the original prompt open across LoginGraceTime expiry; socket loss must not replace a pending user answer. */
 describe('a password prompt the server gives up on', () => {
   let profile: string
   let server: Server
@@ -63,7 +59,7 @@ describe('a password prompt the server gives up on', () => {
     rmSync(profile, { recursive: true, force: true })
   })
 
-  /** Every login gets a keyboard-interactive password prompt; the first is abandoned by the host. */
+  /** Prompt on every login; abandon the first server-side. */
   async function startHost(): Promise<number> {
     let logins = 0
     server = new Server(

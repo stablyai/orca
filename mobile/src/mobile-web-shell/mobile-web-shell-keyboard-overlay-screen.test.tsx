@@ -32,25 +32,28 @@ import {
   renderScreen as mountScreen
 } from './mobile-web-shell-screen-test-harness'
 import { readBridgeHostMessage } from './bridge/bridge-envelope'
-import { MobileWebShellScreen } from './MobileWebShellScreen'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { ReactTestRenderer } from 'react-test-renderer'
+import type * as ScreenModule from './MobileWebShellScreen'
+
+let MobileWebShellScreen: typeof ScreenModule.MobileWebShellScreen
 
 const renderScreen = (state: MobileWebShellSessionState): Promise<ReactTestRenderer> =>
   mountScreen(MobileWebShellScreen, dependencies, state)
 
 afterEach(harness.unmountRenderedScreens)
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Each OS case starts a fresh app-lifetime keyboard observer.
+  vi.resetModules()
   harness.resetScreenDependencies(dependencies)
+  dependencies.keyboardListeners.clear()
+  MobileWebShellScreen = (await import('./MobileWebShellScreen')).MobileWebShellScreen
 })
 
 const WINDOW = { top: 44, right: 0, bottom: 8, left: 0 }
 
-/**
- * The page is covered by the keyboard like a native screen: the view keeps its size, and the page
- * is told the height on every keyboard event.
- */
+// Keep page size under the keyboard and send height updates like native screens.
 describe('a page the keyboard covers', () => {
   async function openPage(sessionId: string) {
     dependencies.client = createFakeRpcClient()
@@ -89,15 +92,12 @@ describe('a page the keyboard covers', () => {
     it(`never shortens the view, and publishes show, a height change and hide (${platform})`, async () => {
       dependencies.platform = platform
       const page = await openPage(`session-overlay-${platform}`)
-      // Pixel_API_37: 312 up, 346 with the suggestion strip, then closed. The inset tracks each, so
-      // a keyboard that changes height while open leaves no gap above it.
+      // Use observed Pixel_API_37 heights, including suggestion-strip changes while the keyboard stays open.
       for (const height of [312, 346, 0]) {
         await page.keyboard(height)
         expect(page.root().props.style[1]).toEqual({ paddingTop: 0 })
       }
-      // The keyboard's own height as native screens read it on this OS, home indicator included on
-      // iOS; the page's arithmetic branches on the shell's OS, as native does. The bottom inset
-      // stays the window's.
+      // Send native keyboard height, including iOS home indicator; leave bottom safe-area inset unchanged for page-side OS arithmetic.
       expect(page.inits()).toEqual([
         { keyboard: 0, insets: WINDOW },
         { keyboard: 312, insets: WINDOW },

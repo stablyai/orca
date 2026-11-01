@@ -11,8 +11,7 @@ export type StickySlotSample = {
 
 type StickySlotStatementTotals = Omit<StickySlotSample, 'queueWaitMs'>
 
-// PostgreSQL round trips (all but ROLLBACK) made while one request holds the sticky
-// slot. Closed at release, so work the request left running is not charged to it.
+// Count PostgreSQL trips except ROLLBACK while sticky slot is held; exclude work still running after release.
 export class StickySlotStatements {
   private closed = false
   private poolWaitMs = 0

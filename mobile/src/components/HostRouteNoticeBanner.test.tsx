@@ -18,14 +18,7 @@ vi.mock('lucide-react-native', () => ({ X: 'X' }))
 
 import { HostRouteNoticeBanner } from './HostRouteNoticeBanner'
 
-/**
- * The banner appears in a screen that is already on screen, so a reader who has moved past the top
- * of the list never arrives at it. A live region is the only thing that carries it to them.
- *
- * The urgency follows the tone rather than being assertive for everything: the two callers are an
- * action that did not happen, which interrupts, and a bounced route, which is context for a list
- * already being read. Interrupting for the second one would train people to ignore the first.
- */
+// Announce inserted banner because list reader may be below it; failure interrupts, bounced-route context stays polite so urgency retains meaning.
 describe('the host route notice banner announces itself', () => {
   let renderer: ReactTestRenderer | null = null
 
@@ -47,9 +40,7 @@ describe('the host route notice banner announces itself', () => {
     if (renderer === null) {
       throw new Error('the banner did not render')
     }
-    // Matched by name rather than through `findAllByType`: React's `ElementType` does not admit an
-    // arbitrary React Native host name, so the typed form needs a cast and this does not. The first
-    // is the banner's own root, which is the element the props under test are on.
+    // Match host name to avoid ElementType cast for arbitrary RN strings; first match is banner root carrying tested props.
     return renderer.root.findAll((node) => String(node.type) === 'View')[0]
   }
 

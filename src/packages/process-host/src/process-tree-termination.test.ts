@@ -138,11 +138,9 @@ describe('forceTerminateProcessTree', () => {
       await vi.advanceTimersByTimeAsync(5_000)
 
       await expect(pending).resolves.toBe(false)
-      // Killing either now would orphan the descendants taskkill has not reached.
       expect(taskkill.kill).not.toHaveBeenCalled()
       expect(child.kill).not.toHaveBeenCalled()
 
-      // A retry joins the same taskkill and sees its late success.
       const retry = forceTerminateProcessTree(child)
       taskkill.emit('close', 0)
       await expect(retry).resolves.toBe(true)
@@ -242,14 +240,10 @@ describe('process-tree-kill breadcrumb seam', () => {
 
   it('never taskkills a pid the child already gave back to Windows', async () => {
     await withWindows(async () => {
-      // A reaped pid is Windows' to reissue, and this host may be the daemon or
-      // relay, where the main-process own-Chromium guard cannot run.
       const child = mockProcess(1234)
       child.exitCode = 0
 
-      // `false`, not `true`: a taskkill against a reaped pid already resolved to
-      // `false`, and reporting verified termination here would release the git
-      // admission grant on root exit instead of on `close`.
+      // Root exit alone cannot release the barrier while descendants still hold the pipes.
       await expect(signalProcessTree(child, 'SIGKILL')).resolves.toBe(false)
 
       expect(spawnMock).not.toHaveBeenCalled()

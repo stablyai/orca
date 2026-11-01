@@ -1,11 +1,8 @@
-// What the sidebar and the chat's strip list of a session's child records: running children only,
-// by one rule. A finished child is in the transcript, not in either list.
-
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import {
   attach,
   hostTestState,
@@ -42,20 +39,6 @@ function finished(id: string, settledAt: number): AgentChildWorkView {
 
 const ids = (views: readonly AgentChildWorkView[]) => views.map((view) => view.id)
 
-describe('the sidebar and the strip list running children only', () => {
-  it('drops finished and failed children, and keeps a finished one whose shell still runs', () => {
-    const failed = { ...finished('failed', 5), outcome: 'failed' as const }
-    const views = [
-      running('working'),
-      finished('done', 4),
-      failed,
-      finished('owner', 3),
-      running('shell', { kind: 'command', parentChildWorkId: 'owner' })
-    ]
-    expect(ids(structuredRunningChildWork(views))).toEqual(['working', 'owner', 'shell'])
-  })
-})
-
 describe("the host's strip channel and summary list the same running children", () => {
   it('sends both the running children, and the strip nothing once none runs', async () => {
     let records = [
@@ -83,7 +66,6 @@ describe("the host's strip channel and summary list the same running children", 
     })
     expect(summaries.at(-1)).toEqual(['run', 'owner', 'shell'])
 
-    // Nothing runs: "none", even with no provider holding the session, so a reader drops its strip.
     records = [finished('done', 5), finished('run', 7)]
     expect(await strip()).toBeNull()
   })
@@ -115,7 +97,6 @@ describe('a session list reads the main agent apart from its subagents', () => {
       status: summary.status!,
       childWork: summary.children
     })
-    // Working for the subagent; the main agent, which the chat's Stop follows, is done.
     expect({ mainAgent: row.mainAgent.state, row: row.state }).toEqual({
       mainAgent: 'done',
       row: 'working'

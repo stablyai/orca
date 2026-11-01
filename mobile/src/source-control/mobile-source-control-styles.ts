@@ -1,68 +1,23 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 import { diffStyles } from './mobile-source-control-diff-styles'
 import { listStyles } from './mobile-source-control-list-styles'
 
-const baseStyles = StyleSheet.create({
+const baseStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  // NavBar draws the bar and its border; this fills the safe-area inset above it.
   header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700'
-  },
-  meta: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: 2
-  },
-  refreshButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.xs
-  },
-  refreshButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  refreshButtonDisabled: {
-    opacity: 0.45
+    backgroundColor: colors.bgBase
   },
   summaryCard: {
     margin: spacing.lg,
     marginBottom: spacing.sm,
     padding: spacing.md,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
@@ -100,7 +55,7 @@ const baseStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
-  // Separate line under counts — keeps Abort inside the card on narrow phones.
+  // Keep Abort below counts so narrow cards cannot overflow.
   conflictRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -115,18 +70,32 @@ const baseStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     textTransform: 'capitalize'
   },
-  // Match bulk-action hit target so Abort reads as a real control, not a chip.
   abortButton: {
     minHeight: 32,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.statusAmber,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
+  },
+  completeMergeButton: {
+    minHeight: 32,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.control,
+    backgroundColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  completeMergeText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
   },
   abortPressed: {
     opacity: 0.75
@@ -149,7 +118,7 @@ const baseStyles = StyleSheet.create({
     marginBottom: -spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusAmber
@@ -162,7 +131,7 @@ const baseStyles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusRed
@@ -180,7 +149,7 @@ const baseStyles = StyleSheet.create({
   bulkButton: {
     flex: 1,
     minHeight: 36,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center',
@@ -190,7 +159,7 @@ const baseStyles = StyleSheet.create({
   bulkMenuButton: {
     width: 42,
     minHeight: 36,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
@@ -211,7 +180,7 @@ const baseStyles = StyleSheet.create({
   },
   createPrButton: {
     height: 42,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -242,6 +211,6 @@ const baseStyles = StyleSheet.create({
     textAlign: 'center',
     flexShrink: 1
   }
-})
+}))
 
-export const styles = { ...baseStyles, ...listStyles, ...diffStyles }
+export const styles = themedStyles(() => ({ ...baseStyles, ...listStyles, ...diffStyles }))

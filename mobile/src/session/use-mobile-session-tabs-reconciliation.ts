@@ -68,8 +68,7 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
 }: Params<Result, Tab>): ResultActions {
   const pendingTerminalRecoveryBudget = useMemo(() => new PendingTerminalHandleRecoveryBudget(), [])
   const onPendingTerminalRecoveryParkedRef = useRef(onPendingTerminalRecoveryParked)
-  // Why: only poll/reset callbacks read this, and they run after commit — so writing it in
-  // render would let a discarded render leak a callback that never mounted.
+  // Sync post-commit callbacks in effects so discarded renders cannot leak an unmounted callback.
   useEffect(() => {
     onPendingTerminalRecoveryParkedRef.current = onPendingTerminalRecoveryParked
   })
@@ -79,15 +78,13 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
     return hasRecoveryNeed() || contextKey !== null
   }, [getPendingTerminalRecoveryContextKey, hasRecoveryNeed, pendingTerminalRecoveryBudget])
   const allowRecoveryPoll = useCallback(() => {
-    if (hasRecoveryNeed()) {
-      return true
-    }
+    // Spend the terminal budget even while other needs poll, or the pending terminal never offers Retry.
     const contextKey = getPendingTerminalRecoveryContextKey?.() ?? null
     const attempt = pendingTerminalRecoveryBudget.take(contextKey)
     if (attempt.parked) {
       onPendingTerminalRecoveryParkedRef.current?.(contextKey)
     }
-    return attempt.allowed
+    return attempt.allowed || hasRecoveryNeed()
   }, [getPendingTerminalRecoveryContextKey, hasRecoveryNeed, pendingTerminalRecoveryBudget])
   const resetPendingTerminalRecovery = useCallback(() => {
     pendingTerminalRecoveryBudget.reset()
@@ -188,7 +185,7 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
         controller.setReconciliationActive(true)
         const tabsRequest = forceTabs ? controller.requestReconciliation() : controller.poll()
         const now = Date.now()
-        // Why: healthy tab streams own liveness; retain only a slow inventory sweep for stale handles and metadata.
+        // Healthy streams own tab liveness; retain slow inventory polling only for stale handles/metadata.
         if (forceTabs || tabsRequest !== null || isCertifiedTerminalSweepDue(now)) {
           void refreshTerminalInventory()
         }

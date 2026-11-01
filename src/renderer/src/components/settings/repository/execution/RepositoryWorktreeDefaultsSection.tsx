@@ -186,8 +186,7 @@ export function RepositoryWorktreeDefaultsSection({
           onTextChange={() => {}}
           onBlur={(e) => {
             const worktreeBasePath = e.currentTarget.value.trim() || undefined
-            // Why: even an unchanged worktreeBasePath update asks main to
-            // prepare the root, which can touch the filesystem.
+            // Skip unchanged paths because main still prepares the root and may touch the filesystem.
             if (worktreeBasePath === (repo.worktreeBasePath?.trim() || undefined)) {
               return
             }

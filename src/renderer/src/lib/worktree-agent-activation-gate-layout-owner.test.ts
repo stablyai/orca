@@ -1,8 +1,4 @@
-// The activation gate's live-terminal adoption in a layout-owner build: main places every live
-// terminal no pane shows (placeUnshownLiveTerminals) and its frames draw it, so the window makes no
-// tab, pane or binding of its own and only reads that main's frames hold the terminal. The frames
-// drawing main's tab is covered in worktree-agent-live-surface-adoption-cli-tab.test.ts and
-// worktree-agent-live-surface-adoption-layout-owner.test.ts.
+/** Main places unshown live terminals and owns panes/bindings; renderer sweeps only read its frames, never mint another surface. Frame drawing is covered by CLI-tab/layout-owner adoption suites. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublishedTab } from '../../../shared/workspace-layout/workspace-layout-published'

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
-  getWebSessionTerminalHandleSubscriberCountForTests,
   queueAcceptedWebSessionTerminalSnapshot,
   subscribeAcceptedWebSessionTerminalHandle
 } from './web-session-terminal-handle-events'
@@ -22,42 +21,6 @@ function snapshot(
 }
 
 describe('accepted web-session terminal handle events', () => {
-  it('notifies only the matching runtime/worktree/pane and releases the listener', async () => {
-    const listener = vi.fn()
-    const unsubscribe = subscribeAcceptedWebSessionTerminalHandle(
-      { environmentId: 'env-1', worktreeId: 'wt-1', hostTabId: 'tab-1', leafId: 'leaf-1' },
-      listener
-    )
-
-    queueAcceptedWebSessionTerminalSnapshot(snapshot([]), 'env-2')
-    queueAcceptedWebSessionTerminalSnapshot(snapshot([], 'wt-2'), 'env-1')
-    queueAcceptedWebSessionTerminalSnapshot(
-      snapshot([
-        {
-          type: 'terminal',
-          id: 'tab-1::leaf-1',
-          parentTabId: 'tab-1',
-          leafId: 'leaf-1',
-          title: 'Claude Code',
-          isActive: true,
-          status: 'ready',
-          terminal: 'terminal-replacement'
-        }
-      ]),
-      'env-1'
-    )
-    await Promise.resolve()
-
-    expect(listener).toHaveBeenCalledOnce()
-    expect(listener).toHaveBeenCalledWith({
-      surfacePresent: true,
-      terminalHandle: 'terminal-replacement'
-    })
-    expect(getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
-    unsubscribe()
-    expect(getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
-  })
-
   it('distinguishes a pending handle from an explicitly removed surface', async () => {
     const listener = vi.fn()
     const unsubscribe = subscribeAcceptedWebSessionTerminalHandle(

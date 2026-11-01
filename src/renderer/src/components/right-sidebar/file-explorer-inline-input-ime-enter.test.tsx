@@ -11,8 +11,7 @@ const newFileInput: InlineInput = {
   depth: 1
 }
 
-// Why: the input focuses itself a frame after mount, then arms itself once the
-// 200ms menu-close grace period has elapsed.
+// Mount focus needs one frame; input arms after the 200ms menu-close grace period.
 async function advance(ms: number): Promise<void> {
   await act(async () => {
     vi.advanceTimersByTime(ms)
@@ -25,7 +24,7 @@ async function settleInlineInput(): Promise<void> {
   await advance(250)
 }
 
-// Why: the carry armed by a confirm Enter expires on the animation frame after keyup.
+// Confirm-Enter ownership expires on the animation frame after keyup.
 async function flushFrame(): Promise<void> {
   await advance(20)
 }

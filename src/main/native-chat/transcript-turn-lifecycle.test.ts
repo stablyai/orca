@@ -168,8 +168,6 @@ describe('native chat transcript turn lifecycle', () => {
   })
 
   it('does not complete a Claude assistant row that omits stop_reason but carries a tool_use block', () => {
-    // A pre-tool row can hold prose AND a tool_use block; without stop_reason the
-    // turn is still mid-flight, so it must not settle the spinner before the tool.
     for (const stopReason of [null, undefined] as const) {
       expect(
         decodeClaudeTurnLifecycle(

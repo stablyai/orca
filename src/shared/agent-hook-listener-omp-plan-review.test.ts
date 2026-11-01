@@ -35,7 +35,7 @@ describe('OMP plan review status', () => {
     state = createHookListenerState()
   })
 
-  it('blocks on the review with a plan card whose choices reach the extension', () => {
+  it('blocks on the review with a parsed plan card and answer choices', () => {
     const blocked = requestReview(state, '# Add a greeting')
 
     expect(blocked?.state).toBe('blocked')

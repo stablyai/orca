@@ -23,6 +23,7 @@ export async function listMarkdownDocuments(
     stdio: ['ignore', 'pipe', 'pipe']
   })
   return collectMarkdownDocuments(child, rootPath, Boolean(distro), options.signal, {
+    allowPartialListing: true,
     stopProcess: () => stopBundledRipgrep(child, Boolean(distro))
   })
 }

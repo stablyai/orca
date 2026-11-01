@@ -1,17 +1,12 @@
-// The execution host's own phone push for hook-reported terminal agents, while no desktop window
-// runs on it: a turn that finished (or failed) and an agent that needs input.
-//
-// WHY ONLY WITHOUT A WINDOW: a window runs its own detection and pushes this host's phones through
-// main, as it always has. A host with no window (`orca serve`, `orcad`, a desktop whose window is
-// closed) had nobody to make the call, so the phones heard nothing. Here the host makes it with the
-// window's own rules, timing and wording; while a window owns the host, it stays silent.
-//
-// The phone suppresses an alert for what it is showing itself, so the host never guesses who looks.
+// Push hook-agent finish/input alerts from windowless execution hosts using desktop rules. A window already pushes these phones; the phone suppresses its own visible chat.
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import { agentMainAgentVerdict } from '../../shared/agent-main-agent-verdict'
 import { buildAgentNotificationId } from '../../shared/agent-notification-id'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusOrchestrationContext } from '../../shared/agent-status-types'
+import { isCoordinatorOnlyNews, withApprovalTitle } from '../../shared/dispatched-worker-attention'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
+import { isNotificationSourceEnabled } from '../../shared/notification-source-gate'
 import type {
   NotificationDispatchRequest,
   NotificationSettings
@@ -34,6 +29,8 @@ export type TerminalAgentPhonePushDeps = {
   /** In-memory only, as the window's: the alert must not wait on a lookup. */
   readWorkspaceLabels: (worktreeId: string, paneKey: string) => TerminalAgentWorkspaceLabels
   isWorkspaceMuted: (worktreeId: string) => boolean
+  readOrchestration: (paneKey: string) => AgentStatusOrchestrationContext | undefined
+  readTerminalTitle: (paneKey: string) => string | null
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
   translate?: (key: string, fallback: string) => string
   dispatch: (event: MobileNotificationDispatchEvent) => void
@@ -93,19 +90,30 @@ export class TerminalAgentPhonePush {
       title,
       body,
       worktreeId,
+      paneKey,
       ...(notificationId ? { notificationId } : {}),
       agentState: row.state
     }
   }
 
   private send(news: PaneNews): void {
-    // Decided when the alert would go out: a window that took over by then announces it itself.
-    if (this.deps.hasWindow() || this.deps.isWorkspaceMuted(news.worktreeId)) {
+    // Recheck window ownership at delivery to avoid duplicating a newly opened window's push.
+    const { agentState, paneKey } = news.event
+    if (
+      this.deps.hasWindow() ||
+      this.deps.isWorkspaceMuted(news.worktreeId) ||
+      (paneKey &&
+        isCoordinatorOnlyNews(
+          withApprovalTitle(agentState, this.deps.readTerminalTitle(paneKey)),
+          () => this.deps.readOrchestration(paneKey)
+        ))
+    ) {
       return
     }
     const settings = this.deps.readNotificationSettings()
     // The window's own fan-out gates the phone on these same preferences.
-    const desktopAllowed = settings?.enabled !== false && settings?.agentTaskComplete !== false
+    const desktopAllowed =
+      !settings || isNotificationSourceEnabled(settings, news.event.source, news.event.agentState)
     const now = this.deps.now()
     const burstKey = JSON.stringify([desktopAllowed, news.event.agentState, news.worktreeId])
     if (!reserveNotificationCooldown(this.recentDispatches, burstKey, now)) {

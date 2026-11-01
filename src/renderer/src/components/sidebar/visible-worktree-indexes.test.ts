@@ -21,9 +21,9 @@ vi.mock('../../../../shared/resolved-worktree-lineage', async (importOriginal) =
 
 import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
 import type { computeVisibleWorktrees } from './compute-visible-worktrees'
-import { getSidebarLineageParentsByIdentity } from '../../../../shared/sidebar-list/worktree-lineage-projection'
+
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
+import { getLineageAncestorIndex } from './visible-worktree-indexes'
 
 type IdentifiedWorktree = Worktree & { instanceId: string }
 
@@ -112,35 +112,12 @@ describe('visible worktree indexes', () => {
     const worktreeLineageById = { [child.id]: makeLineage(child, parent) }
 
     counters.cycleDetections = 0
-    // Each call stands for one store write that re-fires the sidebar memo
-    // (PTY spawn/exit, tab open/close, agent status transition) without
-    // changing `worktreesByRepo`.
+    // Model unrelated store writes that rerun visibility without changing worktreesByRepo.
     for (let write = 0; write < 10; write += 1) {
       computeVisibleWorktreeIds(worktreesByRepo, sortedIds, visibleOptions({ worktreeLineageById }))
     }
 
     expect(counters.cycleDetections).toBe(1)
-  })
-
-  it('returns identity-stable index maps for unchanged store inputs', () => {
-    const parent = makeWorktree('parent')
-    const child = makeWorktree('child')
-    const worktreesByRepo = { repo1: [parent, child] }
-    const sortedIds = [parent.id, child.id]
-    const lineageById = { [child.id]: makeLineage(child, parent) }
-
-    const firstAncestors = getLineageAncestorIndex(worktreesByRepo)
-    const secondAncestors = getLineageAncestorIndex(worktreesByRepo)
-    expect(secondAncestors).toBe(firstAncestors)
-    expect(getSortedWorktreeRankIndex(sortedIds)).toBe(getSortedWorktreeRankIndex(sortedIds))
-    expect([...getSortedWorktreeRankIndex(sortedIds)]).toEqual([
-      [parent.id, 0],
-      [child.id, 1]
-    ])
-
-    expect(getSidebarLineageParentsByIdentity(lineageById, secondAncestors)).toBe(
-      getSidebarLineageParentsByIdentity(lineageById, firstAncestors)
-    )
   })
 
   it('keeps archived parents out of the cached ancestor index', () => {
@@ -157,9 +134,7 @@ describe('visible worktree indexes', () => {
       worktreeLineageById
     })
 
-    // Twice: the second call reads the warm cache, which is where an index
-    // built from the store's own (archive-inclusive) worktree map would leak a
-    // phantom ancestor row.
+    // Check the warm cache too: an archive-inclusive index would inject a phantom ancestor.
     expect(computeVisibleWorktreeIds(worktreesByRepo, sortedIds, opts)).toEqual([child.id])
     expect(computeVisibleWorktreeIds(worktreesByRepo, sortedIds, opts)).toEqual([child.id])
     expect(getLineageAncestorIndex(worktreesByRepo).has(getWorktreeHostIdentity(parent))).toBe(

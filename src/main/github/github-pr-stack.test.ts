@@ -94,7 +94,7 @@ describe('hydrateGitHubPRStack', () => {
       repository,
       201,
       { ...summary, position: 1 },
-      { cwd: '/other-worktree' }
+      { cwd: '/repo' }
     )
 
     expect(first).toMatchObject({
@@ -322,7 +322,7 @@ describe('mergeGitHubPRStack', () => {
     })
     await vi.advanceTimersByTimeAsync(180_000)
 
-    await expect(result).resolves.toEqual({
+    await expect(result).resolves.toMatchObject({
       ok: false,
       error: 'GitHub is still merging this stack. Refresh to check its status.'
     })

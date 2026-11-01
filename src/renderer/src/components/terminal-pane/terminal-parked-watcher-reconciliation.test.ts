@@ -125,8 +125,7 @@ it('releases captured scroll-intent keys when a parked worktree is removed', () 
   expect(readTerminalScrollIntentKeyRetention().intents).toBe(0)
 })
 
-// Why: the sole-newborn parity flag is a fact about the captured PTY, so the
-// layout-fallback rescue must carry it only while the leaf still binds that PTY.
+// Carry sole-newborn facts only while the rescued leaf still binds the captured PTY.
 describe('untouchedFreshSpawn carry through the layout-fallback rescue', () => {
   const soleLeafState = {
     runtimePaneTitlesByTabId: {},

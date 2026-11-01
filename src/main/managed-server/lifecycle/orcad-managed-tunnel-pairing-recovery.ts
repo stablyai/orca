@@ -1,8 +1,4 @@
-/**
- * The one place a managed tunnel build turns "our own server refused our token" into a re-pair.
- * The refusal is proven before this runs: it arrived sealed under the pinned host key, so a
- * foreign server never reaches the repair; it fails the build as a foreign answer instead.
- */
+// Only refusals sealed by the pinned key may trigger repair; foreign servers fail identity checks.
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import { pairingRevisionOf, type ManagedOrcadPairingGate } from './orcad-managed-pairing-repair'
 import { OrcadManagedPairingRejectedError } from './orcad-managed-tunnel-identity'
@@ -10,15 +6,10 @@ import { OrcadManagedPairingRejectedError } from './orcad-managed-tunnel-identit
 export type ManagedOrcadPairingRecovery = {
   resolve: (environmentId: string) => KnownRuntimeEnvironment
   repairs: ManagedOrcadPairingGate
-  /** Forwards on the new pairing; the refusal already removed the old forward. */
   ensure: (environment: KnownRuntimeEnvironment) => Promise<void>
 }
 
-/**
- * Builds once; a refused pairing re-pairs over SSH and forwards once more on the new one. The
- * repair gate decides first whether a build may run: while a failure stands for this pairing,
- * every caller (each refused socket reopen included) gets it without reaching the host.
- */
+/** Check cached refusal before building; permit one repair and rebuild on a refused pairing. */
 export async function buildWithPairingRepair(
   recovery: ManagedOrcadPairingRecovery,
   environmentId: string,
@@ -39,7 +30,7 @@ export async function buildWithPairingRepair(
     }
     console.warn('[managed-orcad] The Orca server refused this desktop; pairing again:', error)
   }
-  // Why the refused revision: a repair another caller already landed is joined, not redone.
+  // Revision matching joins already-completed repairs instead of repeating host work.
   const repaired = await recovery.repairs.repair(environmentId, pairingRevisionOf(refused))
   try {
     await recovery.ensure(repaired)

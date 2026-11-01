@@ -1,5 +1,3 @@
-// A background Stop: the strip's Stop of one task, or of every task the records offer one.
-
 import {
   agentChildWorkStopEvidence,
   type AgentChildWorkStopAcknowledgement
@@ -11,30 +9,26 @@ import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 export type StructuredAgentSessionBackgroundStopInput = {
   taskId?: string
-  /** The session's child records: a background Stop reaches the tasks they offer a stop. */
   childWork?: () => readonly AgentChildWorkView[] | undefined
-  /** Hands the host the stops the provider accepted, as evidence about the runs it sent them to.
-   *  Never throws: recording it is bookkeeping, and cannot fail the Stop. */
+  /** Record accepted-stop evidence without throwing or failing the Stop. */
   acknowledgeStops?: (evidence: AgentChildWorkEvidence[]) => void
-  /** Capture runtime lifetimes alongside listed targets, before the Stop can await. */
+  /** Capture exact runtime lifetimes before awaiting Stop. */
   captureStops?: (
     targets: readonly (AgentChildWorkView & { providerId: string })[]
   ) => CapturedChildWorkStops
-  /** Work the host could not list at the Stop's capture, and the provider child that holds it. */
+  /** Unlisted work and the provider child holding it. */
   unlisted?: { present: () => boolean; stop: () => Promise<void> }
 }
 
-/** `atRest`: no lead turn runs, so the user's Stop all may end an agent holding unlisted work. */
+/** Stop all may end unlisted work’s agent only when no lead turn runs. */
 export async function stopStructuredAgentSessionBackgroundWork(
   ctx: Pick<AgentSessionTurnContext, 'adapter' | 'sessionId' | 'fence'>,
   input: Pick<StructuredAgentSessionBackgroundStopInput, 'acknowledgeStops'> & {
-    /** Captured before the stop goes out: its acknowledgement may end only these runs. */
+    /** Acknowledgements apply only to runs captured before Stop. */
     targets: readonly (AgentChildWorkView & { providerId: string })[]
-    /** A listed ID may be sent only while its captured runtime lifetime still stands. */
+    /** Recheck captured runtime lifetime before sending each listed ID. */
     targetCurrent?: (handleId: string) => boolean
-    /** Unlisted work was already present when this Stop captured its targets. */
     unlisted?: { stop: () => Promise<void> }
-    /** The host could not read the task list the targets came from. */
     unreadable?: true
   },
   atRest: () => boolean
@@ -44,7 +38,7 @@ export async function stopStructuredAgentSessionBackgroundWork(
     ? input.targets.filter((target) => targetCurrent(target.providerId))
     : input.targets
   const acknowledged: AgentChildWorkStopAcknowledgement[] = []
-  // Nothing listed has a stop to send; an agent without a stop route would refuse even none.
+  // Avoid unsupported stop-route refusal when no listed target needs stopping.
   const background =
     targets.length === 0
       ? undefined
@@ -55,7 +49,7 @@ export async function stopStructuredAgentSessionBackgroundWork(
             taskIds: targets.map((target) => target.providerId),
             acknowledge: (acknowledgement) => void acknowledged.push(acknowledgement)
           })
-          // A batch that fails part way still ended each run it was answered for first.
+          // Preserve earlier acknowledgements even if the batch later fails.
           .finally(() => {
             if (acknowledged.length > 0) {
               input.acknowledgeStops?.(
@@ -66,12 +60,12 @@ export async function stopStructuredAgentSessionBackgroundWork(
   if (background?.stillRunning) {
     return background
   }
-  // An initially unlisted helper needs the agent's end; later work cannot expand this Stop.
+  // Later work must not expand this Stop’s captured targets.
   if (input.unlisted && atRest()) {
     await input.unlisted.stop()
     return { cancelled: true }
   }
-  // A list the host could not read proves no task ended: unconfirmed, never "nothing to stop".
+  // Unreadable lists prove no task ended; report uncertainty instead of an empty target set.
   if (input.unreadable) {
     throw new Error('the background task list could not be read')
   }

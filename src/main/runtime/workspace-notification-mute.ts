@@ -1,15 +1,6 @@
-// The host's read of "Notify About Hidden Workspaces": with it off, news from a workspace the
-// desktop's sidebar Filters switches hide sends no phone push from the host. The shared unread dot
-// ignores it: clients' Filters differ.
-// The setting and the switches are this host's own persisted state; a paired client's never apply.
-//
-// WHY NOT "HIDE SLEEPING": main sees the persisted switches and its in-memory workspace records,
-// not the renderer's live tabs, so sleeping is left to the renderer; a workspace with news is live
-// anyway. Rows here are this host's own (no runtime owner environment), so the shared other-client
-// rule needs no paired-device map; this host's own phones record it as creator.
-//
-// FAILS OPEN: no persisted UI, no record of the workspace, or a hidden parent with a shown lineage
-// child (the sidebar keeps it above that child) all notify.
+// Apply this host's persisted sidebar filters to phone pushes, never the shared unread dot or paired-client settings.
+// Main lacks renderer tab state, so sleeping stays renderer-owned; host-local rows need no paired-device ownership map.
+// Missing UI/workspace state and hidden parents with shown lineage children fail open.
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { Worktree } from '../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -90,7 +81,7 @@ export function isWorkspaceHiddenBySidebarFilters(
     ) {
       return true
     }
-    // Without a Git listing, no branch or HEAD is known, so only the provenance switches can apply.
+    // Without a Git listing, only provenance filters can apply; branch and HEAD are unknown.
     const kind = listed ?? {
       isMainWorktree: false,
       branch: '',

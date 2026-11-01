@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Row actions under a cross-authority ID collision.
- *
- * Two authorities may legitimately hold the same automation ID, so the copy the
- * user acted on is named by its row, never by that ID. These pin the case a
- * bare-ID owner map cannot express: the desktop's copy is listed first and the
- * runtime's copy is listed second, so anything keyed by the ID alone answers
- * with the runtime's owner and sends the desktop's row to the wrong machine.
- */
+/** Automation IDs are authority-local: desktop-first/runtime-last collisions must still route each action through its own captured row owner. */
 
 import { act } from 'react'
 import { describe, expect, it } from 'vitest'
@@ -40,8 +32,7 @@ function selectDesktopRow(): string {
   return row?.key ?? ''
 }
 
-/** Every runtime-environment automation call, so a misrouted action cannot hide
- *  in the noise. Local-target calls are the desktop authority's own and excluded. */
+/** Collect runtime automation RPCs only; exclude local calls so wrong-authority actions cannot hide in request noise. */
 function runtimeAutomationCalls(): string[] {
   return mocks.callRuntimeRpc.mock.calls
     .filter((call) => (call[0] as { kind?: string } | null)?.kind === 'environment')
@@ -62,8 +53,7 @@ describe('AutomationsPage row actions under a colliding automation id', () => {
       mocks.listPanel?.selectAutomationRow(remote?.key ?? '')
     })
 
-    // The runtime copy's own execution target reads `local` — local to that
-    // server — so only the row's catalog entry can name the host on the detail view.
+    // The record’s local target means local to its server; the catalog entry supplies the displayed host.
     expect(mocks.detailPane?.selected?.name).toBe('Remote nightly')
     expect(mocks.detailPane?.selectedHostEntry?.authorityLabel).toBe('GPU box')
   })

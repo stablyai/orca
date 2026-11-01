@@ -1,7 +1,7 @@
 import { useLayoutEffect, useState } from 'react'
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   getTaskSourceCacheScope,
@@ -122,8 +122,7 @@ export const initialSource: TaskSourceContext = {
 }
 export const initialSourceContextKey = getJiraReadIdentity(null, initialSource).contextKey
 
-// Why: the task page reads the open issue back out of the Jira store, so an
-// optimistic patch hands the workspace a new object for the same issue.
+// Read optimistically patched issues from the store as the task page does, producing new same-issue objects.
 export function StoreBackedWorkspace({ initial }: { initial: JiraIssue }): React.JSX.Element {
   const [issue, setIssue] = useState<JiraIssue | null>(initial)
   const [source, setSource] = useState(initialSource)

@@ -2,7 +2,7 @@
   "name": "@orca/windows-security",
   "version": "1.0.0",
   "private": true,
-  "description": "In-process Windows file DACL reads and writes for Orca",
+  "description": "In-process Windows file DACLs and child handle inheritance for Orca",
   "license": "MIT",
   "files": [
     "index.js",

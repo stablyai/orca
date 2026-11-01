@@ -1,11 +1,4 @@
-/**
- * Upload by streaming bytes into a POSIX exec channel's stdin (design D5 transfer fallback), for
- * hosts whose SFTP subsystem is disabled or chrooted (#12868, #15479). Works on either transport
- * because it only needs `conn.exec`; the system-SSH transport already writes this way.
- *
- * Each file lands under a unique partial name and is renamed only after the host counts exactly
- * the bytes that were sent, so a transfer cut short never leaves a plausible-looking file behind.
- */
+/** Stream into POSIX exec stdin when SFTP is disabled/chrooted (#12868, #15479). Rename unique partial files only after exact host byte-count verification so truncated transfers cannot look complete. */
 import { randomBytes } from 'node:crypto'
 import { constants } from 'node:fs'
 import { lstat, open } from 'node:fs/promises'
@@ -23,7 +16,6 @@ export const EXEC_STDIN_WRITE_DONE = 'ORCA_EXEC_STDIN_WRITE_DONE'
 
 type ExecStdinOptions = { signal?: AbortSignal }
 
-/** `cat` into a partial file, check its size, then rename it into place. */
 export function makeExecStdinWriteFileCommand(
   remotePath: string,
   byteLength: number,
@@ -58,7 +50,7 @@ async function writeViaExecStdin(
   const output = await execCommand(
     conn,
     makeExecStdinWriteFileCommand(remotePath, byteLength, { token, executable }),
-    // Why the deploy bound: a runtime archive over a slow link outlasts the 30 s probe default.
+    // Runtime archives on slow links need the deploy deadline, not the 30s probe timeout.
     { signal: options?.signal, stdin, timeoutMs: REMOTE_INSTALL_TIMEOUT_MS }
   )
   if (output.trim().split('\n').at(-1) !== EXEC_STDIN_WRITE_DONE) {
@@ -112,7 +104,6 @@ export async function writeStringViaExecStdin(
   await writeViaExecStdin(conn, remotePath, bytes.length, Readable.from([bytes]), false, options)
 }
 
-/** One exec creates the tree (empty directories included), then one exec per file. */
 export async function uploadDirectoryViaExecStdin(
   conn: RemoteInstallTransport,
   localDir: string,

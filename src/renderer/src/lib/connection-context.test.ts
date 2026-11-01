@@ -521,8 +521,7 @@ describe('getConnectionIdFromState', () => {
   })
 
   it('resolves a folder workspace connectionId from a passed-in state without reading the global store', () => {
-    // Why: the Quick Open hook subscribes to store slices and must resolve from
-    // the snapshot it receives, not by re-reading useAppStore.getState().
+    // Resolve Quick Open ownership from the subscribed snapshot, never a second getState read.
     const getStateSpy = vi.spyOn(useAppStore, 'getState')
     const state: ConnectionContextState = {
       folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
@@ -547,8 +546,7 @@ describe('getConnectionIdFromState', () => {
   })
 
   it('refuses to resolve a connection when duplicate repo rows disagree about the owning host', () => {
-    // Why (#17799): a repo id carried by two rows — one runtime-owned, one holding a
-    // client-owned SSH connection — must not hand the client's connection to the runtime.
+    // Same-ID repo rows with conflicting owners must not lend a client SSH connection to a runtime (#17799).
     const state: ConnectionContextState = {
       folderWorkspaces: [],
       projectGroups: [],
@@ -577,10 +575,7 @@ describe('getConnectionIdFromState', () => {
   })
 
   it('never hands a worktree the SSH connection of a different host', () => {
-    // Why (#11163): two SSH hosts, one shared repo id. The worktree names `ssh:m4air`; the only
-    // indexed row belongs to `openclaw`. An id-only fallback after the host lookup misses answers
-    // with the wrong host's connection — "Reconnect openclaw" on an m4air pane, and file reads
-    // routed to a machine that never held the path.
+    // Host lookup misses must not fall back by repo ID to another SSH machine’s connection (#11163).
     const state: ConnectionContextState = {
       folderWorkspaces: [],
       projectGroups: [],
@@ -600,8 +595,7 @@ describe('getConnectionIdFromState', () => {
   })
 
   it('never hands a runtime-hosted worktree a client-owned SSH connection', () => {
-    // The row is on `ssh:openclaw`, not on the runtime host, so it says nothing about this
-    // worktree. This is the cross-host case, not the nested-SSH one below.
+    // A row stamped ssh:openclaw cannot establish this runtime-owned worktree’s owner.
     const state: ConnectionContextState = {
       folderWorkspaces: [],
       projectGroups: [],
@@ -621,10 +615,7 @@ describe('getConnectionIdFromState', () => {
   })
 
   it('keeps a runtime host nested SSH target, which decides local readability', () => {
-    // `adoptFromEndpoint` stamps the runtime host and spreads the nested target through. The
-    // pane pairs it with the environment (`selectRuntimeAwareSshStatus`) for reconnect state, and
-    // `isNativeChatTranscriptLocalReadable` treats a null here as "this client can read it" — so
-    // dropping it would send a transcript read to the wrong machine.
+    // Retain nested SSH ownership with its publishing runtime; null would authorize a local transcript read on the wrong machine.
     const state: ConnectionContextState = {
       folderWorkspaces: [],
       projectGroups: [],
@@ -720,6 +711,43 @@ describe('getConnectionIdFromState', () => {
 
     expect(worktreeIdReads).toBe(10_000)
     expect(repoIdReads).toBe(100)
+  })
+
+  it('invalidates folder connection inference for each catalog slice and preserves tri-state answers', () => {
+    const key = folderWorkspaceKey('folder-workspace-1')
+    const state: ConnectionContextState = {
+      folderWorkspaces: [makeFolderWorkspace()],
+      projectGroups: [makeProjectGroup()],
+      repos: [makeRepo({ id: 'repo-1', projectGroupId: 'group-1', connectionId: 'ssh-1' })],
+      worktreesByRepo: {}
+    }
+    expect(getConnectionIdFromState(state, key)).toBe('ssh-1')
+    const local = {
+      ...state,
+      repos: [makeRepo({ id: 'repo-1', projectGroupId: 'group-1' })]
+    }
+    expect(getConnectionIdFromState(local, key)).toBeNull()
+    const contested = {
+      ...local,
+      projectGroups: [makeProjectGroup()],
+      repos: [
+        ...local.repos,
+        makeRepo({ id: 'repo-2', projectGroupId: 'group-1', connectionId: 'ssh-2' })
+      ]
+    }
+    expect(getConnectionIdFromState(contested, key)).toBeUndefined()
+    expect(getConnectionIdFromState(contested, key)).toBeUndefined()
+    const pinned = {
+      ...contested,
+      folderWorkspaces: [
+        makeFolderWorkspace({ executionHostId: 'runtime:host-a', connectionId: 'nested-ssh' })
+      ]
+    }
+    expect(getConnectionIdFromState(pinned, key)).toBe('nested-ssh')
+    expect(getConnectionIdFromState({ ...pinned, folderWorkspaces: [] }, key)).toBeUndefined()
+    // Retained snapshots remain independent when React reads them between current publications.
+    expect(getConnectionIdFromState(state, key)).toBe('ssh-1')
+    expect(getConnectionIdFromState(local, key)).toBeNull()
   })
 
   it('returns null for a null worktreeId', () => {

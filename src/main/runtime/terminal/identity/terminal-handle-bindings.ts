@@ -10,8 +10,6 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuildPtyTerminalSummary {
   protected abstract getLeafKey(tabId: string, leafId: string): string
 
-  protected abstract rejectWaitersForHandle(handle: string, code: string): void
-
   protected bindPtyIncarnationHandle(
     retained: PtyIncarnationHandleRecord,
     leaf: RuntimeLeafRecord
@@ -47,7 +45,6 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     }
     this.handles.delete(retained.handle)
     this.syntheticTerminalHandles.delete(retained.handle)
-    this.rejectWaitersForHandle(retained.handle, 'terminal_handle_stale')
   }
 
   protected clearPtyIncarnationHandles(): void {
@@ -61,13 +58,24 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     for (const [ptyId, retained] of this.handleByPtyIncarnation) {
       const pty = this.ptysById.get(ptyId)
       const leaves = this.getLeavesForPty(ptyId)
-      // Why: a handle issued before the host reported the incarnation is un-fenced, so
-      // learning it is not a replacement; only a known-to-different incarnation is.
+      // Learning a previously unknown incarnation fences the handle; only known-to-different means replacement.
       const incarnationReplaced =
         retained.incarnationId !== null &&
         pty !== undefined &&
         pty.incarnationId !== retained.incarnationId
-      if (!pty || incarnationReplaced || leaves.length !== 1 || this.handleByPtyId.has(ptyId)) {
+      if (!pty || incarnationReplaced || leaves.length > 1) {
+        this.invalidatePtyIncarnationHandle(ptyId)
+        continue
+      }
+      // No pane shows it: a known incarnation keeps naming the process for exit waits beside the
+      // terminal's own handle, and binds no surface; an unknown one proves nothing to keep.
+      if (leaves.length === 0) {
+        if (retained.incarnationId === null) {
+          this.invalidatePtyIncarnationHandle(ptyId)
+        }
+        continue
+      }
+      if (this.handleByPtyId.has(ptyId)) {
         this.invalidatePtyIncarnationHandle(ptyId)
         continue
       }
@@ -101,8 +109,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
 
   protected issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
     const handle = this.issuePtyHandleRecord(pty)
-    // Switch point: a terminal's record names no pane, so recovery reads the pane it was issued in;
-    // a terminal its replacement unbound keeps that stamp.
+    // An unbound terminal retains its issued pane stamp for recovery, including after replacement.
     const record = ORCA_LAYOUT_OWNER_IS_MAIN ? this.handles.get(handle) : undefined
     const issuedForPaneKey = record && this.paneOfPty(pty).paneKey
     if (record && issuedForPaneKey && record.issuedForPaneKey !== issuedForPaneKey) {
@@ -113,7 +120,11 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
 
   private issuePtyHandleRecord(pty: RuntimePtyWorktreeRecord): string {
     const retained = this.handleByPtyIncarnation.get(pty.ptyId)
-    if (retained?.incarnationId === pty.incarnationId) {
+    // A paneless alias only answers exit waits; the terminal itself gets its own handle, as unshown terminals do.
+    if (
+      retained?.incarnationId === pty.incarnationId &&
+      this.getLeavesForPty(pty.ptyId).length > 0
+    ) {
       return retained.handle
     }
     const existingHandle =
@@ -125,7 +136,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
         existingRecord.runtimeId === this.runtimeId &&
         existingRecord.ptyId === pty.ptyId
       ) {
-        this.handleByPtyId.set(pty.ptyId, existingHandle)
+        this.setPtyHandle(pty.ptyId, existingHandle)
         return existingHandle
       }
     }
@@ -145,7 +156,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       ptyId: pty.ptyId,
       ptyGeneration: 0
     })
-    this.handleByPtyId.set(pty.ptyId, handle)
+    this.setPtyHandle(pty.ptyId, handle)
     return handle
   }
 
@@ -174,13 +185,19 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       return
     }
     const record = this.handles.get(handle)
-    if (record?.ptyId && this.handleByPtyIncarnation.get(record.ptyId)?.handle === handle) {
-      this.handleByPtyIncarnation.delete(record.ptyId)
-    }
+    const retained = record?.ptyId ? this.handleByPtyIncarnation.get(record.ptyId) : undefined
     this.handleByLeafKey.delete(leafKey)
     this.handles.delete(handle)
+    // A pane-issued handle names its PTY incarnation, which outlives the pane: a late exit wait
+    // still reads that record until it is pruned or replaced. An unknown incarnation proves no
+    // continuity, so its alias goes with the pane.
+    if (retained?.handle === handle && retained.incarnationId !== null) {
+      return
+    }
+    if (record?.ptyId && retained?.handle === handle) {
+      this.handleByPtyIncarnation.delete(record.ptyId)
+    }
     this.syntheticTerminalHandles.delete(handle)
-    this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
   }
 
   protected adoptFirstPtyForLeafHandle(
@@ -200,7 +217,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
   protected rememberDetachedPreAllocatedLeaves(): void {
     for (const leaf of this.leaves.values()) {
       if (leaf.ptyId && this.handleByPtyId.has(leaf.ptyId)) {
-        // Why: ORCA_TERMINAL_HANDLE is an agent identity, so CLI control survives renderer graph loss while the PTY is alive.
+        // Agent identity via ORCA_TERMINAL_HANDLE must survive renderer graph loss while the PTY lives.
         this.detachedPreAllocatedLeaves.set(leaf.ptyId, leaf)
       }
     }

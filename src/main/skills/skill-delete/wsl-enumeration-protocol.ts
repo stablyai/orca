@@ -4,15 +4,7 @@ import type {
   SkillPathInspection
 } from '../skill-install-filesystem'
 
-/**
- * Guest-side enumeration for path-based skill deletion.
- *
- * Both scripts take every path as a positional argument and emit one
- * NUL-delimited stream, because the delete plan needs the whole discovery root
- * set at once and one `wsl.exe` boot per root is the cost this shape avoids.
- * Records are keyed by argument index rather than by path so the caller rebuilds
- * its map under the exact strings it passed in, with no path round-tripping.
- */
+/** Batch paths into one NUL-delimited stream to avoid per-root WSL launches. Key records by argument index to preserve caller spelling without path round-trips. */
 export const WSL_LIST_ENTRIES_SCRIPT = [
   'set -u',
   'index=0',
@@ -20,9 +12,7 @@ export const WSL_LIST_ENTRIES_SCRIPT = [
   `  printf 'D\\0%s\\0' "$index"`,
   '  index=$((index + 1))',
   '  [ -d "$dir" ] || continue',
-  // An unreadable directory must fail the whole call, matching the native
-  // listEntries: silently reporting it empty would let the planner treat
-  // unenumerated contents as "nothing left here" and remove the parent.
+  // Unreadable is not empty: fail like native enumeration or planning could remove an uninspected parent.
   '  if ! [ -r "$dir" ]; then',
   `    printf 'X\\0'`,
   '    continue',
@@ -50,8 +40,7 @@ export const WSL_INSPECT_PATHS_SCRIPT = [
   '  elif [ -e "$path" ]; then kind=other',
   '  else kind=missing; fi',
   `  resolved=$(realpath -- "$path" 2>/dev/null || printf '')`,
-  // Deliberately no `-L`: WSL discovery reads mtime the same way, so the
-  // freshness guard compares like with like on this host.
+  // Match discovery's lstat semantics so freshness checks compare the same object.
   `  updated=$(stat -c '%Y' -- "$path" 2>/dev/null || printf '')`,
   `  printf 'P\\0%s\\0%s\\0%s\\0%s\\0' "$index" "$kind" "$resolved" "$updated"`,
   '  index=$((index + 1))',
@@ -67,7 +56,6 @@ export class WslEnumerationProtocolError extends Error {
 
 function splitRecords(output: string): string[] {
   const fields = output.split('\0')
-  // A trailing delimiter always leaves one empty field; anything else is data.
   if (fields.at(-1) === '') {
     fields.pop()
   }
@@ -100,9 +88,7 @@ export function parseWslListEntriesOutput(
       const directory = directories[Number.parseInt(fields[index++] ?? '', 10)]
       if (directory === undefined) {
         throw new WslEnumerationProtocolError()
-        // `X`: the guest could not read the directory. Refusing the whole call is
-        // the same contract as the native listEntries throwing on EACCES — only a
-        // confirmed absence may read as an empty directory.
+        // Unavailable inspection must refuse; only confirmed absence may report empty.
       }
       current = listings.get(directory)
       continue
@@ -112,8 +98,7 @@ export function parseWslListEntriesOutput(
     }
     const name = fields[index++]
     const kind = fields[index++]
-    // An `E` before any `D` would silently vanish, and a listing short of its
-    // real contents reads to the planner as an empty directory it may remove.
+    // Reject orphan/truncated entries; dropped contents would falsely authorize parent removal.
     if (name === undefined || !isEntryKind(kind) || current === undefined) {
       throw new WslEnumerationProtocolError()
     }
@@ -143,7 +128,6 @@ export function parseWslInspectPathsOutput(
     inspections.set(path, {
       kind,
       realpath: resolved === '' ? null : resolved,
-      // `stat -c %Y` is whole seconds, matching how WSL discovery scales it.
       mtimeMs: Number.isFinite(updated) ? updated * 1000 : null
     })
   }

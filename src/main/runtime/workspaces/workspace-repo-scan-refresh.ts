@@ -17,6 +17,7 @@ import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { listStoredWorktreeRowsForRepo } from '../repo-worktree-row-resolution'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../shared/execution-host'
+import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/wsl-unc-access-gate'
 
 const lastFingerprintUnknownWarnAt = new Map<string, number>()
 
@@ -38,37 +39,50 @@ function warnFingerprintUnknownOnce(repoId: string, reason: string): void {
 }
 
 export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCatalog {
-  /**
-   * Refresh one repo's worktree rows, skipping the `git worktree list` subprocess when a cheap
-   * Git-admin fingerprint proves nothing changed since the cached scan.
-   */
+  /** Reuse cached scans when a Git-admin fingerprint proves no change. */
   protected async refreshRepoWorktreeScan(
     repo: Repo,
     projectRuntime: ProjectExecutionRuntimeResolution | undefined,
     cached: RuntimeWorktreeScanCache | null
   ): Promise<RuntimeWorktreeScanRefresh> {
     const scannedAt = Date.now()
-    // SSH and WSL-routed repos run Git off-host, so a local admin-dir read cannot describe them.
-    // Resolve the execution host rather than reading `connectionId`: a row stamped only
-    // `executionHostId: 'ssh:*'` is just as off-host, and fingerprinting it stats client paths.
+    // E9: the admin reads below and the Git scan both boot a stopped distro; keep known rows until it runs.
+    const wslDistro = getRepoSshConnectionId(repo)
+      ? undefined
+      : getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime).wslDistro
+    if (
+      !getRepoSshConnectionId(repo) &&
+      wslDistroForPath(repo.path, wslDistro) &&
+      (await blockedWslDistroForPath(repo.path, wslDistro))
+    ) {
+      return cached
+        ? {
+            result: cached.result,
+            adminFingerprint: cached.adminFingerprint,
+            adminFingerprintProbe: null,
+            scannedAt: cached.scannedAt
+          }
+        : {
+            result: { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) },
+            adminFingerprint: null,
+            adminFingerprintProbe: null,
+            scannedAt
+          }
+    }
+    // Fingerprint only on-host Git: executionHostId-only SSH and WSL paths cannot be described by local admin reads.
     const fingerprintCapable =
       !getRepoSshConnectionId(repo) &&
-      // Why: a repo whose scan TTL already reaches the reconciliation interval can never reuse a
-      // fingerprint, so reading one would be pure work. Agent-scratch roots are that case today.
+      // Skip fingerprints when scan TTL already reaches reconciliation; they could never be reused.
       resolveWorktreeScanCacheTtlMs(repo) < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS &&
       !getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime).wslDistro
-    // Why issue it before the scan: a change landing while the scan runs must not be stamped as
-    // already-observed, or the next probe would mask it until the reconciliation deadline.
+    // Probe before scanning so concurrent changes cannot be stamped as already observed.
     const probe = fingerprintCapable ? this.startRepoWorktreeAdminFingerprintProbe(repo) : null
     const reusable =
       cached?.result.ok === true &&
       scannedAt - cached.scannedAt < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
         ? cached
         : null
-    // Why reuse on "cannot tell": a probe that is still pending or timed out says nothing about
-    // the repo, and turning that into a full scan is the feedback loop of #19312 (slow mount →
-    // timeouts → scans → more load). The original `scannedAt` is kept, so the reconcile ceiling
-    // still forces a real scan on schedule.
+    // Unknown probes reuse the cache without resetting scannedAt; rescanning on slow-mount timeouts amplifies load (#19312).
     const reuseCached = (): RuntimeWorktreeScanRefresh | null =>
       reusable
         ? {
@@ -85,8 +99,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
         return reused
       }
     } else if (probe && reusable) {
-      // Why await only here: this is the one branch whose decision needs the probe. A scan-bound
-      // caller must never wait on it, or every cold read pays filesystem latency it cannot use.
+      // Await only for a reusable cache; scan-bound callers cannot use the probe.
       const probed = await withTimeoutResult(probe, WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
       if (!probed.ok) {
         warnFingerprintUnknownOnce(repo.id, 'probe expired')
@@ -95,8 +108,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
           (await this.scanRepoWorktreesForRefresh(repo, projectRuntime, null, scannedAt))
         )
       }
-      // A known fingerprint that matches proves nothing changed; null means the repo cannot be
-      // fingerprinted, which (like a mismatch) needs a real scan.
+      // Only a known matching fingerprint proves no change.
       if (probed.value !== null && probed.value === reusable.adminFingerprint) {
         return {
           result: reusable.result,
@@ -126,11 +138,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     return { result, adminFingerprint: null, adminFingerprintProbe: probe, scannedAt }
   }
 
-  /**
-   * Read one repo's Git-admin fingerprint, unless that repo's previous read is still outstanding.
-   * Why the gate: `withTimeout` abandons a probe without cancelling it, and readdir/stat take no
-   * AbortSignal — on a wedged mount a fresh probe per refresh would pin every libuv fs thread.
-   */
+  /** Allow one outstanding filesystem probe per repo: timeouts do not cancel readdir/stat, so repeated probes could exhaust libuv on wedged mounts. */
   protected startRepoWorktreeAdminFingerprintProbe(
     repo: Repo
   ): Promise<string | null> | 'in-flight' {
@@ -149,9 +157,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     repo: Repo,
     projectRuntime: ProjectExecutionRuntimeResolution | undefined
   ): Promise<RuntimeWorktreeScanResult> {
-    // Why not `repo.connectionId`: SSH ownership has two spellings, and a repo carrying only
-    // `executionHostId: 'ssh:*'` would otherwise be scanned on the client against a remote path —
-    // `git worktree list` then reports nothing, so the remote worktrees never resolve at all.
+    // Resolve executionHostId-only SSH rows too; client scans of remote paths would lose all worktrees.
     const sshConnectionId = getRepoSshConnectionId(repo)
     if (!sshConnectionId) {
       return await scanLocalRepoWorktreesForResolution(
@@ -197,9 +203,16 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
         }
       }
     }
+    const registered = new Set(
+      (this.store?.getRepos() ?? []).map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
+    )
     for (const key of scopeKeys) {
-      this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
-      this.worktreeScanCache.delete(key)
+      if (registered.has(key)) {
+        this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
+      } else {
+        this.worktreeScanGenerations.delete(key)
+        this.worktreeScanCache.delete(key)
+      }
       this.worktreeScanInFlight.delete(key)
     }
   }
@@ -217,7 +230,6 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     )
     for (const key of affectedScopeKeys) {
       this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
-      this.worktreeScanCache.delete(key)
       this.worktreeScanInFlight.delete(key)
     }
     if (affectedScopeKeys.size > 0) {

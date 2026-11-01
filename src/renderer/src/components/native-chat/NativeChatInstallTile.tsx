@@ -4,7 +4,6 @@ import { agentTypeToIconAgent } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import type { AgentType } from '../../../../shared/agent-status-types'
 
-/** The agent's mark in a tile; a failed install swaps it for an amber warning. */
 export function NativeChatInstallTile(props: {
   agent: AgentType
   failed: boolean

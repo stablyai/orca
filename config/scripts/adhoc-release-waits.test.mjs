@@ -5,7 +5,7 @@ import { parse } from 'yaml'
 const adhoc = parse(readFileSync('.github/workflows/adhoc-mac-build.yml', 'utf8'))
 const publisher = parse(readFileSync('.github/workflows/dev-channel-win-publish.yml', 'utf8'))
 const windows = parse(readFileSync('.github/workflows/dev-channel-win-build.yml', 'utf8'))
-const macSteps = adhoc.jobs['build-adhoc-mac-arch'].steps
+const macBuild = adhoc.jobs['build-adhoc-mac-arch']
 const finalSteps = adhoc.jobs['build-adhoc-mac'].steps
 const publishSteps = publisher.jobs['publish-win'].steps
 const macWait = publishSteps.find((step) => step.name === 'Wait for successful macOS publication')
@@ -53,72 +53,57 @@ const job = (name, conclusion) => ({
   conclusion
 })
 
-describe.each([
-  ['Mac', macSteps],
-  ['Windows', windows.jobs['build-win'].steps]
-])('%s release waits retain qualification and publication gates', (_platform, buildSteps) => {
-  const templateWait = buildSteps.find(
-    (step) => step.name === 'Wait for the qualified orcad template'
-  )
-  it('allows desktop setup first, but waits for a qualified artifact from this run', async () => {
-    const { result, calls } = execute(templateWait, [
-      { jobs: [job('orcad-template / cache', 'success')] },
-      { jobs: [job('orcad-template / qualify / persistence (windows-11-arm)')] },
-      { artifacts: [{ name: 'orcad-template', expired: true }] },
-      { artifacts: [{ name: 'orcad-template', expired: false }] }
-    ])
-    await result
-    expect(calls.filter((call) => call.endpoint === 'artifacts')).toHaveLength(4)
-    expect(calls.every((call) => call.input.run_id === 42)).toBe(true)
-    expect(buildSteps.indexOf(templateWait)).toBeGreaterThan(
-      buildSteps.findIndex((step) => step.name === 'Build app')
-    )
-    expect(buildSteps.indexOf(templateWait)).toBeLessThan(
-      buildSteps.findIndex((step) => step.name === 'Download the orcad deployment template')
-    )
-  })
-
-  it.each(['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'])(
-    'refuses to package after template qualification ends with %s',
-    async (conclusion) => {
-      await expect(
-        execute(templateWait, [
-          {
-            jobs: [job('orcad-template / qualify / persistence (windows-11-arm)', conclusion)],
-            artifacts: [{ name: 'orcad-template', expired: false }]
-          }
-        ]).result
-      ).rejects.toThrow('Template qualification failed')
-    }
-  )
-
-  it('times out when no qualified artifact is produced', async () => {
-    await expect(execute(templateWait, [{}]).result).rejects.toThrow('Timed out')
-  })
-
-  it('prefetches Windows assets before waiting, then mints credentials after Mac succeeds', async () => {
-    const download = publishSteps.findIndex(
-      (step) => step.name === 'Download the staged Windows artifacts'
-    )
-    const wait = publishSteps.indexOf(macWait)
-    const token = publishSteps.findIndex((step) => step.name === 'Mint dev channel repo token')
-    expect(download).toBeLessThan(wait)
-    expect(wait).toBeLessThan(token)
-    await execute(macWait, [
-      { jobs: [job('build-adhoc-mac')] },
-      { jobs: [job('build-adhoc-mac', 'success')] }
-    ]).result
-  })
-
-  it.each(['failure', 'cancelled', 'skipped', 'timed_out'])(
-    'refuses Windows publication when Mac ends with %s',
-    async (conclusion) => {
-      await expect(
-        execute(macWait, [{ jobs: [job('build-adhoc-mac', conclusion)] }]).result
-      ).rejects.toThrow('macOS publication did not succeed')
-    }
+it('starts paid Mac packaging only after template qualification succeeds', () => {
+  expect(macBuild.needs).toContain('orcad-template')
+  expect(macBuild.if).toContain("needs.orcad-template.result == 'success'")
+  expect(macBuild.steps.some((step) => step.name === 'Wait for the qualified orcad template')).toBe(
+    false
   )
 })
+
+describe.each([['Windows', windows.jobs['build-win'].steps]])(
+  '%s release waits retain qualification and publication gates',
+  (_platform, buildSteps) => {
+    const templateWait = buildSteps.find(
+      (step) => step.name === 'Wait for the qualified orcad template'
+    )
+    it('allows desktop setup first, but waits for a qualified artifact from this run', async () => {
+      const { result, calls } = execute(templateWait, [
+        { jobs: [job('orcad-template / cache', 'success')] },
+        { jobs: [job('orcad-template / qualify / persistence (windows-11-arm)')] },
+        { artifacts: [{ name: 'orcad-template', expired: true }] },
+        { artifacts: [{ name: 'orcad-template', expired: false }] }
+      ])
+      await result
+      expect(calls.filter((call) => call.endpoint === 'artifacts')).toHaveLength(4)
+      expect(calls.every((call) => call.input.run_id === 42)).toBe(true)
+      expect(buildSteps.indexOf(templateWait)).toBeGreaterThan(
+        buildSteps.findIndex((step) => step.name === 'Build app')
+      )
+      expect(buildSteps.indexOf(templateWait)).toBeLessThan(
+        buildSteps.findIndex((step) => step.name === 'Download the orcad deployment template')
+      )
+    })
+
+    it.each(['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'])(
+      'refuses to package after template qualification ends with %s',
+      async (conclusion) => {
+        await expect(
+          execute(templateWait, [
+            {
+              jobs: [job('orcad-template / qualify / persistence (windows-11-arm)', conclusion)],
+              artifacts: [{ name: 'orcad-template', expired: false }]
+            }
+          ]).result
+        ).rejects.toThrow('Template qualification failed')
+      }
+    )
+
+    it('times out when no qualified artifact is produced', async () => {
+      await expect(execute(templateWait, [{}]).result).rejects.toThrow('Timed out')
+    })
+  }
+)
 
 it('keeps the release a draft until qualification and its cleanup finish', async () => {
   const final = finalSteps.find(
@@ -136,8 +121,25 @@ it('keeps the release a draft until qualification and its cleanup finish', async
   )
 })
 
-it('uses the same qualification wait on both platforms', () => {
-  const script = (steps) =>
-    steps.find((step) => step.name === 'Wait for the qualified orcad template').with.script
-  expect(script(windows.jobs['build-win'].steps)).toBe(script(macSteps))
+it('prefetches Windows assets before waiting, then mints credentials after Mac succeeds', async () => {
+  const download = publishSteps.findIndex(
+    (step) => step.name === 'Download the staged Windows artifacts'
+  )
+  const wait = publishSteps.indexOf(macWait)
+  const token = publishSteps.findIndex((step) => step.name === 'Mint dev channel repo token')
+  expect(download).toBeLessThan(wait)
+  expect(wait).toBeLessThan(token)
+  await execute(macWait, [
+    { jobs: [job('build-adhoc-mac')] },
+    { jobs: [job('build-adhoc-mac', 'success')] }
+  ]).result
 })
+
+it.each(['failure', 'cancelled', 'skipped', 'timed_out'])(
+  'refuses Windows publication when Mac ends with %s',
+  async (conclusion) => {
+    await expect(
+      execute(macWait, [{ jobs: [job('build-adhoc-mac', conclusion)] }]).result
+    ).rejects.toThrow('macOS publication did not succeed')
+  }
+)

@@ -1,10 +1,4 @@
-/**
- * The fail-closed checks every scoped external-manager call re-applies *before*
- * contacting a relay or launching a provider command.
- *
- * Resolution is fully synchronous on purpose: a rejected scope has performed no
- * probe, because there is no await between the request arriving and the throw.
- */
+// Validate scope synchronously before probing a provider or contacting another host.
 
 import {
   EXTERNAL_AUTOMATION_SCOPE_CODES,
@@ -28,7 +22,7 @@ import {
   isRuntimeOwnedSshTarget
 } from '../ssh/connection/ssh-connection-store'
 
-/** Current SSH registrations, hidden ones included so the guard can reject them itself. */
+/** Include hidden registrations so the guard can reject them before comparing generations. */
 export type DesktopSshTargetRegistry = {
   getSshTargets: () => SshTarget[]
 }
@@ -36,10 +30,8 @@ export type DesktopSshTargetRegistry = {
 export type ResolvedExternalAutomationScope = {
   provider: ExternalAutomationProvider
   target: ExternalAutomationTarget
-  /** Set only for SSH scopes, already proven desktop-visible and current. */
   sshTarget: SshTarget | null
   managerId: string
-  /** Cache, coalescing, and cancellation key for this `{owner, provider}`. */
   ownerKey: string
 }
 
@@ -52,7 +44,7 @@ function resolveSshScope(
   if (!target) {
     throw externalAutomationTargetRemovedError()
   }
-  // Why: checked before the generation compare so a hidden target reveals nothing about its registration.
+  // Hide registration details before reporting generation mismatches.
   if (isRuntimeOwnedSshTarget(target) || isManagedOrcadSshTarget(target)) {
     throw new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden)
   }
@@ -63,10 +55,6 @@ function resolveSshScope(
   return target
 }
 
-/**
- * Validates provider, authority, and host incarnation for one scoped request.
- * Throws `ExternalAutomationScopeError` or `AutomationOwnerConflictError`; never probes.
- */
 export function resolveExternalAutomationScope(
   request: ScopedExternalAutomationRequest,
   registry: DesktopSshTargetRegistry

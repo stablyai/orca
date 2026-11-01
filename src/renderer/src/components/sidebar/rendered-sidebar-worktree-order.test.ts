@@ -89,10 +89,7 @@ function makeFolderWorkspace(id: string, projectGroupId: string): FolderWorkspac
   }
 }
 
-/**
- * Seeds the store with the fields the closed-sidebar order reads, then drops the
- * published order so getVisibleWorktreeIds() must recompute it.
- */
+/** Clear the published order so the closed-sidebar fallback must recompute it from store fields. */
 function seedStore(worktrees: Worktree[], overrides: Partial<AppState> = {}): void {
   useAppStore.setState(
     {
@@ -120,8 +117,7 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
   })
 
   it('hoists the repo main worktree first, matching the rendered sidebar', () => {
-    // Manual sort ranks by sortOrder descending, so the base sort puts the feature
-    // workspace first; only the repo grouping layer hoists main ahead of it.
+    // Arrange flat sort to disagree with grouping so the main-worktree hoist is observable.
     const feature = makeWorktree('wt-feature', { sortOrder: 1 })
     const main = makeMainWorktree('wt-main', { sortOrder: 0 })
     seedStore([feature, main])
@@ -129,13 +125,11 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
     const order = getVisibleWorktreeIds()
 
     expect(order).toEqual(['wt-main', 'wt-feature'])
-    // The pre-fix flat fallback returned membership order and numbered the wrong card.
     expect(order).not.toEqual(['wt-feature', 'wt-main'])
   })
 
   it('ignores the agent-send collapse override, which only applies to a mounted list', () => {
-    // Safe to ignore WorktreeList's effectiveCollapsedGroups override only because
-    // it needs a mounted list, which publishes its order and skips this path.
+    // The send-collapse override requires a mounted list, which publishes its own order and bypasses this fallback.
     const main = makeMainWorktree('wt-main')
     const feature = makeWorktree('wt-feature')
     seedStore([main, feature], {
@@ -165,7 +159,6 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
 
       const order = getVisibleWorktreeIds()
 
-      // Each workspace owns exactly one ordinal even when pinning duplicates its row.
       expect(order).toEqual([...new Set(order)])
       expect([...order].sort()).toEqual(['wt-main', 'wt-pinned', 'wt-plain'])
       expect(order[0]).toBe(showPinnedWorktreesInGroups ? 'wt-main' : 'wt-pinned')
@@ -192,7 +185,7 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
   })
 
   it('numbers a workspace created while nothing was published', () => {
-    // A retained-cache fix cannot surface this: it can only prune ids it already had.
+    // A retained cache cannot discover newly created IDs; this path must recompute membership.
     seedStore([makeMainWorktree('wt-main')])
     expect(getVisibleWorktreeIds()).toEqual(['wt-main'])
 
@@ -207,7 +200,6 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
     setVisibleWorktreeIds(['x'])
     expect(getVisibleWorktreeIds()).toEqual(['x'])
 
-    // An empty rendered sidebar is a real order; the old length check fell through here.
     setVisibleWorktreeIds([])
     expect(getVisibleWorktreeIds()).toEqual([])
 
@@ -233,7 +225,6 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
     } as Partial<AppState>
 
     seedStore([], storeOverrides)
-    // Default all-hosts scope adds no host sections, so repo grouping alone orders it.
     expect(getVisibleWorktreeIds()).toEqual([
       'wt-local-main',
       'wt-local-feature',
@@ -248,14 +239,33 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
       ...storeOverrides,
       visibleWorkspaceHostIds: ['ssh:my-target', 'local']
     })
-    // Host sections keep each host's workspaces contiguous, ordered by the host
-    // registry (local first) rather than by the filter argument's order.
+    // Host registry order, rather than filter argument order, keeps each host’s workspaces contiguous.
     expect(getVisibleWorktreeIds()).toEqual([
       'wt-local-main',
       'wt-local-feature',
       'wt-remote-main',
       'wt-remote-feature'
     ])
+  })
+
+  it("orders a card in a paired host's own column by that column, not the default", () => {
+    const today = makeWorktree('wt-today', {
+      hostId: 'runtime:env-1',
+      workspaceStatus: 'status-6',
+      sortOrder: 0
+    })
+    const todo = makeWorktree('wt-todo', { workspaceStatus: 'todo', sortOrder: 1 })
+    const doing = makeWorktree('wt-doing', { workspaceStatus: 'in-progress', sortOrder: 2 })
+    seedStore([today, todo, doing], {
+      groupBy: 'workspace-status',
+      workspaceStatuses: [
+        { id: 'in-progress', label: 'In progress' },
+        { id: 'todo', label: 'Todo' }
+      ],
+      hostWorkspaceStatuses: { 'env-1': [{ id: 'status-6', label: '🔥 今天收尾' }] }
+    })
+
+    expect(getVisibleWorktreeIds()).toEqual(['wt-doing', 'wt-todo', 'wt-today'])
   })
 
   it('keeps the sort layer intact for smart and comparator sort modes', () => {

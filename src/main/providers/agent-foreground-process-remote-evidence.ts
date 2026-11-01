@@ -36,16 +36,7 @@ export function resolveRemoteForegroundEvidenceFromRows(
     return { ...metadata, verdict: 'unverifiable', reason: 'process_table_unreadable' }
   }
   if (options.platform === 'win32') {
-    // Why SSH-to-Windows is always unverifiable: POSIX has a real foreground primitive
-    // (the controlling terminal's foreground process group, tpgid/pgid), so the host can
-    // read which process is in front. Windows has no equivalent. Local Windows approximates
-    // it by reading the native process table and walking descendants of the PTY root pid
-    // (windows-foreground-process-rows.ts), but the relay has neither piece: it does not
-    // import windows-process-table, its getForegroundProcessName is POSIX-shaped
-    // (/proc, pgrep, lsof), and relay hosts run stock node-pty, so no ConPTY job/console
-    // association is available. Returning a descendant name without a creation-time and
-    // session fence would be a guess. Lifting this requires teaching the relay the Windows
-    // process table plus a measured creation-time/session fence - a separate change.
+    // Windows SSH lacks native process-table, creation-time and ConPTY session proof; descendant names cannot authorize foreground identity.
     const fence: WindowsFence = {
       platform: 'windows',
       rootProcessId: request.rootPid,
@@ -72,14 +63,11 @@ export function resolveRemoteForegroundEvidenceFromRows(
     }
   }
   const descendants = collectDescendantRows(index, root.pid)
-  // A child that owns another terminal/session is outside this PTY's
-  // authority. Do not silently treat it as an idle shell.
+  // Another controlling terminal falls outside this pane; its work cannot prove this shell idle.
   if (descendants.some((row) => hasControllingTty(row.tty) && row.tty !== root.tty)) {
     return { ...metadata, verdict: 'unverifiable', reason: 'tty_boundary' }
   }
-  // Multiplexers can make a descendant appear foreground while the user is
-  // actually interacting with another session. This relay has no measured
-  // multiplexer/session fence, so remain conservative for the whole subtree.
+  // Without a multiplexer/session fence, apparent foreground ancestry cannot establish user focus.
   if ([root, ...descendants].some((row) => /(?:^|\s)(?:tmux|screen)(?:\s|$)/i.test(row.command))) {
     return { ...metadata, verdict: 'unverifiable', reason: 'multiplexer_boundary' }
   }
@@ -97,7 +85,9 @@ export function resolveRemoteForegroundEvidenceFromRows(
         name: NonNullable<ReturnType<typeof recognizeAgentProcessFromCommandLine>>
       } => Boolean(entry.name)
     )
-  if (recognized.length > 1) {
+  // One agent can hold two rows (npm Codex: node codex.js spawning native codex; Gemini relaunching itself in node):
+  // that names it, and the outermost row is its fence. Two different agents prove neither.
+  if (new Set(recognized.map((entry) => entry.name.agent)).size > 1) {
     return { ...metadata, verdict: 'unverifiable', reason: 'ambiguous_foreground_group' }
   }
   const candidate = recognized[0]

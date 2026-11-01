@@ -1,8 +1,9 @@
-import { createElement, Fragment } from 'react'
+import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const reactNative = vi.hoisted(() => ({
+  Animated: { View: 'View' },
   Pressable: 'Pressable',
   StyleSheet: { create: <Styles,>(styles: Styles) => styles, hairlineWidth: 1 },
   Text: 'Text',
@@ -12,8 +13,9 @@ vi.mock('react-native', () => reactNative)
 vi.mock('./mobile-tasks-dependencies', async () => ({
   ...reactNative,
   ...(await import('../theme/mobile-theme')),
+  ...(await import('../theme/themed-styles')),
+  ...(await import('../theme/use-mobile-color-scheme')),
   ChevronLeft: 'Icon',
-  Plus: 'Icon',
   RefreshCw: 'Icon',
   StatusDot: 'StatusDot'
 }))
@@ -23,7 +25,8 @@ vi.mock('./mobile-tasks-legacy-styles', async () => ({
 vi.mock('./mobile-tasks-provider-controls', () => ({
   renderMobileTasksProviderControls: () => null
 }))
-vi.mock('./mobile-tasks-search-control', () => ({ renderMobileTasksSearchControl: () => null }))
+vi.mock('./mobile-tasks-provider-pickers', () => ({ selectMobileTasksProvider: () => {} }))
+vi.mock('../components/MobileSegmentedControl', () => ({ MobileSegmentedControl: () => null }))
 const hostStore = vi.hoisted(() => {
   const hosts = [
     { id: 'studio', name: 'Studio Mac' },
@@ -31,7 +34,6 @@ const hostStore = vi.hoisted(() => {
   ]
   const pending: (() => void)[] = []
   return {
-    /** When set, each read waits for `resolveAll` instead of answering at once. */
     deferred: false,
     pending,
     loadHosts(): Promise<typeof hosts> {
@@ -45,7 +47,7 @@ const hostStore = vi.hoisted(() => {
 vi.mock('../transport/host-store', () => ({ loadHosts: () => hostStore.loadHosts() }))
 
 import { hostScreenStyles } from '../host-screen/host-screen-styles'
-import { renderMobileTasksStatusBar } from './mobile-tasks-screen-chrome'
+import { MobileTasksStatusBar } from './mobile-tasks-screen-chrome'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 
 let renderer: ReactTestRenderer | null = null
@@ -58,7 +60,7 @@ function StatusBar({ hostId }: { hostId: string }) {
     router: { back: () => {} },
     taskUiReady: true
   } as unknown as ConnectionPresentationModel
-  return createElement(Fragment, null, renderMobileTasksStatusBar(model))
+  return createElement(MobileTasksStatusBar, { model, accessory: null })
 }
 
 async function renderStatusBar(hostId: string): Promise<ReactTestRenderer> {
@@ -88,7 +90,7 @@ describe('Tasks header desktop subtitle', () => {
     expect(subtitle.props.children).toBe('Build Box')
     expect(subtitle.props.style).toContain(hostScreenStyles.hostPlatformText)
     expect(subtitle.props.numberOfLines).toBe(1)
-    expect(subtitle.parent!.parent!.findByProps({ children: 'Tasks' })).toBeTruthy()
+    expect(subtitle.parent!.parent!.parent!.findByProps({ children: 'Tasks' })).toBeTruthy()
   })
 
   it('reserves a blank line for a desktop that is not paired', async () => {
@@ -99,13 +101,12 @@ describe('Tasks header desktop subtitle', () => {
   it('reserves the line before the read and never shows the previous desktop after a switch', async () => {
     hostStore.deferred = true
     const tree = await renderStatusBar('studio')
-    // Reserved and blank while the first read is in flight, so the title does not move later.
     expect(subtitleOf(tree).props.children).toBe('')
     await act(async () => {
       tree.update(createElement(StatusBar, { hostId: 'buildbox' }))
     })
     expect(subtitleOf(tree).props.children).toBe('')
-    // Studio Mac's read answers after the switch; only Build Box's may land.
+    // A delayed reply from the previous host must not replace the current subtitle.
     await act(async () => {
       hostStore.pending.shift()!()
     })

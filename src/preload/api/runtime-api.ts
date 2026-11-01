@@ -11,13 +11,16 @@ import type {
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
-import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import type {
+  PublicKnownRuntimeEnvironment,
+  RuntimeEnvironmentRemoval
+} from '../../shared/runtime-environments'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
 import type {
   BrowserClientHostPlacementPreparationRequest,
   BrowserPageCreationPlacement
 } from '../../shared/browser-client-host-placement'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime-shared-control-types'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { WslOrcadAccountNotAppliedEvent } from '../../shared/wsl-orcad-account-notice'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
@@ -72,8 +75,7 @@ export type RuntimeApi = {
     onBrowserDriverChanged: (
       callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
     ) => () => void
-    // Why optional: matches onNativeChatLaunchDraftResolved — a renderer running against an older
-    // preload keeps working without the retention signal instead of throwing on every mount.
+    // Older preloads lack this signal.
     onBrowserRemoteViewersChanged?: (
       callback: (event: { browserPageId: string; hasRemoteViewers: boolean }) => void
     ) => () => void
@@ -83,8 +85,11 @@ export type RuntimeApi = {
     onSidebarInputsChanged: (callback: (event: SidebarInputsChangedEvent) => void) => () => void
   }
   runtimeEnvironments: {
+    desktopCreatedChatIds?: () => Promise<string[]>
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
+    // Absent in the web client, whose catalog lives in the browser rather than a CLI-editable file.
+    onCatalogChanged?: (callback: () => void) => () => void
     list: () => Promise<PublicKnownRuntimeEnvironment[]>
     addFromPairingCode: (args: {
       name: string
@@ -101,7 +106,7 @@ export type RuntimeApi = {
       pairingCode: string
     }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
-    remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
+    remove: (args: { selector: string }) => Promise<RuntimeEnvironmentRemoval>
     disconnect: (args: {
       selector: string
     }) => Promise<{ disconnected: PublicKnownRuntimeEnvironment }>
@@ -114,7 +119,6 @@ export type RuntimeApi = {
       timeoutMs?: number
       observeOnly?: true
     }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
-    retryControlConnection?: (args: { selector: string }) => Promise<void>
     onSharedControlDiagnostics?: (
       callback: (event: {
         environmentId: string
@@ -129,7 +133,7 @@ export type RuntimeApi = {
     prepareBrowserClientHostPlacement: (
       args: BrowserClientHostPlacementPreparationRequest
     ) => Promise<BrowserPageCreationPlacement>
-    // Why: system resume / browser online advance pending shared-control reconnect timers only.
+    // Resume/online events advance only pending shared-control reconnect timers.
     retryConnectionsNow?: () => Promise<void>
     call: (args: {
       selector: string
@@ -157,9 +161,9 @@ export type RuntimeApi = {
         onClose?: () => void
       }
     ) => Promise<RuntimeEnvironmentSubscriptionHandle>
-    // Why optional: only the desktop preload deploys servers over SSH.
+    // Only desktop clients deploy servers over SSH.
     managedOrcad?: ManagedOrcadPreloadApi
-    // Why optional: only a Windows desktop (or the e2e fake) has WSL distros to host.
+    // Only Windows desktops (or e2e fakes) host WSL distros.
     wslHosts?: WslHostsPreloadApi
   }
   wsl: {

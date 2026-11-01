@@ -77,8 +77,7 @@ function setupMount() {
       contentRef: { current: 'A (stale cache)' },
       lastSyncedContentRef: { current: 'A (stale cache)' },
       contentSyncModeRef: { current: 'undoable' },
-      isApplyingProgrammaticContentRef: { current: false },
-      isApplyingLargePasteRef: { current: false }
+      isApplyingProgrammaticContentRef: { current: false }
     },
     decorations: {
       markdownDocLinkDecorationsRef: { current: null },
@@ -94,11 +93,13 @@ function setupMount() {
     gutterMenu: {
       setGutterMenuOpen: vi.fn(),
       setGutterMenuPoint: vi.fn(),
-      setGutterMenuLine: vi.fn()
+      setGutterMenuLine: vi.fn(),
+      setGutterMenuSelection: vi.fn()
     }
   }
   const modelText = { value: 'B' }
   const model = {
+    uri: { toString: () => 'file:///repo/file.ts' },
     getValue: () => modelText.value,
     getEOL: () => '\n',
     pushEditOperations: vi.fn(),
@@ -139,14 +140,13 @@ it('mounts the live model over a stale retained cache, editable, and reloads a m
     const view = renderHook(() => useMonacoEditorMount(params))
     view.result.current(editorInstance, monaco)
 
-    // The live model already holds the truth: keep it, stay editable, reload nothing.
     expect(modelText.value).toBe('B')
     expect(model.pushEditOperations).not.toHaveBeenCalled()
     expect(executeEdits).not.toHaveBeenCalled()
     expect(updateOptions).not.toHaveBeenCalledWith({ readOnly: true })
     expect(dropped).toEqual([])
 
-    // No live model holds other text: the stale cache is dropped once, and remounts don't loop.
+    // Without a fresh live model, evict the cache once without entering a remount/reload loop.
     modelText.value = 'A (stale cache)'
     for (let mount = 0; mount < 3; mount += 1) {
       view.result.current(editorInstance, monaco)

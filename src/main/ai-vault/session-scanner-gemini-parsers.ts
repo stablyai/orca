@@ -121,8 +121,7 @@ function consumeGeminiJsonlRecordLine(accumulator: SessionAccumulator, line: str
   consumeGeminiMessage(accumulator, record)
 }
 
-// Resumable only for the JSONL log format; Gemini's legacy single-JSON
-// session documents are rewritten in place and must be re-read whole.
+// Only JSONL is resumable; legacy Gemini documents are rewritten and require a whole-file read.
 export function createGeminiJsonlSessionResumeState(
   file: FileWithMtime,
   messages?: TranscriptMessageSink

@@ -1,10 +1,4 @@
-/**
- * Perf regression: layout persists fire on pane-title churn, and every one of
- * them used to push a remote-runtime IPC round trip regardless of whether the
- * host-visible layout had moved. Counting invocations at the mocked IPC boundary
- * pins the before/after: 100 persists with an unchanged layout cost 100 pushes
- * before the dedupe and 1 after.
- */
+/** Repeated title-driven persists with unchanged host-visible layout must dedupe to one remote push; count at the IPC boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
@@ -15,7 +9,8 @@ vi.mock('@/runtime/web-runtime-terminal-actions', () => ({
 
 const { createRemotePaneLayoutPusher } = await import('./remote-pane-layout-push')
 const { notePendingPaneTitleRename } = await import('@/runtime/pending-pane-title-renames')
-const { toRemoteRuntimePtyId } = await import('../../../../shared/remote-runtime-pty-id')
+const { toRemoteRuntimePtyId } =
+  await import('../../../../shared/remote-runtime/remote-runtime-pty-id')
 
 const PERSISTS = 100
 

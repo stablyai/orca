@@ -38,22 +38,16 @@ type SshPaneProps = { addTargetIntentSignal?: number }
 
 export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Element {
   const [targets, setTargets] = useState<SshTarget[]>([])
-  // Why: connection states are already hydrated and kept up-to-date by the
-  // global store (via useIpcEvents.ts). Reading from the store avoids
-  // duplicating the onStateChanged listener and per-target getState IPC calls.
+  // Reuse globally hydrated SSH state instead of duplicate listeners and per-target IPC reads.
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
-  // Why: gates the submit button and the Enter path so a double click cannot
-  // land two addTarget/updateTarget writes for one draft.
+  // Guard both clicks and Enter so one draft cannot create duplicate writes.
   const [saving, setSaving] = useState(false)
   const { testingIds, testOne, testMany, bulkTesting } = useSshTargetTests()
-  // Why: when a target still has workspaces, route removal through the shared
-  // workspace-aware HostRemoveDialog (same as the sidebar) instead of the plain
-  // confirm, so the user chooses to delete or keep them rather than silently
-  // orphaning them.
+  // Use the shared workspace-aware removal dialog so users choose whether to delete or keep owned workspaces.
   const [hostRemoveTarget, setHostRemoveTarget] = useState<{
     targetId: string
     label: string
@@ -105,9 +99,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
 
   useEffect(() => {
     const abortController = new AbortController()
-    // Why: auto-sync ~/.ssh/config when the Manage pane opens so rotated ports
-    // and newly added hosts appear without a manual Import click. Best-effort —
-    // a sync failure must not block listing the already-known targets.
+    // Best-effort sync ssh/config on opening to pick up new hosts/ports without blocking known-host listing.
     void (async () => {
       await syncSshConfigTargetsPassively()
       if (abortController.signal.aborted) {
@@ -119,8 +111,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   }, [loadTargets])
 
   const openAddTargetForm = useCallback((): void => {
-    // Why: composer deep-links should land on the existing add form, not just
-    // the host management pane.
+    // Composer deep-links open the existing add form.
     setEditingId(null)
     setForm(EMPTY_FORM)
     setShowForm(true)
@@ -174,8 +165,6 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     }
   }
 
-  // Route removal through the workspace-aware dialog when the target still owns
-  // workspaces; otherwise use the plain confirm (which also ends remote PTYs).
   const requestRemoveTarget = (
     target: { id: string; label: string },
     requestPlainRemove: (target: { id: string; label: string }) => void
@@ -188,8 +177,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     const resolution = resolveSshHostRemoval({
       targetId: target.id,
       repos: useAppStore.getState().repos,
-      worktrees: getAllWorktreesFromState(useAppStore.getState()),
-      sshConnectionStates: useAppStore.getState().sshConnectionStates
+      worktrees: getAllWorktreesFromState(useAppStore.getState())
     })
     if (resolution.workspaceCount > 0) {
       setHostRemoveTarget({ targetId: target.id, label: target.label })
@@ -200,8 +188,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
 
   const removeTargetQuietly = async (id: string): Promise<void> => {
     await window.api.ssh.removeTarget({ id })
-    // Why: a deleted passphrase-gated target may still have deferred
-    // reconnect metadata; clear it so focused SSH tabs stop retrying it.
+    // Clear deferred reconnect metadata after removal so passphrase-gated tabs stop retrying the target.
     clearRemovedSshTargetState(id)
   }
 
@@ -292,7 +279,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
               visibleCount={visibleTargets.length}
               selectedCount={selection.selected.size}
               allVisibleSelected={visibleIds.every((id) => selection.selected.has(id))}
-              // Why: a reload can drop the list under the threshold; an active filter must stay clearable.
+              // Keep active filters clearable even when reload drops the list below the threshold.
               showFilter={targets.length > SSH_TARGET_FILTER_THRESHOLD || filter !== ''}
               filter={filter}
               busy={[...selection.selected].some((id) => busyActionForTarget(id) === 'remove')}
@@ -344,7 +331,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
         }}
       />
 
-      {/* Why: modal keeps the form in viewport over long host lists (STA-3067). */}
+      {/* Use a modal to keep long-list forms in the viewport (STA-3067). */}
       <SshTargetForm
         open={showForm}
         editingId={editingId}

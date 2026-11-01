@@ -9,9 +9,7 @@ import { useNativeChatRailHistoryJump } from './use-native-chat-rail-history-jum
 
 type LaneSnapshot = { loaded: number; messages: readonly string[]; streamed: number }
 
-/** A lane shaped like the structured read owner: a page lands in the store, and
- *  only then does the returned promise settle. A request made while a page is in
- *  flight joins it and shares its result. */
+/** Model structured paging: commit before resolving and share pending-page results with concurrent callers. */
 function createLane({
   total,
   pageSize,
@@ -22,8 +20,7 @@ function createLane({
   total: number
   pageSize: number
   initiallyLoaded: number
-  /** An outline entry that never takes a slot, the way an unrenderable message
-   *  would: listed until the window covers index `at`, then gone. */
+  /** Unrenderable outline entry disappears once the window covers its index. */
   ghost?: { id: string; at: number }
   pageResult?: NativeChatOlderPageResult
 }) {
@@ -75,7 +72,6 @@ function createLane({
       holdPages = true
     },
     releasePage: () => pageGate.release?.(),
-    /** A live turn streaming: new state, nothing older. */
     stream: () => {
       snapshot = { ...snapshot, streamed: snapshot.streamed + 1 }
       emit()
@@ -133,7 +129,6 @@ describe('rail jump through unloaded history', () => {
     expect(result.current.pendingId).toBe('m5')
 
     await waitFor(() => expect(jumpToLoaded).toHaveBeenCalledTimes(1))
-    // 90 messages were unloaded and m5 sits 5 from the top: nine pages reach it.
     expect(lane.reads.count).toBe(9)
     expect(jumpToLoaded).toHaveBeenCalledWith(expect.objectContaining({ id: 'm5', slotIndex: 5 }))
     expect(result.current.pendingId).toBeNull()
@@ -167,7 +162,6 @@ describe('rail jump through unloaded history', () => {
 
     act(() => result.current.start(outlineItem('ghost')))
     await waitFor(() => expect(result.current.pendingId).toBeNull())
-    // The first page covers index 25; history behind it is not read for a message that has no row.
     expect(lane.reads.count).toBe(1)
     expect(jumpToLoaded).not.toHaveBeenCalled()
   })
@@ -236,7 +230,6 @@ describe('rail jump through unloaded history', () => {
     }
 
     await waitFor(() => expect(jumpToLoaded).toHaveBeenCalledTimes(1))
-    // The superseded jump's target loaded first, and it never jumped there.
     expect(jumpToLoaded).toHaveBeenCalledWith(expect.objectContaining({ id: 'm2' }))
     expect(lane.reads.count).toBe(3)
   })
@@ -269,7 +262,7 @@ describe('rail jump through unloaded history', () => {
     expect(result.current.pendingId).toBeNull()
     await releasePage(lane)
 
-    // The page it was waiting on still lands for the lane; the jump does not follow it.
+    // The lane still receives the page after the jump abandons it.
     expect(lane.getSnapshot().loaded).toBe(20)
     expect(lane.reads.count).toBe(1)
     expect(jumpToLoaded).not.toHaveBeenCalled()

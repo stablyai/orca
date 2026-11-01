@@ -1,12 +1,7 @@
 import { z } from 'zod'
 
-/**
- * A user's close of a paired runtime host's session tab that never reached the host.
- *
- * The desktop prunes its mirror at once, so without a durable record a reload would forget the
- * close and the host's next snapshot would bring the tab back (STA-6224). The client replays the
- * same `session.tabs.close` a live close sends, which is why nothing here is new wire state.
- */
+/** Persist paired tab closes until the host receives session.tabs.close; otherwise reload/snapshots resurrect tabs (STA-6224).
+ * Replay the existing RPC without adding wire state. */
 export type PairedTerminalTabCloseIntent = {
   /** Every host id the close hid; the first is the one sent. */
   hostTabIds: string[]

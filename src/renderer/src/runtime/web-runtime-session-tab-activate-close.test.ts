@@ -1,3 +1,4 @@
+import { registerHistoricalSessionTabActivationTests } from './web-runtime-session-tab-historical-activation.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TrackingDecisions from './web-session-tabs-sync/tracking-decisions'
 import {
@@ -29,6 +30,7 @@ import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixtu
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
+  revealWorktree: vi.fn(() => true),
   setState: vi.fn(),
   subscribe: vi.fn(),
   setActiveWorktree: vi.fn(),
@@ -46,6 +48,11 @@ const mocks = vi.hoisted(() => ({
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.revealWorktree,
+  activateAndRevealFolderWorkspace: mocks.revealWorktree
 }))
 
 vi.mock('../store', () => ({
@@ -70,7 +77,6 @@ vi.mock('./web-session-tabs-sync/tracking-decisions', async (importOriginal) => 
 vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
     return () => {}
   }
 }))
@@ -127,9 +133,12 @@ describe('web runtime session tab actions', () => {
 
   afterEach(() => {
     resetWebSessionFocusIntentForTests()
+    replaceRuntimeEnvironmentRevisions([])
     vi.unstubAllGlobals()
     vi.clearAllMocks()
   })
+
+  registerHistoricalSessionTabActivationTests(mocks, { ENVIRONMENT_ID, WORKTREE_ID })
 
   it('maps mirrored local browser unified ids for activate and close', async () => {
     const runtimeCall = vi
@@ -319,11 +328,8 @@ describe('web runtime session tab actions', () => {
     )
   })
 
-  // Why this distinction is load-bearing: a close that reports 'unknown-tab' lets the client
-  // finish a teardown the host cannot, and reporting it for an ordinary failure would tear down
-  // tabs a reachable host still holds.
-  // Note: 'selector_not_found' is a transient scan cache miss during worktree discovery, not
-  // definitive absence proof, so it classifies as 'failed' and must not drop TTL eviction.
+  // Only unknown-tab proves absence and permits teardown; ordinary failures may leave live host tabs.
+  // selector_not_found is a transient discovery cache miss: retain failed classification and TTL.
   it.each([
     ['tab_not_found', 'unknown-tab'],
     ['selector_not_found', 'failed'],
@@ -345,10 +351,7 @@ describe('web runtime session tab actions', () => {
     ).resolves.toBe(outcome)
   })
 
-  // #9194: a host can answer tab_not_found and still keep republishing the surface. The close
-  // intent is what hides the mirror, so letting it age out handed the user back a phantom pane
-  // whose handle is already gone -- and closing it again just restarted the same TTL loop.
-  // 'selector_not_found' is transient, so it does not become durable and its suppression expires.
+  // Keep tab_not_found suppression durable when hosts republish closed surfaces (#9194); transient selector_not_found must still expire.
   it.each([
     ['tab_not_found', true],
     ['selector_not_found', false],
@@ -378,10 +381,7 @@ describe('web runtime session tab actions', () => {
     ).toBe(stillPending)
   })
 
-  // #9194, slow host: the close RPC can answer `tab_not_found` at any point up to its own timeout,
-  // and a host that still republishes the surface keeps querying the intent in the meantime. That
-  // query is what evicts an expired entry, so a TTL under the RPC timeout leaves nothing for the
-  // durable flip to reach and the pane the user closed comes back.
+  // Close TTL must outlast RPC timeout so snapshot queries cannot evict the intent before tab_not_found makes it durable (#9194).
   it('keeps a tab_not_found close suppressed when the host answers slower than the old TTL', async () => {
     const startedAt = 1_700_000_000_000
     let clock = startedAt
@@ -535,10 +535,7 @@ describe('web runtime session tab actions', () => {
       snapshotRepublished: true
     })
 
-    // Why: this is the whole user-visible bug. The host kept the tab and said so,
-    // but the refusal is dropped here — the caller gets the same 'applied' it gets
-    // for a real close, so the tab vanishes and silently reappears with no error,
-    // no toast and no retry. Any fix must make these two outcomes distinguishable.
+    // Refusal must differ from applied or the tab silently vanishes then reappears without error or retry.
     expect(refused).toBe('applied')
     expect(refused).toBe(committed)
 

@@ -5,10 +5,7 @@ export type CombinedDiffSectionRowKeys = {
   allSectionsCollapsed: boolean
   /** Virtualizer item key per section index, pre-built so `getItemKey` is an array read. */
   rowKeys: readonly string[]
-  /**
-   * Bumps only when a row key actually changes. Scroll-anchor restore gates on this constant-size
-   * token instead of re-joining every section key on every section load.
-   */
+  /** Constant-size restore token that changes only with row keys, avoiding full key joins per load. */
   structureRevision: number
 }
 
@@ -20,7 +17,7 @@ type CombinedDiffSectionRowKeyCache = {
 }
 
 export function buildCombinedDiffSectionRowKey(section: DiffSection, generation: number): string {
-  // Why: contentGeneration is per-section, so a single row's reload remounts only that row.
+  // Per-section content generations remount only the row whose content changed.
   return `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${generation}:${section.contentGeneration ?? 0}`
 }
 
@@ -43,8 +40,7 @@ function scanCombinedDiffSectionRowKeys(
     return { collapsedCount: 0, generation, sections, value }
   }
 
-  // Why: a section load rewrites exactly one element of a `prev.map(...)` copy, so object
-  // identity is a sound (and allocation-free) test for "this row's key cannot have moved".
+  // Loads replace one section, so sibling identity proves their row keys are unchanged without allocation.
   const patchable =
     previous !== null &&
     previous.generation === generation &&
@@ -88,14 +84,7 @@ function scanCombinedDiffSectionRowKeys(
   }
 }
 
-/**
- * One incremental pass over `sections` feeding every consumer that needs per-row identity.
- *
- * On-demand section loads replace the sections array once per loaded file, so each independent
- * `sections.map(...).join()` / `every(...)` consumer turns opening a review into O(N^2) work and
- * O(N^2) transient strings. This scan patches index by index — an unchanged row costs one pointer
- * compare and no property read — and returns the previous result unchanged when no row key moved.
- */
+/** Share incremental row-key derivation across consumers; untouched rows need only pointer comparisons, avoiding quadratic scans and transient strings. */
 export function useCombinedDiffSectionRowKeys({
   generation,
   sections
@@ -109,9 +98,7 @@ export function useCombinedDiffSectionRowKeys({
     [generation, sections]
   )
 
-  // Why a committed write and not a render-phase one: React can discard a render, and a cache
-  // seeded from abandoned work would let a later render patch against sections that never existed.
-  // Layout, not passive, so a synchronous re-render inside the same commit still sees this cache.
+  // Cache only committed sections; abandoned renders must not seed later patches. Layout timing supports same-commit rerenders.
   useLayoutEffect(() => {
     cacheRef.current = cache
   }, [cache])

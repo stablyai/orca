@@ -5,7 +5,6 @@ import { useRef } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { NativeChatFindBar } from './NativeChatFindBar'
-import { NativeChatQueuedMessageEditor } from './NativeChatQueuedMessageEditor'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import {
   emptyNativeChatContextMenuActions,
@@ -66,18 +65,9 @@ function Chat(): React.JSX.Element {
       <div data-native-chat-scroll>
         <div data-native-chat-transcript-column>Transcript words</div>
       </div>
-      <NativeChatQueuedMessageEditor
-        editor={{
-          messageId: 'queued-1',
-          text: 'Queued draft',
-          acquiring: false,
-          saving: false,
-          canSave: true,
-          change: () => {},
-          save: () => {},
-          cancel: () => {}
-        }}
-      />
+      <div data-queued-message-editor>
+        <textarea aria-label="Edit message" autoFocus defaultValue="Queued draft" />
+      </div>
       <textarea aria-label="Composer" ref={composerElementRef} />
       {contextMenu.menu}
     </div>

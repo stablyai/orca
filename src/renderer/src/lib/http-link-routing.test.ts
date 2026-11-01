@@ -3,6 +3,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import {
   openHttpLink,
+  openOwnedHttpLink,
   registerHttpLinkStoreAccessor,
   registerWorkspaceHttpLinkBrowserOpener,
   resolveLocalhostHttpLinkDisplayUrl
@@ -18,7 +19,9 @@ const openUrlMock = vi.fn()
 const registerLocalhostLabelMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
-const openRuntimeBrowserTabMock = vi.fn(() => Promise.resolve())
+const setActiveViewMock = vi.fn()
+const openRuntimeBrowserTabMock = vi.fn((): Promise<string | null> => Promise.resolve(null))
+const dispatchEventMock = vi.fn()
 
 function noActiveWorkspace(): {
   activeWorktreeId: string | null
@@ -27,21 +30,30 @@ function noActiveWorkspace(): {
   return { activeWorktreeId: null, activeWorkspaceExecutionHostId: null }
 }
 
+type LinkTestSettings = {
+  openLinksInApp?: boolean
+  openLinksInAppModifierInverts?: boolean
+  openLinksInAppInBackground?: boolean
+  openLinksInAppPreferencePrompted?: boolean
+  activeRuntimeEnvironmentId?: string | null
+  localhostWorktreeLabelsEnabled?: boolean
+}
+const noSettings = (): LinkTestSettings | undefined => undefined
+const terminalView = (): 'terminal' | 'activity' => 'terminal'
+
+const repos: { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[] = []
+
+const projects: { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[] = []
+
 const storeState = {
-  settings: undefined as
-    | {
-        openLinksInApp?: boolean
-        openLinksInAppModifierInverts?: boolean
-        openLinksInAppPreferencePrompted?: boolean
-        activeRuntimeEnvironmentId?: string | null
-        localhostWorktreeLabelsEnabled?: boolean
-      }
-    | undefined,
+  settings: noSettings(),
   setActiveWorktree: setActiveWorktreeMock,
+  activeView: terminalView(),
+  setActiveView: setActiveViewMock,
   ...noActiveWorkspace(),
   createBrowserTab: createBrowserTabMock,
-  repos: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
-  projects: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
+  repos,
+  projects,
   worktreesByRepo: {} as Record<
     string,
     { id: string; projectId?: string; repoId?: string; displayName?: string }[]
@@ -56,11 +68,13 @@ const storeState = {
 beforeEach(() => {
   vi.clearAllMocks()
   storeState.settings = undefined
+  storeState.activeView = 'terminal'
   Object.assign(storeState, noActiveWorkspace())
   storeState.workspacePortScansByKey = {}
   registerHttpLinkStoreAccessor(() => storeState)
   registerWorkspaceHttpLinkBrowserOpener(openRuntimeBrowserTabMock)
   vi.stubGlobal('window', {
+    dispatchEvent: dispatchEventMock,
     api: {
       shell: {
         openUrl: openUrlMock
@@ -78,7 +92,39 @@ afterEach(() => {
 })
 
 describe('openHttpLink', () => {
+  it.each([
+    { kind: 'local' },
+    { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
+    { kind: 'ssh', connectionId: 'ssh-1' }
+  ] as const)('opens required owner %j without reading Active Server', (sourceOwner) => {
+    storeState.settings = {
+      openLinksInApp: true,
+      localhostWorktreeLabelsEnabled: true,
+      get activeRuntimeEnvironmentId(): never {
+        throw new Error('An owned link must not read Active Server')
+      }
+    }
+    openOwnedHttpLink('http://localhost:5180/', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true,
+      sourceOwner
+    })
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: 'wt-1',
+      url: 'http://localhost:5180/',
+      intent: { kind: 'url' },
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) }),
+      ...(sourceOwner.kind === 'runtime'
+        ? { expectedRuntimeEnvironmentId: 'env-1' }
+        : sourceOwner.kind === 'ssh'
+          ? { expectedSshConnectionId: 'ssh-1' }
+          : {})
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
+  })
   it('keeps the selected host of the active workspace a link opens in', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true }
     storeState.activeWorktreeId = 'wt-1'
     storeState.activeWorkspaceExecutionHostId = 'ssh:box'
@@ -89,6 +135,7 @@ describe('openHttpLink', () => {
   })
 
   it('routes into Orca when openLinksInApp is on and a worktree is known', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true }
 
     openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
@@ -98,6 +145,30 @@ describe('openHttpLink', () => {
       activate: true
     })
     expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  // Why: #31530 — queued links must not pull focus or the selected workspace away from the source.
+  it('opens in the background without selecting the tab or its workspace', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
+    storeState.settings = { openLinksInApp: true, openLinksInAppInBackground: true }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: false
+    })
+  })
+
+  // Why: #7813 — a link clicked in Agents View landed in a tab layout that was not on screen.
+  it('brings the workspace tabs on screen for a link clicked in Agents View', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
+    storeState.settings = { openLinksInApp: true }
+    storeState.activeView = 'activity'
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(setActiveViewMock).toHaveBeenCalledWith('terminal')
   })
 
   it('defaults to the system browser when settings have not hydrated', () => {
@@ -110,6 +181,7 @@ describe('openHttpLink', () => {
   })
 
   it('routes floating workspace links into Orca without changing the active repo worktree', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true }
 
     openHttpLink('https://example.com/', { worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
@@ -133,6 +205,7 @@ describe('openHttpLink', () => {
   })
 
   it('forceInApp opens a local link in Orca when the setting is off', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: false }
 
     openHttpLink('https://example.com/', {
@@ -161,6 +234,7 @@ describe('openHttpLink', () => {
   })
 
   it('keeps explicitly local links local while a remote runtime is active', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'remote-1' }
 
     openHttpLink('https://example.com/', {
@@ -189,7 +263,8 @@ describe('openHttpLink', () => {
     expect(openRuntimeBrowserTabMock).toHaveBeenCalledExactlyOnceWith({
       workspaceId: 'wt-1',
       url: 'https://github.com/acme/widgets/pull/123',
-      intent: { kind: 'url' }
+      intent: { kind: 'url' },
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) })
     })
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(openUrlMock).not.toHaveBeenCalled()
@@ -206,6 +281,7 @@ describe('openHttpLink', () => {
   })
 
   it('honors an explicit local document owner despite an unrelated active runtime', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-other' }
 
     openHttpLink('https://example.com/', {
@@ -237,21 +313,22 @@ describe('openHttpLink', () => {
       workspaceId: 'wt-1',
       url: 'http://localhost:5180/runtime',
       intent: { kind: 'url' },
-      expectedRuntimeEnvironmentId: 'env-1'
+      expectedRuntimeEnvironmentId: 'env-1',
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) })
     })
     expect(openRuntimeBrowserTabMock).toHaveBeenNthCalledWith(2, {
       workspaceId: 'wt-1',
       url: 'http://localhost:5180/ssh',
       intent: { kind: 'url' },
-      expectedSshConnectionId: 'ssh-1'
+      expectedSshConnectionId: 'ssh-1',
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) })
     })
     expect(openUrlMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
   })
 
-  // Why: runtimes bind per workspace, so activeRuntimeEnvironmentId is commonly
-  // null while a pane is remote — ownership must come from the click source.
+  // Per-workspace runtimes commonly leave global activeRuntimeEnvironmentId null; route from the click’s owner.
   it('uses the pane runtime owner when no runtime is globally active', () => {
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: null }
 
@@ -546,8 +623,7 @@ describe('openHttpLink', () => {
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
   })
 
-  // Why: the hover label must describe the click's real destination — a remote pane's
-  // loopback URL opens raw in the system browser, so a local worktree label would lie.
+  // Hover labels must match clicks: remote loopback opens raw in the system browser, never under a local workspace label.
   it.each([
     ['runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' }] as const,
     ['ssh', { kind: 'ssh', connectionId: 'conn-1' }] as const
@@ -588,8 +664,7 @@ describe('openHttpLink', () => {
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
   })
 
-  // Why: a local pane keeps its label from the local scan even while another pane's
-  // runtime is globally active — the same scan the click resolves.
+  // Local labels use the click’s local scan even while another pane’s runtime has global focus.
   it('labels a local-owned localhost link from the local scan', async () => {
     storeState.settings = {
       localhostWorktreeLabelsEnabled: true,
@@ -640,8 +715,7 @@ describe('openHttpLink modifier routing', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
-  // Why: this is the pre-existing dead gesture — Shift already meant "system
-  // browser", which is where the link was going anyway.
+  // Shift historically forced the system browser and did nothing when it was already the default.
   it('stays on the system browser when inverting is off and links open externally', () => {
     storeState.settings = { openLinksInApp: false, openLinksInAppModifierInverts: false }
 
@@ -652,6 +726,7 @@ describe('openHttpLink modifier routing', () => {
   })
 
   it('opens in Orca when inverting is on and links open externally', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: false, openLinksInAppModifierInverts: true }
 
     openHttpLink('https://example.com/', { worktreeId: 'wt-1', modifierHeld: true })

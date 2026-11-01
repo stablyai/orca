@@ -1,11 +1,4 @@
-/**
- * The account routing a desktop prepared for a terminal agent on a host with no account services
- * of its own (a WSL distro's orcad): which Claude/Codex home the agent's process starts with.
- *
- * Deliberately narrow. Only the four routing variables, only absolute POSIX paths (the pointer may
- * be `~/`-relative, as the `claude` shell function expands it), and never read for a structured
- * session, whose home stays host-derived.
- */
+/** Desktop account routing for terminal agents on WSL orcad hosts without account services: four variables, absolute POSIX paths (the shell pointer may use ~/). Structured-session homes remain host-derived. */
 
 import { z } from 'zod'
 import {

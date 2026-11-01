@@ -243,7 +243,7 @@ describe('OrcaRuntimeService', () => {
     runtime.markRendererReloading(TEST_WINDOW_ID)
     runtime.markGraphUnavailable(TEST_WINDOW_ID)
 
-    // Layout-owner build: main holds every pane it owns, so it answers once the window is gone.
+    // Main-owned panes remain answerable after the window closes.
     expect(runtime.getStatus()).toMatchObject(
       ORCA_LAYOUT_OWNER_IS_MAIN
         ? { graphStatus: 'ready', authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID }

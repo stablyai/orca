@@ -6,6 +6,7 @@ import {
 } from '../../shared/rich-markdown-context-menu'
 import type { ContextMenuSpelling } from '../../shared/browser-guest-events'
 import { translateMain } from '../i18n/main-i18n'
+import { editableContextMenuLabels } from './editable-context-menu-labels'
 
 type EditableContextMenuWebContents = Pick<
   Electron.WebContents,
@@ -40,9 +41,7 @@ function editableContextPasteItem(
   return {
     label,
     click: () => {
-      // Why: context-menu paste must share renderer ownership with keyboard and
-      // app-menu paste so large text controls can chunk and terminals cannot
-      // receive duplicate native paste.
+      // Use renderer paste ownership for chunked text controls and to avoid duplicate native terminal paste.
       webContents.send('ui:editableContextPaste', {
         plainTextOnly: options?.plainTextOnly === true
       })
@@ -55,42 +54,43 @@ function buildMarkdownMenuTemplate(
   point: { x: number; y: number },
   tableTarget: RichMarkdownContextMenuTableTarget | null
 ): Electron.MenuItemConstructorOptions[] {
+  const labels = editableContextMenuLabels()
   return [
-    markdownCommandItem('Add link', 'add-link', webContents, point),
+    markdownCommandItem(labels.addLink, 'add-link', webContents, point),
     { type: 'separator' },
     {
-      label: 'Format',
+      label: labels.format,
       submenu: [
-        markdownCommandItem('Bold', 'bold', webContents, point),
-        markdownCommandItem('Italic', 'italic', webContents, point),
-        markdownCommandItem('Strike', 'strike', webContents, point),
-        markdownCommandItem('Inline code', 'inline-code', webContents, point),
-        markdownCommandItem('Code block', 'code-block', webContents, point),
-        markdownCommandItem('Quote', 'blockquote', webContents, point)
+        markdownCommandItem(labels.bold, 'bold', webContents, point),
+        markdownCommandItem(labels.italic, 'italic', webContents, point),
+        markdownCommandItem(labels.strike, 'strike', webContents, point),
+        markdownCommandItem(labels.inlineCode, 'inline-code', webContents, point),
+        markdownCommandItem(labels.codeBlock, 'code-block', webContents, point),
+        markdownCommandItem(labels.quote, 'blockquote', webContents, point)
       ]
     },
     {
-      label: 'Paragraph',
+      label: labels.paragraph,
       submenu: [
-        markdownCommandItem('Body text', 'paragraph', webContents, point),
-        markdownCommandItem('Heading 1', 'heading-1', webContents, point),
-        markdownCommandItem('Heading 2', 'heading-2', webContents, point),
-        markdownCommandItem('Heading 3', 'heading-3', webContents, point),
-        markdownCommandItem('Heading 4', 'heading-4', webContents, point),
-        markdownCommandItem('Heading 5', 'heading-5', webContents, point),
+        markdownCommandItem(labels.bodyText, 'paragraph', webContents, point),
+        markdownCommandItem(labels.heading1, 'heading-1', webContents, point),
+        markdownCommandItem(labels.heading2, 'heading-2', webContents, point),
+        markdownCommandItem(labels.heading3, 'heading-3', webContents, point),
+        markdownCommandItem(labels.heading4, 'heading-4', webContents, point),
+        markdownCommandItem(labels.heading5, 'heading-5', webContents, point),
         { type: 'separator' },
-        markdownCommandItem('Bullet list', 'bullet-list', webContents, point),
-        markdownCommandItem('Numbered list', 'ordered-list', webContents, point),
-        markdownCommandItem('Checklist', 'task-list', webContents, point)
+        markdownCommandItem(labels.bulletList, 'bullet-list', webContents, point),
+        markdownCommandItem(labels.numberedList, 'ordered-list', webContents, point),
+        markdownCommandItem(labels.checklist, 'task-list', webContents, point)
       ]
     },
     {
-      label: 'Insert',
+      label: labels.insert,
       submenu: [
-        markdownCommandItem('Link', 'add-link', webContents, point),
-        markdownCommandItem('Image', 'image', webContents, point),
-        markdownCommandItem('Divider', 'divider', webContents, point),
-        markdownCommandItem('Code block', 'code-block', webContents, point)
+        markdownCommandItem(labels.link, 'add-link', webContents, point),
+        markdownCommandItem(labels.image, 'image', webContents, point),
+        markdownCommandItem(labels.divider, 'divider', webContents, point),
+        markdownCommandItem(labels.codeBlock, 'code-block', webContents, point)
       ]
     },
     ...(tableTarget
@@ -174,8 +174,8 @@ function buildMarkdownMenuTemplate(
     { type: 'separator' },
     { role: 'cut' },
     { role: 'copy' },
-    editableContextPasteItem('Paste', webContents),
-    editableContextPasteItem('Paste as plain text', webContents, { plainTextOnly: true }),
+    editableContextPasteItem(labels.paste, webContents),
+    editableContextPasteItem(labels.pasteAsPlainText, webContents, { plainTextOnly: true }),
     { role: 'selectAll' }
   ]
 }
@@ -184,13 +184,14 @@ function buildNativeEditMenuTemplate(
   params: Electron.ContextMenuParams,
   webContents: EditableContextMenuWebContents
 ): Electron.MenuItemConstructorOptions[] {
+  const labels = editableContextMenuLabels()
   return [
     { role: 'cut' },
     { role: 'copy' },
-    editableContextPasteItem('Paste', webContents),
-    // Why: a plain-text contenteditable (the chat composer) already pastes text literally and takes no text-only mode.
+    editableContextPasteItem(labels.paste, webContents),
+    // Plain-text contenteditable composers already paste literally; omit redundant text-only mode.
     ...(params.formControlType !== 'none'
-      ? [editableContextPasteItem('Paste as plain text', webContents, { plainTextOnly: true })]
+      ? [editableContextPasteItem(labels.pasteAsPlainText, webContents, { plainTextOnly: true })]
       : []),
     { role: 'selectAll' }
   ]
@@ -227,7 +228,7 @@ export function buildEditableContextMenuTemplate(
       template.push({ type: 'separator' })
     }
     template.push({
-      label: 'Add to dictionary',
+      label: editableContextMenuLabels().addToDictionary,
       click: () => {
         webContents.session.addWordToSpellCheckerDictionary(misspelledWord)
       }

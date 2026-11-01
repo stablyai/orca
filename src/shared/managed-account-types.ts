@@ -1,3 +1,5 @@
+import type { CodexAccountSelectionTarget } from './codex-selection-lane'
+
 export type ManagedDataAccountProvider = 'opencode' | 'devin'
 
 export type ManagedDataAccountSummary = {
@@ -40,9 +42,7 @@ export type CodexManagedAccountSummary = {
   lastAuthenticatedAt: number
 }
 
-/** Live, read-only identity of the user's real ~/.codex used by the
- *  system-default (activeAccountId:null) Codex account. Orca reads this to
- *  display and attribute the system default; it never writes ~/.codex. */
+/** Read-only identity of real ~/.codex for system-default (activeAccountId:null) display/attribution; this path never writes it. */
 export type CodexSystemDefaultIdentity = {
   /** True when ~/.codex/auth.json exists (signed in via a token file). */
   hasAuth: boolean
@@ -59,8 +59,7 @@ export type CodexRateLimitAccountsState = {
   accounts: CodexManagedAccountSummary[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
-  /** Resolved identity of the host system-default (real ~/.codex) account.
-   *  Omitted for runtimes where it is not resolved (e.g. per-distro WSL). */
+  /** Host’s real ~/.codex identity; omitted where unresolved, such as per-distro WSL. */
   systemDefault?: CodexSystemDefaultIdentity
 }
 
@@ -99,6 +98,8 @@ export type ClaudeManagedAccountSummary = {
   needsSignIn?: true
   /** Its folder holds no login, so its launches run on System default, signed in to it. */
   runsOnSystemDefault?: true
+  /** The host folder its launches use; a legacy account's saved path may name an older one. */
+  home?: string
 }
 
 /** A sign-in to a new account folder, or to a saved account's own when `accountId` is given. */
@@ -122,8 +123,18 @@ export type ClaudeRateLimitAccountsState = {
   activeAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
   /** The login System default holds, when the host can read it and accounts exist. */
   systemDefaultEmail?: string
+  systemDefaultOrganizationUuid?: string
+  /** The host folder System default launches use, when accounts exist. */
+  systemDefaultHome?: string
   /** An older Orca's copy-based switching once wrote an account's login into System default. */
   systemDefaultMayBeCopied?: boolean
+}
+
+/** A Claude switch made over runtime RPC, e.g. from the phone. */
+export type ClaudeAccountSelectionChange = {
+  target: CodexAccountSelectionTarget
+  before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
+  after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
 }
 
 export type ClaudeManagedAccountRuntimeSelection = {

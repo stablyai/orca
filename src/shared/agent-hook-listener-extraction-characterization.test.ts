@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { normalizeHookPayload } from './agent-hook-listener'
+import type { AgentHookSource } from './agent-hook-relay'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -10,54 +11,53 @@ import {
 } from './agent-hook-listener/listener-state'
 import { warnOnHookEnvOrVersionMismatch } from './agent-hook-listener/listener-limits'
 import { resolveHookSource } from './agent-hook-listener/source-routing'
+import { bindOpenCodeSession } from './agent-hook-listener/opencode-session-registry'
 import { makePaneKey } from './stable-pane-id'
 
 const PANE = makePaneKey('tab-hooks', '11111111-1111-4111-8112-111111111111')
 const MOVED_PANE = makePaneKey('tab-hooks', '22222222-2222-4222-8222-222222222222')
-const ROUTES = {
-  '/hook/claude': 'claude',
-  '/hook/codex': 'codex',
-  '/hook/gemini': 'gemini',
-  '/hook/antigravity': 'antigravity',
-  '/hook/amp': 'amp',
-  '/hook/opencode': 'opencode',
-  '/hook/mimo-code': 'mimo-code',
-  '/hook/cursor': 'cursor',
-  '/hook/pi': 'pi',
-  '/hook/omp': 'omp',
-  '/hook/prime-agent': 'prime-agent',
-  '/hook/droid': 'droid',
-  '/hook/command-code': 'command-code',
-  '/hook/grok': 'grok',
-  '/hook/copilot': 'copilot',
-  '/hook/hermes': 'hermes',
-  '/hook/devin': 'devin',
-  '/hook/kimi': 'kimi',
-  '/hook/jcode': 'jcode'
-} as const
 function normalizeProviderState(
-  source: (typeof ROUTES)[keyof typeof ROUTES],
+  source: AgentHookSource,
   eventName: string,
   payload: Record<string, unknown> = {}
 ) {
+  const routedSource = resolveHookSource(`/hook/${source}`)
+  if (routedSource === null) {
+    return null
+  }
   return (
     normalizeHookPayload(
       createHookListenerState(),
-      source,
+      routedSource,
       { paneKey: PANE, hook_event_name: eventName, payload },
       'production'
     )?.payload ?? null
   )
 }
+afterEach(() => vi.restoreAllMocks())
 describe('agent hook extraction boundaries', () => {
-  it('routes exactly the complete provider vocabulary', () => {
-    for (const [pathname, source] of Object.entries(ROUTES)) {
-      expect(resolveHookSource(pathname)).toBe(source)
-      expect(resolveHookSource(`${pathname}/`)).toBeNull()
-      expect(resolveHookSource(`${pathname}?v=1`)).toBeNull()
-      expect(resolveHookSource(pathname.toUpperCase())).toBeNull()
-    }
+  it.each([
+    ['qoder', 'UserPromptSubmit'],
+    ['qoder-cn', 'UserPromptSubmit'],
+    ['qwen-code', 'UserPromptSubmit'],
+    ['codebuddy', 'UserPromptSubmit'],
+    ['opencode2', 'SessionBusy'],
+    ['muse', 'UserPromptSubmit'],
+    ['zcode', 'UserPromptSubmit'],
+    ['dsh', 'UserPromptSubmit'],
+    ['kiro', 'userPromptSubmit']
+  ] as const)('normalizes %s hook traffic through its routed source', (source, eventName) => {
+    expect(normalizeProviderState(source, eventName, { prompt: 'routed prompt' })).toMatchObject({
+      state: 'working',
+      agentType: source,
+      prompt: 'routed prompt'
+    })
+  })
+
+  it('rejects unknown and malformed hook paths', () => {
     expect(resolveHookSource('/hook/unknown')).toBeNull()
+    expect(resolveHookSource('/hook/devin/')).toBeNull()
+    expect(resolveHookSource('/HOOK/DEVIN')).toBeNull()
   })
 
   it('preserves thin provider lifecycle branches and source attribution', () => {
@@ -86,9 +86,17 @@ describe('agent hook extraction boundaries', () => {
     }
   })
 
-  it('warns before tab rejection and caps version and environment warning keys independently', () => {
+  it('warns before tab rejection and bounds distinct version and environment warnings', () => {
     const orderState = createHookListenerState()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    expect(
+      normalizeHookPayload(
+        createHookListenerState(),
+        'devin',
+        { paneKey: PANE, payload: { hook_event_name: 'UserPromptSubmit' } },
+        'production'
+      )?.payload
+    ).toMatchObject({ state: 'working', agentType: 'devin' })
     const rejected = normalizeHookPayload(
       orderState,
       'devin',
@@ -96,13 +104,25 @@ describe('agent hook extraction boundaries', () => {
         paneKey: PANE,
         tabId: 'wrong-tab',
         version: 'outdated',
-        payload: { hook_event_name: 'UnknownEvent' }
+        payload: { hook_event_name: 'UserPromptSubmit' }
       },
       'production'
     )
     expect(rejected).toBeNull()
     expect(warn).toHaveBeenCalledTimes(1)
 
+    warn.mockClear()
+    const repeatedState = createHookListenerState()
+    for (let attempt = 0; attempt < 2; attempt++) {
+      warnOnHookEnvOrVersionMismatch(repeatedState, {
+        version: 'repeated-version',
+        env: 'repeated-environment',
+        expectedEnv: 'production'
+      })
+    }
+    expect(warn).toHaveBeenCalledTimes(2)
+
+    warn.mockClear()
     const cappedState = createHookListenerState()
     for (let index = 0; index < 40; index++) {
       warnOnHookEnvOrVersionMismatch(cappedState, {
@@ -113,10 +133,10 @@ describe('agent hook extraction boundaries', () => {
     }
     expect(cappedState.warnedVersions.size).toBe(32)
     expect(cappedState.warnedEnvs.size).toBe(32)
-    warn.mockRestore()
+    expect(warn).toHaveBeenCalledTimes(64)
   })
 
-  it('moves every pane-owned collection and preserves NUL suffixes', () => {
+  it('moves selected pane-owned collections and preserves NUL suffixes', () => {
     const state = createHookListenerState()
     const scoped = `${PANE}\0child`
     const movedScoped = `${MOVED_PANE}\0child`
@@ -169,20 +189,57 @@ describe('agent hook extraction boundaries', () => {
       expect(cache.get(movedScoped)).toBe('scoped')
       expect(cache.get(sibling)).toBe('sibling')
       expect(cache.has(PANE)).toBe(false)
+      expect(cache.has(scoped)).toBe(false)
     }
     expect(state.lastStatusByPaneKey.get(MOVED_PANE)?.payload.prompt).toBe('exact')
     expect(state.lastStatusByPaneKey.get(movedScoped)?.payload.prompt).toBe('scoped')
     expect(state.lastStatusByPaneKey.get(sibling)?.payload.prompt).toBe('sibling')
     expect(state.lastStatusByPaneKey.has(PANE)).toBe(false)
+    expect(state.lastStatusByPaneKey.has(scoped)).toBe(false)
     for (const set of paneSets) {
       expect(set.has(MOVED_PANE)).toBe(true)
       expect(set.has(movedScoped)).toBe(true)
       expect(set.has(sibling)).toBe(true)
       expect(set.has(PANE)).toBe(false)
+      expect(set.has(scoped)).toBe(false)
     }
 
     movePaneCacheState(state, MOVED_PANE, MOVED_PANE)
     expect((state.lastPromptByPaneKey as Map<string, unknown>).get(MOVED_PANE)).toBe('exact')
+  })
+
+  it('preserves bound OpenCode session ownership and launch identity after a pane move', () => {
+    const state = createHookListenerState()
+    normalizeHookPayload(
+      state,
+      'devin',
+      {
+        paneKey: PANE,
+        launchToken: 'moved-launch',
+        payload: { hook_event_name: 'UserPromptSubmit' }
+      },
+      'production'
+    )
+    expect(
+      bindOpenCodeSession(state, 'moved-session', { paneKey: PANE, boundAt: 1, basis: 'argv' })
+    ).toBe(true)
+    movePaneCacheState(state, PANE, MOVED_PANE)
+    const event = normalizeHookPayload(
+      state,
+      'opencode',
+      {
+        paneKey: PANE,
+        opencodeSharedServer: 1,
+        payload: { hook_event_name: 'SessionBusy', sessionID: 'moved-session' }
+      },
+      'production'
+    )
+    expect(event).toMatchObject({
+      paneKey: MOVED_PANE,
+      launchToken: 'moved-launch',
+      payload: { state: 'working', agentType: 'opencode' }
+    })
+    expect(state.lastLaunchTokenByPaneKey.has(PANE)).toBe(false)
   })
 
   it('clears exact and NUL-scoped cache keys but not sibling prefixes', () => {
@@ -230,6 +287,7 @@ describe('agent hook extraction boundaries', () => {
     expect(state.lastStatusByPaneKey.has(scoped)).toBe(false)
     expect(state.lastStatusByPaneKey.get(sibling)?.payload.prompt).toBe('sibling')
     expect(state.ampCompletedCacheKeys.has(scoped)).toBe(false)
+    expect(state.ampCompletedCacheKeys.has(PANE)).toBe(false)
     expect(state.ampCompletedCacheKeys.has(sibling)).toBe(true)
     expect(state.claudeLeadStateByPaneKey.has(PANE)).toBe(false)
     expect(state.codexLeadStateByPaneKey.has(PANE)).toBe(false)
@@ -267,6 +325,28 @@ describe('agent hook extraction boundaries', () => {
     state.claudeRunningNonAgentTaskPaneKeys.add(PANE)
     state.codexLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     state.grokActiveTurnByPaneKey.set(PANE, { promptId: 'prompt-1' })
+    const notification = {
+      paneKey: PANE,
+      payload: { hook_event_name: 'Notification', notification_type: 'permission_prompt' }
+    }
+    normalizeHookPayload(
+      state,
+      'muse',
+      {
+        paneKey: PANE,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'stale-tool',
+          tool_input: { command: 'old command' }
+        }
+      },
+      'production'
+    )
+    expect(normalizeHookPayload(state, 'muse', notification, 'production')?.payload).toMatchObject({
+      state: 'waiting',
+      agentType: 'muse',
+      toolName: 'stale-tool'
+    })
 
     clearAllListenerCaches(state)
 
@@ -276,5 +356,8 @@ describe('agent hook extraction boundaries', () => {
     expect(state.claudeRunningNonAgentTaskPaneKeys.size).toBe(0)
     expect(state.codexLeadStateByPaneKey.size).toBe(0)
     expect(state.grokActiveTurnByPaneKey.size).toBe(0)
+    const afterReset = normalizeHookPayload(state, 'muse', notification, 'production')
+    expect(afterReset?.payload).toMatchObject({ state: 'waiting', agentType: 'muse' })
+    expect(afterReset?.payload.toolName).toBeUndefined()
   })
 })

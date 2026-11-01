@@ -9,7 +9,6 @@ export function useStructuredAgentSessionTransport(args: {
   target: RuntimeClientTarget
   isVisible: boolean
   enabled: boolean
-  /** The chat's agent, which a refused write about it names. */
   agentName?: string
 }) {
   const { agentName, enabled, isVisible, sessionId, target } = args
@@ -33,6 +32,5 @@ export function useStructuredAgentSessionTransport(args: {
   useEffect(() => {
     stateRef.current = read.state
   }, [read.state])
-  // `stateRef`: the read state now, for a reply that lands after the render that sent it.
   return { ...read, ...mutation, providerVisible, stateRef }
 }

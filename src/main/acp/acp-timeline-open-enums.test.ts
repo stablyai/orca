@@ -21,7 +21,6 @@ async function genericRig() {
   return { rig, translator, apply, update }
 }
 
-// The protocol's enums are open: a value newer than this build reads as known and falls back.
 describe('ACP values newer than this build', () => {
   it('keeps a tool with a newer kind or status as a tool row in its last known state', async () => {
     const { rig, translator, apply, update } = await genericRig()

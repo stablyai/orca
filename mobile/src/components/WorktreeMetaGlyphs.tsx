@@ -1,21 +1,21 @@
 import { CalendarClock, CircleDot, GitMerge, SquareTerminal, StickyNote } from 'lucide-react-native'
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TaskProviderLogo } from './TaskProviderLogo'
 import type { WorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-presence'
 import { prStateToken } from './pr-state-token'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
 
-// PR chip color by state, resolved through the shared prStateToken so it always
-// matches the PR sidebar's state badge: merged = purple, open = green, closed =
-// red, draft/unknown = muted.
+// Use shared prStateToken to match sidebar badge: merged purple, open green, closed red, draft/unknown muted.
 export function prStateColor(state: string): string {
   return statusColor(prStateToken(state))
 }
 
-// Presence glyphs in the desktop WorktreeCardMetaBadges order. Mobile shows presence only; the
-// full detail (title/state/labels) is a follow-up detail sheet.
+// Match desktop metadata order; mobile glyphs show presence, with full details reserved for sheet.
 export function WorktreeMetaGlyphs({ presence }: { presence: WorktreeMetaGlyphPresence }) {
+  useMobileColorScheme()
   if (!Object.values(presence).some(Boolean)) {
     return null
   }
@@ -32,7 +32,7 @@ export function WorktreeMetaGlyphs({ presence }: { presence: WorktreeMetaGlyphPr
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   metaGlyphs: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -44,4 +44,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textMuted
   }
-})
+}))

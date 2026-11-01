@@ -22,8 +22,7 @@ export function SessionRestoredBannerPortals({
           return null
         }
         return createPortal(
-          // Why: resumed TUIs repaint xterm immediately, so the wake marker
-          // must live in that pane's chrome instead of the PTY byte stream.
+          // Put wake markers in pane chrome because resumed TUIs immediately repaint the PTY screen.
           <SessionRestoredBanner visible reason={reason} />,
           pane.container,
           `session-restored-banner-${pane.id}`

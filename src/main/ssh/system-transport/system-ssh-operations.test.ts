@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 
 const { existsSyncMock, spawnMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -89,39 +90,21 @@ function expectOrcaControlMasterArgs(args: string[]): void {
   expect(args).toContain('ControlPersist=300')
 }
 
-type EventedProcess = EventEmitter & {
-  stdin: EventEmitter & {
-    write: ReturnType<typeof vi.fn>
-    end: ReturnType<typeof vi.fn>
-  }
-  stdout: EventEmitter
-  stderr: EventEmitter
-  pid: number
-  kill: ReturnType<typeof vi.fn>
-  exitCode: number | null
-  killed: boolean
-}
+type EventedProcess = ReturnType<typeof createEventedProcess>
 
-// Windows writes read their source asynchronously before spawning, so a close emitted straight
-// after the call can beat the listener. Emit it from the spawn instead.
+// Emit close from spawn: asynchronous Windows source reads can otherwise let it precede listener registration.
 function closeOnceSpawned(proc: EventedProcess): EventedProcess {
   setImmediate(() => proc.emit('close', 0, null))
   return proc
 }
 
-function createEventedProcess(): EventedProcess {
-  const proc = new EventEmitter() as EventedProcess
-  proc.stdin = Object.assign(new EventEmitter(), {
-    write: vi.fn((_chunk, _encoding, cb?: (err?: Error | null) => void) => cb?.()),
-    end: vi.fn()
+function createEventedProcess() {
+  const proc = createFakeSpawnedChild(12345)
+  const stdin = Object.assign(proc.stdin, {
+    write: vi.spyOn(proc.stdin, 'write'),
+    end: vi.spyOn(proc.stdin, 'end')
   })
-  proc.stdout = new EventEmitter()
-  proc.stderr = new EventEmitter()
-  proc.pid = 12345
-  proc.kill = vi.fn()
-  proc.exitCode = null
-  proc.killed = false
-  return proc
+  return Object.assign(proc, { stdin })
 }
 
 function createMockChildProcess(): EventEmitter & {
@@ -279,8 +262,7 @@ describe('spawnSystemSsh', () => {
   })
 
   it('states the stored endpoint when no Host block claims the alias', () => {
-    // A wildcard `Host *` supplies the proxy for every alias, so an alias whose own block is gone
-    // still reads as config-backed and gets dialled bare - the #11746 P1.
+    // #11746: Host * can retain a deleted alias's proxy, making it appear config-backed.
     const args = buildSshArgs(
       createTarget({
         source: 'ssh-config',
@@ -295,7 +277,6 @@ describe('spawnSystemSsh', () => {
     expect(args).toContain('Hostname=10.0.0.5')
     expect(args.slice(args.indexOf('-p'))).toContain('2222')
     expect(args.slice(args.indexOf('-l'))).toContain('deploy')
-    // The alias is still the destination so OpenSSH keeps applying the wildcard's proxy.
     expect(args.at(-1)).toBe('prod')
     expect(args).not.toContain('deploy@prod')
     expect(args).not.toContain('-i')
@@ -699,14 +680,12 @@ describe('spawnSystemSsh', () => {
     )
 
     await expect(promise).resolves.toBeUndefined()
-    // #16432, re-measured: Windows PowerShell 5.1 can lose a redirected stdin for good when a read
-    // finds it momentarily empty, so the bytes must not travel that way at all.
+    // #16432: avoid PowerShell 5.1's per-read stdin hang by sending payload through SFTP.
     const batch = String(spawned[0]!.stdin.end.mock.calls[0]?.[0] ?? '')
     expect(batch).toContain('put ')
     expect(batch).toContain('/C:/Users/me/.orca-remote/relay/.version.orca-partial-')
     const sftpArgs = spawnMock.mock.calls[0][1] as string[]
     expect(sftpArgs).toContain('-b')
-    // The rename that publishes it reads the staged file, never a pipe.
     const publish = (spawnMock.mock.calls[1][1] as string[]).at(-1) ?? ''
     expect(publish).toContain('powershell.exe')
     expect(decodePowerShellCommand(publish)).toContain(
@@ -728,8 +707,7 @@ describe('spawnSystemSsh', () => {
 
     await expect(promise).resolves.toBeUndefined()
     const publish = decodePowerShellCommand((spawnMock.mock.calls[1][1] as string[]).at(-1) ?? '')
-    // `File::Move` raising on an existing destination is what carries the exclusive contract now;
-    // a `CreateNew` on the staged file would only refuse a leftover of our own.
+    // Move refuses an existing destination; CreateNew on staging would only guard our temporary name.
     expect(publish).toContain('[System.IO.File]::Move($staging, $path)')
     expect(publish).not.toContain('[System.IO.File]::Delete($path)')
   })
@@ -806,8 +784,7 @@ describe('spawnSystemSsh', () => {
       rmSync(localDir, { recursive: true, force: true })
     }
 
-    // #16432: directories first, then the file — but both over sftp now, so the only PowerShell
-    // left is the rename that publishes the staged file, which reads a file rather than a pipe.
+    // #16432: directories and payload use SFTP; only publish uses PowerShell, reading a staged file.
     const mkdirBatch = String(spawned[0]!.stdin.end.mock.calls[0]?.[0] ?? '')
     expect(mkdirBatch).toBe('-mkdir "/C:/Users/me/.orca-remote/relay"\n')
     const putBatch = String(spawned[1]!.stdin.end.mock.calls[0]?.[0] ?? '')
@@ -816,7 +793,6 @@ describe('spawnSystemSsh', () => {
     const commands = spawnMock.mock.calls.map((call) => (call[1] as string[]).at(-1) ?? '')
     expect(commands.every((command) => !command.includes('/bin/sh'))).toBe(true)
     expect(commands.join('\n')).not.toContain('tar -xzf')
-    // Nothing base64s the bundle into one PowerShell string any more, and nothing reads one.
     expect(
       commands.some((command) => decodePowerShellCommand(command).includes('OpenStandardInput'))
     ).toBe(false)
@@ -843,7 +819,6 @@ describe('spawnSystemSsh', () => {
     }
 
     const args = spawnMock.mock.calls[0][1] as string[]
-    // The first spawn is the sftp client, whose own `-S` names a program to run.
     expect(args).not.toContain('-S')
     expect(args).toContain('ControlPath=none')
   })

@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 
 type HoverControlSnapshot = ReturnType<typeof useWorktreeCardDetailsHoverControl>
@@ -104,5 +104,56 @@ describe('useWorktreeCardDetailsHoverControl', () => {
 
     expect(control?.hoverOpen).toBe(false)
     expect(control?.reviewMenuOpen).toBe(false)
+  })
+
+  it('keeps a menu that opened in the same click that dismissed the link chooser', () => {
+    mountProbe()
+
+    act(() => {
+      control?.handleHoverOpenChange(true)
+      control?.handleLinkActionsOpenChange(true)
+      control?.handleReviewMenuOpenChange(true)
+      control?.handleLinkActionsOpenChange(false)
+    })
+
+    expect(control?.reviewMenuOpen).toBe(true)
+  })
+
+  it('keeps the card open behind the link chooser after the pointer moves onto it', () => {
+    mountProbe()
+
+    act(() => {
+      control?.handleHoverOpenChange(true)
+      control?.handleLinkActionsOpenChange(true)
+      control?.handleHoverOpenChange(false)
+      control?.handleLinkActionsOpenChange(false)
+    })
+
+    expect(control?.hoverOpen).toBe(true)
+  })
+
+  it('holds the card open while unfocused only after an external link open', () => {
+    mountProbe()
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+
+    act(() => {
+      control?.handleHoverOpenChange(true)
+      control?.handleHoverOpenChange(false)
+    })
+    expect(control?.hoverOpen).toBe(false)
+
+    act(() => {
+      control?.handleHoverOpenChange(true)
+      control?.holdOpenUntilRefocus()
+      control?.handleHoverOpenChange(false)
+    })
+    expect(control?.hoverOpen).toBe(true)
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+      control?.handleHoverOpenChange(false)
+    })
+    expect(control?.hoverOpen).toBe(false)
+    hasFocus.mockRestore()
   })
 })

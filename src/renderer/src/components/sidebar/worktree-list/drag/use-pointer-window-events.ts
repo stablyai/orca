@@ -10,8 +10,7 @@ import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-rout
 
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
 
-// Pointer drags escape the row that started them, so move/up/cancel are tracked on the
-// window in capture phase.
+// Capture move/up/cancel on window because drags escape their starting row.
 export function useWorktreePointerDragWindowEvents(args: {
   ctx: WorktreeDropCommitContext
   runtime: WorktreeDragRuntime

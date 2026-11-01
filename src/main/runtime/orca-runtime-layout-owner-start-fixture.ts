@@ -1,5 +1,4 @@
-// A layout-owner runtime whose store applies layout commands in memory and whose terminals start
-// at once: for tests of the terminals main starts itself.
+// Windowless layout-owner fixture applies commands in memory and starts main-owned terminals immediately.
 import { vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -75,7 +74,6 @@ export function setupLayoutOwnerRuntime() {
     })
   )
   runtime.setPtyController({
-    // The host's spawn commit binds the pane before main registers the terminal (bind-first).
     spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,

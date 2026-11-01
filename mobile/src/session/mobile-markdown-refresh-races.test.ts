@@ -123,7 +123,8 @@ function mountDocument(
         markdownSaveSeqRef,
         markdownSaveInFlightRef,
         showToast: () => {},
-        readMarkdownTab: readers.readMarkdownTab
+        readMarkdownTab: readers.readMarkdownTab,
+        dictationLeaveHold: { holdsLeave: false, hold: () => false }
       })
     )
     model = { readers, actions, docs, setDocs }

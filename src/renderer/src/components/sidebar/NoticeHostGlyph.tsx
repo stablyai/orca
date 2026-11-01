@@ -2,13 +2,9 @@ import React from 'react'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { HostRowIcon } from '../host-row-icon'
-import { useAppStore } from '@/store'
+import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
-import {
-  isDisconnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
 
 type NoticeHostGlyphProps = {
   hostId: ExecutionHostId
@@ -16,30 +12,16 @@ type NoticeHostGlyphProps = {
   keyboardFocusable: boolean
 }
 
-/**
- * The host indicator for a discovery-notice row.
- *
- * Deliberately the one host glyph vocabulary the composer's run-target rows
- * already use (HostRowIcon: a monitor for this computer, a server for anything
- * remote), plus the worktree card's "Project on …" tooltip. Every row gets one,
- * including local, so no row is the odd one out.
- */
 export default function NoticeHostGlyph({
   hostId,
   hostLabel,
   keyboardFocusable
 }: NoticeHostGlyphProps): React.JSX.Element | null {
   const host = parseExecutionHostId(hostId)
-  // Why the shared derivation, not raw truthiness: an absent entry means "not probed yet",
-  // which is not the same verdict as a probe that came back unreachable.
-  const isDisconnected = useAppStore((s) => {
-    if (host?.kind !== 'runtime') {
-      return false
-    }
-    return isDisconnectedRuntimeHostState(
-      runtimeHostConnectionStateForEntry(s.runtimeStatusByEnvironmentId.get(host.environmentId))
-    )
-  })
+  // Shared derivation distinguishes unprobed hosts from confirmed unreachable ones.
+  const isDisconnected = useRuntimeHostDisconnected(
+    host?.kind === 'runtime' ? host.environmentId : null
+  )
 
   if (!host) {
     return null

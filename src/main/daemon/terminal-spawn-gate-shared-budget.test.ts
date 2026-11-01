@@ -11,7 +11,6 @@ import { TerminalSpawnGate, type TerminalSpawnAdmissionMode } from './terminal-s
 
 type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']
 
-// Two daemons on one machine, e.g. the desktop app's and an `orca serve`'s, share one dir.
 describe('one automatic-restore budget per execution host', () => {
   let dir: string
   let nextPid: number
@@ -124,7 +123,6 @@ describe('one automatic-restore budget per execution host', () => {
   })
 
   it('counts restores an observing desktop admitted against the serve daemon budget', async () => {
-    // Why intended: the budget protects the machine, and restores the desktop already runs use it.
     const desktop = daemon(100, 'observe')
     const serve = daemon(200)
     for (let i = 0; i < 8; i++) {
@@ -156,7 +154,7 @@ describe('one automatic-restore budget per execution host', () => {
     const desktop = daemon(100)
     const serve = daemon(200)
     const desktopGate = desktop.gate
-    // Three forks admitted on the desktop that have not published a session yet.
+    // Hold three admissions before session publication to exercise cross-daemon concurrency.
     const leases = [0, 1, 2].map(() =>
       desktopGate.admit({
         clientId: 'client',

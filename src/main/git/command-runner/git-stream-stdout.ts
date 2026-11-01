@@ -24,6 +24,8 @@ import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-en
 import { gitSpawn } from './git-spawn'
 import { acquireGitAdmission } from './git-subprocess-admission'
 import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
+import { routeLocalGitOptions, runAdmittedWslGit } from './local-git-runtime-route'
+import { gitRunsIn } from './git-runs-in'
 
 /** Result of a streamed git command; `stoppedEarly` is true when onStdout asked to stop before the child exited. */
 export type GitStreamResult = { stoppedEarly: boolean }
@@ -32,6 +34,8 @@ export type GitStreamOptions = {
   cwd: string
   env?: NodeJS.ProcessEnv
   wslDistro?: string
+  /** Runs the host's Git even in a WSL-runtime project (local-git-runtime-route.ts); say why. */
+  hostGit?: true
   preferWslDirectGit?: boolean
   signal?: AbortSignal
   /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
@@ -41,26 +45,27 @@ export type GitStreamOptions = {
   /** Overrides only the default read deadline in tests. */
   timeoutMsForTest?: number
   admissionTier?: GitAdmissionTier
-  /**
-   * Called for each decoded stdout chunk. Return true to stop: the child is
-   * killed and the promise resolves with stoppedEarly=true.
-   */
+  /** Return true to kill the child and resolve with stoppedEarly=true. */
   onStdout: (chunk: string) => boolean | void
 }
 
-/**
- * Stream a git command's stdout incrementally instead of buffering it whole.
- *
- * Why: output larger than V8's max string (e.g. status on a repo with a huge
- * un-ignored folder) crashes the process when buffered; streaming keeps memory
- * bounded and lets the parser stop git early. Built on gitSpawn for WSL routing.
- */
+/** Stream bounded stdout so large repositories cannot overflow V8 and parsers can stop early. */
 export async function gitStreamStdout(
   args: string[],
-  options: GitStreamOptions
+  callerOptions: GitStreamOptions
 ): Promise<GitStreamResult> {
+  const options = routeLocalGitOptions(callerOptions)
   const maxBuffer = options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER
   const timeoutMs = gitCommandTimeoutMs(args, options.timeoutMs, options.timeoutMsForTest)
+  return runAdmittedWslGit(options, () => streamInSpan(args, options, maxBuffer, timeoutMs))
+}
+
+function streamInSpan(
+  args: string[],
+  options: GitStreamOptions,
+  maxBuffer: number,
+  timeoutMs: number | undefined
+): Promise<GitStreamResult> {
   return withGitSpan({ args, cwd: options.cwd }, async (span) => {
     const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
     if (checkoutRoutingReady) {
@@ -96,6 +101,7 @@ export async function gitStreamStdout(
       signal: options.signal
     })
     span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
+    span?.setAttribute('git.runs_in', gitRunsIn(resolved))
     const terminationState: { current: Promise<void> | null } = { current: null }
     const stream = (command: ResolvedCommand): Promise<GitStreamResult> =>
       new Promise<GitStreamResult>((resolve, reject) => {
@@ -147,7 +153,7 @@ export async function gitStreamStdout(
         let stdoutBytes = 0
         let stderr = ''
         let stderrBytes = 0
-        // Why: decode statefully so a multibyte UTF-8 char split across chunks isn't corrupted into replacement chars.
+        // Decode across chunk boundaries to preserve split UTF-8 characters.
         const stdoutDecoder = new StringDecoder('utf8')
         const stderrDecoder = new StringDecoder('utf8')
 
@@ -161,7 +167,6 @@ export async function gitStreamStdout(
           child.off('error', onError)
           child.off('close', onClose)
           options.signal?.removeEventListener('abort', onAbort)
-          // Flush any bytes the decoders were holding for an incomplete sequence.
           stdoutDecoder.end()
           stderrDecoder.end()
         }
@@ -189,7 +194,7 @@ export async function gitStreamStdout(
           if (decoded.length === 0) {
             return
           }
-          // Why: a throw from the caller's parser would escape this event handler and crash main; convert to a rejection.
+          // Reject parser failures rather than letting stream callbacks crash main.
           let shouldStop: boolean | void
           try {
             shouldStop = options.onStdout(decoded)
@@ -199,7 +204,6 @@ export async function gitStreamStdout(
             return
           }
           if (shouldStop === true) {
-            // Parser hit its limit: kill git and resolve cleanly with the partial output.
             stoppedEarly = true
             void killSpawnedCommandTree(child)
             finish(null)

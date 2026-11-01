@@ -6,7 +6,6 @@ import { skillInstallJournalPath } from '../skill-install-recovery'
 import { skillPlacementJournalPath } from '../skill-placement-recovery-journal'
 import { skillRemovalJournalPath } from '../skill-remove-recovery'
 
-// What cloud skill sharing left at a path: a pending transaction, or a receipt for its package.
 async function anyFileExists(paths: readonly string[]): Promise<boolean> {
   const found = await Promise.all(
     paths.map((path) =>

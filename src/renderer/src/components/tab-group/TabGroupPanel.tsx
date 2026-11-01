@@ -3,7 +3,6 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store'
 import TabBar from '../tab-bar/TabBar'
-import { WorkspaceEmptyState } from '../WorkspaceEmptyState'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
@@ -16,19 +15,22 @@ import { registerTabGroupBody } from './tab-group-body-geometry'
 import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
 import { translate } from '@/i18n/i18n'
 import type { TabGroup } from '../../../../shared/tab-types'
+import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
 import { cn } from '@/lib/utils'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
+import { useWindowBackdropActive } from '@/lib/window-backdrop'
+import { useThemeBackgroundStore } from '@/store/theme-background'
+import { EditorRevealFlash } from './EditorRevealFlash'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
-/** Who renders this group's tab strip: the panel itself ('attached', the main surface), or the
- *  host shell ('external', the floating panel's titlebar strip). */
+/** The panel draws attached strips; external hosts provide their single strip in shell chrome. */
 export type TabGroupPanelTabStrip = 'attached' | 'external'
 
 export default function TabGroupPanel({
@@ -118,6 +120,8 @@ export default function TabGroupPanel({
     [groupId, setBodyDropRef]
   )
   const attachEditorFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
+  const backdropActive = useWindowBackdropActive()
+  const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   // Why: per-group anchor-name lets the worktree-level overlay position panes via CSS anchor positioning, so moving a tab between groups re-targets the anchor instead of remounting xterm (loses alt-screen TUI state) or reloading `<webview>`.
   const bodyAnchorName = tabGroupBodyAnchorName(groupId)
   // Why: memoize so a fresh style object each render doesn't break downstream memoization keyed on referential equality.
@@ -243,15 +247,13 @@ export default function TabGroupPanel({
     />
   )
 
-  // Why: only width changes the toolbar footprint; focusing a pane must never reflow its tabs.
   const actionChromeClassName = cn(
     'ml-1.5 flex shrink-0 items-center gap-0.5 transition-opacity duration-150',
     !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
   )
   return (
     <div
-      // Why: vertical borders stay `border-border` so the focus highlight (--accent ~#f5f5f5 in light) doesn't paint a near-white strip by the resize handle; only the bottom border changes on focus.
-      // Why: unfocused split groups dim subtly so the focused one reads as selected; only when hasSplitGroups since a lone group has nothing to contrast against.
+      // Dim unfocused splits only when siblings exist; keep vertical seams neutral and change only the bottom focus border.
       className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups
           ? // Why: skip border-l/border-r on edge-touching groups; the split-layout wrapper and right sidebar already paint borders at those seams (double line otherwise).
@@ -264,18 +266,21 @@ export default function TabGroupPanel({
             }`
           : ''
       }`}
-      style={hasSplitGroups && !isFocused ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY } : undefined}
+      // Why not over a window backdrop (material or theme image): group opacity would let it bleed through opaque chrome.
+      style={
+        hasSplitGroups && !isFocused && !backdropActive
+          ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }
+          : undefined
+      }
       onPointerDown={commands.focusGroup}
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
       onFocusCapture={commands.focusGroup}
     >
-      {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
-      {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
-      {/* Why absent (not hidden) for an 'external' host: the floating panel's titlebar owns the one
-          strip, and a mounted second strip would register duplicate sortables in the drag scope. */}
+      {/* Each visible split needs its own strip; the shared titlebar cannot represent them all. */}
+      {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
       {tabStrip !== 'attached' ? null : (
         <div
-          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-card"
+          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-tab-bar"
           data-tab-group-strip-id={groupId}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
@@ -326,16 +331,17 @@ export default function TabGroupPanel({
       <div
         ref={setBodyRef}
         data-tab-group-body-id={groupId}
+        // Why: the pane overlays paint terminals and chats above this body; only they show the theme image.
+        data-translucent-tab-body={
+          activeTab?.contentType === 'terminal' ||
+          (activeTab && isStructuredTab(activeTab) && themeBackgroundActive)
+            ? ''
+            : undefined
+        }
         data-worktree-id={worktreeId}
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >
-        {isVisible &&
-        !activeTab &&
-        model.groupTabs.length === 0 &&
-        clientHostedRows.length === 0 ? (
-          <WorkspaceEmptyState worktreeId={worktreeId} groupId={groupId} />
-        ) : null}
         {/* Why: empty anchor so the agent-sessions tour reads as a terminal-area tip, not toolbar chrome. */}
         {isFocused ? (
           <div
@@ -369,6 +375,7 @@ export default function TabGroupPanel({
                   markdownAnnotationsEnabled={markdownAnnotationsEnabled}
                 />
               </Suspense>
+              <EditorRevealFlash viewStateId={activeTab.id} />
             </div>
           )}
 

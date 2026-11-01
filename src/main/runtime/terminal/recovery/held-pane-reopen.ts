@@ -1,6 +1,4 @@
-// Layout-owner build: a paired desktop's Reopen of panes main holds for a newer build's terminal
-// service. Main stops the newer service as the desktop's own Reopen does, then starts each pane
-// still held; the result shows in main's frames, so the desktop applies nothing itself.
+// For paired desktop Reopen, stop held newer services, then start still-held panes; main's frames carry the result.
 
 import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
 import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-published'

@@ -1,4 +1,3 @@
-/** The last update each managed server deferred in this session, so status can report it. */
 import type { OrcadManagedDeferral } from '../../../shared/orcad-managed-runtime'
 import { compareAppVersions } from '../../../shared/app-version'
 
@@ -22,10 +21,7 @@ function readManagedOrcadUpdateDeferral(environmentId: string): RecordedDeferral
   return deferrals.get(environmentId) ?? null
 }
 
-/**
- * The deferral, unless the host already runs its candidate or a newer release: another desktop's
- * update can land it after this one deferred, and nothing here would otherwise forget it.
- */
+/** Forget deferrals resolved by another desktop activating the candidate or a newer release. */
 export function currentManagedOrcadUpdateDeferral(
   environmentId: string,
   activeVersion: string | null

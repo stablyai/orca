@@ -1,4 +1,4 @@
-import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 
 /** Project the one durable conversation name onto each structured tab's display title. */

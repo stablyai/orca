@@ -3,8 +3,8 @@ import {
   isPathInsideWorktree,
   resolveTerminalFileLink,
   type ParsedTerminalFileLink
-} from '@/lib/terminal-links'
-import { normalizeAbsolutePath } from '@/lib/terminal-path-normalization'
+} from '../../../../shared/terminal-links'
+import { normalizeAbsolutePath } from '../../../../shared/terminal-path-normalization'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
 import {
@@ -17,8 +17,10 @@ import {
 import type { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import {
   getTerminalPathExistsCacheKey,
-  readTerminalPathExistsCache,
-  writeTerminalPathExistsCache
+  readTerminalPathExistence,
+  writeTerminalPathExistence,
+  startTerminalPathExistsProbe,
+  type TerminalPathExistsCache
 } from './terminal-path-exists-cache'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import {
@@ -91,11 +93,7 @@ export function resolveFileLinkTarget(
   }
 }
 
-/**
- * Whether this target may be checked with no click or hover. A network share outside the workspace
- * may not, on any host: on Windows (this machine or an SSH host) that stat opens SMB to the named
- * server and can send the user's credentials. The workspace's own WSL distro is not a share.
- */
+/** Unprompted external-share stats can send credentials over SMB on local or SSH Windows hosts; permit the workspace’s own WSL distro. */
 export function mayCheckFileLinkTargetUnprompted(
   target: FileLinkTarget,
   host: FileLinkHost
@@ -121,12 +119,11 @@ export function mayCheckFileLinkTargetUnprompted(
 /** Rejects when the host cannot answer, so callers never mistake an outage for a missing file. */
 export async function fileLinkTargetExists(
   target: FileLinkTarget,
-  cache: Map<string, boolean>,
+  cache: TerminalPathExistsCache,
   pathExists: FileLinkPathExistence,
   terminalHandle?: string | null
 ): Promise<boolean> {
-  // Why: exact known workspace roots must stay clickable for SSH or
-  // stale local paths even when filesystem probing says "missing".
+  // Known workspace roots remain clickable even when SSH/stale local probing reports missing.
   if (target.isKnownWorktreeRoot) {
     return true
   }
@@ -138,9 +135,16 @@ export async function fileLinkTargetExists(
     // Why: a local stat here would answer for this computer, not the server that printed the path.
     return hostFileLinkTargetExists(target, cache, terminalHandle)
   }
-  const exists =
-    readTerminalPathExistsCache(cache, target.cacheKey) ??
-    (await pathExists(target.fileContext, target.absolutePath, target.isRemoteRuntimePath))
-  writeTerminalPathExistsCache(cache, target.cacheKey, exists)
+  const cached = readTerminalPathExistence(cache, target.cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+  const probe = startTerminalPathExistsProbe()
+  const exists = await pathExists(
+    target.fileContext,
+    target.absolutePath,
+    target.isRemoteRuntimePath
+  )
+  writeTerminalPathExistence(cache, target.cacheKey, exists, probe)
   return exists
 }

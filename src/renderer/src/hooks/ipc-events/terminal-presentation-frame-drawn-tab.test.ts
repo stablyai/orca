@@ -40,7 +40,6 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 
 type Listener = (payload: Record<string, unknown>) => void
 
-/** A CLI-created terminal: main wrote its tab; its layout frame drew it before the reveal or not. */
 function setup(frameDrewTab = true) {
   const listeners = new Map<string, Listener>()
   const replyTerminalCreate = vi.fn()
@@ -99,8 +98,7 @@ beforeEach(() => {
   mocks.callRuntimeRpc.mockClear()
 })
 
-// Main writes a CLI or phone terminal's tab before revealing it, so in a layout-owner build its
-// frame can draw the tab first; the reveal must reuse it under main's id, never add a second.
+// Main’s frame may precede reveal; reuse its ID rather than adding a second terminal tab.
 describe('revealing a terminal main created, in a layout-owner build', () => {
   it('shows the tab its frame drew, bound to main’s terminal, instead of a second one', () => {
     const { store, reveal, replyTerminalCreate } = setup()
@@ -133,7 +131,6 @@ describe('revealing a terminal main created, in a layout-owner build', () => {
 
   it('reuses the frame-drawn tab even when stale records leave the terminal’s owner unclear', () => {
     const { store, reveal, replyTerminalCreate } = setup()
-    // Two other rows still record the same terminal: today's lookup calls that ambiguous.
     store.setState({
       tabsByWorktree: {
         [WORKTREE]: [

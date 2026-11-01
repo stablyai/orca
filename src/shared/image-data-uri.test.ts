@@ -46,8 +46,7 @@ describe('buildImageDataUri', () => {
   })
 
   it('still renders bytes whose header we cannot measure', () => {
-    // Failing to read a header means we could not measure the image, not that it is oversized.
-    // The decoder handles encodings this parser does not, so suppressing here blanks valid images.
+    // Unreadable headers do not prove oversize; decoder-supported formats beyond this parser must remain visible.
     expect(buildImageDataUri('image/png', 'bmV3')).toBe('data:image/png;base64,bmV3')
   })
 

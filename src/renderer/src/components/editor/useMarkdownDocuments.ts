@@ -5,10 +5,8 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
-import {
-  getRuntimeTargetForFileOwner,
-  requireRuntimeTargetForFileOwner
-} from '@/lib/file-owner-runtime-target'
+import { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
+import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import {
   createMarkdownDocumentIndex,
@@ -64,8 +62,7 @@ export function useMarkdownDocuments(
   onSave: (content: string) => Promise<boolean>
 ): UseMarkdownDocumentsResult {
   const worktreeId = activeFile.worktreeId
-  // Why: PTY activity replaces worktree metadata; only a routing-path change
-  // should wake every mounted editor's document-link controller.
+  // PTY metadata churn must not wake every document-link controller unless the routing path changed.
   const worktreePath = useAppStore((s) => selectMarkdownDocumentWorktreePath(s, worktreeId))
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
@@ -173,20 +170,14 @@ export function useMarkdownDocuments(
       if (!worktreeId || !worktreePath) {
         return
       }
+      let acquisition: ReturnType<typeof acquireEditorFileOperation>
       try {
-        const stats = await statRuntimePath(
-          {
-            target: requireRuntimeTargetForFileOwner(
-              useAppStore.getState(),
-              worktreeId,
-              activeFile.runtimeEnvironmentId
-            ),
-            worktreeId,
-            worktreePath,
-            connectionId: connectionId ?? undefined
-          },
-          document.filePath
-        )
+        acquisition = acquireEditorFileOperation(useAppStore.getState, activeFile, {
+          filePath: document.filePath,
+          worktreePath
+        })
+        const stats = await statRuntimePath(acquisition.context, document.filePath)
+        acquisition.assertCurrent()
         if (stats.isDirectory) {
           await refreshMarkdownDocuments(true)
           return
@@ -204,7 +195,8 @@ export function useMarkdownDocuments(
             relativePath: document.relativePath,
             worktreeId,
             language: 'markdown',
-            runtimeEnvironmentId: activeFile.runtimeEnvironmentId
+            runtimeEnvironmentId: acquisition.provenance.generation.route.runtimeEnvironmentId,
+            operationProvenance: acquisition.provenance
           },
           { anchor: options.anchor }
         )
@@ -216,14 +208,13 @@ export function useMarkdownDocuments(
         relativePath: document.relativePath,
         worktreeId,
         language: 'markdown',
-        runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
+        runtimeEnvironmentId: acquisition.provenance.generation.route.runtimeEnvironmentId,
+        operationProvenance: acquisition.provenance,
         mode: 'edit'
       })
     },
     [
-      activeFile.mode,
-      activeFile.runtimeEnvironmentId,
-      connectionId,
+      activeFile,
       openFile,
       openMarkdownPreview,
       refreshMarkdownDocuments,

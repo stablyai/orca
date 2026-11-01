@@ -1,8 +1,3 @@
-/**
- * `orca serve` on orcad, against the packaged slot: the native preflight the launcher asks
- * first, desktop-serve flag parity on stdout (the readiness contract), the browser client the
- * CLI hands orcad, and the shared-profile refusal while the desktop app holds the profile.
- */
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir, userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -81,7 +76,7 @@ afterEach(async () => {
   }
 })
 
-/** Without Vitest's markers: daemon-entry.js does not start its server under VITEST. */
+/** Clear Vitest markers so daemon-entry starts its server. */
 function serveEnv(userData: string): NodeJS.ProcessEnv {
   return {
     ...Object.fromEntries(
@@ -149,7 +144,7 @@ describe.skipIf(skip)('orca serve on orcad', () => {
           reject(new Error(`orcad exited ${String(code)}: ${stderr}`))
         })
       })
-      // Anything after the recipe line would break a reader of this contract.
+      // Wait for late output that would violate the single-line recipe contract.
       await new Promise((settle) => setTimeout(settle, 1_000))
     } finally {
       await diagnostics.capture('beforeServeKill')
@@ -194,7 +189,7 @@ describe.skipIf(skip)('orca serve on orcad', () => {
     expect(result.stderr).toContain('The Orca desktop app')
   }, 90_000)
 
-  // #30120: the CLI never handed orcad the app's web client, so no URL was printed and GETs hung.
+  // Allow real orcad startup and HTTP round trips for the missing-web-client regression (#30120).
   it('serves the web client the CLI hands it, and answers other paths with 404', async () => {
     const userData = realpathSync(
       mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'orca-serve-web-'))
@@ -203,7 +198,6 @@ describe.skipIf(skip)('orca serve on orcad', () => {
     const appRoot = profile()
     mkdirSync(join(appRoot, 'out', 'web'), { recursive: true })
     writeFileSync(join(appRoot, 'out', 'web', WEB_CLIENT_INDEX_FILENAME), '<title>orca web</title>')
-    // The argv `orca serve` builds, but on loopback.
     const args = orcadServeArgs(
       { json: true, port: '0' },
       findBundledWebClientRoot(appRoot),
@@ -223,7 +217,7 @@ describe.skipIf(skip)('orca serve on orcad', () => {
     }
   }, 150_000)
 
-  // A short /tmp root keeps the POSIX daemon socket path legal; Windows uses a named pipe.
+  // Short roots keep POSIX socket paths within limits; Windows uses named pipes.
   it('keeps a live terminal across a serve restart on the shared profile (D7)', async () => {
     const userData = realpathSync(
       mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'orca-serve-d7-'))
@@ -248,7 +242,6 @@ describe.skipIf(skip)('orca serve on orcad', () => {
       shellPid = created.pid
       expect(created).toMatchObject({ isReattach: false, output: true })
       await stopServe(userData)
-      // The same daemon, in the same \`<userData>/daemon\` Electron serve uses, is adopted.
       expect(await serveDaemonPid(userData)).toBe(first)
       expect(await session('attach', 'AFTER')).toEqual({
         pid: created.pid,
@@ -263,7 +256,6 @@ describe.skipIf(skip)('orca serve on orcad', () => {
 
 const running = new Map<string, ReturnType<typeof spawnProcess>>()
 
-/** Starts `orca serve --json` on orcad and returns the terminal daemon pid its readiness names. */
 async function serveDaemonPid(userData: string): Promise<number> {
   const { readiness, stderr } = await serveOnce(userData, [
     '--bind',
@@ -284,7 +276,6 @@ type ServeReadiness = {
   health?: { terminalDaemon?: { state?: string; pid: number } }
 }
 
-/** Starts orcad with `args` and returns its parsed readiness line and stderr so far. */
 async function serveOnce(
   userData: string,
   args: string[]
@@ -314,7 +305,7 @@ async function serveOnce(
   return { readiness, stderr }
 }
 
-/** SIGTERM is serve's graceful stop on POSIX; it leaves the daemon running by design. */
+/** SIGTERM preserves daemon terminals on POSIX; Windows uses its stop-request file. */
 async function stopServe(userData: string): Promise<void> {
   const child = running.get(userData)
   running.delete(userData)

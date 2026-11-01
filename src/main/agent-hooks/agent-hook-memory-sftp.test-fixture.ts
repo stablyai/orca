@@ -19,6 +19,7 @@ export function createAgentHookMemorySftp(initialFiles: Record<string, string> =
     code: 2,
     message: `ENOENT ${path}`
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this in-memory fixture implements only the SFTP operations reached by the installer tests.
   const sftp = {
     readFile: (path: string, _encoding: string, done: (error: unknown, data?: string) => void) => {
       const data = fs.files.get(path)
@@ -42,6 +43,22 @@ export function createAgentHookMemorySftp(initialFiles: Record<string, string> =
     },
     rename: (source: string, target: string, done: (error: unknown) => void) => {
       const content = fs.files.get(source)
+      if (content === undefined && fs.dirs.has(source)) {
+        for (const [path, data] of fs.files) {
+          if (path.startsWith(`${source}/`)) {
+            fs.files.set(`${target}${path.slice(source.length)}`, data)
+            fs.files.delete(path)
+          }
+        }
+        for (const path of fs.dirs) {
+          if (path === source || path.startsWith(`${source}/`)) {
+            fs.dirs.add(`${target}${path.slice(source.length)}`)
+            fs.dirs.delete(path)
+          }
+        }
+        done(null)
+        return
+      }
       if (content === undefined) {
         done(missing(source))
         return
@@ -76,12 +93,20 @@ export function createAgentHookMemorySftp(initialFiles: Record<string, string> =
         done(missing(path))
         return
       }
-      done(null, [])
+      const prefix = `${path}/`
+      const names = [...fs.files.keys(), ...fs.dirs]
+        .filter((entry) => entry.startsWith(prefix))
+        .map((entry) => entry.slice(prefix.length).split('/')[0])
+      done(
+        null,
+        [...new Set(names)].map((filename) => ({ filename }))
+      )
     },
     mkdir: (path: string, done: (error: unknown) => void) => {
       fs.dirs.add(path)
       done(null)
     }
-  } as unknown as SFTPWrapper
-  return { sftp, fs }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: installers call only these members.
+  return { sftp: sftp as unknown as SFTPWrapper, fs }
 }

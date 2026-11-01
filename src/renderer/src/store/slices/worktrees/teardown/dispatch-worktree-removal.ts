@@ -12,13 +12,7 @@ import {
 } from './host-worktree-removal-state'
 import { worktreeRemovalReplyTimeoutMs } from '../../../../../../shared/worktree/archive-hook-removal-gate'
 
-/**
- * Sends the destructive removal over whichever transport owns this workspace.
- *
- * `hostId` rides every branch: local main resolves the owner from it, and the
- * runtime RPC needs it because a `repoId::path` selector alone repeats across
- * hosts (STA-4343).
- */
+/** Carry hostId across every removal transport: repoId::path alone repeats across hosts and cannot identify the confirmed copy (STA-4343). */
 export async function dispatchWorktreeRemoval(args: {
   worktreeId: string
   hostId: ExecutionHostId | undefined
@@ -93,8 +87,7 @@ async function requestWorktreeRemoval(
       ...(effectiveHostId ? { hostId: effectiveHostId } : {}),
       force,
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
-      // Why only when set, unlike the IPC branch: this crosses a version boundary, and a host
-      // that predates the gate drops unknown params silently. Send it when it means something.
+      // Send waiver only when true; older hosts silently strip unknown params at this version boundary.
       ...(options?.allowFailedArchiveHook === true ? { allowFailedArchiveHook: true } : {}),
       runHooks: !skipArchive
     },

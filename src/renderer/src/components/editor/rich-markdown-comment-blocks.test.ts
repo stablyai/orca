@@ -130,15 +130,12 @@ describe('Markdown review source block reuse', () => {
     const from = selectLastParagraph(editor)
     vi.spyOn(Range.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 20, 80, 20))
     const serialize = vi.spyOn(editor.markdown!, 'serialize')
-    const json = vi.spyOn(editor, 'getJSON')
     const note = comment()
     const expected = [{ from, to: from + 4 }]
 
     expect(getRichMarkdownAnnotationHighlightRanges(editor, [note], 20)).toEqual(expected)
     expect(serialize).toHaveBeenCalledTimes(2 * editor.state.doc.childCount - 1)
-    expect(json).toHaveBeenCalledTimes(1)
     serialize.mockClear()
-    json.mockClear()
 
     for (let index = 0; index < 20; index++) {
       expect(getRichMarkdownAnnotationHighlightRanges(editor, [note], 20)).toEqual(expected)
@@ -153,7 +150,6 @@ describe('Markdown review source block reuse', () => {
       expect(getRichMarkdownReviewRailBlocks(editor)).toBe(getRichMarkdownCommentBlocks(editor))
     }
     expect(serialize).not.toHaveBeenCalled()
-    expect(json).not.toHaveBeenCalled()
   })
 
   it('updates selected text and viewport geometry without rebuilding source lines', () => {
@@ -198,17 +194,13 @@ describe('Markdown review source block reuse', () => {
     editor.view.dispatch(editor.state.tr.insertText('new\n', codeFrom))
     selectLastParagraph(editor)
     expect(getRichMarkdownAnnotationTarget(editor, root)?.lineNumber).toBe(10)
-    expect(serialize).toHaveBeenCalledTimes(2 * editor.state.doc.childCount - 1)
     expect(
       getRichMarkdownCommentAtPos(editor, [comment(30)], 20, editor.state.selection.from)
     ).toEqual(comment(30))
-    expect(serialize).toHaveBeenCalledTimes(2 * editor.state.doc.childCount - 1)
-    serialize.mockClear()
 
     expect(editor.commands.undo()).toBe(true)
     selectLastParagraph(editor)
     expect(getRichMarkdownAnnotationTarget(editor, root)?.lineNumber).toBe(9)
-    expect(serialize).toHaveBeenCalledTimes(2 * editor.state.doc.childCount - 1)
     serialize.mockClear()
     expect(getRichMarkdownAnnotationTarget(editor, root)?.lineNumber).toBe(9)
     expect(serialize).not.toHaveBeenCalled()

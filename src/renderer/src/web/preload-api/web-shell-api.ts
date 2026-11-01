@@ -1,4 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
+import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
 import { resolveRuntimeFilePath } from './web-runtime-worktree-catalog'
 
 async function pathExistsOnRuntime(path: string): Promise<boolean> {
@@ -8,6 +9,18 @@ async function pathExistsOnRuntime(path: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** The browser's file picker; resolves empty when the user cancels it. */
+function pickBrowserFiles(): Promise<File[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.multiple = true
+    input.addEventListener('change', () => resolve(Array.from(input.files ?? [])), { once: true })
+    input.addEventListener('cancel', () => resolve([]), { once: true })
+    input.click()
+  })
 }
 
 export function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
@@ -25,7 +38,8 @@ export function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
     // Without this the fallback proxy answers `undefined` and the caller's batch rejects.
     pathsExist: (paths) => Promise.all(paths.map((path) => pathExistsOnRuntime(path))),
     pickAttachment: () => Promise.resolve(null),
-    pickAttachments: () => Promise.resolve([]),
+    // Tokens for the picked files, which the chat upload reads; a browser has no file paths.
+    pickAttachments: async () => holdBrowserAttachmentFiles(await pickBrowserFiles()),
     pickImage: () => Promise.resolve(null),
     pickRepoIconImage: () => Promise.resolve(null),
     pickAudio: () => Promise.resolve(null),

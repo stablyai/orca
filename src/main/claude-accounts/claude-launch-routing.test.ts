@@ -1,10 +1,10 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
-import { resolveClaudeStructuredInvocation } from '../claude/claude-structured-launch-resolution'
-import { resolveClaudeStructuredLaunchHome } from '../claude/claude-structured-launch-home'
+import { resolveClaudeStructuredInvocation } from '../claude/structured/launch/claude-structured-launch-resolution'
+import { resolveClaudeStructuredLaunchHome } from '../claude/structured/launch/claude-structured-launch-home'
 import { resolveStructuredClaudeAccountHomePath } from '../runtime/structured-agent-account-home'
 import {
   installClaudeProfileRouter,
@@ -14,6 +14,7 @@ import { ClaudeProfileRouter, type ClaudeProfileRouterSettings } from './claude-
 import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-message-agent-environment'
 import { claudeStructuredAuthPolicyForSettings } from './claude-structured-auth-policy'
 import { applyClaudeEnvPatch } from './environment'
+import { withoutInheritedClaudeConfigDir } from '../claude/claude-config-dir-pin'
 
 const roots: string[] = []
 afterEach(() => {
@@ -29,7 +30,6 @@ function signIn(stateDir: string, email: string): void {
   )
 }
 
-/** Account a is selected and set up but signed in only in System default. */
 function coveredAccount() {
   const root = mkdtempSync(join(tmpdir(), 'claude-launch-routing-'))
   roots.push(root)
@@ -66,7 +66,6 @@ function coveredAccount() {
   return { router, settings, accountHome, systemHome: join(userHome, '.claude') }
 }
 
-/** Where every Orca-started Claude would run right now, read through each entry point. */
 async function launchHomes(f: ReturnType<typeof coveredAccount>) {
   const chatEnv: Record<string, string> = {}
   return {
@@ -99,21 +98,39 @@ describe('one router decision for every Claude launch', () => {
       usage: f.systemHome,
       inactiveUsage: f.systemHome
     })
+    const prepare = vi.spyOn(f.router, 'prepareLaunch')
+    const inherited = withoutInheritedClaudeConfigDir({ CLAUDE_CONFIG_DIR: '/inherited' })
+    expect(await f.router.accountSelectionHomes(inherited)).toEqual([f.systemHome, f.systemHome])
+    const overlay = { ...inherited, CLAUDE_CONFIG_DIR: join(f.systemHome, 'explicit') }
+    expect(await f.router.accountSelectionHomes(overlay)).toEqual([
+      overlay.CLAUDE_CONFIG_DIR,
+      overlay.CLAUDE_CONFIG_DIR
+    ])
+    expect(prepare).not.toHaveBeenCalled()
+    expect(await resolveClaudeStructuredLaunchHome(f.router, { ...overlay }, '/recorded')).toBe(
+      overlay.CLAUDE_CONFIG_DIR
+    )
     signIn(f.accountHome, 'a@example.test')
+    expect(await f.router.accountSelectionHomes(overlay)).toEqual([
+      overlay.CLAUDE_CONFIG_DIR,
+      f.accountHome
+    ])
+    expect(await resolveClaudeStructuredLaunchHome(f.router, { ...overlay }, '/recorded')).toBe(
+      f.accountHome
+    )
+    prepare.mockRestore()
     expect(await launchHomes(f)).toEqual({
       terminal: f.accountHome,
       terminalEnv: f.accountHome,
       chat: f.accountHome,
       chatEnv: f.accountHome,
       chatRecord: f.accountHome,
-      // A shell proxy's key stays with its address on the account too.
       chatAuth: { account: 'managed' },
       usage: f.accountHome,
       inactiveUsage: f.accountHome
     })
   })
 
-  // The shell function's half is in claude-shell-function.test.ts; WSL's in the WSL router test.
   it.each(['signed-in account', 'System default fallback'])(
     "keeps a shell proxy's key with its address on every launch: %s",
     async (scenario) => {
@@ -127,7 +144,6 @@ describe('one router decision for every Claude launch', () => {
         ANTHROPIC_API_KEY: 'proxy-key',
         ANTHROPIC_AUTH_TOKEN: 'proxy-token'
       }
-      // A terminal applies the launch's patch to its own env and deletes nothing more.
       const terminal = applyClaudeEnvPatch(
         { PATH: '/usr/bin', ...shell },
         (await f.router.prepareLaunch()).envPatch
@@ -135,7 +151,7 @@ describe('one router decision for every Claude launch', () => {
       expect(terminal).toMatchObject(shell)
       expect(terminal.CLAUDE_CONFIG_DIR).toBe(home)
       const chat = await resolveClaudeStructuredInvocation({
-        resolveCommand: () => 'claude',
+        resolveCommand: () => ({ command: 'claude', prefixArgs: [] }),
         resolveInheritedEnv: async () => ({ PATH: '/usr/bin', ...shell }),
         resolveAuthPolicy: () => claudeStructuredAuthPolicyForSettings(f.settings)
       })

@@ -145,9 +145,8 @@ function buildQueryCommand(argv: string[], shell: AgentStartupShell): string {
       quoteStartupArg(QUERY_ARG_PLACEHOLDER, 'powershell'),
       `"--query=$${POWERSHELL_NATIVE_QUERY_VARIABLE}"`
     )
-    // Why: startup prompts must not remain exported to Hermes tools; the
-    // long-lived parent shell retains the transport env for compatibility.
-    // PowerShell 5 needs Windows-native quote escaping before building child argv.
+    // Remove startup prompts from child-tool env; the long-lived parent retains transport env for compatibility.
+    // PowerShell 5 requires native-Windows quote escaping before constructing argv.
     const script = `$${POWERSHELL_QUERY_VARIABLE} = $env:${ORCA_HERMES_STARTUP_QUERY_ENV}; $${POWERSHELL_NATIVE_QUERY_VARIABLE} = $${POWERSHELL_QUERY_VARIABLE} -replace '(\\\\*)"', '$1$1\\"'; Remove-Item Env:${ORCA_HERMES_STARTUP_QUERY_ENV} -ErrorAction SilentlyContinue; ${invocation}`
     return `powershell.exe -NoProfile -EncodedCommand ${encodePowerShellCommand(script)}`
   }
@@ -156,13 +155,9 @@ function buildQueryCommand(argv: string[], shell: AgentStartupShell): string {
     `"--query=\${${POSIX_QUERY_VARIABLE}}"`
   )
   const encodedInvocation = encodePosixEvalScript(invocation)
-  // Why: a fixed single-quote-safe wrapper parses in POSIX shells and pwsh;
-  // the dynamic argv is decoded only after entering the known `sh` grammar.
+  // Keep the wrapper single-quote-safe for POSIX/pwsh; decode dynamic argv only inside known sh grammar.
   const script = `${POSIX_QUERY_VARIABLE}="\${${ORCA_HERMES_STARTUP_QUERY_ENV}}"; unset ${ORCA_HERMES_STARTUP_QUERY_ENV}; eval "$(printf %b "${encodedInvocation}")"`
-  // Why `shell` and not 'posix': the body runs under `sh`, but the quoting around
-  // it is parsed by the shell that types the line. Today's payload survives sh
-  // quoting in fish only because its escapes happen to be `\0NNN` and never `\\`
-  // — quote for the real dialect so that stays an implementation detail.
+  // Outer quoting is parsed by the typing shell, even though the body uses sh; octal payload escapes only happen to survive POSIX quoting in fish.
   return `sh -c ${quoteStartupArg(script, shell)}`
 }
 
@@ -197,7 +192,6 @@ export function planHermesStartupQuery(args: {
   }, 0)
   const commandSize =
     args.platform === 'win32' ? command.length : new TextEncoder().encode(command).byteLength
-  // Why: WSL plans execute as Linux but cross the Windows environment block;
-  // the conservative shared bound is safe for every transport host.
+  // WSL executes Linux plans through the Windows environment block; use a conservative bound safe across transports.
   return commandSize + envSize <= QUERY_ENV_LIMIT ? { command, env } : null
 }

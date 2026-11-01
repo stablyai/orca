@@ -6,11 +6,22 @@ vi.mock('@/runtime/runtime-file-mutation-client', () => ({
 }))
 vi.mock('./file-explorer-operation-owner', () => ({
   getFileExplorerOperationOwner: () => ({ kind: 'local' }),
-  getFileExplorerOperationRoute: () => ({ settings: null, connectionId: null }),
+  getFileExplorerOperationRoute: () => ({
+    target: { kind: 'local' },
+    settings: null,
+    connectionId: null
+  }),
   getFileExplorerOwnerUnresolvedMessage: () => 'unresolved'
 }))
 
-import { readFileExplorerDirectory } from './file-explorer-directory-listing'
+import {
+  keepOpenedDirectoryLinks,
+  clearFailedOpenedDirectoryLink,
+  canFollowFolderLink,
+  readFileExplorerDirectory
+} from './file-explorer-directory-listing'
+import { fileExplorerListingToDirCache } from './file-explorer-dir-pages'
+import type { DirCache, TreeNode } from './file-explorer-types'
 
 describe('readFileExplorerDirectory', () => {
   it('re-sorts backend order — remote-runtime and paired-web routes return the host order verbatim', async () => {
@@ -37,5 +48,173 @@ it('preserves the host directory classification with default Quick Open preferen
   ])
   const { entries } = await readFileExplorerDirectory('wt-1', '/w', '/w')
   expect(entries).toEqual([{ name: 'linked', isDirectory: true, isSymlink: true }])
-  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', undefined)
+  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', {})
+})
+
+it('forwards the WSL wake flag of a user act to the directory read', async () => {
+  readRuntimeDirectory.mockResolvedValueOnce([])
+  await readFileExplorerDirectory('wt-1', '/w', '/w', { wakeWslDistro: true })
+  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', {
+    wakeWslDistro: true
+  })
+})
+
+describe('outside-project folder links', () => {
+  it('marks a folder listed through a project link and its rows as outside the project', async () => {
+    readRuntimeDirectory.mockImplementation(
+      async (_context: unknown, _path: string, options: { access?: unknown }) => {
+        if (!options.access) {
+          throw new Error('Access denied: path resolves outside allowed directories.')
+        }
+        return [{ name: 'notes.md', isDirectory: false, isSymlink: false }]
+      }
+    )
+
+    const listing = await readFileExplorerDirectory('wt-1', '/w', '/w/linked', {
+      followProjectFolderLink: true
+    })
+    const cache = fileExplorerListingToDirCache(listing, '/w/linked', 0, '/w')
+
+    expect(cache.outsideProject).toBe(true)
+    expect(cache.children).toEqual([
+      expect.objectContaining({ path: '/w/linked/notes.md', outsideProject: true })
+    ])
+    readRuntimeDirectory.mockReset()
+  })
+
+  it('follows links only on a gesture, a listed link row, or under an outside listing', () => {
+    const cache: Record<string, DirCache> = {
+      '/w': {
+        children: [
+          { name: 'src', path: '/w/src', relativePath: 'src', isDirectory: true, depth: 0 },
+          {
+            name: 'docs',
+            path: '/w/docs',
+            relativePath: 'docs',
+            isDirectory: true,
+            isSymlink: true,
+            depth: 0
+          }
+        ]
+      },
+      '/w/linked': { children: [], outsideProject: true }
+    }
+
+    expect(canFollowFolderLink(cache, '/w/src', false)).toBe(false)
+    expect(canFollowFolderLink(cache, '/w/src', true)).toBe(true)
+    expect(canFollowFolderLink(cache, '/w/docs', false)).toBe(true)
+    expect(canFollowFolderLink(cache, '/w/linked', false)).toBe(true)
+    expect(canFollowFolderLink(cache, '/w/linked/guides', false)).toBe(true)
+  })
+})
+
+describe('keepOpenedDirectoryLinks', () => {
+  const node = (name: string, overrides: Partial<TreeNode> = {}): TreeNode => ({
+    name,
+    path: `/w/${name}`,
+    relativePath: name,
+    isDirectory: false,
+    depth: 0,
+    operationOwner: { kind: 'local' },
+    ...overrides
+  })
+
+  it('keeps an opened folder link folder-shaped when the parent re-read lists it as a file', () => {
+    const previous = [node('linked', { isSymlink: true, isDirectory: true }), node('other')]
+    const next = [node('linked', { isSymlink: true }), node('other')]
+    const kept = keepOpenedDirectoryLinks(previous, next, {
+      '/w/linked': { children: [], operationOwner: { kind: 'local' } }
+    })
+    expect(kept.map((child) => [child.name, child.isDirectory])).toEqual([
+      ['linked', true],
+      ['other', false]
+    ])
+  })
+
+  it('lets a link revert once its own listing is no longer cached', () => {
+    const previous = [node('linked', { isSymlink: true, isDirectory: true })]
+    const next = [node('linked', { isSymlink: true })]
+    expect(keepOpenedDirectoryLinks(previous, next, {})).toBe(next)
+  })
+
+  it('never promotes a link that was not opened, or a plain file with the same path', () => {
+    const previous = [node('linked', { isSymlink: true }), node('file', { isDirectory: true })]
+    const next = [node('linked', { isSymlink: true }), node('file')]
+    const cache = { '/w/linked': { children: [] }, '/w/file': { children: [] } }
+    expect(keepOpenedDirectoryLinks(previous, next, cache)).toBe(next)
+  })
+
+  it('does not restore a deleted link or a link replaced by a regular file', () => {
+    const previous = [node('linked', { isSymlink: true, isDirectory: true })]
+    const cache = { '/w/linked': { children: [], operationOwner: { kind: 'local' as const } } }
+    expect(keepOpenedDirectoryLinks(previous, [], cache)).toEqual([])
+    expect(keepOpenedDirectoryLinks(previous, [node('linked')], cache)[0].isDirectory).toBe(false)
+  })
+
+  it('does not reuse a failed or still-unproven child listing', () => {
+    const previous = [node('linked', { isSymlink: true, isDirectory: true })]
+    const next = [node('linked', { isSymlink: true })]
+    expect(keepOpenedDirectoryLinks(previous, next, { '/w/linked': { children: [] } })).toBe(next)
+    expect(
+      keepOpenedDirectoryLinks(previous, next, {
+        '/w/linked': { children: [], operationOwner: { kind: 'local' }, error: 'Not a directory' }
+      })
+    ).toBe(next)
+  })
+
+  it('does not carry directory classification across operation owners', () => {
+    const previous = [node('linked', { isSymlink: true, isDirectory: true })]
+    const localCache = {
+      '/w/linked': { children: [], operationOwner: { kind: 'local' as const } }
+    }
+    const remoteNode = node('linked', {
+      isSymlink: true,
+      operationOwner: { kind: 'ssh', connectionId: 'server-2' }
+    })
+    expect(keepOpenedDirectoryLinks(previous, [remoteNode], localCache)[0].isDirectory).toBe(false)
+    const next = [node('linked', { isSymlink: true })]
+    expect(
+      keepOpenedDirectoryLinks(previous, next, {
+        '/w/linked': { children: [], operationOwner: remoteNode.operationOwner }
+      })
+    ).toBe(next)
+  })
+
+  it('leaves unrelated unowned links untouched while preserving a known folder', () => {
+    const previous = [node('linked', { isSymlink: true, isDirectory: true })]
+    const next = [
+      node('linked', { isSymlink: true }),
+      node('unowned', { isSymlink: true, operationOwner: undefined })
+    ]
+    const result = keepOpenedDirectoryLinks(previous, next, {
+      '/w/linked': { children: [], operationOwner: { kind: 'local' } }
+    })
+    expect(result.map((child) => child.isDirectory)).toEqual([true, false])
+  })
+})
+
+describe('clearFailedOpenedDirectoryLink', () => {
+  it.each(['/w/link', 'C:\\link'])('drops only inferred folder state for failed %s', (linkPath) => {
+    const parentPath = linkPath.startsWith('C:') ? 'C:\\' : '/w'
+    const cache: Record<string, DirCache> = {
+      [parentPath]: {
+        children: [
+          {
+            name: 'link',
+            path: linkPath,
+            relativePath: 'link',
+            isDirectory: true,
+            isSymlink: true,
+            isDirectoryFromOpenedLink: true,
+            depth: 0
+          }
+        ]
+      }
+    }
+    expect(
+      clearFailedOpenedDirectoryLink(cache, linkPath)[parentPath].children[0].isDirectory
+    ).toBe(false)
+    cache[parentPath].children[0].isDirectoryFromOpenedLink = false
+    expect(clearFailedOpenedDirectoryLink(cache, linkPath)).toBe(cache)
+  })
 })

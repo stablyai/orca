@@ -1,7 +1,4 @@
-// Why: the changed-on-disk conflict flow (issue #7265) — draft preservation,
-// echo-aware backstop marking, autosave suspension, and baseline settling —
-// in the headless autosave controller. Split from
-// editor-autosave-controller.test.ts to stay under max-lines.
+// Exercise draft preservation, self-write echoes, autosave suspension and baseline settlement through the headless controller.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, requestEditorFileSave } from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
@@ -102,9 +99,7 @@ describe('editor autosave changed-on-disk conflict flow', () => {
     stubEditorWindow()
     const store = createEditorStore()
     openDirtyFile(store, 'typed during save')
-    // Why: the combined-Changes reload notification routes through the
-    // controller for the saved path — a fresh self-write stamp means the
-    // event is Orca's own echo, not an external change.
+    // Combined-diff notifications bypass watcher echo checks; a fresh self-write stamp identifies the controller’s own save.
     recordSelfWrite('/repo/file.ts', 'orca save')
 
     const cleanup = attachEditorAutosaveController(withLoadedBaselines(store))
@@ -131,7 +126,6 @@ describe('editor autosave changed-on-disk conflict flow', () => {
       await vi.advanceTimersByTimeAsync(1500)
       expect(writeFile).not.toHaveBeenCalled()
 
-      // Keep My Edits clears the mark — autosave resumes and overwrites.
       store.getState().setExternalMutation('/repo/file.ts', null)
       await vi.advanceTimersByTimeAsync(1500)
       expect(writeFile).toHaveBeenCalledWith(

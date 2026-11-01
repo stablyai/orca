@@ -18,7 +18,7 @@ export const BROWSER_SCREENCAST_METHODS = [
       runtime.browserScreencast(params, {
         connectionId,
         pairedDeviceId,
-        // Why: the pairing scope is what tells a phone driver apart from a desktop/web viewer of the same stream.
+        // Pairing scope distinguishes phone drivers from desktop/web viewers of the same stream.
         clientKind,
         sendBinary,
         signal,

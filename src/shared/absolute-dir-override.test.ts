@@ -23,8 +23,7 @@ describe('resolveAbsoluteDirOverride', () => {
     ['a bare dot', '.'],
     ['a parent reference', '..'],
     ['a relative path', 'rel/path'],
-    // Grok 1.0.30 does not expand `~` — `GROK_HOME=~/x` makes it create a literal `~` dir under
-    // its own cwd — so expanding one here would point Orca at a directory no agent writes to.
+    // Grok1.0.30 treats ~/ literally under its cwd; expanding it would read a directory the agent never wrote.
     ['an unexpanded tilde', '~/sessions'],
     // Drive-*relative*: both resolve against that drive's current directory, not its root.
     ['a drive-relative path', 'C:foo'],
@@ -35,8 +34,7 @@ describe('resolveAbsoluteDirOverride', () => {
     expect(resolveAbsoluteDirOverride(value, FALLBACK, 'win32')).toBe(FALLBACK)
   })
 
-  // Why: the check is platform-bound, so a POSIX CI box would silently "reject" every real
-  // Windows root if it ran the POSIX predicate. These pin the Windows shapes users actually set.
+  // Exercise Windows path shapes even on POSIX CI; native POSIX predicates would reject valid Windows roots.
   it.each([
     ['a drive-rooted path', 'C:\\Users\\ada\\.grok'],
     ['a forward-slash drive root', 'C:/Users/ada/.grok'],

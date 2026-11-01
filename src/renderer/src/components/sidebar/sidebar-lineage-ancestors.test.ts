@@ -28,7 +28,6 @@ function pair(parentHost: ExecutionHostId | undefined, childHost: ExecutionHostI
 }
 
 describe('getSidebarLineageAncestors', () => {
-  // Why: only a parent on the child's own host nests it; a missing host id matches only another.
   it.each([
     ['both without a host id', undefined, undefined, true],
     ['both local', 'local', 'local', true],

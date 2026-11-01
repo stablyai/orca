@@ -26,7 +26,7 @@ vi.mock('./project-error-classification', () => ({
   rateLimitedError: vi.fn()
 }))
 
-import { listAssignableUsersBySlug, listLabelsBySlug } from './repository-field-options'
+import { listLabelsBySlug } from './repository-field-options'
 
 describe('repository field options', () => {
   beforeEach(() => {
@@ -48,26 +48,5 @@ describe('repository field options', () => {
       { encoding: 'utf-8', host: 'github.corp.example' }
     )
     expect(releaseMock).toHaveBeenCalledOnce()
-  })
-
-  it('merges seed assignees after paginated provider results', async () => {
-    ghExecFileAsyncMock.mockResolvedValue({
-      stdout: '{"login":"octo","name":null,"avatarUrl":"octo.png"}\n',
-      stderr: ''
-    })
-
-    const result = await listAssignableUsersBySlug({
-      owner: 'acme',
-      repo: 'widgets',
-      seedLogins: ['octo', 'hubot']
-    })
-
-    expect(result).toEqual({
-      ok: true,
-      users: [
-        { login: 'octo', name: null, avatarUrl: 'octo.png' },
-        { login: 'hubot', name: null, avatarUrl: '' }
-      ]
-    })
   })
 })

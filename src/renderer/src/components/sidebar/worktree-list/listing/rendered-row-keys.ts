@@ -2,7 +2,6 @@ import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 
-/** Every key the rendered rows answer to, for reveal and scroll lookups. */
 export function collectRenderedSidebarRowKeys(sectionRows: readonly HostSectionRow[]): Set<string> {
   const keys = new Set<string>()
   for (const row of sectionRows) {

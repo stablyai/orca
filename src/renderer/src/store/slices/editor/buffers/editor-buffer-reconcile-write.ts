@@ -18,7 +18,6 @@ export type EditorBufferReconcileState = EditorBufferViewIndex & {
 
 type Drafts = Record<string, string>
 
-/** Copy-on-write accumulators for one reconcile pass. */
 export class ReconcileWrite {
   records: EditorBufferRecords
   drafts: Drafts
@@ -48,7 +47,6 @@ export class ReconcileWrite {
     this.records[recordId] = record
   }
 
-  /** Writes a view's mirror fields and draft from the record it now belongs to. */
   showView(viewId: string, side: EditorBufferJoinSide): void {
     this.mirrors.set(viewId, side.record)
     if (this.drafts[viewId] === side.draft) {
@@ -104,7 +102,6 @@ export class IndexBuilder {
     ;(this.views[recordId] ??= []).push(viewId)
   }
 
-  /** Moves every view of `from` to `to`. */
   move(from: string, to: string): void {
     for (const viewId of this.views[from] ?? []) {
       this.place(viewId, to)

@@ -4,26 +4,13 @@ import { hostFilterMatchesHostId, resolveHostFlagTarget } from './execution-host
 import { findProjectSetups, setupHostId } from './project-selector'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
+import { getPresentStringFlag } from './flags'
 
 export type ProjectCreateTarget = {
   repoSelector: string
-  /** The selected setup's host; a repo id alone is ambiguous once it is set up on two hosts. */
+  /** Repo ids can be shared across hosts. */
   repoHostId: string
   setup: ProjectHostSetup
-}
-
-function getPresentStringFlag(
-  flags: Map<string, string | boolean>,
-  name: string
-): string | undefined {
-  if (!flags.has(name)) {
-    return undefined
-  }
-  const value = flags.get(name)
-  if (typeof value === 'string' && value.length > 0) {
-    return value
-  }
-  throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
 }
 
 export function hasWorkspaceProjectTarget(flags: Map<string, string | boolean>): boolean {
@@ -46,8 +33,7 @@ export function assertWorkspaceTargetFlagsCompatible(flags: Map<string, string |
   }
 }
 
-// Why: the routed runtime can hold both an exact `runtime:<id>` row and a `local` row for the
-// same project; the exact stamp is the one the caller named, so it wins the selection.
+// Prefer the exact runtime stamp over its local alias when both setups exist.
 function selectSetupOnHost(
   candidates: readonly ProjectHostSetup[],
   host: ParsedExecutionHost | undefined,
@@ -59,8 +45,7 @@ function selectSetupOnHost(
       candidates.find((candidate) => hostFilterMatchesHostId(host, candidate.hostId))
     )
   }
-  // Why: one host is not a choice, so demanding --host for it was ceremony. Two are a choice, and
-  // picking one would run the command on a machine the caller never named.
+  // Infer a sole host, but never choose between multiple hosts without an explicit selector.
   const hostIds = new Set(candidates.map(setupHostId))
   if (hostIds.size <= 1) {
     return candidates[0]
@@ -102,8 +87,6 @@ export async function resolveProjectCreateTarget(
   try {
     result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
   } catch (error) {
-    // Why: --host runtime:<id> routes here, so an older server is reachable without the caller
-    // meaning to; name the version gap rather than surfacing a raw method_not_found.
     if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
       throw new RuntimeClientError(
         'incompatible_runtime',
@@ -120,7 +103,7 @@ export async function resolveProjectCreateTarget(
       : (await findProjectSetups(client, result.result.setups, projectId)).filter(
           (candidate) => candidate.setupState === 'ready'
         )
-  // Why --host applies to both: setup ids are per host, so the same id can name two setups.
+  // Setup ids are scoped to a host, so --host must disambiguate them too.
   const setup = projectHostSetupId
     ? selectSetupOnHost(
         ready.filter((candidate) => candidate.id === projectHostSetupId),
@@ -135,7 +118,6 @@ export async function resolveProjectCreateTarget(
         `Project host setup is not ready or was not found: ${projectHostSetupId}${host ? ` on ${host.id}` : ''}`
       )
     }
-    // Why: blaming the host when no project matched sent callers to debug the wrong flag.
     if (candidates.length === 0) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -150,8 +132,6 @@ export async function resolveProjectCreateTarget(
     throw new RuntimeClientError(
       'invalid_argument',
       `Project is not set up on the selected host: ${projectId}${host ? ` on ${host.id}` : ''}`,
-      // Why: when the project is set up somewhere just not here, the recoverable answer is which
-      // hosts do have it — otherwise the caller has to go re-derive the listing by hand.
       {
         knownProjectHostSetups: candidates.map(summarizeSetup),
         nextSteps: candidates.map(
@@ -176,10 +156,7 @@ function getRepoSelectorFromWorktreeId(worktreeId: string | undefined): string |
   return `id:${worktreeId.slice(0, separatorIndex)}`
 }
 
-/**
- * The repo a create names, as RPC params: spread it whole into every call that looks the repo up,
- * so the host a project target picked is never dropped. `--repo` stays selector-only.
- */
+/** Forward repoHostId with the repo in every lookup; the same repo can exist on multiple hosts. */
 export type CliRepoTarget = { repo: string; repoHostId?: string }
 
 export async function getCreateRepoTarget(

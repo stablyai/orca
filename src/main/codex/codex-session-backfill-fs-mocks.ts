@@ -1,9 +1,6 @@
 import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 
-// Fault-injection doubles for the backfill tests. Kept out of the spec files so
-// several suites can drive the same failure modes from one switchboard.
-
 export const fsMockState = {
   failLink: false,
   failLinkTransiently: false,

@@ -2,6 +2,7 @@ import type { ChecksPanelControllerState } from './use-checks-panel-controller-s
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelPollingState } from './use-checks-panel-polling'
 import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
+import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 
 export type ChecksPanelManualRefreshInput = Pick<
   ChecksPanelControllerState,
@@ -18,6 +19,7 @@ export type ChecksPanelManualRefreshInput = Pick<
   | 'fetchPRForBranch'
   | 'gitStatusSnapshot'
   | 'ownerTarget'
+  | 'ownerCopyHostId'
   | 'panelContextKey'
   | 'panelContextKeyRef'
   | 'pollIntervalRef'
@@ -37,7 +39,10 @@ export type ChecksPanelManualRefreshInput = Pick<
   Pick<
     ChecksPanelContextState,
     | 'activeGitLabReview'
+    | 'activeReview'
     | 'fallbackGitHubPRNumber'
+    | 'hostedReview'
+    | 'hostedReviewCacheKey'
     | 'isFolder'
     | 'isGitLabReviewContext'
     | 'linkedAzureDevOpsPR'
@@ -49,5 +54,6 @@ export type ChecksPanelManualRefreshInput = Pick<
     | 'prCacheKey'
     | 'prNumber'
   > &
+  Pick<ChecksPanelReviewState, 'hostedReviewCreateProvider'> &
   Pick<ChecksPanelPollingState, 'fetchGitLabDetails'> &
   Pick<ChecksPanelComposerState, 'isCurrentAsyncResult'>

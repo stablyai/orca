@@ -35,7 +35,7 @@ export function SshHostDeltaMoveDialog({
   const [preview, setPreview] = useState<OrcadDeltaMovePreview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
-  // Why the id: callers pass a fresh target object on every reload, which must not reset a run.
+  // Key by target ID so reloads with fresh target objects cannot reset a running move.
   const targetId = target?.id ?? null
 
   useEffect(() => {

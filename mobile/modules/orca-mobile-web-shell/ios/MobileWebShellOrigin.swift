@@ -1,12 +1,8 @@
 import Foundation
 
-/// The private origin a generation is served from, and the predicate that guards it.
-///
-/// Framework-free on purpose: `tests/MobileWebShellChecks.swift` compiles this file with `swiftc`
-/// and checks it without a device or a simulator.
+/// Framework-free private-origin predicates for off-device checks.
 enum MobileWebShellOrigin {
-  /// A scheme WebKit has no handler for, so the origin shares no cookie jar, cache or storage with
-  /// anything else in the app. A custom scheme's host is opaque, so the session id is used verbatim.
+  /// A custom scheme isolates cookie/cache/storage from other views; use the session id verbatim as host.
   static let scheme = "orca-mobile-web"
   static let maxSessionIdLength = 128
   static let maxUrlByteCount = 8 * 1024
@@ -19,10 +15,7 @@ enum MobileWebShellOrigin {
     }
   }
 
-  /// Host comparison folds case, because a URL parser canonicalises a host and comparing against
-  /// the exact spelling we minted is how the reference lost every asset to a 403. ASCII-only and
-  /// never Unicode: U+212A KELVIN SIGN folds to `k` under `NSString.caseInsensitiveCompare`, which
-  /// would match a host nobody minted against a session id containing `k`.
+  /// Fold ASCII host case for URL-parser canonicalization; Unicode folding would accept unminted hosts (e.g. Kelvin sign → k).
   static func asciiLowercased(_ value: String) -> String {
     var scalars = String.UnicodeScalarView()
     for scalar in value.unicodeScalars {
@@ -40,8 +33,7 @@ enum MobileWebShellOrigin {
     return URL(string: "\(scheme)://\(sessionId)/")
   }
 
-  /// The map key for a request we are willing to answer, or nil to refuse. Every clause is an
-  /// allow, so a component nobody anticipated falls to refusal rather than through it.
+  /// Allow only recognized request components; return the manifest key or refuse.
   static func resolveRequestPath(
     _ parts: MobileWebShellRequestParts,
     sessionId: String

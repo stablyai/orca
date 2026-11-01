@@ -1,9 +1,15 @@
 import { parseWslUncPath } from './wsl-paths'
 
+/**
+ * `git: 'windows-host'` keeps terminals and agents in WSL but runs Orca's own Git on Windows: for a
+ * project on a Windows drive, WSL Git is ~300x slower and misses Windows-side edits.
+ */
+export type ProjectGitRuntime = 'windows-host'
+
 export type LocalWindowsRuntimePreference =
   | { kind: 'inherit-global' }
   | { kind: 'windows-host' }
-  | { kind: 'wsl'; distro: string }
+  | { kind: 'wsl'; distro: string; git?: ProjectGitRuntime }
 
 export type GlobalWindowsRuntimeDefault =
   | { kind: 'windows-host' }
@@ -36,6 +42,7 @@ export type ResolvedProjectExecutionRuntime =
       projectId: string
       distro: string
       reason: 'project-override' | 'global-default'
+      git?: ProjectGitRuntime
       cacheKey: string
     }
 
@@ -103,7 +110,12 @@ export function normalizeProjectRuntimePreference(value: unknown): LocalWindowsR
 
   if (value.kind === 'wsl') {
     const distro = normalizeDistro(value.distro)
-    return distro ? { kind: 'wsl', distro } : { kind: 'inherit-global' }
+    if (!distro) {
+      return { kind: 'inherit-global' }
+    }
+    return value.git === 'windows-host'
+      ? { kind: 'wsl', distro, git: 'windows-host' }
+      : { kind: 'wsl', distro }
   }
 
   return { kind: 'inherit-global' }
@@ -178,7 +190,12 @@ export function resolveProjectExecutionRuntime(
   }
 
   if (projectPreference.kind === 'wsl') {
-    return resolveWslRuntime(args, projectPreference.distro, 'project-override')
+    return resolveWslRuntime(
+      args,
+      projectPreference.distro,
+      'project-override',
+      projectPreference.git
+    )
   }
 
   const globalDefault = normalizeGlobalWindowsRuntimeDefault(args.globalWindowsRuntimeDefault)
@@ -192,7 +209,8 @@ export function resolveProjectExecutionRuntime(
 function resolveWslRuntime(
   args: ResolveProjectExecutionRuntimeArgs,
   distro: string | null,
-  source: RuntimeSource
+  source: RuntimeSource,
+  git?: ProjectGitRuntime
 ): ProjectExecutionRuntimeResolution {
   if (!distro) {
     return {
@@ -233,7 +251,8 @@ function resolveWslRuntime(
       projectId: args.projectId,
       distro: resolvedDistro,
       reason: source,
-      cacheKey: `${args.projectId}:wsl:${resolvedDistro}`
+      ...(git ? { git } : {}),
+      cacheKey: `${args.projectId}:wsl:${resolvedDistro}${git ? `:git-${git}` : ''}`
     }
   }
 }

@@ -111,7 +111,6 @@ describe('NativeChatContextUsageRing', () => {
 
     const press = await click(trigger)
 
-    // Checked on the whole page so a card from any primitive would count.
     expect(document.body.textContent).toContain('42k/200k')
     expect(card()?.textContent).toContain('Messages')
     expect(trigger.getAttribute('aria-expanded')).toBe('true')

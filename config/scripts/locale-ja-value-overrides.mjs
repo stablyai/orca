@@ -88,7 +88,6 @@ const JA_AUDIT_OVERRIDES = {
   'Pull requests and commit statuses for detected repositories':
     '検出されたリポジトリの PR とコミットステータス',
   'Keep at phone size (default)': 'スマートフォンサイズを維持（デフォルト）',
-  // Round 5: inline/launch/action homographs, MR/review status chips, concise prompts.
   Inline: 'インライン',
   inline: 'インライン',
   Launch: '起動',
@@ -156,8 +155,7 @@ const JA_AUDIT_OVERRIDES = {
   'Choose parent folder...': '親フォルダーを選択...',
   'Check for stuck work, stale generated files, failing validation, and anything that needs human attention. Report only actionable issues.':
     'スタックした作業、古い生成ファイル、検証の失敗、および人間の対応が必要なものがないか確認してください。対応が必要なイシューのみを報告してください。',
-  // Round 6: homograph/term mistranslations surfaced by a full ja.json audit.
-  // Why: machine translation rendered UI terms as unrelated everyday words.
+  // Round 6 repairs everyday-word mistranslations of UI terms found in full ja.json audit.
   Smart: 'スマート',
   Jobs: 'ジョブ',
   Bold: '太字',
@@ -472,8 +470,8 @@ const JA_AUDIT_OVERRIDES = {
     'ダークモードでのペイン間の分割線を制御します。',
   'Countdown timer showing time until prompt cache expires (Claude agents).':
     'プロンプトキャッシュが期限切れになるまでの時間を示すカウントダウンタイマー（Claude Agent ）。',
-  'Install and manage experimental Orca plugins.':
-    '実験的機能の Orca プラグインをインストール・管理します。',
+  'Install and manage Orca plugins (Alpha).':
+    'Orca プラグインをインストール・管理します（アルファ版）。',
   "Resident memory held by Orca plus the processes under each worktree's terminals.":
     'Orca が保持する常駐メモリと、各ワークツリーのターミナル配下で実行中のプロセス。',
   'No local Claude, Codex, or OpenCode usage found yet. The overview will populate after the next agent session writes token logs.':
@@ -526,8 +524,7 @@ const JA_AUDIT_OVERRIDES = {
   'Hide from sidebar': 'サイドバーから非表示',
   'Show in sidebar': 'サイドバーに表示',
   'Recent or tab strip.': '「最近」またはタブストリップ。',
-  // Settings-search keywords: proper nouns keep their canonical spelling, and the rest were
-  // translated in the wrong sense (windows→窓, gitignore→ギティ無視, component→成分).
+  // Settings-search proper nouns keep canonical spelling; repair wrong-sense windows/gitignore/component translations.
   windows: 'Windows',
   'windows powershell': 'Windows PowerShell',
   'powershell 7': 'PowerShell 7',

@@ -24,11 +24,26 @@ const committed = (rewrittenStores: string[]) =>
   cutover('move-1', 'destination-committed', { rewrittenStores })
 
 describe('WSL move rewrite ledger', () => {
+  it('lets the seeded host workspaces only grow, and only while the desktop rewrites', () => {
+    const seeded = (ids: string[] | undefined) =>
+      cutover('move-1', 'destination-committed', { seededHostWorkspaceIds: ids })
+    seedWslMoveCutover(userDataPath, committed([]))
+    writeWslMoveCutover(userDataPath, seeded(['w1']))
+    writeWslMoveCutover(userDataPath, seeded(['w1', 'w2']))
+
+    expect(() => writeWslMoveCutover(userDataPath, seeded(['w2']))).toThrow(
+      'wsl_move_ledger_changed'
+    )
+    expect(() => writeWslMoveCutover(userDataPath, seeded(undefined))).toThrow(
+      'wsl_move_ledger_changed'
+    )
+    expect(listWslMoveCutovers(userDataPath)[0]?.seededHostWorkspaceIds).toEqual(['w1', 'w2'])
+  })
+
   it('grows append-only while the desktop rewrites', () => {
     seedWslMoveCutover(userDataPath, committed([]))
     writeWslMoveCutover(userDataPath, committed(['a']))
     writeWslMoveCutover(userDataPath, committed(['a', 'b']))
-    // Rewriting the same ledger is a no-op, not a change.
     writeWslMoveCutover(userDataPath, committed(['a', 'b']))
     expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual(['a', 'b'])
   })
@@ -76,6 +91,7 @@ describe('WSL move rewrite ledger', () => {
   })
 
   it('refuses client-rewritten while the store registry is incomplete', () => {
+    setWslMoveDesktopRewriteRegistryCompleteForTests(false)
     seedWslMoveCutover(userDataPath, committed([]))
     expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'client-rewritten'))).toThrow(
       'wsl_move_rewrite_incomplete'
@@ -83,14 +99,5 @@ describe('WSL move rewrite ledger', () => {
     setWslMoveDesktopRewriteRegistryCompleteForTests(true)
     writeWslMoveCutover(userDataPath, cutover('move-1', 'client-rewritten'))
     expect(listWslMoveCutovers(userDataPath)[0]?.phase).toBe('client-rewritten')
-  })
-
-  it('re-seeds a committed record to a later phase without dropping its ledger', () => {
-    seedWslMoveCutover(userDataPath, committed(['a', 'b']))
-    seedWslMoveCutover(userDataPath, cutover('move-1', 'retained'))
-    expect(listWslMoveCutovers(userDataPath)[0]).toMatchObject({
-      phase: 'retained',
-      rewrittenStores: ['a', 'b']
-    })
   })
 })

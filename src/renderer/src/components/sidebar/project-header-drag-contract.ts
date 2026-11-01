@@ -57,9 +57,7 @@ export function isProjectHeaderDragHandleTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  // Why: the project icon renders as an <svg>, so pressing it makes the event
-  // target an SVGElement (not an HTMLElement). Match Element so dragging by the
-  // icon still arms the drag; closest/contains work on any Element.
+  // SVG icons are Elements too; allow dragging by the project icon.
   if (!(target instanceof Element)) {
     return false
   }
@@ -71,8 +69,7 @@ export function isRepoHeaderActionTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  // Why: an <svg> icon inside an action button is an SVGElement, so match
-  // Element to still treat it as an action target and not arm a drag.
+  // SVG action icons must not arm a header drag.
   if (!(target instanceof Element) || target === currentTarget) {
     return false
   }

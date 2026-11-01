@@ -6,7 +6,6 @@ import { makeLayout, makeTab } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import { withLayoutOwnerTabProps } from '@/components/tab-bar/tab-bar-layout-owner-props'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -102,9 +101,7 @@ describe('createEditorSlice openDiff', () => {
 
   it('keeps a diff for an owner-less worktree off the focused global runtime', () => {
     const store = createEditorStore()
-    // A remote runtime is globally focused, but wt-1's repo names no explicit
-    // owner. The diff must stamp null (not undefined): null forces a LOCAL read
-    // (local), while undefined used to inherit 'focused-env'.
+    // Focused runtime must not own unstamped local diffs; stamp null to force local reads instead of undefined’s focus fallback.
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings']
     })
@@ -140,9 +137,7 @@ describe('createEditorSlice openDiff', () => {
 
   it('keeps an SSH-owned worktree diff off the focused runtime so it routes via its connection', () => {
     const store = createEditorStore()
-    // An SSH worktree is owned by its connection, not the focused runtime. Its
-    // diff stamps null (not the focused env), so the read targets local IPC and
-    // flows over connectionId rather than the focused runtime's RPC.
+    // SSH diffs stamp null so local IPC routes via connectionId, never focused-runtime RPC.
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings'],
       repos: [{ id: 'repo-ssh', connectionId: 'conn-1' }] as unknown as AppState['repos'],

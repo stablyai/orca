@@ -4,9 +4,7 @@ import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 export function registerTerminalListStaleLeafLivenessTests(): void {
-  // run6-review-pr-11959 repro: leaf.connected mirrors the graph (`ptyId !== null`),
-  // so a restored leaf whose PTY no provider owns must be demoted from the
-  // controller inventory or the CLI reports it connected/writable forever.
+  // Graph ptyId alone cannot prove liveness; controller inventory must demote restored leaves no provider owns (#11959).
 
   const WORKTREE_ID = 'repo-1::/tmp/probe-worktree'
   const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -129,9 +127,7 @@ export function registerTerminalListStaleLeafLivenessTests(): void {
       })
     })
 
-    // Why: a just-spawned PTY can register after the inventory snapshot; the
-    // provider's sync hasPty must rescue it or federation reads one
-    // connected:false as exited.
+    // Spawn can register after inventory capture; synchronous provider hasPty must rescue it before federation reads disconnected as exit.
     it('keeps a leaf connected when the provider synchronously knows a ptyId the snapshot missed', async () => {
       const runtime = makeRuntimeWithLeaf({
         leafPtyId: 'pty-just-spawned',

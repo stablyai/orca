@@ -152,11 +152,9 @@ export function useCommentsListState({
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const triageGroups = React.useMemo(
-    // Why: grouped sections read newest-first so recent discussion surfaces at the top.
     () => partitionPRCommentGroupsForTriage(sortPRCommentGroupsByRecency(groups, 'newest-first')),
     [groups]
   )
-  // Why: timeline reads oldest-first so the discussion history unfolds in order.
   const timelineGroups = React.useMemo(() => sortPRCommentGroupsByRecency(groups), [groups])
   const canShowResolveWithAI = Boolean(
     onResolveSelectedCommentsWithAI && selectableGroups.length > 0
@@ -178,8 +176,7 @@ export function useCommentsListState({
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(scrollComposerIntoView)
     })
-    // Why: the composer expands and focuses in separate layout passes; the
-    // timeout catches the final height so the footer is visible in short panels.
+    // Wait for separate expand/focus layout passes so scrolling uses the composer's final height.
     const settledTimer = window.setTimeout(scrollComposerIntoView, 120)
     return () => {
       window.cancelAnimationFrame(firstFrame)
@@ -273,7 +270,10 @@ export function useCommentsListState({
                 'Add a PR comment'
               )
         }
-        submitLabel="Send"
+        submitLabel={translate(
+          'auto.components.right.sidebar.checks.panel.content.sendComment',
+          'Send'
+        )}
         autoFocus
         disabled={commentsDisabled}
         disabledReason={commentsDisabledReason}

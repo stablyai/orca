@@ -1,4 +1,5 @@
 import type {
+  ClaudeAccountSelectionChange,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
@@ -14,7 +15,6 @@ export type CodexAccountsApi = {
     wslDistro?: string | null
   }) => Promise<CodexRateLimitAccountsState>
   cancelPendingLogin: () => Promise<boolean>
-  /** Sign-in link of the login waiting on a browser, or null when none is. */
   getPendingLoginUrl: () => Promise<string | null>
   onPendingLoginUrlChanged: (callback: (url: string | null) => void) => () => void
   reauthenticate: (args: {
@@ -63,6 +63,7 @@ export type ClaudeAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<ClaudeRateLimitAccountsState>
+  onSelectedElsewhere?: (callback: (change: ClaudeAccountSelectionChange) => void) => () => void
 }
 
 export type GrokAccountsApi = {
@@ -74,9 +75,7 @@ export type CursorAccountsApi = {
 }
 
 export type MinimaxCredentialsApi = {
-  // Why: cookie + API key each live in their own safeStorage file, so the
-  // status separates them. 'configured' stays as the OR so existing callers
-  // that only care about "anything saved" keep working unchanged.
+  // configured remains cookie OR API key for existing callers.
   getStatus: () => Promise<MiniMaxCredentialsStatus>
   saveCookie: (cookie: string) => Promise<MiniMaxCredentialsStatus>
   clearCookie: () => Promise<MiniMaxCredentialsStatus>
@@ -85,9 +84,7 @@ export type MinimaxCredentialsApi = {
 }
 
 export type ZcodePlanCredentialsApi = {
-  // Why: the GLM Coding Plan key lives in its own safeStorage file and the
-  // ZCode CLI's config is read-only, so the status reports both sources'
-  // presence; neither credential value ever crosses the IPC boundary.
+  // Report presence of the saved key and read-only CLI credentials without exposing either value.
   getStatus: () => Promise<ZcodePlanCredentialsStatus>
   saveApiKey: (key: string) => Promise<ZcodePlanCredentialsStatus>
   clearApiKey: () => Promise<ZcodePlanCredentialsStatus>

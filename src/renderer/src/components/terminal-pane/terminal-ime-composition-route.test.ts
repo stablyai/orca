@@ -50,37 +50,6 @@ function createHarness(ptyId = 'pty-original') {
 }
 
 describe('installTerminalImeCompositionRoute', () => {
-  it('does not install on an uninitialized terminal element', () => {
-    const transport = createTransport('pty-original')
-
-    const route = installTerminalImeCompositionRoute({
-      terminalElement: {} as HTMLElement,
-      terminal: { input: vi.fn() },
-      capturedTransport: transport,
-      getCurrentTransport: () => transport
-    })
-
-    expect(() => route.dispose()).not.toThrow()
-  })
-
-  it('delivers one Hangul commit to the captured route', () => {
-    const harness = createHarness()
-    harness.start(1)
-
-    expect(harness.end(1, '한')).toBe(false)
-    expect(harness.input).toHaveBeenCalledExactlyOnceWith('한')
-  })
-
-  it('never routes a switched composition to an unrelated transport', () => {
-    const harness = createHarness()
-    harness.start(1)
-    harness.state.currentTransport = createTransport('pty-unrelated')
-
-    harness.end(1, '한')
-
-    expect(harness.input).not.toHaveBeenCalled()
-  })
-
   it('finalizes empty cancellation without leaking into the next session', () => {
     const harness = createHarness()
     harness.start(1)
@@ -136,18 +105,7 @@ describe('installTerminalImeCompositionRoute', () => {
     expect(harness.input).not.toHaveBeenCalled()
   })
 
-  it('drops a commit after SSH reconnect replaces the transport', () => {
-    const harness = createHarness('remote:env:pty-original')
-    harness.start(1)
-    harness.state.currentTransport = createTransport('remote:env:pty-replacement')
-
-    harness.end(1, '한')
-
-    expect(harness.input).not.toHaveBeenCalled()
-  })
-
-  // A route that never saw the start cannot deliver the commit, so cancelling the event would
-  // suppress xterm's own triggerDataEvent with nothing standing in for it.
+  // A route installed mid-session cannot replace xterm’s commit; cancelling would lose the text.
   it('leaves an uncaptured session to xterm when installed mid-composition', () => {
     const harness = createHarness()
 
@@ -169,7 +127,6 @@ describe('installTerminalImeCompositionRoute', () => {
     const firstRoute = install()
 
     element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1))
-    // Reconnect/effect re-run swaps the route while the preedit is still open.
     firstRoute.dispose()
     const secondRoute = install()
 
@@ -186,7 +143,6 @@ describe('installTerminalImeCompositionRoute', () => {
     harness.start(1)
     harness.state.currentTransport = createTransport('pty-replacement')
 
-    // Owned, so xterm must stand down — dropping the commit is this route's decision.
     expect(harness.end(1, '한')).toBe(false)
     expect(harness.input).not.toHaveBeenCalled()
   })

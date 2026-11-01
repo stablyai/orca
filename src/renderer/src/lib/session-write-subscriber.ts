@@ -12,8 +12,7 @@ type UnifiedTabsByWorktree = AppState['unifiedTabsByWorktree']
 type UnifiedTab = UnifiedTabsByWorktree[string][number]
 
 const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
-// Why: this handoff flag is stripped from workspace sessions, so toggling it
-// alone should not rebuild and rewrite the durable session payload.
+// Handoff flags are stripped from sessions; toggling alone must not rebuild durable payloads.
 const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>([
   'pendingActivationSpawn',
   'recovery'
@@ -90,12 +89,7 @@ export type SessionWriteSubscriberDeps = {
   debounceMs?: number
 }
 
-/**
- * Why: factored out so a vitest can drive the real Zustand store and assert
- * which mutations cause a session write — the gate against unrelated updates
- * (agent status, usage, runtime title ticks) is load-bearing for setTimeout
- * violation budgets and the failure mode is silent.
- */
+// Expose the real subscriber for mutation-gate tests; unrelated status/usage/title ticks can otherwise silently breach timer budgets.
 export function createSessionWriteSubscriber({
   store,
   persist,
@@ -105,22 +99,12 @@ export function createSessionWriteSubscriber({
   let timer: ReturnType<typeof setTimeout> | null = null
   let disposed = false
   let writing = false
-  // Why: the subscriber fires on every store update (agent status, usage
-  // refreshes, runtime title ticks, …). Without this gate each fire reset
-  // the debounce, and when it finally expired buildWorkspaceSessionPayload
-  // crossed 70-110ms with many tabs, tripping setTimeout violations. Terminal
-  // and unified maps use durable per-worktree projections, so display frames
-  // reuse the prior identity while a real session change keeps fresh tabs for
-  // the eventual getState() patch build. `null` makes the first fire proceed.
+  // Every store update fires this subscriber; gate unrelated ticks before debounce/payload work (formerly 70–110ms). Durable tab projections retain identity for display-only frames but refresh on real session changes; null permits the first write.
   let prev: Record<string, unknown> | null = null
-  // Why held separately from `prev`: `prev` stores the *projected* tab maps, so the raw slice
-  // identity is the only thing the pre-allocation scan below can compare them against.
+  // prev holds projected maps; retain raw identities separately for the allocation-free scan.
   let prevTabsSource: TabsByWorktree | null = null
   let prevUnifiedTabsSource: UnifiedTabsByWorktree | null = null
-  // Why: this set is the only record that a mutation still owes a write — `prev` has already
-  // advanced past it, and change detection is identity-based, so a field dropped from here can
-  // never be re-detected. In-flight fields remain owned by that write until acknowledgment;
-  // failures merge them back without overwriting newer same-field edits.
+  // Pending fields are the only owed-write ledger after prev advances. In-flight writes own their fields until ACK; failures merge them back without replacing newer same-field edits.
   const pendingChangedFields = new Set<SessionRelevantField>()
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
@@ -129,17 +113,9 @@ export function createSessionWriteSubscriber({
     if (disposed || writing || pendingChangedFields.size === 0) {
       return
     }
-    // Why: rebuild from the freshest store state rather than the snapshot
-    // captured when this timer was scheduled. Today this is equivalent
-    // because buildWorkspaceSessionPayload reads only SESSION_RELEVANT_FIELDS
-    // (the same fields gating the timer reset), so the captured `state` is
-    // already current for those fields. Calling getState() guards against a
-    // future refactor that adds a non-relevant field read to the payload
-    // builder — without this, such a change would silently start emitting
-    // stale values for that field.
+    // Build from live getState, not the scheduled snapshot; future payload inputs outside the timer-gated fields must not silently persist stale values.
     const fresh = store.getState()
-    // Why: a closed shouldPersistWorkspaceSession defers, never discards. The pending set stays, so
-    // the next store update re-arms the write; nothing re-arms here, so staying closed costs no timer.
+    // Closed persistence gates defer without discarding pending fields; the next store update rearms, with no timer churn while closed.
     if (!shouldPersistWorkspaceSession(fresh)) {
       return
     }
@@ -190,14 +166,7 @@ export function createSessionWriteSubscriber({
     timer = setTimeout(flushPendingWrite, debounceMs)
   }
 
-  /**
-   * Identity-only scan over exactly SESSION_RELEVANT_FIELDS, allocating nothing.
-   *
-   * Why sound: for the two projected fields an unchanged raw slice is strictly stronger than an
-   * unchanged projection (the projection is a function of the slice), so a `false` here always
-   * implies the full comparison below would have found no changed field. A changed raw slice
-   * falls through to that comparison, where the projection can still collapse it.
-   */
+  /** Scan raw relevant identities without allocation. For projected maps, unchanged source implies unchanged projection; changed sources still pass through full projected comparison. */
   const hasSessionFieldIdentityChange = (state: AppState): boolean => {
     if (prev === null) {
       return true
@@ -220,9 +189,7 @@ export function createSessionWriteSubscriber({
     if (!shouldPersistWorkspaceSession(state)) {
       return
     }
-    // Why: this fires on every store write and almost none of them touch a session field. Scan
-    // identities first so the common case never allocates the 35-field snapshot or the changed
-    // list; only a real identity change pays for them.
+    // Most store writes touch no session fields; scan identities before allocating snapshots/changed lists.
     if (!hasSessionFieldIdentityChange(state)) {
       if (pendingChangedFields.size === 0) {
         return
@@ -258,18 +225,14 @@ export function createSessionWriteSubscriber({
     for (const field of changedFields) {
       pendingChangedFields.add(field)
     }
-    // Why: an unrelated update may wake a deferred write but must never reset an armed debounce —
-    // that reset storm is exactly what the changed-field gate above exists to prevent.
+    // Unrelated updates may wake deferred writes but must not reset an armed debounce and recreate reset storms.
     if (timer !== null && changedFields.length === 0) {
       return
     }
     armFlushTimer()
   }
 
-  // Why evaluate once here: `prev === null` is what bootstraps the first full write, so a writer
-  // created when the session gate is *already* open owed that write to whatever unrelated store
-  // tick happened to arrive next. Catalog refreshes no longer publish when nothing changed, so
-  // that incidental wake-up is not guaranteed; seed from the current state instead.
+  // Seed the initial full write from current state when the gate is already open; unchanged catalogs no longer guarantee an incidental wake tick.
   evaluateSessionState(store.getState())
   const unsub = store.subscribe(evaluateSessionState)
 

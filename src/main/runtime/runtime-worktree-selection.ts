@@ -14,13 +14,10 @@ export type RuntimeWorktreeRemovalTarget = {
   pushTarget?: GitPushTarget
 }
 
-/**
- * Options for `removeManagedWorktree`. Named rather than positional on purpose: three of the
- * four are interchangeable booleans that each waive a different safety check on a destructive
- * delete, so a transposition would silently delete a checkout the caller meant to protect.
- */
+/** Named options prevent interchangeable safety-waiver booleans from silently authorizing the wrong destructive delete. */
 export type RemoveManagedWorktreeOptions = {
   force?: boolean
+  deleteBranch?: boolean
   runHooks?: boolean
   /** Waives proof that every PTY stopped (#11960). Set by explicit Force Delete only. */
   allowUnverifiedPtyStop?: boolean
@@ -34,23 +31,24 @@ export type RemoveManagedWorktreeOptions = {
 export function getRuntimeWorktreeRemovalOptionsKey(
   options: Pick<
     RemoveManagedWorktreeOptions,
-    'force' | 'runHooks' | 'allowUnverifiedPtyStop' | 'allowFailedArchiveHook'
+    'force' | 'runHooks' | 'allowUnverifiedPtyStop' | 'allowFailedArchiveHook' | 'deleteBranch'
   >
 ): string {
-  // Why: a forced retry must not coalesce onto the in-flight attempt that just
-  // failed the PTY gate — it would inherit that failure instead of retrying.
+  // Forced retries must not coalesce onto an attempt refusing unverified PTY stop.
   const ptyKey = options.allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
-  // Same reason for the archive waiver: a retry that waives the failed hook must not coalesce
-  // onto the in-flight attempt that is about to refuse on it.
+  // Archive-waiver retries must not inherit an in-flight attempt's hook refusal.
   const archiveKey = options.allowFailedArchiveHook ? 'allow-failed-archive' : 'require-archive'
   const hooksKey = options.runHooks ? 'run-hooks' : 'skip-hooks'
-  return `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}`
+  const branchKey =
+    options.deleteBranch === undefined
+      ? 'legacy-branch'
+      : options.deleteBranch
+        ? 'delete-branch'
+        : 'keep-branch'
+  return `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}:${branchKey}`
 }
 
-// Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime
-// host can adopt a legacy (unstamped) repo. A repo that names a host in *either* spelling matches
-// only that host — including its own ssh:<connectionId>, which an executionHostId-only comparison
-// used to reject, so an unstamped SSH repo failed to dedupe against itself.
+// Null host is host-unaware; unstamped legacy rows are adoptable, but either explicit host spelling must match exactly.
 export function runtimeRepoMatchesExecutionHost(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
   executionHostId?: ExecutionHostId | null
@@ -64,10 +62,7 @@ export function runtimeRepoMatchesExecutionHost(
   return getRepoExecutionHostId(repo) === executionHostId
 }
 
-/**
- * Whether `repo` can be the row a registration in this process dedupes onto. Registration reads its
- * path on this machine, so an SSH row at the same path string is another machine's project.
- */
+/** Registration reads this machine's path; an SSH row at that path belongs to another machine. */
 export function runtimeRepoIsRegistrationCandidate(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
   executionHostId?: ExecutionHostId | null

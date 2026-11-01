@@ -2,20 +2,18 @@ import { useMemo, useState } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../src/shared/agent-session-journal-types'
-import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
-import type { AgentSessionLatestTurn } from '../../../src/shared/agent-session-wire'
-import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
-import type { StructuredAgentHostClock } from '../../../src/shared/structured-agent-session-reducer'
-import { selectStructuredAgentTurnBars } from '../../../src/shared/structured-agent-session-turn-timing'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import type { AgentSessionLatestTurn } from '../../../src/shared/agent-session/agent-session-wire'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import type { StructuredAgentHostClock } from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import { selectStructuredAgentTurnBars } from '../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
 } from '../../../src/shared/structured-agent-turn-clock-anchor'
 
-/** Host-recorded turn timing for the structured lane: settled durations straight
- *  off the journal, and a skew-free start for the live counter whose host-to-local
- *  conversion is latched once per turn. */
+// Use journal durations and latch the host-to-phone start conversion once per turn so counters remain skew-free.
 export function useMobileStructuredAgentTurnTiming(
   {
     items,
@@ -27,14 +25,12 @@ export function useMobileStructuredAgentTurnTiming(
     items: readonly AgentJournalRenderItem[]
     submissions: readonly AgentJournalSubmission[]
     latestTurn?: AgentSessionLatestTurn | null
-    /** The host's working answer, which places rows waiting behind the live turn. */
     working?: boolean
     hostClock?: StructuredAgentHostClock | null
   },
   turnId: string | null
 ): {
   settledTurns: NativeChatSettledTurns
-  /** What places each transcript row in its turn; the same read desktop makes. */
   turnJournal: NativeChatTurnJournal
   workingStartedAt: number | null
 } {
@@ -47,8 +43,7 @@ export function useMobileStructuredAgentTurnTiming(
     [items, submissions, latestTurn, working]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
-  // Stamp during render (React's derive-from-props pattern) so the first paint of
-  // a new turn already counts from the right instant.
+  // Derive during render so a new turn’s first paint counts from its correct start.
   const step = stepStructuredAgentTurnClock({
     timing: runningTiming,
     turnId,

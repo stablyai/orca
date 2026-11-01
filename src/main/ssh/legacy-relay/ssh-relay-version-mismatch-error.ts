@@ -1,12 +1,4 @@
-// Why: a unique error class so callers (in particular the relay-lost retry
-// loop in src/main/ipc/ssh/ssh.ts) can branch on `instanceof
-// RelayVersionMismatchError` and treat the failure as terminal — i.e. skip
-// the exponential-backoff retry and surface a user-visible "please reconnect
-// manually" error. Any other transport failure remains transiently retryable.
-//
-// Trigger: the remote `--connect` process exits with code 42 after the
-// daemon's wire-level handshake reports a version mismatch. See
-// docs/ssh-relay-versioned-install-dirs.md.
+// Treat --connect exit 42 as terminal version refusal: skip transport backoff and ask for manual reconnect. See docs/ssh-relay-versioned-install-dirs.md.
 
 export class RelayVersionMismatchError extends Error {
   readonly name = 'RelayVersionMismatchError'
@@ -24,7 +16,5 @@ export class RelayVersionMismatchError extends Error {
   }
 }
 
-// Why: the remote --connect process uses this exit code to signal the wire
-// handshake failed because of a version mismatch. The mapping daemon ⇄ exit
-// code 42 lives in src/relay/relay-handshake.ts (EXIT_CODE_VERSION_MISMATCH).
+// relay-handshake.ts maps wire version refusal to exit 42.
 export const RELAY_EXIT_CODE_VERSION_MISMATCH = 42

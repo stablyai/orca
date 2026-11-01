@@ -1,5 +1,4 @@
-// Why: a Source Control discard in one workspace must stop autosave of the same file in every
-// workspace showing it, until git has finished (the discard releases its hold when it ends).
+// Git discard holds autosave across all workspace views of the same physical file until Git settles.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { notifyEditorExternalFileChange, requestEditorSaveQuiesce } from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
@@ -82,7 +81,6 @@ it('git discard in one workspace pauses the same file autosave in another', asyn
     await vi.advanceTimersByTimeAsync(5_000)
     expect(writes()).toBe(0)
     expect(disk.files.get('/repo/a.ts')).toBe('HEAD')
-    // The dirty tabs keep their edits behind the changed-on-disk banner.
     const tabs = store.getState().openFiles
     expect(tabs.map((file) => file.externalMutation)).toEqual(['changed', 'changed'])
     expect(store.getState().editorDrafts[ids[1]]).toBe('unsaved edit, more')
@@ -99,7 +97,6 @@ it('pauses another workspace even when the discarding workspace has no tab of th
     expect(writes()).toBe(0)
     disk.files.set('/repo/a.ts', 'HEAD')
     release()
-    // Afterwards the guarded write refuses the stale save and raises the banner.
     await vi.advanceTimersByTimeAsync(5_000)
     expect(disk.files.get('/repo/a.ts')).toBe('HEAD')
     expect(store.getState().openFiles[0].externalMutation).toBe('changed')
@@ -157,7 +154,7 @@ it('a discard slower than the backstop: banner, and no autosave from any tab unt
       'changed',
       'changed'
     ])
-    // Even a tab whose banner was dismissed stays held, and its banner comes back to say why.
+    // Dismissed banners must return while an overdue discard still holds the file.
     store.getState().setExternalMutation(ids[1], null)
     edit(ids[1], 'typed while git is still running')
     expect(store.getState().openFiles[1].externalMutation).toBe('changed')

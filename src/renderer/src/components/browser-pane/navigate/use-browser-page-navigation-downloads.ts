@@ -138,7 +138,9 @@ export function useBrowserPageNavigationDownloads({
     if (consumedAsWorkspaceDoc) {
       return
     }
-    const submission = resolveBrowserAddressBarSubmission(addressBarValue)
+    const submission = resolveBrowserAddressBarSubmission(addressBarValue, {
+      allowExtensionPages: true
+    })
     if (submission.status === 'invalid') {
       onUpdatePageStateRef.current(browserTabId, { loadError: submission.loadError })
       return

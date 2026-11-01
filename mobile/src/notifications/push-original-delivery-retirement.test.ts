@@ -28,7 +28,6 @@ const retirementSchema = z.object({
 })
 
 async function captureHostRetirement(directory: string) {
-  // The host fixture checks against Node types; the phone consumer checks against mobile types.
   const modulePath = fileURLToPath(
     new URL(
       '../../../src/main/runtime/structured-attention-original-delivery.test-fixture.ts',

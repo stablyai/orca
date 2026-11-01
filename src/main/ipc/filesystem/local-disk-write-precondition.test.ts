@@ -24,9 +24,13 @@ import type * as LocalRegularFileRead from './local-regular-file-read'
 import type * as NodeFsPromises from 'node:fs/promises'
 
 const fileRead = vi.hoisted(() => {
-  const state: { understateSizeBy: number; hangPath: string | null; openError: Error | null } = {
+  const state: {
+    understateSizeBy: number
+    blockedRead: { path: string; entered: () => void; wait: Promise<void> } | null
+    openError: Error | null
+  } = {
     understateSizeBy: 0,
-    hangPath: null,
+    blockedRead: null,
     openError: null
   }
   return state
@@ -46,14 +50,14 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   return {
     ...actual,
-    // Why: some volumes (RAM disks, subst and network drives, WSL UNC) fail realpath outright.
+    // Some RAM/subst/network/WSL volumes cannot resolve realpath.
     realpath: async (path: string) => {
       if (path === realpathFailure.path) {
         throw Object.assign(new Error(`EIO: i/o error, realpath '${path}'`), { code: 'EIO' })
       }
       return actual.realpath(path)
     },
-    // Why: 9P and some SMB mounts report inode 0 for every file.
+    // 9P and some SMB mounts expose inode zero for every file.
     stat: async (path: string, options?: { bigint?: boolean }) => {
       if (options?.bigint !== true) {
         return actual.stat(path)
@@ -61,7 +65,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       const stats = await actual.stat(path, { bigint: true })
       return zeroInodes.enabled ? Object.assign(stats, { ino: 0n }) : stats
     },
-    // Why: holds one save between its passed check and its write, where a competing save must wait.
+    // Hold a save after comparison so competing saves must wait before checking.
     writeFile: vi.fn(async (...args: Parameters<typeof actual.writeFile>) => {
       const gate = typeof args[1] === 'string' ? writeGates.get(args[1]) : undefined
       if (gate) {
@@ -76,14 +80,15 @@ vi.mock('./local-regular-file-read', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalRegularFileRead>()
   return {
     ...actual,
-    // Why: reports the size from before a concurrent append, as a stat racing the writer would.
+    // Model stat observing size just before a concurrent append.
     openLocalRegularFile: async (filePath: string) => {
       if (fileRead.openError) {
         throw fileRead.openError
       }
-      if (filePath === fileRead.hangPath) {
-        // A read stuck on a dead network or WSL mount.
-        await new Promise(() => undefined)
+      const blockedRead = fileRead.blockedRead
+      if (blockedRead?.path === filePath) {
+        blockedRead.entered()
+        await blockedRead.wait
       }
       const opened = await actual.openLocalRegularFile(filePath)
       opened.stats.size -= fileRead.understateSizeBy
@@ -94,13 +99,29 @@ vi.mock('./local-regular-file-read', async (importOriginal) => {
 
 let base: string
 
+function pauseFileRead(path: string) {
+  let entered: () => void = () => undefined
+  let release: () => void = () => undefined
+  const reached = new Promise<void>((resolve) => {
+    entered = resolve
+  })
+  fileRead.blockedRead = {
+    path,
+    entered,
+    wait: new Promise<void>((resolve) => {
+      release = resolve
+    })
+  }
+  return { reached, release: () => release() }
+}
+
 beforeEach(async () => {
   base = await mkdtemp(join(await realpath(tmpdir()), 'orca-disk-write-precondition-'))
 })
 
 afterEach(async () => {
   fileRead.understateSizeBy = 0
-  fileRead.hangPath = null
+  fileRead.blockedRead = null
   fileRead.openError = null
   realpathFailure.path = null
   writeGates.clear()
@@ -373,7 +394,7 @@ describe('local provider guarded write', () => {
     expect(await readFile(filePath, 'utf8')).toBe(winner === 0 ? 'client one' : 'client two')
   })
 
-  // Why: creating symlinks needs elevated rights on Windows runners.
+  // Windows symlink creation requires elevated rights or Developer Mode.
   it.skipIf(process.platform === 'win32').each([
     ['a symlink', (target: string, alias: string) => symlink(target, alias)],
     ['a hardlink', (target: string, alias: string) => link(target, alias)]
@@ -401,16 +422,22 @@ describe('local provider guarded write', () => {
     await writeFile(stuck, 'original')
     await writeFile(other, 'original')
     zeroInodes.enabled = true
-    fileRead.hangPath = stuck
+    const readGate = pauseFileRead(stuck)
     const fromBaseline = { expectedSignature: getDiskBaselineSignature('original') }
 
-    void provider().writeFileWithDiskPrecondition(stuck, 'edited', fromBaseline)
-    const outcome = await Promise.race([
-      provider().writeFileWithDiskPrecondition(other, 'edited', fromBaseline),
-      new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
-    ])
+    const guardedSave = provider().writeFileWithDiskPrecondition(stuck, 'edited', fromBaseline)
+    try {
+      await readGate.reached
+      const outcome = await Promise.race([
+        provider().writeFileWithDiskPrecondition(other, 'edited', fromBaseline),
+        new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
+      ])
 
-    expect(outcome).toEqual({ ok: true })
+      expect(outcome).toEqual({ ok: true })
+    } finally {
+      readGate.release()
+      await guardedSave
+    }
   })
 
   it('keeps saves ordered when a queued restore creates the file mid-queue', async () => {
@@ -562,35 +589,45 @@ describe('local provider guarded write', () => {
     const other = join(base, 'other.ts')
     await writeFile(stuck, 'original')
     await writeFile(other, 'original')
-    fileRead.hangPath = stuck
+    const readGate = pauseFileRead(stuck)
     const fromBaseline = { expectedSignature: getDiskBaselineSignature('original') }
 
-    void provider().writeFileWithDiskPrecondition(stuck, 'edited', fromBaseline)
-    const otherSave = provider().writeFileWithDiskPrecondition(other, 'edited', fromBaseline)
-    const outcome = await Promise.race([
-      otherSave,
-      new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
-    ])
+    const guardedSave = provider().writeFileWithDiskPrecondition(stuck, 'edited', fromBaseline)
+    try {
+      await readGate.reached
+      const outcome = await Promise.race([
+        provider().writeFileWithDiskPrecondition(other, 'edited', fromBaseline),
+        new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
+      ])
 
-    expect(outcome).toEqual({ ok: true })
+      expect(outcome).toEqual({ ok: true })
+    } finally {
+      readGate.release()
+      await guardedSave
+    }
   })
 
   it('writes a save with no precondition directly, not queued behind a stuck guarded save', async () => {
     const filePath = join(base, 'stuck.ts')
     await writeFile(filePath, 'original')
-    fileRead.hangPath = filePath
+    const readGate = pauseFileRead(filePath)
 
-    void provider().writeFileWithDiskPrecondition(filePath, 'guarded', {
+    const guardedSave = provider().writeFileWithDiskPrecondition(filePath, 'guarded', {
       expectedSignature: getDiskBaselineSignature('original')
     })
-    const plainSave = provider().writeFileWithDiskPrecondition(filePath, 'plain', undefined)
-    const outcome = await Promise.race([
-      plainSave,
-      new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
-    ])
+    try {
+      await readGate.reached
+      const outcome = await Promise.race([
+        provider().writeFileWithDiskPrecondition(filePath, 'plain', undefined),
+        new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
+      ])
 
-    expect(outcome).toEqual({ ok: true })
-    expect(await readFile(filePath, 'utf-8')).toBe('plain')
+      expect(outcome).toEqual({ ok: true })
+      expect(await readFile(filePath, 'utf-8')).toBe('plain')
+    } finally {
+      readGate.release()
+      await guardedSave
+    }
   })
 
   it('does not read a permission error whose path names ENOENT as a missing file', async () => {

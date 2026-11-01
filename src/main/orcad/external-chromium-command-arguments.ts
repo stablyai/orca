@@ -1,4 +1,6 @@
 import { BrowserError } from '../browser/browser-error'
+import { agentBrowserSetMediaArguments } from '../browser/agent-browser-set-media-arguments'
+import { agentBrowserWaitArguments } from '../browser/agent-browser-wait-arguments'
 const TARGET_OVERRIDE_FLAGS: Record<string, true> = {
   '--args': true,
   '--cdp': true,
@@ -63,25 +65,20 @@ function stripTargetOverrideArguments(args: string[]): string[] {
   return stripped
 }
 
-function waitArguments(params: Record<string, unknown>): string[] {
-  const args = ['wait']
-  if (params.selector) {
-    args.push(String(params.selector))
-  } else if (params.timeout != null && !params.text && !params.url && !params.load && !params.fn) {
-    args.push(String(params.timeout))
-  }
-  for (const [key, flag] of [
-    ['text', '--text'],
-    ['url', '--url'],
-    ['load', '--load'],
-    ['fn', '--fn'],
-    ['state', '--state']
-  ] as const) {
-    if (params[key]) {
-      args.push(flag, String(params[key]))
-    }
-  }
-  return args
+export function externalChromiumWaitCommand(
+  params: Record<string, unknown>
+): ReturnType<typeof agentBrowserWaitArguments> {
+  const optional = (key: string): string | undefined =>
+    params[key] ? String(params[key]) : undefined
+  return agentBrowserWaitArguments({
+    selector: optional('selector'),
+    timeout: typeof params.timeout === 'number' ? params.timeout : undefined,
+    text: optional('text'),
+    url: optional('url'),
+    load: optional('load'),
+    fn: optional('fn'),
+    state: optional('state')
+  })
 }
 
 function cookieSetArguments(params: Record<string, unknown>): string[] {
@@ -126,12 +123,6 @@ export function externalChromiumCommandArguments(
       return ['click', text('element')]
     case 'browserDblclick':
       return ['dblclick', text('element')]
-    case 'browserFill':
-      return ['fill', text('element'), text('value')]
-    case 'browserType':
-      return ['keyboard', 'type', text('input')]
-    case 'browserSelect':
-      return ['select', text('element'), text('value')]
     case 'browserScroll':
       return ['scroll', text('direction'), ...optional('amount')]
     case 'browserHover':
@@ -144,8 +135,6 @@ export function externalChromiumCommandArguments(
       return [params.checked === false ? 'uncheck' : 'check', text('element')]
     case 'browserFocus':
       return ['focus', text('element')]
-    case 'browserClear':
-      return ['fill', text('element'), '']
     case 'browserKeypress':
       return ['press', text('key')]
     case 'browserScrollIntoView':
@@ -183,7 +172,7 @@ export function externalChromiumCommandArguments(
     case 'browserSetCredentials':
       return ['set', 'credentials', text('user'), text('pass')]
     case 'browserSetMedia':
-      return ['set', 'media', ...optional('colorScheme'), ...optional('reducedMotion')]
+      return agentBrowserSetMediaArguments(params.colorScheme, params.reducedMotion)
     case 'browserClipboardRead':
       return ['clipboard', 'read']
     case 'browserClipboardWrite':
@@ -235,8 +224,6 @@ export function externalChromiumCommandArguments(
         return null
       }
       return ['set', 'viewport', text('width'), text('height')]
-    case 'browserWait':
-      return waitArguments(params)
     case 'browserCookieSet':
       return cookieSetArguments(params)
     case 'browserInterceptEnable':
@@ -254,12 +241,6 @@ export function normalizeExternalChromiumCommandResult(
   switch (method) {
     case 'browserClick':
       return { clicked: String(params.element) }
-    case 'browserFill':
-      return { filled: String(params.element) }
-    case 'browserType':
-      return { typed: true }
-    case 'browserSelect':
-      return { selected: String(params.value) }
     case 'browserScroll':
       return { scrolled: params.direction }
     case 'browserHover':
@@ -272,14 +253,8 @@ export function normalizeExternalChromiumCommandResult(
       return { checked: params.checked !== false }
     case 'browserFocus':
       return { focused: String(params.element) }
-    case 'browserClear':
-      return { cleared: String(params.element) }
-    case 'browserSelectAll':
-      return { selected: String(params.element) }
     case 'browserKeypress':
       return { pressed: String(params.key) }
-    case 'browserWait':
-      return { waited: true }
     case 'browserSetViewport':
       return {
         width: params.width,

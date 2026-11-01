@@ -2,13 +2,14 @@ import './rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import { RpcDispatcher } from './rpc/dispatcher'
-import type { RpcContext, RpcRequest } from './rpc/core'
+import type { RpcRequest } from './rpc/core'
 import { REPO_METHODS } from './rpc/methods/repo'
 import { WORKTREE_METHODS } from './rpc/methods/worktree'
 import { agentLaunchWorkspaceFactory } from './rpc/methods/agent-launch-worktree-creation'
 import { OrcaRuntimeService } from './orca-runtime'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
-// Why twins: a project copied between hosts keeps its repo id (Codex review 6 #6).
+// Projects copied between hosts retain their repo id.
 const REPOS: Repo[] = [
   {
     id: 'dup',
@@ -31,16 +32,16 @@ const REPOS: Repo[] = [
 ]
 
 function createRuntime(): OrcaRuntimeService {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these paths stop right after repo resolution, which reads only these store methods.
-  return new OrcaRuntimeService({
-    getRepos: () => REPOS,
-    getRepo: (id: string) => REPOS.find((repo) => repo.id === id) ?? null,
-    getAllWorktreeMeta: () => ({}),
-    getWorktreeMeta: () => null,
-    setWorktreeMeta: vi.fn(),
-    getGitHubCache: () => null,
-    getSettings: () => ({})
-  } as never)
+  return new OrcaRuntimeService(
+    partialRuntimeStore({
+      getRepos: () => REPOS,
+      getRepo: (id: string) => REPOS.find((repo) => repo.id === id),
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      setWorktreeMeta: vi.fn(),
+      getSettings: () => ({})
+    })
+  )
 }
 
 /** Stops every create at the step that receives the resolved repo, and records that repo. */
@@ -96,8 +97,7 @@ describe('a repo id set up on two hosts, named with repoHostId', () => {
   it('agent.launch create-worktree keeps the host', async () => {
     const reached = stopAtResolvedProject()
     const runtime = createRuntime()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the create reads only `runtime` and the creator-provenance fields, which default when absent.
-    const factory = agentLaunchWorkspaceFactory({ runtime } as unknown as RpcContext, 'claude')
+    const factory = agentLaunchWorkspaceFactory({ runtime }, 'claude')
 
     await expect(
       factory.createWorktree({

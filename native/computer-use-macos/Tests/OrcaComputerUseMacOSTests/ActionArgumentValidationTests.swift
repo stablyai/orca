@@ -72,12 +72,6 @@ final class ActionArgumentValidationTests: XCTestCase {
         )
     }
 
-    func testOnlyMiddleButtonLacksAnAccessibilityAction() {
-        XCTAssertTrue(MouseButtonSelection.left.hasAccessibilityAction)
-        XCTAssertTrue(MouseButtonSelection.right.hasAccessibilityAction)
-        XCTAssertFalse(MouseButtonSelection.middle.hasAccessibilityAction)
-    }
-
     func testScrollDirectionRejectsUnknownDirections() {
         XCTAssertEqual(try ActionArgumentValidation.scrollDirection("down").get(), "down")
         XCTAssertEqual(

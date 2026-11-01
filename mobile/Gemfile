@@ -1,12 +1,5 @@
-# Pins the Ruby tools for reproducible iOS releases in CI (see fastlane/Fastfile,
-# .github/workflows/mobile-ios-release.yml, and the Fastfile smoke check in
-# .github/workflows/mobile.yml). macOS runners ship a fastlane, but pinning here
-# keeps the release toolchain stable across runner image bumps.
-#
-# Why an exact version plus a committed Gemfile.lock: ios-build (macos) and
-# ios-distribute (ubuntu) resolve gems ~25 minutes apart, so an unpinned
-# fastlane could split a single release across two versions. Bump deliberately
-# in a PR so the Fastfile smoke check runs against the new version first.
+# Pin fastlane with Gemfile.lock: macOS build and Ubuntu distribution resolve ~25 minutes apart.
+# Deliberate version bumps must pass the Fastfile smoke check before release.
 source "https://rubygems.org"
 
 gem "fastlane", "2.240.1"

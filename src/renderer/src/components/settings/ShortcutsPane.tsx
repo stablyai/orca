@@ -40,6 +40,8 @@ import { buildShortcutDefinitionCatalog } from './shortcut-definition-catalog'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { buildShortcutRowVisibility } from './shortcut-row-visibility'
 import { useMacCapturedDigitChords } from './use-mac-captured-digit-chords'
+import { keybindingValidationErrorText } from './keybinding-diagnostic-text'
+import { KeybindingFileDiagnostics } from './KeybindingFileDiagnostics'
 
 const isMac = navigator.userAgent.includes('Mac')
 const platform: NodeJS.Platform = isMac
@@ -79,9 +81,7 @@ export function ShortcutsPane(): React.JSX.Element {
   const mountedRef = useMountedRef()
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
-  // The effective length targets a new appended binding.
   const [recordingBindingIndex, setRecordingBindingIndex] = useState<number | null>(null)
-  // Preserve disabled bindings so Enable can restore them.
   const [disableMemory, setDisableMemory] = useState<Partial<Record<KeybindingActionId, string[]>>>(
     {}
   )
@@ -93,7 +93,7 @@ export function ShortcutsPane(): React.JSX.Element {
     'Blocked by Mission Control. Remap here or change it in System Settings.'
   )
 
-  // Why: suspend global dispatch so a captured chord reaches the editor.
+  // Suspend global shortcuts so recorded chords reach the editor.
   useEffect(() => {
     window.api.ui.setShortcutRecorderFocused(recordingActionId !== null)
     return () => window.api.ui.setShortcutRecorderFocused(false)
@@ -164,7 +164,9 @@ export function ShortcutsPane(): React.JSX.Element {
     if (!Array.isArray(normalizedResult)) {
       setErrors((prev) => ({
         ...prev,
-        [actionId]: normalizedResult.ok ? 'Unable to parse shortcut.' : normalizedResult.error
+        [actionId]: normalizedResult.ok
+          ? translate('settings.shortcuts.parseFailed', 'Unable to parse shortcut.')
+          : keybindingValidationErrorText(normalizedResult)
       }))
       return false
     }
@@ -182,8 +184,9 @@ export function ShortcutsPane(): React.JSX.Element {
     }
     const defaults = getEffectiveKeybindingsForDefinition(definition, platform, {})
     const next =
-      sameBindings(normalizedResult, defaults) ||
-      (normalizedResult.length === 0 && defaults.length === 0)
+      (sameBindings(normalizedResult, defaults) ||
+        (normalizedResult.length === 0 && defaults.length === 0)) &&
+      !hasCommonBindingOverride(keybindingSnapshot, actionId)
         ? removeBindingOverride(keybindings, actionId)
         : { ...keybindings, [actionId]: normalizedResult }
     const blockingConflict = findKeybindingConflictsForDefinitions(definitions, platform, next, {
@@ -196,7 +199,11 @@ export function ShortcutsPane(): React.JSX.Element {
         .join(', ')
       setErrors((prev) => ({
         ...prev,
-        [actionId]: `${formatKeybindingList([blockingConflict.binding], platform)} conflicts with ${labels}.`
+        [actionId]: translate(
+          'auto.components.settings.shortcutDefinitionCatalog.bindingConflict',
+          '{{binding}} conflicts with {{actions}}.',
+          { binding: formatKeybindingList([blockingConflict.binding], platform), actions: labels }
+        )
       }))
       return false
     }
@@ -227,11 +234,10 @@ export function ShortcutsPane(): React.JSX.Element {
   ): Promise<void> => {
     const captured = keybindingFromInputForAction(actionId, input, platform)
     if (!captured.ok) {
-      setErrors((prev) => ({ ...prev, [actionId]: captured.error }))
+      setErrors((prev) => ({ ...prev, [actionId]: keybindingValidationErrorText(captured) }))
       return
     }
 
-    // Preserve sibling bindings when editing or appending one chord.
     const current = effectiveBindingsForAction(actionId)
     const next =
       recordingBindingIndex === null || recordingBindingIndex >= current.length
@@ -284,7 +290,6 @@ export function ShortcutsPane(): React.JSX.Element {
   }
 
   const clearRecordingForAction = (actionId: KeybindingActionId): void => {
-    // Why: final edits must not leave the recorder armed.
     if (recordingActionId === actionId) {
       setRecordingBindingIndex(null)
     }
@@ -328,26 +333,9 @@ export function ShortcutsPane(): React.JSX.Element {
           action={<KeybindingsFileActions />}
         />
 
-        {keybindingSnapshot?.diagnostics.length ? (
-          <div className="space-y-1">
-            {keybindingSnapshot.diagnostics.map((diagnostic, index) => (
-              <p
-                key={`${diagnostic.section ?? 'root'}-${diagnostic.actionId ?? index}`}
-                className={
-                  diagnostic.severity === 'error'
-                    ? 'text-xs text-destructive'
-                    : 'text-xs text-muted-foreground'
-                }
-              >
-                {diagnostic.message}
-              </p>
-            ))}
-          </div>
-        ) : null}
+        <KeybindingFileDiagnostics diagnostics={keybindingSnapshot?.diagnostics ?? []} />
 
-        {/* Below xl the rail stacks above the list in one column; pin the rail
-            row to its content (auto) and let the list row take the rest, so the
-            rail can't spill over the list the way two equal auto rows would. */}
+        {/* Below xl, give the rail only content height and the list the remaining space; equal auto rows can overlap. */}
         <div className="grid min-h-0 flex-1 gap-6 max-xl:grid-rows-[auto_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)]">
           <ShortcutFilterRail
             query={shortcutQuery}
@@ -360,7 +348,7 @@ export function ShortcutsPane(): React.JSX.Element {
           />
 
           <ShortcutRowsList
-            // Why: overflow-y-auto otherwise creates a phantom horizontal scrollbar.
+            // Hide overflow-x to avoid a phantom horizontal scrollbar from overflow-y-auto.
             className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 scrollbar-sleek"
             groups={visibleShortcutGroups}
             platform={platform}
@@ -386,8 +374,7 @@ export function ShortcutsPane(): React.JSX.Element {
             onCapture={(actionId, input) => void captureBinding(actionId, input)}
             onClearError={clearError}
             onRemoveBindingAt={(actionId, index) => {
-              // Keep a pending capture aimed at the right row after the removal
-              // shifts indices (or clear it if the recorded row itself is gone).
+              // Adjust pending capture after removal shifts slots, or clear it if its row was removed.
               if (recordingActionId === actionId) {
                 const nextIndex = adjustRecordingIndexAfterRemove(recordingBindingIndex, index)
                 setRecordingBindingIndex(nextIndex)
@@ -402,7 +389,6 @@ export function ShortcutsPane(): React.JSX.Element {
               void resetBinding(actionId)
             }}
             onDisableAction={(actionId) => {
-              // Remember the current bindings first so "Enable" can restore them.
               const current = effectiveBindingsForAction(actionId)
               setDisableMemory((memory) => ({ ...memory, [actionId]: current }))
               clearRecordingForAction(actionId)

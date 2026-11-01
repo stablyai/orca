@@ -446,12 +446,9 @@ describe('LinearAgentSkillSetupPrompt', () => {
     )
     expect(document.body.textContent).toContain('Linear agent skill is missing.')
     expect(document.body.textContent).toContain('Mock install')
-    // Why: the permanent opt-out is an EyeOff icon (no visible text); the casual
-    // dismiss is the dialog ×. Neither "Not now" nor any dismiss label shows as text.
     expect(document.body.textContent).not.toContain('Not now')
     expect(mocks.panelProps.at(-1)?.preInstallNotice).toBeUndefined()
 
-    // Why: the × must snooze for the session, not persist a permanent dismissal.
     const closeButton = Array.from(document.body.querySelectorAll('button')).find(
       (button) => button.textContent === 'Close'
     )
@@ -568,7 +565,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await act(async () => {
       recheckButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    // Why: the real skill hook re-renders on refresh; this mock only mutates a shared object.
+    // Re-render manually because this mock mutates state without the real hook’s subscription.
     await updatePrompt({ linked: true, remote: false })
 
     expect(mocks.skillState.refresh).toHaveBeenCalled()
@@ -632,7 +629,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     })
     expect(mocks.panelProps.at(-1)).toEqual(expect.objectContaining({ loading: true }))
 
-    // The skill hook owns loading for the new target, independently of the old request.
+    // The new target’s hook owns loading independently of the prior request.
     mocks.skillState.loading = false
     await updatePrompt(wslPromptProps('Ubuntu', 'modal'))
     expect(mocks.panelProps.at(-1)).toEqual(expect.objectContaining({ loading: false }))
@@ -732,7 +729,6 @@ describe('LinearAgentSkillSetupPrompt', () => {
   it('permanently dismisses the modal-only prompt when requested', async () => {
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
-    // Why: permanent dismiss is now an EyeOff icon button (aria-label, no text).
     const dismissButton = document.body.querySelector<HTMLButtonElement>(
       'button[aria-label="Don\'t show again"]'
     )

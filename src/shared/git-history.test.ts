@@ -59,7 +59,7 @@ function createHistoryExecutor(limitRecords = 2): {
       return { stdout: `${REMOTE_OID}\n` }
     }
     if (command === 'symbolic-ref') {
-      return { stdout: 'feature\n' }
+      return { stdout: 'refs/heads/feature\n' }
     }
     if (command === 'for-each-ref') {
       return { stdout: 'refs/remotes/origin/feature\0origin/feature\n' }
@@ -144,6 +144,27 @@ describe('git history parsing', () => {
     ])
   })
 
+  it('preserves commas in legacy branch, remote, and tag decorations', () => {
+    const [item] = parseGitHistoryLog(
+      logRecord({
+        hash: HEAD_OID,
+        decorations: `%(decorate:prefix=,suffix=,separator=${DECORATION_SEPARATOR})`,
+        message: 'preserve legacy ref names',
+        legacyDecorations: [
+          'HEAD -> refs/heads/feat,,one',
+          'refs/remotes/origin/feat,one',
+          'tag: refs/tags/v1,,0'
+        ].join(', ')
+      })
+    )
+
+    expect(item?.references?.map((ref) => [ref.id, ref.name, ref.category])).toEqual([
+      ['refs/heads/feat,,one', 'feat,,one', 'branches'],
+      ['refs/remotes/origin/feat,one', 'origin/feat,one', 'remote branches'],
+      ['refs/tags/v1,,0', 'v1,,0', 'tags']
+    ])
+  })
+
   it('keeps a comma inside a lone decoration, which carries no separator', () => {
     // Why: a lone decoration carries no separator, so sniffing for \x1f split it in two.
     const stdout = logRecord({
@@ -225,7 +246,7 @@ describe('git history loader', () => {
         return { stdout: 'refs/remotes/origin/main\n' }
       }
       if (command === 'symbolic-ref') {
-        return { stdout: 'old-workspace\n' }
+        return { stdout: 'refs/heads/old-workspace\n' }
       }
       if (command === 'for-each-ref') {
         return { stdout: 'refs/remotes/origin/main\0origin/main\n' }
@@ -307,11 +328,9 @@ describe('git history loader', () => {
 })
 
 describe('symbolic full-name resolution', () => {
-  // Why: `rev-parse --verify` swallows --end-of-options, but --symbolic-full-name
-  // deliberately echoes it. Taking the first line made every branch and tag fall
-  // through gitHistoryRefFromFullName's prefix checks into the "commits" category.
+  // --symbolic-full-name echoes --end-of-options (unlike --verify); treating it as the ref misclassified branches/tags as commits.
   function executorEmitting(symbolicStdout: string): GitHistoryExecutor {
-    return vi.fn(async (args: string[]) => {
+    return vi.fn<GitHistoryExecutor>(async (args: string[]) => {
       if (args[0] === 'rev-parse' && args.includes('--symbolic-full-name')) {
         return { stdout: symbolicStdout }
       }
@@ -319,7 +338,7 @@ describe('symbolic full-name resolution', () => {
         return { stdout: `${HEAD_OID}\n` }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'main\n' }
+        return { stdout: 'refs/heads/main\n' }
       }
       if (args[0] === 'for-each-ref' || args[0] === 'merge-base') {
         return { stdout: '' }
@@ -328,7 +347,7 @@ describe('symbolic full-name resolution', () => {
         return { stdout: logRecord({ hash: HEAD_OID, message: 'only' }) }
       }
       return { stdout: '' }
-    }) as unknown as GitHistoryExecutor
+    })
   }
 
   it('categorizes a branch when git echoes the option marker', async () => {

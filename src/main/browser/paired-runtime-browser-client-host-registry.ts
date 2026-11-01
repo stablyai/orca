@@ -128,11 +128,7 @@ export class PairedRuntimeBrowserClientHostRegistry<
     return this.enqueue(environmentId, () => this.closeEnvironmentRecord(environmentId, error))
   }
 
-  /**
-   * Closes an environment and waits for its pages, including a close that deferred executor
-   * teardown behind unsettled handlers. Removal-time storage clearing needs partitions actually
-   * released; `closeEnvironment` alone can resolve while the pages are still prepared.
-   */
+  /** Waits for deferred page teardown before callers clear partition storage. */
   async retireEnvironment(environmentId: string, error?: Error): Promise<boolean> {
     const pendingCleanup: Promise<void>[] = []
     try {

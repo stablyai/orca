@@ -70,7 +70,6 @@ describe('relocateServeSupervisor', () => {
     const snapshotCli = String(args[1])
     expect(snapshotCli.startsWith(serveSupervisorSnapshotRoot(userData))).toBe(true)
     expect(args).toEqual([d.execPath, snapshotCli, 'serve', '--supervise'])
-    // The copy keeps the Resources layout, so bare requires still find node_modules.
     const snapshot = join(snapshotCli, '..', '..', '..', '..')
     expect(existsSync(join(snapshot, 'node_modules', 'ws', 'index.js'))).toBe(true)
     expect(existsSync(join(snapshot, 'app.asar.unpacked', 'out', 'package.json'))).toBe(true)
@@ -104,8 +103,7 @@ describe('relocateServeSupervisor', () => {
     }
   })
 
-  // Why: re-exec from node mode closes the AppImage runtime's keepalive pipe, so the mount is
-  // torn down under the exec and the new image fails to load its libraries (real-host BUG-3).
+  // Re-exec closes the AppImage keepalive pipe and unmounts libraries needed by the new image.
   it('stays in place when running from an AppImage, whose files cannot change under it', async () => {
     const d = deps({
       env: {
@@ -137,7 +135,7 @@ describe('relocateServeSupervisor', () => {
     await expect(relocateServeSupervisor(failing)).resolves.toBe('in-place')
   })
 
-  // Why skip: mode 000 blocks neither root nor Windows readers.
+  // Mode 000 does not block root or Windows readers.
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'removes a partial copy when copying fails',
     async () => {
@@ -183,7 +181,7 @@ describe('relocateServeSupervisor', () => {
       expect(await readlink(join(copied, 'absolute'))).toBe(join(root, 'outside'))
       expect(await readlink(join(copied, 'ws-alias'))).toBe('ws')
       expect((await lstat(join(copied, 'ws-alias'))).isSymbolicLink()).toBe(true)
-      // Why: `cp -R` into an existing directory would nest the tree one level down.
+      // Copying into an existing directory would nest the tree one level too deep.
       expect(await readdir(snapshot)).toEqual(
         expect.arrayContaining(['app.asar.unpacked', 'node_modules'])
       )
@@ -255,7 +253,7 @@ describe('relocateServeSupervisor', () => {
       expect(restart({}, argv, { execPath: gone }).execve).not.toHaveBeenCalled()
     })
 
-    // Why: a failed process.execve aborts natively, so nothing may reach it that cannot run.
+    // Failed execve aborts natively, so preflight must reject unusable files.
     it('keeps running and logs when the installed app cannot run yet', async () => {
       const argv = ['/ignored', appCli(), 'serve']
       await chmod(deps().execPath, 0o644)

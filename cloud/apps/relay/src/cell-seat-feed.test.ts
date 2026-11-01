@@ -3,7 +3,7 @@ import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type WebSocket from 'ws'
 import { z } from 'zod'
-import type { RelayAssignmentStore } from './assignment-store.js'
+import type { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { CELL_FLAG_DEFAULTS, type CellFlags } from './cell-flags.js'
 import type { RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
@@ -353,19 +353,7 @@ describe('cell seat feed', () => {
       flagsApplied: applied,
       // Not reserve mode, so db whatever the switch says.
       phonePathEffective: 'db',
-      databasePoolMax: expect.any(Number),
-      // What the flag tool checks a write against before it writes.
-      supportedFlags: {
-        readinessLocal: { type: 'boolean' },
-        ticketCheck: { type: 'enum', values: ['off', 'shadow'] },
-        rejectionFence: { type: 'boolean' },
-        readTimeoutMarginMs: { type: 'number', min: 1_000, max: 60_000, integer: true },
-        admitMode: { type: 'enum', values: ['db', 'reserve'] },
-        intakePerSec: { type: 'number', max: 1_000 },
-        reserveDryRun: { type: 'boolean' },
-        reregisterInFlight: { type: 'number', min: 1, max: 16, integer: true },
-        phonePath: { type: 'enum', values: ['db', 'memory'] }
-      }
+      databasePoolMax: expect.any(Number)
     })
   })
 

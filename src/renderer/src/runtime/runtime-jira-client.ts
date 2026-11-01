@@ -1,7 +1,7 @@
 import {
   JIRA_STATUS_FILTER_RUNTIME_CAPABILITY,
   JIRA_STATUS_FILTER_UPDATE_REQUIRED
-} from '../../../shared/jira-quick-filters'
+} from '../../../shared/jira/jira-quick-filters'
 import type {
   JiraAuthType,
   JiraComment,
@@ -19,7 +19,7 @@ import type {
   JiraSiteSelection,
   JiraTransition,
   JiraViewer
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { searchLocalJiraIssues } from './local-jira-search-cancellation'
 import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from './runtime-rpc-client'
@@ -45,7 +45,7 @@ export {
   jiraListPrioritiesForTarget,
   jiraListTransitionsForTarget
 } from './runtime-jira-detail-client'
-import { JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY } from '../../../shared/jira/jira-detail-capabilities'
 export { jiraLookupIssueSummary, jiraReadStatus } from './runtime-jira-summary-client'
 export {
   jiraCreateIssue,

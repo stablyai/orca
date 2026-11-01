@@ -247,8 +247,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     await settle()
 
     expect(mocks.toastError).toHaveBeenCalledWith('Failed to open the file.')
-    // Why: App.tsx awaits hydration around this registration and treats any throw as
-    // "session restore failed", so the bridge must swallow its own failures.
+    // App classifies registration throws as restore failure; this bridge must contain its own errors.
     expect(unhandledRejections).toEqual([])
   })
 
@@ -301,8 +300,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
   it('ignores a non-array payload from a mismatched preload', async () => {
     stubPreload({
       onOpenMarkdownFiles: () => () => {},
-      // Why: the payload crosses the preload boundary, so a stale preload can resolve with
-      // something that is not an array. Reading .length off it would throw inside the chain.
+      // Older preloads can return non-arrays; validate before reading length across the boundary.
       consumePendingMarkdownFileOpens: () => Promise.resolve(null as unknown as MarkdownDocument[])
     })
 

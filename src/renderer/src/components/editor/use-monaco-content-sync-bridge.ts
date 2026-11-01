@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { editor } from 'monaco-editor'
 import { syncContentUpdate, type MonacoContentSyncMode } from './monaco-content-sync'
 import { mayPushTabTextIntoModel } from './editor-stale-mount-guard'
@@ -13,15 +13,12 @@ export type MonacoContentSyncBridge = {
   lastSyncedContentRef: MutableRefObject<string>
   contentSyncModeRef: MutableRefObject<MonacoContentSyncMode>
   isApplyingProgrammaticContentRef: MutableRefObject<boolean>
-  isApplyingLargePasteRef: MutableRefObject<boolean>
-  handleChange: (value: string | undefined) => void
 }
 
-/** Why the caller owns `contentRef`/`contentSyncModeRef`: both are latest-value refs
- *  assigned during render, which must happen in the component body so the mount
- *  handler and any handler firing before commit already read the current props. */
+/** Callers update the content/mode refs during render so mount handlers can read current props before commit. */
 export function useMonacoContentSyncBridge(params: {
   editorRef: MutableRefObject<editor.IStandaloneCodeEditor | null>
+  mountedEditor: editor.IStandaloneCodeEditor | null
   content: string
   contentRef: MutableRefObject<string>
   contentSyncModeRef: MutableRefObject<MonacoContentSyncMode>
@@ -30,42 +27,49 @@ export function useMonacoContentSyncBridge(params: {
   fileId?: string
   onContentChange: (content: string) => void
 }): MonacoContentSyncBridge {
-  const { editorRef, content, contentRef, contentSyncModeRef, modelKey, onContentChange, fileId } =
-    params
+  const {
+    editorRef,
+    mountedEditor,
+    content,
+    contentRef,
+    contentSyncModeRef,
+    modelKey,
+    onContentChange,
+    fileId
+  } = params
 
   const lastSyncedContentRef = useRef<string>(content)
 
-  // Why: reconciliation uses real edit ops (to keep undo sane), so these programmatic edits must suppress onChange or they'd mark the file dirty.
+  // Suppress reconciliation’s real edit events so programmatic updates do not mark the file dirty.
   const isApplyingProgrammaticContentRef = useRef(false)
-  const isApplyingLargePasteRef = useRef(false)
 
-  const handleChange = useCallback(
-    (value: string | undefined) => {
-      if (value !== undefined) {
-        if (editorRef.current?.getModel()?.uri.toString() !== modelKey) {
-          return
-        }
-        // Why: split panes share one retained model, so a sibling must ignore the echoed programmatic-sync onChange or it marks the file dirty.
-        if (isApplyingLargePasteRef.current) {
-          lastSyncedContentRef.current = value
-          return
-        }
-        if (
-          shouldIgnoreMonacoContentChange({
-            modelKey,
-            isApplyingProgrammaticContent: isApplyingProgrammaticContentRef.current
-          })
-        ) {
-          return
-        }
-        lastSyncedContentRef.current = value
-        onContentChange(value)
+  useLayoutEffect(() => {
+    if (!mountedEditor) {
+      return
+    }
+    const subscription = mountedEditor.onDidChangeModelContent(() => {
+      if (
+        editorRef.current !== mountedEditor ||
+        mountedEditor.getModel()?.uri.toString() !== modelKey
+      ) {
+        return
       }
-    },
-    [editorRef, modelKey, onContentChange]
-  )
+      if (
+        shouldIgnoreMonacoContentChange({
+          modelKey,
+          isApplyingProgrammaticContent: isApplyingProgrammaticContentRef.current
+        })
+      ) {
+        return
+      }
+      const value = mountedEditor.getValue()
+      lastSyncedContentRef.current = value
+      onContentChange(value)
+    })
+    return () => subscription.dispose()
+  }, [editorRef, modelKey, mountedEditor, onContentChange])
 
-  // Why: sync the model on external `content` drift; useLayoutEffect lands the overwrite before paint so no stale text flashes. On-mount handled in handleMount.
+  // Reconcile external prop changes before paint to avoid stale-text flashes; mount handles retained models separately.
   useLayoutEffect(() => {
     const ed = editorRef.current
     if (
@@ -91,8 +95,6 @@ export function useMonacoContentSyncBridge(params: {
     contentRef,
     lastSyncedContentRef,
     contentSyncModeRef,
-    isApplyingProgrammaticContentRef,
-    isApplyingLargePasteRef,
-    handleChange
+    isApplyingProgrammaticContentRef
   }
 }

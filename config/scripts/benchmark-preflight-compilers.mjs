@@ -1,3 +1,4 @@
+import { readPinnedBunVersion } from './pinned-bun-executable.mjs'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { availableParallelism, totalmem } from 'node:os'
 import path from 'node:path'
@@ -52,8 +53,8 @@ const command = (program, args, label) =>
     ...(process.platform === 'win32' ? { timeoutMs: 900_000 } : {})
   })
 const version = await command(bun, ['--version'], 'bun-version')
-if (version.code !== 0 || version.stdout.trim() !== '1.4.3') {
-  throw new Error('Pin Bun 1.4.3 for this comparison')
+if (version.code !== 0 || version.stdout.trim() !== readPinnedBunVersion(root)) {
+  throw new Error(`Pin Bun ${readPinnedBunVersion(root)} for this comparison`)
 }
 report.host.bun = version.stdout.trim()
 report.host.typescript = JSON.parse(
@@ -176,10 +177,15 @@ if (!parityOnly) {
     save()
   }
 }
+// Why one checker: each tsgo checker holds its own types, so tsconfig.node peaks near 22 GB with
+// four and 16 GB with one, and the 16 GB Windows runner pages past the timeout. Diagnostics match.
+const NATIVE_PROBE_FLAGS = ['--checkers', '1']
+const probeFlags = (arm) => (arm === 'native' ? NATIVE_PROBE_FLAGS : [])
 const probeRoots = new Map([
   ['config/tsconfig.node.json', 'src/main'],
   ['config/tsconfig.tc.web.json', 'src/renderer/src'],
   ['config/tsconfig.tc.cli.json', 'src/cli'],
+  ['config/tsconfig.test.pane-launch.json', 'src/shared'],
   ['src/packages/process-host/tsconfig.test.json', 'src/packages/process-host/src']
 ])
 for (const { config } of TYPECHECK_PROJECTS) {
@@ -201,7 +207,7 @@ for (const { config } of TYPECHECK_PROJECTS) {
       { flag: 'wx' }
     )
     for (const arm of ['native', 'bun']) {
-      const [program, args] = invocation(config, arm)
+      const [program, args] = invocation(config, arm, probeFlags(arm))
       const result = await command(program, args, `probe-${path.basename(config)}-${arm}`)
       report.parity.push({ config, arm, ...result })
       save()

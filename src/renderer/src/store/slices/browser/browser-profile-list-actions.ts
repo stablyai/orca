@@ -1,3 +1,4 @@
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
 import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
 import type {
@@ -5,14 +6,14 @@ import type {
   BrowserProfileDeleteResult,
   BrowserProfileListResult
 } from '../../../../../shared/runtime-types'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getBrowserProfilesForHost,
   getBrowserSettingsHostId,
   getBrowserSettingsRuntimeEnvironmentId,
   profileListByHostUpdate,
-  getDefaultBrowserProfileForHost
+  updateDefaultBrowserProfileForHost
 } from './browser-host-state'
 
 export function createBrowserProfileListActions(
@@ -22,23 +23,61 @@ export function createBrowserProfileListActions(
   BrowserSlice,
   'fetchBrowserSessionProfiles' | 'createBrowserSessionProfile' | 'deleteBrowserSessionProfile'
 > {
+  // Why: change events can overlap fetches; only the latest listing per host may land, or an older one restores a deleted profile.
+  const latestListingByHost = new Map<ExecutionHostId, number>()
+  let listingCount = 0
+  const forgetDefaultProfileUnless = async (
+    hostId: ExecutionHostId,
+    isKept: (profileId: string) => boolean
+  ): Promise<void> => {
+    const saved = get().settings?.browserDefaultProfileIdByHostId?.[hostId]
+    if (saved && !isKept(saved)) {
+      await updateDefaultBrowserProfileForHost(get, hostId, (current) =>
+        current === saved ? null : current
+      )
+    }
+  }
+  // Why: a real listing always has Default, so an empty one (a web client's local host) proves nothing.
+  const landListing = async (
+    hostId: ExecutionHostId,
+    profiles: BrowserSessionProfile[]
+  ): Promise<void> => {
+    set((s) => profileListByHostUpdate(s, profiles, hostId))
+    if (profiles.length > 0) {
+      await forgetDefaultProfileUnless(hostId, (id) =>
+        profiles.some((profile) => profile.id === id)
+      )
+    }
+  }
+  const dropDeletedProfile = async (hostId: ExecutionHostId, profileId: string): Promise<void> => {
+    set((s) =>
+      profileListByHostUpdate(
+        s,
+        getBrowserProfilesForHost(s, hostId).filter((profile) => profile.id !== profileId),
+        hostId
+      )
+    )
+    await forgetDefaultProfileUnless(hostId, (id) => id !== profileId)
+  }
   return {
     fetchBrowserSessionProfiles: async (requestedHostId) => {
       const hostId = requestedHostId ?? getBrowserSettingsHostId(get())
+      const listing = ++listingCount
+      latestListingByHost.set(hostId, listing)
+      const isLatest = (): boolean => latestListingByHost.get(hostId) === listing
       const parsedHostId = parseExecutionHostId(hostId)
       const runtimeEnvironmentId =
         parsedHostId?.kind === 'runtime' ? parsedHostId.environmentId : null
       if (runtimeEnvironmentId) {
         try {
+          const pairingRevision = captureRuntimeEnvironmentRequestRevision(runtimeEnvironmentId)
           const result = await callRuntimeRpc<BrowserProfileListResult>(
             { kind: 'environment', environmentId: runtimeEnvironmentId },
             'browser.profileList',
             undefined,
-            { timeoutMs: 15_000 }
+            { timeoutMs: 15_000, expectedEnvironmentPairingRevision: pairingRevision }
           )
-          // Why: client-hosted imports never touch the server, so the server's
-          // records can't carry the "imported from Chrome" badge — this desktop
-          // remembers what it imported into each environment's jar and overlays it.
+          // Server never observes client imports; overlay desktop-tracked import badges onto each environment’s jar.
           const clientImportSources = await window.api.browser
             .sessionClientRouteImportSources?.({ environmentId: runtimeEnvironmentId })
             .catch(() => ({}))
@@ -47,18 +86,32 @@ export function createBrowserProfileListActions(
               ? { ...profile, source: clientImportSources[profile.id] }
               : profile
           )
-          set((s) => profileListByHostUpdate(s, profiles, hostId))
+          if (isLatest()) {
+            await landListing(hostId, profiles)
+          }
+          return {
+            hostId,
+            environmentId: runtimeEnvironmentId,
+            pairingRevision,
+            profiles,
+            executorRuntimeId: result.executorRuntimeId
+          }
         } catch {
-          set((s) => profileListByHostUpdate(s, [], hostId))
+          if (isLatest()) {
+            set((s) => profileListByHostUpdate(s, [], hostId))
+          }
         }
         return
       }
       try {
         const profiles = (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
-        set((s) => profileListByHostUpdate(s, profiles, hostId))
+        if (isLatest()) {
+          await landListing(hostId, profiles)
+        }
       } catch {
         /* best-effort — stale profile list is preferable to a crash */
       }
+      return undefined
     },
 
     createBrowserSessionProfile: async (scope, label) => {
@@ -119,24 +172,7 @@ export function createBrowserProfileListActions(
             { timeoutMs: 15_000 }
           )
           if (result.deleted) {
-            set((s) => ({
-              ...profileListByHostUpdate(
-                s,
-                getBrowserProfilesForHost(s, hostId).filter((profile) => profile.id !== profileId),
-                hostId
-              ),
-              ...(getDefaultBrowserProfileForHost(s, hostId) === profileId
-                ? {
-                    ...(getBrowserSettingsHostId(s) === hostId
-                      ? { defaultBrowserSessionProfileId: null }
-                      : {}),
-                    defaultBrowserSessionProfileIdByHostId: {
-                      ...s.defaultBrowserSessionProfileIdByHostId,
-                      [hostId]: null
-                    }
-                  }
-                : {})
-            }))
+            await dropDeletedProfile(hostId, profileId)
           }
           return result.deleted
         } catch {
@@ -146,24 +182,7 @@ export function createBrowserProfileListActions(
       try {
         const ok = await window.api.browser.sessionDeleteProfile({ profileId })
         if (ok) {
-          set((s) => ({
-            ...profileListByHostUpdate(
-              s,
-              getBrowserProfilesForHost(s, hostId).filter((profile) => profile.id !== profileId),
-              hostId
-            ),
-            ...(getDefaultBrowserProfileForHost(s, hostId) === profileId
-              ? {
-                  ...(getBrowserSettingsHostId(s) === hostId
-                    ? { defaultBrowserSessionProfileId: null }
-                    : {}),
-                  defaultBrowserSessionProfileIdByHostId: {
-                    ...s.defaultBrowserSessionProfileIdByHostId,
-                    [hostId]: null
-                  }
-                }
-              : {})
-          }))
+          await dropDeletedProfile(hostId, profileId)
         }
         return ok
       } catch {

@@ -153,8 +153,7 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
       continue
     }
 
-    // Why: unknown qualifiers and exact phrases are passed through to GitHub
-    // search as-is; reserializing stripped quotes changes search semantics.
+    // Preserve unknown qualifiers/exact-phrase quoting for GitHub search semantics.
     freeTextTokens.push(raw)
   }
 
@@ -176,10 +175,7 @@ function quoteIfNeeded(value: string): string {
   return /\s/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value
 }
 
-/**
- * Serialize a ParsedTaskQuery back to a raw search string. Round-trips with
- * parseTaskQuery for the qualifiers it understands; freeText is appended last.
- */
+/** Round-trip recognized qualifiers, appending freeText last. */
 export function serializeTaskQuery(q: ParsedTaskQuery): string {
   const parts: string[] = []
   if (q.scope === 'pr') {
@@ -229,11 +225,7 @@ export type TaskQueryFilterKey =
   | 'state'
   | 'draft'
 
-/**
- * Apply a filter change to a raw query string and return the updated raw string.
- * For single-value keys, pass `null` to clear. For `labels`, pass the full next
- * array (caller manages add/remove).
- */
+/** Single-value null clears the qualifier; labels replaces the full array (caller manages membership). */
 export function withQualifier(
   rawQuery: string,
   key: TaskQueryFilterKey,
@@ -285,15 +277,8 @@ export function withQualifier(
   return serializeTaskQuery(parsed)
 }
 
-/**
- * Strip any `repo:owner/name` qualifiers from a raw search string.
- *
- * Why: in cross-repo mode the renderer fans the search out to each selected
- * repo via IPC. A stray `repo:` qualifier would pin every fan-out call to one
- * repo and silently zero out the others, so it must be removed before dispatch.
- * Tokens containing whitespace are re-quoted so quoted-label values like
- * `label:"needs review"` round-trip cleanly.
- */
+/** Remove repo qualifiers before cross-repo IPC fan-out or every call is pinned to one repo and others appear empty.
+ * Re-quote whitespace-bearing tokens to preserve phrase/label semantics. */
 export function stripRepoQualifiers(rawQuery: string): string {
   const kept: string[] = []
   for (const token of tokenizeSearchQuery(rawQuery.trim())) {

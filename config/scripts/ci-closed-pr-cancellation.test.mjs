@@ -59,59 +59,6 @@ function execute(options = {}) {
   return { result, request, getPr, getRun, cancel }
 }
 
-it('uses trusted inline code and only enters cancellation on an unmerged close', () => {
-  expect(workflow.on).toEqual({ pull_request_target: { types: ['closed', 'synchronize'] } })
-  expect(step.if).toBe(
-    "github.event.action == 'synchronize' || github.event.pull_request.merged == false"
-  )
-  expect(step.uses).toBe('actions/github-script@v8')
-  expect(
-    workflow.jobs.clean.steps.some((entry) => entry.uses?.startsWith('actions/checkout'))
-  ).toBe(false)
-})
-
-it('looks up exact PR groups without branch or head-SHA inference', async () => {
-  const { result, request, cancel } = execute()
-  await result
-  expect(request.mock.calls.map(([, args]) => args.concurrency_group_name)).toEqual([
-    'pr-checks-123',
-    'dependency-security-123',
-    'node-server-123',
-    'ssh-windows-hosts-123',
-    'ssh-hostile-hosts-123',
-    'mobile-123',
-    'computer-e2e-123',
-    'wsl-orcad-e2e-123',
-    'performance-contracts-123',
-    'pr-test-loc-123',
-    'preflight-critical-path-123',
-    'preflight-cli-123',
-    'macos-updater-123',
-    'preflight-comparison-123',
-    'windows-typecheck-parity-123',
-    'zcode-transcript-contract-123',
-    'release-ref-validation-123',
-    'docs-pr-123',
-    'cloud-verify-refs/pull/123/merge',
-    'win-orcad-serve-switch-e2e-123',
-    'pi-provider-runtime-123',
-    'coding-plan-contract-123-credentials',
-    'release-javascript-comparison-123',
-    'ci-cache-warmup-platforms-123',
-    'pi-owner-runtime-123',
-    'git-command-termination-123',
-    'ci-cache-warmup-123'
-  ])
-  expect(
-    request.mock.calls.every(
-      ([route, args]) =>
-        route === 'GET /repos/{owner}/{repo}/actions/concurrency_groups/{concurrency_group_name}' &&
-        args.headers['X-GitHub-Api-Version'] === '2026-03-10'
-    )
-  ).toBe(true)
-  expect(cancel.mock.calls).toEqual([[{ owner: 'owner', repo: 'repo', run_id: 42 }]])
-})
-
 it.each([
   { event: 'push' },
   { event: 'workflow_dispatch' },

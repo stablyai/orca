@@ -8,7 +8,6 @@ import { selectWindowVisibilityActions } from './window-visibility-actions-selec
 export function useWindowVisibilityEffects(): void {
   const actions = useAppStore(selectWindowVisibilityActions)
 
-  // Refresh GitHub data (PR/issue status) when window regains focus
   useEffect(() => {
     const handler = (): void => {
       if (document.visibilityState === 'visible') {
@@ -22,10 +21,7 @@ export function useWindowVisibilityEffects(): void {
     return () => document.removeEventListener('visibilitychange', handler)
   }, [actions])
 
-  // Why (STA-2383): macOS throttles the backgrounded window; on occlusion-uncover only `focus`
-  // fires (invalidate-only), so the app-shell's dvh height stays stale and the bottom status bar
-  // is clipped off-screen until a manual resize. Relay the genuine hidden→visible reveal so main
-  // runs the same full repaint (size jiggle) that show/restore/resume get, recomputing the layout.
+  // macOS occlusion can leave dvh stale because focus only invalidates. Relay hidden→visible to main’s full repaint so the status bar is not clipped (STA-2383).
   useEffect(() => {
     if (!isMac || isPairedWebClientWindow()) {
       return

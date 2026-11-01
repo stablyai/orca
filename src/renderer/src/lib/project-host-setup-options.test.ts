@@ -141,8 +141,7 @@ describe('buildProjectHostSetupOptions', () => {
   })
 
   it('omits runtime-owned SSH (per-workspace-env) setups even when their host is filtered out', () => {
-    // The execution-host registry filters runtime-owned targets, so the setup's host is absent
-    // here — guard on the hostId so the hidden target never becomes a selectable run-target.
+    // Runtime-owned SSH targets are absent from the host registry; their raw hostId must still prevent selectable run targets.
     const runtimeSshHostId = 'ssh:runtime-ssh-orca-e37aa3a9' as ExecutionHostId
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
@@ -221,8 +220,7 @@ describe('buildProjectHostSetupOptions', () => {
   })
 
   it('collapses duplicate ready setups on one host to the setup creation actually uses', () => {
-    // Why: a linked worktree added as its own project projected a second ready `local` setup for the
-    // same project, which rendered as repeated identical "Local Mac" rows separated only by path.
+    // Linked worktrees added as projects can duplicate ready Local Mac rows distinguished only by path.
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
       eligibleRepos: [repo('main-checkout'), repo('worktree-a'), repo('worktree-b')],
@@ -277,8 +275,7 @@ describe('buildProjectHostSetupOptions', () => {
     ])
   })
 
-  // A `repo:<id>` project has no cross-host identity, so linking it on another host
-  // always fails in main — the row keeps its status line instead of a dead button.
+  // Host-local repo:<id> projects cannot link across hosts; keep status instead of a guaranteed-failing action.
   it('cannot set a location for a host-local project', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'repo:local-repo',

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
-import { CODEX_CAPACITY_MESSAGE } from '../../shared/codex-capacity-notice'
+import { CODEX_CAPACITY_MESSAGE } from '../../shared/codex-native-notice'
 
 afterEach(() => _internals.resetCachesForTests())
 

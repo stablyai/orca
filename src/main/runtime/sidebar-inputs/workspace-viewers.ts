@@ -4,11 +4,7 @@ import type { ClientWorkspaceView } from '../../../shared/rpc-contract/client-wo
 
 type ClientView = { workspaceKeys: Set<string>; tabIds: Set<string>; presentUntil: number }
 
-/**
- * Who is looking at this host's workspaces: client windows by what they report on screen, and
- * phones by the session they hold open. The host's unread flag skips what someone is looking at.
- * Workspaces are keyed by identity, so path spellings of one checkout match.
- */
+/** Suppress host unread for reported desktop views and open phone sessions; workspace identity normalizes checkout path spellings. */
 export class WorkspaceViewers {
   private readonly clients = new Map<string, ClientView>()
   private readonly phoneSessions = new Map<string, number>()
@@ -28,8 +24,7 @@ export class WorkspaceViewers {
     return !known
   }
 
-  /** An older desktop raises the flag itself and reports no view, so while it is connected the
-   *  host leaves raising to it. The caller drops it with {@link dropClient} when it closes. */
+  /** Older desktops raise unread themselves; defer host raising until their connection drops via dropClient. */
   noteSelfRaisingClient(clientKey: string): void {
     this.selfRaisingClients.add(clientKey)
   }

@@ -1,11 +1,7 @@
-// Runtime send for native chat: clear any unsubmitted TUI line, write the framed
-// body, then Enter as a SEPARATE delayed pty write. Kept apart from the pure
-// byte builders in native-chat-send.ts so those stay IO-free and unit-testable.
-
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
-import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
+import type { AskAnswerKeyGroup } from '../../../../shared/native-chat-ask-answer'
 import {
   clearConfirmDurationMs,
   clearThenWrite,
@@ -16,7 +12,7 @@ import {
   NATIVE_CHAT_ADVANCE_BUFFER_MS,
   NATIVE_CHAT_QUESTION_STEP_MS,
   NATIVE_CHAT_SUBMIT_DELAY_MS
-} from '../../../../shared/native-chat-answer-stepping'
+} from '../../../../shared/native-chat/input/native-chat-answer-stepping'
 import {
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
@@ -35,8 +31,7 @@ import {
 export { NATIVE_CHAT_ADVANCE_BUFFER_MS, NATIVE_CHAT_QUESTION_STEP_MS, NATIVE_CHAT_SUBMIT_DELAY_MS }
 export { resetNativeChatPtySendQueuesForTests }
 
-/** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
- *  later question bodies/Enters). Safe to call after the send completes. */
+/** Cancellation suppresses remaining scheduled writes and is safe after completion. */
 export type NativeChatSendHandle = {
   cancel: (keepInput?: boolean) => void
   /** Time after which every scheduled write has fired and the handle can drop. */
@@ -45,14 +40,7 @@ export type NativeChatSendHandle = {
   settled?: Promise<void>
 }
 
-/**
- * Chat message path:
- *   1. clear any unsubmitted TUI line
- *   2. write framed body
- *   3. delayed Enter (separate write — same-write CR can be swallowed by paste)
- *
- * Serialized per PTY so rapid sends cannot glue before Enter.
- */
+/** Serialize clear/body/delayed Enter per PTY; a CR sharing the paste write can be swallowed. */
 export function sendNativeChatMessage(
   ptyId: string,
   text: string,
@@ -80,8 +68,7 @@ export function sendNativeChatMessage(
           return
         }
         sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
-        // Schedule from the actual body write: an overdue clear-confirm callback
-        // must not collapse the required body-to-Enter gap after a renderer stall.
+        // Measure the Enter delay from the actual body write so renderer stalls cannot collapse the gap.
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
           sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
           markSubmitted()
@@ -115,29 +102,19 @@ function waitForNativeChatSubmit(signal?: AbortSignal): Promise<boolean> {
   })
 }
 
-/**
- * Session-option / slash command path (model switch, /effort, …).
- *
- * Does not pre-clear the line (model-switch confirmation watches the PTY).
- * Cancels any in-flight chat clear/body/Enter on this PTY first so a delayed
- * chat Enter cannot dismiss Claude's "Switch model?" dialog.
- */
+/** Cancel and await chat sends before verified commands; delayed Enter or pre-clear could disrupt model confirmation. */
 export async function sendNativeChatMessageVerified(
   ptyId: string,
   text: string,
   signal?: AbortSignal
 ): Promise<boolean> {
-  // Why: chat sends hold a delayed Enter for 500ms. Opening the model picker in
-  // that window used to let that Enter hit Claude's confirmation UI, so
-  // verification timed out with "Could not verify the model change".
   cancelNativeChatPtySends(ptyId)
   await waitForNativeChatPtyIdle(ptyId)
   if (signal?.aborted) {
     return false
   }
 
-  // Why: option commands await remote/SSH acceptance so the Enter cannot race
-  // ahead of the body while a model-change observer is already armed.
+  // Await remote/SSH body acceptance so Enter cannot race it while model-change observers are armed.
   const bodyAccepted = await sendRuntimePtyInputVerified(
     ptyId,
     buildNativeChatPasteBytes(text),
@@ -149,7 +126,6 @@ export async function sendNativeChatMessageVerified(
   return sendRuntimePtyInputVerified(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
 }
 
-/** Types a slash command as individual keys so Codex opens its command palette. */
 export async function typeNativeChatCommand(
   ptyId: string,
   command: string,
@@ -166,7 +142,6 @@ export async function typeNativeChatCommand(
   return outcome === 'accepted'
 }
 
-/** Queues a typed slash command with composer sends on the same PTY. */
 export function sendNativeChatTypedCommand(ptyId: string, command: string): NativeChatSendHandle {
   const controller = new AbortController()
   return enqueueNativeChatPtySend(
@@ -201,17 +176,11 @@ export function sendNativeChatTypedCommand(ptyId: string, command: string): Nati
   )
 }
 
-/** Submit a TUI prompt with no body (Enter only) — e.g. a plain submit when the
- *  composer is empty. */
 export function submitNativeChatPrompt(ptyId: string): void {
   sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
 }
 
-/**
- * Answer Claude's AskUserQuestion by writing its keystroke groups (built by
- * `buildAskAnswerKeys`) to the PTY, one group per `NATIVE_CHAT_QUESTION_STEP_MS`
- * step so the arrow-navigate selector applies each before the next.
- */
+/** Space AskUserQuestion keystroke groups so the TUI selector applies each before the next. */
 export function sendNativeChatAskAnswer(
   ptyId: string,
   groups: AskAnswerKeyGroup[],

@@ -1,4 +1,3 @@
-/** Plain names for the kinds of saved state that can keep a host from moving. */
 import type { OrcadMigrationDependencyKind } from '../../../../shared/orcad-migration/orcad-migration-preflight'
 import { translate } from '@/i18n/i18n'
 

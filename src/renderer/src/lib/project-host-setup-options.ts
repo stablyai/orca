@@ -41,11 +41,9 @@ export type ProjectHostSetupOption =
       label: string
       detail: string
       isAvailable: boolean
-      // Why: only a genuine connection error warrants an alarm glyph; a dormant
-      // disconnected host is merely not-yet-connected, not broken.
+      // Only connection errors warrant alarm; dormant disconnected hosts are not broken.
       attention: boolean
-      // Why: available hosts without a path can be set up in place; connecting or
-      // in-progress/unsupported hosts need a different next step.
+      // Available pathless hosts can set up in place; connecting/in-progress/unsupported hosts need another step.
       canSetLocation: boolean
       connectAction?: { kind: 'ssh'; targetId: string } | { kind: 'runtime'; environmentId: string }
     }
@@ -176,8 +174,7 @@ function buildNeedsSetupOptions({
     )
     .map((host) => {
       const pendingSetup = pendingSetupByHost.get(host.id)
-      // Why: disconnected hosts cannot confirm project setup or runtime capabilities,
-      // so connection state needs to win over setup guidance.
+      // Disconnected hosts cannot confirm setup/capabilities; connection state takes precedence.
       const unavailableDetail =
         getHostHealthUnavailableDetail(host.health) ?? getHostSetupUnavailableDetail(host)
       const isAvailable = unavailableDetail === null
@@ -203,9 +200,7 @@ function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined):
   return host?.kind === 'runtime' && isEphemeralVmRuntimeEnvironment(host)
 }
 
-// Why: a per-workspace-env SSH repo projects a setup with hostId `ssh:runtime-ssh-<id>`. The
-// execution-host registry filters runtime-owned targets, so its host is absent here — guard on the
-// hostId directly so the hidden target never becomes a selectable run-target option.
+// Runtime-owned ephemeral SSH setups lack host-registry rows; check raw hostId to keep them out of run targets.
 function isRuntimeOwnedSshSetupHost(hostId: ExecutionHostId): boolean {
   const parsed = parseExecutionHostId(hostId)
   return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
@@ -261,9 +256,7 @@ function canSetProjectLocation(
   isAvailable: boolean,
   pendingSetup: ProjectHostSetup | undefined
 ): boolean {
-  // Why: setting up on another host links by project identity, and a host-local
-  // `repo:<id>` project has none to match against — the call always fails, so offer
-  // the plain status line rather than a button that only ever toasts an error.
+  // Cross-host setup links project identity; host-local repo:<id> has no match, so show status instead of a guaranteed error button.
   if (!isAvailable || isHostLocalProjectId(projectId)) {
     return false
   }

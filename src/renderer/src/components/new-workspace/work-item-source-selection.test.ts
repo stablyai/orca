@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
+import type { JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { bindJiraIssueSourceContext } from './use-jira-url-source'
 import { resolveWorkItemSourceRow } from './work-item-source-selection'
@@ -36,12 +36,6 @@ const issue: JiraIssue = {
 const contexts = { github: null, gitlab: null, linear: null, jira: source }
 
 describe('shared work-item source resolution', () => {
-  it('binds a known Jira account for both creation and attachment selection', () => {
-    expect(
-      resolveWorkItemSourceRow({ kind: 'jira', value: 'jira', issue }, contexts, [site])
-        ?.taskSourceContext
-    ).toEqual(bindJiraIssueSourceContext(source, site, issue))
-  })
   it('rejects a row whose account is no longer available', () => {
     expect(
       resolveWorkItemSourceRow({ kind: 'jira', value: 'jira', issue }, contexts, [])

@@ -1,17 +1,13 @@
-// A Cancel that names a question an ended generation raised, from a client that still shows it:
-// the card is dismissed in the journal alone. Main ran the chat's Stop here, which stopped the live
-// turn and withdrew the queue.
+// Dismiss stale-generation prompts in the journal without stopping current turns or withdrawing queued work.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { claudePromptCancelRoute } from '../../claude/claude-structured-prompt-replies'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudePromptCancelRoute } from '../../claude/structured/journal/claude-structured-prompt-replies'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -43,8 +39,6 @@ afterEach(async () => {
   }
 })
 
-/** Generation 1 raised a card and ended without its cleanup; generation 2 runs `turn-2`, with a
- *  message queued behind it. */
 async function endedCardAndLiveTurn(): Promise<{ journal: AgentSessionJournal; itemId: string }> {
   root = await mkdtemp(join(tmpdir(), 'orca-ended-prompt-cancel-'))
   const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
@@ -74,14 +68,11 @@ async function endedCardAndLiveTurn(): Promise<{ journal: AgentSessionJournal; i
   await turn('turn-2', LIVE)
   await journal.queuedMessages.insert({
     messageId: 'queued-1',
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'after this' }] },
-    fingerprint: 'queued-1',
-    hostInstance: 'host-1'
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'after this' }] }
   })
   return { journal, itemId: card.itemId }
 }
 
-/** The queue as the live turn left it: its message waiting, and nothing pausing it. */
 function queueUntouched(journal: AgentSessionJournal): void {
   expect(journal.queuedMessages.list().map((card) => [card.messageId, card.state])).toEqual([
     ['queued-1', 'waiting']

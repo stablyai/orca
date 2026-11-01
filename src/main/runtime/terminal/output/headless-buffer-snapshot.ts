@@ -32,9 +32,7 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
     scrollbackAnsi?: string
     kittyKeyboardFlags?: number
     terminalOwner?: 'shell'
-    // Why: dangling mid-escape tail the restorer must write LAST, after any
-    // reset, so the next live chunk completes it instead of rendering it
-    // literally (Bug E / #7329).
+    // Restore dangling escapes last, after resets, so the next live chunk completes them (#7329).
     pendingEscapeTailAnsi?: string
   } | null> {
     const state = this.headlessTerminals.get(ptyId)
@@ -61,9 +59,7 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
           source: 'headless' as const,
           oscLinks: snapshot.oscLinks,
           scrollbackAnsi: snapshot.scrollbackAnsi,
-          // Why beside outputSequence and never re-read later: the flags must
-          // describe the same stream position as the image, or replay would
-          // apply push/pop transitions twice or out of order.
+          // Capture flags at the image's stream position to prevent duplicate/out-of-order replay pushes and pops.
           ...(parseTerminalKittyKeyboardFlags(snapshot.modes?.kittyKeyboardFlags) !== undefined
             ? { kittyKeyboardFlags: snapshot.modes.kittyKeyboardFlags }
             : {}),
@@ -71,13 +67,9 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
             ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
             : {}),
           ...(terminalOwner ? { terminalOwner } : {}),
-          // Why: lets the renderer skip the destructive scrollback clear when
-          // restoring an alt-screen snapshot — clearing wipes xterm's own
-          // history that the TUI relies on for scroll-up after a tab return.
+          // Alt snapshots must preserve xterm history used for TUI scroll-up after tab return.
           alternateScreen: snapshot.modes?.alternateScreen ?? state.emulator.isAlternateScreen,
-          // Why NOT folded into data: the renderer writes its post-replay
-          // reset after data, and any ESC after a dangling partial aborts it.
-          // The restorer writes this last (Bug E fix).
+          // Do not fold into data: the restorer's later reset would abort this partial escape.
           pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi
         })
       : null
@@ -90,9 +82,7 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
       return
     }
     this.headlessTerminals.delete(ptyId)
-    // Why: queued chain links still parse below before the emulator disposes;
-    // sever the reply sink now so they cannot write to a respawned PTY that
-    // reused this id (belt to the sink's state-identity check).
+    // Sever reply forwarding before queued writes finish so reused PTY ids cannot receive stale replies.
     state.emulator.disableQueryReplyForwarding()
     state.ownership.dispose()
     state.writeChain.finally(() => state.emulator.dispose()).catch(() => state.emulator.dispose())
@@ -113,14 +103,9 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
     return { ptyId: leaf.ptyId }
   }
 
-  // Why: remote clients hold handles across transport reconnects. A handle
-  // minted for a concrete PTY must never silently adopt a different PTY that
-  // later occupies the same pane — that misroutes keystrokes (#7718). Handles
-  // still awaiting their first PTY (ptyId null) may adopt it, which preserves
-  // the mobile pre-spawn subscribe flow.
+  // Concrete-PTY handles cannot adopt later pane occupants; only pre-spawn handles may bind their first PTY (#7718).
   resolveLiveLeafForHandle(handle: string): { ptyId: string | null } | null {
-    // Why the discarded call: it re-links a runtime-owned handle whose `handles` record a renderer
-    // reload cleared, so the lookup below sees it; without it a phone's held handle inspects nothing.
+    // Repair runtime-owned handles cleared by renderer reload before reading their records.
     this.getLivePtyForHandle(handle)
     const record = this.handles.get(handle)
     if (!record) {

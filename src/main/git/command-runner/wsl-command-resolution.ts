@@ -1,3 +1,4 @@
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { getDefaultWslDistro, parseWslPath, type WslPathInfo } from '../../wsl'
 import {
   buildWslCapturedLoginShellCommand,
@@ -14,8 +15,9 @@ import {
 } from '../wsl-process-group-termination'
 import { translateArgForWsl, translateArgsForWsl } from './wsl-path-translation'
 import { resolveWslInteropSpawnCwd } from '../../wsl-interop-spawn-directory'
+import { noteWslDistroLaunched } from '../../wsl-background-distro-gate'
 
-// Env-assignment prefix for WSL-routed git, where spawn env can't cross the wsl.exe boundary; values are shell-safe unquoted.
+// Carry Git locale pins in the WSL command; these assignment values are shell-safe.
 const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
   .map(([key, value]) => `${key}=${value}`)
   .join(' ')
@@ -23,12 +25,11 @@ const GIT_OUTPUT_LOCALE_ENV_ARGS = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV).m
   ([key, value]) => `${key}=${value}`
 )
 
-// Why on the command string: a login profile runs first and could replace WSLENV-forwarded values;
-// alternates append to whatever the profile set, as Git's own scratch object stores do.
+// Override object-store values after login profiles run, appending profile alternates.
 function wslGitObjectStorePrefix(env: NodeJS.ProcessEnv | undefined): string {
   const objectDirectory = env?.GIT_OBJECT_DIRECTORY
   const alternates = env?.GIT_ALTERNATE_OBJECT_DIRECTORIES
-  // Why compare with process.env: only a quarantine's own values, never a Windows-side inherited one.
+  // Forward only this quarantine's overrides, never inherited Windows-side paths.
   if (
     objectDirectory === undefined ||
     alternates === undefined ||
@@ -46,35 +47,33 @@ export type ResolvedCommand = {
   binary: string
   args: string[]
   cwd: string | undefined
-  /** Non-null when the command was routed through WSL. */
   wsl: WslPathInfo | null
   wslMode: 'direct-git' | 'login-shell' | 'non-login-shell' | null
-  /** Present only when the caller opted into a fenced login-shell read. */
+  /** Present only for a fenced (buffered) login-shell read. */
   captured?: WslCapturedLoginShellCommand
   termination?: WslProcessGroupTermination
 }
 
 let defaultWslDistroOverride: string | null = null
 
-// Why: allow host commands fallback to route through the user's pinned WSL distro when host execution fails.
 export function setDefaultWslDistroOverride(distro: string | null): void {
   defaultWslDistroOverride = distro
+}
+
+/** The distro a cwd-less gh/glab call falls back to when the host CLI is missing. */
+export function defaultWslCliDistro(): string | null {
+  return defaultWslDistroOverride ?? getDefaultWslDistro()
 }
 
 export function resolveDefaultWslCli(
   command: 'gh' | 'glab',
   args: string[]
 ): ResolvedCommand | null {
-  const distro = defaultWslDistroOverride ?? getDefaultWslDistro()
+  const distro = defaultWslCliDistro()
   return distro ? resolveCommand(command, args, undefined, distro) : null
 }
 
-/**
- * Resolve whether a command invocation should be routed through wsl.exe.
- *
- * Why `bash -c "cd … && …"` instead of `--cd`: wsl.exe's --cd fails with
- * ERROR_PATH_NOT_FOUND under Node's execFile/spawn in some configs.
- */
+/** Use shell cd for WSL cwd: wsl.exe --cd can fail with ERROR_PATH_NOT_FOUND under Node spawning. */
 export function resolveCommand(
   command: string,
   args: string[],
@@ -88,11 +87,7 @@ export function resolveCommand(
     terminationBarrier?: boolean
     /** Pre-quoted shell expression that names the program inside WSL, replacing `command`. */
     wslShellCommand?: string
-    /**
-     * Exit with this code when the `cd` fails, instead of letting `&&` swallow it as the shell's
-     * own exit 1. Why: ripgrep also exits 1 for "no matches", so an unreachable workspace would
-     * otherwise be indistinguishable from an empty result.
-     */
+    /** Distinguish failed cd from rg's no-match exit 1. */
     cwdFailureExitCode?: number
   } = {}
 ): ResolvedCommand {
@@ -100,25 +95,27 @@ export function resolveCommand(
     return { binary: command, args, cwd, wsl: null, wslMode: null }
   }
 
-  // Why: global gh callers (rate_limit, listAccessibleProjects) have no cwd to derive a distro from; a distro hint still routes through wsl.exe.
-  // TODO(wsl-default-distro): no default-distro setting yet, so override-less global gh callers fall back to host gh.exe (ENOENT on WSL-only installs).
+  // Distro hints route global CLI calls that have no cwd to identify a WSL guest.
   const cwdWsl = cwd ? parseWslPath(cwd) : null
   const wsl: WslPathInfo | null =
     cwdWsl ?? (wslDistroOverride ? { distro: wslDistroOverride, linuxPath: '' } : null)
   if (!wsl) {
     return { binary: command, args, cwd, wsl: null, wslMode: null }
   }
+  // Every Git/gh/glab path into a distro resolves here, whichever spawn API then runs it.
+  assertWslDistroAllowed('wsl.exe', ['-d', wsl.distro])
+  // Every WSL Git/CLI run is about to start the distro; gated polls stop trusting a 'stopped' read.
+  noteWslDistroLaunched(wsl.distro)
 
   const translatedArgs = translateArgsForWsl(args)
-  // Why: env on wsl.exe stays Windows-side (WSLENV forwards only named vars), so the locale must ride the command string (issue #7808).
+  // WSL does not inherit unlisted Windows env vars; carry locale pins in the command.
   const localePrefix =
     command === 'git'
       ? `${GIT_OUTPUT_LOCALE_SHELL_PREFIX} ${wslGitObjectStorePrefix(options.env)}`
       : ''
   const escapedCommand = options.wslShellCommand ?? quotePosixShell(command)
-  // Why: shell-escape each arg to prevent word splitting / glob expansion inside the bash -c string.
+  // Quote each argument against shell splitting and expansion.
   const escapedArgs = translatedArgs.map(quotePosixShell)
-  // Why: prepend `cd <linuxPath> &&` for a UNC cwd; skip it when only a distro override was given (global gh needs no cwd).
   const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
   const invocation = `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
   const enterCwd = linuxCwd
@@ -155,10 +152,7 @@ export function resolveCommand(
   }
 
   if (options.useWslLoginShell) {
-    // Why opt-in: the login shell is interactive for bash/zsh, so its rc output
-    // lands on stdout ahead of the payload. Callers that buffer the whole stream
-    // fence it; streaming consumers (git grep, ls-files -z) must not, because a
-    // marker would be glued onto their first record.
+    // Fence only buffered reads: login rc output contaminates stdout, but markers would corrupt streaming records.
     if (options.captureLoginShellOutput) {
       const captured = buildWslCapturedLoginShellCommand(shellCmd)
       return withWslProcessGroupTermination(
@@ -189,10 +183,7 @@ export function resolveCommand(
     {
       binary: 'wsl.exe',
       args: buildWslExecArgs(wsl.distro, ['bash', '-c', shellCmd]),
-      // Why: the `cd` inside bash -c handles the Linux directory. This names an
-      // explicit Windows directory anyway, because `undefined` makes
-      // CreateProcessW inherit the parent's — which is a deletable WSL UNC path
-      // when Orca was launched from a worktree (#16463).
+      // Use a stable Win32 spawn cwd; inheriting Orca's deletable UNC cwd can break CreateProcessW.
       cwd: resolveWslInteropSpawnCwd(),
       wsl,
       wslMode: 'non-login-shell'
@@ -220,5 +211,25 @@ function withWslProcessGroupTermination(
       ...termination.wrapGuestArgs(command.args.slice(execIndex + 1))
     ],
     termination
+  }
+}
+
+/** Prefix only the opt-in preparation; retain the resolver's original guest argv intact. */
+export function withWslPreparation(
+  command: ResolvedCommand,
+  preparation: { script: string; args: string[] }
+): ResolvedCommand {
+  const execIndex = command.args.indexOf('--exec')
+  return {
+    ...command,
+    args: [
+      ...command.args.slice(0, execIndex + 1),
+      '/bin/sh',
+      '-c',
+      preparation.script,
+      'orca-generation',
+      ...preparation.args,
+      ...command.args.slice(execIndex + 1)
+    ]
   }
 }

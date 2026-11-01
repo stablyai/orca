@@ -1,10 +1,6 @@
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 
-/**
- * Saved terminal rows in the tab groups' order: the groups' tab orders are the tab order, the rows
- * only repeat it. Rows no group lists keep their relative order after the grouped ones. Returns the
- * same session when every row is already in place.
- */
+/** Group tab orders are authoritative; unlisted rows retain order afterwards. Return the same session when already ordered. */
 export function orderTerminalRowsByTabGroups(
   session: WorkspaceSessionState
 ): WorkspaceSessionState {

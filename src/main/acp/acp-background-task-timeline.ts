@@ -2,17 +2,15 @@ import { BoundedMap } from '../../shared/bounded-map'
 import {
   backgroundTaskJournalBody,
   isSettledBackgroundTaskState
-} from '../../shared/native-chat-background-task-row'
-import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat-types'
+} from '../../shared/native-chat/input/native-chat-background-task-row'
+import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
 } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpBackgroundTaskUpdate } from './acp-dialects/acp-dialect'
 
-/** Partial provider snapshots; the assembler owns settlement and durable placement. A running
- *  task's snapshot lives until it settles. Settled ones are history, bounded, so a later ending
- *  (after a Stop found it gone) keeps its label; one evicted keeps only its row's turn. */
+/** Retain running snapshots and bounded settled labels; the assembler owns durable placement. */
 export class AcpBackgroundTaskTimeline {
   private readonly running = new Map<string, NativeChatBackgroundTaskBlock>()
   private readonly settled = new BoundedMap<string, NativeChatBackgroundTaskBlock>({

@@ -1,6 +1,3 @@
-/**
- * Writes a startup command into a local PTY once the shell reports readiness.
- */
 import type * as pty from 'node-pty'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 
@@ -17,7 +14,7 @@ export function writeStartupCommandWhenShellReady(
   proc: pty.IPty,
   startupCommand: string,
   onExit: (cleanup: () => void) => void,
-  // Why: only shells with bracketed-paste active (see isBracketedPasteSafeShell) accept the wrapper; others use the raw path so ESC[200~ isn't echoed.
+  // Only shells with active bracketed paste accept its escape wrapper without echoing it.
   options: { bracketedPasteSafe?: boolean } = {}
 ): void {
   let sent = false
@@ -45,8 +42,7 @@ export function writeStartupCommandWhenShellReady(
       clearTimeout(postReadyTimer)
       postReadyTimer = null
     }
-    // Why: run in the same interactive shell (not `shell -c`) so the session survives after the agent exits.
-    // Why: single write after the ready barrier avoids incremental-paste char drops; multiline is bracketed-paste wrapped so newlines don't submit early.
+    // Keep the interactive shell alive after agent exit; write once past readiness to avoid incremental-paste drops.
     proc.write(
       buildStartupCommandSubmission(startupCommand, {
         bracketedPasteSafe: options.bracketedPasteSafe === true
@@ -62,7 +58,7 @@ export function writeStartupCommandWhenShellReady(
     if (sent) {
       return
     }
-    // Why: marker fires from precmd before the line editor takes the PTY out of ECHO; writing now double-echoes the command, so settle first.
+    // precmd can fire before the line editor disables ECHO; wait for post-marker activity to prevent double echo.
     if (signal?.postMarkerBytesObserved === true) {
       schedulePostReadyFlush()
       return

@@ -98,8 +98,7 @@ export function assertSafeRemotePathSegment(segment: string, pathFlavor: RemoteP
     return
   }
 
-  // Why: Win32 canonicalizes names and exposes devices/NTFS streams through
-  // otherwise ordinary-looking path segments, bypassing no-clobber checks.
+  // Reject Win32-canonicalized aliases/devices/NTFS streams that could bypass no-clobber checks.
   const normalized = normalizeWindowsRemotePath(segment)
   const deviceStem = normalized.split('.')[0]?.toUpperCase()
   if (

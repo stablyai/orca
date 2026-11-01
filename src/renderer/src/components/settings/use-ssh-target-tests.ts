@@ -8,10 +8,9 @@ import { isSshTargetConnecting } from './ssh-target-action-state'
 
 type TestOutcome = { ok: true } | { ok: false; message: string }
 
-// Why a cap: each test opens its own SSH session, and a select-all over a big config would dial them all.
+// Cap concurrent SSH sessions so Select All cannot dial the entire config at once.
 const BULK_TEST_CONCURRENCY = 4
 
-/** Connection tests for one host (its own toast) or many (one summary toast). */
 export function useSshTargetTests(): {
   testingIds: ReadonlySet<string>
   testOne: (targetId: string) => Promise<void>
@@ -84,7 +83,7 @@ export function useSshTargetTests(): {
     if (bulkTesting) {
       return
     }
-    // Same rule as a row's Test: a connected or connecting host has nothing to test.
+    // Connected/connecting hosts have nothing to test, matching the row action.
     const states = useAppStore.getState().sshConnectionStates
     const isLive = (target: SshTarget): boolean => {
       const status = states.get(target.id)?.status ?? 'disconnected'

@@ -38,12 +38,7 @@ type ApplySelectorInput = {
   expectedGeneration: number
   expectedMembershipSha256?: string
   membership: CellAdmissionMembership
-  // Why a marker rather than reading 'migration-only' directly: that state is an
-  // admission class, not a drain signal (orca-relay-operations.md:229-233).
-  // Evacuation targets, Asia `--mode rollback`, a failed wave's re-isolate and
-  // newly registered cells all sit there durably while holding hosts. Only the
-  // same-cap isolate step names cells here; every write out of 'migration-only'
-  // clears the stamp, so a restore cannot leave one behind.
+  // migration-only also parks evacuation/Asia rollback/failed-wave/new cells (orca-relay-operations.md); only same-cap isolate writes stamps, cleared on every exit from that state.
   rollIsolatedCells?: string[]
 }
 
@@ -201,10 +196,7 @@ export class RelayCellAdmissionSelector {
       const rollIsolated = new Set(input.rollIsolatedCells ?? [])
       for (const [state, cellIds] of membershipEntries(membership)) {
         for (const cellId of cellIds) {
-          // Three-way, in the same statement as the state so they cannot tear:
-          // stamp a named isolate (keeping an earlier stamp, so a failed wave's
-          // re-isolate stays marked), clear on any move out of 'migration-only',
-          // and leave an unnamed 'migration-only' cell exactly as it was.
+          // Update stamp atomically with state: named isolates preserve prior stamp, leaving migration-only clears it, unnamed migration-only preserves it.
           const marker =
             state === 'migration-only'
               ? rollIsolated.has(cellId)

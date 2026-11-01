@@ -42,8 +42,7 @@ async function loadBranchDiff(
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
-    // Why concurrent: the two sides are independent `git show` spawns, so awaiting
-    // them in series doubles the latency of every diff the review panel opens.
+    // Read independent blobs concurrently to avoid doubling diff latency.
     const [leftBlob, rightBlob] = await Promise.all([
       readGitBlobAtOidPath(worktreePath, args.mergeBase, leftPath, options),
       readGitBlobAtOidPath(worktreePath, args.headOid, args.filePath, options)
@@ -54,7 +53,8 @@ async function loadBranchDiff(
       rightBlob.content,
       leftBlob.isBinary,
       rightBlob.isBinary,
-      args.filePath
+      args.filePath,
+      leftBlob.tooLarge === true || rightBlob.tooLarge === true
     )
   } catch {
     return {

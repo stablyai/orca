@@ -36,7 +36,6 @@ describe('parseWindowsProcessOutput', () => {
   it('reads PageFileUsage kilobytes into committed private bytes', async () => {
     const { parseWindowsProcessOutput } = await loadWindowsProcessSampleParsing()
 
-    // 5,600,000 KB of commit behind a 96 MB working set is the reported shape.
     expect(
       parseWindowsProcessOutput('100\t1\t100663296\t0\t0\t638830000000000000\t5600000')
     ).toEqual([{ pid: 100, ppid: 1, cpu: 0, memory: 100663296, privateMemory: 5600000 * 1024 }])
@@ -104,8 +103,7 @@ describe('parseTypeperfProcessOutput', () => {
 
   it('still parses a busy host once a fourth counter widens every sample line', async () => {
     const { parseTypeperfProcessOutput } = await loadWindowsProcessSampleParsing()
-    // 2100 processes x 4 counters overruns a fixed 8192-field cap; the reported
-    // MCP fan-out host runs well past 2048 processes.
+    // Four counters per process exceeded the old 8,192-field cap on large MCP hosts.
     const instanceCount = 2100
     const headers = ['"(PDH-CSV 4.0)"']
     const values = ['"time"']

@@ -1,9 +1,7 @@
-import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 
-// Why: a host snapshot taken before it saw a local rename still carries the old name; keep the
-// rename over host snapshots until the host echoes it, moves on, or the hold expires.
-// Leaf ids are unique, so they are the key.
+// Hold local renames over pre-rename snapshots until host echo/new revision/expiry; unique leaf IDs key the hold.
 export const PENDING_PANE_TITLE_HOLD_MS = 15_000
 
 type PendingRename = {

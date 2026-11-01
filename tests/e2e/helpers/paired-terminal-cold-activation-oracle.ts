@@ -95,8 +95,9 @@ export async function runPairedTerminalColdActivationOracle(
       noParent: true,
       startupCommand: fixture.command(firstMarker)
     })
-    worktreeId = created.worktree.id
-    createdWorktreeIds.push(worktreeId)
+    const createdWorktreeId = created.worktree.id
+    worktreeId = createdWorktreeId
+    createdWorktreeIds.push(createdWorktreeId)
     if (!created.startupTerminal?.handle || !created.startupTerminal.tabId) {
       throw new Error('Paired cold-activation startup terminal was not created')
     }
@@ -131,11 +132,11 @@ export async function runPairedTerminalColdActivationOracle(
       })
     }
 
-    let originalPtyIds: string[] | null = null
+    const captured: { ptyIds: string[] | null } = { ptyIds: null }
     await expect
       .poll(
         async () => {
-          originalPtyIds = await page.evaluate(
+          captured.ptyIds = await page.evaluate(
             ({ tabIds, targetWorktreeId }) => {
               const tabs = window.__store?.getState().tabsByWorktree[targetWorktreeId] ?? []
               const byId = new Map(tabs.map((tab) => [tab.id, tab.ptyId]))
@@ -144,14 +145,15 @@ export async function runPairedTerminalColdActivationOracle(
             },
             {
               tabIds: pendingTabs.map((tab) => tab.tabId),
-              targetWorktreeId: worktreeId
+              targetWorktreeId: createdWorktreeId
             }
           )
-          return originalPtyIds
+          return captured.ptyIds
         },
         { timeout: 30_000 }
       )
       .not.toBeNull()
+    const originalPtyIds = captured.ptyIds
     if (originalPtyIds === null) {
       throw new Error('Paired cold-activation PTY ids were not captured')
     }
@@ -160,10 +162,7 @@ export async function runPairedTerminalColdActivationOracle(
       originalPtyId: originalPtyIds[index]!
     }))
     const tabIds = tabs.map((tab) => tab.tabId)
-    // Why: background tabs park eagerly (parking delay is 100ms while tab
-    // creation plus the PTY-id poll above takes far longer), so a one-shot
-    // read races the sweeper. Parked-but-unmounted is the cold resting state
-    // this oracle asserts again after first activation (1 mounted + 7 parked).
+    // Poll for the stable cold state because tabs park within 100ms while creation/readiness takes longer.
     await expectStableColdActivationMountState(page, tabIds, {
       mounted: 0,
       parked: TARGET_TAB_COUNT

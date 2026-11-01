@@ -1,6 +1,4 @@
-// The installed releases of a runtime Orca downloads for an agent: `<root>/<version>/` holding the
-// pinned members and a receipt written before the folder was renamed into place. Read-only, and
-// cheap enough for every launch: a full hash is only ever taken by an install.
+// Launch reads use receipts and member sizes; full hashing belongs to installation.
 
 import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { readdir, rm, writeFile } from 'node:fs/promises'
@@ -10,25 +8,17 @@ import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 
 export type ManagedRuntimePin = {
   version: string
-  /** A zip holding exactly the members. */
   url: string
   archiveSha256: string
-  /** The decoded archive's size. */
   archiveBytes: number
-  /** Name at the archive's top level, sha256 and size of every executable the release holds. */
   members: readonly { path: string; sha256: string; bytes: number }[]
 }
 
-/** A runtime Orca installs only when the person asks; a launch reads what is installed. */
 export type ManagedRuntime = {
-  /** Shown to the person, e.g. "Antigravity". */
   label: string
-  /** The folder that holds only this runtime's releases. */
   root(dataDirectory: string): string
-  /** This host's pinned release; null where none is published. */
   pin(): ManagedRuntimePin | null
-  /** Starts the server in `folder` once, without the person's sign-in, and rejects unless it
-   *  answers as the pinned release; Install publishes and reuses only a copy that passes. */
+  /** Validate startup without user credentials before publishing/reusing this pinned copy. */
   validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
 }
 
@@ -47,21 +37,15 @@ const runtimeReleaseReceiptSchema = z.object({
 export type InstalledRuntimeRelease = {
   folder: string
   version: string
-  /** The pinned release itself, rather than an older one kept runnable. */
   current: boolean
 }
 
-/** What a release folder read proved: whole, definitively not (absent, mismatched or partial), or
- *  unknown because the read itself failed. */
 type ReleaseRead = { releaseId: string } | 'broken' | 'unreadable'
 
 export type InstalledRuntimeReleases = {
-  /** The release a launch runs: the pinned one when installed whole, else the newest other whole
-   *  one; null when none is. Staging, links and anything incomplete never count. */
+  /** Prefer the whole pinned release, then newest whole fallback; ignore staging, links and partial copies. */
   release: InstalledRuntimeRelease | null
-  /** Release folders that are definitively not whole, e.g. a member deleted or truncated. */
   broken: string[]
-  /** Some folder could not be read, so whether it is whole is unknown. */
   unreadable: boolean
 }
 
@@ -94,8 +78,7 @@ export function resolveInstalledRuntimeRelease(
   }
 }
 
-/** `command`'s real path when every pinned member sits beside it, as the server expects its
- *  companions; null otherwise, so a lone server file found elsewhere is never started. */
+/** Require every pinned companion beside the resolved executable; never launch an isolated server file. */
 export function copyBesidePinnedMembers(
   command: string,
   pin: ManagedRuntimePin | null
@@ -112,8 +95,7 @@ export function copyBesidePinnedMembers(
   }
 }
 
-/** Written into a verified release before it is renamed into place: the release is whole once the
- *  rename lands, so a folder with this receipt was never published partly. */
+/** Write before atomic rename so published releases cannot carry partial receipts. */
 export async function writeRuntimeReleaseReceipt(
   folder: string,
   pin: ManagedRuntimePin
@@ -128,9 +110,7 @@ export async function writeRuntimeReleaseReceipt(
   await writeFile(join(folder, RUNTIME_RELEASE_RECEIPT), JSON.stringify(receipt), { flag: 'wx' })
 }
 
-/** Removes everything under `root` but the release named `keep`. Safe only when `keep` is what a
- *  launch resolves and the caller is the only writer, so no chat runs from what it removes.
- *  Answers the entries it could not remove. */
+/** Exclusive writer only: keep must match launch resolution so reclamation cannot remove a running release. */
 export async function reclaimRuntimeReleases(root: string, keep: string | null): Promise<string[]> {
   const names = await readdir(root).catch((error: NodeJS.ErrnoException) =>
     error.code === 'ENOENT' ? [] : Promise.reject(error)

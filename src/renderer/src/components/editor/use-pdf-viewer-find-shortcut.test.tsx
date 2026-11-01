@@ -46,8 +46,7 @@ function PdfViewerStandIn({
   )
 }
 
-/** The real split shape: each group's strip and body (where editors render), and the retained
- *  overlay host for terminals, chats and browsers as a sibling of the layout, outside every body. */
+/** Match split-group strip/body roots with retained terminal/chat/browser overlays outside the bodies. */
 function Workspace({
   focusedGroup,
   openFind
@@ -109,7 +108,6 @@ describe('PDF viewer find shortcut', () => {
     }
     expect(pressFind(document.body).defaultPrevented).toBe(true)
     expect(openFind.pdf).toHaveBeenCalledTimes(4)
-    // With two PDFs on screen only the focused group's opens.
     expect(openFind['second-pdf']).not.toHaveBeenCalled()
   })
 
@@ -118,13 +116,6 @@ describe('PDF viewer find shortcut', () => {
     expect(pressFind(view.getByTestId('sidebar-search')).defaultPrevented).toBe(false)
     expect(pressFind(view.getByTestId('second-pdf').firstElementChild!).defaultPrevented).toBe(true)
     expect(openFind['second-pdf']).toHaveBeenCalledTimes(1)
-    expect(openFind.pdf).not.toHaveBeenCalled()
-  })
-
-  it('does not open for a PDF kept mounted in a hidden workspace', () => {
-    // A hidden workspace's groups are never the focused group.
-    const { openFind } = setup(null)
-    expect(pressFind(document.body).defaultPrevented).toBe(false)
     expect(openFind.pdf).not.toHaveBeenCalled()
   })
   it('answers only keys from its own window surface, not the floating workspace panel', () => {

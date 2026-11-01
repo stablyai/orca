@@ -19,6 +19,11 @@ import { useTerminalPaneProjection } from './use-terminal-pane-projection'
 import { useLayoutOwnerPaneTree } from './use-layout-owner-pane-tree'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
+// Switch point: the mounted tab follows main's pane tree. Chosen once per build, so hook order is fixed.
+const useLayoutOwnerPaneTreeWhenMain = ORCA_LAYOUT_OWNER_IS_MAIN
+  ? useLayoutOwnerPaneTree
+  : (): void => {}
+
 export function useTerminalPaneController(props: TerminalPaneProps) {
   const foundation = useTerminalPaneFoundation(props)
   const title = Object.assign(foundation, useTerminalPaneTitleState(foundation))
@@ -31,11 +36,7 @@ export function useTerminalPaneController(props: TerminalPaneProps) {
   const close = Object.assign(bindings, useTerminalPaneCloseActions(bindings))
   useTerminalPaneLifecycleStage(close)
   const reconciliation = Object.assign(close, useTerminalPaneReconciliation(close))
-  // Switch point: the mounted tab follows main's pane tree. A build constant, so the hook order is fixed.
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    // oxlint-disable-next-line react-hooks/rules-of-hooks -- SAFETY: the condition is a compile-time constant.
-    useLayoutOwnerPaneTree(close)
-  }
+  useLayoutOwnerPaneTreeWhenMain(close)
   useTerminalPaneGlobalListeners(reconciliation)
   useTerminalPanePasteListeners(reconciliation)
   useTerminalPaneTitleEffects(reconciliation)

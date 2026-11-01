@@ -1,18 +1,9 @@
-/**
- * How the orchestration CLI decides WHO is speaking.
- *
- * Split out of `orchestration.test.ts`, which sat exactly on the test-file line ceiling: these two
- * suites are one subject — the coordinator and task-creator identity a command carries — and both
- * exercise the env-handle validation and pane-remint chain rather than flag-to-param mapping.
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
-// Why: isolate the handler's flag-to-param mapping; printResult only writes output.
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
@@ -24,8 +15,6 @@ function staleHandleError(): RuntimeClientError {
   return new RuntimeClientError('terminal_handle_stale', 'terminal_handle_stale')
 }
 
-// Queues the stale-handle remint chain shared by coordinator commands:
-// `terminal.resolveIdentity` answers not-live → resolvePane returns liveHandle → downstream RPC.
 function stubStaleHandleRemint(liveHandle: string, downstream: unknown): void {
   callMock
     .mockResolvedValueOnce(notLiveIdentity())
@@ -33,12 +22,10 @@ function stubStaleHandleRemint(liveHandle: string, downstream: unknown): void {
     .mockResolvedValueOnce(downstream)
 }
 
-// Queues a not-live identity followed by a resolvePane remint that fails with `error`.
 function stubStaleHandleRemintFailure(error: RuntimeClientError): void {
   callMock.mockResolvedValueOnce(notLiveIdentity()).mockRejectedValueOnce(error)
 }
 
-/** What the runtime answers for a handle whose leaf check reports `terminal_handle_stale`. */
 function notLiveIdentity(): { result: { identity: { live: false } } } {
   return { result: { identity: { live: false } } }
 }
@@ -106,7 +93,8 @@ describe('orchestration dispatch coordinator handle', () => {
         ['task', 'task_1'],
         ['from', 'terminal_coordinator'],
         ['dry-run', true],
-        ['return-preamble', true]
+        ['return-preamble', true],
+        ['full', true]
       ]),
       false
     )
@@ -129,7 +117,13 @@ describe('orchestration dispatch coordinator handle', () => {
   it('does not resolve coordinator identity for a non-preamble dispatch lookup', async () => {
     callMock.mockResolvedValue({ result: { dispatch: null } })
 
-    await invokeDispatchShow(new Map([['task', 'task_1']]), false)
+    await invokeDispatchShow(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['full', true]
+      ]),
+      false
+    )
 
     expect(callMock).toHaveBeenCalledWith('orchestration.dispatchShow', {
       task: 'task_1',

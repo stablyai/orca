@@ -204,7 +204,7 @@ describe('authoritative session tab inventory publication', () => {
   })
 
   it('restores a renderer-owned PTY discovered by the authoritative inventory refresh', async () => {
-    // Why a store: main's layout binds the restored pane in the store's workspace session.
+    // Main binds restored panes through the store's workspace session.
     const runtime = createInventoryRuntime(
       makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore
     )

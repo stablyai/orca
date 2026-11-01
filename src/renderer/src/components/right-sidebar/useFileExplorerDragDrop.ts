@@ -18,7 +18,6 @@ type UseFileExplorerDragDropParams = {
   expanded: Set<string>
   toggleDir: (worktreeId: string, dirPath: string) => void
   refreshDir: (dirPath: string) => Promise<void>
-  // Explorer scroll viewport used to auto-scroll while dragging near top/bottom edges
   scrollRef: RefObject<HTMLDivElement | null>
   getOperationOwnerForPath: (path: string) => FileExplorerOperationOwner | undefined
 }
@@ -31,9 +30,7 @@ type UseFileExplorerDragDropResult = {
   dragSourcePath: string | null
   setDragSourcePath: (path: string | null) => void
   isRootDragOver: boolean
-  /** True when a native OS file drag (Files) is hovering over the explorer */
   isNativeDragOver: boolean
-  /** Directory path highlighted during a native Files drag, or null */
   nativeDropTargetDir: string | null
   setNativeDropTargetDir: (dir: string | null) => void
   handleNativeDragExpandDir: (dirPath: string) => void
@@ -66,7 +63,6 @@ export function useFileExplorerDragDrop({
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null)
   const [dragSourcePath, setDragSourcePath] = useState<string | null>(null)
 
-  // Native Files drag state — tracked separately from internal move state
   const [isNativeDragOver, setIsNativeDragOver] = useState(false)
   const nativeRootDragCounterRef = useRef(0)
   const [nativeDropTargetDir, setNativeDropTargetDir] = useState<string | null>(null)
@@ -90,9 +86,7 @@ export function useFileExplorerDragDrop({
 
   useEffect(() => {
     const handleGlobalDragFinish = (): void => {
-      // Why: the OS-drop owner stops native drops before React's root onDrop, and
-      // drops can land elsewhere. A document-level capture listener keeps the
-      // edge-scroll loop from surviving rejected, cancelled, or row drops.
+      // Capture document-level finishes: OS-drop owners stop bubbling, and rejected/cancelled/outside drops must stop edge scrolling.
       stopAndClearDragState()
     }
 
@@ -117,14 +111,12 @@ export function useFileExplorerDragDrop({
   })
 
   const clearNativeDragState = useCallback(() => {
-    // Why: the OS-drop owner stops native drops before React's onDrop (which
-    // calls stopDragEdgeScroll), so its drop path clears here. Otherwise the
-    // edge-scroll rAF loop keeps overriding the user's scroll.
+    // OS-drop ownership bypasses React onDrop; stop its self-rescheduling scroll loop here.
     stopAndClearDragState()
   }, [stopAndClearDragState])
 
   const rootDragHandlers = {
-    // Why: capture, because the OS-drop owner stops native dragover before it bubbles.
+    // Capture before the OS-drop owner stops dragover propagation.
     onDragOverCapture: useCallback(
       (e: React.DragEvent) => {
         const types = e.dataTransfer.types
@@ -159,7 +151,7 @@ export function useFileExplorerDragDrop({
     }, []),
     onDragLeave: useCallback(
       (_e: React.DragEvent) => {
-        // Decrement both counters since we cannot inspect types on dragleave
+        // dragleave cannot reliably identify types, so decrement both counters.
         rootDragCounterRef.current -= 1
         if (rootDragCounterRef.current <= 0) {
           rootDragCounterRef.current = 0
@@ -170,11 +162,7 @@ export function useFileExplorerDragDrop({
           nativeRootDragCounterRef.current = 0
           setIsNativeDragOver(false)
         }
-        // Why: the edge auto-scroll rAF loop re-schedules itself as long as the
-        // last recorded cursor Y sits in an edge zone. If the drag leaves the
-        // explorer (dragged out of window, ESC-cancelled, or dropped elsewhere)
-        // neither onDrop nor onDragEnd fires here, so without this stop the
-        // loop keeps scrolling the viewport down and fights manual scroll-up.
+        // Leaving can skip onDrop/onDragEnd; stop the self-rescheduling rAF loop before it fights manual scrolling.
         if (rootDragCounterRef.current === 0 && nativeRootDragCounterRef.current === 0) {
           stopDragEdgeScroll()
         }

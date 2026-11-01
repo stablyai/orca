@@ -1,10 +1,4 @@
-/**
- * Provider-neutral agent attention boundary.
- *
- * Nothing in this folder may import a PTY, terminal leaf or terminal layout module: a
- * surface adapter answers every question about where a subject lives and who can see it,
- * so a non-terminal agent surface can supply its own adapter without touching the policy.
- */
+/** Keep this boundary provider-neutral: no PTY/leaf/layout imports. Surface adapters own location and visibility facts so other agent surfaces can reuse policy. */
 
 /** Why an unread marker exists. `legacy` is a marker written before reasons were recorded. */
 export type AgentAttentionUnreadReason =
@@ -52,10 +46,7 @@ export type AgentAttentionSurfaceAdmission =
   | { admitted: true; groupId: string }
   | { admitted: false; cause: 'unknown-surface' | 'superseded-surface' }
 
-/**
- * The surface-shaped half of the boundary. One implementation per agent surface kind;
- * the terminal implementation is the only holder of the PTY/leaf/layout predicates.
- */
+/** One adapter per surface kind; only the terminal adapter holds PTY/leaf/layout predicates. */
 export type AgentAttentionSurface = {
   /** Is there still a running session behind this subject? */
   hasLiveSession: (subject: AgentAttentionSubject) => boolean

@@ -12,7 +12,7 @@ import {
   type FileExplorerRowProjection
 } from './file-explorer-row-projection'
 import { isDotfileRelativePath } from './file-explorer-entries'
-import { splitPathSegments } from './path-tree'
+import { splitPathSegments } from '../../../../shared/cross-platform-path'
 import { isPathIgnored } from './status-display'
 
 export type FileExplorerNameFilterProjectionSource = {
@@ -133,8 +133,7 @@ export function createNameFilteredFileExplorerProjection({
   }
   const nameFilterTokens = getFileExplorerNameFilterTokens(nameFilter.query)
   if (nameFilterTokens.length === 0 || nameFilter.relativePaths === null) {
-    // Why: empty queries use the normal explorer projection, and loading filters must not
-    // fall back to a partial cached path list.
+    // Empty queries use normal projection; loading filters must not reveal partial cached paths.
     return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
   }
 

@@ -2,7 +2,7 @@ import type {
   JiraConnectionStatus,
   JiraProject,
   JiraSiteSelection
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { parseJiraConnectionStatus } from './runtime-jira-connection-status'

@@ -6,6 +6,7 @@ import {
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
+import { AcpAgentError } from './acp-errors'
 
 afterEach(closeProviderTimelineRigs)
 
@@ -26,8 +27,7 @@ async function openCodeRig() {
   return { rig, translator, apply, update }
 }
 
-// The shapes OpenCode's ACP server writes for a shell tool: its output and exit code ride under
-// `rawOutput.metadata`, beside the text content.
+// OpenCode puts shell output and exit status in rawOutput.metadata.
 const bashStart = {
   sessionUpdate: 'tool_call',
   toolCallId: 'call-1',
@@ -38,42 +38,117 @@ const bashStart = {
 }
 
 describe('OpenCode over ACP', () => {
-  it("reads a shell tool's exit code and output from OpenCode's metadata", async () => {
-    const { rig, update } = await openCodeRig()
-    update(bashStart, 1001)
-    update(
-      {
-        sessionUpdate: 'tool_call_update',
-        toolCallId: 'call-1',
-        status: 'completed',
-        rawOutput: {
-          output: 'ls: missing: No such file or directory\n',
-          metadata: { output: 'ls: missing: No such file or directory\n', exit: 1 }
-        }
-      },
-      1002
+  it.each([
+    { errorName: 'provider.quota', message: undefined },
+    { errorName: 'provider.rate-limit', retryAfterMs: 60_000, message: undefined },
+    ...[
+      'Usage limit reached for 5 hours. Your limit will reset at 2026-10-01 00:00:00',
+      'Weekly/Monthly Limit Exhausted. Your limit will reset at 2026-10-01 00:00:00'
+    ].map((message) => ({ errorName: 'provider.quota', message }))
+  ])('shows usage limits for $errorName', async ({ message: detail, ...data }) => {
+    const { rig, translator, apply } = await openCodeRig()
+    const message = `Internal error: ${detail ?? 'Rate limit exceeded. Please try again later.'}`
+    apply(
+      translator.promptFailed(
+        'send-1',
+        new AcpAgentError(-32603, message, {
+          service: 'session',
+          ...data
+        }),
+        1001
+      )
     )
-    const tool = (await rig.rows()).find((row) => row.body.kind === 'tool-call')?.body
-    expect(tool).toMatchObject({
-      kind: 'tool-call',
-      state: 'completed',
-      exitCode: 1,
-      output: { head: 'ls: missing: No such file or directory\n' }
-    })
+    const statuses = (await rig.rows()).filter((row) => row.body.kind === 'status')
+    expect(statuses.map((row) => row.body)).toEqual([
+      expect.objectContaining({
+        kind: 'status',
+        tone: 'warning',
+        failure: {
+          kind: 'usageLimitReached',
+          detail: { text: message, audience: 'person' },
+          ...('retryAfterMs' in data ? { usageLimit: { resetsAt: 61_001 } } : {})
+        }
+      })
+    ])
+    expect((await rig.turns())[0]?.outcome).toBe('failure')
   })
 
-  it('keeps a shared exit code the agent already reported', () => {
-    const normalized = OPENCODE_ACP_DIALECT.normalizeToolUpdate!({
-      toolCallId: 'call-1',
-      rawOutput: { exitCode: 0, metadata: { exit: 3 } }
-    })
-    expect(normalized.rawOutput).toEqual({ exitCode: 0, metadata: { exit: 3 } })
+  it.each([
+    { status: 402, message: 'Request rejected' },
+    { message: 'Payment Required' },
+    { message: 'Insufficient balance or no resource package. Please recharge.' },
+    { message: 'Credit limit exceeded.' },
+    { message: 'Upstream request failed: Insufficient account funds' },
+    { message: 'Upstream request failed: Account invoice is overdue' },
+    ...[
+      'Please add or update your payment method to continue',
+      'Your GLM Coding Plan package has expired and is temporarily unavailable. You can resume using it after renewing the subscription on the official website.',
+      '[1309][Your GLM Coding Plan package has expired and is temporarily unavailable. You can resume using it after renewing the subscription on the official website.][20260929132151e73af01340d54b58]',
+      'Your current subscription plan does not yet include access to glm-5',
+      'Your enterprise package has expired. Please contact your enterprise administrator.'
+    ].map((message) => ({ message })),
+    {
+      errorName: 'provider.free-limit',
+      message:
+        'Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.'
+    }
+  ])('keeps non-reset errors generic: $message', async ({ message: detail, ...data }) => {
+    const { rig, translator, apply } = await openCodeRig()
+    const message = `Internal error: ${detail}`
+    apply(
+      translator.promptFailed(
+        'send-1',
+        new AcpAgentError(-32603, message, {
+          service: 'session',
+          errorName: 'provider.quota',
+          ...data
+        }),
+        1001
+      )
+    )
+    expect(
+      (await rig.rows()).filter((row) => row.body.kind === 'status').map((row) => row.body)
+    ).toEqual([{ kind: 'status', tone: 'error', text: message }])
+    expect((await rig.turns())[0]?.outcome).toBe('failure')
   })
 
-  it('leaves a tool with no command metadata as it came', () => {
-    const plain = { toolCallId: 'call-2', rawOutput: 'done' }
-    expect(OPENCODE_ACP_DIALECT.normalizeToolUpdate!(plain)).toBe(plain)
-  })
+  it.each([
+    {
+      label: 'metadata output and exit fallback',
+      rawOutput: {
+        output: 'ls: missing: No such file or directory\n',
+        metadata: { output: 'ls: missing: No such file or directory\n', exit: 1 }
+      },
+      expected: { exitCode: 1, output: { head: 'ls: missing: No such file or directory\n' } }
+    },
+    {
+      label: 'explicit zero takes precedence over metadata exit three',
+      rawOutput: { exitCode: 0, metadata: { exit: 3 } },
+      expected: { exitCode: 0 }
+    },
+    {
+      label: 'plain output without metadata',
+      rawOutput: 'done',
+      expected: { output: { head: 'done' } }
+    }
+  ])(
+    'keeps shell result semantics through the journal: $label',
+    async ({ rawOutput, expected }) => {
+      const { rig, update } = await openCodeRig()
+      update(bashStart, 1001)
+      update(
+        {
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'call-1',
+          status: 'completed',
+          rawOutput
+        },
+        1002
+      )
+      const tool = (await rig.rows()).find((row) => row.body.kind === 'tool-call')?.body
+      expect(tool).toMatchObject({ kind: 'tool-call', state: 'completed', ...expected })
+    }
+  )
 
   it("shows OpenCode's own permission option names", async () => {
     const { translator, apply, update } = await openCodeRig()

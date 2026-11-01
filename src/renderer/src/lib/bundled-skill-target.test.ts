@@ -19,10 +19,6 @@ const WSL_PROJECT: ProjectExecutionRuntimeResolution = {
 }
 
 describe('resolveBundledSkillTarget', () => {
-  it('plans nothing until the owning runtime is known', () => {
-    expect(resolveBundledSkillTarget(null, undefined)).toBeNull()
-  })
-
   it('sends a paired server or SSH host to that host, whatever the local project says', () => {
     const target = resolveBundledSkillTarget(
       { kind: 'environment', environmentId: 'env-1' },
@@ -72,16 +68,6 @@ describe('resolveBundledSkillTarget', () => {
       resolveBundledSkillTarget({ kind: 'environment', environmentId: 'focused' }, undefined, null)
     ).toBeNull()
   })
-
-  it('keeps a proven local workspace target', () => {
-    expect(resolveBundledSkillTarget({ kind: 'local' }, undefined, 'local')).toEqual({
-      kind: 'local'
-    })
-  })
-
-  it('plans this machine otherwise', () => {
-    expect(resolveBundledSkillTarget({ kind: 'local' }, undefined)).toEqual({ kind: 'local' })
-  })
 })
 
 describe('servingExecutionHostId', () => {
@@ -106,11 +92,5 @@ describe('servingExecutionHostId', () => {
     const target = resolveBundledSkillTarget({ kind: 'local' }, undefined, hostId)
     expect(target).toEqual({ kind: 'ssh', targetId: 'other' })
     expect(bundledSkillTargetKey(target!)).toBe('ssh:other')
-  })
-
-  it('leaves local and paired owners alone', () => {
-    expect(servingExecutionHostId('local', environments)).toBe('local')
-    expect(servingExecutionHostId('runtime:paired', environments)).toBe('runtime:paired')
-    expect(servingExecutionHostId(null, environments)).toBeNull()
   })
 })

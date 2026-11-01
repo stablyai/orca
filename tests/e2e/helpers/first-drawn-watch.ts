@@ -1,10 +1,5 @@
-/**
- * Time to first drawn after a relaunch: from the main process's start to the first animation
- * frame in which the restored active tab shows all its panes with a terminal in each. The span
- * includes the test harness attaching DevTools before the first window, and every relaunch keeps
- * the PTY daemon warm, so compare it only with itself, not with a user's cold start. The watch is
- * installed by main as soon as the window's DOM is ready and fails if the panes drew earlier.
- */
+// Measure relaunch start through the first fully drawn restored terminal frame, including DevTools attach and a warm daemon.
+// Compare only like-for-like runs; install at DOM ready and fail if drawing already happened.
 
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import type { WebContents } from 'electron'
@@ -61,7 +56,6 @@ export function installFirstDrawnWatch(app: ElectronApplication, paneCount: numb
   }, source)
 }
 
-/** Epoch ms of the main process's start and of first drawn. */
 export async function readFirstDrawn(
   app: ElectronApplication,
   page: Page

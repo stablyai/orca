@@ -5,9 +5,13 @@ import {
   type KeyboardEventHandler,
   type SetStateAction
 } from 'react'
-import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
+import type {
+  ComposerAutocomplete,
+  NativeChatPickerItem
+} from '../../../../shared/native-chat-composer-autocomplete'
 import { isMacPlatform } from './native-chat-shortcut'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
+import type { NativeChatComposerSendIntent } from './native-chat-composer-types'
 import {
   isNativeChatRecallActive,
   nativeChatSentPrompts,
@@ -29,10 +33,9 @@ export type UseNativeChatComposerKeyDownArgs = {
   dispatchPickerCommand: (item: Extract<NativeChatPickerItem, { kind: 'command' }>) => void
   dismissPicker: (triggerKey: string) => void
   interrupt: () => void
-  send: () => void
-  /** Cmd/Ctrl+Enter from an empty composer: send the newest queued draft now; false falls
-   *  through to send. */
-  steerQueued?: (() => boolean) | undefined
+  send: (intent?: NativeChatComposerSendIntent) => void
+  /** Cmd/Ctrl+Shift+Enter steers the head queued card, whatever the composer holds. */
+  steerHead?: (() => boolean) | undefined
   setActiveSuggestion: Dispatch<SetStateAction<number>>
   setDraft: Dispatch<SetStateAction<string>>
   setCaret: Dispatch<SetStateAction<number>>
@@ -52,7 +55,7 @@ export function useNativeChatComposerKeyDown({
   dismissPicker,
   interrupt,
   send,
-  steerQueued,
+  steerHead,
   setActiveSuggestion,
   setDraft,
   setCaret
@@ -63,8 +66,7 @@ export function useNativeChatComposerKeyDown({
   return useCallback(
     (event) => {
       if (isComposing() || event.nativeEvent.isComposing || event.keyCode === 229) {
-        // Why: IME Enter confirms composition; allowing it to fall through
-        // would accept a picker row or submit a partial draft.
+        // IME Enter commits composition; never pick a suggestion or submit a partial draft.
         if (event.key === 'Enter') {
           event.preventDefault()
         }
@@ -97,8 +99,7 @@ export function useNativeChatComposerKeyDown({
             return
           }
           const item = autocomplete.items[activeSuggestion] ?? autocomplete.items[0]
-          // A mid-prompt command is part of the sentence being written, so Enter
-          // completes the token instead of sending the command on its own.
+          // Only dispatch a command at a dispatchable prompt position; embedded tokens merely complete.
           if (event.key === 'Enter' && item.kind === 'command' && autocomplete.dispatchable) {
             dispatchPickerCommand(item)
           } else {
@@ -123,17 +124,24 @@ export function useNativeChatComposerKeyDown({
         interrupt()
         return
       }
-      if (event.key === 'Enter' && !event.shiftKey) {
-        // Platform primary modifier only (AGENTS.md): ⌘ on Mac, Ctrl elsewhere.
-        const steerChord = isMacPlatform() ? event.metaKey : event.ctrlKey
-        // Only from an empty composer: the chord never sends a card past what the user just wrote.
-        const composerEmpty = draft.trim() === '' && !hasAttachments
-        if (steerChord && composerEmpty && steerQueued?.()) {
-          event.preventDefault()
-          return
-        }
+      const modified = event.key === 'Enter' && (isMacPlatform() ? event.metaKey : event.ctrlKey)
+      // Why before Shift+Enter: that adds a newline, and this chord leaves the draft alone.
+      if (modified && event.shiftKey) {
         event.preventDefault()
-        send()
+        // A held chord would otherwise steer each card that becomes the head.
+        if (!event.repeat) {
+          steerHead?.()
+        }
+        return
+      }
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault()
+        if (!modified) {
+          send()
+        } else if (draft.trim() !== '' || hasAttachments) {
+          // The other thing than the setting; an empty composer has nothing to send either way.
+          send({ alternate: true })
+        }
         return
       }
       const arrow = event.key === 'ArrowUp' || event.key === 'ArrowDown'
@@ -178,7 +186,7 @@ export function useNativeChatComposerKeyDown({
       isComposing,
       mentionFiles,
       send,
-      steerQueued,
+      steerHead,
       setActiveSuggestion,
       setCaret,
       setDraft

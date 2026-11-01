@@ -105,6 +105,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
       return
     }
+    if (opts.releasePreconnectInput && !opts.releasePreconnectInput()) {
+      dropPreconnectInput('startup work appeared before it attached')
+      return
+    }
     await preconnectInputBuffer.flush({
       isCurrent: () => !destroyed && connected && ptyId === id,
       sendInput: (data, inputKind) => inputWriteQueue.enqueue(id, data, inputKind),
@@ -214,6 +218,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     sendInput(data, inputKind) {
+      if (!destroyed && inputKind === 'driving') {
+        opts.onDrivingInputAttempt?.(ptyId)
+      }
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
         return preconnectInputBuffer.enqueue(data, 'ordinary', inputKind, opts.onPreconnectInput)
       }
@@ -240,6 +247,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       ? {}
       : {
           async sendInputAccepted(data: string, inputKind: TerminalInputKind): Promise<boolean> {
+            if (!destroyed && inputKind === 'driving') {
+              opts.onDrivingInputAttempt?.(ptyId)
+            }
             if (!destroyed && preconnectInputBuffer?.isBuffering()) {
               return preconnectInputBuffer.enqueueAccepted(data, inputKind, opts.onPreconnectInput)
             }

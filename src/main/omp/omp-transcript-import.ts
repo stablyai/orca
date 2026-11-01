@@ -13,7 +13,7 @@ function sessionsRoot(accountHomePath: string, launchEnv: NodeJS.ProcessEnv) {
 export const OMP_TRANSCRIPT_IMPORT = directoryTranscriptImport({
   conversationStore: ({ accountHomePath, launchEnv }) => sessionsRoot(accountHomePath, launchEnv),
   accountHomeCandidates: ({ selectedAccountHomePath }) => [selectedAccountHomePath],
-  // Where OMP itself keeps the account's sessions, which is not always under it (XDG_DATA_HOME).
+  // OMP sessions may live outside the account home through XDG_DATA_HOME.
   findTranscript: ({ providerSessionId, store, launchEnv, workspaceCwd, strictErrors }) =>
     findOmpSessionByCwd({
       sessionsDir: store,

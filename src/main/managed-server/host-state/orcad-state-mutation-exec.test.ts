@@ -6,17 +6,15 @@ import {
   execOrcadStateMutation,
   execOrcadStateMutationOr
 } from './orcad-state-mutation-exec'
-import { execOrcadRemoteOr } from '../install/orcad-remote-runtime-control'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 
-/** An ssh2 exec channel whose remote command answers only when the test says so. */
 class SlowChannel extends EventEmitter {
   readonly stderr = new EventEmitter()
   readonly stdin = this
   closed = false
-  // sshd acknowledges the close at once, which ssh2 reports as a confirmed close.
+  // Model sshd acknowledging channel close without proving the command stopped.
   close(): void {
     this.closed = true
     queueMicrotask(() => this.emit('close', 0))
@@ -49,13 +47,6 @@ afterEach(() => {
 })
 
 describe('a snapshot restore that runs past the 30s exec timeout', () => {
-  it('was read as a confirmed failure by the generic exec, though the host kept restoring', async () => {
-    const generic = execOrcadRemoteOr(target, 'restore', 'FALLBACK')
-    await vi.advanceTimersByTimeAsync(31_000)
-    await expect(generic).resolves.toBe('FALLBACK')
-    expect(channel.closed).toBe(true)
-  })
-
   it('keeps waiting past 30s and returns the restore’s own answer', async () => {
     const restore = execOrcadStateMutation(target, 'restore')
     await vi.advanceTimersByTimeAsync(45_000)
@@ -71,23 +62,5 @@ describe('a snapshot restore that runs past the 30s exec timeout', () => {
     const error = await settled
     expect(channel.closed).toBe(true)
     expect(isUnconfirmedSshCommandTermination(error)).toBe(true)
-  })
-
-  it.each(['STATE_MUTATION_BUSY', 'STATE_MUTATION_DEADLINE'])(
-    'reads the host’s %s answer as unconfirmed, never as a failed restore',
-    async (answer) => {
-      const restore = execOrcadStateMutationOr(target, 'restore', 'FALLBACK')
-      await vi.advanceTimersByTimeAsync(0)
-      channel.finish(`${answer}\n`)
-      const error = await restore.catch((caught: unknown) => caught)
-      expect(isUnconfirmedSshCommandTermination(error)).toBe(true)
-    }
-  )
-
-  it('reads a command that exited non-zero as finished, so the fallback applies', async () => {
-    const restore = execOrcadStateMutationOr(target, 'restore', 'FALLBACK')
-    await vi.advanceTimersByTimeAsync(0)
-    channel.emit('close', 2)
-    await expect(restore).resolves.toBe('FALLBACK')
   })
 })

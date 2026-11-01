@@ -32,7 +32,7 @@ const platform = Object.getOwnPropertyDescriptor(process, 'platform')
 let root: string
 
 beforeEach(() => {
-  // Occupied owner fixtures need real rename retries, but no elapsed backoff.
+  // Exercise rename retries without real backoff delays.
   vi.spyOn(Atomics, 'wait').mockReturnValue('timed-out')
   root = mkdtempSync(join(tmpdir(), 'orca-state-access-windows-'))
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

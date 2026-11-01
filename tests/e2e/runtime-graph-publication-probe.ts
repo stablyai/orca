@@ -1,25 +1,7 @@
-/**
- * Diagnostic-only probe for renderer runtime-graph publication cost.
- *
- * `window.api` is frozen by contextBridge, so the renderer cannot wrap
- * `runtime.syncWindowGraph`. Instead this counts publications where they land —
- * main's `runtime:syncWindowGraph` invoke handler.
- *
- * `publications` and `mainHandler` are trustworthy. The long-task fields are NOT
- * yet: on 2026-09-16 an injected 250 ms renderer busy-wait produced zero entries
- * even though `longtask` is in `supportedEntryTypes`, so a zero there means
- * "oracle unproven", not "no long task happened". Run with
- * ORCA_TYPING_BENCH_GRAPH_PROBE_SELFTEST_MS and require a non-zero
- * `selfTestLongTaskMs` before believing any long-task number. That number comes
- * from the entry the busy-wait actually ran in (see `partitionSelfTestLongTask`),
- * so unrelated work cannot satisfy it, and the same entry is withheld from every
- * workload summary so the oracle does not measure itself.
- *
- * Renderer-side per-publication build time is unavailable here; attribute it
- * with a separate --cpu-profile run instead.
- *
- * Keep this out of acceptance timing runs (gate: ORCA_TYPING_BENCH_GRAPH_PROBE=1).
- */
+// Count runtime graph publications at main’s invoke handler because contextBridge freezes renderer window.api.
+// Long-task numbers are unproven until ORCA_TYPING_BENCH_GRAPH_PROBE_SELFTEST_MS yields its own nonzero entry; exclude that entry from workload summaries.
+// Main-handler durations exclude renderer graph build: use a CPU profile for that cost.
+// Diagnostic gate ORCA_TYPING_BENCH_GRAPH_PROBE=1 must stay off in acceptance timing runs.
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 
 const GRAPH_CHANNEL = 'runtime:syncWindowGraph'
@@ -86,12 +68,7 @@ function summarize(values: number[]): DurationSummary {
   }
 }
 
-/**
- * Presence precondition for the long-task oracle: burns a known span on the
- * renderer thread so a run that reports zero long tasks has proved it could
- * have seen one. Returns the busy-wait's own bounds — a cutoff timestamp would
- * let any earlier unrelated long task stand in for it.
- */
+// Inject a known renderer busy-wait and return its own clock bounds so unrelated setup tasks cannot prove observer liveness.
 export async function injectRendererLongTaskSelfTest(
   page: Page,
   busyMs: number
@@ -109,12 +86,7 @@ export async function injectRendererLongTaskSelfTest(
   }, busyMs)
 }
 
-/**
- * Main-thread tasks never overlap, so at most one long task can contain the
- * busy-wait's midpoint and that one is the task the busy-wait ran in. Anything
- * else — including a long task that merely started earlier — leaves the oracle
- * unproven rather than falsely satisfied.
- */
+// The nonoverlapping task containing the busy-wait midpoint is the self-test; earlier or merely overlapping entries cannot prove it.
 export function partitionSelfTestLongTask(
   longTasks: LongTaskSample[],
   selfTest: RendererLongTaskSelfTestWindow | null

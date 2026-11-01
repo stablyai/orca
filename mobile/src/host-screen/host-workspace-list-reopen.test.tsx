@@ -1,13 +1,22 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { act, create as createRenderer, type ReactTestRenderer } from 'react-test-renderer'
 
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+// Banner and chevron motion run on Reanimated and Animated, which these mocks leave out.
+vi.mock('../components/AutoHeight', () => ({
+  Presence: ({ children }: { children: unknown }) => children || null,
+  AutoHeight: ({ children }: { children: unknown }) => children
+}))
+vi.mock('../components/DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
+}))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
-  SectionList: 'SectionList',
+  Animated: { SectionList: 'SectionList' },
   StyleSheet: { create: (styles: unknown) => styles },
   Text: 'Text',
   View: 'View'
@@ -21,17 +30,26 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../components/AuthFailedBanner', () => ({ AuthFailedBanner: 'AuthFailedBanner' }))
 vi.mock('../components/HostDiagnosticsLink', () => ({ HostDiagnosticsLink: 'HostDiagnosticsLink' }))
 vi.mock('../components/MobileRepoIcon', () => ({ MobileRepoIcon: 'MobileRepoIcon' }))
-vi.mock('../components/MobileSearchField', () => ({ MobileSearchField: 'MobileSearchField' }))
-vi.mock('../components/NewWorkspaceFab', () => ({
-  NewWorkspaceFab: 'NewWorkspaceFab',
-  FAB_SIZE: 56
-}))
 vi.mock('../components/WorktreeListRow', () => ({ WorktreeListRow: 'WorktreeListRow' }))
 
 import { HostWorkspaceList } from './host-workspace-list'
 import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
 
-/** A host whose feed this page cannot read: the notice, above the rows the page already holds. */
+const renderers = new Set<ReturnType<typeof createRenderer>>()
+function create(...args: Parameters<typeof createRenderer>): ReturnType<typeof createRenderer> {
+  const renderer = createRenderer(...args)
+  renderers.add(renderer)
+  return renderer
+}
+function unmountRenderers(): void {
+  act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.clear()
+}
+
 function listWith(rows: number) {
   const section = {
     key: 'all',
@@ -69,12 +87,11 @@ function listWith(rows: number) {
       catalogError: null,
       view: { ...INITIAL_MOBILE_VIEW, groupBy: 'none' },
       search: '',
-      showSearch: false,
       worktreesLoaded: true
     }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every row and header below the notice is mocked to a host string here, so the list reads only the fields named above.
-  return { controller } as unknown as Parameters<typeof HostWorkspaceList>[0]
+  return { controller, bottomBarHeight: 0 } as unknown as Parameters<typeof HostWorkspaceList>[0]
 }
 
 function render(rows: number): ReactTestRenderer {
@@ -108,3 +125,5 @@ describe('a host whose sidebar feed this page cannot read', () => {
     expect(tree.root.findAll((node) => String(node.type) === 'SectionList')).toEqual([])
   })
 })
+
+afterEach(unmountRenderers)

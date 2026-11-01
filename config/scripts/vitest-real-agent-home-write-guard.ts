@@ -5,11 +5,7 @@ import { isAbsolute, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach } from 'vitest'
 
-/**
- * Why: agent trust and hook writers resolve `~` at write time, so a unit test that reaches one
- * edits the developer's real Codex, Claude or Orca config. Any write there fails the test instead.
- * Child processes a test spawns are outside this guard.
- */
+// Reject in-process writes to real agent/app homes because trust/hook code resolves home at write time; spawned children are outside this guard.
 
 type GuardState = { roots: string[]; violations: string[] }
 
@@ -22,9 +18,9 @@ const AGENT_HOME_ENTRIES = [
   '.gemini',
   '.qoder'
 ]
-// Why a bare prefix: Claude's config file and its atomic-write temp siblings sit beside `~/.claude`.
+// Guard Claude file/temp prefixes beside .claude directory, not only inside it.
 const AGENT_HOME_FILE_PREFIXES = ['.claude.json']
-// Why: an Orca terminal exports these pointing at the live app and agent state; guarded, then unset.
+// Capture live Orca/agent roots from terminal env before clearing inherited values.
 const INHERITED_STATE_ENV = [
   'ORCA_USER_DATA_PATH',
   'CODEX_HOME',
@@ -33,7 +29,7 @@ const INHERITED_STATE_ENV = [
 ]
 // Why: an Orca terminal points this at the live app's CLI, which a test's child shell would run.
 const INHERITED_LIVE_CLI_ENV = ['ORCA_CODEX_LAUNCH_PREFLIGHT']
-// Why: opted-in real-agent suites point a real CLI at its own home on purpose; each suite's own switch.
+// Real-agent opt-in suites intentionally use their own home and explicit switch.
 const REAL_AGENT_SUITE_SWITCHES = [
   'ORCA_REAL_CLAUDE_SUPERVISED_STOP',
   'ORCA_CODEX_CONTRACT_BINARY',
@@ -188,17 +184,17 @@ function install(): GuardState {
     guard(state, fs.promises, name, positions, `fs.promises.${name}`)
   }
   guard(state, fs, 'createWriteStream', [0], 'fs.createWriteStream')
-  // Why: named ESM imports of node:fs keep the originals until the builtin exports are re-synced.
+  // Re-sync builtin ESM exports or named fs imports keep original unguarded writers.
   syncBuiltinESMExports()
   return state
 }
 
 declare global {
-  // Why once per process: re-wrapping per test file would stack wrappers around wrappers.
+  // Wrap once per process; per-file wrapping stacks duplicate guards.
   var orcaRealAgentHomeWriteGuard: GuardState | undefined
 }
 const state = (globalThis.orcaRealAgentHomeWriteGuard ??= install())
-// Why after install: the guard keeps the inherited paths as roots; tests that need one set their own.
+// Clear inherited paths only after capturing guarded roots; suites can supply test-local values.
 export function clearInheritedAgentStateEnv(): void {
   const inheritedEnvToUnset = realAgentSuiteOptedIn()
     ? []
@@ -220,7 +216,7 @@ export function takeRealAgentHomeWriteViolations(): string[] {
 function failOnViolations(): void {
   const violations = takeRealAgentHomeWriteViolations()
   if (violations.length > 0) {
-    // Why rethrow here: trust writers swallow errors, so the throw at the call site can vanish.
+    // Rethrow recorded violations: trust writers can swallow call-site errors.
     throw new Error(`[vitest real-agent-home guard]\n${violations.join('\n')}`)
   }
 }

@@ -5,21 +5,36 @@ import { isBinaryBuffer } from './binary-buffer'
 import { isPathInsideOrEqual } from './cross-platform-path'
 import { IMAGE_FILE_MIME_TYPES } from './image-file-extensions'
 import { FONT_FILE_MIME_TYPES } from './font-file-extensions'
+import type { RuntimeFileReadChunkResult } from './runtime-file-contracts'
 import {
   NodeFileReadTooLargeError,
   readNodeFileHandleWithinLimit
 } from './node-bounded-file-reader'
 
 export const DOC_PREVIEW_PATH_AUTHORIZATION_ERROR = 'doc_preview_path_unauthorized'
+export const DOC_PREVIEW_FILE_CHANGED_MESSAGE =
+  'This document changed while it was loading. Reload the preview to see the latest version.'
 
-export type DocPreviewFileAccessRequest = {
+export type DocPreviewFileTarget = {
   boundaryPath: string
   entryPath: string
   implicitRootPath: string | null
   authorizedRootPaths: string[]
   targetPath: string
+}
+
+export type DocPreviewFileAccessRequest = DocPreviewFileTarget & {
   maxTextBytes: number
   maxBinaryBytes: number
+}
+
+/** One range of a preview file, with the opened file's version so a reader can refuse a rewrite mid-read. */
+export type DocPreviewFileChunk = RuntimeFileReadChunkResult & {
+  size: number
+  mtimeMs: number
+  ctimeMs: number
+  /** Set for the image, font and PDF types a whole read serves as base64; text otherwise. */
+  mimeType?: string
 }
 
 export type DocPreviewFileAccessResult = {
@@ -37,8 +52,7 @@ const DOC_PREVIEW_MAX_TEXT_BYTES = 10 * 1024 * 1024
 const DOC_PREVIEW_MAX_BINARY_BYTES = 50 * 1024 * 1024
 
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
-// Why: opening a writer-less FIFO blocks before the regular-file check can refuse it, pinning a
-// threadpool slot for good; non-blocking open returns at once and does not change regular-file reads.
+// Nonblocking open prevents writer-less FIFOs pinning a threadpool slot before regular-file checks; regular reads are unaffected.
 const OPEN_NONBLOCK = typeof constants.O_NONBLOCK === 'number' ? constants.O_NONBLOCK : 0
 
 function authorizationError(): Error {
@@ -56,9 +70,13 @@ function sameFileIdentity(opened: Stats, current: Stats): boolean {
   return opened.dev === current.dev && opened.ino === current.ino
 }
 
+function docPreviewBinaryMimeType(filePath: string): string | undefined {
+  return DOC_PREVIEW_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
+}
+
 async function openAuthorizedDocPreviewTarget(
-  request: DocPreviewFileAccessRequest
-): Promise<{ handle: FileHandle; canonicalTarget: string }> {
+  request: DocPreviewFileTarget
+): Promise<{ handle: FileHandle; canonicalTarget: string; stats: Stats }> {
   const [canonicalBoundary, canonicalEntry, canonicalTarget, canonicalImplicitRoot] =
     await Promise.all([
       realpath(request.boundaryPath),
@@ -102,7 +120,7 @@ async function openAuthorizedDocPreviewTarget(
     ) {
       throw authorizationError()
     }
-    return { handle, canonicalTarget }
+    return { handle, canonicalTarget, stats: openedStats }
   } catch (error) {
     await handle.close()
     throw error
@@ -115,7 +133,7 @@ export async function readAuthorizedDocPreviewFile(
 ): Promise<DocPreviewFileAccessResult> {
   const { handle, canonicalTarget } = await openAuthorizedDocPreviewTarget(request)
   try {
-    const mimeType = DOC_PREVIEW_BINARY_MIME_TYPES[extname(canonicalTarget).toLowerCase()]
+    const mimeType = docPreviewBinaryMimeType(canonicalTarget)
     const { buffer } = await readNodeFileHandleWithinLimit(
       handle,
       mimeType
@@ -133,6 +151,43 @@ export async function readAuthorizedDocPreviewFile(
       throw new Error('file_too_large')
     }
     throw error
+  } finally {
+    await handle.close()
+  }
+}
+
+/** A range of a file too large for one reply, under the same authorization and size caps as a whole read. */
+export async function readAuthorizedDocPreviewFileChunk(
+  request: DocPreviewFileTarget,
+  offset: number,
+  length: number
+): Promise<DocPreviewFileChunk> {
+  const { handle, canonicalTarget, stats } = await openAuthorizedDocPreviewTarget(request)
+  try {
+    const mimeType = docPreviewBinaryMimeType(canonicalTarget)
+    if (stats.size > (mimeType ? DOC_PREVIEW_MAX_BINARY_BYTES : DOC_PREVIEW_MAX_TEXT_BYTES)) {
+      throw new Error('file_too_large')
+    }
+    const buffer = Buffer.alloc(Math.min(length, Math.max(0, stats.size - offset)))
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset)
+    // Why: the reader compares versions across chunks, so a rewrite during this read must surface here.
+    const after = await handle.stat()
+    if (
+      after.size !== stats.size ||
+      after.mtimeMs !== stats.mtimeMs ||
+      after.ctimeMs !== stats.ctimeMs
+    ) {
+      throw new Error(DOC_PREVIEW_FILE_CHANGED_MESSAGE)
+    }
+    return {
+      contentBase64: buffer.subarray(0, bytesRead).toString('base64'),
+      bytesRead,
+      eof: offset + bytesRead >= stats.size,
+      size: stats.size,
+      mtimeMs: stats.mtimeMs,
+      ctimeMs: stats.ctimeMs,
+      ...(mimeType ? { mimeType } : {})
+    }
   } finally {
     await handle.close()
   }

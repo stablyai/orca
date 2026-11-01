@@ -10,10 +10,7 @@ import type { SourceControlWorktreeContext } from '../listing/use-worktree-conte
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-target'
 
-/**
- * Generates the commit message the Create-PR intent needs, keyed to the run token's worktree rather
- * than the focused one so a mid-run worktree switch can't retarget the generation.
- */
+/** Pin generation to the run token’s worktree so navigation cannot retarget it. */
 export function useSourceControlCreatePrIntentCommitMessage({
   activeRepo,
   generateInFlightRef,

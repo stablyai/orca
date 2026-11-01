@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// A layout-owner server's held pane on this desktop's existing newer-build banner: drawn from the
-// server's frames, its Reopen sent to that server's main, and nothing applied here.
+// Frame-drawn server holds use this desktop’s newer-build banner; Reopen goes to server main and applies nothing locally.
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

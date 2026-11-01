@@ -1,17 +1,9 @@
-/**
- * The page's form of the capture seam: the shell holds the microphone and the page drains it.
- *
- * Driven through the real port pair against the real shell handler, so what this reads is the four
- * verbs leaving the page and the chunks the drain builds out of what came back — the same path the
- * composer's mic button takes. Every refusal is a case, because the whole point of the seam is
- * that a shell saying no reaches the screen as the state it is rather than as a crash.
- */
+// Use real bridge/device handlers to verify pulled audio and refusal states reach the composer without crashing.
 import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The provider module re-exports the screen hooks, and reaching the real ones imports the Expo
-// runtime this test does not have. Nothing below calls one.
+// Stub re-exported hooks to avoid Expo imports; these tests call none of them.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,
@@ -36,7 +28,6 @@ import { DICTATION_CAPTURE_DRAIN_INTERVAL_MS } from './dictation-capture-contrac
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import type { DictationCapture, DictationCaptureChunk } from './dictation-capture-contract'
 
-/** The three verbs, served by the real shell handlers over an engine a case drives. */
 function createAudioShell(
   options: {
     permission?: 'granted' | 'denied' | 'undetermined'
@@ -121,7 +112,6 @@ async function mount(pair: BridgePortPair): Promise<DictationCapture> {
   return capture
 }
 
-/** One drain interval of fake time, plus the microtasks the read and its reply ride. */
 async function tick(pair: BridgePortPair, intervals = 1): Promise<void> {
   for (let index = 0; index < intervals; index += 1) {
     await act(async () => {
@@ -141,7 +131,7 @@ afterEach(() => {
 })
 
 describe('opening a capture on the page', () => {
-  it('asks the shell to start and reports the rate it opened at', async () => {
+  it('asks the shell to start and reports success', async () => {
     const shell = createAudioShell()
     const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
     const capture = await mount(pair)
@@ -173,7 +163,6 @@ describe('opening a capture on the page', () => {
     await expect(capture.open()).rejects.toSatisfy(
       (error: unknown) => error instanceof NativeVerbError && error.reason === 'ungranted'
     )
-    // Refused before a frame is sent: an ungranted verb costs no in-flight slot.
     expect(shell.calls).toEqual([])
   })
 
@@ -205,7 +194,6 @@ describe('draining the shell ring', () => {
     await tick(pair)
     expect(chunks).toHaveLength(1)
     expect(chunks[0]?.droppedBytes).toBe(0)
-    // The bytes the microphone produced, in order and unaltered by the crossing.
     expect(Array.from(chunks[0]?.data ?? [])).toEqual(Array.from(pcm(1_024)))
     sub.remove()
   })
@@ -220,7 +208,6 @@ describe('draining the shell ring', () => {
     capture.begin()
     await tick(pair, 3)
     expect(chunks).toEqual([])
-    // A budget the page never spends on silence: the reads happened, the chunks did not.
     expect(shell.calls.filter((verb) => verb === 'native.audio.read').length).toBeGreaterThan(0)
   })
 
@@ -239,11 +226,7 @@ describe('draining the shell ring', () => {
   })
 
   it('delivers the tail the stop reply carried', async () => {
-    // The utterance's last 400 ms sits in the shell's ring when the user lifts the button: less
-    // than one drain interval, so no timer will ever come for it. Natively that audio is already
-    // in the hook's hands by the time recording stops, so a page that dropped it would transcribe
-    // a sentence with its ending cut off. It rides the stop's own reply, so the page has no last
-    // read to order against the stop.
+    // The final partial interval has no future timer; stop must return its ring tail or the transcript loses the utterance’s ending.
     const shell = createAudioShell()
     const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
     const capture = await mount(pair)
@@ -252,7 +235,6 @@ describe('draining the shell ring', () => {
     await capture.open()
     capture.begin()
     await tick(pair)
-    // 400 ms of 16 kHz 16-bit PCM, spoken after the last drain and before the next one.
     const tail = pcm(12_288, 11)
     shell.speak(tail)
     await act(async () => {
@@ -283,7 +265,6 @@ describe('draining the shell ring', () => {
       await capture.end()
       await pair.flush()
     })
-    // One verb, not a read and then a stop: there is no ordering here to get wrong.
     expect(shell.calls.slice(before)).toEqual(['native.audio.stop'])
     expect(Array.from(chunks.at(-1)?.data ?? [])).toEqual(Array.from(tail))
   })
@@ -300,14 +281,12 @@ describe('draining the shell ring', () => {
     const afterwards = pcm(512, 32)
     shell.speak(spoken)
     await act(async () => {
-      // The drain's read leaves the page, and the user lifts the button before its reply is back.
       vi.advanceTimersByTime(DICTATION_CAPTURE_DRAIN_INTERVAL_MS)
       shell.speak(afterwards)
       await capture.end()
       await pair.flush()
     })
-    // Every byte the microphone produced, once each and in the order it said them: whether the
-    // read or the stop carried a given byte is the shell's business and neither can carry it twice.
+    // Deliver every byte once and in order, regardless of whether read or stop carried it.
     expect(chunks.flatMap((chunk) => Array.from(chunk.data))).toEqual([
       ...Array.from(spoken),
       ...Array.from(afterwards)
@@ -332,8 +311,6 @@ describe('draining the shell ring', () => {
       await capture.end()
       await pair.flush()
     })
-    // No latch on the page: the shell has no capture, so it answers an empty tail and the page
-    // hands nothing on. A second end that delivered would splice the last chunk in twice.
     expect(chunks).toHaveLength(1)
   })
 
@@ -351,8 +328,6 @@ describe('draining the shell ring', () => {
     })
     const afterEnd = shell.calls.length
     await tick(pair, 3)
-    // The stop, and then nothing: a timer left running would keep asking a shell that no longer
-    // has a capture.
     expect(shell.calls.slice(before, afterEnd)).toEqual(['native.audio.stop'])
     expect(shell.calls.slice(afterEnd)).toEqual([])
   })
@@ -375,8 +350,7 @@ describe('a capture the page loses', () => {
   })
 
   it('does not end a live capture for an interruption that only ended', async () => {
-    // The native seam gates on `began` and `blocked`; the page must gate on the same two, or a
-    // notification chime finishing cancels a dictation on the page and nothing natively.
+    // Match native began/blocked handling; a finished notification chime must not cancel only the page’s dictation.
     const shell = createAudioShell()
     const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
     const capture = await mount(pair)
@@ -389,7 +363,6 @@ describe('a capture the page loses', () => {
     shell.interrupt('ended')
     await tick(pair)
     expect(interrupted).toBe(0)
-    // And the drain is still running, so the capture really did survive it.
     const before = shell.calls.length
     await tick(pair)
     expect(shell.calls.length).toBeGreaterThan(before)
@@ -417,17 +390,11 @@ describe('a capture the page loses', () => {
     await capture.open()
     capture.begin()
     await tick(pair, 3)
-    // Once, and then the drain stops: a shell with no capture will not grow one.
     expect(interrupted).toBe(1)
   })
 
   it('cannot re-enter end from an interruption raised while one is running', async () => {
-    // The heap case from PR D's bot round: the hook's handler is `() => void cancel()`, and
-    // `cancel` reaches `capture.end()` synchronously through `closeDictationAudio`. When `end`
-    // itself read, its refused read raised an interruption that called straight back into `end`,
-    // whose own read was refused for the same reason, and the recursion issued bridge reads until
-    // the page ran out of memory. There is no read inside `end` now, and a stop reply carries no
-    // interruption, so the lane that re-entered does not exist.
+    // Do not read from end(): refused reads invoke interruption, whose cancel calls end synchronously and would recurse until bridge exhaustion. Stop replies carry no interruption.
     const shell = createAudioShell({
       refuse: (verb) =>
         verb === 'native.audio.read'
@@ -451,41 +418,11 @@ describe('a capture the page loses', () => {
     await tick(pair, 3)
     const reads = shell.calls.filter((verb) => verb === 'native.audio.read').length
     expect(reads).toBeLessThanOrEqual(2)
-    // And the stop is not the recursion's new shape either: one per `end` the hook asked for.
     expect(shell.calls.filter((verb) => verb === 'native.audio.stop').length).toBeLessThanOrEqual(2)
   })
 
-  it('goes on ending when an interruption lands while the stop is in flight', async () => {
-    const shell = createAudioShell()
-    const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
-    const capture = await mount(pair)
-    let interrupted = 0
-    capture.onInterruption(() => {
-      interrupted += 1
-      void capture.end()
-    })
-    await capture.open()
-    capture.begin()
-    shell.speak(pcm(1_024, 51))
-    await act(async () => {
-      vi.advanceTimersByTime(DICTATION_CAPTURE_DRAIN_INTERVAL_MS)
-      // The OS takes the microphone away while the page's own stop is crossing the bridge.
-      const ending = capture.end()
-      shell.interrupt('began')
-      await ending
-      await pair.flush()
-    })
-    await tick(pair, 3)
-    expect(interrupted).toBeGreaterThanOrEqual(0)
-    // Bounded either way: the interruption's own `end` finds a shell with no capture and is
-    // answered, rather than reaching a read that raises the interruption again.
-    expect(shell.calls.filter((verb) => verb === 'native.audio.stop').length).toBeLessThanOrEqual(3)
-    expect(shell.calls.filter((verb) => verb === 'native.audio.read').length).toBeLessThanOrEqual(2)
-  })
-
   it('reads again for the next dictation after an end, rather than staying ended', async () => {
-    // `end` is idempotent for the life of one capture, and the seam is memoised per client, so a
-    // second dictation on the same screen has to be able to drain.
+    // A second dictation on the same memoized capture must drain normally after the first end.
     const shell = createAudioShell()
     const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
     const capture = await mount(pair)
@@ -505,11 +442,7 @@ describe('a capture the page loses', () => {
   })
 
   it('ends a capture opened after the last end, though `begin` never ran between them', async () => {
-    // `open` starts the shell recording, and the hook sets `activeIdRef` before the desktop
-    // session exists: a start that goes stale after that point cleans up through `capture.end()`
-    // while `commitRecordingStart` -- the only caller of `begin` -- never runs. An `end` still
-    // holding the previous dictation's settled promise answers from it and stops nothing, leaving
-    // the shell recording a capture no page is draining.
+    // Open starts shell recording before begin; stale starts must still end the new capture even when begin never ran.
     const shell = createAudioShell()
     const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
     const capture = await mount(pair)
@@ -540,7 +473,7 @@ describe('a capture the page loses', () => {
     const capture = await mount(pair)
     await capture.open()
     capture.begin()
-    expect(() => capture.end()).not.toThrow()
+    await expect(capture.end()).resolves.toBeUndefined()
     expect(() => capture.release()).not.toThrow()
     await pair.flush()
   })

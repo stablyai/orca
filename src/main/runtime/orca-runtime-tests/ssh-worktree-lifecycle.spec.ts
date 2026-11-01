@@ -77,8 +77,7 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).not.toHaveBeenCalled()
   })
 
-  // Why: the desktop composer sends `parentWorkspace` too, and a bare selector defaults to CLI
-  // provenance — the same user action must not carry different cleanup semantics per host.
+  // The same parent selection must keep manual cleanup semantics across hosts.
   it('records an app-selected parent workspace as a manual action', async () => {
     vi.mocked(addWorktree).mockClear()
     const created = {

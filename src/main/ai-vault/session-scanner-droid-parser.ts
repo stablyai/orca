@@ -39,8 +39,7 @@ export async function parseDroidSessionFile(
   try {
     return await parseDroidSessionLines({ file, lines, platform, messages })
   } finally {
-    // readline.close() leaves the underlying stream open; destroy it so a
-    // mid-parse throw cannot leak the gated transcript handle.
+    // readline.close() leaves its input open; destroy the gated stream after parse failures too.
     lines.close()
     input.destroy()
   }

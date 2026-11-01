@@ -26,7 +26,6 @@ export type DesktopWorkspaceRowFactInputs = {
   sleepingSweepExemptWorktreeIds?: ReadonlySet<string>
 }
 
-/** The desktop's answers to the Workspace options filters, read off its own worktrees and tabs. */
 export function buildDesktopWorkspaceRowFactReader(
   inputs: DesktopWorkspaceRowFactInputs
 ): WorkspaceRowFactReader<Worktree> {

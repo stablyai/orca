@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { DiffComment } from '../../shared/diff-comment-types'
 import type { GitStatusResult } from '../../shared/git-status-types'
 import type { Repo } from '../../shared/repo-types'
@@ -60,7 +60,7 @@ vi.mock('../memory/pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))
 
-// Why: snapshot persistence does real file I/O; covered in workspace-cleanup-snapshot-ipc.test.ts.
+// Real snapshot persistence is covered in workspace-cleanup-snapshot-ipc.test.ts.
 vi.mock('../workspace-cleanup-scan-snapshot', () => ({
   persistWorkspaceCleanupScanResult: vi.fn(async () => undefined),
   readWorkspaceCleanupScanSnapshot: vi.fn(async () => null)

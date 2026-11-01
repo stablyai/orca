@@ -40,12 +40,6 @@ import {
 } from './codex-hook-user-mirroring'
 import { getSystemCodexHomePath } from './codex-home-paths'
 
-/**
- * A managed CODEX_HOME's hooks at launch prep: the user's hooks mirrored from
- * ~/.codex, after Orca's entry in each event Codex listed, approved with
- * Codex's own hash. The approval is written before the entry and taken back
- * if the entry write fails.
- */
 export async function installCodexHooksExclusively(
   runtimeHomePath: string,
   hashes: CodexHookHashes,
@@ -53,10 +47,7 @@ export async function installCodexHooksExclusively(
 ): Promise<AgentHookInstallStatus> {
   const configPath = getConfigPath(runtimeHomePath)
   const scriptPath = getManagedScriptPath()
-  // Why: must run before this install rewrites hooks.json/config.toml —
-  // approvals the user made inside Orca-launched Codex are keyed to the
-  // previous launch's runtime layout, and stale-trust cleanup below would
-  // delete them once the system config stops backing them.
+  // Save in-Orca approvals before rewriting their runtime positions or cleaning stale trust.
   promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
   const config = readHooksJson(configPath)
   if (!config) {
@@ -69,7 +60,7 @@ export async function installCodexHooksExclusively(
     }
   }
 
-  // Why: match by script filename (not exact command) so a fresh install sweeps stale entries from older builds or a different userData path.
+  // Match by filename to catch older builds' commands and relocated userData paths.
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
   const command = getManagedCommand(scriptPath)
   const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
@@ -85,13 +76,12 @@ export async function installCodexHooksExclusively(
   const nextHooks = hookPlan.hooks
   const managedEvents = new Set<string>(CODEX_EVENTS)
 
-  // Why: sweep managed entries from events we no longer subscribe to (e.g. a prior install's PreToolUse), else they keep firing stale hooks after upgrade.
+  // Remove subscriptions to retired events so stale hooks stop firing after upgrades.
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (managedEvents.has(eventName)) {
       continue
     }
     if (!Array.isArray(definitions)) {
-      // Why: a non-array event value would make removeManagedCommands throw; skip the unparsable entry, managed events below still install.
       continue
     }
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
@@ -119,7 +109,7 @@ export async function installCodexHooksExclusively(
     const cleaned = removeManagedCommands(current, isManagedCommand)
     const trustedHash = hashes[CODEX_EVENT_LABEL[eventName]]
     if (trustedHash === undefined) {
-      // Why: an event Codex does not list would never run Orca's entry, or would hold it for review.
+      // Unlisted events cannot run Orca's hook without review, if at all.
       if (cleaned.length > 0) {
         nextHooks[eventName] = cleaned
       } else {
@@ -129,14 +119,12 @@ export async function installCodexHooksExclusively(
     }
     const hook = buildCodexManagedHook(command, eventName)
     const definition: HookDefinition = { hooks: [hook] }
+    // Report status before slow user hooks can leave the sidebar displaying the previous state.
     nextHooks[eventName] = [definition, ...cleaned]
     if (trustedHash === null) {
-      // Why: this Codex lists the entry with no hash, so it has no approvals to write.
+      // Listed entries without hashes need no approval.
       continue
     }
-    // Why: the status hook must run before user hooks so a slow
-    // PostToolUse/Stop hook cannot leave the sidebar stuck on the previous
-    // state while Codex visibly reports that hooks are still running.
     managedTrustEntries.push({
       sourcePath: trustSourcePath,
       eventLabel: CODEX_EVENT_LABEL[eventName],
@@ -145,7 +133,7 @@ export async function installCodexHooksExclusively(
       command,
       timeoutSec: hook.timeout,
       trustedHash,
-      // Why: Orca's setting is the only off switch for its hook (a /hooks toggle-off is overridden).
+      // Orca's setting overrides Codex's /hooks off switch for this hook.
       enabled: true
     })
   }
@@ -155,7 +143,7 @@ export async function installCodexHooksExclusively(
   config.hooks = nextHooks
   writeManagedScript(scriptPath, getManagedScript())
   try {
-    // Why: the config.toml mirror and approvals land before hooks.json, which used to create the home.
+    // Config mirroring and approvals need the home before hooks.json creates it.
     mkdirSync(runtimeHomePath, { recursive: true })
     syncSystemConfigIntoManagedCodexHome({
       runtimeHomePath,
@@ -171,9 +159,7 @@ export async function installCodexHooksExclusively(
     return trustWriteError(configPath, false, error)
   }
   try {
-    // Why: system user hook approvals are mirrored into runtime CODEX_HOME. If
-    // the user later revokes approval in ~/.codex/config.toml, preserving all
-    // old runtime [hooks.state.*] blocks would keep Orca Codex trusted.
+    // Reconcile revoked system approvals too; retaining old runtime trust would leave hooks approved.
     upsertHookTrustEntries(tomlPath, mirroredTrustEntries)
     removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
     applyMirroredRuntimeUserHookTrustStates(tomlPath, mirroredUserTrustEntries)

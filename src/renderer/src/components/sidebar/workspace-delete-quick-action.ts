@@ -40,8 +40,7 @@ function installListeners(): void {
     return
   }
   listenersInstalled = true
-  // Why: Option/Alt is a transient reveal modifier, so stale key state after
-  // focus loss would leave destructive affordances visible.
+  // Clear transient Option/Alt state on blur so destructive affordances cannot remain visible.
   addAppKeyListener('keydown', onKeyDown)
   addAppKeyListener('keyup', onKeyUp)
   window.addEventListener('blur', clearDeleteModifierPressed)

@@ -1,17 +1,7 @@
 import { win32 } from 'node:path'
 import { findGitSubcommandIndex, isWslDirectGitReadCommand } from './wsl-direct-git-read-commands'
 
-/**
- * Per-command config that makes Linux Git read a Windows Git checkout the way Windows Git does.
- *
- * - core.autocrlf=true: CRLF working files compare equal to LF blobs, and staging writes LF;
- *   without it every rehashed file reads as modified and `add` commits CRLF.
- * - core.checkStat=minimal: an index Windows Git wrote carries no inode/uid/ctime Linux Git
- *   agrees with, so every entry otherwise rehashes across drvfs (~70 s on 11k files). It also
- *   skips the ctime check, so `core.trustctime` is moot here.
- *
- * Both predate the Git 2.25 baseline, so no capability probe is needed.
- */
+/** autocrlf normalizes CRLF; minimal stat avoids drvfs rehashes from Windows index metadata (Git >=2.25). */
 export const WINDOWS_CHECKOUT_GIT_CONFIG_ARGS: readonly string[] = [
   '-c',
   'core.autocrlf=true',
@@ -19,17 +9,13 @@ export const WINDOWS_CHECKOUT_GIT_CONFIG_ARGS: readonly string[] = [
   'core.checkStat=minimal'
 ]
 
-/**
- * Writes while the sample has not proven which Git wrote the checkout: `input` stages LF like
- * Windows Git would, yet never writes CRLF into what may be a Linux checkout.
- */
+/** Normalize staged bytes to LF without writing CRLF until checkout ownership is proven. */
 export const UNPROVEN_CHECKOUT_WRITE_GIT_CONFIG_ARGS: readonly string[] = [
   '-c',
   'core.autocrlf=input'
 ]
 
-// Why: these write a new checkout whose `.git` points at /mnt/..., which Windows Git cannot open,
-// so its probe answers not-repo and CRLF files written here would read as modified forever.
+// New WSL checkouts have guest gitdir pointers; writing CRLF would leave files permanently modified.
 const OTHER_CHECKOUT_SUBCOMMANDS = new Set(['clone', 'worktree'])
 
 export function writesAnotherCheckout(args: readonly string[]): boolean {
@@ -37,14 +23,12 @@ export function writesAnotherCheckout(args: readonly string[]): boolean {
   return subcommandIndex !== -1 && OTHER_CHECKOUT_SUBCOMMANDS.has(args[subcommandIndex])
 }
 
-/** Deliberate cap: ~200 eligible files decide the checkout. */
 export const LINE_ENDING_SAMPLE_LIMIT = 200
-// Why: `ls-files --eol` reads every file it lists over drvfs, so capping matches alone still reads
-// the whole tree when few files qualify (`* text=auto`); the scan stops after this many entries.
+// Bound scanned entries too: few matching text files would otherwise traverse the entire drvfs tree.
 export const LINE_ENDING_SCAN_LIMIT = 10 * LINE_ENDING_SAMPLE_LIMIT
-// Fewer eligible files than this is no evidence either way.
+// Smaller samples cannot establish checkout ownership.
 export const LINE_ENDING_MIN_EVIDENCE = 5
-// Why a TTL: a re-clone at the same path can change the answer.
+// Re-cloning at the same path can change the answer.
 export const WSL_WINDOWS_CHECKOUT_TTL_MS = 10 * 60_000
 const CACHE_LIMIT = 256
 
@@ -111,13 +95,7 @@ export function isFresh(entry: { at: number } | undefined, now: number): boolean
   return entry !== undefined && now - entry.at < WSL_WINDOWS_CHECKOUT_TTL_MS
 }
 
-/**
- * Effective `core.autocrlf` from `git config --show-origin --get-regexp`, the way Windows Git
- * resolves it (last value wins). Only `true` makes Windows Git write CRLF.
- *
- * Why core.eol is ignored: with autocrlf=true Windows Git checks out CRLF regardless of core.eol
- * (measured: local core.eol=lf still leaves Windows Git and the flagged WSL Git both clean).
- */
+/** Last autocrlf value wins; true forces CRLF regardless of core.eol. */
 export function parseHostAutocrlf(showOriginOutput: string): 'true' | 'other' {
   let value: string | null = null
   for (const line of showOriginOutput.split(/\r?\n/)) {
@@ -129,13 +107,7 @@ export function parseHostAutocrlf(showOriginOutput: string): 'true' | 'other' {
   return value !== null && ['true', 'yes', 'on', '1'].includes(value) ? 'true' : 'other'
 }
 
-/**
- * Classifies a bounded `ls-files --eol` sample of LF blobs with no eol attribute.
- *
- * The first index entries, not just top-level files: root files are the ones formatters re-save
- * as LF, the ones attributes pin, and absent in some repos. Majority of CRLF working files means Windows Git
- * (autocrlf=true) wrote this checkout; one CRLF README in a Linux checkout does not.
- */
+/** Sample nested index entries: root files may be formatted as LF or have pinned eol attributes. */
 export function classifyLineEndingSample(
   output: string,
   outputTruncated: boolean
@@ -163,14 +135,7 @@ export function classifyLineEndingSample(
   return crlf * 2 > crlf + lf ? 'windows' : 'not-windows'
 }
 
-/**
- * Whether this command runs with Windows Git's settings.
- *
- * Reads need only the host's autocrlf=true: the flags never make a read less correct, even on an
- * LF checkout, so an unfinished sample must not leave status flashing every file as modified.
- * Writes change bytes on disk or in the index, so they need a fresh sample proving CRLF; until then
- * they only normalize what they stage.
- */
+/** Reads can use host autocrlf immediately; writes need fresh CRLF evidence before changing checkout bytes. */
 export function windowsCheckoutGitConfigArgs(
   args: readonly string[],
   state: Readonly<CheckoutState> | undefined,
@@ -190,7 +155,6 @@ export function windowsCheckoutGitConfigArgs(
     : UNPROVEN_CHECKOUT_WRITE_GIT_CONFIG_ARGS
 }
 
-/** Whether this command runs with Windows Git's full settings, including minimal stat. */
 export function usesWindowsCheckoutGitConfig(
   args: readonly string[],
   state: Readonly<CheckoutState> | undefined,
@@ -199,7 +163,6 @@ export function usesWindowsCheckoutGitConfig(
   return windowsCheckoutGitConfigArgs(args, state, now) === WINDOWS_CHECKOUT_GIT_CONFIG_ARGS
 }
 
-/** `args` with Windows Git's settings prepended when this WSL command needs them. */
 export function withWslWindowsCheckoutGitConfig(
   args: string[],
   cwd: string | undefined,

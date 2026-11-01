@@ -1,6 +1,4 @@
-// Why a sidecar beside the profile state: the record must be on disk before Git starts deleting,
-// and profile-state writes are batched; the sidecar writer fsyncs and renames atomically. It also
-// keeps a host-local, in-flight obligation out of profile exports and backups.
+// The sidecar persists before deletion without waiting for batched profile writes or entering profile exports.
 import {
   readSidecarSnapshot,
   sidecarSnapshotFile,
@@ -11,7 +9,7 @@ import {
 const RECORDS_FILE_NAME = 'orca-worktree-removals.json'
 const RECORDS_VERSION = 1
 
-/** A local worktree removal Orca accepted; everything a restart needs to run the same delete. */
+/** Accepted choices needed to resume this host's removal after a restart. */
 export type WorktreeRemovalRecord = {
   worktreeId: string
   repoId: string
@@ -24,10 +22,7 @@ export type WorktreeRemovalRecord = {
   deleteBranch: boolean
   force: boolean
   requestedAt: number
-  /**
-   * The delete failed after Git dropped the registration with the checkout still on disk. Its Git
-   * side (branch, push-target remote) ran when it failed; the record owes only the folder.
-   */
+  /** Git dropped registration; branch/remote cleanup ran, but the folder remains. */
   failure?: WorktreeRemovalFailure
 }
 
@@ -89,7 +84,6 @@ export function worktreeRemovalRecordsFile(directory: string): string {
   return sidecarSnapshotFile(directory, RECORDS_FILE_NAME)
 }
 
-/** Records a previous run left behind; a missing or unreadable file reads as none. */
 export async function readWorktreeRemovalRecords(
   directory: string
 ): Promise<WorktreeRemovalRecord[]> {
@@ -100,7 +94,7 @@ export async function readWorktreeRemovalRecords(
   return parsed.removals.flatMap((entry) => parseRecord(entry) ?? [])
 }
 
-/** Writes the current records; `current` is read when the queued write runs, so the latest wins. */
+/** Read current records when the queued write runs so newer state wins. */
 export function writeWorktreeRemovalRecords(
   directory: string,
   current: () => WorktreeRemovalRecord[]

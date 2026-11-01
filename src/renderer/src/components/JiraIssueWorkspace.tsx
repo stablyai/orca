@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { hasBoundedCommentBodyText } from '@/lib/comment-body-submit-state'
 import { useAppStore } from '@/store'
 import { jiraGetIssueForTarget, jiraUpdateIssueForTarget } from '@/runtime/runtime-jira-client'
-import type { JiraIssue, JiraMutationResult } from '../../../shared/jira-types'
+import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext

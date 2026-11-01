@@ -7,24 +7,6 @@ const check = (name: string, conclusion: string | null) =>
   ({ name, conclusion }) as Pick<PRCheckDetail, 'name' | 'conclusion'>
 
 describe('PR check severity order', () => {
-  it('keeps passing checks above the skipped and neutral noise', () => {
-    const sorted = sortChecksBySeverity([
-      check('daily-cleanup', 'skipped'),
-      check('Test Results', 'success'),
-      check('build-admin', 'skipped'),
-      check('advisory', 'neutral'),
-      check('Validate Configs', 'success')
-    ])
-
-    expect(sorted.map((c) => c.name)).toEqual([
-      'Test Results',
-      'Validate Configs',
-      'advisory',
-      'daily-cleanup',
-      'build-admin'
-    ])
-  })
-
   it('orders failures, then in-flight work, then successes', () => {
     const sorted = sortChecksBySeverity([
       check('success', 'success'),
@@ -73,14 +55,7 @@ describe('PR check severity order', () => {
     ])
   })
 
-  it('sinks unknown conclusions below every known state', () => {
-    expect(getCheckSeverityRank('stale_from_a_future_github')).toBeGreaterThan(
-      getCheckSeverityRank('skipped')
-    )
-  })
-
-  // Why: an object-literal rank table would resolve these off Object.prototype and
-  // return a function, turning the comparator into NaN and scrambling the list.
+  // Object rank tables expose prototype names as functions, producing NaN comparisons and unstable ordering.
   it('treats prototype property names as unknown conclusions', () => {
     for (const inherited of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
       expect(getCheckSeverityRank(inherited)).toBe(

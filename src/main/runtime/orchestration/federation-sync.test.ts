@@ -13,6 +13,7 @@ import {
 import { createIdleSyncHarness } from './federation-sync-test-harness'
 import { parseRelayedMessage, syncFederatedDispatch } from './federation-sync'
 import { getOrchestrationPeerCapabilityCache } from './orchestration-peer-capability-cache'
+import { MessageWake } from '../runtime-message-waiters'
 
 describe('federation relay parsing', () => {
   it('accepts a supported message type', () => {
@@ -293,8 +294,7 @@ describe('federation relay acknowledgments', () => {
     await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
 
     expect(getPersistedRemoteRuntimeEpoch()).toBe('remote_epoch_2')
-    // The restart dropped the old epoch's answers, so the next resolve re-probes once and
-    // then serves the new epoch from cache.
+    // A new runtime epoch invalidates the old probe cache, then caches its own result.
     const probe = vi.fn().mockResolvedValue({
       runtimeId: 'remote_epoch_2',
       capabilities: [ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY]
@@ -420,7 +420,7 @@ describe('federation relay acknowledgments', () => {
 
     pulled = [relayItem(2)]
     await syncFederatedDispatch(runtime, dispatch.id)
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
     expect(db.getUnreadMessages(`run:${run.id}`).map((message) => message.id)).toEqual([
       'msg_federated_2'
     ])

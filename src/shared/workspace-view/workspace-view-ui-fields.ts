@@ -10,7 +10,7 @@ export const WORKSPACE_VIEW_UI_FIELDS = [
   'agentActivityDisplayMode',
   'collapsedGroups',
   'workspaceStatuses',
-  // The legacy host scope: read when no host list is saved, written with a null or one-host list.
+  // Keep the legacy scope for older readers and as fallback when no host list is saved.
   'workspaceHostScope'
 ] as const satisfies readonly (keyof PersistedUIState)[]
 

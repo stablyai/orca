@@ -139,8 +139,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
     )
   })
 
-  // Regression for #7732: refreshing a GitLab job tab through the GitHub check-runs
-  // API returns null and blanks the tab the user just asked to reload.
+  // GitLab job refresh must use GitLab trace, not GitHub check-runs or the open tab blanks (#7732).
   it('reloads an open GitLab job tab through the job trace client', async () => {
     loadGitLabJobLogDetailsMock.mockReset()
     loadGitLabJobLogDetailsMock.mockResolvedValue({
@@ -213,8 +212,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
     )
   })
 
-  // Regression for #7732: a fork MR's job lives in the source project, so reloading
-  // without the stored project ref requests the trace from the wrong project.
+  // Fork MR job traces live in source project; retain stored project ref on reload (#7732).
   it('reloads a fork MR job tab with the stored GitLab project ref', async () => {
     loadGitLabJobLogDetailsMock.mockReset()
     loadGitLabJobLogDetailsMock.mockResolvedValue(null)

@@ -1,6 +1,4 @@
-// An editor tab Orca moved survives restart (plan Q5): a window's restored-editor re-own (F42) sends
-// moveTabToWorkspace; main's real Store applies and saves it, and a cold relaunch publishes the tab
-// with its file record in the new workspace only.
+// A restored-editor move must survive real Store save and cold restart, including its file record only in the destination.
 
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -77,7 +75,6 @@ describe('an editor tab Orca moved survives restart', () => {
     })
     expect(opened.ok).toBe(true)
 
-    // What the window's re-own sends (restored-editor-move-through-layout-owner.ts).
     const moved = await runtime.applyLayoutCommand({
       type: 'moveTabToWorkspace',
       workspace: WT,

@@ -41,7 +41,6 @@ describe('terminal viewport refit', () => {
   })
 
   it('re-defers a height refit if the keyboard reopens before the debounce fires', () => {
-    // Settle while the keyboard is up -> deferred (pending), no refit.
     let r = reduceTerminalFrameHeightRefit(
       { frameHeight: 600, keyboardVisible: true, pending: false },
       { type: 'frame-height', height: 520 }
@@ -49,18 +48,15 @@ describe('terminal viewport refit', () => {
     expect(r.shouldRefit).toBe(false)
     expect(r.state.pending).toBe(true)
 
-    // Keyboard closes -> refit scheduled (the hook arms a 150ms timer here).
     r = reduceTerminalFrameHeightRefit(r.state, { type: 'keyboard-visibility', visible: false })
     expect(r.shouldRefit).toBe(true)
 
-    // Keyboard reopens inside the debounce window, then the timer fires:
-    // the committed refit must NOT reflow while typing, and stays owed.
+    // Reopen inside debounce; the timer must preserve the pending refit instead of reflowing while typing.
     r = reduceTerminalFrameHeightRefit(r.state, { type: 'keyboard-visibility', visible: true })
     const committed = reduceTerminalFrameHeightRefit(r.state, { type: 'refit-committed' })
     expect(committed.shouldRefit).toBe(false)
     expect(committed.state.pending).toBe(true)
 
-    // Keyboard closes again -> rescheduled -> now the committed refit runs.
     const rescheduled = reduceTerminalFrameHeightRefit(committed.state, {
       type: 'keyboard-visibility',
       visible: false
@@ -85,7 +81,6 @@ describe('terminal viewport refit', () => {
         error: { code: 'temporary_failure', message: 'retryable' }
       })
     ).toBe('unknown')
-    // A method_not_found refusal latches the capability, so a refit stops re-probing.
     expect(resolveTerminalUpdateViewportCapability(unsupported)).toBe('unsupported')
   })
 
@@ -124,7 +119,6 @@ describe('terminal viewport refit', () => {
       updated: false,
       applied: false
     })
-    // A refusal is not an outcome at all, which is what keeps the refit on its resubscribe path.
     expect(terminalViewportUpdate.interpret(failed)).toBe(null)
   })
 

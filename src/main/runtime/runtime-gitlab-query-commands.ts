@@ -84,7 +84,7 @@ export class RuntimeGitLabQueryCommands {
   }> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit, page })
-    // Why: page is after localGitOptions; never spread optional args before it (#13538).
+    // Keep page after localGitOptions; spreading optional args before it shifts positions (#13538).
     const result = await listIssues(
       repo.path,
       normalized.limit,
@@ -95,7 +95,7 @@ export class RuntimeGitLabQueryCommands {
       this.deps.getLocalGitArgs(repo)[0] ?? {},
       normalized.page
     )
-    // Why: web runtime mirrors the desktop preload contract used by TaskPage.
+    // Match TaskPage's desktop preload contract on web runtime.
     const items: GitLabWorkItem[] = result.items.map((issue) => ({
       id: `gitlab-issue-${repo.id}-${issue.number}`,
       type: 'issue' as const,
@@ -194,7 +194,7 @@ export class RuntimeGitLabQueryCommands {
       getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
-    // Why: successful remote pasted-URL lookups update the same recents as desktop IPC.
+    // Successful pasted-URL lookups must update recents as desktop IPC does.
     if (result) {
       this.deps.recordProjectRecent(projectRef)
     }

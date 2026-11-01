@@ -6,8 +6,7 @@ import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { isPinnedWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
 
-// A worktree can render in more than one section; the row the user actually clicked owns
-// the primary active surface so its duplicates stay visually secondary.
+// The clicked occurrence owns the primary active surface; other rendered copies stay secondary.
 export function usePrimaryActiveWorktreeRow(args: {
   rows: HostSectionRow[]
   activeWorktreeId: string | null

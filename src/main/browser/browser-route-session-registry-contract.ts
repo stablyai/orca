@@ -8,7 +8,7 @@ import type { BrowserRouteElectronSession } from './browser-route-session-policy
 
 export type BrowserRoutePartitionBindingStore = {
   get(partition: string): string | null
-  /** Returns partitions evicted to make room; their storage is now the caller's to destroy. */
+  /** Returns evicted partitions whose storage the caller must destroy. */
   set(
     partition: string,
     fingerprint: string,
@@ -33,7 +33,6 @@ export type BrowserRouteSessionRegistryDependencies = {
   clearPolicies(input: { partition: string; session: BrowserRouteElectronSession }): void
   retirePageAuthority(input: BrowserRoutePageAuthorityRetirement): boolean
   bindingStore: BrowserRoutePartitionBindingStore
-  /** Destroys the storage of partitions the binding store evicted at capacity. */
   releaseEvictedPartitions?: (partitions: readonly string[]) => void
   maxLivePartitions?: number
   maxPagesPerPartition?: number

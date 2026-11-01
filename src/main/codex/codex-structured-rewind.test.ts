@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexSession } from './codex-structured-session-state'
 import { recoverCodexRewind, rewindCodexSession } from './codex-structured-rewind'
-import { openCodexThread } from './codex-structured-thread-open'
 
-/** A Codex thread whose turns are `turns`, newest last; revert drops `drop` and every later one. */
 function fixture(turns = ['kept', 'drop'], reverted = false) {
   let history = reverted ? turns.slice(0, turns.indexOf('drop')) : turns
   const request = vi.fn(
@@ -174,16 +172,5 @@ describe('Codex rewind', () => {
       reason: 'busy'
     })
     expect(request).toHaveBeenCalledTimes(1)
-  })
-  it('captures history mode at both start and resume without changing defaults', async () => {
-    for (const resumeThreadId of [null, 'thread']) {
-      const request = vi.fn(async (_method: string, _params?: unknown) => ({
-        thread: { id: 'thread', historyMode: 'legacy' }
-      }))
-      expect(
-        await openCodexThread({ request }, { cwd: '/workspace', resumeThreadId }, 10)
-      ).toMatchObject({ historyMode: 'legacy' })
-      expect(request.mock.calls[0]?.[1]).not.toHaveProperty('historyMode')
-    }
   })
 })

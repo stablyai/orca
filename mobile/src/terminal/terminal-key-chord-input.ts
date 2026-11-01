@@ -21,7 +21,7 @@ export function createTerminalKeyChordInput(
   if (chord.alt) {
     modifiers.push('alt')
   }
-  // Why: the builder lowercases letters and restores case only from `shift`, so Alt+Shift+B keeps its B.
+  // Carry shift because the builder lowercases letters before restoring case.
   if (chord.shift || /^[A-Z]$/.test(chord.key)) {
     modifiers.push('shift')
   }
@@ -29,7 +29,7 @@ export function createTerminalKeyChordInput(
   if (!shortcut) {
     return null
   }
-  // Why: a bare key keeps its accessory id, so forward delete follows the accessory Del rule.
+  // Keep accessory ids for unmodified keys so Del retains its forward-delete rule.
   return createTerminalLiveAccessoryInput({
     id: modifiers.length === 0 ? chord.key : shortcut.label,
     bytes: shortcut.bytes

@@ -237,8 +237,7 @@ describe('AgentHookServer listener replay', () => {
 
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working', prompt: 'new run' })
 
-    // A matching eviction follows ordinary dismissal semantics, including
-    // preserving a resumable provider session for the still-live TUI.
+    // Matching eviction retains provider identity so the surviving TUI can resume.
     const resumed = new AgentHookServer()
     resumed.ingestRemote(
       {
@@ -265,8 +264,7 @@ describe('AgentHookServer listener replay', () => {
   })
 
   it('evicts when the renderer identity was stamped after receipt but pins the same turn', () => {
-    // Runtime-sync and recovery entries stamp updatedAt with Date.now()/capturedAt, which is
-    // at or after main's receivedAt; the eviction must still land for those rows.
+    // Recovery stamps can follow receipt; match the turn independently of that timestamp ordering.
     const server = new AgentHookServer()
     server.ingestRemote(
       {
@@ -286,7 +284,6 @@ describe('AgentHookServer listener replay', () => {
       })
     ).toBe(true)
 
-    // A different turn never matches, whatever the receivedAt relationship.
     const other = new AgentHookServer()
     other.ingestRemote(
       {
@@ -333,7 +330,6 @@ describe('AgentHookServer listener replay', () => {
 
     const evicted = server.dropPersistedStatusEntries([
       ...identities,
-      // A stale identity never matches and never blocks the rest of the batch.
       { ...identities[0]!, stateStartedAt: identities[0]!.stateStartedAt + 1 }
     ])
 

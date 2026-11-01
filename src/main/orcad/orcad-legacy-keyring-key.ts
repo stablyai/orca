@@ -1,12 +1,9 @@
-/**
- * Reads a master key that hourly builds (#29412) kept in the OS keyring, so it can be copied into
- * the key file once. Never writes or deletes the item. Removable a few releases after it ships.
- */
+/** Read hourly-build keyring keys for one-time file migration without modifying the keyring. */
 import { runProcess } from '@orca/process-host'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 
 const SERVICE = 'orca-headless-secret-store'
-// Why bounded: a locked keychain must not hang server start.
+// Locked keychains must not hang startup.
 const KEYRING_TIMEOUT_MS = 5_000
 
 export type OrcadLegacyKeyLookup = { key: string } | { failure: string }
@@ -16,7 +13,7 @@ function lookupArgv(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): [string,
   if (platform === 'darwin') {
     return ['/usr/bin/security', ['find-generic-password', '-s', SERVICE, '-w', '-a']]
   }
-  // Why only with a session bus: without one, dbus autolaunch can hang or spawn a daemon.
+  // Without a session bus, D-Bus autolaunch can hang or start unwanted daemons.
   return platform === 'linux' && env.DBUS_SESSION_BUS_ADDRESS
     ? ['secret-tool', ['lookup', 'service', SERVICE, 'account']]
     : null

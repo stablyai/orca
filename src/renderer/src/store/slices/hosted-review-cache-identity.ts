@@ -42,16 +42,14 @@ function getHostedReviewCacheHostScope(
   if (sshConnectionId) {
     return toSshExecutionHostId(sshConnectionId)
   }
-  // Why: a known repo owner with no SSH/runtime marker is local; absent owner
-  // context keeps the focused-runtime fallback for active-host operations.
+  // Known owner without remote markers is local; absent owner context retains active-host focus fallback.
   if (hasRepoOwner) {
     return 'local'
   }
   return getSettingsFocusedExecutionHostId(settings)
 }
 
-// Why: a branch-keyed lookup can describe a different PR than the persisted
-// linked review number. Track that distinction without changing the cache key.
+// Branch results can differ from exact linked review; track provenance without changing cache key.
 export function linkedReviewHintKey(options?: LinkedReviewHints): string {
   const hints = [
     ['github', options?.linkedGitHubPR ?? options?.fallbackGitHubPR ?? null],

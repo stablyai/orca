@@ -4,8 +4,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { WorkerRequestTransport } from '../lazy-worker-thread-host'
 import { ForeignSqliteReaderClient } from './foreign-sqlite-reader-client'
 
-// Ported from the dedicated Cursor worker's tests (#24572), against the shared client.
-
 const FAILURE = { status: 'error', error: 'Unable to read the Cursor desktop login' }
 const MISSING = { status: 'missing' }
 const ANSWER_MISSING = `const { parentPort } = require('node:worker_threads');
@@ -14,7 +12,7 @@ const ANSWER_MISSING = `const { parentPort } = require('node:worker_threads');
 const clients: ForeignSqliteReaderClient[] = []
 afterEach(() => clients.splice(0).forEach((client) => client.dispose()))
 
-// The host clears retirement a few microtasks after terminate() settles.
+// Retirement clears a few microtasks after worker termination resolves.
 function afterRetirement(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve))
 }
@@ -78,7 +76,6 @@ describe('ForeignSqliteReaderClient worker lifecycle', () => {
     expect(workers).toHaveLength(2)
   })
 
-  // Every reader shares the lane, so each must keep the retirement gate.
   it.each([
     {
       reader: 'cursorProfile',
@@ -93,6 +90,25 @@ describe('ForeignSqliteReaderClient worker lifecycle', () => {
         client.readOpenCodeBinderSessions('/synthetic/opencode.db', { ms: 0, id: '' }),
       failure: [],
       answer: [{ id: 'ses_a', directory: '/w', createdAtMs: 1, parentId: null }]
+    },
+    {
+      reader: 'openCodePromptFailure',
+      read: (client: ForeignSqliteReaderClient) =>
+        client.readOpenCodePromptFailure({
+          dbPath: '/synthetic/opencode.db',
+          sessionId: 'ses-a',
+          startedAt: 100,
+          failedAt: 200
+        }),
+      failure: { failure: null },
+      answer: {
+        failure: {
+          inputId: 'input',
+          type: 'provider.quota',
+          message: 'Quota exhausted',
+          status: 429
+        }
+      }
     }
   ])(
     '$reader refuses new native workers until the retired worker positively terminates',

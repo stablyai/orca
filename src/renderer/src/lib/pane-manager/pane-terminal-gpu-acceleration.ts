@@ -24,9 +24,7 @@ export function applyTerminalGpuAcceleration(
   for (const pane of panes) {
     pane.terminalGpuAcceleration = nextMode
     if (modeChanged) {
-      // Why: an explicit setting change is user intent to re-evaluate the
-      // renderer; context-loss and attach-failure latches from the old mode
-      // should not pin DOM.
+      // Explicit GPU settings changes reset prior context-loss/attach latches so user intent can reevaluate the renderer.
       pane.webglDisabledAfterContextLoss = false
       resetPaneWebglContextLosses(pane)
       pane.webglAttachFailedSinceRecovery = false

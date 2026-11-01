@@ -17,8 +17,7 @@ type CommitMessageGenerationOverride = {
   commitMessageDiscoveryHostKey?: string
 }
 
-// Why: generateCommitMessage and generatePullRequestFields share the same optional
-// override fields; returning undefined when none are set keeps the no-override call path.
+// Share optional overrides across commit/PR generation; undefined preserves the no-override path.
 function buildCommitMessageGenerationOverride(params: {
   commitMessageAi?: unknown
   sourceControlAi?: unknown
@@ -65,6 +64,7 @@ function buildCommitMessageGenerationOverride(params: {
 export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.generateCommitMessage',
+    requires: ['accounts'],
     permission: 'workspace',
     params: GitGenerateCommitMessage,
     handler: async (params, { runtime }) => {

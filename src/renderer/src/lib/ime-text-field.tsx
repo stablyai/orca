@@ -26,7 +26,7 @@ export function useImeTextFieldProps<T extends HTMLInputElement | HTMLTextAreaEl
       props.onCompositionStart?.(event)
     },
     onCompositionEnd(event) {
-      ime.onCompositionEnd()
+      ime.onCompositionEnd(event.data)
       props.onCompositionEnd?.(event)
     },
     onBlur(event) {

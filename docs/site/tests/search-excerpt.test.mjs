@@ -60,22 +60,14 @@ test('search excerpts preserve highlighted matches inside Markdown', () => {
   )
 })
 
-test('unclosed angles avoid the HTML matcher without changing excerpt text', () => {
-  const input = '<'.repeat(8192)
-  const replace = String.prototype.replace
-  let tagMatcherCalls = 0
-  String.prototype.replace = function (pattern, ...args) {
-    if (pattern instanceof RegExp && pattern.source === '<[^>]+>' && pattern.flags === 'g') {
-      tagMatcherCalls += 1
-    }
-    return Reflect.apply(replace, this, [pattern, ...args])
-  }
-  try {
-    assert.equal(stripSearchExcerptMarkdown(input), input)
-  } finally {
-    String.prototype.replace = replace
-  }
-  assert.equal(tagMatcherCalls, 0)
+test('unclosed angles finish within the excerpt budget without changing text', () => {
+  const input = '<'.repeat(131_072)
+  const result = runInNewContext(
+    'strip(input)',
+    { strip: stripSearchExcerptMarkdown, input },
+    { timeout: 250 }
+  )
+  assert.equal(result, input)
 })
 
 test('tag guards preserve malformed markup, protected code and highlighted matches', () => {
@@ -108,24 +100,12 @@ test('tag guards preserve malformed markup, protected code and highlighted match
   }
 })
 
-test('unclosed brackets avoid link matchers without changing excerpt text', () => {
-  const input = '['.repeat(4096)
-  const replace = String.prototype.replace
-  let linkMatcherCalls = 0
-  String.prototype.replace = function (pattern, ...args) {
-    if (
-      pattern instanceof RegExp &&
-      pattern.source.includes('\\[') &&
-      pattern.source.includes('\\]')
-    ) {
-      linkMatcherCalls += 1
-    }
-    return Reflect.apply(replace, this, [pattern, ...args])
-  }
-  try {
-    assert.equal(stripSearchExcerptMarkdown(input), input)
-  } finally {
-    String.prototype.replace = replace
-  }
-  assert.equal(linkMatcherCalls, 0)
+test('unclosed brackets finish within the excerpt budget without changing text', () => {
+  const input = '['.repeat(131_072)
+  const result = runInNewContext(
+    'strip(input)',
+    { strip: stripSearchExcerptMarkdown, input },
+    { timeout: 250 }
+  )
+  assert.equal(result, input)
 })

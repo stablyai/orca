@@ -79,11 +79,7 @@ function bridgedPaneFor(
   )
 }
 
-/**
- * Whether activating this tab on the managed server could reach a pane the bridge serves, which
- * would start a second shell there that no tab shows. Without a leaf, any bridged pane in the tab
- * counts: the server then picks a pane itself.
- */
+/** Server activation could start a second shell in a bridged pane; without a leaf, any bridged pane in the tab can be chosen. */
 export function isLegacyRelayBridgedTab(tabId: string, leafId?: string | null): boolean {
   const { inTab, leaf } = bridgedPanesInTab(tabId, leafId)
   return leaf === null ? inTab.length > 0 : bridgedPaneFor(tabId, leafId) !== undefined
@@ -94,10 +90,7 @@ export function hasLegacyRelayBridgedPane(tabId: string): boolean {
   return bridgedPanesInTab(tabId, null).inTab.length > 0
 }
 
-/**
- * The bridged PTYs a closing tab runs: the panes main lists for its relay-era tab (only the named
- * leaf for a `tab::leaf` mirror), plus any bridged PTY the tab itself was bound to.
- */
+/** Closing includes main’s bridged panes for the relay-era tab/leaf and any bridged PTY still bound to the tab. */
 export function legacyRelayBridgedPtyIdsForClosingTab(
   tabId: string,
   boundPtyIds: readonly string[]
@@ -114,10 +107,7 @@ export function legacyRelayBridgedPtyIdsForClosingTab(
   return [...ids]
 }
 
-/**
- * The relay-era PTY a runtime pane should reattach through the bridge: one main reports serving
- * for this tab and leaf, or the `ssh:` id the pane itself still names from an earlier bridging.
- */
+/** Reattach main’s bridged tab/leaf PTY, falling back to the pane’s earlier ssh: binding. */
 export function legacyRelayBridgePtyIdForPane(args: {
   tabId: string
   leafId: string | null | undefined

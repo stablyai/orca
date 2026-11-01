@@ -108,7 +108,6 @@ async function attachDesktop(
 }
 
 function cliCall(dispatcher: RpcDispatcher, method: string, params: Record<string, unknown>) {
-  // No transport options: the host's own `orca` CLI over its runtime socket.
   return dispatcher.dispatch({ id: `cli-${method}`, authToken: 'owner', method, params })
 }
 
@@ -133,7 +132,6 @@ describe('desktop browser bridge on orcad', () => {
     })
     await vi.waitFor(() => expect(events).toHaveLength(2))
     const forwarded = ForwardedEvent.parse(events[1])
-    // orcad resolves its own selector and pins the forwarded call to that workspace id.
     expect(forwarded).toMatchObject({
       type: 'request',
       method: 'browser.goto',
@@ -141,7 +139,6 @@ describe('desktop browser bridge on orcad', () => {
       params: { url: 'https://example.com', worktree: 'id:repo-1::/srv/app' }
     })
 
-    // An answer from any other socket is ignored.
     const spoofed = await dispatcher.dispatch(
       {
         id: 'spoof',
@@ -193,7 +190,7 @@ describe('desktop browser bridge on orcad', () => {
     })
     await vi.waitFor(() => expect(events).toHaveLength(2))
     const forwarded = ForwardedEvent.parse(events[1])
-    // An older bridged desktop has always accepted browser.tabCreate; it never knew browser.openUrl.
+    // Older desktops support tabCreate but not openUrl.
     expect(forwarded).toEqual({
       type: 'request',
       requestId: forwarded.requestId,

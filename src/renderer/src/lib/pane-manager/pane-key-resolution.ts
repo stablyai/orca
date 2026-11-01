@@ -61,8 +61,7 @@ export function resolveLeafIdForManager(
     return { status: 'unresolved', paneKey, leafId, reason: 'confirmed-missing' }
   }
   if (pane.leafId !== leafId) {
-    // Why: numeric pane ids can be reused after replay/teardown. The stable
-    // leaf must still match at the moment the caller needs a live handle.
+    // Numeric IDs can be reused after replay/teardown; verify the stable leaf before returning a live handle.
     return { status: 'unresolved', paneKey, leafId, reason: 'ownership-mismatch' }
   }
 

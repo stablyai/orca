@@ -14,7 +14,7 @@ export type MonacoEditorDecorations = {
   updateMarkdownCompletionDocuments: () => void
 }
 
-// Why: these resources are keyed to the current Monaco model, so they refresh on content/language change and tear down together on model swap or unmount.
+// Keep model-owned decorations together so swaps and unmounts release their resources.
 export function useMonacoEditorDecorations(params: {
   editorRef: MutableRefObject<editor.IStandaloneCodeEditor | null>
   mountedEditor: editor.IStandaloneCodeEditor | null
@@ -32,6 +32,7 @@ export function useMonacoEditorDecorations(params: {
     conflictDecorationsEnabled
   } = params
 
+  const completionOwnerRef = useRef(Symbol('markdown-completion'))
   const completionModelRef = useRef<editor.ITextModel | null>(null)
   const markdownDocLinkDecorationsRef = useRef<MarkdownDocLinkDecorationController | null>(null)
   const conflictDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
@@ -39,24 +40,20 @@ export function useMonacoEditorDecorations(params: {
   const updateMarkdownCompletionDocuments = useCallback((): void => {
     const model = editorRef.current?.getModel() ?? null
     if (completionModelRef.current && completionModelRef.current !== model) {
-      clearMarkdownDocCompletionDocuments(completionModelRef.current)
+      clearMarkdownDocCompletionDocuments(completionModelRef.current, completionOwnerRef.current)
     }
     completionModelRef.current = model
     if (!model) {
       return
     }
     if (language === 'markdown' && markdownDocuments) {
-      setMarkdownDocCompletionDocuments(model, markdownDocuments)
+      setMarkdownDocCompletionDocuments(model, markdownDocuments, completionOwnerRef.current)
     } else {
-      clearMarkdownDocCompletionDocuments(model)
+      clearMarkdownDocCompletionDocuments(model, completionOwnerRef.current)
     }
   }, [editorRef, language, markdownDocuments])
 
-  // Why: content changes are already covered by the controller's own
-  // `onDidChangeModelContent` subscription (which also catches programmatic
-  // edits this effect never saw), so mirroring `content` here only doubled the
-  // debounce timer churn per keystroke. A language swap on a retained model has
-  // no content event, so that trigger stays.
+  // The controller observes content edits; only language swaps lack that event and need this explicit refresh.
   useEffect(() => {
     markdownDocLinkDecorationsRef.current?.refresh()
   }, [language])
@@ -90,9 +87,10 @@ export function useMonacoEditorDecorations(params: {
   }, [updateMarkdownCompletionDocuments])
 
   useEffect(() => {
+    const completionOwner = completionOwnerRef.current
     return () => {
       if (completionModelRef.current) {
-        clearMarkdownDocCompletionDocuments(completionModelRef.current)
+        clearMarkdownDocCompletionDocuments(completionModelRef.current, completionOwner)
       }
       markdownDocLinkDecorationsRef.current?.dispose()
       markdownDocLinkDecorationsRef.current = null

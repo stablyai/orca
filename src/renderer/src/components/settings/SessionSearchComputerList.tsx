@@ -3,15 +3,10 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 
-/** Local computer plus five servers. Past that the list stops being a list and becomes a wall. */
 const VISIBLE_COMPUTER_LIMIT = 6
 
 export type SessionSearchServerRowEntry = { id: string; node: React.ReactNode }
 
-/**
- * Presentation only: the caller has already decided which servers exist and in
- * what order, so the list owns nothing but the two subheads and the fold.
- */
 export function SessionSearchComputerList({
   local,
   servers
@@ -23,7 +18,7 @@ export function SessionSearchComputerList({
   const visibleServerCount = VISIBLE_COMPUTER_LIMIT - 1
   const hiddenCount = Math.max(0, servers.length - visibleServerCount)
   const shownServers = expanded ? servers : servers.slice(0, visibleServerCount)
-  // One row needs no heading to tell it apart from the rest; the pair of subheads appears together or not at all.
+  // Show paired subheads only when servers exist; one local row needs no heading.
   const showSubheads = servers.length > 0
   return (
     <div>

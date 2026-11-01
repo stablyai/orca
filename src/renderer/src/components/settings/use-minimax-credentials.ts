@@ -11,7 +11,7 @@ import {
 
 export type MiniMaxCredentialsModel = ReturnType<typeof useMiniMaxCredentials>
 
-/** MiniMax's saved cookie and API key on `owner`; key the component by owner so drafts reset. */
+/** Key by owner so switching credential hosts resets drafts. */
 export function useMiniMaxCredentials(owner: RuntimeClientTarget) {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [status, setStatus] = useState<MiniMaxCredentialsStatus | null>(null)
@@ -38,7 +38,7 @@ export function useMiniMaxCredentials(owner: RuntimeClientTarget) {
       (error: unknown) => {
         console.error('Failed to load MiniMax credential status:', error)
         if (current) {
-          // Why local stays editable: this computer's store is always writable, as before.
+          // Local storage stays writable even when its status read fails.
           setAccess(ownerEnvironmentId ? usageCredentialAccessAfterError(error) : 'ready')
         }
       }
@@ -62,13 +62,13 @@ export function useMiniMaxCredentials(owner: RuntimeClientTarget) {
 
   return {
     access,
-    // Why: only a host that answered can be written; never fall back to this computer.
+    // Only write to a host that answered; never substitute local storage.
     editable: access === 'ready',
     miniMaxConfigured: status?.cookieConfigured === true,
     miniMaxCookieProtection: status?.cookieProtection ?? null,
     miniMaxApiKeyConfigured: status?.apiKeyConfigured === true,
     miniMaxApiKeyProtection: status?.apiKeyProtection ?? null,
-    // Why `!== false`: older hosts and this desktop omit or set it; only orcad says it cannot.
+    // Older hosts omit this capability; only explicit false forbids session cookies.
     sessionCookieSupported: status?.sessionCookieSupported !== false,
     miniMaxCookieUnreadable: status?.cookieUnreadable,
     miniMaxApiKeyUnreadable: status?.apiKeyUnreadable,

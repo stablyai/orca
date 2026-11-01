@@ -7,6 +7,7 @@ import {
   getSendCommandCalls,
   getSendCommandMethods,
   sendAndReceive,
+  mockAsWebContents,
   type MockWebContents
 } from './cdp-ws-proxy-test-harness'
 
@@ -21,8 +22,7 @@ describe('CdpWsProxy', () => {
 
   beforeEach(async () => {
     mock = createMockWebContents()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
-    proxy = new CdpWsProxy(mock.webContents as never, () => () => {})
+    proxy = new CdpWsProxy(mockAsWebContents(mock), () => () => {})
     endpoint = await proxy.start()
   })
 
@@ -55,8 +55,6 @@ describe('CdpWsProxy', () => {
   it('attaches debugger on start', () => {
     expect(mock.webContents.debugger.attach).toHaveBeenCalledWith('1.3')
   })
-
-  // ── CDP message ID correlation ──
 
   it('correlates CDP request/response IDs', async () => {
     mock.webContents.debugger.sendCommand.mockResolvedValueOnce({ tree: 'nodes' })
@@ -254,8 +252,6 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
-  // ── Concurrent requests get correct responses ──
-
   it('handles concurrent requests with correct correlation', async () => {
     let resolveFirst: (v: unknown) => void
     const firstPromise = new Promise((r) => {
@@ -325,8 +321,6 @@ describe('CdpWsProxy', () => {
     secondClient.close()
   })
 
-  // ── sessionId envelope translation ──
-
   it('forwards sessionId to sendCommand for OOPIF support', async () => {
     mock.webContents.debugger.sendCommand.mockResolvedValueOnce({})
 
@@ -346,7 +340,25 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
-  // ── Event forwarding ──
+  it('never leaves auto-attached workers and frames waiting on a client that may leave', async () => {
+    mock.webContents.debugger.sendCommand.mockResolvedValueOnce({})
+
+    const client = await connect(endpoint)
+    // agent-browser 0.39 asks child targets to wait for it; the shared guest debugger outlives it.
+    await sendAndReceive(client, {
+      id: 1,
+      method: 'Target.setAutoAttach',
+      params: { autoAttach: true, waitForDebuggerOnStart: true, flatten: true },
+      sessionId: 'oopif-session-123'
+    })
+
+    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith(
+      'Target.setAutoAttach',
+      { autoAttach: true, waitForDebuggerOnStart: false, flatten: true },
+      'oopif-session-123'
+    )
+    client.close()
+  })
 
   it('forwards CDP events from debugger to client', async () => {
     const client = await connect(endpoint)
@@ -423,7 +435,7 @@ describe('CdpWsProxy', () => {
     expect(insert.result).toEqual({})
     expect(key.result).toEqual({})
     expect(mock.webContents.focus).not.toHaveBeenCalled()
-    // Why: each delivery probes focus, and text/keys then wait for the page to handle them.
+    // Each delivery probes focus, then waits for page input handling.
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'DOM.focus',
@@ -837,7 +849,6 @@ describe('CdpWsProxy', () => {
     client.close()
     await new Promise((resolve) => setTimeout(resolve, 10))
 
-    // Print resolves only after the client is gone: no stream must be created.
     resolvePrint(Buffer.from('%PDF-late'))
     await new Promise((resolve) => setTimeout(resolve, 10))
 
@@ -874,16 +885,12 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
-  // ── Page.frameNavigated interception ──
-
-  // ── Cleanup ──
-
   it('detaches debugger and closes server on stop', async () => {
     const client = await connect(endpoint)
     await proxy.stop()
 
     expect(mock.webContents.debugger.detach).toHaveBeenCalled()
-    expect(proxy.getPort()).toBeGreaterThan(0) // port stays set but server is closed
+    expect(proxy.getPort()).toBeGreaterThan(0)
 
     await new Promise<void>((resolve) => {
       client.on('close', () => resolve())

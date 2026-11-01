@@ -1,10 +1,4 @@
-/**
- * The executor's half of the `legacy-host` prompt policy: `worktree.create`'s own startup contract,
- * kept for the host's legacy producers until one planner replaces both policies.
- *
- * The create owns the text, so the executor hands it the whole prompt instead of an argv offer and
- * delivers nothing itself; and the create's startup terminal is the launch's only surface.
- */
+/** Legacy creation owns both the startup terminal and prompt delivery. */
 
 import type {
   AgentLaunchPrompt,
@@ -20,16 +14,7 @@ import {
   promptReceipt
 } from './agent-launch-prompt-delivery'
 
-/**
- * The create's startup terminal is a `legacy-host` launch's only surface: a create that could not
- * spawn it here handed it to the window's activation or reported why in its warning, so building
- * another would start the agent twice. The workspace exists; no agent came back.
- *
- * Caught only by `createWorktreeWithStartupAgent`, which answers with the create's own result as
- * `worktree.create` always has. That shared entry is the only `legacy-host` producer. Headless
- * automations, federation and orchestration workers are not `legacy-host`: their own workspace
- * factories refuse a create with no agent, so they never see it.
- */
+/** No returned agent may mean deferred activation; creating another risks a duplicate. */
 export class AgentLaunchStartupAgentNotCreatedError extends Error {
   readonly worktreeId: string
 
@@ -40,7 +25,6 @@ export class AgentLaunchStartupAgentNotCreatedError extends Error {
   }
 }
 
-/** What a create is handed to deliver: the launch's argv offer, or under this policy all of it. */
 export function createLaunchPromptInputs(
   execution: AgentLaunchExecution,
   mode: AgentLaunchModeReceipt['mode']
@@ -52,14 +36,12 @@ export function createLaunchPromptInputs(
   return execution.intent.prompt ? { legacyPrompt: execution.intent.prompt } : {}
 }
 
-/** Refuses a cast past the type before the workspace exists, so it cannot leave one behind. */
 export function assertLegacyHostTarget(execution: AgentLaunchLegacyHostExecution): void {
   if (execution.intent.target.kind !== 'create-worktree') {
     throw new Error('agent_launch_legacy_prompt_policy_requires_terminal_create')
   }
 }
 
-/** The launch once the create returned; see `AgentLaunchStartupAgentNotCreatedError` for none. */
 export function legacyHostCreateResult(
   execution: AgentLaunchLegacyHostExecution,
   placed: {
@@ -87,13 +69,7 @@ export function legacyHostCreateResult(
   }
 }
 
-/**
- * By the delivery module's rule, each arm names an act that already happened. The create folds a
- * submit into the command that starts any agent taking it on argv (`buildAgentStartupPlan` leaves
- * no follow-up for those), so that text is handed over. A post-start agent gets it from a send the
- * create fires and does not await, so it is `unconfirmed` here: host-internal, never on the wire,
- * meaning "may have arrived, do not resend". A draft is unsent text the host never vouches for.
- */
+/** Post-start sends are unawaited, so report unconfirmed to prevent duplicate delivery. */
 function legacyCreatePromptDisposal(
   intent: AgentLaunchLegacyHostExecution['intent']
 ): AgentLaunchPromptDisposal {

@@ -222,7 +222,6 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     const first = host(FIRST_TAB_ID)
     const second = host(SECOND_TAB_ID)
     const dim = String(UNFOCUSED_SPLIT_GROUP_OPACITY)
-    // The unfocused chat takes the same dim as every other unfocused split group, never more.
     expect(first?.style.opacity).toBe(dim)
     expect(second?.style.opacity).toBe('1')
     act(() => mocks.store?.setState({ activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID } }))

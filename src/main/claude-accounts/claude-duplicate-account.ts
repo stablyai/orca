@@ -22,18 +22,12 @@ function runtimeScopeKey(
   runtime: 'host' | 'wsl' | undefined,
   wslDistro: string | null | undefined
 ): string {
-  // Why: accounts persisted before the runtime fields existed have
-  // managedAuthRuntime === undefined; treat that as 'host' so a new host add
-  // still matches them (#6616). WSL folds through the same distro-bucket key
-  // runtime-selection.ts uses, so a distro compares equal to its own bucket.
+  // Legacy accounts without a runtime field belong to the host.
   const normalizedRuntime = runtime ?? 'host'
   return normalizedRuntime === 'wsl' ? `wsl:${getClaudeWslSelectionKey(wslDistro)}` : 'host'
 }
 
-// Why: the same Claude email can legitimately belong to two organizations, and
-// host vs WSL (and each WSL distro) keep separate managed-auth stores — so a
-// duplicate is only a match on email + organization + runtime scope, each side
-// normalized so a legacy/undefined field cannot dodge the check (#6616).
+// Organizations and runtime scopes have separate accounts even when emails match.
 export function findDuplicateClaudeAccount(
   accounts: readonly ClaudeManagedAccountSummary[],
   candidate: ClaudeAccountIdentityCandidate

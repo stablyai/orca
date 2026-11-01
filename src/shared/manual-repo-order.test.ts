@@ -24,10 +24,6 @@ const remoteCharlie = repo('charlie', 'runtime:node-b')
 const remoteDelta = repo('delta', 'runtime:node-b')
 
 describe('manual repo order', () => {
-  it('preserves source order when no overlay exists', () => {
-    expect(applyManualRepoOrder([localBravo, localAlpha], [])).toEqual([localBravo, localAlpha])
-  })
-
   it('returns the input array when no overlay exists', () => {
     const repos = [localBravo, localAlpha]
 

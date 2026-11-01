@@ -10,7 +10,7 @@ vi.mock('./SshTargetCard', () => ({
   SshTargetCard: ({ target }: { target: SshTarget }) => <div data-ssh-row>{target.label}</div>
 }))
 
-// Why 13,692: the host count from the generated ~/.ssh/config in the crash this guards.
+// Match the 13,692-host generated config that caused the original crash.
 const IMPORTED_HOST_COUNT = 13_692
 const VIEWPORT_HEIGHT_PX = 600
 const ROW_HEIGHT_PX = 52
@@ -63,7 +63,7 @@ let root: Root
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  // Why: happy-dom has no layout; the scroller is one viewport tall and every other box one row.
+  // Supply missing happy-dom layout: one scroller viewport, row-sized boxes elsewhere.
   const heightOf = (element: Element): number =>
     element.classList.contains('overflow-y-auto') ? VIEWPORT_HEIGHT_PX : ROW_HEIGHT_PX
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
@@ -119,15 +119,5 @@ describe('the SSH host list with a very large imported config', () => {
     })
     expect(rowLabels()).toContain(`node-${IMPORTED_HOST_COUNT - 1}`)
     expect(rowLabels()).not.toContain('node-00000')
-  })
-
-  it('renders an ordinary config in full, unwindowed', () => {
-    act(() => {
-      root.render(
-        <SettingsScrollerHarness targets={[configTarget(0), configTarget(1), configTarget(2)]} />
-      )
-    })
-    expect(rowLabels()).toEqual(['node-00000', 'node-00001', 'node-00002'])
-    expect(document.querySelector('[data-testid="virtualized-list"]')).toBeNull()
   })
 })

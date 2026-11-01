@@ -2,8 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EditorGutter } from 'monaco-editor/esm/vs/editor/browser/widget/diffEditor/utils/editorGutter.js'
 
-// Guards config/patches/monaco-editor@0.55.1.patch: unpatched 0.55.1 never disposes the gutter views
-// still on screen, and each one's toolbar menu stays registered on Monaco's global MenuRegistry.
+// Guard the Monaco 0.55.1 patch: visible gutter views must dispose their global MenuRegistry toolbar entries.
 class FakeResizeObserver {
   observe(): void {}
   disconnect(): void {}

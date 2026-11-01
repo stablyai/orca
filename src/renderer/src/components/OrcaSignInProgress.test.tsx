@@ -67,7 +67,7 @@ describe('Orca sign-in progress', () => {
     expect(screen.getByRole('button', { name: 'Signing in…' })).toBeDisabled()
   })
 
-  it('shows the waiting line only while the browser has not answered', () => {
+  it('omits the waiting notice until the sign-in link is available', () => {
     mocks.state.orcaProfileSignInProgress = { link: null }
     const { container } = render(<OrcaSignInWaitNotice />)
     expect(container).toBeEmptyDOMElement()

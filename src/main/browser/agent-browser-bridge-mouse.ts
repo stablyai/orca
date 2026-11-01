@@ -3,11 +3,8 @@ import type { BrowserMouseModifier } from './agent-browser-bridge-types'
 
 type CdpMouseButton = 'left' | 'middle' | 'right'
 
-// Why: bit positions and iteration order are CDP's `buttons` mask, not arbitrary.
 const CDP_POINTER_BUTTON_ORDER = ['left', 'right', 'middle', 'back', 'forward'] as const
 
-// Why: coordinate down/up carries X1/X2 through as real back/forward presses; the
-// element-click path below deliberately coerces them to left instead.
 export type CdpPointerButton = (typeof CDP_POINTER_BUTTON_ORDER)[number]
 
 const CDP_POINTER_BUTTON_MASKS = {

@@ -1,10 +1,10 @@
 import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissions'
-import { translate } from '@/i18n/i18n'
+import { agentPermissionChoiceLabel } from './AgentPermissionChoiceControls'
+
+export function agentPermissionModeChoice(mode: Exclude<AgentPermissionMode, 'mixed'>) {
+  return mode === 'manual' ? 'own' : mode === 'yolo' ? 'full-access' : 'auto'
+}
 
 export function agentPermissionModeLabel(mode: Exclude<AgentPermissionMode, 'mixed'>): string {
-  return mode === 'auto'
-    ? translate('settings.agents.autoPermissions', 'Auto')
-    : mode === 'yolo'
-      ? translate('auto.components.settings.AgentsPane.agentPermissionsYolo', 'Yolo')
-      : translate('auto.components.settings.AgentsPane.agentPermissionsManual', 'Manual')
+  return agentPermissionChoiceLabel(agentPermissionModeChoice(mode), null)
 }

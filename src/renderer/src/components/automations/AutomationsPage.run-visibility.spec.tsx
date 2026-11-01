@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * A run must change the list the user is looking at.
- *
- * Same shape as the save path: once any host has answered, the page renders the
- * per-host cache, so the legacy `automations` state that `refresh()` writes is
- * off screen and the cached row keeps its pre-run schedule until the entry is
- * invalidated. A run is not a definition write, but it does rewrite what this
- * host reports for the row, and that is what the list shows.
- */
+/** Run updates must invalidate the host cache that supplies the visible row; legacy refresh alone leaves its projected schedule stale. */
 
 import { act } from 'react'
 import { describe, expect, it } from 'vitest'

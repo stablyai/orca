@@ -1,10 +1,8 @@
 import { z } from 'zod'
-import { isNativeChatVisualFileName } from '../native-chat-visual-directive'
+import { isNativeChatVisualFileName } from '../native-chat/native-chat-visual-directive'
 import { SessionId } from './structured-agent-session-identifiers'
 
-// `agentSession.readVisual`: one HTML visual from a structured chat's scratch folder, read on the
-// host that owns the chat. The client names only the session and a bare file name; the host
-// resolves its own folder, so no client path ever reaches another host.
+// Read visuals on their owning host; accept bare filenames, never another host’s paths.
 
 /** Content revision: hex digest of the file's bytes. */
 const Revision = z.string().regex(/^[0-9a-f]{16,64}$/)
@@ -20,10 +18,7 @@ export const ReadVisualParams = z
 
 export type AgentSessionReadVisualParams = z.infer<typeof ReadVisualParams>
 
-/**
- * Why a visual cannot be shown, as positively observed by the owning host. Transport loss and an
- * older host are never one of these: the client reads those as unavailable and may retry.
- */
+/** Positive host observations only; transport loss or an older host means unavailable/retryable, never these errors. */
 export const AGENT_SESSION_VISUAL_READ_ERRORS = [
   'session_not_found',
   'unsupported_location',

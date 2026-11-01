@@ -133,8 +133,6 @@ export const pasteTerminalPaneMenuClipboard = async (
   if (result.status !== 'pasted') {
     return
   }
-  // Why: Radix returns focus to the menu trigger (the pane container) on
-  // close. Refocus only after a completed paste so rejected async targets
-  // do not steal focus from the user's new control.
+  // Refocus after completed paste only; a rejected async target must not steal focus from a newer control.
   pane.terminal.focus()
 }

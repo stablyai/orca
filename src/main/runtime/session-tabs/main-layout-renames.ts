@@ -1,6 +1,4 @@
-// Layout-owner builds: naming a terminal tab or pane in a workspace main owns, and setting its tab's
-// props, is main's own layout command, window or not; every view draws the change from main's frames.
-// Each method answers null or false for any other workspace, which keeps today's path.
+// Main-owned terminal names/props use layout commands for every view; null/false retains legacy routing for other workspaces.
 import type { OrcaRuntimeWithPersistHeadlessTerminalTitle as PersistHeadlessTerminalTitleMethods } from '../workspaces/workspace-file-session-targets'
 import { OrcaRuntimeWithMainLayoutAgentLaunchTabs } from './main-layout-agent-launch-tabs'
 import type {
@@ -78,7 +76,9 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
   /** A manual name outranks later agent titles, which win by timestamp, so it is the freshest. */
   private stampManualTitle(pty: RuntimePtyWorktreeRecord, title: string | null): void {
     pty.title = title
-    pty.titleUpdatedAt = Date.now()
+    const observedAtEpochMs = Date.now()
+    pty.titleUpdatedAt = observedAtEpochMs
+    pty.titleObservedAtEpochMs = title ? observedAtEpochMs : null
     this.touchMobileSessionSnapshotsForPty(pty.ptyId)
   }
 
@@ -165,10 +165,7 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
     return true
   }
 
-  /**
-   * A phone's pane names in a terminal tab main owns become main's pane renames, only for the panes
-   * it says it renamed (a resent map may predate the host's names). Returns the rest of the edit.
-   */
+  /** Rename only client-declared changed panes; resent maps may predate host names. Return remaining edits. */
   protected async nameMainPanes(
     worktreeId: string,
     tabId: string,

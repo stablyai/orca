@@ -34,8 +34,7 @@ const PairedServerWorkspaceRowSchema = z
     isPinned: z.boolean()
   })
   .extend(
-    // What the list sorts, groups and filters by, as the server stamped it; older desktops omit them.
-    // `lineage` is the edge the server's own check kept, not its stored record.
+    // Server-owned sorting/filter/lineage facts; older desktops omit them. Lineage is the checked edge, not the raw record.
     WorkspaceRowSchema.pick({
       isMainWorktree: true,
       isUnread: true,
@@ -129,8 +128,7 @@ export function pairedServerRowOfWorktree(
   }
 }
 
-/** The paired servers' workspaces in a catalog the window holds, keyed by host-qualified id: what
- *  buildWorkspaceRows leaves out. */
+/** Host-qualified paired rows omitted by buildWorkspaceRows. */
 export function buildPairedServerRows(catalog: {
   worktrees: readonly Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]

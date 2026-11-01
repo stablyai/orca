@@ -8,15 +8,8 @@ import { buildVisibleWorktreeOptionsFromState } from '@/components/sidebar/visib
 import { isFolderWorkspaceFromOtherDevice } from '../../../shared/workspace-creator-visibility'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-/**
- * Whether attention from this workspace must raise nothing — no unread, banner, sound or push —
- * because a Filters-menu switch hides it and "Notify About Hidden Workspaces" is off.
- *
- * Asks the sidebar pipeline itself with the project and host filters lifted, so lineage parents
- * and same-id rows on other hosts notify exactly when the sidebar would show them.
- * Fails open: unhydrated settings or UI state, terminals not yet reconnected (every restored
- * workspace would read as sleeping), or a workspace this store has no record of, notify.
- */
+/** Apply sidebar kind filters with project/host filters lifted so lineage and host twins follow sidebar visibility. Muting suppresses unread/banner/sound/push.
+ * Fail open until settings/UI and terminal reconnect hydrate, or when the workspace is unknown; restored rows otherwise look asleep. */
 export function isWorkspaceNotificationMutedBySidebarFilters(
   state: AppState,
   workspaceId: string
@@ -46,8 +39,7 @@ export function isWorkspaceNotificationMutedBySidebarFilters(
   if (!known) {
     return false
   }
-  // Why the full sidebar pass per call: measured at ~0.2-0.3 ms with 1,000 workspaces, and a
-  // per-row shortcut would have to mirror every way the sidebar adds rows back.
+  // Use the full sidebar pass (~0.2–0.3ms/1,000 workspaces) to preserve every rule that adds rows back.
   const visibleIds = computeVisibleWorktreeIds(selectWorktreesByRepo(state), [], {
     ...inputs,
     filterRepoIds: [],

@@ -22,7 +22,6 @@ function renderPane(
     React.createElement(AccountsPane, {
       settings,
       updateSettings: vi.fn(),
-      // Why: mirrors the page before the user picks a host — the default host setting.
       hostScope: resolveSettingsHostScope({
         choice: null,
         defaultEnvironmentId: settings.activeRuntimeEnvironmentId,
@@ -66,8 +65,7 @@ describe('AccountsPane', () => {
   })
 
   it('selects the WSL account location under auto when the global project runtime is WSL', () => {
-    // Why: navigator.userAgent is a read-only prototype getter, so shadow it with
-    // a configurable own property and remove that shadow afterward to restore it.
+    // Shadow the read-only userAgent prototype getter, then remove the own property to restore it.
     const originalOwnUserAgent = Object.getOwnPropertyDescriptor(globalThis.navigator, 'userAgent')
     Object.defineProperty(globalThis.navigator, 'userAgent', {
       value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -84,7 +82,6 @@ describe('AccountsPane', () => {
       )
 
       expect(markup).toContain('aria-label="Account location"')
-      // The resolved WSL radio is the checked option (unavailable while capabilities load).
       expect(markup).toContain('role="radio" aria-checked="true" aria-disabled="true"')
     } finally {
       if (originalOwnUserAgent) {
@@ -116,9 +113,7 @@ describe('AccountsPane', () => {
   })
 
   it('scopes account copy to the active remote server and offers sign-in on that server', () => {
-    // Note: static SSR markup reads the store's initial state (zustand v5), so
-    // this exercises the pre-hydration path where no server name is known yet.
-    // The named-server label is covered in provider-account-scope.test.ts.
+    // SSR reads Zustand’s initial state; this covers unnamed pre-hydration scope, while provider-account-scope.test covers named servers.
     const markup = renderPane(
       {
         ...getDefaultSettings('/tmp'),
@@ -132,17 +127,13 @@ describe('AccountsPane', () => {
         'Showing accounts managed by the remote server. New accounts sign in there; you finish in this device’s browser.'
       ).length - 1
     ).toBe(2)
-    // Both the Claude and Codex sections must say local accounts are intact and
-    // link the default-runtime control, so the scoped list never reads as loss.
+    // Both sections must reassure desktop users and link runtime selection so remote scope cannot look like lost accounts.
     expect(markup.split('Accounts managed on this desktop are unchanged').length - 1).toBe(2)
     expect(markup.split('Open Remote Servers').length - 1).toBe(2)
-    // Before the saved-server list loads there is no name to interpolate, so the
-    // scope label must stay bare instead of stuttering the prose fallback.
+    // Unloaded server names must not interpolate prose fallbacks into scope labels.
     expect(markup).toContain('Account scope: Remote server<')
     expect(markup).not.toContain('Remote server: the remote server')
-    // The WSL account-location toggle is a local concern; a remote owner hides it.
     expect(markup).not.toContain('aria-label="Account location"')
-    // #20009: Add Account runs the server's own login, so neither section's button is inert.
     const addButtons = [...markup.matchAll(/Add Account/g)].map(({ index }) =>
       markup.slice(markup.lastIndexOf('<button', index), index)
     )
@@ -150,7 +141,6 @@ describe('AccountsPane', () => {
     for (const button of addButtons) {
       expect(button).not.toContain('disabled=""')
     }
-    // "Copy sign-in link instead" hands over a link that calls back to this device.
     expect(markup).not.toContain('More sign-in options')
   })
 
@@ -164,11 +154,9 @@ describe('AccountsPane', () => {
         activeRuntimeEnvironmentId: 'env-1'
       })
 
-      // The web client has no desktop-managed accounts to switch back to, so
-      // this copy would promise a move it cannot make.
+      // Web clients cannot return to desktop-owned accounts, so that promise would be misleading.
       expect(markup).not.toContain('Accounts managed on this desktop are unchanged')
       expect(markup).not.toContain('Open Remote Servers')
-      // The server-scope copy itself still applies.
       expect(markup).toContain('Showing accounts managed by')
     } finally {
       if (!hadWindow) {
@@ -230,7 +218,6 @@ function render(
   }
   const accountRuntime = { runtime: 'host' as const, wslDistro: null, label: 'This device' }
   const model: AccountsPaneSectionModel = {
-    // Unused by the Claude section; present only so the model is the real type.
     updateSettings: vi.fn(),
     accountOwner: { kind: 'local' },
     searchQuery: '',

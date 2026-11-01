@@ -3,13 +3,13 @@ import { GitBranch, Server } from 'lucide-react'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { branchDisplayName } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
-// Why: presentational and memoized — the picker resolves every row's status
-// from one batched store read so the rows themselves hold no subscriptions.
+// The picker batches status reads once; memoized rows keep no store subscriptions.
 export const WorktreeParentPickerRow = React.memo(function WorktreeParentPickerRow({
   candidate,
   repo,
@@ -21,6 +21,7 @@ export const WorktreeParentPickerRow = React.memo(function WorktreeParentPickerR
   status: WorktreeStatus
   isCurrent: boolean
 }): React.JSX.Element {
+  useUiLanguageRevision()
   const branch = branchDisplayName(candidate.branch)
 
   return (

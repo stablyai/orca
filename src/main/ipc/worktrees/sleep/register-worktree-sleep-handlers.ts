@@ -16,20 +16,34 @@ function isRestoredPane(value: unknown): value is RestoredPane {
   )
 }
 
-/** The window's Sleep: main runs it on each workspace's hosts and the window follows its notices. */
 export function registerWorktreeSleepHandlers(context: WorktreeIpcContext): void {
   ipcMain.handle('worktrees:sleep', (_event, request: WorkspaceSleepRequest) =>
-    context.runtime.sleepWorkspaces(request)
+    context.runtime.sleepWorkspaces({
+      targets: request.targets,
+      markChatsAsleep: request.markChatsAsleep
+    })
   )
-  // The user opened a workspace whose sleep is still running: its VM keeps running.
+  // Reopening during sleep must preserve the running VM.
   ipcMain.handle('worktrees:sleepReopened', (_event, worktreeId: string) =>
     context.runtime.noteWorkspaceReopened(worktreeId)
   )
-  // The window opened a slept pane: main resumes it, and the window's spawn attaches to it.
-  ipcMain.handle('worktrees:resumeSleptPane', (_event, pane: unknown) => {
+  // Main resumes the session before the renderer attaches its spawn.
+  ipcMain.handle('worktrees:resumeSleptPane', (_event, pane: unknown, automatic: unknown) => {
     if (!isRestoredPane(pane)) {
       throw new Error('invalid_pane')
     }
-    return context.runtime.resumeSleptPane(pane)
+    if (automatic !== undefined && typeof automatic !== 'boolean') {
+      throw new Error('invalid_automatic')
+    }
+    return context.runtime.resumeSleptPane(pane, automatic)
   })
+  ipcMain.handle(
+    'worktrees:retireStrandedSleepRecord',
+    (_event, args: { worktreeId?: unknown; paneKey?: unknown } | undefined) => {
+      if (typeof args?.worktreeId !== 'string' || typeof args.paneKey !== 'string') {
+        throw new Error('invalid_sleep_record')
+      }
+      return context.runtime.retireStrandedSleepRecord(args.worktreeId, args.paneKey)
+    }
+  )
 }

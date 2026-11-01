@@ -1,5 +1,4 @@
-// Render stubs for the heavy panes/primitives the floating panel composes; the tests assert on
-// element type names and props, never on rendered output.
+// Probe element names and props without mounting heavy workspace children.
 
 export function createTabBarModule() {
   return {

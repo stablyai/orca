@@ -14,13 +14,11 @@ import {
 } from './config-toml-trust'
 
 export type CodexManagedTrustGrantPlan = {
-  /** Host-visible runtime home path (UNC for WSL) — ledger key + config reads. */
+  /** Host-visible home (UNC for WSL), used for ledger keys and config reads. */
   runtimeHomePath: string
-  /** Host-visible config.toml path holding the trust entries. */
+  /** Host-visible, including for guest runtimes. */
   tomlPath: string
-  /** Exact command string written to the managed hooks.json entries. */
   managedCommand: string
-  /** Managed trust identities Orca just wrote (no trustedHash). */
   managedEntries: readonly CodexTrustEntry[]
   host: CodexTrustGrantHost
 }
@@ -39,10 +37,8 @@ export function buildExpectedEntries(plan: CodexManagedTrustGrantPlan): Expected
   }))
 }
 
-/** Windows fallback writes equivalent separator variants that Codex's canonical
- *  RPC key may not overwrite, leaving conflicting logical trust behind. Only for a
- *  home whose fallback writes that trust back: in ~/.codex a matching record is
- *  Codex's own, and nothing would restore it. */
+// Clear conflicting Windows separator aliases before canonical RPC writes.
+// Managed homes restore fallback trust on failure; never clear matching ~/.codex records here.
 export function removeSelfComputedTrustBeforeGrant(plan: CodexManagedTrustGrantPlan): void {
   const trustStates = readHookTrustEntries(plan.tomlPath)
   const ownedKeys = plan.managedEntries
@@ -56,8 +52,7 @@ export function removeSelfComputedTrustBeforeGrant(plan: CodexManagedTrustGrantP
   }
 }
 
-/** Entries a prior grant already recorded for this exact binary and config
- *  state, or null when the RPC session has to run again. */
+/** Reuse grants only while the binary, hook identity and current config match. */
 export function findLedgerGrant(
   plan: CodexManagedTrustGrantPlan,
   expected: ExpectedManagedEntry[],

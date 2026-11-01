@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import {
   SKILLS_FILTER_QUERY_MAX_BYTES,
-  countSkillsBySource,
   filterSkills,
   isSkillsFilterQueryTooLarge
 } from './skills-filter'
@@ -37,8 +36,7 @@ describe('skills filtering', () => {
       })
     ]
 
-    // Why: the owning agent comes from the root a skill was found in, not from
-    // its provider list, which flattens ten agents into "agent-skills".
+    // Root provenance preserves individual agent ownership that coarse provider tags collapse.
     const agentByRootPath = new Map([
       ['/home/dev/.codex/skills', 'codex'],
       ['/repo/.claude/skills', 'claude']
@@ -79,15 +77,5 @@ describe('skills filtering', () => {
         sourceKind: 'all'
       })
     ).toEqual([])
-  })
-
-  it('counts skills by source kind', () => {
-    expect(
-      countSkillsBySource([
-        skill({ sourceKind: 'home' }),
-        skill({ id: 'repo', sourceKind: 'repo' }),
-        skill({ id: 'plugin', sourceKind: 'plugin' })
-      ])
-    ).toEqual({ home: 1, repo: 1, bundled: 0, plugin: 1 })
   })
 })

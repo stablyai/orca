@@ -25,7 +25,6 @@ export type WslAgentSkillSetupPanelProps = {
   icon?: ReactNode
   variant?: AgentSkillSetupPanelVariant
   className?: string
-  // Enclosing modals can own the title and status.
   hideHeader?: boolean
   preInstallNotice?: ReactNode
   getPrerequisiteStatus?: () => Promise<SkillPrerequisiteStatus>
@@ -35,7 +34,6 @@ export type WslAgentSkillSetupPanelProps = {
   showRecheckWhenInstalled?: boolean
   installLabel?: string
   installedInstallLabel?: string
-  // Modal footers can promote Install to the primary action.
   installVariant?: ComponentProps<typeof Button>['variant']
   actionHint?: ReactNode
   openingHint?: ReactNode

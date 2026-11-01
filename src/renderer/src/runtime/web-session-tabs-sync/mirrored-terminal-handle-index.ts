@@ -37,7 +37,7 @@ function sameHandles(a: ReadonlyMap<string, string>, b: ReadonlyMap<string, stri
   return true
 }
 
-// Why a microtask: snapshots are indexed inside the store updater, and listeners read the committed store.
+// Index inside updater, notify in a microtask so listeners see committed state.
 function notifyHandlesChanged(environmentId: string, worktreeId: string): void {
   pendingNotifications.set(sessionTabsFreshnessKey(environmentId, worktreeId), {
     environmentId,
@@ -107,7 +107,6 @@ function forgetWorktree(key: string, entry: WorktreeSurfaces | undefined): void 
   }
 }
 
-/** Drops a worktree's index, or every worktree of the environment when none is named. */
 export function forgetMirroredTerminalHandles(environmentId: string, worktreeId?: string): void {
   if (worktreeId !== undefined) {
     const key = sessionTabsFreshnessKey(environmentId, worktreeId)
@@ -135,7 +134,6 @@ export function mirroredTerminalHandle(
   )
 }
 
-/** Fires after a snapshot changed any handle in the index for that worktree. */
 export function onMirroredTerminalHandlesChanged(listener: HandlesChangedListener): () => void {
   listeners.add(listener)
   return () => {

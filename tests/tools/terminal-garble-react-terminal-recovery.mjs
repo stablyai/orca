@@ -87,8 +87,7 @@ export function recoverProductionTerminalRefs() {
     }
   }
 
-  // Why: packaged builds omit the E2E manager exposure, but a buffer oracle
-  // is required to distinguish real render corruption from valid TUI rewrites.
+  // Packaged builds omit pane managers; recover a buffer oracle to separate corruption from valid TUI redraws.
   window.__terminalGarbleTerminals = terminals
   return terminals.map((terminal) => ({
     cols: terminal.cols,

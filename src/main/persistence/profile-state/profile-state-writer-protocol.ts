@@ -30,7 +30,7 @@ export type ProfileStateWriterErrorData = {
   expectedRevision?: number
   actualRevision?: number
   domain?: string | null
-  /** The SQLite failure behind a database open error, which the error class alone cannot name. */
+  /** Preserve SQLite causes that the outer open-error class cannot identify. */
   cause?: { code?: string; errcode?: number; message: string }
 }
 export type ProfileStateWriterResponse =

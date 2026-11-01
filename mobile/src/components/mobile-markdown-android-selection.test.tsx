@@ -3,9 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
 
-// Why Android here: the sibling selectable test runs as iOS and proves prose IS selectable there;
-// this one proves the transcript carries no selectable span on Android, where a selectable
-// TextView selects words while the transcript scrolls — and that other surfaces are untouched.
+// Disable selectable transcript spans only on Android, where scrolling selects TextView words; sibling iOS suite proves range selection stays enabled there.
 vi.mock('react-native', () => ({
   Linking: { openURL: () => Promise.resolve() },
   Platform: { OS: 'android' },
@@ -17,6 +15,7 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
+vi.mock('./MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'MobileSourceCopyButton' }))
 
 const CONTENT = [
   '# Heading',
@@ -53,8 +52,7 @@ describe('MobileMarkdown on Android', () => {
     const all = render({ content: CONTENT, rangeSelectable: true })
     expect(all.length).toBeGreaterThan(5)
     expect(all.filter((node) => node.props.selectable === true)).toHaveLength(0)
-    // Inline spans (bold, code, links) never asked for selection; writing `false` onto them
-    // would map to `userSelect: none` on the web, so the gate must leave them alone.
+    // Leave inline selection unset: false becomes web userSelect:none and breaks inherited behavior.
     const links = tappable(all)
     expect(links.length).toBeGreaterThan(0)
     for (const node of links) {

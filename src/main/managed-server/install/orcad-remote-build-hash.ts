@@ -1,4 +1,3 @@
-/** The installed entry bytes, hashed as the server reports them for activation and rollback. */
 import { ORCAD_LAUNCHER_FILENAME } from '../../../shared/orcad-artifacts'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
@@ -35,7 +34,7 @@ export function remoteOrcadBuildHashCommand(
     ])
   }
   const path = quotePosixShell(joinRemotePath(host, remoteInstallDir, ORCAD_LAUNCHER_FILENAME))
-  // Why both tools: GNU/busybox ship sha256sum, macOS ships shasum; either prints the digest first.
+  // GNU/BusyBox provide sha256sum, macOS shasum; both print the digest first.
   return [
     `[ -f ${path} ] && [ -r ${path} ] || exit 1;`,
     `orca_hash=$(if command -v sha256sum >/dev/null 2>&1; then sha256sum ${path} | awk '{print $1}';`,

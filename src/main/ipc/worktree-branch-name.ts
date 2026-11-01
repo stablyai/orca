@@ -6,16 +6,7 @@ import {
   type BranchPrefixSettings
 } from '../../shared/branch-prefix'
 
-/**
- * Resolve the branch prefix segment (the part before `/`) the configured
- * strategy will prepend, or null when no prefix applies. Exposed so callers can
- * detect a prefix the user already typed (or a generation model leaked) before
- * it gets prepended a second time.
- *
- * The returned prefix is normalized (surrounding whitespace/slashes stripped) so
- * a custom value like `team/` cannot produce a `team//name` branch that git
- * check-ref-format rejects.
- */
+/** Expose a normalized prefix so callers avoid double-prefixing and invalid slash combinations. */
 export function getConfiguredBranchPrefix(
   settings: Parameters<typeof selectBranchPrefixInput>[0],
   gitUsername: string | null
@@ -24,9 +15,6 @@ export function getConfiguredBranchPrefix(
   return raw ? normalizeBranchPrefix(raw) || null : null
 }
 
-/**
- * Compute the full branch name by applying the configured prefix strategy.
- */
 export function computeBranchName(
   sanitizedName: string,
   settings: Parameters<typeof selectBranchPrefixInput>[0],
@@ -36,23 +24,20 @@ export function computeBranchName(
   return prefix ? `${prefix}/${sanitizedName}` : sanitizedName
 }
 
-/**
- * Compute a branch name and fail fast when the configured prefix is invalid.
- * Used on worktree-create paths so users get a clear settings hint instead of
- * an opaque git check-ref-format failure.
- */
+/** Validate prefix settings early so creation errors identify configuration rather than opaque Git failures. */
 export function computeValidatedBranchName(
-  sanitizedName: string,
+  sanitizedWorktreeName: string,
   settings: BranchPrefixSettings,
   gitUsername: string | null
 ): string {
+  // Git rejects a ref component ending in .lock; only the branch is rewritten so the folder keeps its name.
+  const sanitizedName = sanitizedWorktreeName.replace(/-?\.lock$/, '-lock')
   const prefix = getConfiguredBranchPrefix(settings, gitUsername)
   if (prefix === null) {
     return sanitizedName
   }
   if (getBranchPrefixIssue(prefix) !== null) {
-    // Why: git-username can resolve to garbage (e.g. a rate-limited `gh api` JSON body).
-    // Skip the prefix rather than blocking every worktree create; custom prefixes still fail loudly.
+    // Git username lookup can return error payloads; skip invalid derived prefixes but reject custom ones.
     if (settings.branchPrefix === 'git-username') {
       return sanitizedName
     }

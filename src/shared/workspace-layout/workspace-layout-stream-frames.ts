@@ -1,12 +1,9 @@
-// The frames `layout.subscribe` sends (design 2.4), shared by the runtime that emits them and the
-// one client that reads them.
+// layout.subscribe frame contract shared by runtime producers and clients (2.4).
 
 import type { PublishedWorkspaceLayout } from './workspace-layout-published'
 import type { WorkspaceLayoutRecordChange } from './workspace-layout-records'
 
-/** `seq`: the stream's position after this frame. It rises by one per change frame for the host's
- *  life, so a subscriber to every workspace sees each one. A `layout.apply` reply names the
- *  position holding its effect. Absent from older hosts. */
+/** Stream position after this frame; rises once per change during the host’s lifetime. layout.apply replies identify their effect’s position. Absent on older hosts. */
 type Sequenced = { seq?: number }
 
 export type WorkspaceLayoutEvent = (
@@ -15,11 +12,7 @@ export type WorkspaceLayoutEvent = (
 ) &
   Sequenced
 
-/**
- * A layout-owner host's one frame per operation: the records it changed, workspace by workspace.
- * `epoch` names the host's stream for its life; a reader whose epoch differs, or whose last
- * position is not `seq - 1`, missed frames and must take a fresh snapshot.
- */
+/** One records frame per operation. An epoch mismatch or a gap before seq requires a fresh snapshot. */
 export type WorkspaceLayoutRecordsFrame = {
   type: 'records'
   epoch: string
@@ -44,7 +37,6 @@ export type WorkspaceLayoutStreamFrame =
   | WorkspaceLayoutStreamEvent
   | { type: 'end' }
 
-/** What a reader's cache takes from the stream. */
 export type WorkspaceLayoutChangeFrame = Exclude<WorkspaceLayoutStreamFrame, { type: 'end' }>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -97,7 +89,7 @@ function isRecordChanges(value: unknown): boolean {
   )
 }
 
-// Top-level shape only, as for a whole layout: the records' fields are the host's contract.
+// Validate only top-level shape; nested fields follow the published host contract.
 function isRecordChange(value: unknown): value is WorkspaceLayoutRecordChange {
   if (!isRecord(value) || !isKey(value.key)) {
     return false

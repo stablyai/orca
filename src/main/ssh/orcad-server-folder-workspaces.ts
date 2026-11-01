@@ -1,4 +1,3 @@
-/** The folder workspaces a managed server already holds, so a move links them (#27285). */
 import { z } from 'zod'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import {
@@ -9,7 +8,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import { listServerRows, type CatalogRequestOptions } from './orcad-migration-catalog-client'
 import type { OrcadServerRepository } from './orcad-migration-repository-link'
 
-/** The server's folder rows and the groups that decide which host each folder is on. */
+/** Include groups because they can supply a folder's host. */
 export type OrcadServerFolderCatalog = Omit<FolderHostCatalog, 'repos'>
 
 const HostFields = { connectionId: z.string().nullish(), executionHostId: z.string().nullish() }
@@ -35,7 +34,6 @@ const ServerProjectGroupsSchema = z.object({
   )
 })
 
-/** The folder workspaces and groups the destination already holds, as the server stores them. */
 export async function listRemoteOrcadFolderCatalog(
   pairingCode: string,
   options: CatalogRequestOptions = {}
@@ -53,10 +51,7 @@ export async function listRemoteOrcadFolderCatalog(
   }
 }
 
-/**
- * Incoming folder workspaces the server holds under the same id and folder, on its own machine:
- * its copy from an earlier move. Any other same-id row still imports, so the server refuses it.
- */
+/** Link same-id/path folders only on the server's own host; other same-id rows still import and must conflict rather than alias. */
 export function folderWorkspacesHeldByServer(
   incoming: readonly Pick<FolderWorkspace, 'id' | 'folderPath'>[],
   server: OrcadServerFolderCatalog,

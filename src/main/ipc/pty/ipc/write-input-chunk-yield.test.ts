@@ -45,8 +45,7 @@ beforeEach(() => {
   ptyOwnership.set(PTY_ID, 'local')
   provider.write.mockReset()
   mainWindow.webContents.send.mockReset()
-  // Why: only setTimeout is faked. A setTimeout(0) yield would stall the write forever here,
-  // while a setImmediate yield still runs in Node's check phase — the race below is deterministic.
+  // Fake timers make timer-based yields stall while setImmediate still runs, proving check-phase yielding.
   vi.useFakeTimers({ toFake: ['setTimeout'] })
 })
 

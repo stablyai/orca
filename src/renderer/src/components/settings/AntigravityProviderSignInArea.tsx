@@ -14,8 +14,7 @@ type ActiveInstall = Extract<ManagedRuntimeInstallObservation, { kind: 'active' 
 
 const CHANGING_PHASES = new Set(['downloading', 'extracting', 'verifying', 'removing'])
 
-/** Sign-in needs a copy to run, so it stays away while there is none or one is being installed or
- *  removed; the install line says which. Until the host answers, it holds its place. */
+/** Require an installed server outside install/removal; retain space while host status is unknown. */
 export function antigravityProviderSignInShown(install: ActiveInstall): boolean {
   const { snapshot } = install
   if (snapshot.kind !== 'known') {
@@ -25,7 +24,6 @@ export function antigravityProviderSignInShown(install: ActiveInstall): boolean 
   return source !== null && !(operation && CHANGING_PHASES.has(operation.phase))
 }
 
-/** Settings › Chat › Providers' sign-in for Antigravity chats, under its row. */
 export function AntigravityProviderSignInArea(props: {
   owner: RuntimeClientTarget
   label: string
@@ -48,14 +46,13 @@ export function AntigravityProviderSignInArea(props: {
   // A settled failure says only why; a running sign-in keeps its step beside a copy failure.
   const line = alert && !ownFlow ? null : signIn.line
   return (
-    // Indented to the provider's name, past its icon.
-    <div className="ml-10 space-y-2">
+    <div className="space-y-2">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium leading-none">
             {translate('settings.chat.providers.antigravityAccount', 'Account')}
           </p>
-          {/* The line keeps its height until the host answers, so nothing shifts when it does. */}
+          {/* Reserve line height so the host’s answer cannot shift layout. */}
           <div
             role="status"
             className="mt-1 flex min-h-4 items-center gap-1.5 text-xs text-muted-foreground"
@@ -87,7 +84,7 @@ export function AntigravityProviderSignInArea(props: {
         ) : (
           <Button
             size="xs"
-            // Signed in, the button only switches account, so it steps back further.
+            // Account switching uses secondary styling once signed in.
             variant={signIn.action === 'changeAccount' ? 'ghost' : 'outline'}
             disabled={signIn.signInDisabled}
             onClick={signIn.start}

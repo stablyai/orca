@@ -54,6 +54,16 @@ function restoreSections(
     const registry = useCombinedDiffSectionLoadRegistry([])
     return useCombinedDiffViewRestore({
       entrySet,
+      file: {
+        id: viewStateKey,
+        worktreeId: 'wt-1',
+        filePath: '/repo',
+        relativePath: '',
+        language: 'plaintext',
+        isDirty: false,
+        mode: 'diff',
+        diffSource: 'combined-all'
+      },
       gitStatusEntries: [],
       registry,
       setGeneration: () => {},
@@ -63,8 +73,7 @@ function restoreSections(
       },
       setSideBySide: () => {},
       succession,
-      viewStateKey,
-      worktreeId: 'wt-1'
+      viewStateKey
     })
   })
   return sections
@@ -77,8 +86,7 @@ describe('useCombinedDiffViewRestore deferral', () => {
   })
 
   it('keeps uncommitted rows deferred when only the branch pass counted', () => {
-    // combined-all concatenates two independent passes: the uncommitted numstat
-    // can fail (or be skipped at the entry cap) while the compare diff succeeds.
+    // All mode combines independent passes; successful compare counts cannot prove the uncommitted pass ran.
     const sections = restoreSections(
       buildAllModeEntrySet(
         [
@@ -93,10 +101,7 @@ describe('useCombinedDiffViewRestore deferral', () => {
   })
 
   it('restores a closed combined-diff tab with a cold model registry when reopened', async () => {
-    // Why this test exists: combined-diff tab ids are deterministic
-    // (`<worktreeId>::all-diffs::uncommitted`), so closing and reopening the review hits the same
-    // viewStateKey and restores loaded bodies + scroll with no refetch. Sweeping the combined-diff
-    // view-state caches on tab close would therefore change what the user sees on reopen.
+    // Closing must preserve loaded bodies and scroll for reopening, even after the model registry is cleared.
     const entrySet = buildAllModeEntrySet(
       [{ path: 'src/app.ts', status: 'modified', area: 'unstaged', added: 5 }],
       []
@@ -163,7 +168,6 @@ describe('useCombinedDiffViewRestore deferral', () => {
     const tabSuccession = (scopeId: string): CombinedDiffViewSuccession => ({
       contentKey,
       scopeId,
-      // Only the reopened tab exists; the first tab was closed.
       isScopeOpen: (id) => id === 'tab-reopened'
     })
     const loadedSections: DiffSection[] = [

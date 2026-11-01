@@ -159,8 +159,7 @@ describe('repo slice host identity routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
-    // Focus is local (no active runtime env); without the explicit hostId this
-    // would route to the focused (local) row.
+    // Explicit hostId must override locally focused fallback.
     store.setState({ repos: [localDuplicate, remoteDuplicate] })
 
     await store
@@ -181,8 +180,7 @@ describe('repo slice host identity routing', () => {
   })
 
   it('updateRepo with an explicit local hostId stays local even when a runtime is focused', async () => {
-    // The self-pair case: a repo id exists on both local and a focused runtime.
-    // An explicit local hostId must route to local IPC, not the runtime RPC.
+    // Self-paired same-ID rows still require explicit local hostId to route IPC, not runtime RPC.
     reposUpdate.mockResolvedValue(undefined)
     const store = createTestStore()
     store.setState({
@@ -363,8 +361,7 @@ describe('repo slice host identity routing', () => {
     expect(store.getState().projects).toEqual([
       expect.objectContaining({ id: 'repo:same-repo', sourceRepoIds: ['same-repo'] })
     ])
-    // Why: the id also exists on runtime:env-1, so the local-side removal must be
-    // host-scoped in main to avoid deleting the other host's persisted repo row.
+    // Host-scope local removal or main also deletes runtime twin’s persisted row.
     expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
 
     expect(reposRemove).not.toHaveBeenCalled()
@@ -459,9 +456,7 @@ describe('repo slice host identity routing', () => {
       hostId: 'runtime:env-1'
     })
     const store = createTestStore()
-    // Focus is local (no active runtime env). Without deriving the target from the
-    // explicit hostId, this would route to the focused (local) host and delete the
-    // wrong row. It must target runtime:env-1 via that host's RPC.
+    // Derive runtime target from explicit hostId despite local focus or removal deletes the wrong row.
     store.setState({
       repos: [localDuplicate, remoteDuplicate],
       worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] }
@@ -469,8 +464,7 @@ describe('repo slice host identity routing', () => {
 
     await store.getState().removeProject('same-repo', { hostId: 'runtime:env-1' })
 
-    // Routes to the runtime host's repo.rm (not the local removeForHost/remove),
-    // and the local row is left intact.
+    // Use runtime repo.rm and retain local twin.
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'repo.rm',
@@ -488,9 +482,7 @@ describe('repo slice host identity routing', () => {
   })
 
   it('removeProject of an SSH host row routes local even when a runtime is focused', async () => {
-    // Regression: removing an SSH host's repo (explicit ssh hostId) must NOT route
-    // repo.rm to the focused runtime env. Owner routing clears the focused
-    // runtime for SSH owners, so removal stays on the host-scoped local path.
+    // SSH ownership must route host-scoped local removal even with runtime focused.
     const sshDuplicate: Repo = {
       id: 'same-repo',
       path: '/home/orca/project',

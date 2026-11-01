@@ -77,12 +77,11 @@ describe('profile switch failure convergence', () => {
     ).rejects.toThrow('browser_host_page_creation_timeout')
     await vi.advanceTimersByTimeAsync(11)
     await rejected
-    // The reservation and placement both wait for the client's verdict.
     expect(f.placements.cancelClientPageReservation).not.toHaveBeenCalled()
     expect(f.placements.completePageRetirement).not.toHaveBeenCalled()
     expect(f.ledger.retirePage).not.toHaveBeenCalled()
     expect(f.ledger.issue).toHaveBeenCalledTimes(1)
-    // The client may still be switching, so the page cannot be recreated under it yet.
+    // Pending client verdict must keep the old guest from being recreated.
     expect(f.grants.has('page')).toBe(true)
     expect(f.grant.release).not.toHaveBeenCalled()
   })

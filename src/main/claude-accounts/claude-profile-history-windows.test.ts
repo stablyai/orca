@@ -20,8 +20,7 @@ vi.mock('../codex-accounts/fs-utils', async (original) => {
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { shareClaudeProfileHistory } from './claude-profile-history'
 
-// Junctions and hardlinks need no Windows privilege, so these run on real Windows too; on POSIX
-// Node ignores the junction type and makes a symlink.
+// Junctions and hardlinks need no Windows privilege; POSIX uses symlinks for junctions.
 const roots: string[] = []
 function fixture() {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'claude-profile-history-win-')))
@@ -67,7 +66,6 @@ describe('Claude profile history sharing on Windows', () => {
       join(f.profileHome, 'projects'),
       'junction'
     )
-    // Node reports a junction as a symlink.
     expect(fs.lstatSync(join(f.profileHome, 'projects')).isSymbolicLink()).toBe(true)
     expect(fs.readFileSync(join(f.defaultHome, 'projects/session.jsonl'), 'utf8')).toBe('own')
     expect(f.isHardlinked()).toBe(true)

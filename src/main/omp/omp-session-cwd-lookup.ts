@@ -23,7 +23,7 @@ function launchTempDir(env: NodeJS.ProcessEnv): string {
     : env.TMPDIR || env.TMP || env.TEMP || '/tmp'
 }
 
-/** OMP's current and migrated cwd buckets, derived without enumerating other workspaces. */
+/** Derive current and migrated buckets without scanning other workspaces. */
 async function cwdBuckets(cwd: string, home: string, env: NodeJS.ProcessEnv): Promise<string[]> {
   const [canonicalCwd, canonicalHome, canonicalTemp] = await Promise.all([
     canonicalPath(cwd),
@@ -47,7 +47,6 @@ async function cwdBuckets(cwd: string, home: string, env: NodeJS.ProcessEnv): Pr
   ].filter((name): name is string => name !== null)
 }
 
-/** Import only a known workspace's direct session files, stopping at its first ID match. */
 export async function findOmpSessionByCwd(input: {
   sessionsDir: string
   sessionId: string
@@ -92,7 +91,7 @@ export async function findOmpSessionByCwd(input: {
       ) {
         throw error
       }
-      // A stale or unreadable bucket must not replace a missing history with a blank chat.
+      // An unreadable bucket must not replace missing history with a blank chat.
     }
   }
   return null

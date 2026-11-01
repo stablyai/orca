@@ -1,8 +1,5 @@
 // @vitest-environment happy-dom
-// Exercises the in-WebView touch dispatcher end-to-end: a surface tap on a
-// printed http(s) URL must post an `open-url` message (which RN routes to the
-// in-app/phone browser). Regression guard for taps that jitter a few pixels —
-// those were being swallowed because the tap shared the long-press slop gate.
+// URL taps with slight jitter once hit the long-press slop gate and never reached the native browser bridge.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
 import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
@@ -11,7 +8,6 @@ function bodyMarkup(): string {
   return TERMINAL_DOCUMENT_MARKUP
 }
 
-// Minimal xterm stub: one scrollback line containing a URL, fixed 8x15 cells.
 function makeTerminal(
   lineRef: { current: string },
   mouseTrackingMode = 'none',
@@ -32,13 +28,15 @@ function makeTerminal(
         cursorY: 0,
         type: 'normal' as const,
         getLine(row: number) {
-          const text = row === 0 ? lineRef.current : undefined
+          // Rows after the first are xterm soft-wrap continuations.
+          const text = lineRef.current.split('\n')[row]
           if (text === undefined) {
             return null
           }
           return {
-            // Honor (trimRight, startCol, endCol) like real xterm so the
-            // cell→string-index conversion (cellColToStringIndex) resolves correctly.
+            length: 80,
+            isWrapped: row > 0,
+            // Honor xterm’s translateToString slice arguments so wide-cell offset conversion is realistic.
             translateToString: (_trim?: boolean, start?: number, end?: number) =>
               text.slice(start ?? 0, end ?? text.length),
             getCell: () => ({ extended: undefined })
@@ -89,7 +87,6 @@ function boot(
     }
   }
   document.body.innerHTML = bodyMarkup()
-  // eslint-disable-next-line no-new-func
   // The bundle the WebView loads, run as the WebView runs it.
   new Function(TERMINAL_DOCUMENT_SCRIPT)()
   window.dispatchEvent(
@@ -111,16 +108,12 @@ function fireTouch(type: string, touches: Array<{ x: number; y: number }>): void
   Object.defineProperty(ev, 'touches', {
     value: touches.map((p, i) => ({ identifier: i, clientX: p.x, clientY: p.y, target: surface }))
   })
-  // Dispatched on the surface so its own scroll handlers see the touch, as on a device.
   surface.dispatchEvent(ev)
 }
 
-// Wait one macrotask so init()'s rAF chain (term.open -> ready) settles.
 const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 50))
 
 describe('terminal WebView tap routing', () => {
-  // Fit scale here is min(1, innerWidth / (cellW*cols)) = 200 / 640 = 0.3125.
-  // A URL at column 12 sits at screen x = 12 * 8 * 0.3125 = 30px, y within row 0.
   const URL_LINE = 'visit https://example.com/foo now'
   const tapX = 12 * 8 * 0.3125
   const tapY = 2
@@ -152,8 +145,7 @@ describe('terminal WebView tap routing', () => {
   })
 
   it('still posts open-url when the tap jitters a few pixels', async () => {
-    // Why: a finger rarely lands perfectly still. Movement under TAP_SLOP must
-    // not reclassify the tap as a scroll and drop the link open.
+    // Small finger jitter must stay a tap and open the touched URL.
     const { posted } = boot(URL_LINE)
     await settle()
     fireTouch('touchstart', [{ x: tapX, y: tapY }])
@@ -182,8 +174,7 @@ describe('terminal WebView tap routing', () => {
   })
 
   it('marks the mouse report a touch tap sends as a click', async () => {
-    // Why: the program may move its cursor to the tapped cell, so the app orders this report
-    // against the live field's text instead of the wheel queue.
+    // A click can move the TUI cursor; order it behind live-field text rather than the wheel queue.
     const { posted } = boot('interactive prompt', undefined, 'drag')
     await settle()
     window.dispatchEvent(
@@ -223,8 +214,7 @@ describe('terminal WebView tap routing', () => {
   })
 
   it('opens the URL even right after a width-change reflow', async () => {
-    // Why: scrollback reflow rewraps the local buffer; the tap path must keep
-    // working afterward (the reflow message must not disturb tap routing).
+    // Reflow must preserve URL tap routing after scrollback rewrap.
     const { posted } = boot(URL_LINE)
     await settle()
     window.dispatchEvent(
@@ -255,11 +245,51 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchend', [])
 
     expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
-    expect(posted.find((m) => m.type === 'terminal-file-tap')).toMatchObject({
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toEqual({
       type: 'terminal-file-tap',
-      pathText: '/tmp/result.json',
-      line: 12,
-      column: 3
+      candidates: [{ pathText: '/tmp/result.json', line: 12, column: 3 }]
+    })
+  })
+
+  it('keeps the UNC host of an OSC file link for a Windows share workspace', async () => {
+    const oscLinks = [
+      { row: 0, startCol: 5, endCol: 15, uri: 'file://server/share/repo/app.ts#L12' }
+    ]
+    const { posted } = boot('open artifact here', oscLinks)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(7), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toEqual({
+      type: 'terminal-file-tap',
+      candidates: [{ pathText: '//server/share/repo/app.ts', line: 12, column: null }]
+    })
+  })
+
+  it('keeps a tap on prose beside a path an ordinary tap', async () => {
+    const line = 'me@host:~/proj$ git status'
+    const { posted } = boot(line)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(line.indexOf('git') + 1), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toBeUndefined()
+    expect(posted.find((m) => m.type === 'terminal-tap')).toBeDefined()
+  })
+
+  it('opens a markdown link whose destination has spaces', async () => {
+    const line = 'see [PDF](</tmp/folder with spaces/report.pdf>)'
+    const { posted } = boot(line)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(line.indexOf('with') + 1), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toEqual({
+      type: 'terminal-file-tap',
+      candidates: [{ pathText: '/tmp/folder with spaces/report.pdf', line: null, column: null }]
     })
   })
 
@@ -271,12 +301,22 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchstart', [{ x: screenXForCol(line.indexOf('result')), y: tapY }])
     fireTouch('touchend', [])
 
-    expect(posted.find((m) => m.type === 'terminal-file-tap')).toMatchObject({
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toEqual({
       type: 'terminal-file-tap',
-      pathText: '/tmp/result.json',
-      line: 12,
-      column: 3
+      candidates: [{ pathText: '/tmp/result.json', line: 12, column: 3 }]
     })
+  })
+
+  it('opens the whole URL when the tap lands on its soft-wrapped second row', async () => {
+    const url = `https://example.com/${'a'.repeat(70)}/end`
+    const text = `see ${url} now`
+    const { posted } = boot(`${text.slice(0, 80)}\n${text.slice(80)}`)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(2), y: tapY + 15 * 0.3125 }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'open-url')?.url).toBe(url)
   })
 
   it('does not open snapshot OSC links from adjacent terminal cells', async () => {
@@ -341,8 +381,7 @@ describe('terminal WebView tap routing', () => {
     expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
   })
 
-  // Why: 15px rows at this fit scale are ~4.7px on screen, so the drags below
-  // scroll rows while staying inside TAP_SLOP.
+  // Scaled rows are smaller than tap slop; a short drag can still count as a real row scroll.
   it('does not tap after a short drag that scrolled scrollback', async () => {
     const { posted } = boot('plain output', undefined, 'none', 50)
     await settle()
@@ -370,7 +409,6 @@ describe('terminal WebView tap routing', () => {
       .filter((m) => m.type === 'terminal-input')
       .map((m) => String(m.bytes))
       .join('')
-    // Wheel reports only: no button-press (space) or release (#) report.
     const reports = input.split('\u001b[M').slice(1)
     expect(reports.length).toBeGreaterThan(0)
     expect(reports.every((report) => report[0] === '`' || report[0] === 'a')).toBe(true)

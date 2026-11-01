@@ -28,9 +28,13 @@ describe('the batched resume-confirmed audit', () => {
     inner = await openInMemoryRelayDatabase()
     const database = new StatementRecordingDatabase(inner)
     const lines: Array<Record<string, unknown>> = []
-    const buffer = new ResumeConfirmedAuditBuffer(database, now, (line) => lines.push(JSON.parse(line)))
+    const buffer = new ResumeConfirmedAuditBuffer(database, now, (line) =>
+      lines.push(JSON.parse(line))
+    )
     const rows = async (): Promise<SqlRow[]> =>
-      await inner!.query(`SELECT type, relay_device_id, detail_json FROM relay_audit_events ORDER BY at, id`)
+      await inner!.query(
+        `SELECT type, relay_device_id, detail_json FROM relay_audit_events ORDER BY at, id`
+      )
     return { database, buffer, lines, rows }
   }
 
@@ -48,11 +52,26 @@ describe('the batched resume-confirmed audit', () => {
   })
 
   it('flushes at once when a batch fills, without waiting for the timer', async () => {
-    const { buffer, rows } = await setup()
-    for (let index = 0; index < RESUME_AUDIT_FLUSH_ROWS; index += 1) buffer.add(event(`r${index}`))
-    await buffer.flush()
-    expect(await rows()).toHaveLength(RESUME_AUDIT_FLUSH_ROWS)
-    buffer.stop()
+    const { database, buffer, rows } = await setup()
+    const inserted = Promise.withResolvers<void>()
+    const query = database.query.bind(database)
+    database.query = async (sql, params) => {
+      const result = await query(sql, params)
+      inserted.resolve()
+      return result
+    }
+    try {
+      for (let index = 0; index < RESUME_AUDIT_FLUSH_ROWS - 1; index += 1) {
+        buffer.add(event(`r${index}`))
+      }
+      expect(database.statements).toEqual([])
+      buffer.add(event('last'))
+      expect(database.statements).toHaveLength(1)
+      await inserted.promise
+      expect(await rows()).toHaveLength(RESUME_AUDIT_FLUSH_ROWS)
+    } finally {
+      buffer.stop()
+    }
   })
 
   it('retries a flush whose commit outcome was lost without writing any row twice', async () => {
@@ -97,7 +116,6 @@ describe('the batched resume-confirmed audit', () => {
       aged: RESUME_AUDIT_BUFFER_MAX_ROWS
     })
     expect(await rows()).toEqual([])
-    // Quiet once nothing more is lost.
     await buffer.flush()
     expect(lines).toHaveLength(2)
     buffer.stop()
@@ -108,12 +126,12 @@ describe('the batched resume-confirmed audit', () => {
     database.failing = () => true
     for (let index = 0; index < RESUME_AUDIT_FLUSH_ROWS + 50; index += 1) buffer.add(event(`r${index}`))
     await buffer.flush()
-    // The 50 adds past the batch size sent nothing more: no insert per confirm into a failing database.
+    // Crossing batch size schedules one insert; further adds must not hammer a failing database.
     expect(database.statements).toHaveLength(1)
     buffer.stop()
   })
 
-  it('writes nothing more once stopped', async () => {
+  it('does not restart periodic flushing after stop', async () => {
     vi.useFakeTimers()
     try {
       const { database, buffer } = await setup()
@@ -126,4 +144,3 @@ describe('the batched resume-confirmed audit', () => {
     }
   })
 })
-

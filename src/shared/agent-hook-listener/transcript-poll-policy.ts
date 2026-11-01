@@ -4,7 +4,6 @@ import type { HookListenerState } from './listener-state'
 import { hasCodexTranscriptSubagents } from './providers/codex-state'
 import { hasMuseSessionLog } from './providers/muse-events'
 
-/** Whether a pane's last hook body should be re-normalized on a timer to pick up transcript-only state. */
 export function shouldPollHookTranscript(
   state: HookListenerState,
   source: AgentHookSource,
@@ -18,7 +17,7 @@ export function shouldPollHookTranscript(
     )
   }
   if (source === 'muse') {
-    // Why: Muse's question tool fires no hook, so only its session log shows the wait and its answer.
+    // Muse question waits/answers exist only in the session log.
     return event.payload.state !== 'done' && hasMuseSessionLog(state, event.paneKey)
   }
   return false
@@ -35,7 +34,6 @@ export function hookTranscriptWatchPath(
     : undefined
 }
 
-/** Returns the poll result to publish, or undefined when it carries nothing new. */
 export function transcriptPollUpdate<T extends AgentHookEventPayload>(
   source: AgentHookSource,
   original: T,
@@ -48,7 +46,7 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
     const changed =
       polled.payload.state !== original.payload.state ||
       polled.payload.interactivePrompt !== original.payload.interactivePrompt
-    // Why: a replayed UserPromptSubmit body is neither a newly sent prompt nor a turn boundary.
+    // Replayed prompt bodies cannot create new prompt or turn boundaries.
     return changed
       ? { ...polled, hasExplicitPrompt: undefined, hookEventName: undefined }
       : undefined
@@ -61,8 +59,7 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
   if (!subagentsChanged && !leadChanged) {
     return undefined
   }
-  // Why: a replayed root Stop keeps its name so every desktop sees a turn end; a failed one goes
-  // unlabelled like a cancellation, because desktops derive a labelled Stop's outcome as success.
+  // Keep root Stop for remote turn-end derivation, but unlabel failures so clients cannot derive success.
   const replayedStop =
     polled.hookEventName === 'Stop' &&
     original.payload.mainAgent?.state !== 'done' &&

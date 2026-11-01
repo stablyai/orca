@@ -1,20 +1,6 @@
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 
-/**
- * Single source of truth for turning a set of terminal leaves into a layout
- * tree on the client. The host's published layout is authoritative; this module
- * exists so every client ingestion path resolves the tree the same way instead
- * of independently re-deriving it (which is how "Split Right" used to render as
- * a down split — divergent fallbacks each guessed a direction).
- *
- * Invariant: NEVER invent a split direction for a leaf some known tree already
- * places. A split's direction is meaningful user/host state, and the resolved
- * tree is persisted and pushed back to the host, so a guess that wins here
- * destroys the real direction on disk — a one-way door. A known tree that does
- * not match the leaf set exactly is still knowledge: it is pruned to the leaves
- * that survive and grafted with only the genuinely new ones, which is the sole
- * place a direction is invented (and always reported).
- */
+// All client ingestion shares host-authoritative layout resolution. Never guess directions for known leaves: resolved trees persist/push back, so guesses destroy real layout on disk. Prune known trees to surviving leaves and graft only genuinely new ones; every invented direction is reported.
 
 function collectLayoutLeafIds(
   node: TerminalPaneLayoutNode | null | undefined,
@@ -99,14 +85,7 @@ function countPlacedLeaves(
   return leafIds.filter((leafId) => treeLeafIds.has(leafId)).length
 }
 
-/**
- * Resolve the layout tree for `leafIds`, preferring authoritative/known trees
- * (which carry the real direction) over any invented structure.
- *
- * Precedence: a tree covering the leaves exactly (host-authoritative, then
- * prior client) → the tree placing the most leaves, pruned to them and grafted
- * with the rest → a degenerate chain when nothing is known.
- */
+/** Prefer exact-cover host tree, then exact prior tree; else prune/graft the tree covering most leaves. Only absent knowledge permits a degenerate chain. */
 export function resolveTerminalLayoutRoot(args: {
   authoritativeRoot?: TerminalPaneLayoutNode | null
   existingRoot?: TerminalPaneLayoutNode | null

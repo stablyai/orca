@@ -75,7 +75,6 @@ describe('getBranchConflictKindViaExec', () => {
       getBranchConflictKindViaExec(exec, 'feature/fix', 'origin/feature/fix')
     ).resolves.toBeNull()
     expect(calls.some((argv) => argv[0] === 'show-ref')).toBe(false)
-    // A different base still sees the other remote's branch as taken.
     await expect(getBranchConflictKindViaExec(exec, 'feature/fix', 'origin/main')).resolves.toBe(
       'remote'
     )
@@ -124,7 +123,6 @@ describe('getBranchConflictKindViaExec', () => {
         return { stdout: 'origin\n' }
       }
       if (argv[0] === 'show-ref') {
-        // The exact ref is absent even though a descendant exists.
         throw new Error('missing exact ref')
       }
       throw new Error(`unexpected git command: ${argv.join(' ')}`)
@@ -168,8 +166,7 @@ describe('getBranchConflictKindViaExec', () => {
 
     await expect(getBranchConflictKindViaExec(exec, 'feature')).resolves.toBeNull()
     expect(probeCount).toBe(12)
-    // Equality, not a ceiling: 12 candidates saturate the pool, so a regression
-    // to serial probing has to fail here.
+    // Require pool saturation so a regression to serial probing fails.
     expect(maxActiveProbes).toBe(8)
   })
 

@@ -72,14 +72,12 @@ describe('validateWorkingDirectory', () => {
   })
 
   it('accepts a WSL UNC worktree that exists inside the distro even when fs.statSync would fail', async () => {
-    // Why: the Win32 9P stat is the exact path that falsely reported ENOENT and
-    // broke opening WSL worktrees. The distro answer must win.
+    // Windows 9P stat can falsely report missing WSL worktrees; distro-side existence wins.
     wslUncDirectoryExistsAsyncMock.mockResolvedValue(true)
     existsSyncMock.mockReturnValue(false)
 
     await expect(validateWorkingDirectory(WSL_UNC_DIR)).resolves.toBeUndefined()
     expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledWith(WSL_UNC_DIR)
-    // The fs fallback must not run when the distro confirmed existence.
     expect(existsSyncMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
   })
@@ -237,7 +235,7 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
       ['wrapped', '/bin/zsh', '-l'],
       expect.objectContaining({ cwd: '/work', cols: 80, rows: 24 })
     )
-    // The reported shellPath stays the real shell so identity/name logic is intact.
+    // Attribution wrapping must retain the actual shell path for identity checks.
     expect(result.shellPath).toBe('/bin/zsh')
   })
 
@@ -259,8 +257,7 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
       ptySpawn: ptySpawn as never
     })
 
-    // First fallback candidate after /bin/zsh is /bin/bash, also login-wrapped.
-    // The wrapper must see the fallback-corrected env so SHELL survives login(1).
+    // A login-wrapped fallback must receive corrected SHELL so login(1) preserves it.
     expect(wrapSpawnMock).toHaveBeenLastCalledWith(
       '/bin/bash',
       ['-l'],
@@ -275,9 +272,7 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
   })
 
   it('drops the primary shell’s launch env when an unwrapped fallback takes over', () => {
-    // Why: nothing in an unwrapped bash pane consumes the feature channel, so a
-    // leftover ZDOTDIR would point a nested zsh at Orca's wrapper and turn on
-    // features Orca never selected for it.
+    // Unwrapped fallbacks must not inherit ZDOTDIR/features that would wrap an unrelated nested shell.
     const zshLaunchEnv = {
       ZDOTDIR: '/userdata/shell-ready/zsh',
       ORCA_ORIG_ZDOTDIR: '/home/jin',
@@ -353,9 +348,7 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
   })
 
   it('drops the first fallback’s launch env when a second fallback takes over', () => {
-    // Why: the keys to scrub are the ones the LAST attempt wrote. Computed once
-    // from the primary, a wrapped first fallback leaks its own ZDOTDIR and
-    // feature channel into the shell that finally starts.
+    // Scrub the last attempt keys; a once-only primary scrub would leak the first fallback env.
     const bashLaunchEnv = { ORCA_SHELL_FEATURES: 'markers', BASH_ENV: '/userdata/bash/rcfile' }
     const env: Record<string, string> = { HOME: '/home/jin', ZDOTDIR: '/userdata/shell-ready/zsh' }
     const ptySpawn = vi

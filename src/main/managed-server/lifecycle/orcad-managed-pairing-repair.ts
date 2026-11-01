@@ -1,8 +1,4 @@
-/**
- * Pairing again with a managed orcad that refused this desktop's token. SSH access is what paired
- * it in the first place, so the repair reads the offer the server publishes now over SSH, the same
- * way a deploy or update does, and keeps it only when it names the host key this desktop pinned.
- */
+// Repair over trusted host access, but accept only offers matching the desktop's pinned server key.
 import { parsePairingCode } from '../../../shared/pairing'
 import { errorMessage } from '../../../shared/error-message'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
@@ -26,25 +22,24 @@ import { OrcadManagedIdentityError } from './orcad-managed-tunnel-identity'
 import { OrcadManagedPairingRepairFailedError } from './orcad-managed-pairing-repair-failure'
 import { notifyManagedOrcadPairingRepaired } from './orcad-managed-pairing-repaired-listener'
 
-// Why a cap on attempts: a server that refuses every fresh offer would otherwise re-pair forever.
+// Cap servers that keep refusing fresh pairing offers to avoid endless repair.
 export const MAX_PAIRING_REPAIRS_PER_WINDOW = 3
 export const PAIRING_REPAIR_WINDOW_MS = 10 * 60_000
-// Why remembered briefly: every reconnecting pane would otherwise re-read the host over SSH.
+// Briefly cache failures so reconnecting panes do not each reread the host.
 export const PAIRING_REPAIR_FAILURE_HOLD_MS = 15_000
 
 type ManagedOrcadHostAccess = { target: OrcadHostTarget; connection: OrcadHostTransport }
 
-/** SSH reaches the host over SSH; WSL through its distro, the trust root of its own pairing. */
 export type ManagedOrcadPairingRepairDeps<
   Access extends ManagedOrcadHostAccess = ManagedOrcadHostAccess
 > = {
   resolve: (environmentId: string) => KnownRuntimeEnvironment
   connect: (environment: KnownRuntimeEnvironment) => Promise<Access>
   readReadiness: (input: Access) => Promise<ServeReadiness | null>
-  /** The bridge or tunnel ports the pairing names; defaults to the SSH deployment's. */
+  /** Override ports for bridges; SSH uses deployment ports by default. */
   ports?: (environment: KnownRuntimeEnvironment) => { localPort: number; remotePort: number } | null
   refresh: (environmentId: string, pairingCode: string) => KnownRuntimeEnvironment
-  /** Retires every transport still authenticating with the refused token, once per repair. */
+  /** Retire transports using the refused token once per repair. */
   repaired: (environmentId: string) => void | Promise<void>
   now: () => number
 }
@@ -81,35 +76,26 @@ async function connectManagedOrcadHost(environment: KnownRuntimeEnvironment) {
   return { target, connection: await connections.connect(target) }
 }
 
-/** The pairing revision a refusal was seen under, so a repair that already landed is not redone. */
+/** Refusal revisions prevent repeating repairs already stored by another attempt. */
 export function pairingRevisionOf(environment: KnownRuntimeEnvironment): number {
   return environment.pairingRevision ?? environment.createdAt
 }
 
-/** A failure that stands for one pairing until `until`; building under that pairing is refused again. */
 type StandingFailure = { error: Error; revision: number; until: number }
 
-/**
- * The gate for re-pairing a managed server: whether a build may run at all, one repair per
- * environment at a time, a capped number of attempts per window, and a failure that stands for the
- * refused pairing. Keyed by the refused revision: a refusal seen under an older pairing than the
- * stored one was already answered, so it gets the stored pairing without reaching the host.
- */
+/** Coalesce and cap repairs per environment; refusals of older revisions reuse the stored pairing. */
 export class ManagedOrcadPairingRepairs<
   Access extends ManagedOrcadHostAccess = ManagedOrcadHostAccess
 > {
   private readonly inFlight = new Map<string, Promise<KnownRuntimeEnvironment>>()
   private readonly attemptedAt = new Map<string, number[]>()
   private readonly standing = new Map<string, StandingFailure>()
-  // Why: a repair that was already running when the user asked again must not undo that reset.
+  // In-flight repairs must not undo an explicit user reset.
   private readonly resets = new Map<string, number>()
 
   constructor(private readonly deps: ManagedOrcadPairingRepairDeps<Access>) {}
 
-  /**
-   * The failure that stands for this pairing now, or null. A build under it would cost SSH execs,
-   * a forward and a handshake only to be refused again, so callers check this before building.
-   */
+  /** Check before building to avoid SSH, forwarding and handshake work for a known refusal. */
   standingFailure(environmentId: string, revision: number): Error | null {
     const failure = this.standing.get(environmentId)
     return failure && failure.revision === revision && this.deps.now() < failure.until
@@ -129,10 +115,7 @@ export class ManagedOrcadPairingRepairs<
     return operation
   }
 
-  /**
-   * The new pairing was refused too, so it counts as a failed repair. Stands under that pairing's
-   * revision: a newer one stored meanwhile was never tried, so it must not be blocked.
-   */
+  /** Charge refusal to the attempted revision; newer untried pairings must remain eligible. */
   recordRefusedAfterRepair(environmentId: string, repairedRevision: number, epoch: number): Error {
     return this.stand(
       environmentId,
@@ -142,7 +125,7 @@ export class ManagedOrcadPairingRepairs<
     )
   }
 
-  /** An explicit connect is the user asking again: neither a standing failure nor the cap answers it. */
+  /** Explicit connects clear both cached failure and attempt cap. */
   forgetFailures(environmentId: string): void {
     this.standing.delete(environmentId)
     this.attemptedAt.delete(environmentId)
@@ -172,10 +155,9 @@ export class ManagedOrcadPairingRepairs<
     if (!deployment) {
       throw new OrcadManagedPairingRepairFailedError('this server has no managed deployment')
     }
-    // Why counted only once read: losing contact with the host proves nothing about the pairing.
+    // Losing host contact proves nothing about pairing; count only completed reads.
     const readiness = await this.deps.readReadiness(await this.deps.connect(environment))
-    // Why re-read before judging the answer: an update or recovery may have stored a newer pairing
-    // while SSH answered; everything after this is synchronous, so the check holds through the write.
+    // Updates may store new pairings during SSH reads; recheck before synchronous validation/write.
     const current = this.deps.resolve(environmentId)
     if (pairingRevisionOf(current) !== refusedRevision) {
       return current
@@ -186,7 +168,7 @@ export class ManagedOrcadPairingRepairs<
     const pairingCode = publishedPairingCode(readiness, deployment.localPort, fail)
     const offer = parsePairingCode(pairingCode)
     const pinned = getPreferredPairingOffer(environment)
-    // Why refuse: a server with another key is not the one this desktop paired, whatever SSH says.
+    // Host access alone cannot authorize a different server key.
     if (!offer || offer.publicKeyB64 !== pinned.publicKeyB64) {
       throw fail(
         new OrcadManagedIdentityError(
@@ -220,7 +202,7 @@ export class ManagedOrcadPairingRepairs<
     )
   }
 
-  /** Taken when a build starts; a failure from before the user's latest Connect must not stand. */
+  /** Prevent pre-Connect failures from surviving the user's reset. */
   resetEpoch(environmentId: string): number {
     return this.resetsOf(environmentId)
   }
@@ -229,7 +211,7 @@ export class ManagedOrcadPairingRepairs<
     return this.resets.get(environmentId) ?? 0
   }
 
-  /** Stands briefly, or through the window once the cap is spent, since no repair could run before. */
+  /** Hold capped failures until the repair window reopens. */
   private stand(environmentId: string, revision: number, epoch: number, error: Error): Error {
     if (this.resetsOf(environmentId) !== epoch) {
       return error
@@ -237,7 +219,7 @@ export class ManagedOrcadPairingRepairs<
     const recent = this.recentAttempts(environmentId)
     const capSpent = recent.length >= MAX_PAIRING_REPAIRS_PER_WINDOW
     this.standing.set(environmentId, {
-      // Why the cap's reason for later callers: no repair can run again until the window ends.
+      // Later callers need the cap reason until repair becomes possible again.
       error:
         capSpent && error instanceof OrcadManagedPairingRepairFailedError
           ? capSpentError(recent.length)
@@ -251,7 +233,6 @@ export class ManagedOrcadPairingRepairs<
   }
 }
 
-/** What callers of the gate use; independent of how a host is reached. */
 export type ManagedOrcadPairingGate = Pick<
   ManagedOrcadPairingRepairs,
   'standingFailure' | 'repair' | 'recordRefusedAfterRepair' | 'resetEpoch' | 'forgetFailures'

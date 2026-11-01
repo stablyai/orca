@@ -76,7 +76,6 @@ it('forwards tab commands through startup to the Chromium provider', async () =>
   const startup = startOrcadBrowserProvider({ userDataPath: '/state' })
   await startup.ready
   try {
-    // The runtime that composes the provider owns a page registry, which startup consults.
     const host: RuntimeBrowserCommandHost = Object.assign(Object.create(null), {
       getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry()
     })

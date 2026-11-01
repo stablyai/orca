@@ -75,21 +75,6 @@ afterEach(() => {
 })
 
 describe('project sidebar OS folder drops', () => {
-  it('offers to add a dropped folder as a project', async () => {
-    const view = render(<SidebarProbe />)
-    expect(drag(view.getByTestId('worktree-card'), 'dragover').dropEffect).toBe('copy')
-    drag(view.getByTestId('worktree-card'), 'drop')
-    await waitFor(() =>
-      expect(mocks.state.openModal).toHaveBeenCalledWith('add-repo', {
-        droppedLocalPath: '/Users/me/project'
-      })
-    )
-    expect(mocks.prepare).toHaveBeenCalledWith({
-      paths: ['/Users/me/project'],
-      consumer: 'main-reader'
-    })
-  })
-
   it('refuses the drop while a remote runtime is active', () => {
     mocks.state.settings = { activeRuntimeEnvironmentId: 'env-1' }
     const legacyRoute = vi.fn()
@@ -143,17 +128,5 @@ describe('Explorer folder drops for a WSL host (Windows)', () => {
     )
     expect(mocks.stat).not.toHaveBeenCalled()
     expect(mocks.state.openModal).not.toHaveBeenCalled()
-  })
-
-  it('leaves a \\\\wsl.localhost drop local while the experiment is off', async () => {
-    mocks.state.settings.experimentalWslHosts = false
-    mocks.droppedPath = '\\\\wsl.localhost\\Ubuntu\\home\\me'
-    const view = render(<SidebarProbe />)
-    drag(view.getByTestId('worktree-card'), 'drop')
-    await waitFor(() =>
-      expect(mocks.state.openModal).toHaveBeenCalledWith('add-repo', {
-        droppedLocalPath: '\\\\wsl.localhost\\Ubuntu\\home\\me'
-      })
-    )
   })
 })

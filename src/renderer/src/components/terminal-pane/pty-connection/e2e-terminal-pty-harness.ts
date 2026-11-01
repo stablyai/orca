@@ -27,9 +27,7 @@ type E2eTerminalHiddenSnapshotOverride = {
 
 const e2eTerminalHiddenSnapshotOverrides = new Map<string, E2eTerminalHiddenSnapshotOverride>()
 
-// Why: the per-chunk hidden-skip grammar is deleted (Phase 6) — hidden bytes
-// either never reach the renderer (delivery gate) or ride the background
-// scheduler queue.
+// Hidden bytes are withheld by the delivery gate or queued by the background scheduler; no per-chunk skip grammar remains.
 type E2eTerminalPtyOutputDebugSnapshot = {
   hiddenRendererSkipCount: number
   hiddenRendererSkippedChars: number
@@ -78,8 +76,7 @@ export function exposeE2eTerminalPtyDataInjection(): void {
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
     return
   }
-  // Why: a real PTY can coalesce tiny TUI redraws before E2E sees them. This
-  // e2e-only seam lets tests replay the renderer-side data callback exactly.
+  // Replay data callbacks deterministically because real PTYs may coalesce tiny redraws before E2E observes them.
   const target = window as E2eTerminalPtyDataInjectionWindow
   target.__terminalPtyDataInjection ??= {
     inject: (paneKey, data, meta) => {
@@ -138,8 +135,7 @@ export function readE2eHiddenSnapshotOverride(
   if (!override) {
     return null
   }
-  // Why: visual E2E needs to hold a hidden restore snapshot in flight so a
-  // newer live TUI frame can race it deterministically.
+  // Hold a snapshot in flight so visual E2E can race newer live frames deterministically.
   return override.promise.finally(() => {
     if (e2eTerminalHiddenSnapshotOverrides.get(ptyId) === override) {
       e2eTerminalHiddenSnapshotOverrides.delete(ptyId)

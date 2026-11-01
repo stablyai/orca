@@ -1,4 +1,3 @@
-// Replays captured PTY bytes the way onPtyData does, for suites asserting a rule on every frame.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -11,7 +10,7 @@ import { visibleNonBlankTerminalLines } from './terminal-tail-read'
 
 const DEFAULT_CHUNK_CHARS = 64
 
-/** `screenLines` are readLiveTerminalScreenLines' rows; `ruledScreenLines` readRuledScreen's. */
+/** Live emulator rows and trusted ruled-grid rows, respectively. */
 export type TranscriptReplayFrame = {
   screenLines: string[]
   ruledScreenLines: string[]
@@ -23,16 +22,14 @@ export function readRuntimeFixture(name: string): string {
 }
 
 export type TimedRuntimeFixture = {
-  /** The recorded PTY reads, in order; they concatenate to the whole `.txt`. */
   chunks: string[]
-  /** ms since spawn at which each read arrived. */
+  /** Milliseconds since spawn. */
   times: number[]
   promptSentAtMs?: number
-  /** When recording stopped; no bytes arrived between the last read and this. */
+  /** Recording end; no bytes arrived after the final read. */
   recordedUntilMs?: number
 }
 
-/** `<name>.timing.json` holds each read as [ms since spawn, UTF-16 length]. */
 export function readTimedRuntimeFixture(name: string): TimedRuntimeFixture {
   const data = readRuntimeFixture(name)
   const timing: {
@@ -57,10 +54,9 @@ export function readTimedRuntimeFixture(name: string): TimedRuntimeFixture {
   }
 }
 
-/** Resizes the grid before chunk `atChunk`, as a PTY resize landing mid-paint would. */
 export type TranscriptReplayResize = { atChunk: number; cols: number; rows: number }
 
-/** A string is cut into fixed 64-char chunks; an array replays the recorded PTY chunks as-is. */
+/** Strings use 64-character chunks; arrays preserve recorded PTY read boundaries. */
 export async function* replayTranscript(
   data: string | readonly string[],
   cols: number,
@@ -112,7 +108,7 @@ export async function finalReplayFrame(
   return last
 }
 
-/** The final screen as `terminal read --screen` projects it, composer draft blanked. */
+/** terminal read --screen projection with composer draft blanked. */
 export async function finalReadProjection(
   name: string,
   cols: number,
@@ -129,7 +125,6 @@ export async function finalReadProjection(
   }
 }
 
-/** The fixed-size chunks a string transcript replays as, for suites driving their own sink. */
 export function splitTranscriptIntoChunks(data: string): string[] {
   const chunks: string[] = []
   for (let offset = 0; offset < data.length; offset += DEFAULT_CHUNK_CHARS) {

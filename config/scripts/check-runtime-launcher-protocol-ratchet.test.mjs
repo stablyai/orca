@@ -78,6 +78,7 @@ afterEach(() => {
 
 describe('RUNTIME_LAUNCHER_PATHS', () => {
   it('names only files that exist, so a rename cannot silently drop one from the gate', () => {
+    expect(RUNTIME_LAUNCHER_PATHS).toContain(LAUNCHER)
     expect(RUNTIME_LAUNCHER_PATHS.filter((path) => !existsSync(join(repoRoot, path)))).toEqual([])
   })
 })

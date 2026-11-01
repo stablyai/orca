@@ -116,7 +116,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   }
 }
 
-// Imported per test so the mocked store is seeded before the module reads it.
+// Seed mocked store state before importing the card that reads it.
 async function renderCardMarkup(props: Partial<WorktreeCardProps> = {}): Promise<string> {
   const { default: WorktreeCard } = await import('./WorktreeCard')
   return renderToStaticMarkup(

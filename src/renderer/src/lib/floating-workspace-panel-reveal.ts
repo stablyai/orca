@@ -6,7 +6,7 @@ function toggleFloatingWorkspacePanel(): void {
   window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
 }
 
-/** Opens the floating panel unless it is already on screen. */
+// Enable before toggling: floating tabs outlive feature disable and would otherwise reveal silently into nothing.
 // Why enable first: floating tabs outlive a feature disable, and the panel ignores the toggle
 // while disabled, so a live floating agent row would otherwise be a silent no-op.
 export function revealFloatingWorkspacePanel(

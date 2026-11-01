@@ -3,10 +3,7 @@ import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-m
 import type { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { credentialRequestedForTarget } from './ssh-connect-attempt-registry'
 
-/**
- * Persists whether signing in to this host took a typed credential, so the next launch knows
- * which hosts must wait for the user instead of prompting from a background reconnect.
- */
+/** Persist credential need so background restore waits for explicit sign-in after the next launch. */
 export function recordSshSignInRequirement(
   targetId: string,
   store: SshConnectionStore | null,
@@ -25,9 +22,8 @@ export function recordSshSignInRequirement(
   }
 }
 
-/** At launch no credential is remembered; only the user's own connect may ask for one. */
+/** Credential hosts wait for explicit sign-in because credentials are not retained across launch. */
 export function awaitSignInForCredentialHosts(store: SshConnectionStore): void {
-  // listTargets omits runtime-owned targets: the runtime layer dials those, never the user.
   for (const target of store.listTargets()) {
     if (target.lastRequiredPassphrase === true) {
       recordSshSignInAwaited(target.id)

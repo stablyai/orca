@@ -14,8 +14,6 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import lockfile from 'proper-lockfile'
 
-// Source resolution bootstraps compilation without requiring an existing dist.
-
 const STAGING_PREFIX = '.dist-staging-'
 const LOCK_PATH = '.dist-build.lock'
 const LOCK_STALE_MS = 30_000
@@ -99,7 +97,7 @@ async function syncCompiledOutput(stagingDir, distDir, assertLockHeld) {
     await renameReplacing(source, target, assertLockHeld)
     result.written += 1
   }
-  // Outputs of renamed or deleted sources would otherwise ship and stay importable.
+  // Remove obsolete outputs so renamed or deleted modules cannot remain importable.
   for (const file of existing) {
     if (!stagedSet.has(file)) {
       assertLockHeld()
@@ -152,7 +150,6 @@ export async function buildPackageDist(packageDir) {
       compromised = error
     }
   })
-  // Reject before publishing after proper-lockfile observes a lost lock.
   const assertLockHeld = () => {
     if (compromised) {
       throw new Error(

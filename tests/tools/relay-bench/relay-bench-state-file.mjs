@@ -1,8 +1,5 @@
-// Reads and writes the bench state bundle, which holds a live resume token and device token for a
-// real paired desktop. Why this is not a bare writeFileSync: `mode` only applies when the file is
-// created, so an existing world-readable state.json would keep its mode; and the default path
-// lives under a directory the operator may not have created yet, so the write would throw ENOENT
-// *after* the desktop already provisioned the credential, losing it.
+// Persist live desktop resume/device credentials: create parents before writing and force permissions on existing files too.
+// writeFileSync mode only governs creation; ENOENT after provisioning would lose the already-issued credential.
 import {
   chmodSync,
   closeSync,

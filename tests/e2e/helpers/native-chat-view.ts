@@ -10,14 +10,16 @@ export async function showActivePaneAsNativeChat(
   const descriptor = await waitForActivePaneHookDescriptor(page)
   await page.evaluate(
     async ({ paneKey, worktreeId, agentType, title }) => {
-      const settings = await window.api.settings.set({ experimentalNativeChat: true })
+      const settings = await window.api.settings.set({
+        nativeChatProviders: { claude: true, codex: true }
+      })
       const store = window.__store
       if (!store) {
         throw new Error('Store unavailable')
       }
       store.setState({ settings })
       const state = store.getState()
-      state.setAgentStatus(paneKey, { state: 'idle', agentType, prompt: '' }, title, undefined, {
+      state.setAgentStatus(paneKey, { state: 'done', agentType, prompt: '' }, title, undefined, {
         worktreeId
       })
       const [tabId] = paneKey.split(':')

@@ -1,10 +1,65 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+
+import { registerCapturedAutomationRunActionTests } from './automation-captured-run-actions.spec'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { cleanup } from '@testing-library/react'
+import { i18n } from '@/i18n/i18n'
+import es from '@/i18n/locales/es.json'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getAutomationTargetAvailability } from './automation-target-availability'
+import type { AppState } from '@/store/types'
+import {
+  adoptEndpointRepo,
+  adoptEndpointProjectHostSetup
+} from '../../../../shared/endpoint-catalog-adoption'
+import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree-host-ownership'
+import { mergeFetchedReposForHost } from '@/store/repos/repo-catalog-identity'
+import { mergeProjectHostSetupsByOwner } from '../../../../shared/project-compatibility-merge'
+import { resolveOwner } from '@/lib/resolve-owner'
+
+const actionMocks = vi.hoisted(() => {
+  const state: Partial<AppState> = {}
+  return {
+    rpc: vi.fn(),
+    interaction: vi.fn<AppState['recordFeatureInteraction']>(async () => {}),
+    error: vi.fn(),
+    state
+  }
+})
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: actionMocks.rpc,
+  getRuntimeEnvironmentStatus: vi.fn(async () => ({
+    capabilities: ['automation.owner-fencing.v1']
+  }))
+}))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: Partial<AppState>) => unknown) => selector(actionMocks.state),
+    {
+      getState: () => actionMocks.state
+    }
+  )
+}))
+vi.mock('@/store/selectors', () => ({
+  useRepoMap: () => new Map((actionMocks.state.repos ?? []).map((repo) => [repo.id, repo])),
+  useWorktreeMap: () =>
+    new Map(
+      Object.values(actionMocks.state.worktreesByRepo ?? {})
+        .flat()
+        .map((row) => [row.id, row])
+    )
+}))
+vi.mock('@/lib/agent-catalog', () => ({
+  getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }],
+  AgentIcon: () => null
+}))
+afterEach(cleanup)
+vi.mock('sonner', () => ({ toast: { error: actionMocks.error, message: vi.fn() } }))
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
@@ -87,6 +142,72 @@ function makeRuntimeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatu
 }
 
 describe('automation target availability', () => {
+  it.each([false, true])(
+    'keeps the paired local workspace route local with a nested SSH repo twin, reversed=%s',
+    (reverse) => {
+      const repos = [
+        makeRepo({ executionHostId: 'local' }),
+        makeRepo({ executionHostId: 'ssh:box', connectionId: 'box' })
+      ].map((repo) => adoptEndpointRepo({ kind: 'environment', environmentId: 'gpu' }, repo))
+      if (reverse) {
+        repos.reverse()
+      }
+      const row = withRepoHostOwnership(
+        makeWorkspace({ id: 'repo-1::/repo', hostId: 'local' }),
+        'runtime:gpu'
+      )
+      expect(
+        resolveOwner(
+          { repos, worktreesByRepo: { 'repo-1': [row] } },
+          { workspaceId: row.id, hostId: 'runtime:gpu' }
+        )
+      ).toMatchObject({
+        kind: 'resolved',
+        owner: { endpoint: { kind: 'environment', environmentId: 'gpu' }, at: 'local' }
+      })
+    }
+  )
+  it.each([false, true])(
+    'keeps endpoint local and nested SSH copied rows through actual catalog ingestion, reversed=%s',
+    (reverse) => {
+      const target = { kind: 'environment' as const, environmentId: 'gpu' }
+      const repos = [
+        makeRepo({ executionHostId: 'local' }),
+        makeRepo({ executionHostId: 'ssh:box', connectionId: 'box' })
+      ].map((repo) => adoptEndpointRepo(target, repo))
+      const setups = [
+        makeProjectHostSetup({ hostId: 'local' }),
+        makeProjectHostSetup({ hostId: 'ssh:box', executionHostId: 'ssh:box' })
+      ].map((setup) => adoptEndpointProjectHostSetup(target, setup))
+      if (reverse) {
+        repos.reverse()
+        setups.reverse()
+      }
+      expect(mergeProjectHostSetupsByOwner([], setups)).toHaveLength(2)
+      const merged = mergeFetchedReposForHost([], repos, 'runtime:gpu')
+      expect(merged).toHaveLength(2)
+      expect(merged.some((repo) => repo.connectionId === 'box')).toBe(true)
+      expect(merged.some((repo) => !repo.connectionId)).toBe(true)
+      const refreshed = mergeFetchedReposForHost(merged, structuredClone(repos), 'runtime:gpu')
+      expect(refreshed).toBe(merged)
+      const changed = repos.map((repo) =>
+        repo.connectionId === 'box' ? { ...repo, displayName: 'Changed SSH' } : repo
+      )
+      const updated = mergeFetchedReposForHost(refreshed, changed, 'runtime:gpu')
+      expect(updated.find((repo) => !repo.connectionId)).toBe(
+        merged.find((repo) => !repo.connectionId)
+      )
+      expect(updated.find((repo) => repo.connectionId === 'box')?.displayName).toBe('Changed SSH')
+    }
+  )
+  registerCapturedAutomationRunActionTests({
+    actionMocks,
+    makeAutomation,
+    makeRepo,
+    makeWorkspace,
+    makeProjectHostSetup
+  })
+
   it('allows local automations with an available existing workspace', () => {
     expect(
       getAutomationTargetAvailability({
@@ -121,8 +242,8 @@ describe('automation target availability', () => {
     ).toBe('missing-workspace')
   })
 
-  it('blocks a saved run context that no longer matches the repo host setup', () => {
-    expect(
+  it('blocks a saved run context that no longer matches the repo host setup', async () => {
+    const availability = () =>
       getAutomationTargetAvailability({
         automation: makeAutomation({
           runContext: {
@@ -138,8 +259,20 @@ describe('automation target availability', () => {
         workspace: makeWorkspace(),
         projectHostSetups: [makeProjectHostSetup()],
         sshConnectionStates: new Map()
-      }).reason
-    ).toBe('host-mismatch')
+      })
+    expect(availability().reason).toBe('host-mismatch')
+    const originalLanguage = i18n.language
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage('es')
+    try {
+      expect(availability()).toEqual({
+        canRunNow: false,
+        reason: 'host-mismatch',
+        message: es.auto.components.automations.automationTargetAvailability.hostMismatch
+      })
+    } finally {
+      await i18n.changeLanguage(originalLanguage)
+    }
   })
 
   it('allows a run context whose derived projectId tier drifted but repo/host/path still match', () => {
@@ -186,8 +319,7 @@ describe('automation target availability', () => {
   })
 
   it('still blocks when the setup repoId drifts even though the live repo still matches', () => {
-    // Live repo matches runContext.repoId (repoMatchesContext passes), so this
-    // isolates the setup-side repoId clause that survives the projectId removal.
+    // Keep the live repo matching so this isolates setup-side repoId checks after dropping derived projectId.
     expect(
       getAutomationTargetAvailability({
         automation: makeAutomation({
@@ -208,38 +340,65 @@ describe('automation target availability', () => {
     ).toBe('host-mismatch')
   })
 
-  it('allows remote-listed SSH automations whose repo is projected through a runtime server', () => {
-    expect(
-      getAutomationTargetAvailability({
-        automation: makeAutomation({
-          executionTargetType: 'ssh',
-          executionTargetId: 'devbox',
-          runContext: {
-            kind: 'workspace-run',
-            projectId: 'project-1',
-            hostId: 'ssh:devbox',
-            projectHostSetupId: 'setup-1',
-            repoId: 'repo-1',
-            path: '/repo'
-          }
-        }),
-        repo: makeRepo({
-          connectionId: 'devbox',
-          executionHostId: 'runtime:gpu'
-        }),
-        workspace: makeWorkspace(),
-        projectHostSetups: [
-          makeProjectHostSetup({
-            hostId: 'ssh:devbox',
-            connectionId: 'devbox',
-            executionHostId: 'ssh:devbox'
-          })
-        ],
-        sshConnectionStates: new Map([['devbox', { status: 'connected' }]]),
-        automationHostTarget: { kind: 'environment', environmentId: 'gpu' }
-      })
-    ).toEqual({ canRunNow: true, reason: 'available', message: null })
-  })
+  it.each(['adopted', 'older-repo-projection'] as const)(
+    'allows runtime-owned SSH using %s setup evidence and its server mirror',
+    (shape) => {
+      const target = { kind: 'environment' as const, environmentId: 'gpu' }
+      const repo = adoptEndpointRepo(
+        target,
+        makeRepo({ executionHostId: 'ssh:devbox', connectionId: 'devbox' })
+      )
+      const setup =
+        shape === 'adopted'
+          ? adoptEndpointProjectHostSetup(
+              target,
+              makeProjectHostSetup({
+                hostId: 'ssh:devbox',
+                connectionId: 'devbox',
+                executionHostId: 'ssh:devbox'
+              })
+            )
+          : projectHostSetupProjectionFromRepos([repo]).setups[0]
+      expect(
+        getAutomationTargetAvailability({
+          automation: makeAutomation({
+            executionTargetType: 'ssh',
+            executionTargetId: 'devbox',
+            runContext: {
+              kind: 'workspace-run',
+              projectId: 'project-1',
+              hostId: 'ssh:devbox',
+              projectHostSetupId: setup.id,
+              repoId: 'repo-1',
+              path: '/repo'
+            }
+          }),
+          repo,
+          workspace: makeWorkspace(),
+          projectHostSetups: [setup],
+          sshConnectionStates: new Map([['devbox', { status: 'auth-failed' }]]),
+          sshStateByEnvironment: new Map([
+            [
+              'gpu',
+              {
+                targetsHydrated: true,
+                targetLabels: new Map(),
+                targetGenerations: new Map(),
+                removedTargetLabels: new Map(),
+                connectionStates: new Map([
+                  [
+                    'devbox',
+                    { targetId: 'devbox', status: 'connected', error: null, reconnectAttempt: 0 }
+                  ]
+                ])
+              }
+            ]
+          ]),
+          automationHostTarget: target
+        })
+      ).toEqual({ canRunNow: true, reason: 'available', message: null })
+    }
+  )
 
   it('allows remote-listed server-local automations whose setup is projected through a runtime server', () => {
     expect(

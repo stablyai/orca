@@ -1,7 +1,3 @@
-/**
- * The surface half of auto-acknowledgement: which adapter owns a viewed target's address, and the
- * write that acknowledges one target.
- */
 import type { useAppStore } from '@/store'
 import type { AgentAttentionSurface } from '@/attention/agent-attention-contract'
 import {
@@ -30,7 +26,6 @@ export function surfaceForAutoAckTarget(
     : createTerminalAttentionSurface(state)
 }
 
-/** Subject-keyed view of the store's turn bookkeeping for the neutral acknowledgement policy. */
 export function readAgentAttentionTurnRecords(state: StoreSnapshot): AgentAttentionTurnRecords {
   return {
     liveTurns: state.agentStatusByPaneKey,

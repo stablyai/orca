@@ -17,11 +17,7 @@ function referencedAssets(html) {
   return [...assets]
 }
 
-/**
- * Why: orcad serves the browser client by path from the CLI's own app root, and it runs on plain
- * Node, which cannot read app.asar. So the page and everything it loads must be unpacked beside
- * out/cli, or `orca serve` comes up with no web client (#30100).
- */
+// Plain Node orcad cannot read app.asar; unpack browser client and dependencies beside CLI app root or serve launches without web client (#30100).
 function assertPackagedWebClient(resourcesDir) {
   const outDir = join(resourcesDir, 'app.asar.unpacked', 'out')
   if (!existsSync(join(outDir, 'cli'))) {
@@ -108,10 +104,7 @@ function missingRelativeRequires(entry) {
   return [...missing]
 }
 
-/**
- * Why: `orca serve` asks this entry which host to serve on, running it on the app's executable
- * as plain Node, which cannot read app.asar. A packed copy made every serve fall back (#27404).
- */
+// Run host-selection entry as plain Node from app executable; packed entry forces every serve into fallback (#27404).
 function assertPackagedServeSelectionEntry(resourcesDir) {
   const entry = join(resourcesDir, 'app.asar.unpacked', 'out', ...SERVE_SELECTION_ENTRY.split('/'))
   if (!existsSync(entry)) {

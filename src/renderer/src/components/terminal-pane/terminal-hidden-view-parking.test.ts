@@ -87,10 +87,7 @@ describe('isSnapshotBackedTerminalPty', () => {
     )
   })
 
-  // Why: separator-less ids ('1', '2', 'pty-local-detached') come from the
-  // daemon-fail-open LocalPtyProvider and have no daemon session model —
-  // revealing a parked pane would silently respawn a fresh shell, so they
-  // must not count as snapshot-backed (changed from the ported prior art).
+  // Daemon-fail-open IDs lack snapshot models; parking would respawn a shell instead of restoring it.
   it('rejects separator-less local PTY ids that lack a daemon session model', () => {
     expect(isSnapshotBackedTerminalPty('pty-local-detached', 'repo::/worktree')).toBe(false)
     expect(isSnapshotBackedTerminalPty('1', 'wt-1')).toBe(false)
@@ -236,9 +233,7 @@ describe('canParkTerminalWorktreeRenderers', () => {
     ).toBe(true)
   })
 
-  // Why: hiddenSince survives a background-measure window, so a past-deadline
-  // worktree would otherwise re-park the instant the measure lease ends —
-  // remount/reattach thrash on every ~3s periodic probe.
+  // Measure leaves hiddenSince intact; cool-down prevents immediate re-park and repeated remount thrash.
   it('holds an otherwise past-deadline candidate out of park until the measure cool-down ends', () => {
     expect(canParkTerminalWorktreeRenderers({ ...base, parkCooldownUntilMs: nowMs + 1 })).toBe(
       false
@@ -399,8 +394,7 @@ describe('selectColdParkedTerminalWorktrees', () => {
   it('cold-parks aged local worktrees even when under the retain limit', () => {
     const selected = selectColdParkedTerminalWorktrees({
       worktrees: [
-        // Why: wt-recent is the last-active exempt one; wt-1 proves the TTL
-        // sweep still parks an aged worktree that is under the cap.
+        // wt-recent takes last-active exemption; wt-1 proves TTL still parks aged candidates below the cap.
         localCandidate('wt-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localCandidate('wt-1', nowMs - TERMINAL_WORKTREE_HOT_RETAIN_MS)
       ],
@@ -443,9 +437,7 @@ describe('selectColdParkedTerminalWorktrees', () => {
   it('does not cold-park terminals without local snapshot recovery', () => {
     const selected = selectColdParkedTerminalWorktrees({
       worktrees: [
-        // Why: wt-recent is last-active (exempt); wt-local proves the aged
-        // local worktree still parks while ssh/remote never enter the candidate
-        // set at all.
+        // wt-recent takes the exemption; aged local still parks while SSH/remote stay outside this fixture’s candidates.
         localCandidate('wt-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localCandidate('wt-local', nowMs - TERMINAL_WORKTREE_HOT_RETAIN_MS),
         {
@@ -551,8 +543,7 @@ describe('selectColdParkedTerminalTabs', () => {
     expect(selected).toEqual(new Set(['tab-3']))
   })
 
-  // Why worktree-scoped: measure windows mount every tab of the worktree, so
-  // one cool-down (not per-tab clocks) delays re-park after the lease ends.
+  // Measure mounts all tabs, so one worktree cool-down delays their re-park together.
   it('selects nothing while the post-measure cool-down is active', () => {
     const args = {
       worktreeId: 'wt-1',
@@ -578,8 +569,7 @@ describe('selectColdParkedTerminalTabs', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
       terminalTabs: [
-        // Why: tab-recent is last-active exempt; tab-1 proves the TTL sweep
-        // still parks an aged tab under the cap.
+        // tab-recent takes the exemption; tab-1 proves TTL still parks aged tabs below the cap.
         localTab('tab-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localTab('tab-1', nowMs - TERMINAL_TAB_HOT_RETAIN_MS)
       ],
@@ -662,8 +652,7 @@ describe('selectColdParkedTerminalTabs', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
       terminalTabs: [
-        // Why: tab-recent is last-active exempt; tab-local proves the aged
-        // local tab still parks while ssh/remote never enter the candidate set.
+        // tab-recent takes the exemption; aged local still parks while SSH/remote stay outside these candidates.
         localTab('tab-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localTab('tab-local', nowMs - TERMINAL_TAB_HOT_RETAIN_MS),
         {

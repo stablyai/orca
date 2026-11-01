@@ -6,33 +6,15 @@ import { collectMobileWebAppRoutes } from './mobile-web-app-route-manifest.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../../mobile', import.meta.url))
 
-/**
- * The file the build actually put in a chunk for this route, which is not always the one named.
- *
- * `resolveExtensions` puts `.web.tsx` ahead of `.tsx`, so a route with a sibling is bundled as the
- * sibling and the named path appears in no output at all. Until C7.7 the session route had none
- * and the lookup below was exact; the first route with a sibling to be asked for reached "no
- * output" instead — a route that is served on the page reading as one the bundle never built.
- */
+// Match resolved web sibling in output metafile; named native .tsx may never appear because resolveExtensions prefers .web.tsx.
 function chunkOwnerPaths(routeModule) {
   const named = resolve(mobileDir, routeModule)
   const sibling = named.replace(/\.(tsx?)$/, '.web.$1')
   return sibling === named ? [named] : [sibling, named]
 }
 
-/**
- * What a browser must download before one page route can paint, and what it may defer.
- *
- * `mobileWebAppRouteClosure` answers a different question: it reads `metafile.inputs`, which holds
- * every module an entry reaches including the ones behind `import()`, so it cannot say "on
- * demand" about anything (ruling 28). This walks the emitted chunks instead, from the output the
- * route's own module landed in, and follows only `import-statement` edges — which is exactly where
- * a dynamic import stops being part of the download.
- *
- * Both halves come back, because the interesting claim is always a difference: `staticInputs` is
- * what the route costs to open, `deferredInputs` is everything else the bundle emitted, and a
- * module absent from the first is only meaningful while it is present in the second.
- */
+// Walk emitted chunks’ import-statement edges for initial download cost; input closure includes dynamic imports and cannot prove laziness.
+// Return deferred inputs too: absence from static inputs matters only when module still exists elsewhere in bundle.
 export async function mobileWebAppRouteChunkClosure(routeModule) {
   const routes = await collectMobileWebAppRoutes(join(mobileDir, 'app'))
   const { metafile } = await esbuild.build({

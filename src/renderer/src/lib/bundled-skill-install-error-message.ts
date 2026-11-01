@@ -36,7 +36,6 @@ const KNOWN_FAILURE_MESSAGES: ReadonlyMap<string, () => string> = new Map([
   ['skill-install-home-unavailable', homeUnavailable]
 ])
 
-/** Plain copy for a thrown install error; an unknown code still names itself for support. */
 export function bundledSkillInstallErrorMessage(error: unknown): string {
   const fallback = translate(
     'auto.lib.bundled.skill.install.error.message.unknown',

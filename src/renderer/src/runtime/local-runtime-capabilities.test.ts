@@ -122,8 +122,7 @@ describe('local runtime capabilities', () => {
       .mockResolvedValueOnce({ capabilities: ['agent-session.structured.v1'] })
     Object.assign(window, { api: { runtime: { getStatus } } })
 
-    // A failed probe is not evidence about the host, so it must not latch as a denial:
-    // the answer stays unknown and the next caller pays for a fresh probe.
+    // Failed probes prove no unsupported capability; keep unknown and let later callers retry.
     await expect(ensureLocalRuntimeCapabilities()).resolves.toBeNull()
     await expect(ensureLocalRuntimeCapabilities()).resolves.toEqual(['agent-session.structured.v1'])
     expect(getStatus).toHaveBeenCalledTimes(2)

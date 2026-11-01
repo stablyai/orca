@@ -46,8 +46,7 @@ export async function settleWebRuntimeTerminalPlacement(
       : undefined
     const state = useAppStore.getState()
     const groups = state.groupsByWorktree[worktreeId] ?? []
-    // Why: the requested group can be closed while the mirrored tab is still in flight; the
-    // anchor's own group still expresses where the caller asked for this terminal.
+    // Requested group can close during create; use the anchor’s group as caller placement.
     const targetGroup =
       groups.find((group) => group.id === placement.groupId) ??
       (anchorId === undefined
@@ -57,8 +56,7 @@ export async function settleWebRuntimeTerminalPlacement(
       return
     }
     if (tab.groupId !== targetGroup.id) {
-      // Why: a snapshot can adopt the tab before the record exists (the publication races the
-      // RPC response); repair through the same client-owned move a user drag takes.
+      // Snapshot may beat placement recording; repair through the same client-owned move as user drags.
       state.moveUnifiedTabToGroup(unifiedTabId, targetGroup.id, {
         activate: placement.activate,
         recordInteraction: false

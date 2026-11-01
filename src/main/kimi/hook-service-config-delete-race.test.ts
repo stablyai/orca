@@ -8,9 +8,7 @@ const deleteRace = vi.hoisted((): { path: string | null; code: string } => ({
   code: 'ENOENT'
 }))
 
-// Why: simulates the config file (or an ancestor directory) vanishing between
-// writeConfigToml's existsSync check and its statSync mode read — e.g. a
-// concurrent uninstall, user delete, or a directory replaced by a file.
+// Simulate the config or its ancestor disappearing between existence and mode reads.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const statSync = (

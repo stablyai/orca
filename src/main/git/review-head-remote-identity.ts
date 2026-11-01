@@ -6,8 +6,7 @@ type LocalGitExecOptions = {
   wslDistro?: string
 }
 
-// Why: the durable review-head ref embeds the remote's identity, and a missing
-// remote must fail with an actionable message instead of a raw fetch error.
+// Resolve remote identity before constructing its durable review ref, with actionable errors for missing remotes.
 export async function getReviewHeadRemoteComponent(
   remote: string,
   localGitExecOptions: LocalGitExecOptions

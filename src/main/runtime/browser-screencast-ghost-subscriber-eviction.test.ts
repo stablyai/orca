@@ -36,8 +36,7 @@ describe('screencast ghost-subscriber delivery state', () => {
     expect(screencastSubscriberIsGhost(belowLimit)).toBe(false)
   })
 
-  // Why: a joining subscriber's pre-ready gate refuses every frame, and those refusals are about
-  // this process's own gate rather than the viewer's socket.
+  // Pre-ready refusals describe our gate, not viewer socket health.
   it('never evicts a subscriber no frame has ever reached', () => {
     const neverReached = replay(refusals(BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT * 10))
     expect(neverReached.refusalStreak).toBeGreaterThan(
@@ -46,8 +45,6 @@ describe('screencast ghost-subscriber delivery state', () => {
     expect(screencastSubscriberIsGhost(neverReached)).toBe(false)
   })
 
-  // Why: transient backpressure is what a delivery in the middle of a run proves, and it must
-  // never accumulate toward eviction across the recovery.
   it('never reaches the limit while deliveries keep interleaving', () => {
     let state = INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY
     for (let frame = 0; frame < BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT * 4; frame += 1) {
@@ -56,8 +53,7 @@ describe('screencast ghost-subscriber delivery state', () => {
     }
   })
 
-  // Why: the limit has to sit far enough above a backpressure hiccup to be evidence, and far
-  // enough below the ws heartbeat reap it exists to beat to be worth having.
+  // Bound eviction between a backpressure hiccup and heartbeat reaping.
   it('keeps the limit inside the window that makes eviction meaningful', () => {
     expect(BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT).toBeGreaterThan(10)
     expect(BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT).toBeLessThan(900)

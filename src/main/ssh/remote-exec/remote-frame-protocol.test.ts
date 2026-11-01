@@ -17,9 +17,9 @@ describe('frame encoding', () => {
 
     expect(frame.length).toBe(HEADER_LENGTH + payload.length)
     expect(frame[0]).toBe(MessageType.Regular)
-    expect(frame.readUInt32BE(1)).toBe(1) // ID
-    expect(frame.readUInt32BE(5)).toBe(0) // ACK
-    expect(frame.readUInt32BE(9)).toBe(5) // LENGTH
+    expect(frame.readUInt32BE(1)).toBe(1)
+    expect(frame.readUInt32BE(5)).toBe(0)
+    expect(frame.readUInt32BE(9)).toBe(5)
     expect(frame.subarray(HEADER_LENGTH).toString()).toBe('hello')
   })
 
@@ -28,9 +28,9 @@ describe('frame encoding', () => {
 
     expect(frame.length).toBe(HEADER_LENGTH)
     expect(frame[0]).toBe(MessageType.KeepAlive)
-    expect(frame.readUInt32BE(1)).toBe(42) // ID
-    expect(frame.readUInt32BE(5)).toBe(10) // ACK
-    expect(frame.readUInt32BE(9)).toBe(0) // LENGTH
+    expect(frame.readUInt32BE(1)).toBe(42)
+    expect(frame.readUInt32BE(5)).toBe(10)
+    expect(frame.readUInt32BE(9)).toBe(0)
   })
 
   it('encodes JSON-RPC frame', () => {
@@ -65,9 +65,7 @@ describe('frame encoding', () => {
 })
 
 describe('FrameDecoder', () => {
-  // Framing correctness should not depend on wall-clock turn budgeting; the
-  // default 4ms maxTurnMs can defer later frames via setImmediate under CI load.
-  // Time-sliced drain is covered by relay-protocol-backpressure.test.ts.
+  // Freeze clock for framing cases; relay-protocol-backpressure.test.ts separately covers time-sliced drain under CI load.
   const frozenClock = { now: () => 0 }
 
   it('decodes a complete frame', () => {
@@ -92,7 +90,6 @@ describe('FrameDecoder', () => {
     const payload = Buffer.from('hello world')
     const encoded = encodeFrame(MessageType.Regular, 2, 1, payload)
 
-    // Feed in two parts
     decoder.feed(encoded.subarray(0, 10))
     expect(frames).toHaveLength(0)
 
@@ -154,12 +151,10 @@ describe('FrameDecoder', () => {
     const frames: DecodedFrame[] = []
     const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
-    // Feed a partial frame
     const encoded = encodeFrame(MessageType.Regular, 1, 0, Buffer.from('test'))
     decoder.feed(encoded.subarray(0, 5))
     decoder.reset()
 
-    // Feed a new complete frame
     decoder.feed(encodeFrame(MessageType.Regular, 2, 0, Buffer.from('new')))
     expect(frames).toHaveLength(1)
     expect(frames[0].id).toBe(2)
@@ -213,9 +208,7 @@ describe('FrameDecoder', () => {
   })
 
   it('never rebuilds the buffered stream per feed while assembling a large frame', () => {
-    // Regression: feed() used Buffer.concat([buffered, chunk]) per data event,
-    // re-copying the whole backlog for every TCP chunk — O(n²) memcpy on the
-    // Electron main thread while fs.streamChunk frames arrive (SSH typing lag).
+    // Guard against per-chunk Buffer.concat recopying the full backlog quadratically and blocking main/SSH input.
     const frames: DecodedFrame[] = []
     const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
     const frame = encodeFrame(MessageType.Regular, 1, 0, Buffer.alloc(512 * 1024, 0x61))

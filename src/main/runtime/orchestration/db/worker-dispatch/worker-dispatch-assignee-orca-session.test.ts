@@ -70,7 +70,6 @@ describe('assignee identity writers', () => {
   })
 
   it('refuses a minted structured-worker handle as an Orca session id', () => {
-    // Ties the handle-prefix refusal to the handle this runtime actually mints.
     expect(isOrcaSessionId(mintStructuredWorkerHandle())).toBe(false)
   })
 })

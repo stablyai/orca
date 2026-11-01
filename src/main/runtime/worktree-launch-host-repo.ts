@@ -15,42 +15,26 @@ export type WorktreeLaunchHostResolution<T extends LaunchHostRepo> =
 export type WorktreeHostRouting<T extends LaunchHostRepo> =
   /** `repo` is metadata; the host is the routing answer. */
   | { kind: 'resolved'; hostId: ExecutionHostId; repo: T | null }
-  /** No row carries this repo id and the worktree names no host — nothing ever named a host. */
+  /** No repo row or workspace host ever named an owner. */
   | { kind: 'unowned' }
-  /**
-   * No single trustworthy host: rival rows disagree, or the resolved row named one that cannot be
-   * parsed. Guessing is the cross-host leak in both cases.
-   */
+  /** Disagreeing or malformed owners are ambiguous; guessing leaks across hosts. */
   | { kind: 'ambiguous' }
 
-/**
- * Main-side adapter over the shared execution-host rule
- * (`src/shared/worktree-execution-host-resolution.ts`), which the renderer's owner index answers
- * with too. What is local to this side is the disposal of the two `unresolved` reasons: rival rows
- * that disagree about the host are `ambiguous` and callers throw, while an id nobody carries is
- * `unowned` — the launch path's long-standing behaviour for a worktree whose repo row has gone.
- */
+/** Adapt the shared renderer/main ownership rule: unknown ids remain unowned for legacy local-folder launches; conflicting/malformed owners fail closed. */
 export function resolveWorktreeHostRouting<T extends LaunchHostRepo & ExecutionHostOwnerRow>(
   repos: readonly T[],
-  worktree: { repoId: string; hostId?: string | null }
+  worktree: { repoId: string; hostId?: string | null },
+  lookup = createRepoRowExecutionHostLookup(repos)
 ): WorktreeHostRouting<T> {
-  const resolution = resolveWorktreeExecutionHost(createRepoRowExecutionHostLookup(repos), worktree)
+  const resolution = resolveWorktreeExecutionHost(lookup, worktree)
   if (resolution.kind === 'unresolved') {
-    // Only `unknown` — nothing anywhere carries the id — becomes `unowned`, which callers dispose of
-    // as a plain local folder. `malformed` is a row that declared a host and named an unparseable
-    // one, so it joins `ambiguous`: guessing is the cross-host leak either way.
+    // Only a wholly unknown id permits local fallback; a malformed declared host must fail closed.
     return resolution.reason === 'unknown' ? { kind: 'unowned' } : { kind: 'ambiguous' }
   }
   return { kind: 'resolved', hostId: resolution.hostId, repo: resolution.owner }
 }
 
-/**
- * The same resolution, answering "what may this client dial" rather than "which host is this on".
- * The connection comes off the *host*, not the resolved row: this is a client-dialable PTY route,
- * so a `runtime:` host contributes nothing — its nested SSH target belongs to that machine's
- * namespace and spawning against it here would dial the wrong box. The renderer wants the opposite
- * answer from the same resolution, which is why the shared type carries both.
- */
+/** Return only client-dialable routes from the resolved host; runtime-nested SSH ids belong to that environment's namespace. The renderer uses the shared resolution differently. */
 export function resolveWorktreeLaunchHost<T extends LaunchHostRepo & ExecutionHostOwnerRow>(
   repos: readonly T[],
   worktree: { repoId: string; hostId?: string | null }

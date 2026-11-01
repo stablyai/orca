@@ -3,7 +3,7 @@ import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orc
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { createOrcadMigrationSourceScope, orcadMigrationOwnsRepoId } from './orcad-source-scope'
 
-/** The manifest's automations, and any a downgraded build added to a moved project since. */
+/** Include rows a downgraded build added to moved projects. */
 export function subtractOrcadMigrationSourceAutomationState(
   state: PersistedState,
   manifest: OrcadMigrationManifest

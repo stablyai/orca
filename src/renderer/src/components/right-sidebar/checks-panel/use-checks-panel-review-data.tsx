@@ -47,16 +47,18 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     setCommentsError,
     setCommentsLoading
   } = model
-  // Fetch comments once when PR changes (no polling — comments change infrequently).
   const fetchComments = useCallback(
     async ({
       force = false,
       prNumberOverride,
-      prRepoOverride
+      prRepoOverride,
+      userRefresh = false
     }: {
       force?: boolean
       prNumberOverride?: number | null
       prRepoOverride?: PRInfo['prRepo'] | null
+      /** A follow-up to a write: it must not be answered by a read begun before the write. */
+      userRefresh?: boolean
     } = {}) => {
       const targetPRNumber = prNumberOverride ?? prNumber
       const targetPRRepo = prRepoOverride ?? pr?.prRepo
@@ -75,7 +77,8 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         const result = await fetchPRComments(repo.path, targetPRNumber, {
           force,
           repoId: repo.id,
-          prRepo: targetPRRepo
+          prRepo: targetPRRepo,
+          ...(userRefresh ? { userRefresh: true } : {})
         })
         if (!isCurrentAsyncResult(requestKey)) {
           return
@@ -149,7 +152,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     [fetchPRCheckDetails, pr?.prRepo, repo, activeWorktree, gitLabProjectRefRef]
   )
 
-  // Why: read at call time — the ref is filled by an async MR fetch, so a value prop would be stale.
+  // Read the ref at call time because async MR fetches can fill it after render.
   const getGitLabProjectRef = useCallback(() => gitLabProjectRefRef.current, [gitLabProjectRefRef])
 
   useEffect(() => {
@@ -211,7 +214,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       if (!sameRepo || payload.type !== 'pr' || payload.number !== prNumber) {
         return
       }
-      void fetchComments({ force: true })
+      void fetchComments({ force: true, userRefresh: true })
     })
   }, [activeGitLabReview, fetchComments, isPanelVisible, prNumber, repo])
   return { fetchComments, handleLoadCheckDetails, getGitLabProjectRef }

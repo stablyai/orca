@@ -1,5 +1,4 @@
-// applyLayoutCommand: every layout change a client can ask for, applied to the model in one step.
-// Pure and synchronous, so the runtime applies commands in arrival order on one thread.
+// Apply pure layout commands synchronously so runtime arrival order remains authoritative.
 
 import {
   closeBrowserPage,
@@ -61,7 +60,6 @@ const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
   'openSimulatorTab'
 ])
 
-/** A `renameTabs` as the `renameTab` each of its titles is. */
 export function renameTabCommandsOf(command: RenameTabsCommand): CommandOf<'renameTab'>[] {
   return command.renames.map(({ workspace, tabId, title, replaceExisting }) => ({
     type: 'renameTab',

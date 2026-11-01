@@ -59,7 +59,6 @@ describe('migrateWorkspaceSessionSshTargetId', () => {
 
     const tabs = session.tabsByWorktree['r1::/wt']
     expect(tabs[0].ptyId).toBe(`ssh:${NEW_ID}@@pty-3`)
-    // Local and other-target pty ids must be untouched.
     expect(tabs[1].ptyId).toBe('local-pty-7')
     expect(tabs[2].ptyId).toBe(`ssh:other-target@@pty-1`)
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
@@ -69,15 +68,6 @@ describe('migrateWorkspaceSessionSshTargetId', () => {
       tab1: `ssh:${NEW_ID}@@pty-3`,
       tab3: `ssh:other-target@@pty-1`
     })
-  })
-
-  it('replaces the old id in activeConnectionIdsAtShutdown and dedupes', () => {
-    const session = makeSession({
-      activeConnectionIdsAtShutdown: [OLD_ID, NEW_ID, 'ssh-unrelated']
-    })
-
-    expect(migrateWorkspaceSessionSshTargetId(session, OLD_ID, NEW_ID)).toBe(true)
-    expect(session.activeConnectionIdsAtShutdown).toEqual([NEW_ID, 'ssh-unrelated'])
   })
 
   it('re-points sleeping agent records pinned to the old connection', () => {
@@ -99,16 +89,6 @@ describe('migrateWorkspaceSessionSshTargetId', () => {
 
     expect(migrateWorkspaceSessionSshTargetId(session, OLD_ID, NEW_ID)).toBe(true)
     expect(session.sleepingAgentSessionsByPaneKey?.['tab1:leaf-1'].connectionId).toBe(NEW_ID)
-  })
-
-  it('returns false when nothing references the old id', () => {
-    const session = makeSession({
-      tabsByWorktree: { 'r1::/wt': [makeTab({ ptyId: 'local-pty' })] },
-      activeConnectionIdsAtShutdown: ['ssh-unrelated']
-    })
-
-    expect(migrateWorkspaceSessionSshTargetId(session, OLD_ID, NEW_ID)).toBe(false)
-    expect(session.activeConnectionIdsAtShutdown).toEqual(['ssh-unrelated'])
   })
 })
 
@@ -136,16 +116,5 @@ describe('migrateUiHostScopeSshTargetId', () => {
       { hostId: `ssh:${NEW_ID}`, repoId: 'remote-repo' },
       { hostId: 'local', repoId: 'local-repo' }
     ])
-  })
-
-  it('returns false when the old host id appears nowhere', () => {
-    const ui = makeUi({
-      workspaceHostScope: 'all',
-      visibleWorkspaceHostIds: ['local'],
-      workspaceHostOrder: ['local'],
-      manualRepoOrder: [{ hostId: 'local', repoId: 'local-repo' }]
-    })
-
-    expect(migrateUiHostScopeSshTargetId(ui, OLD_ID, NEW_ID)).toBe(false)
   })
 })

@@ -1,3 +1,4 @@
+import { editorSaveResourceKey } from './slices/editor/buffers/editor-buffer-identity'
 import type { StateCreator } from 'zustand'
 import {
   editorBufferMirrorMismatch,
@@ -29,13 +30,7 @@ const NO_DRAFTS: Record<string, string> = {}
 const NO_DETACHMENTS = {}
 const NO_KEPT = {}
 
-/**
- * Ties editor buffer records and their view index to `openFiles` membership and file identity
- * inside the same write: views of one file share a record, a view whose identity changes (opened,
- * hydrated, owner resolved, renamed, routes changed) joins by the join rules, and a record with no
- * view left is dropped. Field writes go through the record (`writeEditorBuffer`); with
- * `checkInvariant` a write that drifts a view from its record throws.
- */
+/** Reconcile views/records atomically with openFiles identity/membership; same-file views join by identity rules and unreferenced records retire. Write fields via writeEditorBuffer; checkInvariant rejects mirror drift. */
 function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
   state: TState,
   requested: TState | Partial<TState>,
@@ -92,13 +87,18 @@ function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
     editorBufferDetached: detachments ?? NO_DETACHMENTS,
     editorBufferKept: kept ?? NO_KEPT
   }
-  // Why only on an identity pass: callers settle a record in steps (clean, then clear the draft);
-  // a rejoin between them would let the second step clear the draft the rejoin adopted.
+  // Rejoin only on identity passes: clean-then-clear-draft settlement must not adopt another draft between steps.
   const rejoin = Object.hasOwn(write, 'editorBufferIdentityRevision')
   const result = reconcileEditorBufferRecords(
     input,
     (file) => editorBufferIdForFile(file, routeState),
-    keepRequest && { ...keepRequest, drafts: state.editorDrafts ?? NO_DRAFTS },
+    keepRequest && {
+      ...keepRequest,
+      drafts: state.editorDrafts ?? NO_DRAFTS,
+      resourceKeys: new Map(
+        state.openFiles.map((file) => [file.id, editorSaveResourceKey(file, state)])
+      )
+    },
     rejoin
   )
   const changed: Partial<EditorBufferState> = {}
@@ -152,10 +152,7 @@ export function assertEditorBufferDraftsAgree(
   }
 }
 
-/**
- * Against the index: every view's record exists, every record has a view, and every view of a
- * record holds the same mirror fields and the same `editorDrafts` entry.
- */
+/** Require index/tab agreement, no orphan records, and identical mirror fields/draft entries for every shared view. */
 export function assertEditorBufferRecordsMatchViews(state: EditorBufferState): void {
   const recordIds = new Set(state.openFiles.map((file) => editorBufferIdOfView(state, file.id)))
   const keys = Object.keys(state.editorBuffers)

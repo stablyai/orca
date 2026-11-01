@@ -10,13 +10,9 @@ const MODES = new Set([
   'electron-fixed',
   'firefox-auth',
   'firefox-fixed',
-  // Replicates the app before and after the cross-host fix. Firefox UA is written
-  // to the WebContents on auth navs and to the request header only for auth-host
-  // URLs; every other request keeps whatever UA the WebContents carries. Logs incoming vs outgoing
-  // identity for ALL requests to expose cross-host mismatches during the flow.
+  // Pre-fix model: auth navigation sets Firefox WebContents UA, but only auth-host requests receive matching headers; log cross-host divergence.
   'app-current',
-  // Same, but with the STA-3811 fix: the header layer strips client hints on any
-  // request already carrying the Firefox auth UA, regardless of destination host.
+  // STA-3811 model strips client hints for any request already carrying the Firefox auth UA.
   'app-fixed'
 ])
 const mode = process.argv.find((arg) => arg.startsWith('--mode='))?.slice('--mode='.length)
@@ -79,8 +75,7 @@ function hostOf(rawUrl) {
   }
 }
 
-// A Firefox UA paired with any sec-ch-ua header is the cross-host tell we hunt:
-// real Firefox emits no client hints, so the two surfaces contradict each other.
+// Firefox UA with sec-ch-ua contradicts real Firefox, which sends no client hints.
 function detectUaHintMismatch(headers) {
   const ua = headers['user-agent'] || ''
   const isFirefox = /Firefox\/\d/.test(ua) && !/Chrome\//.test(ua)
@@ -170,17 +165,13 @@ app.whenReady().then(async () => {
     const incoming = relevantHeaders(headers)
 
     if (isAppMode) {
-      // Mirror setupGoogleAuthUserAgentOverride: only auth-host URLs get the Firefox UA
-      // header + hint strip; every other request keeps its incoming UA (which is
-      // the WebContents UA — Firefox while the auth document is on screen).
+      // Mirror auth-host override only; other destinations retain incoming WebContents UA, including Firefox auth-document subresources.
       if (isGoogleAuthUrl(details.url)) {
         setHeader(headers, 'user-agent', identities.firefox)
         removeClientHints(headers)
       } else {
         const currentUa = incoming['user-agent']
-        // STA-3811 fix: a request already carrying the Firefox auth UA came from
-        // the auth document; real Firefox sends no client hints, so strip them
-        // instead of rewriting to Chrome — keeping UA and hints one story.
+        // STA-3811: preserve Firefox auth identity and strip hints regardless of destination.
         if (mode === 'app-fixed' && currentUa === identities.firefox) {
           removeClientHints(headers)
         }
@@ -241,9 +232,7 @@ app.whenReady().then(async () => {
       return
     }
     if (isAppMode) {
-      // Mirror presentTabIdentityAtNavigationStart: Firefox UA on auth navs, restore the
-      // cleaned session UA otherwise. This WebContents UA is what leaks onto
-      // cross-host subresource requests while the auth document is on screen.
+      // Mirror navigation identity: Firefox for auth navs, cleaned UA otherwise; auth-document UA reaches cross-host subresources.
       const current = window.webContents.getUserAgent()
       if (isGoogleAuthUrl(url)) {
         if (current !== identities.firefox) {

@@ -1,13 +1,4 @@
-/**
- * A switch-on desktop paired to a switch-on `orca serve` (no window) closes, renames, splits and
- * creates terminals in a server workspace its frames draw (H5c-2). Each lands in the server main's
- * own layout: a close also stops the closed terminal, session.tabs on the server agrees, and the
- * desktop draws every result from the server's frames.
- *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
- *   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-desktop-server-layout-writes.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=2
- */
+// H5c-2: with ORCA_LAYOUT_OWNER=main, desktop close/rename/split/create must update windowless server layout, session tabs and drawn frames; close must also stop its PTY.
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'

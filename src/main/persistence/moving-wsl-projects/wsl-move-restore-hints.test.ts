@@ -65,7 +65,7 @@ describe('captureWslMoveRestoreHints', () => {
       noCwdPaneKeys: ['t:c', 't:d', 't:e'],
       staleCwdPaneKeys: ['t:h']
     })
-    // A sleep ends sessions cleanly; the read must not skip them for it.
+    // Clean Sleep exits must still expose checkpoints.
     expect(seen[0]).toEqual({ ignoreCleanEnd: true, wslDistro: 'Ubuntu' })
   })
 
@@ -119,5 +119,30 @@ describe('captureWslMoveRestoreHints', () => {
     )
     expect(capture.hints).toEqual([{ paneKey: 't:a', cwd: '/home/dev/app' }])
     expect(capture.staleCwdPaneKeys).toEqual(['t:a'])
+  })
+
+  // Bash on the bridge reports no folder, so an open pane's checkpoint kept its
+  // spawn folder and `cd deep/er` reopened at the project root.
+  it('prefers the folder the shell was in before Sleep over the spawn folder', async () => {
+    const capture = await captureWslMoveRestoreHints(
+      {
+        detectColdRestoreState: async () =>
+          restored('\\\\wsl.localhost\\Ubuntu\\home\\dev\\app', false, true)
+      },
+      [{ paneKey: 't:a', sessionId: 'wt@@a', shellCwd: '/home/dev/app/deep/er' }],
+      'Ubuntu'
+    )
+    expect(capture.hints).toEqual([{ paneKey: 't:a', cwd: '/home/dev/app/deep/er' }])
+    expect(capture.staleCwdPaneKeys).toEqual([])
+  })
+
+  it('uses the shell folder when the checkpoint has none', async () => {
+    const capture = await captureWslMoveRestoreHints(
+      { detectColdRestoreState: async () => ({ status: 'none' }) },
+      [{ paneKey: 't:a', sessionId: 'wt@@a', shellCwd: '/home/dev/app/deep' }],
+      'Ubuntu'
+    )
+    expect(capture.hints).toEqual([{ paneKey: 't:a', cwd: '/home/dev/app/deep' }])
+    expect(capture.noCwdPaneKeys).toEqual([])
   })
 })

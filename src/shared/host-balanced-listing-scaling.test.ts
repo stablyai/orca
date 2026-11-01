@@ -38,8 +38,7 @@ it('retires exhausted host buckets from subsequent listing rounds', () => {
   expect(reads).toBeLessThanOrEqual(2000)
 })
 
-// Retirement is only safe while every retained bucket outlives the round it is read at. If that
-// predicate drifts, `bucket[round]` yields undefined and the page grows blank rows.
+// Retained buckets must outlive their round index or undefined rows enter the page.
 it('fills every cap exactly, without undefined or duplicate rows', () => {
   const rows = [
     ...Array.from({ length: 3 }, (_, index) => ({ host: 'a', id: index })),
@@ -52,7 +51,6 @@ it('fills every cap exactly, without undefined or duplicate rows', () => {
     expect(page).toHaveLength(limit)
     expect(page.every((row) => row !== undefined)).toBe(true)
     expect(new Set(pageIds).size).toBe(limit)
-    // the page must stay a subsequence of the caller's original order
     expect(pageIds).toEqual([...pageIds].sort((left, right) => left - right))
   }
 })

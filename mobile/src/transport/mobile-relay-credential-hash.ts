@@ -1,7 +1,6 @@
 import { sha256 } from '@noble/hashes/sha256'
 
-// Why: the relay stores a digest of the serialized base64url bearer, not the
-// random bytes it encodes, so every installer must hash the wire token text.
+// Hash serialized bearer text, not decoded random bytes, to match the relay’s stored credential digest.
 export function hashMobileRelayCredential(token: string): string {
   return encodeBase64Url(sha256(new TextEncoder().encode(token)))
 }

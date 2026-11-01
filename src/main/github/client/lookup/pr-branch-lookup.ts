@@ -18,6 +18,8 @@ import {
   type RestPullRequest
 } from './pull-request-lookup-data'
 import { getPRByNumber } from './pr-number-lookup'
+import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
+import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 export async function getRestPRForBranch(
   prRepo: GitHubApiRepository,
   headOwner: string,
@@ -25,9 +27,10 @@ export async function getRestPRForBranch(
   ghOptions: ReturnType<typeof ghRepoExecOptions>
 ): Promise<PullRequestLookupData | null> {
   const head = encodeURIComponent(`${headOwner}:${branchName}`)
-  const { stdout } = await ghExecFileAsync(
-    ['api', `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=all&per_page=1`],
-    { ...ghOptions, ...githubHostExecOptions(prRepo) }
+  const stdout = await revalidateGitHubRestJson(
+    prRepo,
+    `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=all&per_page=1`,
+    ghOptions
   )
   const list = JSON.parse(stdout) as RestPullRequest[]
   const pr = list[0]
@@ -39,6 +42,7 @@ export async function getFallbackPRListForBranch(
   branchName: string,
   ghOptions: ReturnType<typeof ghRepoExecOptions>
 ): Promise<PullRequestLookupData | null> {
+  noteRepositoryRateLimitSpend(prRepo, 'graphql', 1, ghOptions)
   const { stdout } = await ghExecFileAsync(
     [
       'pr',
@@ -111,7 +115,7 @@ export async function lookupPRByBranchName(args: {
               args.ghOptions
             )
           : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
-        // Why: REST/list branch lookup identifies the PR cheaply; exact `gh pr view` carries review, merge-queue, and auto-merge state.
+        // Cheap branch discovery needs exact hydration for review, queue and auto-merge metadata.
         const data = await hydrateBranchLookupWithExactPR(
           candidate,
           branchData,
@@ -120,8 +124,8 @@ export async function lookupPRByBranchName(args: {
         )
         if (
           data &&
-          pullRequestMatchesHeadRepository(data, candidate, args.headRepo) &&
-          (!args.policy || (await args.policy.accepts(data, candidate)))
+          (!args.policy || (await args.policy.accepts(data, candidate))) &&
+          pullRequestMatchesHeadRepository(data, candidate, args.headRepo)
         ) {
           return { data, dataRepo: candidate }
         }
@@ -148,8 +152,8 @@ export async function lookupPRByBranchName(args: {
           )
           if (
             data &&
-            pullRequestMatchesHeadRepository(data, candidate, args.headRepo) &&
-            (!args.policy || (await args.policy.accepts(data, candidate)))
+            (!args.policy || (await args.policy.accepts(data, candidate))) &&
+            pullRequestMatchesHeadRepository(data, candidate, args.headRepo)
           ) {
             return { data, dataRepo: candidate }
           }
@@ -161,13 +165,14 @@ export async function lookupPRByBranchName(args: {
         }
       }
     }
-    // Why: branch-list failures are ambiguous for fork discovery; give exact fallback-number recovery a chance before surfacing the error.
+    // Ambiguous fork-list failures still permit exact fallback-number recovery.
     return hasPendingError
       ? { data: null, dataRepo: null, pendingError }
       : { data: null, dataRepo: null }
   }
 
   try {
+    noteRepositoryRateLimitSpend(null, 'graphql', 1, args.ghOptions)
     const { stdout } = await ghExecFileAsync(
       ['pr', 'view', args.branchName, '--json', PR_LOOKUP_JSON_FIELDS],
       args.ghOptions

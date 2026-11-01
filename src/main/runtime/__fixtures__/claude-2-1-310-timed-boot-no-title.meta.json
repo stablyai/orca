@@ -1,0 +1,10 @@
+{
+  "capturedAt": "2026-10-25T03:40:00.000Z",
+  "platform": "darwin",
+  "command": ["claude"],
+  "env": { "CLAUDE_CODE_DISABLE_TERMINAL_TITLE": "1", "TERM": "xterm-256color" },
+  "cols": 120,
+  "rows": 40,
+  "note": "Claude Code 2.1.310, macOS arm64, Python pty in a trusted folder, DA1 answered, no input sent. With its title disabled Claude writes no OSC title at all, so the composer's pointer + NBSP is its only ready signal (#22655). <name>.timing.json holds each PTY chunk as [ms since spawn, UTF-16 length].",
+  "exitCode": null
+}

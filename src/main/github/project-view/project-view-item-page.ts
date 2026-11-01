@@ -1,3 +1,4 @@
+import type { OptionalProjectItemField } from './project-view-cache'
 import type { GitHubProjectOwnerType } from '../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
 import {
@@ -20,11 +21,9 @@ import { ownerQueryRoot } from './project-view-config'
 import type { RawItem } from './project-view-item-normalization'
 import {
   FIELD_CONFIG_FRAGMENT,
-  FIELD_VALUES_SELECTION,
+  fieldValuesSelection,
   itemContentSelection
 } from './project-view-query-fragments'
-
-// ─── Items fetch (paginated) ──────────────────────────────────────────
 
 export type RawItemsPage = {
   totalCount?: number
@@ -32,7 +31,7 @@ export type RawItemsPage = {
   nodes?: (RawItem | null)[]
 }
 
-// Why: unlike runGraphql, return the raw GraphQL error envelope so the parent-field retry decision can re-inspect it.
+// Preserve raw GraphQL errors for parent-field capability retry decisions.
 export async function fetchItemsPageWithRaw(args: {
   owner: string
   ownerType: GitHubProjectOwnerType
@@ -40,7 +39,7 @@ export async function fetchItemsPageWithRaw(args: {
   query: string
   first: number
   after: string | null
-  includeParent: boolean
+  unsupportedFields: ReadonlySet<OptionalProjectItemField>
   host?: string
 }): Promise<
   | { ok: true; page: RawItemsPage }
@@ -69,8 +68,10 @@ export async function fetchItemsPageWithRaw(args: {
               id
               type
               updatedAt
-              content { ${itemContentSelection(args.includeParent)} }
-              ${FIELD_VALUES_SELECTION}
+              content {
+                ${itemContentSelection(!args.unsupportedFields.has('parent'), !args.unsupportedFields.has('subIssuesSummary'))}
+              }
+              ${fieldValuesSelection(!args.unsupportedFields.has('linkedPullRequests'))}
             }
           }
         }
@@ -87,8 +88,7 @@ export async function fetchItemsPageWithRaw(args: {
     argsArr.push('-f', `after=${args.after}`)
   }
 
-  // Why: GHES traffic runs against its own quota — only github.com requests
-  // consult/debit the shared snapshot.
+  // Enterprise traffic has separate quota from the shared github.com snapshot.
   const guard = repositoryRateLimitGuard(args, 'graphql')
   if (guard.blocked) {
     return {
@@ -121,7 +121,7 @@ export async function fetchItemsPageWithRaw(args: {
     try {
       parsed = JSON.parse(stdout)
     } catch {
-      // Why: gh exited non-zero with unparseable stdout; classify against stderr so callers see the real cause, not a synthesized drift/not-found.
+      // Unparseable failed stdout must retain stderr's error rather than become missing data.
       if (execFailed) {
         return {
           ok: false,
@@ -137,7 +137,7 @@ export async function fetchItemsPageWithRaw(args: {
         stderr
       }
     }
-    // Why: gh rejected but stdout parsed; fall through to parsed.errors below, else surface the stderr classification rather than not_found.
+    // Prefer parsed GraphQL errors, otherwise classify failed execution from stderr.
     if (execFailed && (!parsed.errors || parsed.errors.length === 0) && !parsed.data) {
       return {
         ok: false,
@@ -159,7 +159,11 @@ export async function fetchItemsPageWithRaw(args: {
     if (!page) {
       return {
         ok: false,
-        error: { type: 'not_found', message: 'Project or view not found.' },
+        error: {
+          type: 'not_found',
+          message: 'Project or view not found.',
+          reason: 'project_or_view_not_found'
+        },
         rawErrors: [],
         stderr
       }

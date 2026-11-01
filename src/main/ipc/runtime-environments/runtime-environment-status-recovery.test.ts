@@ -9,7 +9,7 @@ import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
 
 const { request, publish } = vi.hoisted(() => ({ request: vi.fn(), publish: vi.fn() }))
-vi.mock('../../../shared/remote-runtime-client', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: request,
   subscribeRemoteRuntimeRequest: vi.fn()
 }))

@@ -1,5 +1,4 @@
-// Which workspaces main's layout frames draw in the window, when the window starts holding one,
-// and which terminal panes a frame shows.
+// Track locally held frame-drawn workspaces and their shown terminal panes.
 
 import type { AppState } from '@/store/types'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
@@ -17,10 +16,7 @@ export function framesDrawWorkspace(state: AppState): (key: string) => boolean {
     (key in state.groupsByWorktree || key in state.unifiedTabsByWorktree) && !mirrored(key)
 }
 
-/**
- * Calls `onDrawn` when frames start drawing one of `unshown` (main's workspaces the window does not
- * show): the window's first visit to a workspace only main held, after which no frame need follow.
- */
+/** Notify first visits to main-only workspaces; no later frame is guaranteed to trigger drawing. */
 export function onWorkspaceStartsDrawing(
   store: HeldWorkspacesStore,
   draws: (state: AppState) => (key: string) => boolean,

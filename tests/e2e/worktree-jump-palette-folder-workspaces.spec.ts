@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { encodePaletteIdentity } from '../../src/renderer/src/lib/palette-match/palette-ranking'
+import { encodePaletteIdentity } from '../../src/shared/palette-match/palette-ranking'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 

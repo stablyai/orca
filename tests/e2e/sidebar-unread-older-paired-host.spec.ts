@@ -1,8 +1,4 @@
-/**
- * A desktop paired to an `orca serve` host raises a workspace's unread flag itself exactly when that
- * host does not: an older host (played by withholding its capability) gets the window's flag, and a
- * current host is left to raise its own.
- */
+// Withhold the host capability to prove desktop unread fallback for older serve builds; current hosts retain sole unread authority.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'

@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import type {
   AgentJournalQuestionItem,
   AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
-import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session/agent-session-question-answer'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { structuredQuestionTranscript } from '../../../../shared/structured-agent-question-projection'
 import {
@@ -17,7 +18,7 @@ import {
 import {
   nativeChatReceiptAnswers,
   type NativeChatResolvedPrompt
-} from '../../../../shared/native-chat-resolution-receipt'
+} from '../../../../shared/native-chat/native-chat-resolution-receipt'
 
 afterEach(async () => {
   cleanup()
@@ -313,7 +314,6 @@ describe('resolution receipts', () => {
 
       fireEvent.click(toggle)
       expect(toggle).toHaveAttribute('aria-expanded', 'true')
-      // The count stays on the line; the list opens outside the button, as prose.
       expect(toggle).toHaveTextContent('2 questions')
       const items = screen.getAllByRole('listitem')
       expect(items.map((item) => item.textContent)).toEqual([FIRST, SECOND])

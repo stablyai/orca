@@ -11,16 +11,11 @@ import {
   RunStopParams
 } from '../../../../../../shared/rpc-contract/orchestration-gates-params'
 
-// Why: the coordinator instance is stored at module scope so orchestration.runStop
-// can signal it to halt. Only one coordinator can run at a time (enforced by
-// the DB's active-run check), so a single reference suffices.
+// Keep one coordinator reference for runStop; the DB allows only one active run.
 let activeCoordinator: Coordinator | null = null
 
 export const ORCHESTRATION_GATE_METHODS = [
-  // Why: Section 4.12 — orchestration.run returns immediately with a run ID.
-  // The coordinator loop runs in the background; progress is queried via
-  // orchestration.taskList. This prevents the RPC call from blocking the
-  // CLI (or any caller) for the entire duration of the pipeline.
+  // Return the run id immediately; callers query persisted progress while coordination runs in the background.
   defineMethod({
     name: 'orchestration.run',
     permission: 'workspace',
@@ -50,9 +45,7 @@ export const ORCHESTRATION_GATE_METHODS = [
         pollIntervalMs: params.pollIntervalMs
       })
 
-      // Why: fire-and-forget — the coordinator loop runs in the event loop
-      // background. Results are persisted to the DB; callers query via
-      // orchestration.taskList or orchestration.runStatus.
+      // Do not await the loop; results persist for taskList/runStatus.
       coordinator.runFromExistingRun(run.id).finally(() => {
         if (activeCoordinator === coordinator) {
           activeCoordinator = null
@@ -152,7 +145,7 @@ export const ORCHESTRATION_GATE_METHODS = [
         callerEvidence: orchestrationCompatibilityEvidence,
         callerSession: orchestrationCaller
       })
-      // Why: a gate outside the caller's Run is indistinguishable from a missing one, so probing cannot map foreign Runs.
+      // Hide foreign gates as missing so probes cannot map other Runs.
       if (existing.run_id !== run.id) {
         throw new Error(`Gate not found: ${params.id}`)
       }
@@ -174,7 +167,7 @@ export const ORCHESTRATION_GATE_METHODS = [
     ) => {
       const db = runtime.getOrchestrationDb()
       const explicitRun = params.run ? db.getRun(params.run) : undefined
-      // Why: same read posture as taskList — an explicitly named Run is inspectable, an unnamed one means the caller's own.
+      // Match taskList: an explicit Run is inspectable; absence means the caller's own.
       const run =
         explicitRun?.legacy === 1
           ? explicitRun

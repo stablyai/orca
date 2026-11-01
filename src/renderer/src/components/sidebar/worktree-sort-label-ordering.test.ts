@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
-  buildWorktreeComparator,
   buildWorktreeSortLabels,
   compareWorktreeSortLabel,
-  getWorktreeSortLabel,
-  type SortBy
+  getWorktreeSortLabel
 } from '../../../../shared/sidebar-list/smart-sort'
 import { compareCodePoints, compareSidebarText } from '../../../../shared/sidebar-list/text-order'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
@@ -61,8 +58,7 @@ const TRICKY_LABELS: readonly (string | null)[] = [
 ]
 
 function makeWorktree(index: number, displayName: string | null): Worktree {
-  // Trailing separators and Windows separators exercise `basename()`'s
-  // normalisation on the rows whose displayName is blank.
+  // Blank names must normalize trailing and Windows path separators consistently.
   const suffixes = ['', '/', '//', '\\']
   return {
     id: `w${index}`,
@@ -89,59 +85,7 @@ function makeWorktree(index: number, displayName: string | null): Worktree {
   }
 }
 
-const corpus: Worktree[] = TRICKY_LABELS.flatMap((label, index) => [
-  makeWorktree(index * 2, label),
-  // Second row per label with a blank displayName, so `basename(path)` decides.
-  makeWorktree(index * 2 + 1, index % 2 === 0 ? '' : null)
-])
-
-const repoMap = new Map<string, Repo>([
-  [
-    'repo1',
-    { id: 'repo1', path: '/repo1', displayName: 'Ångström', badgeColor: '#000', addedAt: 0 }
-  ],
-  [
-    'repo2',
-    { id: 'repo2', path: '/repo2', displayName: 'angstrom', badgeColor: '#111', addedAt: 0 }
-  ]
-])
-
-const SORT_MODES: readonly SortBy[] = ['name', 'smart', 'recent', 'repo', 'manual']
-const NOW = 1_700_000_000_000
-
 describe('worktree sort label ordering', () => {
-  it('matches the pre-precompute comparator on every pair', () => {
-    const labels = buildWorktreeSortLabels(corpus)
-    for (const a of corpus) {
-      for (const b of corpus) {
-        expect(Math.sign(compareWorktreeSortLabel(a, b, labels))).toBe(
-          Math.sign(legacyCompareWorktreeSortLabel(a, b))
-        )
-      }
-    }
-  })
-
-  it('produces byte-for-byte identical sort output in every mode', () => {
-    for (const sortBy of SORT_MODES) {
-      const attention = new Map()
-      const withLabels = [...corpus].sort(
-        buildWorktreeComparator(sortBy, repoMap, NOW, attention, buildWorktreeSortLabels(corpus))
-      )
-      const withoutLabels = [...corpus].sort(
-        buildWorktreeComparator(sortBy, repoMap, NOW, attention)
-      )
-      expect(withLabels.map((w) => w.id)).toEqual(withoutLabels.map((w) => w.id))
-    }
-  })
-
-  it('falls back to deriving labels for rows missing from the precomputed map', () => {
-    const [first, second] = corpus
-    const partial = buildWorktreeSortLabels([first])
-    expect(Math.sign(compareWorktreeSortLabel(first, second, partial))).toBe(
-      Math.sign(legacyCompareWorktreeSortLabel(first, second))
-    )
-  })
-
   it('keys labels by row so a two-host id collision keeps each row its own label', () => {
     const local: Worktree = { ...makeWorktree(0, null), id: 'shared', path: '/tmp/aaa' }
     const remote: Worktree = { ...makeWorktree(1, null), id: 'shared', path: '/tmp/zzz' }

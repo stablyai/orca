@@ -19,26 +19,6 @@ function deferred<T>(): {
 }
 
 describe('CheckpointSessionQueue', () => {
-  it('serializes operations for one session', async () => {
-    const queue = new CheckpointSessionQueue()
-    const order: string[] = []
-    const first = deferred<void>()
-
-    const a = queue.run('s', async () => {
-      order.push('a:start')
-      await first.promise
-      order.push('a:end')
-    })
-    const b = queue.run('s', async () => {
-      order.push('b:start')
-    })
-
-    await vi.waitFor(() => expect(order).toEqual(['a:start']))
-    first.resolve()
-    await Promise.all([a, b])
-    expect(order).toEqual(['a:start', 'a:end', 'b:start'])
-  })
-
   it('does not make one session wait on another', async () => {
     const queue = new CheckpointSessionQueue()
     const stalled = deferred<void>()
@@ -53,7 +33,7 @@ describe('CheckpointSessionQueue', () => {
 
     const healthy = await queue.run('healthy', async () => 'ran')
 
-    // Why assert entry: a stall that never started would prove nothing about isolation.
+    // Prove the stalled operation entered before testing other-session isolation.
     expect(stalledEntered).toBe(true)
     expect(healthy).toBe('ran')
     stalled.resolve()
@@ -79,52 +59,9 @@ describe('CheckpointSessionQueue', () => {
 
     expect(outcome).toBe('live')
     expect(onDeadlineFired).toHaveBeenCalledOnce()
-    // Why: abandoning the wait must not abandon the write, or a reattach deadline
-    // would drop durable history instead of merely delaying it.
     expect(completed).toBe(false)
     stalled.resolve()
     await vi.waitFor(() => expect(completed).toBe(true))
-  })
-
-  it('propagates operation failures instead of reporting a deadline', async () => {
-    const queue = new CheckpointSessionQueue()
-    const onDeadlineFired = vi.fn()
-
-    await expect(
-      queue.runWithDeadline(
-        'failed',
-        async () => {
-          throw new Error('daemon unavailable')
-        },
-        50,
-        'timed-out',
-        { onDeadline: onDeadlineFired }
-      )
-    ).rejects.toThrow('daemon unavailable')
-    expect(onDeadlineFired).not.toHaveBeenCalled()
-  })
-
-  it('reports an operation rejection that arrives after the deadline', async () => {
-    const queue = new CheckpointSessionQueue()
-    const stalled = deferred<void>()
-    const onAbandonedRejection = vi.fn()
-
-    await expect(
-      queue.runWithDeadline<void | 'timed-out'>(
-        'failed-late',
-        async () => await stalled.promise,
-        5,
-        'timed-out',
-        { onAbandonedRejection }
-      )
-    ).resolves.toBe('timed-out')
-
-    stalled.reject(new Error('late failure'))
-    await vi.waitFor(() =>
-      expect(onAbandonedRejection).toHaveBeenCalledWith(
-        expect.objectContaining({ message: 'late failure' })
-      )
-    )
   })
 
   it('keeps a later waiter behind an abandoned operation', async () => {

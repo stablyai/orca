@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
+import type { AgentJournalDispatchState } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
@@ -14,7 +14,6 @@ function accepted(
 }
 
 describe('mobileStructuredSendDelivery', () => {
-  // The host's row draws it in place, as not sent, with the reason under it; the composer stays empty.
   it.each([
     ['a sign-in rejection', 'Sign in to Grok with `grok login`.', { kind: 'notSignedIn' as const }],
     ['a content rejection', 'Claude does not support .bmp', undefined],

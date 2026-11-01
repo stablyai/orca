@@ -14,7 +14,6 @@ function tokens(
   return { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, cacheWrite1hTokens }
 }
 
-/** Prices plain totals, none of them from a long-context request. */
 function estimate(model: string, ...counts: number[]): number | null {
   return estimateCostUsd(model, tokens(...counts))
 }
@@ -50,7 +49,6 @@ describe('model pricing name matching', () => {
     expect(normalizeModelForPricing(model)).toBe(key)
   })
 
-  // Why: an unknown version must stay unpriced (and flagged), never borrow an older model's rates.
   it.each([
     'claude-opus-5-6',
     'claude-sonnet-5-6',
@@ -112,7 +110,6 @@ describe('estimateCostUsd cache-write TTL rates', () => {
   })
 })
 
-// A request over the threshold is billed entirely at long-context rates; callers pass that subset.
 describe('estimateCostUsd long-context requests', () => {
   it('bills only the long-context subset at Haiku 5.5 long-context rates', () => {
     const short = tokens(MTOK, MTOK, MTOK, MTOK, 400_000)
@@ -133,7 +130,7 @@ describe('estimateCostUsd long-context requests', () => {
     expect(estimateCostUsd('claude-sonnet-4-5', { ...long, longContext: long })).toBeCloseTo(
       6 + 22.5 + 0.6 + 12
     )
-    // Daily totals far over 200K from short requests stay at base rates.
+    // A large aggregate does not imply any individual request crossed the threshold.
     expect(estimate('claude-sonnet-4-5', 5 * MTOK)).toBeCloseTo(15)
   })
 
@@ -149,11 +146,7 @@ describe('estimateCostUsd long-context requests', () => {
   })
 })
 
-// Published Claude Sonnet 5 rates (platform.claude.com/docs/en/about-claude/pricing):
-// $2 base input, $10 output, $0.20 cache hit, $2.50 5m write, $4 1h write per MTok.
-// The $2/$10 launch price, announced as introductory through 2026-08-31, is now the
-// standard price — the scheduled 2026-09-01 rise to $3/$15 was cancelled — so the rate
-// is date-independent.
+// Rate source: platform.claude.com/docs/en/about-claude/pricing.
 describe('estimateCostUsd Claude Sonnet 5 rates', () => {
   it('bills base input at $2/MTok', () => {
     expect(estimate('claude-sonnet-5', 1_000_000, 0, 0, 0, 0)).toBeCloseTo(2)

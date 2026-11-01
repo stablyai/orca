@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { classifyHostUrl } from './tab-create-entry-url-classification'
 
-// Why this file exists: the suffix check behind `host/path` navigation moved off `psl.isValid`, and
-// nothing else in the tree exercises it directly. These cases pin the listed/unlisted split that
-// decides whether a typed string navigates or falls through to search.
+// Pin suffix-list navigation behavior directly instead of relying on classifier composition tests.
 describe('classifyHostUrl suffix gate', () => {
   it('navigates for a listed suffix carrying a path', () => {
     expect(classifyHostUrl('example.com/foo')).toEqual({
@@ -41,8 +39,7 @@ describe('classifyHostUrl suffix gate', () => {
     }
   )
 
-  // Why this is the fix: psl's 2024 snapshot did not know `api.br`, so `isValid` called it a domain
-  // and a typed `api.br/x` navigated to a bare public suffix instead of searching.
+  // api.br is a public suffix missing from the old psl snapshot; a suffix alone cannot name a registrable destination.
   it('refuses a bare public suffix carrying a path', () => {
     expect(classifyHostUrl('api.br/foo')).toBeNull()
     expect(classifyHostUrl('co.uk/foo')).toBeNull()
@@ -59,8 +56,7 @@ describe('classifyHostUrl suffix gate', () => {
     })
   })
 
-  // The gate only applies once an authority ends; a bare host still navigates so unlisted intranet
-  // names typed on their own are not forced into search.
+  // Bare hosts bypass suffix filtering so intranet names still navigate.
   it('leaves a bare host unfiltered by the suffix list', () => {
     expect(classifyHostUrl('api.br')).toEqual({ kind: 'host-url', url: 'https://api.br/' })
   })

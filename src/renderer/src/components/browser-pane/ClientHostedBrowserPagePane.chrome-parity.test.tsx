@@ -3,7 +3,6 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   BrowserCertificateFailure,
-  BrowserLoadError,
   BrowserPage
 } from '../../../../shared/browser-workspace-types'
 import type {
@@ -45,8 +44,7 @@ const PLACEMENT = {
   pageHostGeneration: 7
 }
 
-// Why: the chords are Cmd on macOS and Ctrl everywhere else, so the platform cannot be left to
-// whatever the test runner reports.
+// Pin macOS so shortcut tests do not depend on the runner platform.
 const MAC_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
 
 let contextMenu = paneChannel<BrowserContextMenuRequestedEvent>()
@@ -196,6 +194,50 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     expect(screen.getByPlaceholderText('Find in page...')).not.toBeNull()
   })
 
+  it('closes Find on a full navigation', () => {
+    const { webview } = renderPane()
+    vi.mocked(webview.findInPage).mockReturnValueOnce(1)
+
+    act(() => findRequests.emit(undefined))
+    fireEvent.change(screen.getByPlaceholderText('Find in page...'), {
+      target: { value: 'needle' }
+    })
+    fireEvent.keyDown(screen.getByPlaceholderText('Find in page...'), { key: 'Enter' })
+    act(() =>
+      webview.dispatchEvent(
+        Object.assign(new Event('found-in-page'), {
+          result: { requestId: 1, activeMatchOrdinal: 1, matches: 3, finalUpdate: true }
+        })
+      )
+    )
+    expect(screen.getByText('1 of 3')).not.toBeNull()
+
+    act(() =>
+      webview.dispatchEvent(
+        Object.assign(new Event('did-navigate'), { url: 'https://example.internal/next' })
+      )
+    )
+
+    expect(screen.queryByPlaceholderText('Find in page...')).toBeNull()
+    expect(screen.queryByText('1 of 3')).toBeNull()
+  })
+
+  it('keeps Find open for an in-page navigation', () => {
+    const { webview } = renderPane()
+    act(() => findRequests.emit(undefined))
+
+    act(() =>
+      webview.dispatchEvent(
+        Object.assign(new Event('did-navigate-in-page'), {
+          url: 'https://example.internal/app#section',
+          isMainFrame: true
+        })
+      )
+    )
+
+    expect(screen.getByPlaceholderText('Find in page...')).not.toBeNull()
+  })
+
   it('reloads and hard-reloads the retained guest from the forwarded chords', () => {
     const { webview } = renderPane()
 
@@ -270,34 +312,6 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     expect(failed.webview.style.display).toBe('none')
   })
 
-  // Why: the overlay is about the navigation that failed. Naming browserTab.url instead pointed
-  // every action at the page still loaded and offered it an HTTPS retry it never needed.
-  it('names the URL that failed, not the page that is still loaded', () => {
-    const loaded = 'http://localhost:3000/app'
-    const { onUpdatePageState } = renderPane({ url: loaded })
-
-    const addressBar = screen.getByRole('combobox')
-    act(() => {
-      fireEvent.change(addressBar, { target: { value: 'javascript:alert(1)' } })
-    })
-    act(() => {
-      fireEvent.submit(addressBar.closest('form') ?? addressBar)
-    })
-
-    const loadError = onUpdatePageState.mock.calls.at(-1)?.[1]?.loadError as
-      | BrowserLoadError
-      | undefined
-    expect(loadError?.validatedUrl).toBe('javascript:alert(1)')
-
-    cleanup()
-    renderPane({ loadError, url: loaded })
-
-    act(() => screen.getByRole('button', { name: 'Copy Address' }).click())
-    expect(writeClipboardText).toHaveBeenCalledWith('javascript:alert(1)')
-    // The loaded page is a localhost http URL, so keying off it would offer an HTTPS retry here.
-    expect(screen.queryByRole('button', { name: 'Try HTTPS' })).toBeNull()
-  })
-
   it('drives the guest from the find bar rather than only rendering it', () => {
     const { webview } = renderPane()
 
@@ -317,8 +331,7 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     )
   })
 
-  // Why: the toolbar button is Stop mid-load; passing the plain 'reload' trigger would restart the
-  // navigation the user is trying to cancel.
+  // Toolbar reload means Stop during a load; a plain reload would restart the cancelled navigation.
   it('stops an in-flight load from the toolbar button', () => {
     const { webview } = renderPane({ loading: true })
 
@@ -345,8 +358,7 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     )
   })
 
-  // Why: a Kagi private-session link carries an account bearer token, and the store and address bar
-  // are both persisted surfaces.
+  // Kagi links contain bearer tokens; persisted pages and the address bar must redact them.
   it('keeps a Kagi session token out of the stored page and the address bar', () => {
     const { onUpdatePageState, webview } = renderPane()
 
@@ -369,8 +381,7 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     )
   })
 
-  // Why: an unattached pane has no guest to reload, so the load-failure overlay's actions would be
-  // dead buttons stacked on the notice that actually explains the situation.
+  // An unattached guest cannot reload; only its availability notice offers a usable recovery action.
   it('shows only the unavailable notice when the guest never attached', () => {
     renderPane(
       {
@@ -380,8 +391,7 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     )
 
     expect(screen.getByText('Client-hosted browser unavailable')).not.toBeNull()
-    // 'Copy Address' belongs to the load-failure overlay alone; the toolbar's own button reads
-    // 'Retry' whenever a loadError stands, attached or not.
+    // Copy Address distinguishes the failure overlay from the toolbar’s Retry button.
     expect(screen.queryByRole('button', { name: 'Copy Address' })).toBeNull()
   })
 

@@ -5,6 +5,7 @@ import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import { MobileAgentSessionHistoryIcon } from './MobileAgentSessionHistoryIcon'
+import { translate } from '../i18n/mobile-i18n'
 
 type Args = {
   hostId: string
@@ -17,11 +18,7 @@ type Args = {
   onDone: () => void
 }
 
-// Why: builds the per-worktree "navigate to a screen" action-sheet actions
-// (Source Control + Agent Session History). The Agent Session History action is
-// included only on hosts advertising the aiVault.v1 capability, so we never
-// navigate to a screen that would call a missing RPC method. Extracted from the
-// host index action sheet to keep that file under its max-lines budget.
+// Gate history action on aiVault.v1 so navigation cannot call a missing RPC; actions also include Source Control.
 export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] {
   if (args.executionHost === null) {
     return []
@@ -29,7 +26,8 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   const executionHost = args.executionHost
   const actions: ActionSheetAction[] = [
     {
-      label: 'Source Control',
+      id: 'sourceControl',
+      label: translate('agentHistory.worktreeNavigationActions.sourceControl', 'Source Control'),
       icon: GitBranch,
       onPress: () => {
         const params = new URLSearchParams({ name: args.worktreeName, origin: 'host' })
@@ -45,7 +43,11 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   ]
   if (args.hostCapabilities.includes(MOBILE_AI_VAULT_CAPABILITY)) {
     actions.push({
-      label: 'Agent Session History',
+      id: 'agentSessionHistory',
+      label: translate(
+        'agentHistory.worktreeNavigationActions.agentSessionHistory',
+        'Agent Session History'
+      ),
       renderIcon: () =>
         MobileAgentSessionHistoryIcon({ size: 16, color: colors.textSecondary, strokeWidth: 2 }),
       onPress: () => {

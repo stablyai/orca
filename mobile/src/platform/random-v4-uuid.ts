@@ -1,10 +1,6 @@
 import * as ExpoCrypto from 'expo-crypto'
 
-/**
- * A v4 UUID from a secure source. `crypto.randomUUID` is missing on Hermes and on the page under the
- * iOS shell's custom scheme (not a secure context), so the fallback builds one from the platform's
- * own random bytes, never `Math.random`.
- */
+// Hermes and insecure iOS custom-scheme pages lack randomUUID; fall back to secure platform bytes, never Math.random.
 export function randomV4Uuid(): string {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID()

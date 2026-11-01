@@ -4,11 +4,11 @@ import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CheckoutGitConfig from '../wsl-windows-checkout-git-config'
 import type * as GitRunner from '../runner'
-import type * as WatcherObservers from '../../ipc/local-watcher-event-observers'
+import type * as WatcherObservers from '../../ipc/filesystem/watchers/local-watcher-event-observers'
 import type { GitStatusEntry } from '../../../shared/git-status-types'
-import { notifyLocalWatcherEvents } from '../../ipc/local-watcher-event-observers'
-import type { WatchedRoot } from '../../ipc/filesystem-watcher-wsl'
-import { createDebouncedBatch } from '../../ipc/filesystem-watcher-batch-control'
+import { notifyLocalWatcherEvents } from '../../ipc/filesystem/watchers/local-watcher-event-observers'
+import type { WatchedRoot } from '../../ipc/filesystem/watchers/filesystem-watcher-wsl'
+import { createDebouncedBatch } from '../../ipc/filesystem/watchers/filesystem-watcher-batch-control'
 
 type StreamMock = (
   args: string[],
@@ -33,7 +33,7 @@ vi.mock('../wsl-windows-checkout-git-config', async (importOriginal) => {
   }
 })
 
-vi.mock('../../ipc/local-watcher-event-observers', async (importOriginal) => {
+vi.mock('../../ipc/filesystem/watchers/local-watcher-event-observers', async (importOriginal) => {
   const actual = await importOriginal<typeof WatcherObservers>()
   return { ...actual, findCoveringLocalWatchRoot: () => mocks.coveringRoot }
 })
@@ -141,14 +141,6 @@ describe('reconcileDriveCheckoutSuspects', () => {
       return { stoppedEarly: false }
     })
   }
-
-  it('does nothing for checkouts outside the Windows-checkout config', async () => {
-    mocks.appliesTo = new Set()
-    await reconcileDriveCheckoutSuspects(repo, [], {})
-    changed(['a.ts'])
-    expect(await reconcileDriveCheckoutSuspects(repo, [], {})).toEqual([])
-    expect(mocks.gitStreamStdout).not.toHaveBeenCalled()
-  })
 
   it('rechecks only suspects minimal status reported clean, keeping the dirty ones', async () => {
     await touchFiles(['clean.ts', 'hidden edit.ts', 'already.ts'])

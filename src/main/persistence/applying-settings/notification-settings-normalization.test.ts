@@ -33,7 +33,6 @@ describe('muted notification machines', () => {
   })
 
   it('does not count an unchanged list as a repair', () => {
-    // Why: a fresh array never equals the stored one by reference; a false repair rewrites settings on every launch.
     const persisted = {
       ...getDefaultNotificationSettings(),
       mutedNotificationSourceIds: ['runtime:m4air']
@@ -46,5 +45,20 @@ describe('muted notification machines', () => {
     const persisted = { ...getDefaultNotificationSettings(), mutedNotificationSourceIds: ['nope'] }
     const normalized = normalizeNotificationSettings(persisted)
     expect(persistedNotificationSettingsRepaired(persisted, normalized)).toBe(true)
+  })
+})
+
+describe('agent needs-input notifications', () => {
+  it('inherits the old shared toggle on upgrade, then stands on its own', () => {
+    const { agentNeedsInput: _absentBeforeUpgrade, ...upgraded } = {
+      ...getDefaultNotificationSettings(),
+      agentTaskComplete: false
+    }
+    expect(normalizeNotificationSettings(upgraded).agentNeedsInput).toBe(false)
+    expect(normalizeNotificationSettings({}).agentNeedsInput).toBe(true)
+    expect(
+      normalizeNotificationSettings({ agentTaskComplete: false, agentNeedsInput: true })
+        .agentNeedsInput
+    ).toBe(true)
   })
 })

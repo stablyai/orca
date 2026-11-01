@@ -145,8 +145,7 @@ describe('killWorkspacePortOnExecutionHost', () => {
       killWorkspacePortOnExecutionHost(host, { scannedHostId: 'ssh:t', pid: 4242, port: 3020 })
     ).resolves.toEqual({ ok: true })
 
-    // Same pid and port may be listening on the server itself; the old repo-scoped kill would
-    // signal that one, so it must never be used for a row from the SSH host.
+    // Equal server/SSH pid+port values are unrelated processes; never fall back to repo-scoped server kills.
     expect(callRuntimeRpc).toHaveBeenCalledOnce()
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       host.route.target,

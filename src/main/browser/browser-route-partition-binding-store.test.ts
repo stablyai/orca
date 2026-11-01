@@ -139,7 +139,6 @@ describe('BrowserRoutePartitionBindingStore', () => {
     expect(store.get(partition)).toBe(fingerprint)
   })
 
-  // Why: a caller that cannot tell which partitions are in use must not evict one that is.
   it('bounds distinct persisted bindings when liveness is unknown', () => {
     const store = new BrowserRoutePartitionBindingStore({ filePath: createPath(), maxBindings: 1 })
     store.set(partition, fingerprint, 'e'.repeat(64))
@@ -238,7 +237,6 @@ describe('BrowserRoutePartitionBindingStore', () => {
 
     expect(store.findPartitionByFingerprint('b'.repeat(64))).toBe(partition)
     expect(store.findPartitionByFingerprint(fingerprint)).toBe(partition)
-    // Why: older builds read only `fingerprint`, so an alias must leave it in place.
     expect(store.get(partition)).toBe(fingerprint)
     expect(store.listBindings().get(partition)?.aliasFingerprints).toEqual(['b'.repeat(64)])
     store.set(partition, fingerprint, 'f'.repeat(64))

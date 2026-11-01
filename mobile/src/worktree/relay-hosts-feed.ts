@@ -1,6 +1,4 @@
-// The paired desktop's servers (`mobileRelay.hosts.list`), one feed per desktop client: the host
-// list's poll and every open server workspace share one read, so two readers never double the
-// desktop's load. The host list reads without subscribing, so its badge may trail a workspace by a tick.
+// Share reads per desktop across its host list and open server workspaces to avoid multiplying poll load.
 
 import { useCallback, useSyncExternalStore } from 'react'
 import { AppState } from 'react-native'
@@ -8,14 +6,12 @@ import type { MobileRelayHost } from '../../../src/shared/mobile-relay-hosts-con
 import type { RpcClient } from '../transport/rpc-client'
 import { relayHostsListRead } from './server-workspace-operations'
 
-// The host list's own poll cadence, counted from when the last read finished.
+// Count polling cadence from the last completed read.
 const RELAY_HOSTS_POLL_MS = 3000
 
 export type RelayHostsFeed = {
   subscribe: (listener: () => void) => () => void
-  /** The last answer on this connection; null before one lands. */
   getSnapshot: () => readonly MobileRelayHost[] | null
-  /** Reads now, or joins the read in flight; null when the desktop did not answer. */
   read: () => Promise<readonly MobileRelayHost[] | null>
 }
 
@@ -46,7 +42,6 @@ function createFeed(client: RpcClient): RelayHostsFeed {
       timer = null
     }
   }
-  // Timed reads run only while someone subscribes and the desktop is connected.
   const schedule = (): void => {
     stopTimer()
     if (listeners.size === 0 || client.getState() !== 'connected') {
@@ -70,7 +65,6 @@ function createFeed(client: RpcClient): RelayHostsFeed {
   const fetchHosts = async (readGeneration: number): Promise<readonly MobileRelayHost[] | null> => {
     try {
       const listed = relayHostsListRead.interpret(await relayHostsListRead.request(client))
-      // A reply from before a drop is not this connection's answer.
       if (!listed.accepted || readGeneration !== generation) {
         return null
       }
@@ -88,7 +82,7 @@ function createFeed(client: RpcClient): RelayHostsFeed {
     inFlight = fetchHosts(readGeneration).finally(() => {
       if (readGeneration === generation) {
         inFlight = null
-        // Why: scheduling from the finish, so a read slower than the poll still gets a next one.
+        // Schedule after completion so reads slower than the interval still get a next poll.
         lastReadAt = Date.now()
         schedule()
       }
@@ -132,7 +126,6 @@ export function relayHostsFeed(client: RpcClient): RelayHostsFeed {
 
 const noSubscription = (): (() => void) => () => {}
 
-/** The desktop's servers from the shared feed while `client` is set; null before it answers. */
 export function useRelayHosts(client: RpcClient | null): readonly MobileRelayHost[] | null {
   const feed = client ? relayHostsFeed(client) : null
   const subscribe = useCallback(

@@ -64,7 +64,7 @@ export function launchOrcaApp(): void {
     return
   }
 
-  // Why: `openOrca` waits on this profile's metadata, so the app must start on it too.
+  // Launch on the same profile whose metadata openOrca awaits.
   const userDataPath = resolveLaunchUserDataPath()
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
@@ -84,9 +84,7 @@ export function launchOrcaApp(): void {
     if (process.platform === 'darwin') {
       const appBundlePath = getMacAppBundlePath(process.execPath)
       if (appBundlePath) {
-        // Why: launching the inner MacOS binary directly can trigger macOS app
-        // launch failures and bypass normal bundle lifecycle. The public
-        // packaged CLI should re-open the .app the same way Finder does.
+        // Launch the macOS bundle through Launch Services to preserve its app lifecycle.
         spawnDetached('open', getMacOpenArgs(appBundlePath, userDataPath), {
           env: stripElectronRunAsNode(process.env)
         })
@@ -109,10 +107,7 @@ export function launchOrcaApp(): void {
   )
 }
 
-/**
- * Plain `open` activates whichever instance already runs, which is the default profile's.
- * Why `-n` only off the default: `open` drops our env, and `--args` reach only a new instance.
- */
+/** Nondefault profiles need a new instance: open drops env and only new instances receive --args. */
 export function getMacOpenArgs(appBundlePath: string, userDataPath: string): string[] {
   if (isSameUserDataPath(userDataPath, getPlatformUserDataPath())) {
     return [appBundlePath]
@@ -126,21 +121,20 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
     stdio: 'ignore',
     ...options
   })
-  // Why: detached launch errors are reported asynchronously after this function
-  // returns; openOrca already reports the user-facing timeout if startup fails.
+  // Handle asynchronous spawn errors; openOrca reports startup failure via its timeout.
   child.once('error', () => {})
   child.unref()
 }
 
 export function serveOrcaApp(args: ServeOrcaAppArgs = {}): Promise<number> {
-  // Why first: as a container or PrivatePIDs init, nothing would reap orphaned descendants.
+  // Install the PID 1 reaper before spawning so orphaned descendants are collected.
   reexecThisServeUnderInitReaper()
   noteServeSupervisorStart()
   const executable = resolveForegroundOrcaExecutable()
-  // Why one value: the selector, orcad and Electron must all serve the profile the caller chose.
+  // Runtime selection, orcad, and Electron must use the same profile.
   const userDataPath = resolveLaunchUserDataPath()
   if (args.supervise) {
-    // Why: a successful relocation replaces this process and never resolves.
+    // Successful relocation replaces this process and never resolves.
     return relocateThisServeSupervisor(resolveAppRoot(), userDataPath).then(() => {
       let attempt = 0
       return superviseServeService({
@@ -150,7 +144,7 @@ export function serveOrcaApp(args: ServeOrcaAppArgs = {}): Promise<number> {
         force: args.force === true,
         park: openServeBundlePark({ executable }),
         appImageUpdate: supervisedAppImageUpdate(executable, userDataPath, args.force === true),
-        // Why first only: --force overrides a remembered abort once; the brake owns later attempts.
+        // --force overrides the brake once; later attempts use its updated state.
         runOnce: () =>
           serveOnce(
             executable,
@@ -168,7 +162,6 @@ function serveOnce(
   args: ServeOrcaAppArgs,
   userDataPath: string
 ): Promise<number> {
-  // Why synchronous on the opt-out: it must spawn Electron exactly as before, without asking.
   if (process.env[SERVE_RUNTIME_ENV] === SERVE_RUNTIME_ELECTRON) {
     return serveWithElectron(executable, args, userDataPath)
   }
@@ -187,8 +180,7 @@ async function serveWithSelectedRuntime(
     usesMacUpdateHandoff: args.recipeJson !== true && getMacAppBundlePath(executable) !== null
   })
   if (selection.kind === 'orcad') {
-    // Why only supervised: orcad refuses a held profile as a configuration fault (exit 78), which
-    // the brake would count; exit 3 here lets the supervisor wait for the other Orca instead.
+    // Exit 3 waits for the profile owner; orcad’s exit 78 would count against the crash brake.
     const refusal = args.supervise ? await refuseIfProfileServed(args, userDataPath) : null
     if (refusal !== null) {
       return refusal
@@ -235,8 +227,7 @@ function spawnElectronServe(
   )
   const childArgs = pinned.args
   childArgs.push('--serve', ...serveOptionArgs(args, '--serve-'))
-  // Why: the isolated profile has no login keychain, and the probe that discovers this blocks the
-  // foreground process on the Keychain authorization prompt before it advertises readiness (#25453).
+  // Isolated profiles need keychain bypass to avoid blocking readiness on authorization (#25453).
   childArgs.push(...foregroundServeIsolatedProfileSwitches())
   childArgs.push(...headlessServeOzonePlatformSwitches(process.platform))
   const handoffPath =
@@ -247,7 +238,6 @@ function spawnElectronServe(
   if (handoffPath) {
     childEnv[SERVE_UPDATE_HANDOFF_PATH_ENV] = handoffPath
   }
-  // Why process-host: it encodes a Windows `.cmd`/`.bat` executable's arguments instead of a raw shell.
   const spec: ProcessSpec = {
     program: executable,
     args: childArgs,
@@ -264,8 +254,7 @@ function spawnElectronServe(
   const spawnServer: ServeSpawnChild = shouldRedactSupervisedStdout(args.supervise === true)
     ? redactingSpawn(spawnProcess)
     : spawnProcess
-  // Why in the spawn: every server start (first, resumed, after an install or a park) passes here,
-  // after its stop and park gates. Only our own executable: an update never deletes an override.
+  // Check before every spawn after stop/park gates; overrides are not replaced by app updates.
   const spawnServeChild: ServeSpawnChild =
     handoffPath && executable === process.execPath
       ? (childSpec) => {
@@ -275,7 +264,7 @@ function spawnElectronServe(
       : spawnServer
   const interruptedHandoff = handoffPath ? readServeUpdateHandoffSync(handoffPath) : null
   if (interruptedHandoff?.phase === 'install-requested') {
-    // Why: the node-mode CLI is not an NSRunningApplication, so it can retain launchd ownership while ShipIt swaps the app.
+    // Node mode avoids NSRunningApplication registration, retaining launchd ownership during ShipIt swaps.
     return resumeInterruptedServeUpdate({
       spec,
       spawnChild: spawnServeChild,
@@ -299,7 +288,7 @@ function spawnElectronServe(
     handoffPath,
     expectedHandoff: null
   }).catch((error: unknown) => {
-    // Why only a prompt abort: the registration abort kills the child before any JS runs.
+    // Registration aborts happen before child JS runs; record only immediate startup failures.
     if (error instanceof MacServeStartupAbortError && Date.now() - spawnedAt < STARTUP_ABORT_MS) {
       recordElectronServeStartupAbort(userDataPath, error.message)
     }

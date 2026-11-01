@@ -3,8 +3,7 @@ package expo.modules.orcagziputf8codec
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
-// Synchronous on purpose: each call is a few ms per window, and only a sync call reads its
-// Uint8Array argument without a thread hop.
+// Sync avoids a thread hop when reading Uint8Array; each window takes only a few ms.
 class OrcaGzipUtf8CodecModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("OrcaGzipUtf8Codec")

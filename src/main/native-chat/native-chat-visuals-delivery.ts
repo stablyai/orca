@@ -1,6 +1,4 @@
-// What a structured chat launch gets for inline visuals: its own writable scratch folder, named to
-// the agent in an environment variable, and where this host keeps the skill that teaches the reply line.
-// Every step is best effort: a chat without visuals still starts.
+// Best-effort visual setup must never prevent chat startup.
 
 import { mkdir } from 'node:fs/promises'
 import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
@@ -10,21 +8,18 @@ import {
   type NativeChatVisualsSkillLocation
 } from './native-chat-visuals-skill-location'
 
-/** The agent child's variable holding its chat's scratch folder. The skill reads it; the path is
- *  never written into the skill text. */
+/** Keep the per-chat path in the child environment rather than generated skill text. */
 export const NATIVE_CHAT_SCRATCH_DIR_ENV = 'ORCA_CHAT_SCRATCH_DIR'
 
-/** The variable's pre-rename name. Never set; only stripped, since an Orca started from an older
- *  chat would otherwise hand that chat's folder on to every agent it launches. */
+/** Strip the legacy name so launching Orca from a chat cannot leak that folder to new agents. */
 export const LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV = 'ORCA_CHAT_VISUALS_DIR'
 
 export type NativeChatVisualsLaunch = {
-  /** This chat's folder, created and private to this user. */
   folder: string
   skill: NativeChatVisualsSkillLocation
 }
 
-/** Prepares one chat's launch; null leaves the chat without visuals. Never throws. */
+/** null disables visuals; preparation never throws. */
 export type PrepareNativeChatVisuals = (
   sessionId: string
 ) => Promise<NativeChatVisualsLaunch | null>
@@ -63,8 +58,7 @@ export function createNativeChatVisualsDelivery(deps: {
   }
 }
 
-/** `env` naming this chat's folder; without visuals, an inherited value (Orca itself started from
- *  a chat) is removed so the agent never writes into another chat's folder. */
+/** Remove inherited folder values when visuals are unavailable to prevent cross-chat writes. */
 export function withNativeChatVisualsEnv(
   env: Record<string, string>,
   visuals: NativeChatVisualsLaunch | null

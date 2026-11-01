@@ -12,10 +12,7 @@ export type HardenedPathCacheEntry = {
   birthtimeMs: number
 }
 
-/**
- * Snapshots a path's identity, mode, and timestamps so later drift is detectable.
- * Mode is tracked directly so a chmod is caught even where coarse ctime granularity hides it.
- */
+/** Track mode directly as well as identity/timestamps so coarse ctime cannot hide chmod drift. */
 export function getHardenedPathCacheEntry(
   targetPath: string,
   isDirectory: boolean

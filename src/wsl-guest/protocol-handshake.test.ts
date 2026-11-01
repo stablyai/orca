@@ -61,15 +61,13 @@ describe('handshake framing', () => {
     expect(() => parseHandshakeMessage(bogus)).toThrow(/Unknown handshake type/)
   })
 
-  // `type` is peer-supplied, so it can be an object whose String() conversion throws — which
-  // replaced the one diagnostic this refusal exists to produce with a primitive-conversion error.
+  // Hostile JSON can make String(type) throw and hide the intended refusal diagnostic.
   it('still names the refusal when the peer type cannot be stringified', () => {
     const hostile = Buffer.from(JSON.stringify({ type: { toString: 1 } }))
     expect(() => parseHandshakeMessage(hostile)).toThrow(/Unknown handshake type: object/)
   })
 
-  // The daemon logs the peer's version before any credential check, and `JSON.parse` can hand
-  // back a value a template literal throws on. The parser is the one place every reader shares.
+  // Validate versions before pre-auth readers interpolate them into diagnostics.
   it('rejects a version that is not a string on both arms that carry one', () => {
     for (const type of ['orca-relay-handshake', 'orca-relay-handshake-ok']) {
       for (const version of [{ toString: 1 }, 7, null, undefined, ['0.1.0']]) {
@@ -100,9 +98,7 @@ describe('handshake framing', () => {
     }
   })
 
-  // endpointCredential is the one optional field, and it is the most pre-auth thing on the frame.
-  // Its only reader compares it, so a non-string refuses today by inequality rather than by type —
-  // which is luck, not a guarantee. Prove it at the parser, where every reader shares it.
+  // Validate optional credentials at the parser so future readers cannot encounter a hostile non-string.
   it('rejects a present endpointCredential that is not a string', () => {
     for (const endpointCredential of [{ toString: 1 }, 7, null, ['secret'], true]) {
       const payload = Buffer.from(
@@ -115,8 +111,7 @@ describe('handshake framing', () => {
     }
   })
 
-  // Absent must stay absent: a bridge that legitimately presents no credential is the common case,
-  // and refusing it here would close every unauthenticated-endpoint connection in the fleet.
+  // Missing credentials are valid for unauthenticated endpoints; preserve absence.
   it('still accepts a handshake with no endpointCredential, and one with a string', () => {
     const bare = Buffer.from(JSON.stringify({ type: 'orca-relay-handshake', version: '0.1.0' }))
     expect(parseHandshakeMessage(bare)).toEqual({ type: 'orca-relay-handshake', version: '0.1.0' })

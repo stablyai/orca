@@ -1,15 +1,20 @@
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
 import type {
+  WorkerTerminalArchiveRow,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
 } from '../../../../orchestration/worker-terminal-ownership'
 import {
   captureWorkerOutputArchive,
+  releaseCommitFieldsForCapturedArchive,
+  releaseCommitFieldsForStoredArchive,
   summarizeWorkerOutputArchive
 } from '../../../../orchestration/worker-output-archive'
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
-import { readArchivedWorkerOutput } from '../worker/worker-archive-read'
+import { readRemoteAttachmentArchive } from './remote-attachment-archive-read'
+import { WorkerTerminalReleaseSingleFlight } from '../worker/worker-terminal-release-single-flight'
+import { yieldAutoReleaseToWorkingAgent } from '../../../../orchestration/worker-terminal-auto-release-working-yield'
 import { archiveSummary } from '../worker/worker-terminal-resource-presentation'
 import {
   releaseUnknownRecovery,
@@ -22,43 +27,37 @@ import {
   TRANSIENT_WORKER_RELEASE_RECOVERY
 } from '../worker/worker-release-close-error'
 
-export async function readRemoteAttachmentArchive(args: {
-  runtime: WorkerTerminalReleaseRuntime
-  attachment: RemoteDispatchAttachmentRow
-  source?: 'auto' | 'transcript' | 'terminal'
-  cursor?: string | number
-  limit?: number
-  liveness?: 'live' | 'unverifiable' | 'exited'
-}) {
-  const archive = args.runtime
-    .getOrchestrationDb()
-    .getWorkerTerminalArchive(args.attachment.dispatch_id)
-  if (!archive || !args.attachment.terminal_handle) {
-    return null
-  }
-  return readArchivedWorkerOutput({
-    db: args.runtime.getOrchestrationDb(),
-    dispatchId: args.attachment.dispatch_id,
-    workerState: args.attachment.state,
-    resource: {
-      id: `remote-attachment:${args.attachment.dispatch_id}`,
-      terminal_handle: args.attachment.terminal_handle,
-      release_state: args.attachment.stage === 'released' ? 'released' : 'releasing'
-    },
-    source: args.source,
-    cursor: args.cursor,
-    limit: args.limit,
-    liveness: args.liveness
-  })
-}
-
-export async function releaseRemoteAttachment(args: {
+type RemoteAttachmentReleaseArgs = {
   runtime: WorkerTerminalReleaseRuntime
   attachment: RemoteDispatchAttachmentRow
   observation: Awaited<ReturnType<typeof inspectRemoteAttachment>>
   mode?: 'interactive' | 'recovery'
-}): Promise<WorkerReleaseReceipt & { output?: unknown }> {
-  const { runtime, attachment, observation } = args
+}
+
+type RemoteReleaseReceipt = WorkerReleaseReceipt & { output?: unknown }
+
+const remoteReleases = new WorkerTerminalReleaseSingleFlight<RemoteReleaseReceipt>()
+
+/** Each caller records its own request first, so a release joining the host timer's close still clears the deadline. */
+export async function releaseRemoteAttachment(
+  args: RemoteAttachmentReleaseArgs
+): Promise<RemoteReleaseReceipt> {
+  const requested = await requestRemoteAttachmentRelease(args)
+  if ('state' in requested) {
+    return requested
+  }
+  return remoteReleases.run(args.runtime, args.attachment.dispatch_id, args.mode, () =>
+    completeRemoteAttachmentRelease(args, requested.resource, requested.storedArchive)
+  )
+}
+
+async function requestRemoteAttachmentRelease(
+  args: RemoteAttachmentReleaseArgs
+): Promise<
+  | RemoteReleaseReceipt
+  | { resource: WorkerTerminalResourceRow; storedArchive: WorkerTerminalArchiveRow | null }
+> {
+  const { runtime, attachment } = args
   const db = runtime.getOrchestrationDb()
   let storedArchive
   try {
@@ -86,7 +85,7 @@ export async function releaseRemoteAttachment(args: {
       ...(archived ? { output: archived } : {})
     }
   }
-  const requested = db.requestRemoteAttachmentTerminalRelease(attachment.dispatch_id)
+  const requested = db.requestRemoteAttachmentTerminalRelease(attachment.dispatch_id, args.mode)
   if (requested.disposition === 'already_released') {
     return {
       dispatchId: attachment.dispatch_id,
@@ -104,7 +103,16 @@ export async function releaseRemoteAttachment(args: {
       archive: archiveSummary(requested.resource)
     }
   }
-  const resource = requested.resource
+  return { resource: requested.resource, storedArchive: storedArchive ?? null }
+}
+
+async function completeRemoteAttachmentRelease(
+  args: RemoteAttachmentReleaseArgs,
+  resource: WorkerTerminalResourceRow,
+  storedArchive: WorkerTerminalArchiveRow | null
+): Promise<RemoteReleaseReceipt> {
+  const { runtime, attachment, observation } = args
+  const db = runtime.getOrchestrationDb()
   if (!observation.exact || !observation.terminal) {
     if (
       args.mode === 'recovery' &&
@@ -143,31 +151,30 @@ export async function releaseRemoteAttachment(args: {
       : observation.status === 'exited'
         ? 'exited'
         : 'live'
+  let committed
   let output
-  let archive
   try {
-    archive = storedArchive
-    if (!archive) {
-      const captured = await captureWorkerOutputArchive({
-        runtime,
-        dispatchId: attachment.dispatch_id,
-        terminalHandle: observation.terminal.handle,
-        attachedAtMs: orchestrationTimestampToMs(attachment.created_at)
-      })
-      db.storeWorkerTerminalArchive({
-        dispatchId: attachment.dispatch_id,
-        resourceId: resource.id,
-        kind: captured.kind,
-        content: JSON.stringify(captured.content)
-      })
-      archive = db.getWorkerTerminalArchive(attachment.dispatch_id)
-    }
-    if (!archive || archive.resource_id !== resource.id) {
-      throw new Error('The execution host did not commit the worker output archive.')
-    }
-    output = await readRemoteAttachmentArchive({ runtime, attachment, liveness })
-    if (!output) {
-      throw new Error('The execution host could not reopen the committed worker output archive.')
+    const archive = storedArchive
+      ? releaseCommitFieldsForStoredArchive(storedArchive)
+      : releaseCommitFieldsForCapturedArchive(
+          await captureWorkerOutputArchive({
+            runtime,
+            dispatchId: attachment.dispatch_id,
+            terminalHandle: observation.terminal.handle,
+            attachedAtMs: orchestrationTimestampToMs(attachment.created_at)
+          })
+        )
+    // Publish the archive only if the request still stands; a retain during capture keeps live output readable.
+    committed = db.commitWorkerTerminalArchiveForRelease({
+      dispatchId: attachment.dispatch_id,
+      resourceId: resource.id,
+      ...archive
+    })
+    if (isStillReleasing(committed)) {
+      output = await readRemoteAttachmentArchive({ runtime, attachment, liveness })
+      if (!output) {
+        throw new Error('The execution host could not reopen the committed worker output archive.')
+      }
     }
   } catch (error) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
@@ -180,39 +187,26 @@ export async function releaseRemoteAttachment(args: {
       lastError: error instanceof Error ? error.message : String(error)
     }
   }
-  const releasing = db.commitWorkerTerminalArchiveForRelease({
-    dispatchId: attachment.dispatch_id,
-    resourceId: resource.id,
-    archiveSource: summarizeWorkerOutputArchive(archive).source,
-    archiveStatus: summarizeWorkerOutputArchive(archive).status
-  })
-  if (releasing.ownership_state !== 'owned' || releasing.release_state !== 'releasing') {
+  // Decide on the current row: a release that joined during the archive read may have cleared the deadline.
+  const current = db.getWorkerTerminalResource(resource.id) ?? committed
+  const releasing = !isStillReleasing(current)
+    ? current
+    : !remoteAttachmentLeaseIsCurrent(runtime, attachment, observation, current)
+      ? db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
+      : yieldAutoReleaseToWorkingAgent(runtime, current)
+  if (!isStillReleasing(releasing) || !output) {
     return {
       dispatchId: attachment.dispatch_id,
       state: 'retained',
       reason: retainedReason(releasing),
       processAction: 'none',
-      archive: archiveSummary(releasing),
-      output
+      archive: archiveSummary(releasing)
     }
   }
-  if (!remoteAttachmentLeaseIsCurrent(runtime, attachment, observation, releasing)) {
-    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
-    return {
-      dispatchId: attachment.dispatch_id,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained),
-      output
-    }
-  }
-  // An exited worker still owns a terminal record and tab on the host; close it before
-  // reporting `closed_exited_terminal`, exactly as the local release path does.
+  // Close the exited worker's remaining record/tab before reporting closed_exited_terminal, as local release does.
   try {
     const close = await runtime.closeTerminal(observation.terminal.handle)
-    // A host-certified exit already proved the process is gone, so a kill that stops nothing
-    // is not new doubt; anything else that survives the close still is.
+    // A host-certified exit survives a no-op kill; other state surviving close remains uncertain.
     if (!close.ptyKilled && observation.status !== 'exited') {
       const reason = describeUnconfirmedAgentStop(close)
       return {
@@ -230,9 +224,7 @@ export async function releaseRemoteAttachment(args: {
     }
   } catch (error) {
     const closeError = classifyWorkerTerminalCloseError(error)
-    // A close that finds nothing to close is this release's goal once the host certified the
-    // exit; reporting release_unknown wedged the record and told the agent to retry the same
-    // stale handle.
+    // After certified exit, nothing-left-to-close is success; release_unknown would wedge retries on a stale handle.
     if (!(closeError.alreadyGone && observation.status === 'exited')) {
       return {
         dispatchId: attachment.dispatch_id,
@@ -309,4 +301,8 @@ function projectArchivedOutputLiveness<
       liveness
     }
   }
+}
+
+function isStillReleasing(resource: WorkerTerminalResourceRow): boolean {
+  return resource.ownership_state === 'owned' && resource.release_state === 'releasing'
 }

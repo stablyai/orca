@@ -1,45 +1,32 @@
 import { randomUUID } from 'node:crypto'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 
-// Why bounded: one entry per (PTY, client input session); a session evicted here has been idle
-// behind thousands of newer ones, so it holds no input still awaiting acknowledgement.
+// Bound per-PTY/client-session entries; evicted idle sessions have no pending acknowledgements.
 export const TERMINAL_INPUT_SEQUENCE_LEDGER_MAX_SESSIONS = 4096
 
-/**
- * What one write did. `refused` proved nothing reached the terminal; `delivery-unknown` may have
- * written, so it is never retried (a duplicate keystroke can run a command twice).
- */
+/** Refused proves no write; delivery-unknown may have written and must never be blindly retried as a duplicate command. */
 export type TerminalInputWriteOutcome = 'applied' | 'refused' | 'delivery-unknown'
 
-/**
- * The cumulative reply for one frame: every sequence through `appliedSeq` is settled. `resend`
- * (a refusal or a gap) asks the client for everything after `appliedSeq` again, in order.
- */
+/** Settle every sequence through appliedSeq; resend requests the remaining suffix in order after a refusal/gap. */
 export type TerminalInputAdmission = {
   kind: 'applied' | 'delivery-unknown' | 'resend'
   appliedSeq: number
 }
 
-// Why bounded: a duplicate older than every retained unknown outcome is answered as unknown too.
+// Remember bounded unknown outcomes; duplicates older than that window also remain unknown.
 export const TERMINAL_INPUT_SEQUENCE_LEDGER_MAX_UNKNOWN_SEQS = 256
 
 type Session = {
   appliedSeq: number
   tail: Promise<void>
-  // Why kept past the ack: that ack can die with its connection, and a duplicate must not read as applied.
+  // Retain unknown results after ack because the connection may lose it; duplicates must not become applied.
   unknownSeqs: Set<number>
   unknownForgottenThrough: number
 }
 
-/**
- * Go-back-N receiver for client input sequences, per (PTY, client input session). It outlives any
- * one multiplex connection, so input replayed after an outage is written once even when the dead
- * connection's copy arrives too. Frames run one at a time in arrival order against the last
- * confirmed write, so nothing is ever written ahead of earlier input and no state blocks later input.
- */
+/** Serialize Go-back-N input per PTY/client session across connection replacement; replay writes once even when dead-connection copies arrive late. */
 export class TerminalInputSequenceLedger {
-  // Why: published to clients; a PTY that outlives this ledger (runtime restart) gets a new id, so
-  // clients drop input of unknown delivery instead of replaying it into a ledger that forgot it.
+  // Publish a new ledger id after runtime restart so clients discard unknown input instead of replaying forgotten writes.
   readonly id = randomUUID()
   private readonly sessions = new Map<string, Session>()
 

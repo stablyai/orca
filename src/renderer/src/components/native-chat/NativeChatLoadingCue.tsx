@@ -1,8 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 
-/** The structured chat's pane while its first read runs. No visible text, and a CSS animation
- *  delay keeps it invisible unless the read lasts, so a quick read paints nothing. */
+/** Delay the loading animation so fast initial reads paint no cue. */
 export function NativeChatLoadingCue(): React.JSX.Element {
   return (
     <div

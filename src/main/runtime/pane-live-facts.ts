@@ -1,6 +1,4 @@
-// A fact about a pane's terminal that main lays over the published layout (layout-owner build):
-// live state, never saved, that lasts only while the binding it was first published with stands,
-// so any later bind ends it. Keys are never reused.
+// Transient facts attach to the first published binding and expire at rebind; pane keys are never reused.
 
 /** A pane's terminal binding as published: its terminal and that terminal's bind generation. */
 export function bindingOf(pane: { ptyId?: string; ptyGeneration?: number }): string {
@@ -49,7 +47,7 @@ export class PaneLiveFacts<T> {
     if (!entry) {
       return null
     }
-    // Why not ended: the start's own bind may not have landed yet (a same-id respawn included).
+    // The start's bind, including same-id respawn, may not have committed yet.
     if (entry.binding === undefined && entry.awaits && !isAwaitedBind(binding, entry.awaits)) {
       return null
     }

@@ -11,6 +11,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { resolveUnlaunchedIntent } from '../runtime/rpc/methods/agent-launch-intent-resolution'
 import { agentLaunchSurfaceFactory } from '../runtime/rpc/methods/agent-launch-surfaces'
 import { agentLaunchWorkspaceFactory } from '../runtime/rpc/methods/agent-launch-worktree-creation'
+import { refusalOf } from './external-conversation-chain'
 import { refused, type Delivery } from './external-conversation-types'
 
 export type ConversationLaunchInput = {
@@ -25,27 +26,24 @@ export type ConversationLauncher = {
     onSurfacePublished: (surface: AgentLaunchPublishedSurface) => void,
     signal: AbortSignal
   ): Promise<AgentLaunchResult>
-  /** The launched workspace as hook rows name it, qualified by the host that runs it. */
   paneWorkspace(worktreeId: string): Promise<AgentPaneWorkspace>
 }
 
-/**
- * `agent.launch`'s own executor and factories with no paired caller: a background terminal agent
- * that takes the prompt on argv, in a workspace the target names or creates (worktree or folder).
- */
+/** Reuse agent.launch so conversations support both git worktrees and folder workspaces. */
 export function runtimeConversationLauncher(runtime: OrcaRuntimeService): ConversationLauncher {
   const context = { runtime }
   return {
     launch: async ({ agent, target, prompt }, onSurfacePublished, signal) => {
-      const intent = await resolveUnlaunchedIntent(
+      const { intent, decidedMode } = await resolveUnlaunchedIntent(
         { agent, target, prompt: { text: prompt, delivery: 'submit' } },
         runtime,
-        null
+        null,
+        { terminalOnly: true }
       )
       return executeAgentLaunch({
         runtime,
         intent,
-        terminalOnly: true,
+        decidedMode,
         surfaces: agentLaunchSurfaceFactory(context, undefined, undefined, false, undefined, {
           early: null,
           presentation: 'background'
@@ -62,11 +60,7 @@ export function runtimeConversationLauncher(runtime: OrcaRuntimeService): Conver
   }
 }
 
-/**
- * Launches the conversation's agent and links its pane as soon as the surface is published. Only
- * a failure before anything was published throws, so its delivery id may retry; after that an
- * agent may exist, so any failure, the link's included, is `unknown` and never launches again.
- */
+/** After surface publication, failures are unknown rather than retryable because an agent may already exist. */
 export async function launchConversation(
   launcher: ConversationLauncher,
   input: ConversationLaunchInput,
@@ -75,7 +69,7 @@ export async function launchConversation(
   /** Called synchronously at publication with the agent's pane, null when it has none. */
   onPublished: (paneKey: string | null) => void
 ): Promise<Delivery> {
-  // Settled to its error, so a failed write waits for the launch instead of going unhandled.
+  // Settle link errors as values so they wait for launch instead of becoming unhandled rejections.
   const surface: { published: boolean; linked: Promise<unknown> | null } = {
     published: false,
     linked: null
@@ -100,9 +94,8 @@ export async function launchConversation(
     result = await launcher.launch(input, onSurfacePublished, signal)
   } catch (error) {
     if (!surface.published) {
-      // Turned off before the agent existed: the launch stopped before any effect.
       if (signal.aborted) {
-        return refused('connectors_disabled')
+        return refused(refusalOf(signal))
       }
       throw error
     }

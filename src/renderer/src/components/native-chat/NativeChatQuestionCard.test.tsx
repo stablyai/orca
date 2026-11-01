@@ -4,13 +4,11 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
-import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-prompt'
-import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../shared/native-chat-question-auto-advance'
+import type { AskAnswerSelection } from '../../../../shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
+import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../shared/native-chat/input/native-chat-question-auto-advance'
 
-// The card resolves its own label-keyed selection state into the index-based
-// answer the delivery layer needs. These tests pin that resolution — the exact
-// seam of STA-1860 (a non-first pick must surface as its option INDEX, not the
-// first option / the raw label).
+// Answers must use option indices; labels can be duplicated and a non-first choice must retain its position.
 
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot>
@@ -69,8 +67,7 @@ function click(button: Element | undefined, describe: string): void {
   act(() => button.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 }
 
-// Option rows carry a badge number + label, so match them by the label they
-// contain among the aria-pressed selectable rows.
+// Match option labels within selectable rows because their text also includes badge numbers.
 function clickOption(label: string): void {
   const row = [...container.querySelectorAll('button[aria-pressed]')].find((b) =>
     b.textContent?.includes(label)

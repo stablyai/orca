@@ -16,8 +16,7 @@ import {
 } from './helpers/markdown-inline-image'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
-// A markdown image nested in a paragraph or a toggle summary used to parse into a
-// schema-invalid document that only threw on the first edit reassembling it.
+// Nested inline images used to parse invalid schema and fail only when the first edit reassembled their paragraph.
 test.describe('Rich markdown inline image regression', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
@@ -47,8 +46,7 @@ test.describe('Rich markdown inline image regression', () => {
       await expect(paragraph).toBeVisible({ timeout: 15_000 })
       await expect(editor.locator('img')).toHaveCount(1, { timeout: 15_000 })
 
-      // Typing at the paragraph start reassembles the whole paragraph, which is
-      // the frame the reported RangeError bottomed out in.
+      // Type at paragraph start to hit the reported reassembly RangeError.
       await paragraph.click({ position: { x: 12, y: 8 } })
       await orcaPage.keyboard.press('Home')
       await orcaPage.keyboard.type('X')
@@ -119,8 +117,7 @@ test.describe('Rich markdown inline image regression', () => {
       await expect(paragraph).toBeVisible({ timeout: 15_000 })
       await expect(editor.locator('img')).toHaveCount(1, { timeout: 15_000 })
 
-      // toggleBold runs tr.addMark across the selection, which reassembles every
-      // paragraph it spans — and silently dropped the image before the fix.
+      // toggleBold reassembles every selected paragraph, which previously dropped the image.
       await paragraph.click({ position: { x: 12, y: 8 } })
       await orcaPage.keyboard.press('ControlOrMeta+a')
       await orcaPage.getByRole('button', { name: 'Bold', exact: true }).first().click()

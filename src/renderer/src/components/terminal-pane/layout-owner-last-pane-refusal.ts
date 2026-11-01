@@ -1,11 +1,7 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { panesLeftAfterPendingCloses } from '@/runtime/layout-owner-pane-intents'
 
-/**
- * Main refused a pane close as its last pane. An earlier close in flight took the sibling: once
- * it lands here too, or is about to, the tab closes. More panes here than main has: main's copy
- * lags, so close as today. An unmounted tab is left alone.
- */
+/** After main’s last-pane refusal, close the tab if pending closes leave one pane; otherwise close locally to handle lagging main state; leave unmounted tabs alone. */
 export function closeAfterLastPaneRefusal(
   tabId: string,
   manager: PaneManager | null,

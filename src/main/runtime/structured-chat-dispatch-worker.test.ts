@@ -1,7 +1,4 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-// A chat as the assignee of `orchestration dispatch`, end to end on the coordinator-mail rig: its
-// task arrives as any agent's message into a chat does, and it then works the Dispatch as a
-// terminal worker would.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
@@ -111,7 +108,7 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     expect(task).toContain('build it')
     expect(task).toContain(`Your Orca session ID is: ${WORKER}`)
     expect(task).toContain('The coordinator cannot see this chat')
-    expect(task).toContain('it will send this chat a fresh')
+    expect(task).toContain('More supervised work arrives in this chat')
     expect(task).not.toContain('this terminal')
     expect(task).not.toMatch(/exit the shell/i)
     expect(task).not.toMatch(/address/i)

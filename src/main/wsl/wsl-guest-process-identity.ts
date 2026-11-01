@@ -1,9 +1,4 @@
-/**
- * Which incarnation of a WSL distro, and of orcad inside it, is running. Identity is the guest
- * kernel's boot id plus `/proc/<pid>/stat` start times, which count clock ticks since the VM
- * booted: the guest's wall clock can jump after a host sleep (microsoft/WSL#4179, #10006), and
- * a wall-clock start time would then mistake a live process for a new one, or the reverse.
- */
+/** Use kernel boot ID and /proc start ticks for distro/process identity; wall-clock jumps after host sleep can misidentify live processes (microsoft/WSL#4179/#10006). */
 import type { OrcadProcessIncarnation } from '../orcad/orcad-process-start-time'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
@@ -20,10 +15,14 @@ const IDENTITY_TIMEOUT_MS = 10_000
 
 /** One exec, so a classification never mixes two distro incarnations. */
 export function wslGuestIdentityCommand(orcadPid: number | null): string {
-  const orcad =
-    orcadPid !== null && Number.isSafeInteger(orcadPid) && orcadPid > 0
-      ? `cat /proc/${orcadPid}/stat 2>/dev/null; `
-      : ''
+  return wslGuestIdentityShellCommand(
+    orcadPid !== null && Number.isSafeInteger(orcadPid) && orcadPid > 0 ? String(orcadPid) : null
+  )
+}
+
+/** `pidWord` is a digits-only word, literal or a shell expansion the caller has validated. */
+export function wslGuestIdentityShellCommand(pidWord: string | null): string {
+  const orcad = pidWord !== null ? `cat /proc/${pidWord}/stat 2>/dev/null; ` : ''
   return [
     `cat /proc/sys/kernel/random/boot_id; echo ${SECTION}; cat /proc/1/stat; echo ${SECTION}; `,
     `${orcad}echo ${SECTION}`

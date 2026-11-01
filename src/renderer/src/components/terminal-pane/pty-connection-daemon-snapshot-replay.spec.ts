@@ -408,7 +408,6 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(20)
 
-      // Pane was resized to the snapshot grid before the snapshot bytes landed.
       expect(pane.terminal.resize).toHaveBeenCalledWith(80, 24)
       const resizeToSnapshotCall = pane.terminal.resize.mock.invocationCallOrder.find(
         (_order, index) => {
@@ -487,10 +486,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
     })
 
     it('forwards the destination grid on reveal when the reattach fit was deferred by a display:none pane', async () => {
-      // Why: a restored floating-workspace pane reattaches while its panel is still closed, so the
-      // pane is display:none for the whole replay. The snapshot pins xterm to the PTY's grid, and the
-      // reattach fit is the only step that pushes the client grid back and signals SIGWINCH — losing
-      // it strands the PTY at the snapshot grid and the first reveal reflows the replay under a live TUI.
+      // Hidden floating panels cannot fit during replay; deferred fit must restore the client grid and signal SIGWINCH before reveal reflows a live TUI.
       const { connectPanePty } = await import('./pty-connection')
       const { safeFit } = await import('@/lib/pane-manager/pane-tree-ops')
       const transport = createMockTransport('tab-pty')
@@ -530,7 +526,6 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
       transport.resize.mockClear()
       signalPty.mockClear()
 
-      // Reveal: the panel opens, the pane gains a box, and the first fit becomes measurable.
       xtermContainerDisplay = 'block'
       ;(deps.isVisibleRef as { current: boolean }).current = true
       pane.fitAddon.proposeDimensions = vi.fn(() => ({ cols: 120, rows: 40 })) as never
@@ -542,9 +537,7 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
     })
 
     it('suppresses the deferred reattach grid push when mobile claims the PTY while hidden', async () => {
-      // Why: the pre-check at reattach time cannot see a takeover that happens while the pane
-      // waits for a box, and this path calls transport.resize directly, bypassing
-      // forwardPtyResize's own suppression.
+      // Recheck mobile takeover after the hidden pane gains a box; direct transport.resize bypasses the usual suppression.
       const { connectPanePty } = await import('./pty-connection')
       const { safeFit } = await import('@/lib/pane-manager/pane-tree-ops')
       const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')

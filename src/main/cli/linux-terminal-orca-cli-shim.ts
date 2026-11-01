@@ -36,13 +36,7 @@ export type LinuxTerminalOrcaCliShimOptions = {
   appImageCacheRootPath?: string
 }
 
-// Why: on Linux the CLI installs as `orca-ide` so it never shadows the GNOME
-// Orca screen reader at /usr/bin/orca — but agent-facing surfaces (skills,
-// dispatch preambles, CLI hints) all invoke bare `orca`, so on stock Ubuntu an
-// agent inside an Orca terminal would launch the screen reader instead
-// (stablyai/orca#7904). Prepending this userData-scoped shim dir to managed-PTY
-// PATH makes bare `orca` resolve to the Orca CLI inside Orca terminals only,
-// leaving the user's own shells (and their screen reader) untouched.
+// Prepend only in managed PTYs so agents' bare `orca` calls reach the CLI instead of GNOME Orca.
 export function ensureLinuxTerminalOrcaCliShimDir(
   options: LinuxTerminalOrcaCliShimOptions
 ): string | null {
@@ -106,8 +100,6 @@ function ensureAppImageShim(
 }
 
 type AppImageRuntimeFence = {
-  pid: number
-  startTime: string
   runtimeRoot: string
   runtimeIdentity: string
   launcherIdentity: string
@@ -122,11 +114,8 @@ function captureAppImageRuntimeFence(launcherPath: string): AppImageRuntimeFence
   const runtimeRoot = dirname(dirname(dirname(resolvedLauncherPath)))
   const runtimeIdentity = readFileIdentity(runtimeRoot)
   const launcherIdentity = readFileIdentity(resolvedLauncherPath)
-  const startTime = readLinuxProcessStartTime(process.pid)
-  return runtimeIdentity && launcherIdentity && startTime
+  return runtimeIdentity && launcherIdentity
     ? {
-        pid: process.pid,
-        startTime,
         runtimeRoot,
         runtimeIdentity,
         launcherIdentity,
@@ -154,36 +143,15 @@ function formatFileIdentity(stats: Stats): string {
   ].join(':')
 }
 
-function readLinuxProcessStartTime(pid: number): string | null {
-  try {
-    const content = readFileSync(join('/proc', String(pid), 'stat'), 'utf8')
-    const commandEnd = content.lastIndexOf(') ')
-    if (commandEnd === -1) {
-      return null
-    }
-    const fields = content
-      .slice(commandEnd + 2)
-      .trim()
-      .split(/\s+/)
-    return fields[19] ?? null
-  } catch {
-    return null
-  }
-}
-
 function buildAppImageLiveLauncherScript(
   launcherPath: string,
   fence: AppImageRuntimeFence
 ): string {
-  const runtimePid = quotePosixShellDoubleQuotedApostrophe(String(fence.pid))
-  const runtimeStartTime = quotePosixShellDoubleQuotedApostrophe(fence.startTime)
   const runtimeRoot = quotePosixShellDoubleQuotedApostrophe(fence.runtimeRoot)
   const expectedRuntimeIdentity = quotePosixShellDoubleQuotedApostrophe(fence.runtimeIdentity)
   const expectedLauncherIdentity = quotePosixShellDoubleQuotedApostrophe(fence.launcherIdentity)
   const quotedLauncherPath = quotePosixShellDoubleQuotedApostrophe(launcherPath)
   return `#!/usr/bin/env bash
-runtime_pid=${runtimePid}
-runtime_start_time=${runtimeStartTime}
 runtime_root=${runtimeRoot}
 launcher=${quotedLauncherPath}
 expected_runtime_identity=${expectedRuntimeIdentity}
@@ -192,12 +160,6 @@ fail() {
   printf 'Orca CLI is unavailable; reopen Orca or register the CLI again.\\n' >&2
   exit 1
 }
-proc_stat_path="/proc/$runtime_pid/stat"
-[[ -r "$proc_stat_path" ]] || fail
-proc_stat="$(<"$proc_stat_path")" || fail
-proc_fields=()
-read -r -a proc_fields <<< "\${proc_stat##*) }" || fail
-[[ "\${proc_fields[19]:-}" == "$runtime_start_time" ]] || fail
 runtime_identity="$(stat -Lc '%d:%i:%s:%Y:%Z' -- "$runtime_root" 2>/dev/null)" || fail
 [[ "$runtime_identity" == "$expected_runtime_identity" ]] || fail
 launcher_identity="$(stat -Lc '%d:%i:%s:%Y:%Z' -- "$launcher" 2>/dev/null)" || fail

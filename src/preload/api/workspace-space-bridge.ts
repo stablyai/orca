@@ -12,7 +12,6 @@ export const workspaceSpaceApi = {
   getCachedAnalysis: () => ipcRenderer.invoke('workspaceSpace:getCachedAnalysis'),
   cancel: () => ipcRenderer.invoke('workspaceSpace:cancel'),
   openWindow: () => ipcRenderer.invoke('workspaceSpace:openWindow'),
-  closeWindow: () => ipcRenderer.invoke('workspaceSpace:closeWindow'),
   publishWindowState: (state: unknown) =>
     ipcRenderer.invoke('workspaceSpace:publishWindowState', state),
   requestWindowState: () => ipcRenderer.invoke('workspaceSpace:requestWindowState'),

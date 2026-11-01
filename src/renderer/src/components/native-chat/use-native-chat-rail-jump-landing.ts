@@ -1,15 +1,4 @@
-// Carrying out a rail jump to a loaded message: scroll its row to the top, light
-// its tick, release the request.
-//
-// Pinning the target mounts it in the same commit, so the row exists by the time
-// layout runs. Routed through `scrollMessageToTop` rather than the virtualizer
-// because that is what releases the bottom pin — without it the next streamed
-// token snaps the reader straight back down.
-//
-// Serviced once per request, then released. `slots` takes a new identity on
-// every render, so an effect that merely depended on it would re-scroll to this
-// row forever; and a request left standing would keep its pin, which outranks
-// the diff reveal that shares it.
+// Pin before layout; scrollMessageToTop releases the bottom pin so streaming cannot undo the jump; release once to avoid repeated scrolling or blocking diff reveals.
 
 import { useLayoutEffect, useRef } from 'react'
 import {
@@ -43,7 +32,6 @@ export function useNativeChatRailJumpLanding({
     if (row) {
       scrollMessageToTop(row)
     }
-    // Lit now: the scroll's own position report only arrives once it settles.
     onActivate(railJump.messageId)
     release(null)
   }, [onActivate, railJump, release, scrollMessageToTop, scrollRef, slots])

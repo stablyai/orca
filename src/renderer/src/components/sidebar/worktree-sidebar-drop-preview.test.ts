@@ -54,9 +54,7 @@ describe('computeWorktreeSidebarDropPreview', () => {
       draggedIds: ['parent']
     })
 
-    // Sibling slides up to 0 and the 282px-tall parent unit lands right after it,
-    // so the line marks 106 - 3. The old rule pointed at the sibling's stale
-    // bottom (391), a full lineage-height below where the card actually lands.
+    // The parent lands after the sibling at 106px; mark 103px rather than its old bottom at 391px.
     expect(preview).toMatchObject({
       dropIndex: 2,
       dropIndicatorY: 103
@@ -81,8 +79,7 @@ describe('computeWorktreeSidebarDropPreview', () => {
       draggingWorktreeId: 'b'
     })
 
-    // c/d/e slide up one slot, so the placeholder opens at 224 and the line marks
-    // 221 — not 277, which was one whole card height below the real gap.
+    // Rows slide upward to open a slot at 224px; mark 221px rather than the old 277px slot.
     expect(preview).toMatchObject({
       dropIndex: 5,
       dropIndicatorY: 221
@@ -119,8 +116,7 @@ describe('computeWorktreeSidebarDropPreview', () => {
   })
 
   it('marks the gap the row previews open, not the displaced card top', () => {
-    // One expanded agent card (404px) among collapsed ones: dragging 'a' below it
-    // is exactly the case where the old rule put the line a card-height off.
+    // An expanded 404px neighbor exposes card-height errors in insertion-line placement.
     const rects = [
       { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 116 },
       { worktreeId: 'b', groupIndex: 1, top: 122, bottom: 238 },
@@ -146,8 +142,6 @@ describe('computeWorktreeSidebarDropPreview', () => {
     expect(offsets.get('d')).toBe(-122)
     // d ends at 532..648, so a's slot opens at 654 and the line marks 651.
     expect(preview.dropIndicatorY).toBe(651)
-    // The old rule had no rect at this index and fell back to the pre-drag list
-    // bottom (773) — 122px below the gap the user could see opening.
   })
 
   it('resolves the same slot wherever a tall card is grabbed', () => {

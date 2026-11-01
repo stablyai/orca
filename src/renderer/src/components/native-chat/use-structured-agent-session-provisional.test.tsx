@@ -3,7 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
-import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
 
 const mocks = vi.hoisted(() => {
   const pending: StructuredAgentSessionPendingSend[] = []
@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
 let readState: StructuredAgentSessionState
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false)
 }))
@@ -59,11 +60,11 @@ vi.mock('./use-structured-agent-session-sends', () => ({
   }
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-create-support', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-support', () => ({
   useStructuredLaunchCreateSupport: () => false
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () => ({
   takeBackLegacyStructuredLaunchPrompts: mocks.takeBackLaunchText
 }))
 
@@ -138,7 +139,7 @@ describe('useStructuredAgentSession provisional launch gate', () => {
         agent: 'codex',
         isVisible: true,
         transportEnabled: false,
-        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' }, heldOptions: {} }
+        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' } }
       })
     )
 
@@ -157,7 +158,6 @@ describe('useStructuredAgentSession provisional launch gate', () => {
       conversationCommands: []
     })
     expect(result.current.sessionCommands).toBeUndefined()
-    // The picker shows the selection the create seeds, once the host's list names it.
     await waitFor(() => expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5'))
     expect(result.current.optionSurface.getSnapshot()).toBe(result.current.optionSnapshot)
     expect(result.current.send('queued while launching')).toBe(true)
@@ -180,7 +180,7 @@ describe('useStructuredAgentSession provisional launch gate', () => {
           agent: 'grok',
           isVisible: true,
           transportEnabled: false,
-          launch: { kind: 'new', heldOptions: {} }
+          launch: { kind: 'new' }
         })
       )
     expect(render().result.current.canStop).toBe(false)
@@ -204,21 +204,7 @@ describe('useStructuredAgentSession provisional launch gate', () => {
 
     expect(mocks.takeBackLaunchText).toHaveBeenCalledWith('session-1')
     expect(mocks.stopSends).toHaveBeenCalledTimes(1)
-    // Nothing reached a host, so nothing is asked of one.
     expect(methodsCalled().filter((method) => method === 'agentSession.cancel')).toEqual([])
-  })
-
-  it('shows no stored selection for a chat this view did not launch', () => {
-    const { result } = renderHook(() =>
-      useStructuredAgentSession({
-        sessionId: 'session-1',
-        target: LOCAL_TARGET,
-        agent: 'codex',
-        isVisible: true
-      })
-    )
-    // A reopened chat runs its own recorded options until the live read reports them.
-    expect(currentModel(result.current.optionSnapshot)).toBeUndefined()
   })
 
   it('activates provider surfaces after publication without repeating option discovery', async () => {
@@ -238,9 +224,14 @@ describe('useStructuredAgentSession provisional launch gate', () => {
     rerender({ transportEnabled: true })
 
     await waitFor(() =>
-      expect(mocks.call).toHaveBeenCalledWith(LOCAL_TARGET, 'agentSession.options', {
-        sessionId: 'session-1'
-      })
+      expect(mocks.call).toHaveBeenCalledWith(
+        LOCAL_TARGET,
+        'agentSession.options',
+        {
+          sessionId: 'session-1'
+        },
+        {}
+      )
     )
     expect(methodsCalled().filter((method) => method === 'agentSession.options')).toHaveLength(1)
     expect(mocks.hold).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true }))

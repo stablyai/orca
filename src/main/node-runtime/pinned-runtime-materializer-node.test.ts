@@ -28,7 +28,6 @@ function fetcherFor(body: Uint8Array, signals: AbortSignal[] = []): typeof fetch
   })
 }
 
-/** A real .tar.gz laid out like the official one, so extraction runs the host's tar. */
 async function nodeDistArchiveFixture(executable: Uint8Array): Promise<Uint8Array> {
   const staging = join(root, 'staging')
   const member = nodeRuntimeExecutablePath(TARGET, NODE_RUNTIME_ASSETS[TARGET].archive)
@@ -152,15 +151,12 @@ describe('pinned runtime archive request ownership', () => {
   })
 })
 
-// The desktop downloads Node and uploads it, so an offline SSH host is fine but an offline desktop
-// used to see only Chromium's bare `net::ERR_CONNECTION_REFUSED` under "couldn't start its server".
 describe('a pinned runtime archive this computer cannot download', () => {
   it('says this computer could not reach the download, and where an offline copy goes', async () => {
     const cacheRoot = join(root, 'cache')
     const fetcher = vi.fn<typeof fetch>(async () => {
       throw new Error('net::ERR_CONNECTION_REFUSED')
     })
-    // Every attempt still runs; only the pauses between them are skipped.
     const error = await materializeNodeRuntimeArchive(TARGET, cacheRoot, {
       fetcher,
       retryDelaysMs: [0, 0, 0]

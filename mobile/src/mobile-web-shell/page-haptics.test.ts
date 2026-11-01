@@ -1,19 +1,10 @@
-/**
- * The page's haptic is the app's haptic.
- *
- * Asserted against `expo-haptics` rather than against `platform/haptics`: a test that mocked the
- * app's own module would pin this file's table and prove nothing about the thing a hand feels, and
- * the whole reason haptics ride one mapping is that the `Platform.OS` split and the Android
- * `HapticFeedbackConstants` must not be written twice.
- */
+// Assert actual Expo calls so the page cannot silently fork native platform styles; mocking platform/haptics would only test the mapping table.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BRIDGE_HAPTICS_KINDS } from './bridge/bridge-haptics-notify'
 
-/** Annotated rather than asserted: the platform is a two-value union and the log starts empty. */
 type MockDevice = { platform: { OS: 'ios' | 'android' }; calls: string[] }
 
-// Hoisted, because `vi.mock` is: a factory closing over an ordinary `const` reads it before its
-// initializer has run. The device call each haptic makes is the only thing recorded.
+// Hoist the call log because vi.mock factories run before ordinary initializers.
 const device = vi.hoisted((): MockDevice => ({ platform: { OS: 'ios' }, calls: [] }))
 const { calls, platform } = device
 
@@ -67,10 +58,7 @@ describe('the haptic a page asked for, on iOS', () => {
   })
 })
 
-/**
- * The other platform, unchanged: `performAndroidHapticsAsync` reaches
- * `HapticFeedbackConstants`, which works with no `VIBRATE` permission and is why the split exists.
- */
+// Android uses HapticFeedbackConstants through performAndroidHapticsAsync, which needs no VIBRATE permission.
 describe('the same haptic on Android', () => {
   it.each([
     ['mediumImpact', 'android:long-press'],
@@ -86,25 +74,11 @@ describe('the same haptic on Android', () => {
 })
 
 describe('the kinds and the functions behind them', () => {
-  it('spends exactly one call per notify, which is what a per-row tap can afford', () => {
+  it('plays exactly one distinct device call for every kind', () => {
     for (const kind of BRIDGE_HAPTICS_KINDS) {
       playPageHaptic(kind)
     }
     expect(calls).toHaveLength(BRIDGE_HAPTICS_KINDS.length)
-  })
-
-  /**
-   * Every kind reaches a different device call, which is what says the table has no duplicate row.
-   *
-   * A table mapping two kinds to one function would pass every case above — each still plays
-   * something — and would mean a Save that felt like a failure. The third direction, a haptic
-   * `haptics.ts` grows with no kind of its own, is the census's:
-   * `config/scripts/mobile-web-app/platform-seams/mobile-web-app-haptics-seam.test.mjs` reads both files' names.
-   */
-  it('plays a different device call for every kind, so no two share a row', () => {
-    for (const kind of BRIDGE_HAPTICS_KINDS) {
-      playPageHaptic(kind)
-    }
     expect(new Set(calls).size).toBe(BRIDGE_HAPTICS_KINDS.length)
   })
 })

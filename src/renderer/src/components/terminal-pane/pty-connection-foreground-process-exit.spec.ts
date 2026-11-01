@@ -16,6 +16,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionForegroundProcessExitTests(): void {
   let mockStoreState: StoreState
@@ -54,7 +55,11 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
     async function connectRestoredPane(
       ptyId: string,
       visible: boolean
-    ): Promise<{ cacheKey: string; binding: { sampleForegroundAgentOnFocus: () => void } }> {
+    ): Promise<{
+      cacheKey: string
+      binding: { sampleForegroundAgentOnFocus: () => void }
+      deps: ReturnType<typeof createDeps>
+    }> {
       const { connectPanePty } = await import('./pty-connection')
       const tabId = `tab-${ptyId}`
       const transport = createMockTransport(ptyId)
@@ -67,15 +72,10 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: ptyId },
         isVisibleRef: { current: visible }
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: connectPanePty returns the pane binding, which exposes sampleForegroundAgentOnFocus.
-      const binding = connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        deps as never
-      ) as unknown as { sampleForegroundAgentOnFocus: () => void }
+      const binding = connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks(20)
-      return { cacheKey: makePaneKey(tabId, LEAF_1), binding }
+      return { cacheKey: makePaneKey(tabId, LEAF_1), binding, deps }
     }
 
     it('retires a hand-typed Codex read in a pane without command marks once it exits', async () => {
@@ -86,7 +86,7 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
       vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
       vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(async () => children)
 
-      const { cacheKey, binding } = await connectRestoredPane(ptyId, true)
+      const { cacheKey, binding, deps } = await connectRestoredPane(ptyId, true)
       await vi.advanceTimersByTimeAsync(3_000)
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toMatchObject({
         agent: 'codex',
@@ -102,6 +102,7 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
         shellForeground: false
       })
       expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(cacheKey)
+      expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
 
       // Codex typed again in the same unmarked pane: the next sample must identify it.
       foreground = 'codex'

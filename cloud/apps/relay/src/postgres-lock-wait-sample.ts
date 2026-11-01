@@ -1,16 +1,7 @@
 import type { RelayDatabase } from './database.js'
 import type { DatabaseLockWaitSample } from './relay-observability.js'
 
-// Every relay process connects as the same user through a socket, so neither
-// pg_stat_statements nor Query Insights can tell a director's lock wait from a
-// cell's. application_name (`orca-relay/<role>/<cell>`) can, so this samples it.
-// The holder is the root of the wait chain: in a row-lock convoy every later
-// waiter is blocked by the first waiter, not by the transaction holding the row.
-// Blockers are read once per waiter; non-relay waiters stay in so chains through
-// them resolve, and the depth cap bounds a cycle. The table is the first relay
-// table the waiting statement names, which may be one it only references.
-// It shares the director's 3-slot pool, so when every slot is a lock waiter the
-// sample queues and undercounts director waiters; a dedicated connection fixes that.
+// Use application_name (orca-relay/<role>/<cell>) to separate shared-user waiters. Follow blockers to root, keeping non-relay intermediates and bounding depth for cycles. First referenced relay table labels the wait. Shared 3-slot pool can queue/undercount samples when saturated; dedicated sampling avoids it.
 const LOCK_WAIT_SAMPLE_SQL = `
 WITH RECURSIVE waiting AS MATERIALIZED (
   SELECT pid, application_name, query, (pg_blocking_pids(pid))[1] AS blocker

@@ -1,4 +1,5 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import type { useAppStore } from '@/store'
@@ -17,6 +18,7 @@ import type {
 export type LiveSurfaceAdoptionStore = WorktreeOperationRouteState &
   Pick<
     ReturnType<typeof useAppStore.getState>,
+    | 'closedTerminalTabTombstonesByTabId'
     | 'createTab'
     | 'ptyIdsByTabId'
     | 'setTabLayout'
@@ -83,25 +85,30 @@ function tabExists(store: LiveSurfaceAdoptionStore, tabId: string): boolean {
   return Object.values(store.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === tabId))
 }
 
-/**
- * Rebind a PTY the host found unowned to the pane its record names, but only while this renderer
- * still holds that pane free: the host's graph omits unmounted panes, so its verdict cannot tell a
- * closed pane from one that merely lost its binding, and minting forks the PTY onto a second tab.
- */
+/** Rebind host-unowned PTYs to recorded panes still free here, recreating a missing unclosed tab under its recorded id; minting would duplicate surfaces. */
 function bindToRecordedSurface(
-  store: LiveSurfaceAdoptionStore,
+  getState: () => LiveSurfaceAdoptionStore,
   worktreeId: string,
-  recorded: LiveTerminalSurfaceOwner
+  recorded: LiveTerminalSurfaceOwner,
+  materializedTabIds: Set<string>
 ): boolean {
+  const store = getState()
   const pane = parsePaneKey(recorded.paneKey)
-  if (!pane || !tabExists(store, recorded.tabId)) {
+  if (!pane) {
     return false
   }
   const heldPtyId = store.terminalLayoutsByTabId[recorded.tabId]?.ptyIdsByLeafId?.[pane.leafId]
   if (heldPtyId && heldPtyId !== recorded.ptyId) {
     return false
   }
-  return bindLivePtyToExactSurface(store, worktreeId, recorded)
+  if (tabExists(store, recorded.tabId) && !materializedTabIds.has(recorded.tabId)) {
+    return bindLivePtyToExactSurface(store, worktreeId, recorded)
+  }
+  // Why: a fresh id duplicates the tab on the client that made it; main refuses closed tab ids.
+  return (
+    !hasClosedTerminalTabRecord(store.closedTerminalTabTombstonesByTabId, recorded.tabId) &&
+    adoptHostOwnedSurface(getState, worktreeId, recorded, materializedTabIds)
+  )
 }
 
 /** Bind one host-owned PTY to the surface the host names for it; false when none could be named. */
@@ -169,23 +176,14 @@ function mainHoldsRecordedPane(worktreeId: string, recorded: LiveTerminalSurface
   )
 }
 
-/**
- * Give every live workspace PTY the surface that already owns it, minting one
- * only for a PTY proven to have none.
- *
- * `surfaced` is whether any live PTY ends the sweep holding a surface. False means the
- * workspace has live agents but nothing the user can look at — the caller owes them a
- * seeded pane, because failing closed must not also fail silent. `declinedPtyIds` names
- * the live PTYs the sweep left without one, so a decline is diagnosable and not mute.
- */
+/** Reuse proven PTY surfaces, minting only after host proves no owner. surfaced=false returns seeding responsibility when live agents remain invisible; declinedPtyIds makes refusal diagnosable. */
 export async function adoptLiveWorkspacePtySurfaces(
   getState: () => LiveSurfaceAdoptionStore,
   worktreeId: string,
   livePtyIds: readonly string[],
   listSurfaceOwners: (worktreeId: string) => Promise<LiveTerminalSurfaceOwnerIndex | null>
 ): Promise<{ surfaced: boolean; declinedPtyIds: string[] }> {
-  // Why: ptyIdsByTabId holds only panes this renderer mounted, so a tab bound
-  // solely in tab.ptyId or the persisted layout used to read as unbound.
+  // Include persisted layout/tab.ptyId bindings; mounted-only ptyIdsByTabId misses dormant surfaces.
   const unbound = livePtyIds.filter(
     (ptyId) => resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind === 'none'
   )
@@ -201,25 +199,26 @@ export async function adoptLiveWorkspacePtySurfaces(
     surfaceOwners = null
   }
   const materializedTabIds = new Set<string>()
-  for (const ptyId of unbound) {
-    // Why: a pane can mount while the census is in flight, so the pre-RPC
-    // verdict is stale by the time it would authorize a mint.
+  // Why: an unowned PTY's recorded pane is only a hint, so PTYs the host names as owners bind first.
+  const isUnowned = (ptyId: string): boolean => {
+    const owner = surfaceOwners?.get(ptyId)
+    return Boolean(owner && 'unowned' in owner)
+  }
+  for (const ptyId of [...unbound.filter((id) => !isUnowned(id)), ...unbound.filter(isUnowned)]) {
+    // Recheck after RPC: panes can mount and bind while census is in flight.
     if (resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind !== 'none') {
       surfaced = true
       continue
     }
     const owner = surfaceOwners?.get(ptyId)
-    // Why: only the execution host can prove a live PTY is unowned, and minting
-    // on anything weaker forks a running agent onto a second empty surface.
+    // Only execution-host proof permits minting; weaker ownership evidence forks live agents onto empty surfaces.
     if (!owner) {
       declinedPtyIds.push(ptyId)
       continue
     }
     const mainPlaces =
       ORCA_LAYOUT_OWNER_IS_MAIN && runtimeEnvironmentIdUnlessTwin(getState(), worktreeId) === null
-    // Switch point: main placed the workspace's unshown terminals before answering (the listing's
-    // placeUnshownLiveTerminals), so a pane main names is the surface and main's frames draw it.
-    // The window writes nothing. A paired server's workspace keeps today's path.
+    // Main places unshown terminals before answering, so its named pane/frame owns presentation. Window writes nothing; paired servers retain their existing path.
     if (mainPlaces && !('unowned' in owner)) {
       surfaced = true
       continue
@@ -243,7 +242,14 @@ export async function adoptLiveWorkspacePtySurfaces(
       continue
     }
     surfaced = true
-    if (owner.recorded && bindToRecordedSurface(getState(), worktreeId, owner.recorded)) {
+    if (
+      owner.recorded &&
+      bindToRecordedSurface(getState, worktreeId, owner.recorded, materializedTabIds)
+    ) {
+      continue
+    }
+    // A recorded tab createTab had to mint under another id already holds this PTY.
+    if (resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind !== 'none') {
       continue
     }
     getState().createTab(worktreeId, undefined, undefined, {

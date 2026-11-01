@@ -1,7 +1,4 @@
-// Signs this host's Antigravity chats in with the server's own Google sign-in: a server spawned as a
-// chat start spawns one prints the link, saves the sign-in to the chats' folder itself once the
-// browser finishes, and then starts a session to prove it works. One flow per host, which only the
-// client that started it follows, cancels or completes.
+// One sign-in flow per host; only its initiating client receives the link or controls it.
 
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -18,7 +15,7 @@ import type { ConnectAcpAgent } from '../acp/acp-structured-connection'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
 import { prepareAcpLaunch } from '../acp/acp-structured-launch-preparation'
 import { AcpAgentError, AcpConnectionClosedError } from '../acp/acp-errors'
-import { saveSignInModels } from './antigravity-sign-in-models'
+import { captureSignInModelPublisher } from './antigravity-sign-in-models'
 import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { structuredAgentHostLaunchSources } from '../runtime/structured-agent-launch-support'
 import {
@@ -35,7 +32,7 @@ import {
 import { removeAntigravitySignInSessionFiles } from './antigravity-sign-in-session-files'
 import { antigravitySignInUrl } from './antigravity-sign-in-url'
 
-// The server's own wait for the browser.
+// Match the server’s browser wait.
 const FLOW_DEADLINE_MS = 300_000
 const SIGN_IN_FAILED = 'Google sign-in for Antigravity failed. Start sign-in again.'
 const SECOND_LINK = {
@@ -49,24 +46,22 @@ const SESSION_FAILED =
 type Phase = AntigravityChatSignInState['phase']
 type Flow = {
   id: string
-  /** The caller that started it, the only one shown its link and allowed to act on it. */
   owner: string
   ended: AbortController
   done: Promise<void>
   pending?: { url: string } & AntigravitySignInPending
   callbackSent?: boolean
-  /** The pasted address on its way to the server, which the flow's end aborts. */
   forwarding?: Promise<void>
 }
 
 export type AntigravityChatSignInHost = {
-  launchSources(): ReturnType<typeof structuredAgentHostLaunchSources>
+  launchSources(signal: AbortSignal): ReturnType<typeof structuredAgentHostLaunchSources>
   /** Rejects when a chat is not proven stopped. */
   stopLiveChats(): Promise<void>
   connect?: ConnectAcpAgent<AcpAgentConnection>
 }
 
-// The operation from its accepted Start until its work has unwound, whatever its shown phase.
+// Retain the flow until cleanup finishes, even after publishing a terminal phase.
 let active: Flow | null = null
 
 const settled = (phase: Phase): boolean =>
@@ -83,7 +78,6 @@ function publish(
 ): void {
   const { value } = antigravityChatSignIn.get()
   const shown = value.flow
-  // An ended flow's late news is dropped, and a later flow owns the state.
   if (shown?.flowId !== current.id || (settled(shown.phase) && !cleanupFailed)) {
     return
   }
@@ -95,12 +89,10 @@ function publish(
   }
 }
 
-/** Starts a sign-in for `owner`, or answers its own running one; another client's is refused. */
 export function startAntigravityChatSignIn(
   host: AntigravityChatSignInHost,
   owner: string
 ): { flowId: string } {
-  // A host whose chats are refused (supportsAcpStructuredLocation) signs none in.
   if (ANTIGRAVITY_LAUNCH_SPEC.managedRuntime.pin() === null) {
     throw new Error(`Antigravity chats are not available on ${process.platform} ${process.arch}.`)
   }
@@ -143,7 +135,7 @@ async function runFlow(current: Flow, host: AntigravityChatSignInHost): Promise<
     if (!expected) {
       console.warn('[antigravity] chat sign-in failed:', error)
     }
-    // Before the sign-in runs, a refusal is the gate's or the chat stop's own sentence.
+    // Gate and chat-stop refusals already carry displayable messages.
     const message =
       signingIn || !(error instanceof Error) ? antigravitySignInFailure(error) : error.message
     publish(
@@ -165,7 +157,11 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
   const spec: AcpLaunchSpec = ANTIGRAVITY_LAUNCH_SPEC
   const { signal } = current.ended
   const closed = (): void => signal.throwIfAborted()
-  const { accountHome, env, commandSettings, dataDirectory } = await host.launchSources()
+  const publishModels = captureSignInModelPublisher(
+    spec,
+    () => active === current && running(current) && !signal.aborted
+  )
+  const { accountHome, env, commandSettings, dataDirectory } = await host.launchSources(signal)
   const deps = { spec, dataDirectory, connect: host.connect ?? createAcpAgentConnection }
   const resolve = () =>
     resolveAcpLaunchInvocation(spec, accountHome, {
@@ -173,13 +169,13 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       resolveCommandSettings: () => commandSettings,
       dataDirectory
     })
-  // Never downloads: an unresolved runtime refuses as a chat start does.
+  // Reuse chat launch resolution without downloading a runtime.
   const launch = await prepareAcpLaunch(deps, resolve, closed)
   const connect = await acpPrivateTempConnect(deps, closed)
   const home = launch.env.GEMINI_HOME
   const cwd = await mkdtemp(join(tmpdir(), 'orca-antigravity-sign-in-'))
   let connection: AcpAgentConnection | null = null
-  // Removed once the server is proven gone and this start knows which session it made.
+  // Wait for proven exit and session ownership before deleting files.
   const owned = { sessionId: '', exited: false, done: false, disposed: false }
   const disposeWhenGone = async (): Promise<void> => {
     if (!owned.exited || !owned.done || owned.disposed) {
@@ -207,12 +203,10 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     const stop = (): void => void server.close().catch(() => false)
     signal.addEventListener('abort', stop, { once: true })
     try {
-      // Resolves once the browser finishes, or at once when the folder is already signed in.
       await connection.authenticate('oauth-personal')
       publish(current, { phase: 'verifying' })
-      // Signed in only once a session starts; its start also answers the host's status.
+      // Authentication alone does not prove a chat can start.
       const started = await connection.start({ cwd, mcpServers: [] }).catch((error: unknown) => {
-        // Google accepted the sign-in, so a plain session refusal is the server's own.
         const plain = error instanceof AcpAgentError && error.code === -32603
         throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
           ? new AntigravitySignInSentence(SESSION_FAILED)
@@ -220,7 +214,7 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       })
       owned.sessionId = started.sessionId
       current.pending = undefined
-      saveSignInModels(spec, accountHome, started)
+      publishModels(accountHome, started, !connection.exited)
     } finally {
       signal.removeEventListener('abort', stop)
       await closeAntigravitySignInOwner(home, server)
@@ -232,8 +226,7 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
   }
 }
 
-/** The printed line and the helper carry the same link; a different one, at any point while the
- *  flow runs, fails it. */
+/** The printed URL and browser helper may report the same request twice. */
 function receiveLink(current: Flow, link: string): void {
   const parsed = antigravitySignInUrl(link)
   if (current.ended.signal.aborted || !parsed || parsed.url === current.pending?.url) {
@@ -247,7 +240,6 @@ function receiveLink(current: Flow, link: string): void {
   publish(current, { phase: 'waiting', url: link })
 }
 
-/** The sentence a person reads for a failed sign-in; the raw error goes only to the log. */
 function antigravitySignInFailure(error: unknown): string {
   const cause = isAgentSessionPreSpawnError(error) ? error.cause : error
   if (cause instanceof AntigravitySignInSentence) {
@@ -257,7 +249,7 @@ function antigravitySignInFailure(error: unknown): string {
     return 'Antigravity is not installed on this host. Install it, then start sign-in again.'
   }
   if (error instanceof AcpAgentError) {
-    // The server may put its own words in the answer's data rather than its message.
+    // Provider errors may put the reason in data instead of message.
     const text = `${error.message} ${JSON.stringify(error.data ?? '')}`
     if (text.includes('SUBSCRIPTION_REQUIRED')) {
       return 'Google requires an eligible Antigravity subscription for this account.'
@@ -272,7 +264,6 @@ function antigravitySignInFailure(error: unknown): string {
   return SIGN_IN_FAILED
 }
 
-/** The caller's own running flow, or a refusal. */
 function ownFlow(owner: string, flowId: string): Flow {
   const current = active
   if (!running(current) || current.id !== flowId || current.owner !== owner) {
@@ -281,8 +272,7 @@ function ownFlow(owner: string, flowId: string): Flow {
   return current
 }
 
-/** Resolves once the flow has unwound and let go of the chats' starts, so a send right after
- *  Cancel isn't refused as a sign-in change. */
+/** Await cleanup so the next chat start can acquire the launch gate. */
 export async function cancelAntigravityChatSignIn(
   owner: string,
   flowId: string
@@ -296,8 +286,7 @@ export async function cancelAntigravityChatSignIn(
 const CALLBACK_NOT_SENT =
   "Couldn't pass the sign-in on to Antigravity on this host. Start sign-in again."
 
-/** Sends the address the browser ended on to the server's own listener, for a browser on another
- *  computer than this host; at most once per flow. */
+/** Forward a remote browser’s callback to the host’s listener once per flow. */
 export async function completeAntigravityChatSignIn(
   owner: string,
   flowId: string,
@@ -317,7 +306,6 @@ export async function completeAntigravityChatSignIn(
   try {
     await current.forwarding
   } catch (error) {
-    // Cancel, expiry or the flow's own end stopped it; that result stands.
     if (!current.ended.signal.aborted) {
       console.warn('[antigravity] pasted sign-in address not delivered:', error)
       publish(current, { phase: 'failed', error: CALLBACK_NOT_SENT })
@@ -327,11 +315,10 @@ export async function completeAntigravityChatSignIn(
   return readAntigravityChatSignInStatus(owner).flow
 }
 
-/** Calls `onChange` after every change of the sign-in status until the returned unsubscribe. */
 export const subscribeAntigravityChatSignIn = (onChange: () => void): (() => void) =>
   antigravityChatSignIn.subscribe(onChange)
 
-/** The status as `owner` sees it: another client's flow without its id or link. */
+/** Hide the flow ID and sign-in link from other clients. */
 export function readAntigravityChatSignInStatus(owner: string): AntigravityChatSignInStatus {
   const { value, revision } = antigravityChatSignIn.get()
   if (!value.flow) {

@@ -259,7 +259,7 @@ async function parentMain() {
       ],
       { cwd }
     )
-    taskId = readNested(task, ['task', 'id'])
+    taskId = readNested(task, ['taskId'])
     if (!taskId) {
       throw new Error('Could not create orchestration task')
     }
@@ -357,8 +357,7 @@ function buildReport(payload, mode, marker) {
   }
   return {
     ...base,
-    // Codex/Claude-like TUIs need generated multi-line prompts to arrive as
-    // one paste frame; unframed newlines are treated as live editor keys.
+    // Send generated multiline TUI prompts as one paste frame; unframed newlines become editor keys.
     contractOk: hasSubmit && rawContainsMarker && hasBracketedPasteFrame && unframedLineBreaks === 0
   }
 }

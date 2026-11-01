@@ -1,23 +1,14 @@
-// Why: ProjectV2 shapes are distinct enough from the issue/PR work-item types
-// that we keep them in a dedicated module. Preload and main-process callers
-// import from here directly — do not re-export through `./types.ts` just to
-// match the existing import block; routing through the issue types module
-// would obscure ownership of the Project surface.
+// Import ProjectV2 shapes directly; re-exporting through issue/PR types.ts obscures Project ownership.
 
 export type GitHubProjectViewLayout = 'TABLE_LAYOUT' | 'BOARD_LAYOUT' | 'ROADMAP_LAYOUT'
 
-/** Allowlist shared by the host gate, tab strip, and picker — raw.layout is
- *  cast unchecked, so an unknown future GitHub layout must fail this check
- *  everywhere at once rather than drifting per call site. */
+/** One layout allowlist serves host/tab/picker gates; unchecked raw.layout must reject unknown future values consistently. */
 export function isRenderableProjectViewLayout(layout: string): boolean {
   return layout === 'TABLE_LAYOUT' || layout === 'BOARD_LAYOUT' || layout === 'ROADMAP_LAYOUT'
 }
 export type GitHubProjectOwnerType = 'organization' | 'user'
 
-// Why: anything outside this union must render as an empty cell — the
-// normalizer must never throw on an unknown dataType. The `(string & {})`
-// branch preserves unknown values verbatim for debuggability while still
-// satisfying the distinct field-kind discriminants below.
+// Unknown data types render empty, never throw; string & {} preserves unknown wire values while retaining known discriminants.
 export type GitHubProjectFieldDataType =
   | 'TITLE'
   | 'ASSIGNEES'
@@ -88,17 +79,12 @@ export type GitHubProjectView = {
   number: number
   name: string
   layout: GitHubProjectViewLayout
-  /** Normalized to '' when GitHub returns null. `ProjectV2.items(query:)` is
-   *  declared `String = ""`, so sending '' and omitting the argument are the
-   *  same request — there is no non-search item field to fall back to. '' is
-   *  therefore only a UI signal: it means "this view is unfiltered". */
+  /** Null normalizes to empty: ProjectV2.items(query:) defaults to empty, equivalent to omitting query. Empty signals unfiltered UI; no separate non-search field exists. */
   filter: string
   fields: GitHubProjectField[]
   groupByFields: GitHubProjectField[]
   sortByFields: GitHubProjectSort[]
-  /** Board-layout column field(s). Optional for wire compat — older hosts
-   *  don't send it, and hosts fall back to omitting it when the GraphQL
-   *  schema lacks `verticalGroupByFields` (older GHES). */
+  /** Optional for older hosts/GHES schemas lacking verticalGroupByFields. */
   verticalGroupByFields?: GitHubProjectField[]
 }
 
@@ -119,15 +105,17 @@ export type GitHubProjectParentIssue = {
   url: string
 }
 
-// Why: GitHub Issue Types are a repo-level taxonomy (Bug/Feature/Task/etc).
-// Only repos opted into typed-issues expose a non-empty list. We carry both
-// id and human-readable name so the picker can reflect updates without a
-// re-fetch and the cell can render the chosen name with its color.
+// Opted-in repos expose Issue Types; carry id/name/color so pickers and cells reflect changes without refetching.
 export type GitHubIssueType = {
   id: string
   name: string
   color: string | null
   description: string | null
+}
+
+export type GitHubProjectLinkedPullRequests = {
+  pullRequests: { number: number; title: string; url: string }[]
+  totalCount: number
 }
 
 export type GitHubProjectFieldValue =
@@ -145,8 +133,7 @@ export type GitHubProjectFieldValue =
       title: string
       startDate: string
       duration: number
-      /** Owning field's display name. Optional for wire compat — older hosts
-       *  don't send it; used when the field is hidden from the view config. */
+      /** Owning field label for fields hidden in view config; older hosts omit it. */
       fieldName?: string
     }
   | { kind: 'text'; fieldId: string; text: string }
@@ -168,8 +155,7 @@ export type GitHubProjectRow = {
     body: string | null
     url: string | null
     state: string | null
-    /** Issue stateReason; null for PR/draft. Why: closed-as-not-planned needs
-     *  a different glyph than a regular closed issue. */
+    /** Issue-only stateReason distinguishes closed-as-not-planned glyphs; null for PRs/drafts. */
     stateReason: string | null
     /** PullRequest.isDraft; null otherwise. */
     isDraft: boolean | null
@@ -178,14 +164,15 @@ export type GitHubProjectRow = {
     assignees: GitHubProjectUser[]
     labels: GitHubProjectLabel[]
     parentIssue: GitHubProjectParentIssue | null
+    linkedPullRequests?: GitHubProjectLinkedPullRequests | null
+    /** Present when the ProjectV2Item content is an Issue and GitHub returned its summary. */
+    subIssuesProgress?: { completed: number; total: number; percentCompleted: number } | null
     /** Issue.issueType when set; null on PRs/drafts/redacted or when unset. */
     issueType: GitHubIssueType | null
   }
   fieldValuesByFieldId: Record<string, GitHubProjectFieldValue>
   updatedAt: string
-  /** Original fetched order (zero-based index in the fully paginated
-   *  POSITION ASC stream). Used as the final tie-break so equal sort values
-   *  keep GitHub rank order. */
+  /** Zero-based fully paginated POSITION ASC order; final tie-break preserves GitHub rank. */
   position: number
 }
 
@@ -203,8 +190,7 @@ export type GitHubProjectTable = {
   rows: GitHubProjectRow[]
   /** Echoes ProjectV2.items.totalCount for the view filter. */
   totalCount: number
-  /** True when the `parent` retry fallback fired. The UI can hint
-   *  "sub-issues unavailable" without claiming a hard error. */
+  /** True after parent-field fallback; permits a sub-issues-unavailable hint without a hard error. */
   parentFieldDropped: boolean
 }
 

@@ -1,8 +1,4 @@
-/**
- * A failed worker-start keeps the terminal it created (a pane the user typed into is theirs), and
- * `--retry-of` launches a new agent in a new terminal. Without releasing the failed attempt's
- * terminal on retry, every retry of a start that can never succeed left one more live agent.
- */
+/** Failed starts retain user-owned panes; retry-of must release the prior agent while launching in a new terminal, preventing one leaked agent per retry. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../../../orchestration/db'
@@ -125,16 +121,16 @@ describe('retrying a failed worker-start', () => {
     expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
   })
 
-  it('keeps a pane the user typed into', async () => {
+  it('keeps a pane the user kept open', async () => {
     h.setup()
     const failed = await failFirstStart()
-    await h.call('orchestration.workerTerminalUserInput', { paneKey: h.workerPaneKey })
+    await h.call('orchestration.workerKeepOpen', { paneKey: h.workerPaneKey, keep: true })
 
     await retry(failed)
 
     expect(h.db.getWorkerTerminalResourceByOwner(failed.dispatchId)).toMatchObject({
-      ownership_state: 'user_owned',
-      retained_reason: 'user_takeover'
+      ownership_state: 'owned',
+      retained_reason: 'user_kept'
     })
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
   })

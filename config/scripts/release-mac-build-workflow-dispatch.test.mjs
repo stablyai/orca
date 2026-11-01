@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
-  dispatchReleaseMacBuildWorkflow,
   executeReleaseMacBuildMode,
   expectedReleaseMacBuildRunTitle,
   readReleaseMacBuildWorkflowOptions,
@@ -22,13 +21,15 @@ const baseOptions = {
 
 describe('release mac build workflow dispatch', () => {
   it('passes the shared JavaScript commit only when the parent produced a bundle', async () => {
-    const request = vi.fn(async () => ({}))
-    const api = { owner: 'stablyai', repo: 'orca', request }
-    await dispatchReleaseMacBuildWorkflow(api, {
-      ...baseOptions,
-      javascriptSourceSha: 'a'.repeat(40)
-    })
-    expect(request.mock.calls[0][2].inputs).toEqual({
+    const { fetch, requests } = createGitHubFetch([
+      jsonResponse(200, { workflow_run_id: 123 }),
+      jsonResponse(200, { id: 123, status: 'completed', conclusion: 'success' })
+    ])
+    await runReleaseMacBuildWorkflow(
+      { ...baseOptions, javascriptSourceSha: 'a'.repeat(40) },
+      { fetch, now: () => Date.parse('2026-06-30T12:00:00Z'), sleep: vi.fn() }
+    )
+    expect(requests[0].body.inputs).toEqual({
       release_run_id: '777',
       tag: 'v1.2.3-rc.4',
       javascript_source_sha: 'a'.repeat(40)

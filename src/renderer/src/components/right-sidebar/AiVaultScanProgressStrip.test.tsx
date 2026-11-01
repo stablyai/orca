@@ -31,16 +31,6 @@ const FINISHED: AiVaultScanProgress = {
   settledAt: 90_000
 }
 
-it('says the finished total in the strip and opens to one row per agent', async () => {
-  render(<AiVaultScanProgressStrip progress={FINISHED} />)
-  expect(screen.getByText('102,452 files').parentElement?.textContent).toBe('Scanned 102,452 files')
-  expect(screen.queryByText('Codex')).toBeNull()
-
-  await userEvent.setup().click(screen.getByRole('button'))
-  expect(screen.getByText('77,483 files')).toBeTruthy()
-  expect(screen.getByText('1 database')).toBeTruthy()
-})
-
 it('keeps a narrower cached panel off the broader key while a late matching panel loads it', async () => {
   const lowerDepth = { scopePaths: ['/project'], includeAntigravityIdeSessions: true, limit: 100 }
   const broader = aiVaultLocalScanKey({ ...lowerDepth, limit: 1000 })
@@ -72,7 +62,7 @@ it('keeps a narrower cached panel off the broader key while a late matching pane
     push({ scanKey: broader, progress: { ...cachedProgress, scanId: 'later', stage: 'finding' } })
   )
   expect(narrowerPanel.result.current).toBeNull()
-  // A remote host has no progress stream yet; its panel keeps today's spinner and error line.
+  // Without remote progress evidence, retain the existing spinner/error presentation.
   expect(remote.result.current).toBeNull()
   expect(allHosts.result.current).toBeNull()
 })

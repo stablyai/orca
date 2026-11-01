@@ -3,7 +3,11 @@ import type {
   BundledSkillPlan
 } from '../../../shared/bundled-skill-plan'
 import { BUNDLED_SKILL_SOURCES } from './bundled-skill-sources'
-import { executeBundledSkillPlan, type BundledSkillExecuteInput } from './execute'
+import {
+  autoUpdateBundledSkills,
+  executeBundledSkillPlan,
+  type BundledSkillExecuteInput
+} from './execute'
 import { nativeBundledSkillFilesystem } from './filesystem'
 import { buildBundledSkillPlan } from './plan'
 
@@ -24,10 +28,17 @@ export async function previewBundledSkillInstall(
   return (await buildBundledSkillPlan(withDefaults(input))).plan
 }
 
-/** Runs the previewed plan, identified by its digest; the client never re-sends the ops. */
+/** Execute by preview digest, never by client-supplied operations. */
 export async function installBundledSkills(
   input: BundledSkillServiceInput,
   planDigest: string
 ): Promise<BundledSkillInstallResult> {
   return executeBundledSkillPlan(withDefaults(input), planDigest)
+}
+
+/** Silent path: updates only hash-verified Orca copies of `names`, planned under the same locks. */
+export async function autoUpdateInstalledBundledSkills(
+  input: BundledSkillServiceInput & { names: readonly string[] }
+): Promise<BundledSkillInstallResult> {
+  return autoUpdateBundledSkills({ ...withDefaults(input), names: input.names })
 }

@@ -3,6 +3,7 @@ import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { gitRuntimeOptionsKey } from './git-runtime-options-cache-key'
+import { iterateNulDelimitedFields } from '../../../shared/nul-delimited-fields'
 
 const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
 export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512
@@ -16,7 +17,7 @@ export function clearSubmodulePathsCacheForTests(): void {
 
 export function clearSubmodulePathsCache(): void {
   submodulePathsCache.clear()
-  // Why: bump the generation so a pre-mutation read can't repopulate the invalidated cache.
+  // Prevent pre-mutation reads from repopulating this cache.
   submodulePathsCacheGeneration += 1
 }
 
@@ -25,7 +26,7 @@ export function getSubmodulePathsCacheCountForTests(): number {
 }
 
 function getSubmodulePathsCacheKey(worktreePath: string, options: GitRuntimeOptions): string {
-  // Why: the same path can map to different WSL-distro filesystems, so key the cache by runtime routing.
+  // Identical paths can name different filesystems across WSL distros.
   return [worktreePath, ...gitRuntimeOptionsKey(options)].join('\0')
 }
 
@@ -67,10 +68,7 @@ function rememberSubmodulePaths(cacheKey: string, paths: string[], now: number):
   trimSubmodulePathsCache()
 }
 
-/**
- * Resolve a submodule's own worktree path from a parent worktree + relative
- * submodule path, rejecting anything that escapes the parent.
- */
+/** Reject submodule paths that escape the parent worktree. */
 export function resolveSubmoduleWorktreePath(worktreePath: string, submodulePath: string): string {
   if (!submodulePath || submodulePath.includes('\0') || path.isAbsolute(submodulePath)) {
     throw new Error('Access denied: invalid submodule path')
@@ -83,10 +81,7 @@ export function resolveSubmoduleWorktreePath(worktreePath: string, submodulePath
   return resolved
 }
 
-/**
- * List configured submodule paths (relative, forward-slash) for a worktree, cached
- * briefly. Read from `.gitmodules` to avoid an index-wide `ls-files` scan.
- */
+/** Read .gitmodules with a short cache to avoid scanning every index entry. */
 export async function listSubmodulePaths(
   worktreePath: string,
   options: GitRuntimeOptions = {}
@@ -97,29 +92,29 @@ export async function listSubmodulePaths(
   if (cached) {
     return cached
   }
-  // Why: prune on misses so removed worktrees don't accumulate; hot hits stay O(1).
+  // Prune on misses to bound removed-worktree entries while keeping hits O(1).
   pruneExpiredSubmodulePathsCache(now)
   const cacheGeneration = submodulePathsCacheGeneration
   let paths: string[] = []
   try {
     const { stdout } = await gitExecFileAsync(
-      ['config', '--file', '.gitmodules', '--get-regexp', '^submodule\\..*\\.path$'],
-      { ...gitOptionsForWorktree(worktreePath, options), env: gitOptionalLocksDisabledEnv() }
+      ['config', '-z', '--file', '.gitmodules', '--get-regexp', '^submodule\\..*\\.path$'],
+      {
+        ...gitOptionsForWorktree(worktreePath, options),
+        env: gitOptionalLocksDisabledEnv()
+      }
     )
-    paths = stdout
-      .split(/\r?\n/)
-      .map((line) => {
-        const spaceIndex = line.indexOf(' ')
-        return spaceIndex === -1
-          ? ''
-          : line
-              .slice(spaceIndex + 1)
-              .trim()
-              .replace(/\/+$/, '')
-      })
-      .filter((value) => value.length > 0)
+    for (const record of iterateNulDelimitedFields(stdout)) {
+      const separator = record.indexOf('\n')
+      if (separator === -1) {
+        continue
+      }
+      const submodulePath = record.slice(separator + 1).replace(/\/+$/, '')
+      if (submodulePath) {
+        paths.push(submodulePath)
+      }
+    }
   } catch {
-    // No .gitmodules (or git config failure) — treat as a repo without submodules.
     paths = []
   }
   if (cacheGeneration === submodulePathsCacheGeneration) {
@@ -128,16 +123,11 @@ export async function listSubmodulePaths(
   return paths
 }
 
-/**
- * Find the submodule whose root equals or contains `filePath`. Returns the
- * submodule path (forward-slash) or null when the path is not in a submodule.
- */
 export function findContainingSubmodule(submodulePaths: string[], filePath: string): string | null {
   const normalized = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
   let best: string | null = null
   for (const sub of submodulePaths) {
     if (normalized === sub || normalized.startsWith(`${sub}/`)) {
-      // Prefer the longest match to support nested submodule roots.
       if (!best || sub.length > best.length) {
         best = sub
       }

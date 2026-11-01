@@ -27,7 +27,6 @@ export type GitRepoRegistrationInfo = {
 
 let warnedMarkerFallbackThisSession = false
 
-/** Check if a path is a valid git repository (regular or bare). */
 function* isGitRepoCommands(path: string): GitRepoCommands<boolean> {
   try {
     if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
@@ -89,7 +88,6 @@ function* probeGitRepo(path: string, includeLocation = false): GitRepoCommands<G
   }
 }
 
-/** Reuse one repository discovery across registration's validity, root and worktree checks. */
 function* inspectGitRepoForRegistrationCommands(
   path: string
 ): GitRepoCommands<GitRepoRegistrationInfo> {
@@ -168,9 +166,7 @@ function* getGitRepoRootCommands(path: string): GitRepoCommands<string> {
         return normalizeGitRepoRootForInputPath(path, toplevel)
       }
     }
-  } catch {
-    // Fall through to preserving the original path.
-  }
+  } catch {}
   return rootPathFromMarker(path)
 }
 

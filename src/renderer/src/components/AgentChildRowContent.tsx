@@ -18,10 +18,7 @@ type AgentChildRowContentProps = {
   lineTitle?: boolean
 }
 
-/**
- * A child row's state dot, name and detail: the one piece the sidebar's child rows and the chat
- * strip's rows both render, so the same child reads the same on both.
- */
+/** Keep sidebar-child and chat-strip state/name/detail rendering consistent. */
 export const AgentChildRowContent = React.memo(function AgentChildRowContent({
   row,
   now,

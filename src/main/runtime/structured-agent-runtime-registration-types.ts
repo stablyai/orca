@@ -1,5 +1,5 @@
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
 import type { StructuredAgentCliConversations } from '../native-chat/structured-agent-cli-conversations'
 import type {
@@ -11,9 +11,9 @@ import type { StructuredAgentDefinition } from '../native-chat/agent-session-wir
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import type { AgentModelCatalogDiscovery } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
-import type { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
+import type { createStructuredAgentSessionDispatchFollowUps } from './agent-session/structured-agent-session-dispatch-followups'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import type { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type {
   StructuredClaudeAccountHomeDeps,
@@ -44,8 +44,9 @@ export type StructuredAgentAccountHomeRequest = {
   launchEnv: NodeJS.ProcessEnv
   /** Where the chat runs; null for a read with no workspace (the model catalog). */
   location: AgentSessionExecutionLocation | null
-  /** A `read` has no side effects: it syncs no home, starts no bridge, clears no selection. */
-  purpose: 'launch' | 'read'
+  /** A `read` has no side effects: it syncs no home, starts no bridge, clears no selection.
+   *  `identity` is a read that names the selected account before its folder exists. */
+  purpose: 'launch' | 'read' | 'identity'
   /** The launch's workspace directory on this host; a read has none. */
   workspacePath: (() => Promise<string>) | null
 }
@@ -72,9 +73,16 @@ export type StructuredAgentLaunchCheck = {
   resolveLaunch: (
     env: Record<string, string>,
     commandSettings: StructuredAgentCommandSettings
-  ) => { command: string; env: Record<string, string> }
+  ) => { command: string; prefixArgs: string[]; env: Record<string, string> }
   /** The ascending releases that binary's `--version` must reach; see `agentCliMinimumVersion`. */
   minimumVersions: readonly string[]
+}
+
+export type StructuredAgentChatProgram = {
+  /** Resolves the binary a chat start from `env` runs, spawning nothing; throws launch refusals. */
+  resolve: StructuredAgentLaunchCheck['resolveLaunch']
+  /** Whether Orca can download this program on this host when none is found. */
+  installable?: () => boolean
 }
 
 export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {
@@ -87,11 +95,16 @@ export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {
   /** How create asks whether the agent installed on this host runs a structured chat, with the
    *  environment a launch starts from; absent when the location alone decides. */
   launchCheck?: StructuredAgentLaunchCheck
+  /** How the host health snapshot finds this agent's chat program; absent answers unknown. */
+  chatProgram?: StructuredAgentChatProgram
   /** The account a chat of this agent pins; see `StructuredAgentAccountHomeRequest`. */
   resolveAccountHome: (
     request: StructuredAgentAccountHomeRequest,
     services: StructuredAgentAccountHomeServices
   ) => Promise<AgentSessionAccountHome>
+  /** Whether a start of an existing chat launches under the account `resolveAccountHome` picks now
+   *  rather than the one its record pins; absent keeps the record's. */
+  launchFollowsSelection?: () => boolean
 }
 
 export type StructuredAgentRuntimeRegistration = StructuredAgentRuntimeMetadata & {

@@ -31,7 +31,7 @@ describe('bindTabStripContentResizeObservers', () => {
     expect(onResize).toHaveBeenCalled()
 
     disconnectObservers()
-    expect(disconnect).toHaveBeenCalled()
+    expect(disconnect).toHaveBeenCalledTimes(2)
 
     vi.unstubAllGlobals()
   })

@@ -8,7 +8,6 @@ import { applyPaneOutcomeChanges } from './workspace-layout-pane-outcomes'
 import type { ProcessExitFacts } from './workspace-layout-process-exit'
 import { applyLayoutTransition } from './workspace-layout-transitions'
 
-/** A terminal tab with `panes` panes, none started. */
 function setup(panes: 1 | 2) {
   const context = testContext()
   const created = build(context, [{ type: 'createTerminalTab', workspace: WS }])
@@ -149,14 +148,12 @@ describe('processExited', () => {
     const newborn = { spawnedFresh: true, inputWritten: false }
     const split = { ...newborn, tabHadPaneAtConnect: true }
     const keeps = [
-      // A local process that exits non-zero.
       { panes: 2 as const, facts: exit({ local: true }) },
       // A sole newborn that dies before input, whatever the code.
       { panes: 1 as const, facts: exit(newborn) },
       { panes: 1 as const, facts: exit({ ...newborn, exitCode: 0, local: true }) },
       { panes: 1 as const, facts: exit({ ...newborn, exitCode: 0 }) },
-      // A split into a tab with a live pane, not restored, dead before input or output, whatever
-      // the code; it need not be a fresh spawn.
+      // A silent, unrestored split into a live tab stays regardless of code or whether it spawned fresh.
       { panes: 2 as const, facts: exit({ ...split, outputReceived: false }) },
       { panes: 2 as const, facts: exit({ ...split, exitCode: 0, outputReceived: false }) },
       { panes: 2 as const, facts: exit({ ...split, spawnedFresh: false, outputReceived: false }) }

@@ -25,7 +25,6 @@ export function registerJournalPiContextImportTests(): void {
   async function prepare(entries: unknown[], version = 3) {
     const filePath = join(root, 'session.jsonl')
     const header = { type: 'session', id: 'session', version, cwd: root }
-    // Malformed records do not contribute to Pi's v1 entry indexes.
     await writeFile(
       filePath,
       [JSON.stringify(header), '{bad json', ...entries.map((entry) => JSON.stringify(entry))].join(

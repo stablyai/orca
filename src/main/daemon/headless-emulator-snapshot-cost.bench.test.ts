@@ -5,18 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HeadlessEmulator } from './headless-emulator'
 
-// Benchmark harness for issue #5096 (terminal output delay / UI lag growing
-// with session history). Run with:
-//   ORCA_TERMINAL_PERF_BENCH=1 pnpm vitest run \
-//     src/main/daemon/headless-emulator-snapshot-cost.bench.test.ts \
-//     --config config/vitest.config.ts
-//
-// Why these measurements: during an active agent session every PTY chunk marks
-// the session dirty, so daemon-pty-adapter checkpoints every 5s. getSnapshot()
-// serializes the full headless buffer synchronously on the daemon event loop
-// (stalling the PTY pump), and history-manager JSON.stringifies the result on
-// the Electron main process (stalling input IPC). Both stalls scale with
-// buffer content, which matches the report that clearing history fixes the lag.
+// Enable with ORCA_TERMINAL_PERF_BENCH=1 to compare full snapshots against incremental checkpoint work.
 const benchEnabled = process.env.ORCA_TERMINAL_PERF_BENCH === '1'
 
 const COLS = 200
@@ -38,8 +27,7 @@ type BenchRow = {
 }
 
 function agentTranscriptLine(index: number): string {
-  // Mimic agent TUI transcripts: SGR colors, tool-call box drawing, varied
-  // widths — serialized cost depends on attribute churn, not just row count.
+  // Attribute churn affects serialization cost as well as row count.
   const color = 30 + (index % 8)
   const variant = index % 4
   if (variant === 0) {
@@ -75,8 +63,7 @@ function medianOf(values: number[]): number {
 function measureCheckpointStringify(emulator: HeadlessEmulator): number {
   const snapshot = emulator.getSnapshot()
   const start = performance.now()
-  // Mirrors history-manager.ts checkpoint(): the payload main stringifies and
-  // writes to disk every 5s per dirty session.
+  // Measure checkpoint JSON serialization separately from daemon snapshot work.
   JSON.stringify({
     snapshotAnsi: snapshot.snapshotAnsi,
     scrollbackAnsi: snapshot.scrollbackAnsi,
@@ -131,20 +118,14 @@ function round(value: number): number {
   return Math.round(value * 100) / 100
 }
 
-// Why a file: vitest's default reporter swallows console output from passing
-// tests; the measurements are the deliverable of this harness.
+// Persist measurements because passing-test console output may be hidden.
 function writeBenchReport(fileName: string, report: unknown): void {
   const reportPath = join(tmpdir(), fileName)
   writeFileSync(reportPath, JSON.stringify(report, null, 2))
   process.stdout.write(`\n[bench] report written to ${reportPath}\n`)
 }
 
-// Why: models the daemon event loop. PTY chunks and the checkpoint work share
-// one thread in the daemon process; the worst inter-chunk gap during a
-// checkpoint is the output latency a user sees when a tick lands.
-// 'snapshot' models the pre-#5096 design (full serialize per tick);
-// 'incremental-take' models the replacement (drain pending records — the
-// daemon-side cost of the takePendingOutput RPC).
+// Compare event-loop stalls from full serialization and incremental drains during PTY output.
 async function measureStreamInterference(
   checkpointAtChunk: number | null,
   mode: 'snapshot' | 'incremental-take' = 'snapshot'

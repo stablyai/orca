@@ -6,33 +6,26 @@ import {
   type DeviceResumeConfirmed
 } from '@orca-cloud/relay-contract'
 import type { RelayDatabase, SqlRow } from './database.js'
-import { HeapWindowReaper } from './heap-window-reaper.js'
+import { changes, HeapWindowReaper } from './heap-window-reaper.js'
 import { ResumeConfirmedAuditBuffer } from './resume-confirmed-audit-buffer.js'
 
 const CREDENTIAL_GRACE_MS = 24 * 60 * 60 * 1000
-// Released desktops validate invite expiry against their own clock with zero
-// tolerance at exactly inviteTtlMs; issuing under the ceiling keeps pairing
-// working for clients whose clocks trail the cell by up to this margin.
+// Issue below released desktops’ zero-tolerance inviteTtlMs ceiling so clients lagging by this margin can still pair.
 const INVITE_ISSUE_SKEW_MARGIN_MS = 30 * 1000
-// Terminal invites are read by nothing: every reader re-checks expiry and state at read time, so
-// the row only serves the audit trail, which relay_audit_events already keeps. A week is long
-// enough to answer a support question about a pairing that failed.
+// Terminal invite readers recheck state/expiry; retain one week only for pairing support, with audit events already durable.
 const TERMINAL_INVITE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
-// Why: both readers of a connection basis and of a direct authorization require it still
-// active/unconsumed AND inside its deadline, and every deadline is set at most 30s past insert, so
-// a settled row can never authorize anything again. A day is margin for forensics, not for reads.
+// Readers require active/unconsumed and unexpired ≤30s deadlines; settled rows cannot authorize again, so one day is forensic margin.
 const INACTIVE_AUTHORIZATION_RETENTION_MS = 24 * 60 * 60 * 1000
-// A stored confirm result only answers a retry of the same request on the same connection basis,
-// and a different basis is refused as a tuple mismatch; a basis lives for one phone connection. A
-// week matches the pairing support window above.
+// Confirm retries must match the same request and per-phone connection basis; keep one week for pairing support.
 export const CONFIRM_RESULT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 // Nothing in the relay reads audit events back; 90 days covers support and incident questions.
 export const AUDIT_EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000
 // Bounded so one cycle cannot hold row locks or grow WAL without limit; the backlog drains over
 // however many cycles it takes.
 const REAP_BATCH_ROWS = 5000
-// ~14 rows per page. With ~9 director ticks a minute the row cap is ~3M rows a day, so the 7.4M-row
-// backlog drains over two to three days; a walk that finds nothing reads ~1 MB a tick.
+// Unindexed, a drained reap rescans the whole heap; retention is days, so minutes of reap lag are harmless.
+const UNINDEXED_REAP_PAUSE_MS = 5 * 60 * 1000
+// At ~14 rows/page and ~9 ticks/min, budget reaps ~3M rows/day (~2–3 days for 7.4M backlog); empty walks read ~1MB/tick.
 const CONFIRM_RESULT_REAP_BUDGET = {
   pagesPerStatement: 16,
   maxPagesPerTick: 128,
@@ -161,6 +154,7 @@ export class RelayCredentialStore {
     'committed_at <= ?',
     CONFIRM_RESULT_REAP_BUDGET
   )
+  private readonly unindexedReapResumesAt = new Map<string, number>()
 
   // Only memory confirms add to it, so its flush timer never starts on a director.
   readonly resumeAudit: ResumeConfirmedAuditBuffer
@@ -590,9 +584,7 @@ export class RelayCredentialStore {
     })
   }
 
-  // Step 6's confirm for a basis the cell holds in memory: one fresh device read, and a renewal
-  // write at most once a day per device. A current-version confirm always answers renewed:true
-  // with the expiry the database now holds, so a phone keeps scheduling its renewals.
+  // Memory confirm reads one device and renews at most daily; current-version replies always use renewed:true with stored expiry so phones schedule future renewals.
   async confirmMemoryResume(
     input: RelayIdentity & {
       reqId: string
@@ -643,8 +635,7 @@ export class RelayCredentialStore {
     }
   }
 
-  // Guarded by the row just read, so a revoke or install that committed since leaves it alone;
-  // the answer then keeps the expiry that was read, which the database still holds.
+  // Guard against revoke/install since the read; on no-op keep the expiry read, which the database still holds.
   private async renewResume(
     identity: RelayIdentity & { relayDeviceId: string },
     device: SqlRow,
@@ -782,28 +773,26 @@ export class RelayCredentialStore {
     await this.reapSettledCredentials(now)
   }
 
-  // Outside the sweep transaction on purpose: each delete is idempotent and independent of the
-  // state transitions above, so batching them in would only hold their row locks for longer.
+  // Idempotent reaping stays outside transition transaction or locks last across unrelated batch deletes.
   private async reapSettledCredentials(now: number): Promise<void> {
-    await this.reapBatch(
+    await this.reapUnindexed(
       'relay_invites',
       'state IN (?, ?, ?) AND updated_at <= ?',
-      ['expired', 'consumed', 'invalidated', now - TERMINAL_INVITE_RETENTION_MS]
+      ['expired', 'consumed', 'invalidated', now - TERMINAL_INVITE_RETENTION_MS],
+      now
     )
-    // deadline, not created_at: it is the second column of relay_connection_bases_active_deadline,
-    // so once the backlog is drained this batch learns there is nothing left to do from the index
-    // instead of the 1.5 GB heap. Both readers reject a passed deadline, so a day past one is
-    // unusable whatever the active flag says.
+    // Use indexed active/deadline range to avoid scanning 1.5GB drained heap; both readers reject expired deadlines regardless of flag, so one-day-old bases are unusable.
     await this.reapBatch('relay_connection_bases', 'active = ? AND deadline <= ?', [
       0,
       now - INACTIVE_AUTHORIZATION_RETENTION_MS
     ])
     // consumed_at, not deadline: consumption is what settles this row, and it can happen well
     // before the deadline, so measuring from it retains the row for the full window either way.
-    await this.reapBatch(
+    await this.reapUnindexed(
       'relay_direct_authorizations',
       'consumed_at IS NOT NULL AND consumed_at <= ?',
-      [now - INACTIVE_AUTHORIZATION_RETENTION_MS]
+      [now - INACTIVE_AUTHORIZATION_RETENTION_MS],
+      now
     )
     await this.confirmResultReaper.reap(this.database, [now - CONFIRM_RESULT_RETENTION_MS])
     // Ordered so the plan walks relay_audit_events_at from its oldest entry: unordered, a LIMIT
@@ -811,25 +800,40 @@ export class RelayCredentialStore {
     await this.reapBatch('relay_audit_events', 'at <= ?', [now - AUDIT_EVENT_RETENTION_MS], 'at')
   }
 
-  // ctid/rowid, not the primary key: the physical address lets the delete re-find exactly the batch
-  // the subquery located instead of re-matching the predicate per row. On Postgres an array of TIDs,
-  // not `IN`: IN can plan as a hash join over a sequential scan of the whole table.
+  // Paused before the delete, so an overlapping or failed reap waits too; only a full batch (a backlog) clears it.
+  private async reapUnindexed(
+    table: string,
+    predicate: string,
+    params: unknown[],
+    now: number
+  ): Promise<void> {
+    if (now < (this.unindexedReapResumesAt.get(table) ?? 0)) {
+      return
+    }
+    this.unindexedReapResumesAt.set(table, now + UNINDEXED_REAP_PAUSE_MS)
+    if ((await this.reapBatch(table, predicate, params)) >= REAP_BATCH_ROWS) {
+      this.unindexedReapResumesAt.delete(table)
+    }
+  }
+
+  // Delete located physical ctid/rowid; PostgreSQL ANY(TID array) guarantees TID scan, while IN can hash-join a full heap scan.
   private async reapBatch(
     table: string,
     predicate: string,
     params: unknown[],
     orderBy?: string
-  ): Promise<void> {
+  ): Promise<number> {
     const sqlite = this.database.dialect === 'sqlite'
     const address = sqlite ? 'rowid' : 'ctid'
     const order = orderBy ? `ORDER BY ${orderBy} ` : ''
     const batch = `SELECT ${address} FROM ${table} WHERE ${predicate} ${order}LIMIT ${REAP_BATCH_ROWS}`
-    await this.database.query(
+    const rows = await this.database.query(
       sqlite
         ? `DELETE FROM ${table} WHERE rowid IN (${batch})`
         : `DELETE FROM ${table} WHERE ctid = ANY(ARRAY(${batch}))`,
       params
     )
+    return changes(rows)
   }
 
   private async installStatusWith(

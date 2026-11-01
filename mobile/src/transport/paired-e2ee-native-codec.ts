@@ -1,7 +1,4 @@
-/**
- * Inbound decode steps done natively instead of in Hermes JS: every v2 text frame the phone opens
- * (base64, secretbox, UTF-8), plus the gunzip of page-bundle ranges.
- */
+// Move inbound frame decode and bundle gunzip off Hermes’s JS thread when native bindings are available.
 export type PairedE2EENativeCodec = {
   /** Canonical padded base64 only; null for anything else, including what `atob` forgives. */
   decodeBase64(value: string): Uint8Array | null
@@ -13,13 +10,11 @@ export type PairedE2EENativeCodec = {
   decodeUtf8(input: Uint8Array): string | null
 }
 
-/** The two react-native-libsodium JSI functions the phone needs; both throw on failure. */
 export type LibsodiumBindings = {
   fromBase64: (value: string, variant: number) => ArrayBuffer
   secretboxOpen: (box: ArrayBuffer, nonce: ArrayBuffer, key: ArrayBuffer) => ArrayBuffer
 }
 
-/** What the app entry hands over: libsodium plus the orca-gzip-utf8-codec module. */
 export type PairedE2EENativeBindings = {
   codec: {
     gunzip(input: Uint8Array, outputLimit: number): Uint8Array
@@ -39,20 +34,14 @@ const PROBE_GZIP_BASE64 = 'H4sIAAAAAAAAE8vPBgBH3dx5AgAAAA=='
 let loadBindings: (() => PairedE2EENativeBindings | null) | null = null
 let detected: PairedE2EENativeCodec | null | undefined
 
-/**
- * Called once by the app entry. Injected rather than imported so that this module, which shared,
- * desktop and e2e code reach, never loads the native modules or their global types.
- */
+// Inject from app entry so shared/desktop/e2e imports never load native modules or globals.
 export function providePairedE2EENativeBindings(load: () => PairedE2EENativeBindings | null): void {
   loadBindings = load
   // Why: a lookup that ran before this must not pin the JS path for the whole run.
   detected = undefined
 }
 
-/**
- * The native codec, or null when none was provided or any part of it is missing or answers the
- * probe wrongly; the caller then runs the JS path. Detected once, on first use.
- */
+// Probe once and use JS fallback if bindings are absent, incomplete or incompatible.
 export function pairedE2EENativeCodec(): PairedE2EENativeCodec | null {
   if (detected === undefined) {
     detected = detectPairedE2EENativeCodec()

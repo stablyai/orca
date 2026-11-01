@@ -129,14 +129,12 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
   )
   const inputLeafIdsInOrder = collectLayoutLeafIdsInOrder(inputRoot)
   const preferredLeafIdsInOrder = collectLayoutLeafIdsInOrder(preferredLayout?.root)
-  // Why the uniqueness check: a preferred layout that repeats a UUID would hand two input leaves the
-  // same id, collapsing their pty/buffer/scrollback/title records onto one key.
+  // Duplicate preferred UUIDs would collapse distinct panes' persisted records.
   const usePreferredLeafIds =
     preferredLeafIdsInOrder.length === inputLeafIdsInOrder.length &&
     new Set(preferredLeafIdsInOrder).size === preferredLeafIdsInOrder.length
   const leafIdByInputLeafId = new Map<string, string>()
-  // Why pre-seeded: a stable leaf later in the input keeps its own id, so handing that id to an
-  // earlier non-terminal leaf would recreate the duplicate this pass exists to remove.
+  // Reserve stable input IDs before assigning replacements to earlier legacy leaves.
   const claimedLeafIds = new Set(
     inputLeafIdsInOrder.filter((leafId) => counts.get(leafId) === 1 && isTerminalLeafId(leafId))
   )

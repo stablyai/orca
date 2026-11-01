@@ -1,10 +1,8 @@
-// Test fixture: a terminal client that talks to a profile's terminal daemon directly, the way a
-// paired client's terminal does, so a test can prove a session outlives a serve-host switch.
 import { build } from 'esbuild'
 
 export type DaemonSessionClientResult = { pid: number; isReattach: boolean; output: boolean }
 
-/** Bundles the client to `outfile`; run it with Node as `<op: create|attach> <daemonDir> <sessionId> <marker> <cwd>`. */
+/** Run bundled client with Node: <create|attach> <daemonDir> <sessionId> <marker> <cwd>. */
 export async function buildDaemonSessionClient(outfile: string): Promise<void> {
   await build({
     stdin: {

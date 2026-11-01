@@ -1,16 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { parseLinuxStartTicks, readBootIdentity } from '../agent-hooks/managed-hook-owner-identity'
 
-/**
- * What the daemon reports about itself over the readiness IPC channel.
- *
- * Why `pid` is self-reported rather than read from the launcher's `child.pid`: the immediate
- * child is not guaranteed to be the daemon process. The durable-scope launch path spawns
- * `systemd-run --user --scope` (see daemon-cgroup-scope.ts), so the PID the launcher holds only
- * happens to be the daemon's because systemd-run `execvpe()`s the command in scope mode. Reading
- * it from inside the daemon makes the identity independent of that external detail, matching how
- * `detectOwnCgroupScopeUnit` treats cgroup membership as ground truth.
- */
+/** Self-reported identity avoids relying on launcher PIDs that may belong to wrappers. */
 export type DaemonReadyIdentity = {
   pid: number
   startedAtMs: number
@@ -34,12 +25,7 @@ export async function readCurrentDaemonReadyIdentity(
   }
 }
 
-/**
- * Reads another process's incarnation markers.
- *
- * Why: `readCurrentDaemonReadyIdentity` only covers /proc/self, but repairing a PID record
- * means republishing the markers of the daemon that actually owns the endpoint.
- */
+/** PID-record repair needs the endpoint owner's incarnation, not this process's. */
 export async function readDaemonProcessIncarnation(
   pid: number
 ): Promise<{ linuxStartTicks: string; bootId: string } | null> {

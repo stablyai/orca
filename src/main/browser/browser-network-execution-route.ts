@@ -1,11 +1,13 @@
-import { connect } from 'node:net'
+import { connect, type Socket } from 'node:net'
 import { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
 import { readNetworkProxySettings } from './browser-network-proxy-settings-source'
 import { selectBrowserNetworkTunnelProxy } from './browser-network-tunnel-proxy-selection'
-import { HttpConnectTunnelSocket } from './http-connect-tunnel-socket'
-import { SystemSshSocksClientSocket } from './system-ssh-socks-client-socket'
+import {
+  connectThroughBrowserNetworkTunnelProxy,
+  type BrowserNetworkTunnelDialer
+} from './browser-network-tunnel-proxy-connect'
 
 export type BrowserNetworkExecutionRoute = {
   key: string
@@ -82,24 +84,43 @@ export function resolveNativeBrowserNetworkExecutionRoute(
   }
 }
 
-/** Dials a tunnel destination from this host the way its own browser would: through its proxy. */
+const nativeDialer: BrowserNetworkTunnelDialer = {
+  connect: (target) => connect({ ...target, allowHalfOpen: true }),
+  openTransport: openConnectedSocket
+}
+
+// Settle on connect so an immediate dial error (emitted on nextTick) cannot outrun its listener.
+export function openConnectedSocket(
+  endpoint: BrowserNetworkTunnelOpen,
+  signal: AbortSignal
+): Promise<Socket> {
+  return new Promise((resolve, reject) => {
+    const socket = connect({ ...endpoint, allowHalfOpen: true })
+    const abandon = (): void => {
+      socket.destroy()
+      reject(new Error('browser_tunnel_proxy_connect_abandoned'))
+    }
+    const fail = (error: Error): void => {
+      signal.removeEventListener('abort', abandon)
+      reject(error)
+    }
+    signal.addEventListener('abort', abandon, { once: true })
+    socket.on('error', fail)
+    // Keep fail attached: an error between connect and the caller's listeners must not go uncaught.
+    socket.once('connect', () => {
+      signal.removeEventListener('abort', abandon)
+      resolve(socket)
+    })
+  })
+}
+
 export function connectNativeBrowserNetworkTarget(
   target: BrowserNetworkTunnelOpen,
   env: Record<string, string | undefined> = process.env
 ): BrowserNetworkTunnelSocket {
-  const proxy = selectBrowserNetworkTunnelProxy(target, readNetworkProxySettings(), env)
-  if (proxy.kind === 'http') {
-    return new HttpConnectTunnelSocket(proxy.url, target)
-  }
-  if (proxy.kind === 'socks5' && !proxy.url.username && !proxy.url.password) {
-    return new SystemSshSocksClientSocket(
-      { host: proxy.url.hostname.replace(/^\[|\]$/g, ''), port: Number(proxy.url.port) || 1080 },
-      target
-    )
-  }
-  if (proxy.kind !== 'direct') {
-    // Why throw, not dial direct: a host that requires a proxy must not leak traffic around it.
-    throw new Error('browser_tunnel_proxy_unsupported')
-  }
-  return connect({ ...target, allowHalfOpen: true })
+  return connectThroughBrowserNetworkTunnelProxy(
+    target,
+    selectBrowserNetworkTunnelProxy(target, readNetworkProxySettings(), env),
+    nativeDialer
+  )
 }

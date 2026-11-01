@@ -1,6 +1,3 @@
-// A close, dispose or quit while a turn runs: the agent is asked to cancel it and given the Stop's
-// grace to end it before its process goes, as a Stop does; an idle close goes at once.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closeProviderTimelineRigs,
@@ -22,7 +19,6 @@ afterEach(async () => {
   await closeProviderTimelineRigs()
 })
 
-/** What Orca had written, and whether the turn had ended, when it first asked the child to close. */
 function watchClose(child: FakeAcpChild, turn: { ended: boolean }) {
   const atClose: { cancels: number | null; turnEnded: boolean | null } = {
     cancels: null,
@@ -37,14 +33,12 @@ function watchClose(child: FakeAcpChild, turn: { ended: boolean }) {
   return atClose
 }
 
-/** The agent ends the cancelled turn a moment after Orca asks. */
+/** Release the provider's held turn end only after the close is observed waiting. */
 function answerCancel(child: FakeAcpChild, prompt: FakeFrame, turn: { ended: boolean }) {
-  child.agent.on('session/cancel', () =>
-    setTimeout(() => {
-      turn.ended = true
-      child.agent.reply(prompt, { stopReason: 'cancelled' })
-    }, 30)
-  )
+  return () => {
+    turn.ended = true
+    child.agent.reply(prompt, { stopReason: 'cancelled' })
+  }
 }
 
 async function runningPrompt(rig: AcpAdapterRig): Promise<FakeFrame> {
@@ -58,9 +52,14 @@ describe('ACP teardown of a running turn', () => {
     const rig = await openAcpAdapterRig()
     const prompt = await runningPrompt(rig)
     const turn = { ended: false }
-    answerCancel(rig.child(), prompt, turn)
+    const releaseCancel = answerCancel(rig.child(), prompt, turn)
     const atClose = watchClose(rig.child(), turn)
-    await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
+    const closing = rig.adapter.closeSession(SESSION)
+    await rig.frame('session/cancel')
+    expect(rig.child().closes).toBe(0)
+    expect(turn.ended).toBe(false)
+    releaseCancel()
+    await expect(closing).resolves.toBe(true)
     expect(atClose).toEqual({ cancels: 1, turnEnded: true })
     expect(rig.ended).toMatchObject([{ type: 'ended', cause: 'requested-close' }])
   })
@@ -80,11 +79,16 @@ describe('ACP teardown of a running turn', () => {
     expect(child.closes).toBe(1)
   })
 
-  it('a quit cancels every running turn before it ends the children, within the grace', async () => {
+  it('a quit cancels the running turn before ending its child at the grace', async () => {
     const rig = await openAcpAdapterRig({ deps: { stopGraceMs: 20 } })
     await runningPrompt(rig)
     const atClose = watchClose(rig.child(), { ended: false })
-    await rig.adapter.closeAll()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    const closing = rig.adapter.closeAll()
+    await vi.advanceTimersByTimeAsync(19)
+    expect(rig.child().closes).toBe(0)
+    await vi.advanceTimersByTimeAsync(1)
+    await closing
     expect(atClose).toEqual({ cancels: 1, turnEnded: false })
     expect(rig.child().closes).toBe(1)
   })
@@ -93,7 +97,12 @@ describe('ACP teardown of a running turn', () => {
     const rig = await openAcpAdapterRig({ deps: { stopGraceMs: 20 } })
     await runningPrompt(rig)
     const cancel = vi.spyOn(rig.child(), 'cancel').mockRejectedValue(new Error('EPIPE'))
-    await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    const closing = rig.adapter.closeSession(SESSION)
+    await vi.advanceTimersByTimeAsync(19)
+    expect(rig.child().closes).toBe(0)
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(closing).resolves.toBe(true)
     expect(cancel).toHaveBeenCalledTimes(1)
     expect(rig.child().closes).toBe(1)
   })
@@ -152,9 +161,14 @@ describe('a Grok chat closed through the host while its turn runs', () => {
     await send(host, 'hello')
     const prompt = await rig.frame('session/prompt')
     const turn = { ended: false }
-    answerCancel(child, prompt, turn)
+    const releaseCancel = answerCancel(child, prompt, turn)
     const atClose = watchClose(child, turn)
-    await host.close(HOST_TEST_SESSION, 'user-close')
+    const closing = host.close(HOST_TEST_SESSION, 'user-close')
+    await rig.frame('session/cancel')
+    expect(child.closes).toBe(0)
+    expect(turn.ended).toBe(false)
+    releaseCancel()
+    await closing
     expect(atClose).toEqual({ cancels: 1, turnEnded: true })
     expect(child.exited).toBe(true)
     expect((await turns()).at(-1)).toMatchObject({ state: 'interrupted' })

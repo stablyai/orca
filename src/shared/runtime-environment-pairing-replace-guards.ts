@@ -3,27 +3,22 @@ import {
   type KnownRuntimeEnvironment,
   type RuntimeEnvironmentSource
 } from './runtime-environments'
-import { RuntimeEnvironmentStoreError } from './runtime-environment-store-file'
+import { alreadyPairedGuardCode } from './remote-server-pairing-failure-copy'
+import {
+  remoteServerPairingStoreError,
+  RuntimeEnvironmentStoreError
+} from './runtime-environment-store-records'
 
 /** Refuses replacing or removing a pairing that SSH access or a managed deployment depends on. */
 export function assertNoIndependentSshAccess(environment: KnownRuntimeEnvironment): void {
   if (environment.orcadDeployment) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'Orca runs this server on an SSH host for you; its pairing cannot be replaced or removed here. To decommission it, run `orca environment stop --environment <name> --yes` or use Settings > Orca on your SSH hosts; for a host that is gone, run `orca environment forget --environment <name> --yes`.'
-    )
+    throw remoteServerPairingStoreError('managedDeployment')
   }
   if (environment.pendingSshAccessOperation) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      "This server's SSH access change didn't finish. Retry or cancel it under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it."
-    )
+    throw remoteServerPairingStoreError('sshAccessChangePending')
   }
   if (environment.sshAccess) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      "Unlink this server's SSH access under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it."
-    )
+    throw remoteServerPairingStoreError('sshAccessLinked')
   }
 }
 
@@ -33,38 +28,28 @@ export function assertPairingReplaceableByAdd(
   source: RuntimeEnvironmentSource | undefined,
   refreshable: boolean
 ): void {
-  const alreadyPaired = `This server is already paired as "${environment.name}".`
+  const named = { name: environment.name }
   // Why: a cloud workspace pairs its own server on resume; a hand-made pairing would be swept with it.
   if (isEphemeralVmRuntimeEnvironment(environment)) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      `${alreadyPaired} It belongs to a cloud workspace, which pairs it again when it resumes.`
-    )
+    throw remoteServerPairingStoreError('alreadyPairedCloudWorkspace', named)
   }
   if (source === 'ephemeral-vm') {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      `${alreadyPaired} The cloud workspace's server reuses that server's identity, so it was not saved.`
-    )
+    throw remoteServerPairingStoreError('alreadyPairedCloudIdentity', named)
   }
   if (environment.orcadDeployment?.kind === 'wsl') {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      `${alreadyPaired} Orca manages it as a WSL host, so its pairing cannot be replaced here.`
-    )
+    throw remoteServerPairingStoreError('alreadyPairedWslHost', named)
   }
   try {
     assertNoIndependentSshAccess(environment)
   } catch (error) {
-    throw error instanceof RuntimeEnvironmentStoreError
-      ? new RuntimeEnvironmentStoreError(error.code, `${alreadyPaired} ${error.message}`)
-      : error
+    const pairedCode =
+      error instanceof RuntimeEnvironmentStoreError && error.pairingFailure
+        ? alreadyPairedGuardCode(error.pairingFailure.errorCode)
+        : null
+    throw pairedCode ? remoteServerPairingStoreError(pairedCode, named) : error
   }
   // Why: only the app holding this server's connections can switch them to a new pairing.
   if (!refreshable) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      `${alreadyPaired} To update its connection, add it again under Settings > Remote Orca Servers.`
-    )
+    throw remoteServerPairingStoreError('alreadyPairedAddAgain', named)
   }
 }

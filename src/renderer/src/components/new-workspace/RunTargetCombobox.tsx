@@ -39,15 +39,7 @@ type RunTargetComboboxProps = {
 
 const ROOT_ATTRIBUTE = 'data-run-target-combobox-root'
 
-/**
- * Run-target picker, built to match the project picker: the field *is* the
- * search, exactly one row is armed and Enter takes it, hovering arms, and the
- * "Add host" row is pinned to the popover edge so it survives every state.
- *
- * Two things the project picker doesn't have: disconnected hosts carry an
- * inline Connect action that must not select the row, and two rows open nested
- * lists (VM recipes, Add host) rather than committing.
- */
+/** Match project-picker navigation; Connect must not select its host, and recipe/Add host rows open nested lists. */
 export default function RunTargetCombobox({
   hostOptions,
   hostValue,
@@ -93,7 +85,6 @@ export default function RunTargetCombobox({
     null
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
   const armedRow = rows.find((row) => row.key === armedKey) ?? rows[0] ?? null
-  // Only a committed selection paints the field; typing replaces it.
   const committed = query.length === 0 && (selectedRecipe !== null || selectedHost !== null)
 
   // Closing also drops any open submenu, which the shared hook doesn't know about.
@@ -128,8 +119,6 @@ export default function RunTargetCombobox({
       try {
         await onConnectHost(option)
       } finally {
-        // Always clear when the connect settles (success, failure, or timeout)
-        // so the row's spinner stops.
         setConnectingHostIds((current) => {
           if (!current.has(option.hostId)) {
             return current
@@ -143,8 +132,7 @@ export default function RunTargetCombobox({
     [connectingHostIds, onConnectHost]
   )
 
-  // Why: reached from the row body, its inline button, and Enter — keep one path
-  // so all three close the picker before handing off to the nested dialog.
+  // Row clicks, inline actions and Enter must all close the picker before opening the setup dialog.
   const setLocation = useCallback(
     (option: NeedsSetupProjectHostOption): void => {
       if (!option.canSetLocation || !onSetLocation) {
@@ -156,7 +144,6 @@ export default function RunTargetCombobox({
     [close, onSetLocation]
   )
 
-  /** Commits a row, or opens its submenu when the row is a submenu row. */
   const activate = useCallback(
     (key: string | null): void => {
       const row = rows.find((candidate) => candidate.key === key)
@@ -168,7 +155,6 @@ export default function RunTargetCombobox({
         return
       }
       if (row.kind === 'needs-setup') {
-        // Not ready: setting the location is the only way forward from the row itself.
         setLocation(row.option)
         return
       }
@@ -194,7 +180,6 @@ export default function RunTargetCombobox({
       if (event.key === 'Escape' && (open || query.length > 0)) {
         event.preventDefault()
         event.stopPropagation()
-        // A submenu closes first, so Escape backs out one layer at a time.
         if (submenu !== null) {
           setSubmenu(null)
           return
@@ -252,8 +237,7 @@ export default function RunTargetCombobox({
         )}
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
-        // The field lives in the anchor, not the content, so Radix would see a
-        // focus/pointer event "outside" and dismiss the instant you tab in.
+        // The search anchor is outside Radix content; preserve interactions inside this control.
         onFocusOutside={(event) => {
           if (isWithinComboboxRoot(event.target, ROOT_ATTRIBUTE)) {
             event.preventDefault()
@@ -309,7 +293,6 @@ export default function RunTargetCombobox({
               onSetLocation={setLocation}
             />
           </div>
-          {/* Why outside the listbox: the note is not an option. */}
           <HostListOverflowNote hiddenCount={hiddenHostCount} />
           {hasAddHost ? (
             <AddHostSubmenuRow

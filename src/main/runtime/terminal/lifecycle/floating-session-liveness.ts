@@ -6,6 +6,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import { DISCONNECTED_PTY_RECORD_MAX } from '../../orca-runtime-postlude'
+import { questionAnswerWaitPrefix } from '../../orchestration/question-answer-delivery'
 
 export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory {
   protected refreshFloatingWorkspacePtyLiveness(): Set<string> | null {
@@ -49,7 +50,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
         livePtyIds.add(ptyId)
         const binding = persistedBindingByPtyId.get(ptyId)
         if (!pty && binding) {
-          // Why: a live daemon PTY restored from disk needs its pane identity before mobile can issue a safe handle.
+          // Restored daemon PTYs need pane identity before mobile can issue safe handles.
           pty = this.recordPtyWorktree(ptyId, FLOATING_TERMINAL_WORKTREE_ID, {
             connected: true,
             tabId: binding.tabId,
@@ -75,7 +76,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     if (pty.connected) {
       return
     }
-    // Why: disconnected PTY records stay addressable for status/exit reads, but their transcripts must not accumulate after the process dies.
+    // Keep disconnected records addressable for status/exit, but release their transcripts.
     pty.tailBuffer = []
     pty.tailTranscriptBuffer = []
     pty.tailTranscriptChars = 0
@@ -85,7 +86,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     pty.tailTruncated = false
     pty.tailLinesTotal = 0
     pty.waitBlockedAt = null
-    // Why: tail is now empty, so clear the memoized wait scan; onPtyData must recompute from the reset tail if this record resumes output.
+    // Empty tails invalidate cached wait scans before resumed output.
     pty.tailWaitState = undefined
   }
 
@@ -95,7 +96,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
       .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
     const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
     for (const stale of retained.slice(0, staleCount)) {
-      // Why: exited runtime-owned PTYs stay readable, but long-lived runtimes churn through many sessions; bound the archive.
+      // Bound retained exited-terminal archives in long-lived runtimes.
       this.dropDisconnectedPtyRecord(stale.ptyId)
     }
   }
@@ -116,9 +117,10 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.ptysById.delete(ptyId)
     this.pendingPtyHandleReplacementFences.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
+    this.launchComposerReadyByPtyId.delete(ptyId)
     this.setupCompletionTokenByPtyId.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
-    this.recentPtyPathCandidatesById.delete(ptyId)
+    this.trustDialogStatus.forget(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
     this.providerSequenceInitializedPtys.delete(ptyId)
     this.providerSequenceOffsetByPtyId.delete(ptyId)
@@ -134,6 +136,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.terminalRunFacts.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
     this.invalidatePtyIncarnationHandle(ptyId)
+    this.terminalWaiters.rejectPty(ptyId, 'terminal_handle_stale')
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.terminalCwdByPtyId.delete(ptyId)
@@ -141,7 +144,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.wslDistroByPtyId.delete(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
-      // Why: pruning can remove a PTY without onPtyExit firing; release this leader's agent team so it doesn't leak.
+      // Pruning can bypass onPtyExit; release leader teams here too.
       this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
       this.handleByPtyId.delete(ptyId)
       this.syntheticTerminalHandles.delete(handle)
@@ -179,8 +182,15 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
   // Keep the notification hook on the runtime as well as on the installed
   // command surface: exit escalation can wake an in-flight --wait directly.
   notifyMessageArrived(handle: string, messageType?: string): void {
+    // Heartbeats are stored handled and only record liveness; they never wake a mailbox.
+    if (messageType === 'heartbeat') {
+      return
+    }
     if (!handle.startsWith('dispatch:')) {
       this.mailPointerRepointScheduler.schedule(handle)
+    } else {
+      // A waiting ask rechecks its question, which a settled Dispatch has closed.
+      this.messageWaiters.notifyPrefix(questionAnswerWaitPrefix(handle.slice('dispatch:'.length)))
     }
     this.orchestrationMailboxNotifications.notifyMessageArrived(handle, messageType)
   }

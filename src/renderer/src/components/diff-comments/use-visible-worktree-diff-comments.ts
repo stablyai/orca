@@ -7,12 +7,11 @@ import {
 } from '@/lib/markdown-review-notes-setting'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 
-/** Worktree notes the user can see: markdown notes drop out while the Markdown Review Notes setting is off. */
 export function useVisibleWorktreeDiffComments(worktreeId: string | null | undefined): {
   comments: DiffComment[]
   markdownReviewNotesEnabled: boolean
 } {
-  // Why: pass worktreeId even when null so the selector returns its stable empty sentinel; an inline [] would break Zustand's Object.is and churn.
+  // Null owners still need the selector’s stable empty sentinel; inline arrays would churn Zustand subscribers.
   const allComments = useAppStore((s) => selectWorktreeDiffCommentsOrEmpty(s, worktreeId))
   const markdownReviewNotesEnabled = useAppStore((s) => isMarkdownReviewNotesEnabled(s.settings))
   const comments = useMemo(

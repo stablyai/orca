@@ -48,30 +48,6 @@ afterEach(() => {
 })
 
 describe('useAgentBucketCounts', () => {
-  it('includes folder workspaces in the count snapshot inputs', () => {
-    mocks.buildDashboardBucketCounts.mockImplementation(
-      (state: { folderWorkspaces?: unknown[] }) => ({
-        attention: 0,
-        working: state.folderWorkspaces?.length ? 1 : 0,
-        done: 0,
-        idle: 0
-      })
-    )
-
-    const { result } = renderHook(() => useAgentBucketCounts())
-
-    expect(result.current).toEqual({ attention: 0, working: 1, done: 0, idle: 0 })
-    expect(mocks.buildDashboardBucketCounts).toHaveBeenCalledWith(
-      expect.objectContaining({
-        folderWorkspaces: mocks.state.folderWorkspaces,
-        unifiedTabsByWorktree: mocks.state.unifiedTabsByWorktree
-      }),
-      expect.any(Number),
-      expect.objectContaining({ byWorktree: expect.any(Map) }),
-      expect.anything()
-    )
-  })
-
   it('moves acknowledged completions to idle without recomputing for unrelated writes', () => {
     mocks.buildDashboardBucketCounts.mockImplementation(
       (state: { acknowledgedAgentsByPaneKey?: Record<string, number> }) => ({

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   readOpenCodeNativeChatTranscriptFull,
   readOpenCodeNativeChatTranscriptTail,
@@ -32,9 +32,7 @@ describe('readOpenCodeNativeChatTranscriptFull', () => {
   })
 
   it('returns the whole session oldest-first across page boundaries', async () => {
-    // Five messages served in windows of two: pages arrive newest-window-first
-    // (each oldest-first); the full read must concatenate them globally
-    // oldest-first like the JSONL full reader, not in page-fetch order.
+    // Fetch newest windows first; concatenate windows in reverse while preserving each window’s order.
     const ids = ['m1', 'm2', 'm3', 'm4', 'm5']
     const readPage: OpenCodeTranscriptDeps['readPage'] = async (args) => {
       const upper = args.beforeMessageRowId ?? 6
@@ -194,8 +192,6 @@ describe('readOpenCodeNativeChatTranscriptTail', () => {
   })
 
   it('returns a retryable error when DB discovery throws', async () => {
-    // Discovery scans the filesystem and can throw (EACCES/EIO) — the
-    // value-error contract must not leak that as a rejection.
     const result = await readOpenCodeNativeChatTranscriptTail(
       { sessionId: 'ses-1', limit: 10 },
       {

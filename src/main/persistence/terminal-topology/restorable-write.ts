@@ -1,4 +1,4 @@
-/** Writes `next`, returning a restore that puts the prior value back unless a later write replaced it. */
+/** Restore the prior value only if no later write replaced next. */
 export function writeRestorable<V>(read: () => V, write: (value: V) => void, next: V): () => void {
   const prior = read()
   write(next)

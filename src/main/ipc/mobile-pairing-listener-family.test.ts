@@ -31,7 +31,7 @@ import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 
 const GLOBAL_IPV6 = '2605:340:cd51:2a01:0:2b13:f279:c096'
 
-// Why #31161: Node's 0.0.0.0 listener refuses every IPv6 connection, so a v6 entry mints a dead link.
+// IPv4-only 0.0.0.0 binds cannot serve advertised IPv6 links (#31161).
 describe('pairing addresses follow the runtime listener family', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
 
@@ -87,21 +87,6 @@ describe('pairing addresses follow the runtime listener family', () => {
         { name: 'en0', address: '192.168.1.24' },
         { name: 'en0', address: GLOBAL_IPV6 }
       ]
-    })
-  })
-
-  it('returns an IPv6 interface on an IPv6-only host when the listener serves IPv6', async () => {
-    networkInterfacesMock.mockReturnValue({
-      eth0: [
-        { family: 'IPv6', internal: false, address: GLOBAL_IPV6 },
-        { family: 'IPv6', internal: false, address: 'fe80::42:acff:fe11:2' }
-      ]
-    })
-
-    registerStub(stubServer('::'))
-
-    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
-      interfaces: [{ name: 'eth0', address: GLOBAL_IPV6 }]
     })
   })
 

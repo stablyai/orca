@@ -1,11 +1,8 @@
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
 
-// Pure on purpose: the diagnostics analysis shares this mapping and runs without
-// React Native, so nothing here may import the relay link or its errors.
+// Keep pure for diagnostics consumers outside React Native.
 
-// What the relay says about the desktop, for the host row. Closed: every other
-// failure is 'connecting', because the relay is still retrying it and no copy
-// would be truer than "Connecting via Relay…".
+// Unknown failures remain connecting; only named relay evidence establishes a desktop verdict.
 export type RelayHostReachability =
   | 'connecting'
   | 'signed-out' // the cell named the desktop's own Orca Cloud sign-out as the reason

@@ -41,7 +41,7 @@ const localRepos = [
 ]
 const windowsRepo = hostRepo('win-orca', 'C:/Users/jinwo/orca/orca')
 
-// Jinwoo's shape: several local checkouts of stablyai/orca, plus the project on two servers.
+// Several local checkouts plus copies of the same project on two servers.
 export const PROJECT_SECTION_PARITY_HOSTS: readonly ParityHostAnswer[] = [
   {
     target: { kind: 'local' },

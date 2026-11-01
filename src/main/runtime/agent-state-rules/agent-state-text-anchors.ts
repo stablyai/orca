@@ -98,12 +98,11 @@ export function compileTextAnchors(files: readonly AgentStateRulesFile[]): {
 
 const textAnchors = compiledFromActiveAgentStateRules(compileTextAnchors)
 
-/** The literal every blocked anchor needs, for the blocked layer's one-pass prefilter. */
+/** Literals required by the blocked layer's one-pass prefilter. */
 export function blockedAnchorLiterals(): readonly string[] {
   return textAnchors().blockedLiterals
 }
 
-/** Every rule file's blocked anchor found in the blocked layer's live window. */
 export function findBlockedAnchorSignals(window: string): BlockedTextSignal[] {
   return textAnchors().blocked.flatMap((find) => {
     const hit = find(window)
@@ -111,10 +110,7 @@ export function findBlockedAnchorSignals(window: string): BlockedTextSignal[] {
   })
 }
 
-/**
- * The latest live prompt (`live`: an idle or live anchor, which proves an earlier startup
- * dialog was answered) and the latest idle one (`ready`) that any rule file's anchors find.
- */
+/** Latest live prompt cancels earlier blockers; only the latest idle prompt can settle readiness. */
 export function findPromptAnchorIndexes(normalized: string): {
   live: number | null
   ready: number | null
@@ -134,7 +130,6 @@ export function findPromptAnchorIndexes(normalized: string): {
   return { live, ready }
 }
 
-/** Whether any rule file's hold anchor shows: an agent is up but not yet taking input. */
 export function showsHoldAnchor(normalized: string): boolean {
   return textAnchors().holds.some((find) => find(normalized) !== null)
 }

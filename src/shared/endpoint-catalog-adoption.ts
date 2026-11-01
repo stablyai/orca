@@ -29,8 +29,7 @@ export function adoptEndpointProjectHostSetup(
   target: RuntimeClientTarget,
   setup: ProjectHostSetup
 ): ProjectHostSetup {
-  // Why here: every setup row crossing IPC or RPC into a client passes through this
-  // adoption step, so it is where the declared field types stop being aspirational.
+  // Normalize every setup crossing IPC/RPC here; remote declared types are not validation.
   const adopted = normalizeProjectHostSetupRow(setup)
   if (target.kind !== 'environment') {
     return adopted
@@ -60,8 +59,7 @@ export function adoptEndpointProjectCatalog(
     }
   }
   return {
-    // Why projects too: the same wire response carries them, and a remote host on another
-    // Orca version can publish a row whose declared field types do not hold.
+    // Normalize projects too: independently updated hosts can send rows violating declared types.
     projects: normalizeProjectRows([...projects]),
     setups: setups.map((setup) => adoptEndpointProjectHostSetup(target, setup))
   }

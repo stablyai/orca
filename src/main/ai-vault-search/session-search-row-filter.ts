@@ -1,36 +1,16 @@
 import { cwdKey } from './session-search-file-records'
 import type { SessionSearchFilters } from './session-search-engine-types'
 
-/** SQL fragments for the `sessions` WHERE clause; every condition is ANDed. */
+/** ANDed conditions and bound values for the sessions WHERE clause. */
 export type SessionRowFilter = {
   conditions: string[]
   values: (string | number)[]
 }
 
-// Stored identity: `cwdKey` is the sidebar's `folderGroupKey` without its prefix,
-// so a scope term and an indexed session are keyed by one function, never two.
+// Use the sidebar’s cwd identity so indexed sessions and scopes share path normalization.
 const CWD = 'cwd_key'
 
-/**
- * The narrowings SQL can express exactly, in one place, so retrieval, the
- * operator-only page and the session load cannot drift apart. These conditions
- * run over `sessions` itself. Reachability is not here and is not a condition:
- * it is the INNER JOIN to `sessions` that every retrieval carries, which is
- * what makes a message row a purge has not reclaimed yet unreadable.
- *
- * `repo:` and `path:` are deliberately absent. What they mean is the predicate
- * the sessions panel applies (`matchesAiVaultQueryOperators`), and SQL cannot
- * express it: LIKE folds ASCII and nothing else, so `path:CAFÉ` would miss
- * `café`; `path:` searches the transcript path as well as the working
- * directory, so `path:jsonl` would miss every session; and `repo:` compares the
- * last two path segments, not one. A second spelling that came close would be a
- * query meaning different things in the list and in the index, so the engine
- * applies the panel's own predicate over the rows it retrieves instead.
- *
- * `scopePaths` stays here because it is exact: a prefix range over the key
- * `cwdKey` produces, which folds exactly where the execution host folds —
- * Windows drives, never a POSIX directory name.
- */
+/** Keep repo:/path: in the sidebar’s JS matcher; SQL LIKE differs on Unicode and path semantics. */
 export function sessionRowFilter(
   filters: SessionSearchFilters,
   cutoffMs: number | null = null
@@ -49,7 +29,7 @@ export function sessionRowFilter(
     filter.values.push(filters.since)
   }
   if (filters.scopePaths && filters.scopePaths.length > 0) {
-    // Any scope matches; one that cannot be keyed matches nothing, and all-unkeyable must not widen to every session.
+    // Unkeyable scopes must not widen a scoped query to every session.
     const keys = filters.scopePaths.map(cwdKey).filter((key) => key !== null)
     if (keys.length === 0) {
       filter.conditions.push('0 = 1')
@@ -61,21 +41,7 @@ export function sessionRowFilter(
   return filter
 }
 
-/**
- * `key` itself, or anything below it. One JSON parameter, not an OR per scope:
- * ~500 OR arms exceed SQLite's expression depth of 1000 and the search throws.
- *
- * Why a half-open range and not `substr(key, 1, length(?)) = ?`: only `>=`/`<`
- * can seek `sessions_cwd_key`; the substr form scans it. The bound is the child
- * prefix with its last byte incremented, so it stops at the end of that prefix
- * and nowhere else. The two arms cannot merge: one range over the bare key would
- * also swallow a sibling like `/work/app-other`. No wildcards, so `%`/`_` in a
- * folder name are literal.
- *
- * The filesystem root is the one key that already ends in a separator, and
- * appending a second one would bound the range at `//`, which sorts below every
- * real child; `cwdKey` keeps it as `/` for exactly this reason.
- */
+// One JSON parameter avoids OR-depth limits; exact-key and child-prefix ranges seek sessions_cwd_key.
 const SCOPE_CONDITION = `id IN (
   SELECT scoped.id FROM json_each(?) AS scope JOIN sessions AS scoped
     ON scoped.${CWD} = scope.value ->> 0
@@ -83,13 +49,13 @@ const SCOPE_CONDITION = `id IN (
 )`
 
 function scopeRange(scopeKey: string): [string, string, string] {
-  // A bound key stores a lone surrogate as U+FFFD; JSON would decode it to other bytes.
+  // Match SQLite’s U+FFFD encoding of lone surrogates before serializing keys through JSON.
   const key = scopeKey.toWellFormed()
   const children = key.endsWith('/') ? key : `${key}/`
   return [key, children, nextAfterPrefix(children)]
 }
 
-/** The first string that sorts after every string starting with `prefix`. */
+/** Upper bound for every string starting with prefix. */
 function nextAfterPrefix(prefix: string): string {
   return prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1)
 }

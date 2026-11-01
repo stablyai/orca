@@ -73,7 +73,7 @@ export function useCombinedDiffScrollPersistence({
       anchorIdleTimerId = window.setTimeout(() => {
         anchorIdleTimerId = null
         if (hasDirectScrollInput()) {
-          // Why: the idle timer can fire mid-wheel while TanStack still shows a transitional virtual window.
+          // Idle timers can fire mid-wheel while TanStack’s virtual window is still transitional.
           scheduleSettledAnchorPersist()
           return
         }
@@ -121,12 +121,12 @@ export function useCombinedDiffScrollPersistence({
         return
       }
       if (shrank && scrollTop >= maxScrollTop - 1 && scrollOffsetRef.current > maxScrollTop + 1) {
-        // Why: pinned at a just-shrunk max from an unreachable offset is a browser clamp, not user input — re-pin, don't record it.
+        // A newly unreachable offset clamped to max is browser layout, not user intent; restore the anchor instead of recording it.
         setClampRestoreCount((count) => count + 1)
         updateScrollbar()
         return
       }
-      // Why: any unmarked scroll is the user's — even events delayed past their window by main-thread jank.
+      // Unmarked scrolls are user intent even if main-thread jank delays their events.
       recordVirtualScrollAnchor(scrollTop)
       updateCachedScrollPosition({
         recordDomAnchor: false,
@@ -136,7 +136,7 @@ export function useCombinedDiffScrollPersistence({
       })
     }
 
-    // Why: detach in the layout phase so the outgoing tab snapshots its real scroll before teardown fires a reset-to-top scroll.
+    // Detach during layout so outgoing tabs snapshot before teardown emits a reset-to-top scroll.
     updateScrollbar()
     const resizeObserver = new ResizeObserver(updateScrollbar)
     resizeObserver.observe(container)

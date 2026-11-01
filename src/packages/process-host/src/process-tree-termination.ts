@@ -10,49 +10,19 @@ const PROBE_INTERVAL_MS = 25
 const SUBPROCESS_TIMEOUT_MS = 2_000
 const MAX_PS_OUTPUT_BYTES = 8 * 1024 * 1024
 
-/**
- * Signal the child's whole tree.
- *
- * POSIX precondition: the child must have been spawned `detached`. The signal
- * goes to the process group `-child.pid`, so a child that is not its own group
- * leader would hand it to whatever group it inherited instead.
- *
- * Runs in every host — Electron main, the daemon, the relay, the CLI — so the
- * own-Chromium guard arrives through `process-tree-kill-gate`, which main
- * installs and every other host leaves admitting. The exit check below is what
- * keeps the Windows branch off a pid that is no longer ours on those hosts.
- *
- * Both arms ask before walking the tree, so a refused pid never gets a
- * pid-addressed kill; that also means the recorded crumb says "about to kill",
- * not "killed". The root is still killed through its handle, which cannot reach
- * the recycled pid the refusal was about, so a refusal is never a leak. Main's
- * gate only ever refuses the `win-taskkill-tree` scope — a POSIX group holds
- * only what Orca put in it — so the POSIX refusal arm is the seam's contract,
- * not something any installed gate exercises today.
- */
+/** POSIX children must be detached: signaling -pid targets the process group. */
 export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals): Promise<boolean> {
   if (!child.pid) {
     killRoot(child, signal)
     return Promise.resolve(true)
   }
   if (process.platform === 'win32') {
-    // Why first: a root that the in-flight taskkill already killed must join
-    // that kill's verdict, not read as a reaped pid.
+    // A tracked taskkill may have killed the root already; join its verdict before checking exit.
     const tracked = trackedWindowsTreeKill(child)
     if (tracked) {
       return waitForWindowsTreeKill(tracked)
     }
-    // Why the exit check: once the child is reaped its pid is Windows' to
-    // reissue, and `taskkill /t /f` walks whatever tree owns it *now* — a
-    // recycled pid can be one of Orca's own Chromium processes (#10680). The
-    // POSIX branch below cannot hit this: killing a reaped group is ESRCH.
-    //
-    // Why `false`: this is exactly what a taskkill against a reaped pid already
-    // resolved to (non-zero exit -> killRoot + `false`), so skipping the unsafe
-    // spawn must not also flip the termination barrier to "verified". Reporting
-    // `true` here would release the git admission grant on root exit instead of
-    // on `close`, admitting the next git command while a descendant that
-    // inherited the pipes still holds the repo.
+    // A reaped Windows PID can be reused; root exit alone does not prove descendants are gone.
     if (childProcessHasExited(child)) {
       killRoot(child, signal)
       return Promise.resolve(false)
@@ -66,8 +36,7 @@ export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals):
       scope: 'posix-process-group'
     })
   ) {
-    // Same shape as the reaped-pid skip above: refuse the group, still kill the
-    // root by handle, and report unverified.
+    // Refuse the group kill but still terminate the root through its handle.
     killRoot(child, signal)
     return Promise.resolve(false)
   }
@@ -100,7 +69,6 @@ function taskkillTree(
   rootPid: number,
   signal?: NodeJS.Signals
 ): Promise<boolean> {
-  // Asked before the spawn, not after: a refusal has to prevent the taskkill.
   if (
     !admitProcessTreeKill({ pid: rootPid, site: 'run-process-tree', scope: 'win-taskkill-tree' })
   ) {

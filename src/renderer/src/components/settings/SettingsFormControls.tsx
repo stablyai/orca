@@ -43,13 +43,10 @@ type SettingsRowProps = {
   description?: React.ReactNode
   control: React.ReactNode
   className?: string
-  /** Optional id applied to the label so the control can reference it via aria-labelledby. */
   labelId?: string
-  /** When true, top-align label/description and control. Useful for tall control columns. */
   alignTop?: boolean
 }
 
-/** Two-column row grammar: left min-w-0 label+description, right shrink-0 control. */
 export function SettingsRow({
   label,
   description,
@@ -121,7 +118,6 @@ type SegmentedOption<T extends string | number> = {
   label: React.ReactNode
   disabled?: boolean
   ariaLabel?: string
-  /** Optional hover label describing what the option does. */
   tooltip?: React.ReactNode
 }
 
@@ -135,7 +131,6 @@ type SettingsSegmentedControlProps<T extends string | number> = {
   wrap?: boolean
 }
 
-/** Canonical segmented control for theme/ligatures/cursor/shell/etc. */
 export function SettingsSegmentedControl<T extends string | number>({
   value,
   onChange,
@@ -164,9 +159,7 @@ export function SettingsSegmentedControl<T extends string | number>({
             role="radio"
             aria-checked={active}
             aria-label={opt.ariaLabel}
-            // Why aria-disabled, not disabled: a native disabled button leaves the tab
-            // order, so keyboard users can never focus it to open the tooltip explaining
-            // why the option is unavailable. The click guard below keeps it inert.
+            // Keep unavailable options focusable for explanatory tooltips; the click guard enforces aria-disabled.
             aria-disabled={opt.disabled}
             onClick={() => {
               if (!opt.disabled) {
@@ -207,7 +200,6 @@ type SettingsBadgeProps = {
   className?: string
 }
 
-/** Tokenized badge for status pills inside settings (e.g. Detected, Not installed). */
 export function SettingsBadge({
   tone = 'neutral',
   children,
@@ -237,7 +229,6 @@ type SettingsSubsectionHeaderProps = {
   className?: string
 }
 
-/** Consistent subsection header: h3 text-sm font-semibold + optional muted description. */
 export function SettingsSubsectionHeader({
   title,
   description,
@@ -276,11 +267,12 @@ type NumberFieldProps = {
   onChange: (value: number) => void
   /** When set, emptying the field clears the setting instead of snapping back to the current value. */
   onClear?: () => void
+  /** With `onClear`, a typed 0 clears the setting like an empty field (0 means "automatic"). */
+  clearOnZero?: boolean
   placeholder?: string
   suffix?: string
   className?: string
   disabled?: boolean
-  /** Hover explanation shown only while the field is disabled. */
   disabledReason?: string
 }
 
@@ -328,6 +320,7 @@ export function NumberField({
   integer = false,
   onChange,
   onClear,
+  clearOnZero = false,
   placeholder,
   suffix,
   className,
@@ -337,7 +330,6 @@ export function NumberField({
   const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
   const [prevValue, setPrevValue] = useState(value)
 
-  // Sync draft when the external value changes (e.g. from another source)
   if (value !== prevValue) {
     setPrevValue(value)
     setDraft(Number.isFinite(value) ? String(value) : '')
@@ -347,25 +339,30 @@ export function NumberField({
     if (disabled) {
       return
     }
+    const revert = (): void => setDraft(Number.isFinite(value) ? String(value) : '')
     const trimmed = draft.trim()
-    if (trimmed === '') {
-      if (onClear) {
-        // Clearable fields treat empty as "unset" so the caller can fall back to its automatic value.
-        onClear()
+    const next = Number(trimmed)
+    if (trimmed === '' || (clearOnZero && next === 0)) {
+      if (!onClear) {
+        // Empty input resets rather than committing zero.
+        revert()
         return
       }
-      // Empty input — reset to current value rather than committing 0
-      setDraft(Number.isFinite(value) ? String(value) : '')
+      setDraft('')
+      // Re-blurring an already-empty field must not write the setting again.
+      if (value !== undefined) {
+        onClear()
+      }
       return
     }
-    const next = Number(trimmed)
     if (Number.isFinite(next) && (!integer || Number.isSafeInteger(next))) {
       const clamped = max === undefined ? Math.max(min, next) : Math.min(max, Math.max(min, next))
-      onChange(clamped)
+      if (clamped !== value) {
+        onChange(clamped)
+      }
       setDraft(String(clamped))
     } else {
-      // Reset to current value if input is invalid
-      setDraft(Number.isFinite(value) ? String(value) : '')
+      revert()
     }
   }
 

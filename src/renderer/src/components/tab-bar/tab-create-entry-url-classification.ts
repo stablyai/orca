@@ -73,8 +73,7 @@ function splitHostCandidate(
     return null
   }
 
-  // Keep the authority separate from the path/query/hash so domain URLs remain
-  // navigations; known source extensions are excluded and exact files win later.
+  // Parse authority before path/query/hash so domain URLs remain navigations; exact files can still win later.
   const authorityEnd = query.search(/[/?#]/)
   const authority = authorityEnd === -1 ? query : query.slice(0, authorityEnd)
   const colonIndex = authority.indexOf(':')
@@ -95,8 +94,7 @@ function splitHostCandidate(
   return { host, port }
 }
 
-// Why: a bare LAN/dev address almost never serves TLS, but a public IP still
-// deserves https — plaintext there would be a downgrade, and IPs get no HSTS.
+// Prefer HTTP for private development addresses; public IPs need HTTPS because HSTS cannot protect them.
 function isPrivateIpv4(host: string): boolean {
   if (!IPV4_PATTERN.test(host)) {
     return false
@@ -160,8 +158,7 @@ export function classifyHostUrl(
     return BRACKETED_IPV6_ATTEMPT_PATTERN.test(query) ? invalidUrl() : null
   }
   if (candidate.port !== null && !/^\d+$/.test(candidate.port)) {
-    // Why: "docker.io:latest" reads as a tag, not a URL attempt — fall through so
-    // file matches and search still get offered instead of blocking every row.
+    // Non-numeric ports may be tags such as docker.io:latest; allow file/search fallbacks instead of blocking the query.
     return null
   }
   try {

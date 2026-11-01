@@ -1,31 +1,23 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { View, Pressable, StyleSheet, Platform, Keyboard } from 'react-native'
 import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  runOnJS,
-  interpolate,
-  Extrapolation
-} from 'react-native-reanimated'
+import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { colors, spacing } from '../theme/mobile-theme'
-// Why: mount-before-commit logic is anchor-agnostic, so the X-axis drawer reuses
-// the exact same gate as BottomDrawer rather than duplicating it.
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+// Reuse BottomDrawer’s anchor-independent mount-before-commit gate.
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
+import {
+  bottomDrawerOffset,
+  bottomDrawerScrim,
+  bottomDrawerTravel
+} from './bottom-drawer-drag-motion'
+import { hideDrawer, showDrawer, useDrawerDrag } from './use-bottom-drawer-drag'
+import { useDrawerReducedMotion } from './bottom-drawer-constants'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-
-const DISMISS_THRESHOLD = 80
-const SPRING_CONFIG = { damping: 28, stiffness: 400 }
-// Why: leftward drags (negative translateX) pull the panel past its docked edge;
-// damp them with a rubber-band factor so the drawer resists over-pulling inward.
-const RUBBER_BAND_FACTOR = 0.25
-const SHOW_DURATION = 180
-const HIDE_DURATION = 150
 
 type Props = {
   visible: boolean
@@ -39,14 +31,12 @@ export function RightDrawer({ visible, onClose, children, zIndex, widthPx }: Pro
   const [mounted, setMounted] = useState(visible)
   const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
 
-  // Why: opening drawers should mount before commit; waiting for a passive
-  // Effect adds a null render before the drawer can animate in.
+  // Mount opening drawer before commit; passive effect adds blank render before animation.
   if (resolvedMounted !== mounted) {
     setMounted(resolvedMounted)
   }
 
-  // Why: hidden drawers are rendered by parent screens even while closed; keep
-  // their Reanimated/Gesture setup out of hot paths until they are actually shown.
+  // Keep Reanimated/Gesture setup out of closed-drawer parent hot paths.
   if (!resolvedMounted) {
     return null
   }
@@ -76,30 +66,31 @@ function MountedRightDrawer({
   zIndex = 1000,
   widthPx
 }: MountedRightDrawerProps) {
-  const translateX = useSharedValue(0)
+  useMobileColorScheme()
   const progress = useSharedValue(0)
+  const fade = useSharedValue(0)
+  const reducedMotion = useDrawerReducedMotion()
+  const motion = useMemo(() => ({ progress, fade, reducedMotion }), [progress, fade, reducedMotion])
   const { width: screenWidth } = useSafeAreaFrame()
   const insets = useSafeAreaInsets()
   const { isWideLayout } = useResponsiveLayout()
   const panelWidth = resolveRightDrawerPanelWidth(screenWidth, isWideLayout, widthPx)
+  const extent = useSharedValue(panelWidth)
+  useEffect(() => {
+    extent.value = panelWidth
+  }, [extent, panelWidth])
 
+  // The panel moves like the bottom sheet, on its own axis: one value, the same curve and release.
   useEffect(() => {
     if (visible) {
-      translateX.value = 0
-      progress.value = withTiming(1, { duration: SHOW_DURATION })
+      showDrawer(motion)
     } else {
       Keyboard.dismiss()
-      progress.value = withTiming(0, { duration: HIDE_DURATION }, (finished) => {
-        if (finished) {
-          runOnJS(onHidden)()
-        }
-      })
+      hideDrawer(motion, onHidden)
     }
   }, [onHidden, visible])
 
-  // The same seam every session sheet takes: the hardware key natively, and a claim on the shell's
-  // key inside the page. The review screen is this drawer's one caller and C4 serves that route
-  // from the page, so both halves are reachable.
+  // Use native hardware Back or page’s shell Back claim; review route reaches both platform seams.
   useBackClaim(
     visible
       ? () => {
@@ -109,54 +100,29 @@ function MountedRightDrawer({
       : null
   )
 
-  const dismiss = useCallback(() => {
-    onClose()
-  }, [onClose])
-
+  const drag = useDrawerDrag({ ...motion, extent, screenExtent: screenWidth, onDismiss: onClose })
   const scrollGesture = Gesture.Native()
-  // Why: swipe-from-right (positive translationX) dismisses; the horizontal
-  // activeOffset lets the inner vertical ScrollView keep its gestures.
+  // Positive horizontal swipe dismisses; activeOffset leaves vertical ScrollView gestures intact.
   const panGesture = Gesture.Pan()
     .activeOffsetX([-8, 8])
     .simultaneousWithExternalGesture(scrollGesture)
-    .onUpdate((e) => {
-      if (e.translationX > 0) {
-        translateX.value = e.translationX
-      } else {
-        translateX.value = e.translationX * RUBBER_BAND_FACTOR
-      }
-    })
-    .onEnd((e) => {
-      if (e.translationX > DISMISS_THRESHOLD || e.velocityX > 500) {
-        const velocity = Math.max(e.velocityX, 800)
-        const remaining = panelWidth - e.translationX
-        const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
-        translateX.value = withTiming(panelWidth, { duration })
-        progress.value = withTiming(0, { duration }, () => {
-          runOnJS(dismiss)()
-        })
-      } else {
-        translateX.value = withSpring(0, SPRING_CONFIG)
-      }
-    })
+    .onBegin(() => drag.begin())
+    .onUpdate((e) => drag.follow(e.translationX))
+    .onEnd((e) => drag.release(e.velocityX))
 
-  const drawerStyle = useAnimatedStyle(
-    () => ({
-      transform: [
-        {
-          translateX:
-            interpolate(progress.value, [0, 1], [panelWidth, 0], Extrapolation.CLAMP) +
-            translateX.value
-        }
-      ]
-    }),
-    [progress, translateX, panelWidth]
-  )
+  // Web has no worklet plugin; mapper hooks need this explicit dependency list.
+  const drawerStyle = useAnimatedStyle(() => {
+    const travel = bottomDrawerTravel(extent.value, screenWidth)
+    return {
+      opacity: fade.value,
+      transform: [{ translateX: bottomDrawerOffset(progress.value, travel) }]
+    }
+  }, [progress, fade, extent, screenWidth])
 
   const backdropStyle = useAnimatedStyle(() => {
-    const dragFade = interpolate(translateX.value, [0, panelWidth], [1, 0], Extrapolation.CLAMP)
-    return { opacity: progress.value * dragFade }
-  }, [progress, translateX, panelWidth])
+    const travel = bottomDrawerTravel(extent.value, screenWidth)
+    return { opacity: fade.value * bottomDrawerScrim(progress.value, travel, extent.value) }
+  }, [progress, fade, extent, screenWidth])
 
   return (
     <Animated.View
@@ -167,7 +133,7 @@ function MountedRightDrawer({
     >
       <GestureHandlerRootView style={styles.root}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         </Animated.View>
 
         <View style={styles.anchor} pointerEvents="box-none">
@@ -201,7 +167,7 @@ function MountedRightDrawer({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000
@@ -221,8 +187,8 @@ const styles = StyleSheet.create({
   drawer: {
     height: '100%',
     backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+    borderTopLeftRadius: radii.surface,
+    borderBottomLeftRadius: radii.surface,
     paddingHorizontal: spacing.md,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: colors.borderSubtle,
@@ -236,4 +202,4 @@ const styles = StyleSheet.create({
       android: { elevation: 8 }
     })
   }
-})
+}))

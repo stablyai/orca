@@ -1,9 +1,14 @@
-import React, { useCallback, useLayoutEffect, useRef } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
+import {
+  noteWorktreeRowHoverEnd,
+  noteWorktreeRowHoverStart,
+  noteWorktreeRowPress
+} from './worktree-row-hover-prewarm'
 import type { WorktreeCardProps } from './worktree-card-model'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardLinkedDetails } from './use-worktree-card-linked-details'
@@ -47,7 +52,6 @@ export function useWorktreeCardActivationActions({
   useLayoutEffect(() => {
     worktreeRef.current = worktree
   }, [worktree])
-  // Stable click handler – ignore clicks that are really text selections.
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
@@ -80,7 +84,7 @@ export function useWorktreeCardActivationActions({
         return
       }
       onWorktreeCardClick?.()
-      // Why: route sidebar clicks through the shared activation path so the back/forward stack stays complete.
+      // Use shared activation so sidebar navigation participates in back/forward history.
       recordRendererCrashBreadcrumb('sidebar_worktree_activate', {
         worktreeId: worktree.id,
         repoId: worktree.repoId,
@@ -111,9 +115,47 @@ export function useWorktreeCardActivationActions({
     ]
   )
 
+  const handlePointerEnter = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      // Touch and pen have no hover intent; a disconnected SSH host cannot reattach a PTY.
+      if (event.pointerType !== 'mouse' || isActive || isDeleting || isSshDisconnected) {
+        return
+      }
+      noteWorktreeRowHoverStart(worktree.id)
+    },
+    [isActive, isDeleting, isSshDisconnected, worktree.id]
+  )
+
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      // A press may still become a drag, so it only starts the warm mount; the click switches.
+      if (
+        event.pointerType !== 'mouse' ||
+        event.button !== 0 ||
+        // Modified presses select or open menus rather than switch.
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey ||
+        isActive ||
+        isDeleting ||
+        isSshDisconnected
+      ) {
+        return
+      }
+      noteWorktreeRowPress(worktree.id)
+    },
+    [isActive, isDeleting, isSshDisconnected, worktree.id]
+  )
+
+  const handlePointerLeave = useCallback(() => {
+    noteWorktreeRowHoverEnd(worktree.id)
+  }, [worktree.id])
+  // A row unmounted under the pointer never receives pointerleave.
+  useEffect(() => () => noteWorktreeRowHoverEnd(worktree.id), [worktree.id])
+
   const handleRenameTitle = useCallback(
-    // Inline rename has no surface for the failure; the store already logs and
-    // refetches, which reverts the optimistic title in place.
+    // Store logging/refetch reverts failed optimistic renames; inline rename has no separate error surface.
     async (displayName: string): Promise<void> => {
       await updateWorktreeMeta(
         worktree.id,
@@ -164,5 +206,13 @@ export function useWorktreeCardActivationActions({
     [worktree.hostId, worktree.id, worktree.isUnread, setWorkspaceUnreadByUser]
   )
 
-  return { handleClick, handleRenameTitle, handleDoubleClick, handleToggleUnreadQuick }
+  return {
+    handleClick,
+    handlePointerDown,
+    handlePointerEnter,
+    handlePointerLeave,
+    handleRenameTitle,
+    handleDoubleClick,
+    handleToggleUnreadQuick
+  }
 }

@@ -1,5 +1,4 @@
-// Why: views of one file share one record. A view of a dirty record must never be reloaded on its
-// own, left without a banner, or sent into a reload loop.
+// Dirty records must retain every view’s edits and conflict state without per-view reloads.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
@@ -139,7 +138,6 @@ describe('a dirty record shown in several workspaces', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(dropped).toEqual([])
-    // A's text is the record's kept draft, never its cached disk text.
     expect(store.getState().editorDrafts[a.id]).toBe('unsaved in B')
     expect(store.getState().editorDrafts[b.id]).toBe('unsaved in B')
   })
@@ -155,7 +153,6 @@ describe('a dirty record shown in several workspaces', () => {
     expect(store.getState().editorDrafts[b.id]).toBeUndefined()
     expect(tab(b.id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('E'))
     expect(dropped).toEqual([b.id])
-    // Old text for B can no longer enter the model on remount.
     expect(isStaleCachedEditorText(b.id, 'S0')).toBe(true)
   })
 
@@ -209,7 +206,6 @@ describe('a dirty record shown in several workspaces', () => {
     expect(joined.isDirty).toBe(true)
     expect(joined.lastKnownDiskSignature).toBe(getDiskBaselineSignature('S0'))
     expect(store.getState().editorDrafts[joined.id]).toBe('unsaved in B')
-    // Its panel loading disk text that still matches the baseline changes nothing.
     stampCleanTabDiskBaseline(joined.id, { content: 'S0', isBinary: false })
     expect(store.getState().openFiles.every((tab) => tab.externalMutation === undefined)).toBe(true)
 

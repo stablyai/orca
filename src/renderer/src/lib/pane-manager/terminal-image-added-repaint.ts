@@ -8,15 +8,7 @@ type ImageAddedSource = {
   onImageAdded?: (listener: () => void) => { dispose(): void }
 }
 
-/**
- * Repaint the viewport once after the image addon registers an image.
- *
- * Why: an image's rows are dirtied in a write that Orca's synchronous per-write
- * repair may not cover (async decoders even place tiles after that write's
- * parse), so they reach only xterm's frame-debounced refresh. A throttled or
- * hidden window may never run that frame, leaving every image row but the
- * cursor's unpainted until something else repaints the grid.
- */
+/** Repaint after image registration: decoder placement can outlive parse/dirty tracking, and throttled or hidden windows may never run xterm’s deferred frame, leaving all but the cursor row stale. */
 export function repaintTerminalAfterImageAdded(
   terminal: RepaintableTerminal,
   addon: ImageAddedSource
@@ -46,7 +38,7 @@ export function repaintTerminalAfterImageAdded(
     if (scheduled || disposed) {
       return
     }
-    // Why a microtask: one repaint per decoded burst, outside the addon's addImage call.
+    // Coalesce each decoded burst into one microtask repaint outside addImage.
     scheduled = true
     queueMicrotask(repaint)
   })

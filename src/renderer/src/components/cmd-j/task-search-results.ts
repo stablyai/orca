@@ -1,13 +1,13 @@
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { parseCmdJTaskSourceUrl } from '@/lib/worktree-palette-task-url-match'
-import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bounds'
+import { isWorktreePaletteQueryTooLarge } from '../../../../shared/palette-match/worktree-palette-query-bounds'
 
 export type CmdJTask =
   | { provider: 'linear'; issue: LinearIssue }

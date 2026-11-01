@@ -12,15 +12,8 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
     return () => this.legacyCapacityListeners.delete(listener)
   }
 
-  /**
-   * Ungated per-client writer capacity, for a frame that lost control-lane admission and must retry.
-   * onLegacyPtyCapacity cannot serve that: it is gated on producer retention, so it stays silent
-   * exactly under the dual-queue pressure that rejected the frame. Registered on the dispatcher, not
-   * the writer, so a retry survives setWrite() replacing the primary sink.
-   * Returns null only when the client is gone for good. A merely closed client still counts: setWrite
-   * marks the primary closed before replacing its sink, and that replacement is exactly when a frame
-   * stranded by the old writer must be armed to retry.
-   */
+  // Watch ungated per-client capacity after control admission fails; producer-retention gates stay silent under dual-queue pressure.
+  // Register on the dispatcher so retries survive setWrite replacing a sink; null means permanently gone, not temporarily closed.
   onClientCapacity(clientId: number, listener: () => void): (() => void) | null {
     const client = this.clients.get(clientId)
     if (this.disposed || !client) {
@@ -38,10 +31,7 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
     }
   }
 
-  /**
-   * Whether the id still names a client. A detach notification does not always mean it stopped:
-   * invalidateClient() detaches the primary without removing it, and setWrite() revives that same id.
-   */
+  // Invalidation detaches but keeps the primary id for setWrite revival; detach alone does not prove removal.
   isClientAttached(clientId: number): boolean {
     return !this.disposed && this.clients.has(clientId)
   }
@@ -58,11 +48,7 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
     return this.publicationLedger.belowLowWater(() => this.activeClientKeys())
   }
 
-  /**
-   * Same reserve as legacyRetentionBelowLowWater, but scoped to one client: a paced bulk producer
-   * gated on the dispatcher-wide signal stops for a peer's stall and degrades a healthy link.
-   * The relay-wide aggregate still counts — that ceiling is shared by every client.
-   */
+  // Gate by this client’s reserve so a stalled peer cannot pause healthy links; still enforce the relay-wide aggregate ceiling.
   producerRetentionBelowLowWater(clientId: number): boolean {
     const client = this.clients.get(clientId)
     if (!client || client.closed) {

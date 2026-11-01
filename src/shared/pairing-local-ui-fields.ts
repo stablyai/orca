@@ -1,13 +1,9 @@
 import type { PersistedUIState } from './persisted-ui-state-types'
 
-// UI state each side of a pairing owns for itself. These fields describe a client's own view —
-// which workspaces it hides, what order it puts repos and host sections in — and are keyed to hosts
-// only that side knows about, so a value copied across the boundary in either direction overwrites
-// the receiver's answer with one computed for somebody else. They must be stripped on the way to a
-// host (ui.set) and pinned to the local value on the way back (ui.get).
+// Pairing-local views use each client’s host catalog/viewport; forwarding them would overwrite another client’s choices.
+// Strip on ui.set and pin local values on ui.get.
 export const PAIRING_LOCAL_UI_FIELDS = [
-  // Its hostKey names authorities only the writing client can resolve — a paired
-  // client's `desktop` is a different machine — and old hosts reject the unknown key.
+  // Host keys are client-relative (desktop means another machine); older hosts reject this key.
   'automationHostFilter',
   // Except for the host's own phone, which shows the host's view (isHostOwnPhone, client-ui.ts).
   'hideWorkspacesFromOtherDevices',
@@ -15,6 +11,8 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'workspaceHostOrder',
   // A phone-width browser and a desktop window each choose their own left sidebar, and old hosts reject the unknown key.
   'sidebarOpen',
+  // Sidebar model badges are a client display choice; older hosts reject the new key.
+  'showAgentModels',
   // Agent View filters and presentation belong to each client's host catalog and viewport.
   'agentsVisibleHostIds',
   'agentsFilterRepoIds',
@@ -32,14 +30,12 @@ export const PAIRING_LOCAL_UI_FIELDS = [
 
 export type PairingLocalUiField = (typeof PAIRING_LOCAL_UI_FIELDS)[number]
 
-// What a paired client actually receives over the UI RPCs, so reading a pairing-local field off a
-// host response is a compile error rather than a silent undefined.
+// Omit pairing-local fields from host response types so accidental reads fail compilation.
 export type PairedUiState = Omit<PersistedUIState, PairingLocalUiField>
 
 const PAIRING_LOCAL_UI_FIELD_SET: ReadonlySet<string> = new Set(PAIRING_LOCAL_UI_FIELDS)
 
-// Accepts any object, not just Partial<PersistedUIState>: the ui.set seam passes the zod-inferred
-// update type, whose optionality differs from the persisted shape.
+// Accept arbitrary objects because ui.set’s Zod-inferred optionality differs from persisted state.
 export function omitPairingLocalUiFields<T extends object>(state: T): Omit<T, PairingLocalUiField> {
   return Object.fromEntries(
     Object.entries(state).filter(([key]) => !PAIRING_LOCAL_UI_FIELD_SET.has(key))

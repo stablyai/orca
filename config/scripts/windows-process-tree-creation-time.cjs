@@ -1,19 +1,7 @@
 'use strict'
 
-/**
- * Prove the compiled addon supports table and synchronous process creation-time reads.
- *
- * Unlike node-pty, this package ships a prebuilt `.node` at the same
- * `build/Release/` path node-gyp writes to, so neither a load nor a path check
- * can tell a stale prebuilt from a source build. pnpm patches the source tree
- * and leaves that prebuilt in place, which is how `ProcessDataFlag.CreationTime`
- * came to exist in `lib/index.js` on a binary that ignores flag 4 -- the gate
- * read true and every row came back without `creationTimeMs`.
- *
- * `supportedProcessDataFlags` is exported by the patched `addon.cc`, so its
- * presence is the binary's own answer. Shared by the Node and Electron probes
- * the way `node-pty-job-ownership.cjs` is.
- */
+// Tarball prebuilt shares build/Release path and loads under Node/Electron even when JS exposes CreationTime that binary ignores.
+// Require patched addon’s supportedProcessDataFlags export as binary proof, shared by Node/Electron probes.
 
 /** `ProcessDataFlags::CREATIONTIME` in src/process.h. */
 const CREATION_TIME_FLAG = 4

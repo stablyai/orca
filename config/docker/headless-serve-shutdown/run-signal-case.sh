@@ -6,8 +6,7 @@ app_root=${ORCA_TEST_APP_ROOT:-/artifacts/root}
 signal_target_kind=${ORCA_SIGNAL_TARGET:-app}
 entrypoint_kind=${ORCA_TEST_ENTRYPOINT:-app}
 int_delivery=${ORCA_INT_DELIVERY:-foreground-process-group}
-# Packaged Electron startup can approach 90s on a cold CI runner; leave room
-# for the readiness line to reach the log before the observer deadline.
+# Allow cold CI’s ~90s Electron startup plus log delivery before the observer deadline.
 startup_timeout_seconds=${ORCA_STARTUP_TIMEOUT_SECONDS:-180}
 
 if ((EUID == 0)); then
@@ -57,9 +56,7 @@ setsid env -u DISPLAY "${entrypoint[@]}" serve --port 0 --pairing-address 127.0.
 app_pid=$!
 app_start_ticks=$(awk '{print $22}' "/proc/$app_pid/stat")
 
-# jq's `inputs` waits for EOF even when wrapped in `first`, so a tail -F
-# observer can outlive the timeout and leak into the next signal case. Poll
-# finite snapshots instead; each parser invocation has a definite EOF.
+# Poll finite snapshots: jq inputs waits for EOF under first(), leaking tail -F observers past the timeout.
 read_ready_line() {
   sed -u -n 's/^[^{]*//p' "$stdout_log" \
     | jq --unbuffered -Rnc 'first(inputs | fromjson? | select(.type == "orca_server_ready" and .schemaVersion == 1))'
@@ -161,8 +158,7 @@ fi
 
 signal_target_pid=$app_pid
 if [[ "$signal_target_kind" == serving-electron ]]; then
-  # The ready socket identifies the serving Electron even when AppImage's
-  # extraction wrapper rewrites the command line before it reaches Chromium.
+  # AppImage’s extraction wrapper rewrites argv; the ready socket identifies the serving Electron.
   signal_target_pid=$(head -n1 <<<"$listener_before_pids")
   [[ -n "$signal_target_pid" ]] || { echo "FAIL: serving Electron process not found" >&2; exit 1; }
   if [[ -z "${tree_start_ticks[$signal_target_pid]+present}" ]]; then

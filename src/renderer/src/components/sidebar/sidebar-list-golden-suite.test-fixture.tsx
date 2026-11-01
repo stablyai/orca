@@ -1,4 +1,3 @@
-/** The sidebar row model golden suite; each build switch runs it into its own directory. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
 import { useMemo } from 'react'
@@ -166,7 +165,6 @@ export const GROUP_BYS: AppState['groupBy'][] = ['none', 'repo', 'workspace-stat
 const SORT_BYS: AppState['sortBy'][] = ['manual', 'name', 'recent', 'smart', 'repo']
 const PROJECT_ORDER_BYS: AppState['projectOrderBy'][] = ['manual', 'recent']
 
-/** Appends one labelled capture, or a pointer to the earlier identical one. */
 export function appendCapture(
   sections: string[],
   seen: Map<string, string>,
@@ -198,7 +196,6 @@ export function captureScenario(view: GoldenView, overrides: Partial<AppState> =
   )
 }
 
-/** The golden suite, writing its files under `goldenDir` (relative to the test file). */
 export function defineSidebarListGoldens(goldenDir: string): void {
   describe('sidebar row model goldens', () => {
     beforeEach(() => {

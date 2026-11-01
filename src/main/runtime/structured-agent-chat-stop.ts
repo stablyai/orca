@@ -1,7 +1,6 @@
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
-/** Stops each running chat of `agent` on this host as a worktree teardown stops its chats; the chat
- *  stays, and its next send starts the agent again. Rejects unless every child is proven gone. */
+/** Stop every running chat child for this agent, rejecting unless all are proven gone; chats remain and next send restarts them. */
 export async function stopStructuredAgentChats(agent: string, label: string): Promise<void> {
   const host = getStructuredAgentSessionHost()
   if (!host) {

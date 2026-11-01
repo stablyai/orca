@@ -34,8 +34,7 @@ beforeEach(() => {
 })
 
 describe('withReactCommitCascadeWriteProbe', () => {
-  // Why this matters most: this wraps every write the app makes. A diagnostic
-  // that throws here would drop the write and take app state with it.
+  // Diagnostics wrap every write; throwing would drop app state.
   it('lands the write even when the sampler throws', () => {
     noteWrite.mockImplementation(() => {
       throw new Error('sampler exploded')
@@ -47,8 +46,7 @@ describe('withReactCommitCascadeWriteProbe', () => {
     expect(useProbedStore.getState().ticks).toBe(3)
   })
 
-  // Why asserted: create() copies api.setState onto the hook AFTER the creator
-  // runs, so a middleware that forgets this line leaves store.setState unprobed.
+  // create copies api.setState onto the hook after creator runs; require the middleware to cover that path too.
   it('routes the api setState through the probe', () => {
     const useProbedStore = createProbedStore()
     probe.armed = true
@@ -79,8 +77,7 @@ describe('withReactCommitCascadeWriteProbe', () => {
     expect(useProbedStore.getState().ticks).toBe(4)
   })
 
-  // Why: composed as in store/index.ts, the buffer middleware must not turn every write into one
-  // updater from one frame, or the crash report loses changed keys and distinct write sites.
+  // Buffer middleware must preserve caller partials/write frames or cascade reports lose distinct write sites/keys.
   it('sees each original partial and caller under the editor buffer middleware', () => {
     type BufferedState = EditorBufferViewIndex & {
       ticks: number

@@ -27,9 +27,7 @@ export function hashInteractionKeyPart(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 12)
 }
 
-// Why byte offsets: the caller's interactionKey embeds the prompt's absolute
-// position, so the backward scan has to report the same offset the old
-// read-everything-then-take-the-last-match pass produced.
+// Interaction keys require absolute byte offsets, including across backward-read chunks.
 export function findLastCommandCodePromptInRegion(
   region: Buffer
 ): { prompt: string; byteOffset: number } | undefined {

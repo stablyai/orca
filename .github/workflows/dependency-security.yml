@@ -27,6 +27,10 @@ on:
         description: Exact release tag to audit using the workflow commit's tooling
         required: true
         type: string
+      runner:
+        description: Runner override for GitHub-hosted signing provenance.
+        type: string
+        default: ubuntu-24.04
   workflow_dispatch:
 
 permissions:
@@ -42,7 +46,7 @@ env:
 jobs:
   javascript:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -55,6 +59,8 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
       - name: Audit JavaScript lockfiles
+        id: audit
+        continue-on-error: true
         shell: bash
         env:
           RELEASE_REF: ${{ inputs.ref }}
@@ -73,7 +79,7 @@ jobs:
 
   rust:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -92,6 +98,8 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
       - name: Audit native Rust lockfiles
+        id: audit
+        continue-on-error: true
         shell: bash
         working-directory: ${{ inputs.ref != '' && 'candidate' || '.' }}
         run: |

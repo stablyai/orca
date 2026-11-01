@@ -5,11 +5,7 @@ import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup
 import { resolveLocalWindowsAgentStartupShell } from './windows-terminal-shell'
 import { isWslUncPath } from './wsl-paths'
 
-/**
- * Where an agent launch runs, resolved once on its execution host: the platform its command is
- * quoted for and its PTY's shell. The quoting shell is derived from both, so the command is always
- * quoted for the shell it is typed into. In memory only.
- */
+/** Resolve command platform and actual PTY shell once on the execution host; in-memory only. */
 export type AgentLaunchRuntime = {
   /** `linux` for a WSL runtime. */
   platform: NodeJS.Platform

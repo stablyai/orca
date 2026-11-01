@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeLogic from './ipc/worktree-logic'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 import { WORKTREE_CREATE_PREPARATION_TTL_MS } from './worktree-create-preparation-pool'
 import type { Repo } from '../shared/repo-types'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'
@@ -96,9 +96,6 @@ afterEach(async () => {
   await _resetWorktreeCreatePreparationsForTests()
 })
 
-// Why this file exists separately from worktree-create-preparation.test.ts: it holds the
-// in-flight checkout cancellation paths (eviction, expiry, caller abort) and the discard that
-// follows, keeping both suites under the test-file line limit.
 describe('worktree create preparation cancellation', () => {
   it('cancels an evicted checkout and cleans up with the original options', async () => {
     let signal: AbortSignal | undefined

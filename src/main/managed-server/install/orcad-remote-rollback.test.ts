@@ -32,7 +32,7 @@ const barrier = vi.hoisted(() => {
   }
   return state
 })
-// The managed stop and its terminal barrier are proven in orcad-activation-crash-recovery.test.ts.
+// The real stop/barrier path is covered by orcad-activation-crash-recovery.test.ts.
 vi.mock('../lifecycle/orcad-rollback-terminal-barrier', async (importOriginal) => ({
   ...(await importOriginal<typeof TerminalBarrier>()),
   readOrcadRollbackBarrierTarget: async (_options: unknown, version: string) => ({
@@ -220,8 +220,7 @@ describe('rollbackOrcad', () => {
     scriptHost(log)
     const result = await rollbackOrcad(options())
     expect(result).toMatchObject({ outcome: 'rolled-back', target: TARGET })
-    // Restoring under a running orcad would replace the store beneath a process holding it;
-    // starting first would let the older build migrate the newer build's state.
+    // Stop before replacing open state; restore before the older build can migrate it.
     expect(log).toEqual([`stop:${ACTIVE}`, 'rescue', 'restore', `launch:${TARGET}`])
   })
 
@@ -274,7 +273,7 @@ describe('rollbackOrcad', () => {
     expect(result).toMatchObject({ outcome: 'refused', code: 'orcad_rollback_terminals_running' })
     expect(log).toEqual([])
     expect(vi.mocked(writeAtomicOrcadRemoteRecord)).not.toHaveBeenCalled()
-    // The server keeps serving, so it takes terminals again now, not when the fence lapses.
+    // A serving incumbent must reopen admission immediately.
     expect(releaseIncumbentAdmission).toHaveBeenCalledOnce()
   })
 
@@ -282,7 +281,6 @@ describe('rollbackOrcad', () => {
     const log: string[] = []
     scriptHost(log)
     let clockMs = Date.parse('2026-02-02T00:00:00.000Z')
-    // The transaction write, the last step before the stop, outlasts the fence.
     vi.mocked(writeAtomicOrcadRemoteRecord).mockImplementationOnce(async () => {
       clockMs += ORCAD_UPDATE_ADMISSION_STOP_BY_MS + 1
     })
@@ -366,8 +364,7 @@ describe('rollbackOrcad', () => {
       `stop:${TARGET}`,
       'compare'
     ])
-    // Until the target is proven serving, `active` must still name the version an operator
-    // would have to bring back.
+    // Keep active pointing at the recoverable incumbent until the target proves it is serving.
     expect(
       vi
         .mocked(writeAtomicOrcadRemoteRecord)

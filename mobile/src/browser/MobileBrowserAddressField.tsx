@@ -1,8 +1,18 @@
-import { Platform, StyleSheet, Text, TextInput, View } from 'react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { browserAddressFieldStyles } from './browser-address-field-styles'
+import { Platform, StyleSheet, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { TextField } from '../components/composer-input/TextField'
+import {
+  COMPOSER_TEXT_SIZE,
+  composerInputStyles
+} from '../components/composer-input/composer-input-styles'
 import { compactMobileBrowserFileAddress } from './browser-url'
 import { MobileBrowserLoadProgress } from './MobileBrowserLoadProgress'
+
+// The browser toolbar is a 32pt strip of 15pt icons; a 44pt field would double its height.
+const ADDRESS_FIELD_HEIGHT = 28
 
 type Props = {
   disabled: boolean
@@ -27,13 +37,15 @@ export function MobileBrowserAddressField({
   onSubmit,
   value
 }: Props): React.JSX.Element {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const fileLabel = focused ? null : compactMobileBrowserFileAddress(value)
   const selection = focused ? undefined : { start: 0, end: 0 }
 
   return (
-    <View style={styles.field}>
-      <TextInput
-        style={browserAddressFieldStyles.input}
+    <View style={styles.host}>
+      <TextField
+        style={styles.compact}
         value={value}
         onChangeText={onChangeText}
         onFocus={onFocus}
@@ -44,23 +56,19 @@ export function MobileBrowserAddressField({
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
-        // Why: `keyboardType` is a native-only enum, so in a browser the URL keyboard is lost and
-        // the field falls back to a plain one. `inputMode` is what a browser reads, and it takes
-        // precedence over `keyboardType`, so it must stay undefined everywhere else.
+        // Browser reads inputMode, not native keyboardType; keep it undefined on native where it would override URL keyboard.
         inputMode={Platform.OS === 'web' ? 'url' : undefined}
         numberOfLines={1}
         returnKeyType="go"
-        placeholder="URL"
-        placeholderTextColor={colors.textMuted}
+        placeholder={t('browser.addressField.urlPlaceholder', 'URL')}
         editable={!disabled}
       />
       {fileLabel ? (
-        <View pointerEvents="none" style={styles.fileLabelHost}>
-          <Text
-            style={browserAddressFieldStyles.fileLabel}
-            numberOfLines={1}
-            ellipsizeMode="middle"
-          >
+        <View
+          pointerEvents="none"
+          style={[composerInputStyles.field, styles.compact, styles.fileLabelHost]}
+        >
+          <Text style={styles.fileLabel} numberOfLines={1} ellipsizeMode="middle">
             {fileLabel}
           </Text>
         </View>
@@ -70,17 +78,21 @@ export function MobileBrowserAddressField({
   )
 }
 
-const styles = StyleSheet.create({
-  field: {
+const styles = themedStyleSheet(() => ({
+  host: {
     flex: 1,
-    minWidth: 0,
-    height: 28
+    minWidth: 0
+  },
+  compact: {
+    minHeight: ADDRESS_FIELD_HEIGHT,
+    height: ADDRESS_FIELD_HEIGHT
   },
   fileLabelHost: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised
+    ...StyleSheet.absoluteFillObject
+  },
+  fileLabel: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: COMPOSER_TEXT_SIZE
   }
-})
+}))

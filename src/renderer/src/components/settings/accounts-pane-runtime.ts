@@ -6,7 +6,7 @@ import type {
 } from '../../../../shared/managed-account-types'
 import { resolveLocalAccountRuntimeTarget } from '../../../../shared/local-account-runtime'
 import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { LocalAccountRuntime } from './accounts-pane-types'
 
 export const EMPTY_WSL_DISTROS: string[] = []
@@ -17,9 +17,7 @@ export function getHostRuntimeLabel(): string {
     : translate('auto.components.settings.AccountsPane.9baf45d071', 'This device')
 }
 
-// Why: the system-default row has no stored identity, so surface the real
-// ~/.codex login live — the OAuth email when signed in, a clear custom-provider
-// note for env-key logins, and the generic fallback when signed out.
+// System default has no saved identity; show live host login or custom-provider detail, falling back when signed out.
 export function getCodexSystemDefaultSubtitle(
   identity: CodexSystemDefaultIdentity | undefined,
   runtimeSentenceLabel: string
@@ -69,7 +67,7 @@ export function getSelectedAccountRuntime(
   /** A WSL host's distro: its accounts are this desktop's for that distro, with no location to pick. */
   wslHostDistro: string | null = null
 ): LocalAccountRuntime {
-  // Why: the two-option control displays the concrete target behind the persisted auto policy.
+  // Display the concrete target behind persisted auto policy.
   const resolvedRuntime = wslHostDistro
     ? { runtime: 'wsl' as const, wslDistro: wslHostDistro }
     : resolveLocalAccountRuntimeTarget(settings, getRendererAppPlatform())
@@ -97,7 +95,7 @@ export function getSelectedAccountRuntime(
   return { runtime: 'host', label: getHostRuntimeLabel() }
 }
 
-// Why: host runtime labels are standalone UI labels; interpolated prose needs sentence casing.
+// Standalone runtime labels need sentence casing when interpolated into prose.
 export function getRuntimeSentenceLabel(runtime: LocalAccountRuntime): string {
   return runtime.runtime === 'host' && !navigator.userAgent.includes('Windows')
     ? `${runtime.label.charAt(0).toLocaleLowerCase()}${runtime.label.slice(1)}`
@@ -105,7 +103,7 @@ export function getRuntimeSentenceLabel(runtime: LocalAccountRuntime): string {
 }
 
 export function formatAccountTimestamp(timestamp: number): string {
-  return new Date(timestamp).toLocaleString(undefined, {
+  return new Date(timestamp).toLocaleString(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

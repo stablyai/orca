@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+import { themedStyleSheet } from '../src/theme/themed-styles'
 
-export const pairScanStyles = StyleSheet.create({
+export const pairScanStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -10,7 +11,7 @@ export const pairScanStyles = StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm
@@ -28,7 +29,7 @@ export const pairScanStyles = StyleSheet.create({
   stepBadge: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
@@ -44,16 +45,14 @@ export const pairScanStyles = StyleSheet.create({
   },
   cameraWrap: {
     flex: 1,
-    borderRadius: radii.camera,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
-  // Why: holds the layout slot while the camera is unmounted during
-  // paste, so the bottom action button doesn't snap up to fill the
-  // empty space.
+  // Reserve the camera slot during paste mode so the bottom action cannot jump upward.
   cameraPlaceholder: {
     flex: 1,
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.camera
+    borderRadius: radii.surface
   },
   camera: {
     ...StyleSheet.absoluteFillObject
@@ -77,28 +76,28 @@ export const pairScanStyles = StyleSheet.create({
     left: 0,
     borderTopWidth: 2.5,
     borderLeftWidth: 2.5,
-    borderTopLeftRadius: 6
+    borderTopLeftRadius: radii.mark
   },
   cornerTR: {
     top: 0,
     right: 0,
     borderTopWidth: 2.5,
     borderRightWidth: 2.5,
-    borderTopRightRadius: 6
+    borderTopRightRadius: radii.mark
   },
   cornerBL: {
     bottom: 0,
     left: 0,
     borderBottomWidth: 2.5,
     borderLeftWidth: 2.5,
-    borderBottomLeftRadius: 6
+    borderBottomLeftRadius: radii.mark
   },
   cornerBR: {
     bottom: 0,
     right: 0,
     borderBottomWidth: 2.5,
     borderRightWidth: 2.5,
-    borderBottomRightRadius: 6
+    borderBottomRightRadius: radii.mark
   },
   centered: {
     flex: 1,
@@ -144,7 +143,7 @@ export const pairScanStyles = StyleSheet.create({
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   primaryButtonText: {
     color: colors.bgBase,
@@ -158,7 +157,7 @@ export const pairScanStyles = StyleSheet.create({
     gap: spacing.xs,
     marginTop: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   pasteButtonPressed: {
     opacity: 0.6
@@ -175,11 +174,11 @@ export const pairScanStyles = StyleSheet.create({
   secondaryButton: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   secondaryButtonText: {
     color: colors.textSecondary,
     fontSize: typography.bodySize,
     fontWeight: '500'
   }
-})
+}))

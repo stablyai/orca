@@ -48,7 +48,7 @@ test('registration resolves nested and linked paths to one existing project', as
   await waitForSessionReady(orcaPage)
   const result = await orcaPage.evaluate(
     async ({ repoPath, nestedPath }) => {
-      const results = []
+      const results: Awaited<ReturnType<typeof window.api.repos.add>>[] = []
       for (const path of [repoPath, nestedPath]) {
         results.push(await window.api.repos.add({ path }))
       }

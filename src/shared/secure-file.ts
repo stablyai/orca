@@ -39,8 +39,8 @@ let hardenedPathsThisProcess = new SecurePathHardeningCache<HardenedPathCacheEnt
   DEFAULT_HARDENING_CACHE_BOUNDS
 )
 
-// Why: child writes constantly bump a dir's mtime, so cache dirs by path (not metadata); a Windows rewrite walks the whole tree.
-// Limitation: a dir deleted+recreated in-process won't re-harden; fine since we never delete our secure dirs at runtime.
+// Child writes constantly change directory mtime; cache paths because Windows rewrites traverse all descendants.
+// Deleted/recreated directories would not re-harden; secure directories are never deleted at runtime.
 let hardenedDirectoryPathsThisProcess = new SecurePathHardeningCache<true>(
   DEFAULT_HARDENING_CACHE_BOUNDS
 )
@@ -85,8 +85,7 @@ function hardenSecurePathOnce(targetPath: string, isDirectory: boolean): boolean
 
 /** A file has no descendants, so verifying and fixing it in-process costs microseconds. */
 function hardenExistingWindowsFile(targetPath: string): boolean {
-  // Why the floor: this is the read path, polled at ~2/s; a host that can never restrict
-  // (FAT32, some shares) would otherwise log on every poll.
+  // Back off incapable filesystems (FAT32/shares) instead of logging on every ~2/s read poll.
   if (!mayAttemptHardening(targetPath)) {
     return false
   }
@@ -108,21 +107,9 @@ export function writeDurableSecureJsonFile(targetPath: string, value: unknown): 
   return writeSecureFile(targetPath, JSON.stringify(value, null, 2), { durable: true })
 }
 
-/**
- * Writes `contents` and restricts the result to the current user.
- *
- * Returns whether the restriction actually took, so a caller storing a credential can react. On
- * Windows with the ACL addon loaded the file is created already restricted, and a failed create
- * throws like any write failure (fail closed). Only when the addon cannot load is the file written
- * plainly, best-effort, and reported as unrestricted. A restriction the filesystem drops (FAT32,
- * some shares) also reports false.
- *
- * An optional publication predicate runs after staged hardening; false discards the staged file.
- *
- * The return value covers the *file* only. The parent directory is hardened fire-and-forget — on
- * Windows on the thread pool, settling after this returns — so a `true` here says nothing about
- * the directory's ACL.
- */
+/** Publish a staged file and return whether user-only file permissions hold. Windows addon creates restricted or throws;
+ * without it, plain best-effort writes report false, as do filesystems dropping restrictions.
+ * shouldPublish may discard the hardened stage. Windows parent hardening may finish later; true says nothing about its ACL. */
 export function writeSecureFile(
   targetPath: string,
   contents: string,
@@ -137,8 +124,7 @@ export function writeSecureFile(
 
   const tmpFile = `${targetPath}.${process.pid}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`
   try {
-    // Why born restricted on Windows: writeFileSync's mode is a no-op there, and a file created
-    // plainly would hold the credential under the directory's inherited DACL until a later fix.
+    // Create restricted on Windows: mode is ignored there, leaving inherited DACL exposure until a later fix.
     const restricted =
       process.platform === 'win32'
         ? writeRestrictedWindowsFile(tmpFile, contents)
@@ -206,22 +192,9 @@ export function bestEffortFsyncDirectorySync(directory: string): void {
   }
 }
 
-/**
- * Errors that mean the contents were never seen, so they say nothing about what the file holds.
- *
- * `ENOENT` is deliberately absent: "there is no file" genuinely licenses creating one. So is a
- * parse failure, which means the bytes WERE read and were garbage - the self-heal these stores
- * were built for. The distinction is "could not read it" versus "read it and it was garbage".
- *
- * Why it matters: a reader that treats every failure as corruption regenerates the file, and the
- * regeneration succeeds - `renameSync` over an unreadable file needs `FILE_DELETE_CHILD` on the
- * parent, not `DELETE` on the file - so the original is destroyed by the code meant to heal it.
- * `EPERM`/`EACCES` is the hardened-DACL case: a file granting a SID this process does not hold,
- * reachable through a relocated user-data path, a share or roaming profile, a restored backup
- * under a new local SID, or a half-applied harden. The rest are transient and, on Windows, more
- * likely than that: `EBUSY` is what antivirus produces by holding a file open at the moment of a
- * read, which for a credential read on the startup path is an ordinary Tuesday.
- */
+/** Unread contents cannot authorize regeneration: rename can replace an unreadable file using parent rights,
+ * destroying the credential. Include permission/transient read failures; ENOENT permits creation and parse errors
+ * prove bytes were read, so neither belongs here. */
 export function isUnreadableError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | null)?.code
   return (
@@ -234,14 +207,26 @@ export function isUnreadableError(error: unknown): boolean {
   )
 }
 
+/** Readers tighten modes opportunistically; a sandbox that denies chmod must not fail the read (#20937). */
 export function hardenExistingSecureFile(targetPath: string): void {
-  const dir = dirname(targetPath)
-  if (existsSync(dir)) {
-    hardenSecurePathOnce(dir, true)
+  try {
+    const dir = dirname(targetPath)
+    if (existsSync(dir)) {
+      hardenSecurePathOnce(dir, true)
+    }
+    if (existsSync(targetPath)) {
+      hardenSecurePathOnce(targetPath, false)
+    }
+  } catch (error) {
+    if (!isPermissionDeniedError(error)) {
+      throw error
+    }
   }
-  if (existsSync(targetPath)) {
-    hardenSecurePathOnce(targetPath, false)
-  }
+}
+
+function isPermissionDeniedError(error: unknown): boolean {
+  const code = error instanceof Error && 'code' in error ? error.code : undefined
+  return code === 'EPERM' || code === 'EACCES' || code === 'EROFS'
 }
 
 /** Caches the current metadata snapshot for a just-hardened path, or clears it if the path is gone. */

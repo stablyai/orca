@@ -7,9 +7,7 @@ import { isMobileMethodUnavailableError } from '../transport/mobile-method-unava
 import type { RpcResponse } from '../transport/types'
 import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
 
-// The host's sidebar feed (src/main/runtime/sidebar-inputs/), read only by a page built with
-// ORCA_SIDEBAR_INPUTS=main. A host without it answers method_not_found, or forbidden from an
-// older mobile allowlist; either means this page is newer than the host.
+// Only ORCA_SIDEBAR_INPUTS=main pages read this feed; method_not_found or an older allowlist’s forbidden means the page is newer than the host.
 
 export const sidebarInputsRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -47,7 +45,6 @@ export const setCollapsedWrite = bindDeferredRpcOperation(
   })
 )
 
-/** A reply either answers, says the host lacks the method, or failed (retry on the next trigger). */
 export type HostMethodReply<Value> =
   | { kind: 'answered'; value: Value }
   | { kind: 'unavailable' }
@@ -70,7 +67,6 @@ export function readHostMethodReply<Value>(
   }
 }
 
-/** The shared feed reader's reads over one host connection. */
 export function hostSidebarFeedTransport(client: UnvalidatedRpcRequestPort): SidebarFeedTransport {
   return async (params) => {
     const read = readHostMethodReply(

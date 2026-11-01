@@ -12,9 +12,7 @@ export function registerServeSignalHandlers(
   quitApplication: () => void
 ): void {
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
-    // Why reclaim: Electron's native handler replaces Node's for any signal that already had a
-    // listener before app ready, so these never ran and a SIGTERM arrived as a native quit.
-    // Dropping the last listener releases Node's handler; re-adding installs it over Electron's.
+    // After ready, remove every listener to release Node's handle, then re-add so Node reclaims signals Electron replaced.
     const existing = signalSource.listeners(signal)
     for (const listener of existing) {
       signalSource.removeListener(signal, listener)
@@ -22,7 +20,7 @@ export function registerServeSignalHandlers(
     for (const listener of existing) {
       signalSource.on(signal, listener)
     }
-    // Keep every listener installed so duplicate delivery cannot fall through to default termination.
+    // Keep handlers installed across duplicate signals so default termination cannot bypass cleanup.
     signalSource.on(signal, quitApplication)
   }
 }

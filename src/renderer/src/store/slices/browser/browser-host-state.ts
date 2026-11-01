@@ -18,14 +18,7 @@ import type {
 } from './browser-slice-contract'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 
-/** Rebuild the remote page handles a restored session implies. No placement is seeded: the
- *  persisted generations belong to the host lease that died with the last run, and the first host
- *  snapshot is what supplies the live one.
- *
- *  Client-hosted rows only. A server-hosted page lives on the runtime, which may have restarted or
- *  been redeployed while this desktop was closed; a seeded handle sends its pane down the adopt
- *  branch, and the browser_tab_not_found that comes back deletes the row. With no handle the pane
- *  creates a fresh page at the URL the row persisted, which is what the user left behind. */
+/** Seed restored handles only for client-hosted pages, without dead lease placement generations. Server-hosted pages may vanish during runtime restart; leaving their handle absent recreates the saved URL instead of adopting a missing page and deleting the row. First snapshot supplies live placement. */
 export function buildRestoredRemoteBrowserPageHandles(
   browserPagesByWorkspace: Record<string, BrowserPage[]>
 ): Record<string, RemoteBrowserPageHandle> {
@@ -50,8 +43,7 @@ export function buildRestoredRemoteBrowserPageHandles(
   return handles
 }
 
-/** Whether this desktop hosts the remote page itself rather than streaming it from the host. Staged
- *  and restored rows count before the host confirms a placement, so they never mount as streams. */
+/** Staged/restored client-hosted rows must mount local guests before placement confirmation, never streamed panes. */
 export function isClientHostedBrowserPageHandle(handle: RemoteBrowserPageHandle): boolean {
   return (
     handle.placement?.kind === 'client' ||
@@ -148,14 +140,42 @@ export function getBrowserProfilesForHost(
   )
 }
 
+/** The host's chosen default profile for new tabs, or null for Default. */
 export function getDefaultBrowserProfileForHost(
-  state: AppState,
+  state: Pick<AppState, 'settings'>,
   hostId: ExecutionHostId
 ): string | null {
-  return (
-    state.defaultBrowserSessionProfileIdByHostId[hostId] ??
-    (getBrowserSettingsHostId(state) === hostId ? state.defaultBrowserSessionProfileId : null)
-  )
+  // Why: only paired runtimes keep their own profiles; every other host renders on this desktop's.
+  const profileHostId =
+    parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : LOCAL_EXECUTION_HOST_ID
+  const profileId = state.settings?.browserDefaultProfileIdByHostId?.[profileHostId]
+  return typeof profileId === 'string' ? profileId : null
+}
+
+let defaultProfileWrites: Promise<void> = Promise.resolve()
+
+/** Rewrites one host's default pick (null = Default) from the latest saved map. */
+export function updateDefaultBrowserProfileForHost(
+  getState: () => Pick<AppState, 'settings' | 'updateSettings'>,
+  hostId: ExecutionHostId,
+  next: (current: string | null) => string | null
+): Promise<void> {
+  // Why: each write replaces the whole map, so it reads the map only after the previous write lands.
+  defaultProfileWrites = defaultProfileWrites.then(() => {
+    const state = getState()
+    const { [hostId]: current = null, ...otherHosts } =
+      state.settings?.browserDefaultProfileIdByHostId ?? {}
+    const profileId = next(current)
+    if (profileId === current) {
+      return
+    }
+    return state.updateSettings({
+      browserDefaultProfileIdByHostId: profileId
+        ? { ...otherHosts, [hostId]: profileId }
+        : otherHosts
+    })
+  })
+  return defaultProfileWrites
 }
 
 export function browserImportStateForHostUpdate(

@@ -10,8 +10,7 @@ import { translate } from '@/i18n/i18n'
 
 type NewExternalWorktreesInboxLineProps = {
   repoDisplayName: string
-  /** Host this checkout lives on. Set only when the project is checked out on
-   *  more than one host, where the count alone cannot identify the row. */
+  /** Disambiguates checkouts when the project appears on multiple hosts. */
   hostContextLabel?: string
   hostContextHostId?: ExecutionHostId
   inboxCount: number
@@ -37,8 +36,7 @@ export default function NewExternalWorktreesInboxLine({
     'auto.components.sidebar.NewExternalWorktreesInboxLine.c3e8a1f4b2',
     "Don't show again"
   )
-  // Why: the same project on two hosts renders two identical rows, so every
-  // accessible name has to name the host as well as the project.
+  // Accessible names need host labels to distinguish the same project on multiple hosts.
   const repoScopeLabel = hostContextLabel
     ? translate(
         'auto.components.sidebar.NewExternalWorktreesInboxLine.6c07f3a91e',
@@ -51,27 +49,21 @@ export default function NewExternalWorktreesInboxLine({
     'Hide external worktrees permanently for {{value0}}',
     { value0: repoScopeLabel }
   )
-  const isSingular = inboxCount === 1
-  const countLabel = isSingular
-    ? translate(
-        'auto.components.sidebar.NewExternalWorktreesInboxLine.2a6f31d8c7',
-        'hidden worktree'
-      )
-    : translate(
-        'auto.components.sidebar.NewExternalWorktreesInboxLine.5b90e4a2f6',
-        'hidden worktrees'
-      )
-  const reviewAriaLabel = isSingular
-    ? translate(
-        'auto.components.sidebar.NewExternalWorktreesInboxLine.7f18c5b0d3',
-        'Review {{value0}} hidden worktree in {{value1}}',
-        { value0: inboxCount, value1: repoScopeLabel }
-      )
-    : translate(
-        'auto.components.sidebar.NewExternalWorktreesInboxLine.4e2b7a9c05',
-        'Review {{value0}} hidden worktrees in {{value1}}',
-        { value0: inboxCount, value1: repoScopeLabel }
-      )
+  // The count renders in its own badge; `count` still selects the noun's plural form.
+  const countLabel = translate(
+    'auto.components.sidebar.NewExternalWorktreesInboxLine.hiddenWorktreesNoun',
+    'hidden worktrees',
+    { count: inboxCount, defaultValue_one: 'hidden worktree' }
+  )
+  const reviewAriaLabel = translate(
+    'auto.components.sidebar.NewExternalWorktreesInboxLine.reviewHiddenWorktrees',
+    'Review {{count}} hidden worktrees in {{scope}}',
+    {
+      count: inboxCount,
+      scope: repoScopeLabel,
+      defaultValue_one: 'Review {{count}} hidden worktree in {{scope}}'
+    }
+  )
 
   if (inboxCount === 0) {
     return null
@@ -118,7 +110,7 @@ export default function NewExternalWorktreesInboxLine({
             aria-hidden="true"
             className={cn(
               'size-3 shrink-0',
-              // Why: the suppress control takes over this slot on hover.
+              // Suppress replaces this indicator on hover.
               onSuppress &&
                 'can-hover:group-hover:opacity-0 can-hover:group-focus-within:opacity-0 [@media(hover:none)]:opacity-0'
             )}

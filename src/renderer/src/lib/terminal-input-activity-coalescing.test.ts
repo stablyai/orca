@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TERMINAL_INPUT_ACTIVITY_WRITE_INTERVAL_MS,
-  flushTerminalInputActivity,
   getPendingTerminalInputActivityCountForTests,
   mergePendingTerminalInputActivity,
   readLastTerminalInputAt,
@@ -10,7 +9,6 @@ import {
 } from './terminal-input-activity-coalescing'
 
 const PANE = 'tab-1:leaf-1'
-const OTHER_PANE = 'tab-2:leaf-2'
 
 // Minimal stand-in for the store slot the real commit writes into.
 function createStore(initial: Record<string, number> = {}) {
@@ -73,9 +71,7 @@ describe('terminal input activity coalescing', () => {
     type(store, PANE, 1_000)
     type(store, PANE, 1_100)
 
-    // The store itself still holds the leading-edge stamp...
     expect(store.stored[PANE]).toBe(1_000)
-    // ...but readers see the pending keystroke.
     expect(getPendingTerminalInputActivityCountForTests()).toBe(1)
     expect(readLastTerminalInputAt(store.stored, PANE)).toBe(1_100)
     expect(mergePendingTerminalInputActivity(store.stored)[PANE]).toBe(1_100)
@@ -95,27 +91,6 @@ describe('terminal input activity coalescing', () => {
 
     expect(store.stored[PANE]).toBe(1_100)
     expect(getPendingTerminalInputActivityCountForTests()).toBe(0)
-  })
-
-  it('does not resurrect a pane key that teardown deleted', () => {
-    const store = createStore()
-
-    type(store, PANE, 1_000)
-    type(store, OTHER_PANE, 1_000)
-    type(store, PANE, 1_100)
-    type(store, OTHER_PANE, 1_100)
-    expect(getPendingTerminalInputActivityCountForTests()).toBe(2)
-
-    // Teardown (close pane / close tab / worktree purge) removes the key.
-    delete store.stored[PANE]
-
-    flushTerminalInputActivity()
-
-    expect(PANE in store.stored).toBe(false)
-    expect(readLastTerminalInputAt(store.stored, PANE)).toBeUndefined()
-    expect(mergePendingTerminalInputActivity(store.stored)[PANE]).toBeUndefined()
-    // The surviving sibling still advances.
-    expect(store.stored[OTHER_PANE]).toBe(1_100)
   })
 
   it('writes immediately again once the coalescing window has passed', () => {

@@ -1,7 +1,6 @@
 import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import type { Worktree } from './workspace-list-types'
 
-/** Which presence glyphs a row draws, as the desktop's card badges gate them. */
 export type WorktreeMetaGlyphPresence = {
   notes: boolean
   automation: boolean
@@ -12,7 +11,7 @@ export type WorktreeMetaGlyphPresence = {
   gitLabMR: boolean
 }
 
-// Why unknown: rows reach the phone unchecked, and hosts before the attachment list omit it.
+// Accept unknown because rows are unchecked and older hosts omit attachments.
 function hasLinkedJiraIssue(linkedItems: unknown): boolean {
   return (
     Array.isArray(linkedItems) &&

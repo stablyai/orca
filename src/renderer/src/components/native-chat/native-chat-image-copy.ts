@@ -7,7 +7,6 @@ import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../shared/clipboard-im
 /** The chat context menu offers "Copy image" for elements carrying this attribute. */
 const COPY_IMAGE_SRC_SELECTOR = '[data-native-chat-copy-image-src]'
 
-/** Full-size source to copy for an image, or undefined when it has none. */
 export function copyableNativeChatImageSrc(src: string | undefined): string | undefined {
   // The web client's image clipboard write is a no-op.
   return isWebClientLocation() ? undefined : src

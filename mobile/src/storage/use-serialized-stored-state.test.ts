@@ -35,9 +35,6 @@ describe('useSerializedStoredState', () => {
       latest?.setValue('b')
       latest?.persist('b')
     })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
     expect(latest?.value).toBe('a')
   })
 
@@ -56,12 +53,12 @@ describe('useSerializedStoredState', () => {
       latest?.persist('b')
       latest?.setValue('c')
       latest?.persist('c')
-      await new Promise((resolve) => setTimeout(resolve, 0))
     })
+    expect(save).toHaveBeenNthCalledWith(1, 'b')
+    expect(save).toHaveBeenNthCalledWith(2, 'c')
     expect(load).not.toHaveBeenCalled()
     await act(async () => {
       landLater()
-      await new Promise((resolve) => setTimeout(resolve, 0))
     })
     expect(load).not.toHaveBeenCalled()
     expect(latest?.value).toBe('c')

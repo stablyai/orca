@@ -7,8 +7,10 @@ import {
   shouldShowChecksPanelPublishBranchAction
 } from '../checks-panel-empty-state'
 import { openChecksPanelHostedReviewUrl } from '../checks-panel-hosted-review-click-routing'
+import { isRateLimitRefresh } from '../checks-panel-review-state-model'
 import { isMacPlatform } from '../../terminal-pane/terminal-link-open-hints'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { isGitHubPRSuppressed } from '../../../../../shared/worktree/github-pr-suppression'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
 import { useNow } from '@/hooks/use-now'
@@ -18,10 +20,7 @@ export function ChecksPanelEmptyContent({
 }: {
   model: ChecksPanelEmptyContentModel
 }): React.JSX.Element | null {
-  // Why: the auto-retry line and the retry-disabled window are the only readers,
-  // and both are populated solely by a GitHub refresh error — so an idle panel
-  // (and every folder workspace, which never reaches them) stays tick-free
-  // rather than re-rendering the create composer once a second.
+  // Tick only for GitHub retry timing; idle/folder composers must not rerender every second.
   const now = useNow(
     1000,
     model.prRefreshState?.nextAutoRetryAt !== undefined ||
@@ -66,6 +65,7 @@ export function ChecksPanelEmptyContent({
     linkedGitLabMR,
     linkedPR,
     linkedReviewNumber,
+    manualRefreshError,
     panelContextKey,
     prAiGenerationEnabled,
     prBase,
@@ -95,7 +95,6 @@ export function ChecksPanelEmptyContent({
     stackParentReview,
     suppressedGitHubPR
   } = model
-  // ── Empty state ──
   if (!activeWorktree) {
     return (
       <div className="px-4 py-6">
@@ -155,20 +154,22 @@ export function ChecksPanelEmptyContent({
   }
 
   if (!activeReview) {
-    // Why: mid rebase/merge/cherry-pick HEAD is detached, so "No pull request found" misleads — the PR still exists on the original branch.
+    // Detached HEAD during Git operations does not mean the original branch lost its PR.
     const operationInProgress = conflictOperation !== 'unknown'
     const operationLabel =
       conflictOperation === 'rebase'
-        ? 'Rebase'
+        ? translate('auto.components.right.sidebar.checks.panel.content.operation.rebase', 'Rebase')
         : conflictOperation === 'merge'
-          ? 'Merge'
+          ? translate('auto.components.right.sidebar.checks.panel.content.operation.merge', 'Merge')
           : conflictOperation === 'cherry-pick'
-            ? 'Cherry-pick'
+            ? translate(
+                'auto.components.right.sidebar.checks.panel.content.operation.cherryPick',
+                'Cherry-pick'
+              )
             : null
     const emptyReviewIsGitLab =
       linkedGitLabMR !== null || hostedReviewCreation?.provider === 'gitlab'
-    const emptyReviewLabel = emptyReviewIsGitLab ? 'merge request' : 'pull request'
-    const emptyReviewShortLabel = emptyReviewIsGitLab ? 'MR' : 'PR'
+    const emptyReviewCopy = localizedHostedReviewCopy(emptyReviewIsGitLab ? 'gitlab' : 'github')
     const canPushCreate = hostedReviewCreation?.blockedReason === 'needs_push'
     const shouldPushBeforeCreateReview = createPrPushFirst || canPushCreate
     const canPublishBranch =
@@ -179,7 +180,7 @@ export function ChecksPanelEmptyContent({
           hasUpstream: publishActionRemoteStatus?.hasUpstream,
           hasCurrentBranch: Boolean(branch)
         }))
-    // Feed refresh state only for GitHub; surface a sticky hard error so its card and composer suppression persist across retries.
+    // Keep GitHub hard errors sticky so retry state cannot briefly restore the composer.
     const emptyRefreshInput = !isGitHubReviewContext
       ? undefined
       : checksPanelHasHardRefreshError && hardRefreshError
@@ -201,14 +202,14 @@ export function ChecksPanelEmptyContent({
           : 'loading'
     const reviewState = getChecksPanelReviewState({
       operationLabel,
-      reviewLabel: emptyReviewLabel,
-      reviewShortLabel: emptyReviewShortLabel,
+      reviewLabel: emptyReviewCopy.reviewLabel,
+      reviewShortLabel: emptyReviewCopy.shortLabel,
       providerName: hostedReviewCreateCopy.providerName,
       isGitHubProvider: hostedReviewCreateProvider === 'github',
       reviewLookup: checksPanelReviewLookup,
       openReviewUrl: checksPanelReviewLookupResult.openReviewUrl,
       eligibilityBlockedReason: hostedReviewCreation?.blockedReason,
-      // Confirmed readiness (not the live create gate) drives composer mode to match preserved-composer semantics.
+      // Preserved-composer mode uses confirmed readiness rather than the live create gate.
       confirmedReadiness: confirmedReadiness.confirmed,
       confirmedNeedsPush: confirmedReadiness.needsPush,
       refresh: emptyRefreshInput,
@@ -216,26 +217,36 @@ export function ChecksPanelEmptyContent({
       hasUpstream: publishActionRemoteStatus?.hasUpstream,
       hasCurrentBranch: Boolean(branch)
     })
-    const emptyStateCopy = { title: reviewState.title, description: reviewState.description }
+    // Classified GitHub states carry the next step (sign in, or wait for the limit), so they win.
+    const refreshFailure =
+      emptyRefreshInput?.status === 'error' || isRateLimitRefresh(emptyRefreshInput)
+        ? null
+        : manualRefreshError
+    const emptyStateCopy = refreshFailure
+      ? {
+          title: translate('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed'),
+          description: refreshFailure
+        }
+      : { title: reviewState.title, description: reviewState.description }
     const reviewStateAutoRetryText =
       reviewState.autoRetryAt !== undefined && reviewState.autoRetryAt > now
         ? translate(
             'auto.components.right.sidebar.ChecksPanel.review.auto_retry',
             'Orca will retry at {{time}}.',
-            { time: new Date(reviewState.autoRetryAt).toLocaleTimeString() }
+            { time: new Date(reviewState.autoRetryAt).toLocaleTimeString(getIntlLocale()) }
           )
         : null
     const reviewRecoveryRetryDisabled =
       reviewState.retryDisabledUntil !== undefined && now < reviewState.retryDisabledUntil
     const reviewRecoveryLabelIsRefresh = reviewState.recovery.includes('refresh')
-    // Only offer Retry/Refresh when the selector's recovery set includes it; some states expose none.
     const reviewShowRetryOrRefresh =
-      reviewState.recovery.includes('retry') || reviewRecoveryLabelIsRefresh
+      Boolean(refreshFailure) ||
+      reviewState.recovery.includes('retry') ||
+      reviewRecoveryLabelIsRefresh
     const reviewShowOpenReview =
       reviewState.recovery.includes('open_review') && Boolean(reviewState.openReviewUrl)
-    // A `needs_sync` create blocker must expose Sync Branch, not just guidance copy.
     const reviewShowSyncBranch = reviewState.workflowAction === 'sync_branch'
-    // Recovery actions render independently of the composer so a preserved composer still exposes Retry during a transient failure.
+    // Keep recovery actions independent so preserved composers still expose Retry after transient failures.
     const reviewShowActionRow =
       canPublishBranch ||
       reviewShowSyncBranch ||
@@ -250,10 +261,10 @@ export function ChecksPanelEmptyContent({
         )}
         <div className="text-sm font-medium text-foreground">{emptyStateCopy.title}</div>
         <div className="mt-1 text-xs text-muted-foreground">{emptyStateCopy.description}</div>
-        {reviewState.detail ? (
+        {!refreshFailure && reviewState.detail ? (
           <div className="mt-1 text-xs text-muted-foreground">{reviewState.detail}</div>
         ) : null}
-        {reviewStateAutoRetryText ? (
+        {!refreshFailure && reviewStateAutoRetryText ? (
           <div className="mt-1 text-xs text-muted-foreground">{reviewStateAutoRetryText}</div>
         ) : null}
         {!operationInProgress && createComposerOpen ? (
@@ -294,12 +305,12 @@ export function ChecksPanelEmptyContent({
                   ? translate(
                       'auto.components.right.sidebar.ChecksPanel.98f4c37b33',
                       'Push & Create {{value0}}',
-                      { value0: emptyReviewShortLabel }
+                      { value0: emptyReviewCopy.shortLabel }
                     )
                   : translate(
                       'auto.components.right.sidebar.ChecksPanel.889cdfba04',
                       'Create {{value0}}',
-                      { value0: emptyReviewShortLabel }
+                      { value0: emptyReviewCopy.shortLabel }
                     )
               }}
               onGenerate={() => void handleGeneratePullRequestFields()}

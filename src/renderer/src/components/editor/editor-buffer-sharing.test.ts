@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// Why: G3 scenarios through the real record middleware and save queue, with two workspaces showing
-// one file: restored drafts, phone saves, delayed rich text and paused autosave.
+// Use real record middleware and save queues for cross-workspace restored drafts, phone writes, rich text and autosave pauses.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -22,7 +21,9 @@ import { createEditorStore } from './editor-autosave-controller-test-fixture'
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { GUARDED_PATH, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { editorTabModelUri } from './editor-save-disk-precondition'
 import { mayPushTabTextIntoModel, isStaleCachedEditorText } from './editor-stale-mount-guard'
 import { registerPendingEditorFlush } from './editor-pending-flush'
@@ -65,34 +66,37 @@ function twoWorkspaceStore(): StoreApi<AppState> {
   return store
 }
 
-function restore(store: StoreApi<AppState>, drafts: [string, string]): [OpenFile, OpenFile] {
-  const entry = (worktreeId: string, draft: string) => ({
+function restore(
+  store: StoreApi<AppState>,
+  drafts: [string | undefined, string | undefined],
+  workspaces = ['wt-1', 'wt-2']
+): [OpenFile, OpenFile] {
+  const entry = (worktreeId: string, draft: string | undefined) => ({
     filePath: GUARDED_PATH,
     relativePath: 'file.ts',
     worktreeId,
     language: 'typescript',
+    runtimeEnvironmentId: null,
     dirtyDraftContent: draft,
     lastKnownDiskSignature: getDiskBaselineSignature(BASE)
   })
   const session: WorkspaceSessionState = {
     activeRepoId: null,
-    activeWorktreeId: 'wt-1',
+    activeWorktreeId: workspaces[0],
     activeTabId: null,
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
-    openFilesByWorktree: { 'wt-1': [entry('wt-1', drafts[0])], 'wt-2': [entry('wt-2', drafts[1])] }
+    openFilesByWorktree: Object.fromEntries(
+      workspaces.map((workspace, i) => [workspace, [entry(workspace, drafts[i])]])
+    )
   }
-  // The store write session hydration makes.
-  store.setState(buildHydratedEditorSessionState(session, new Set(['wt-1', 'wt-2']), 'wt-1').state)
+  store.setState(buildHydratedEditorSessionState(session, new Set(workspaces), workspaces[0]).state)
   const [a, b] = store.getState().openFiles
-  expect([a?.worktreeId, b?.worktreeId]).toEqual(['wt-1', 'wt-2'])
+  expect([a?.worktreeId, b?.worktreeId]).toEqual(workspaces)
   return [a, b]
 }
 
-/**
- * What a mount does with the view's text (its draft, else the panel's cached `text`): create its
- * model, or push into one it may overwrite. Stale cached text never enters a live model.
- */
+/** Match mount reconciliation: prefer drafts and never push stale cached text into an already-live model. */
 function mount(
   store: StoreApi<AppState>,
   viewId: string,
@@ -115,7 +119,6 @@ function mount(
   return model
 }
 
-/** The banner an edit surface shows for a view: only while its record is conflicted. */
 function bannerOf(store: StoreApi<AppState>, id: string): string | null {
   const file = view(store, id)!
   return file.externalMutation === 'changed'
@@ -146,12 +149,17 @@ afterEach(() => {
 })
 
 describe('restored drafts of one file (scenario 2)', () => {
-  it.each([['a first'], ['b first'], ['no mount']] as const)(
-    'divergent drafts detach with their own models (%s); the first autosave lands and the other side keeps its draft behind the banner',
-    async (order) => {
+  it.each([
+    ['a first', 'wt-2'],
+    ['b first', 'wt-2'],
+    ['no mount', 'wt-2'],
+    ['b first', FLOATING_TERMINAL_WORKTREE_ID]
+  ] as const)(
+    'divergent drafts detach with their own models (%s, %s); the first autosave lands and the other side keeps its draft behind the banner',
+    async (order, partner) => {
       const disk = stubGuardedDisk({ [GUARDED_PATH]: BASE })
       const store = twoWorkspaceStore()
-      const [a, b] = restore(store, ['abc', 'abcd'])
+      const [a, b] = restore(store, ['abc', 'abcd'], ['wt-1', partner])
       const recordOf = (id: string) => store.getState().editorBufferIdOf[id]
       expect(isDetachedEditorBufferId(recordOf(b.id))).toBe(true)
 
@@ -174,13 +182,16 @@ describe('restored drafts of one file (scenario 2)', () => {
         expect(['abc', 'abcd']).toContain(landed)
         const kept = landed === 'abc' ? 'abcd' : 'abc'
         expect(disk.writeFile).toHaveBeenCalledTimes(2)
-        // Rejoined: the unsaved side won with its old baseline, banner on every view.
+        // Rejoining preserves the unsaved side’s older baseline and marks every view conflicted.
         expect(recordOf(a.id)).toBe(recordOf(b.id))
         for (const id of [a.id, b.id]) {
           expect(store.getState().editorDrafts[id]).toBe(kept)
           expect(view(store, id)?.isDirty).toBe(true)
           expect(view(store, id)?.externalMutation).toBe('changed')
           expect(view(store, id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature(BASE))
+          expect(bannerOf(store, id)).toContain('Compare')
+          expect(bannerOf(store, id)).toContain('Reload from Disk')
+          expect(bannerOf(store, id)).toContain('Overwrite')
         }
       } finally {
         cleanup()
@@ -206,6 +217,75 @@ describe('restored drafts of one file (scenario 2)', () => {
   })
 })
 
+describe('restored floating and ordinary views', () => {
+  it.each([
+    ['worktree', false],
+    ['worktree', true],
+    ['folder', false],
+    ['folder', true]
+  ] as const)(
+    'share edits and save both ways after %s restore (late catalog: %s)',
+    async (kind, late) => {
+      const disk = stubGuardedDisk({ [GUARDED_PATH]: BASE })
+      const store = twoWorkspaceStore()
+      const workspace = kind === 'folder' ? folderWorkspaceKey('folder') : 'wt-1'
+      const catalog =
+        kind === 'folder'
+          ? {
+              folderWorkspaces: [
+                makeFolderWorkspace({ id: 'folder', folderPath: '/repo', executionHostId: 'local' })
+              ]
+            }
+          : { worktreesByRepo: store.getState().worktreesByRepo }
+      store.setState(late ? { worktreesByRepo: {}, folderWorkspaces: [] } : catalog)
+      const [ordinary, floating] = restore(
+        store,
+        [undefined, 'restored draft'],
+        [workspace, FLOATING_TERMINAL_WORKTREE_ID]
+      )
+      const recordOf = (id: string) => store.getState().editorBufferIdOf[id]
+      if (late) {
+        expect(recordOf(ordinary.id)).not.toBe(recordOf(floating.id))
+        store.setState(catalog)
+      }
+      expect(recordOf(ordinary.id)).toBe(recordOf(floating.id))
+      expect(store.getState().editorDrafts[ordinary.id]).toBe('restored draft')
+      expect(ordinary.operationProvenance).toBeUndefined()
+      expect(floating.operationProvenance).toBeUndefined()
+      const model = mount(store, ordinary.id)
+      expect(mount(store, floating.id)).toBe(model)
+      store.setState((state) => {
+        if (!state.settings) {
+          throw new Error('Editor fixture settings must be initialized')
+        }
+        return { settings: { ...state.settings, editorAutoSave: false } }
+      })
+      const cleanup = attachEditorAutosaveController(store)
+      try {
+        for (const source of [ordinary, floating]) {
+          const text = `saved from ${source.worktreeId}`
+          model.setValue(text)
+          store.getState().setEditorDraft(source.id, text)
+          store.getState().markFileDirty(source.id, true)
+          for (const tab of [ordinary, floating]) {
+            expect(store.getState().editorDrafts[tab.id]).toBe(text)
+          }
+          await requestEditorFileSave({ fileId: source.id })
+          expect(disk.files.get(GUARDED_PATH)).toBe(text)
+          for (const tab of [ordinary, floating]) {
+            expect(view(store, tab.id)?.isDirty).toBe(false)
+            expect(store.getState().editorDrafts[tab.id]).toBeUndefined()
+            expect(mount(store, tab.id, text)).toBe(model)
+          }
+        }
+        expect(disk.writeFile).toHaveBeenCalledTimes(2)
+      } finally {
+        cleanup()
+      }
+    }
+  )
+})
+
 function openShared(disk: string) {
   const store = twoWorkspaceStore()
   for (const worktreeId of ['wt-1', 'wt-2']) {
@@ -228,7 +308,7 @@ describe('two workspaces on one record', () => {
     const { store, a, b } = openShared(BASE)
     const model = mount(store, a.id)
     expect(mount(store, b.id)).toBe(model)
-    // Typing in each workspace edits the one model; each view's editor publishes the draft.
+    // Both workspaces edit one model; each editor still publishes its view’s draft.
     model.setValue('abc')
     store.getState().setEditorDraft(a.id, 'abc')
     store.getState().markFileDirty(a.id, true)
@@ -241,7 +321,6 @@ describe('two workspaces on one record', () => {
       expect(disk.files.get(GUARDED_PATH)).toBe('abcd')
       expect(view(store, a.id)?.isDirty).toBe(false)
       expect(view(store, b.id)?.isDirty).toBe(false)
-      // W1 remounting with its panel's old cached text pushes nothing.
       expect(mount(store, a.id, 'abc')).toBe(model)
       expect(model.getValue()).toBe('abcd')
     } finally {
@@ -273,7 +352,7 @@ describe('two workspaces on one record', () => {
         }
       }
       if (state === 'clean') {
-        // The panel reloads every tab this matches: content and clean baseline from disk.
+        // Match panel reloads that update both content and clean disk baselines.
         const matched = getOpenFilesForExternalFileChange(store.getState().openFiles, {
           worktreeId: 'wt-2',
           worktreePath: '/repo',
@@ -290,7 +369,7 @@ describe('two workspaces on one record', () => {
           getDiskBaselineSignature('from phone')
         )
 
-        // A desktop save after it lands, and the panel moves the other view to the written text.
+        // After a desktop save, the panel must advance the sibling view’s loaded disk text too.
         const saved: EditorFileSavedDetail[] = []
         window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, (event) => {
           if (event instanceof CustomEvent) {
@@ -346,7 +425,6 @@ describe('two workspaces on one record', () => {
     store.getState().setExternalMutation(b.id, 'changed')
     for (const id of [a.id, b.id]) {
       expect(isAutosaveSuspendedForFile(view(store, id)!)).toBe(true)
-      // Both views render the banner, offering to overwrite with the record's edits.
       expect(bannerOf(store, id)).toContain('changed on disk')
       expect(bannerOf(store, id)).toContain('>Overwrite<')
     }

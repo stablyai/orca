@@ -1,5 +1,6 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type { HostedReviewForBranchOutcome, HostedReviewInfo } from '../../shared/hosted-review'
+import { cachedHostedReviewOutcome } from '../../shared/hosted-review'
 import {
   __resetHostedReviewActiveClaimsForTests,
   isActiveBranch,
@@ -19,6 +20,7 @@ import {
   getInflightLookup,
   releaseInflight,
   retireInflightWithPrefix,
+  retireInflightLookup,
   trackInflight,
   type InflightToken
 } from './hosted-review-inflight-lookups'
@@ -35,6 +37,7 @@ import {
   dropFailuresWithPrefix,
   noteFailure
 } from './hosted-review-lookup-backoff'
+import { observeProviderRead } from './hosted-review-provider-read'
 import {
   ACTIVE_REFRESH_INTERVAL_MS,
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
@@ -42,21 +45,9 @@ import {
   NO_REVIEW_REFRESH_INTERVAL_MS
 } from './hosted-review-refresh-pacing'
 
-/**
- * Process-wide cache for branch review lookups (#11532).
- *
- * `hostedReview:forBranch` is polled by every desktop window, the mobile client
- * and `orca serve` alike, and each one used to reach the provider directly. The
- * host's API quota is per user, so the only place that can pace them together is
- * here — the single funnel they all pass through.
- *
- * Pacing is tiered by what the user is looking at rather than applied flat: the
- * selected worktree is O(1) and can afford a per-minute re-check, while the
- * worktree list is O(N) and is what exhausts the budget.
- */
+/** All desktop/mobile/serve callers share this host's API quota. Pace active selection separately from the O(N) worktree list (#11532). */
 
-// Why: a found review still refreshes at the callers' poll cadence; the cache
-// exists to collapse concurrent clients, not to make review state go stale.
+// Collapse clients without making found reviews lag their polling cadence.
 const FOUND_REVIEW_TTL_MS = 60_000
 const MAX_ENTRIES = MAX_BRANCH_MAP_ENTRIES
 
@@ -69,9 +60,7 @@ type CacheEntry = {
 }
 
 const entries = new Map<string, CacheEntry>()
-// Why: NUL is the one byte a repo path or branch name cannot contain, so a
-// scope prefix cannot straddle a component boundary — invalidating `/a/b` must
-// not also flush the unrelated repo at `/a/b c`.
+// NUL cannot occur in paths/branches, preventing invalidation prefixes from crossing identity components.
 const KEY_SEPARATOR = '\0'
 
 export type HostedReviewBranchCacheIdentity = {
@@ -93,6 +82,7 @@ export type HostedReviewBranchCacheOptions = {
   /** Set by surfaces that only ever render the selected worktree. */
   active?: boolean
   force?: boolean
+  userRefresh?: boolean
 }
 
 export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIdentity): string {
@@ -110,10 +100,7 @@ export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIden
   ].join(KEY_SEPARATOR)
 }
 
-// Why: a merged review is the one answer that depends on the inspected head —
-// the merged-at-head carve-out keeps it visible only while the head matches.
-// Negative answers are deliberately head-insensitive, so a branch under active
-// commits cannot defeat the long no-review interval.
+// Only merged visibility depends on HEAD; commits must not defeat negative-cache pacing.
 function isHeadSensitive(entry: CacheEntry): boolean {
   return entry.review?.state === 'merged'
 }
@@ -146,10 +133,7 @@ function storeEntry(key: string, entry: CacheEntry): void {
   }
 }
 
-/**
- * Drops every cached answer for a repo. Called when Orca itself opens a review,
- * so the new one is visible immediately instead of after the no-review interval.
- */
+/** Invalidate after review creation so long negative-cache intervals cannot hide the new review. */
 export function invalidateHostedReviewBranchCache(
   repoPath: string,
   executionHostId: ExecutionHostId
@@ -176,15 +160,7 @@ export function __resetHostedReviewBranchCacheForTests(): void {
   __resetHostedReviewScopeGenerationsForTests()
 }
 
-/**
- * Whether a lookup that no longer owns the key may still install its answer.
- * Losing the record — to the deadline or to the size cap — costs it the branch,
- * so it may only fill a gap or replace an answer a strictly older attempt stored
- * after this one began. It must never overwrite the pre-refresh answer its own
- * callers were served, and never beat a replacement to the key: a late `null`
- * landing there reads as a fresh "no review" and short-circuits the lookup that
- * was about to give the real one.
- */
+/** Detached answers may fill gaps or replace strictly older attempts only; never outrank the served pre-refresh answer or a replacement owner. Late null would otherwise mask a real review. */
 function canAdoptDetachedAnswer(key: string, startedAt: number): boolean {
   if (getInflightLookup(key) !== undefined) {
     return false
@@ -193,7 +169,6 @@ function canAdoptDetachedAnswer(key: string, startedAt: number): boolean {
   return current === undefined || (current.startedAt < startedAt && current.fetchedAt >= startedAt)
 }
 
-/** Why the branch must not be asked again yet, or null when a lookup may start. */
 function lookupUnavailableReason(key: string): string | null {
   const until = backoffUntil(key)
   if (until !== null) {
@@ -204,27 +179,23 @@ function lookupUnavailableReason(key: string): string | null {
   return lookupCapacityRefusal(key)
 }
 
-/**
- * Runs one lookup under a deadline. Nothing below this can be cancelled, so the
- * deadline *detaches* instead: the branch is unpinned and the callers hear a
- * failure, while the lookup keeps running and its answer is still adopted if it
- * ever lands. That is what lets a wedged host recover in-session (P1-D).
- */
+/** Deadline detaches uninterruptible work and releases callers; adopt a later answer only if still current so a host can recover in-session (P1-D). */
 function startLookup(
   key: string,
   scope: string,
   headOid: string | null,
+  revisionScope: string,
   lookup: () => Promise<HostedReviewInfo | null>
-): Promise<HostedReviewInfo | null> {
+): Promise<HostedReviewForBranchOutcome> {
   const startedAt = Date.now()
   const generation = scopeGeneration(scope)
+  const revision = scopeGeneration(revisionScope)
   const token: InflightToken = {}
-  /** The deadline released the callers; the lookup itself runs on, detached. */
   let timedOut = false
   let completed = false
-  let release: (review: HostedReviewInfo | null) => void = () => {}
+  let release: (read: HostedReviewForBranchOutcome) => void = () => {}
   let fail: (error: unknown) => void = () => {}
-  const promise = new Promise<HostedReviewInfo | null>((resolve, reject) => {
+  const promise = new Promise<HostedReviewForBranchOutcome>((resolve, reject) => {
     release = resolve
     fail = reject
   })
@@ -238,21 +209,12 @@ function startLookup(
     if (timer !== undefined) {
       clearTimeout(timer)
     }
-    // Why: only the lookup still serving this key shapes the backoff. A record
-    // already replaced — or dropped by the size cap — has a live successor, and
-    // penalising the branch would slow down the retry that is already running.
+    // Only current ownership may shape backoff; a straggler must not penalize its running successor.
     if (releaseInflight(key, token)) {
       noteFailure(key)
     }
-    // Why: the lookup runs on with nothing able to stop it, so it is counted
-    // process-wide until it settles — that count is what stops a wedged host
-    // from stranding a lookup on every branch it serves.
+    // Detached work remains uninterruptible; count it process-wide until completion.
     noteDetachedLookup()
-    const stale = entries.get(key)
-    if (stale) {
-      release(stale.review)
-      return
-    }
     fail(
       new Error(
         `Hosted review lookup timed out after ${Math.round(
@@ -262,56 +224,39 @@ function startLookup(
     )
   }
 
-  // Why: the branch's slot is taken from the moment the lookup starts. Counting
-  // only from the deadline would let a first failure wave admit one lookup per
-  // branch with the cap still reading zero, and every one of them can wedge.
+  // Reserve when starting, not at deadline: an entire first wave could wedge before then.
   noteLookupStarted(key)
   timer = setTimeout(expire, HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
   if (typeof timer === 'object' && 'unref' in timer) {
     timer.unref()
   }
-  // Why: track before running, so a lookup that throws synchronously clears the
-  // record it would otherwise leave behind for a full deadline.
+  // Register before invoking so synchronous throws cannot leave a pinned record.
   trackInflight(key, { token, startedAt, promise, expire })
 
   void (async () => {
     try {
-      const review = await lookup()
-      // Why: a review created while this lookup was out makes its answer older
-      // than the invalidation; storing it would re-pin the stale "no review".
-      // Owning the key is what licenses a store outright — anything else is a
-      // straggler and has to prove it still outranks what is there.
+      const { value: review, answeredFromProviderCache } = await observeProviderRead(lookup)
+      // Generation invalidates pre-creation answers; without key ownership, stragglers must prove their result still outranks the cache.
       const stored =
         generation === scopeGeneration(scope) &&
+        revision === scopeGeneration(revisionScope) &&
         (getInflightLookup(key)?.token === token || canAdoptDetachedAnswer(key, startedAt))
       if (stored) {
         storeEntry(key, { review, fetchedAt: Date.now(), headOid, startedAt })
       }
-      // Why: only an answer that beat the deadline proves the provider is
-      // healthy. Clearing on a straggler leaves a chronically wedged host at the
-      // base window forever, re-asking as fast as the deadline expires.
+      // Only on-time answers prove health; clearing failures on late data would prevent escalation.
       if (stored && !timedOut) {
         clearFailures(key)
       }
-      release(review)
+      release({ review, readOutcome: stored && !answeredFromProviderCache ? 'provider' : 'cached' })
     } catch (error) {
-      // Why: the deadline already counted this lookup as a failure and released
-      // its callers; counting the late rejection again would double-escalate.
+      // Deadline already counted failure; never count late rejection twice.
       if (timedOut) {
         return
       }
-      // Why: a record the size cap dropped has a live successor, and backing the
-      // branch off would slow the retry that is already running.
+      // Size-evicted stragglers must not back off their successor's branch.
       if (getInflightLookup(key)?.token === token) {
         noteFailure(key)
-      }
-      // Why: the last good review beats an error card here just as it does on
-      // the backed-off path — otherwise it blinks out on the first failure.
-      // An invalidation drops the entry, so this cannot revive a retired answer.
-      const stale = entries.get(key)
-      if (stale) {
-        release(stale.review)
-        return
       }
       fail(error)
     } finally {
@@ -330,54 +275,76 @@ function startLookup(
   return promise
 }
 
-/**
- * Serves `lookup` through the shared cache: a fresh answer is reused, concurrent
- * callers share one in-flight lookup, and a failing branch backs off instead of
- * being re-asked at every caller's poll cadence.
- */
 export async function withHostedReviewBranchCache(
+  ...args: Parameters<typeof readHostedReviewBranchCache>
+): Promise<HostedReviewInfo | null> {
+  return (await readHostedReviewBranchCache(...args)).review
+}
+
+/** Share fresh answers/in-flight lookups across clients and back off failed branches. */
+export async function readHostedReviewBranchCache(
   identity: HostedReviewBranchCacheIdentity,
   options: HostedReviewBranchCacheOptions,
   lookup: () => Promise<HostedReviewInfo | null>
-): Promise<HostedReviewInfo | null> {
+): Promise<HostedReviewForBranchOutcome> {
   const key = hostedReviewBranchCacheKey(identity)
   const headOid = options.headOid
-  // Why: sweep first, so a lookup whose deadline never fired cannot be joined —
-  // that is the pin this cache used to hold until the process restarted.
+  // Sweep wall-clock deadlines before joining so suspended timers cannot pin a branch after sleep.
   expireOverdueInflight(Date.now())
   if (options.active === true && noteActiveClaim(key) && entries.get(key)?.review === null) {
-    // Why: switching to a worktree is the user asking whether a review exists
-    // yet, so the long no-review interval must not answer on their behalf. This
-    // is the cheap half of the fast tier — it costs one lookup per selection
-    // rather than one per minute.
+    // Selection asks again immediately rather than waiting out the long negative cache.
     entries.delete(key)
   }
   const active = isActiveBranch(key)
 
   const cached = entries.get(key)
-  if (!options.force && cached && isFresh(cached, headOid, active)) {
-    return cached.review
+  if (!options.userRefresh && !options.force && cached && isFresh(cached, headOid, active)) {
+    return cachedHostedReviewOutcome(cached.review)
   }
 
-  const pending = getInflightLookup(key)
-  if (pending) {
-    return pending.promise
-  }
-
-  const unavailable = lookupUnavailableReason(key)
+  // Admission is keyed independently of revision; a refused click cannot retire an admitted owner.
+  const unavailable = options.userRefresh ? lookupCapacityRefusal(key) : null
   if (unavailable !== null) {
-    // Why: a stale answer beats an error card, but with nothing cached the
-    // caller must hear the failure rather than read it as "no review".
-    if (cached) {
-      return cached.review
-    }
     throw new Error(unavailable)
   }
+  const revisionScope = `branch-refresh${KEY_SEPARATOR}${key}`
+  if (options.userRefresh) {
+    bumpScopeGeneration(revisionScope)
+    retireInflightLookup(key)
+  }
 
-  return startLookup(
-    key,
-    hostedReviewRepoScope(identity.repoPath, identity.executionHostId),
-    headOid,
-    lookup
+  const settleForCaller = async (promise: Promise<HostedReviewForBranchOutcome>) => {
+    try {
+      return await promise
+    } catch (error) {
+      const stale = entries.get(key)
+      if (!options.userRefresh && stale) {
+        return cachedHostedReviewOutcome(stale.review)
+      }
+      throw error
+    }
+  }
+  const pending = getInflightLookup(key)
+  if (pending) {
+    // The owner began before this caller asked, so its answer can't prove a read after this caller's failure.
+    return settleForCaller(pending.promise.then(({ review }) => cachedHostedReviewOutcome(review)))
+  }
+
+  const refusal = options.userRefresh ? null : lookupUnavailableReason(key)
+  if (refusal !== null) {
+    if (cached) {
+      return cachedHostedReviewOutcome(cached.review)
+    }
+    throw new Error(refusal)
+  }
+
+  return settleForCaller(
+    startLookup(
+      key,
+      hostedReviewRepoScope(identity.repoPath, identity.executionHostId),
+      headOid,
+      revisionScope,
+      lookup
+    )
   )
 }

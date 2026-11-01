@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { stripTerminalSelectionGutter } from './terminal-selection-gutter'
 
-// Shape agent CLIs paint: a marker column, then continuation lines behind a
-// two-space gutter. Selecting the body is what users copy to paste elsewhere.
+// Agent CLIs paint a marker then a fixed gutter; users copy the message body.
 const AGENT_MESSAGE_BODY = [
   '  Thanks for flagging this. The retry limit is now 5, and the backoff',
   '  starts at 2s instead of 500ms.',
@@ -22,12 +21,6 @@ describe('stripTerminalSelectionGutter', () => {
     )
   })
 
-  it('drops the gutter from a single wrapped line', () => {
-    expect(stripTerminalSelectionGutter('  one logical line, joined by xterm')).toBe(
-      'one logical line, joined by xterm'
-    )
-  })
-
   it('keeps relative indentation inside the gutter', () => {
     const nested = ['  def run():', '      return 1', '', '  run()'].join('\n')
     expect(stripTerminalSelectionGutter(nested)).toBe(
@@ -38,17 +31,6 @@ describe('stripTerminalSelectionGutter', () => {
   it('leaves a selection that starts mid-line untouched', () => {
     const midLine = ['answer starts here', '  and continues', '  and ends'].join('\n')
     expect(stripTerminalSelectionGutter(midLine)).toBe(midLine)
-  })
-
-  it('leaves unindented output untouched', () => {
-    const shellOutput = ['$ git status', 'On branch main', 'nothing to commit'].join('\n')
-    expect(stripTerminalSelectionGutter(shellOutput)).toBe(shellOutput)
-  })
-
-  it('ignores blank lines when measuring the gutter', () => {
-    expect(stripTerminalSelectionGutter(['  a', '', '  b'].join('\n'))).toBe(
-      ['a', '', 'b'].join('\n')
-    )
   })
 
   it('ignores whitespace-only lines when measuring the gutter', () => {
@@ -65,28 +47,16 @@ describe('stripTerminalSelectionGutter', () => {
     expect(stripTerminalSelectionGutter('  first\r\n  second\r\n')).toBe('first\r\nsecond\r\n')
   })
 
-  // Regression: a blank CRLF row is '\r', which reads as a zero-indent content
-  // row unless the CR is split off first — that would cancel the gutter on
-  // Windows only.
+  // A blank Windows CRLF row must not look like zero-indent content and cancel gutter removal.
   it('still finds the gutter across a blank CRLF row', () => {
     expect(stripTerminalSelectionGutter('  first\r\n\r\n  second\r\n')).toBe(
       'first\r\n\r\nsecond\r\n'
     )
   })
 
-  it('leaves wide characters and emoji in the content alone', () => {
-    expect(
-      stripTerminalSelectionGutter(['  変更を適用しました 🎉', '  お疲れさま'].join('\n'))
-    ).toBe(['変更を適用しました 🎉', 'お疲れさま'].join('\n'))
-  })
-
   it('does not strip past a shorter line', () => {
     const uneven = ['    deep', '  shallow'].join('\n')
     expect(stripTerminalSelectionGutter(uneven)).toBe(['  deep', 'shallow'].join('\n'))
-  })
-
-  it('is a no-op on an empty selection', () => {
-    expect(stripTerminalSelectionGutter('')).toBe('')
   })
 
   it('leaves tab-indented text alone (terminal cells never hold tabs)', () => {

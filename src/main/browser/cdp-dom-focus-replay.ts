@@ -4,13 +4,8 @@ import type { CdpClientResponseWriter } from './cdp-client-response-writer'
 import type { CdpDebuggerChannel } from './cdp-debugger-channel'
 import type { TextInsertionRoute } from './guest-direct-key-input'
 
-/**
- * Replays the last DOM.focus immediately before Input.insertText so a native
- * webContents.focus() on the fallback path cannot blur the element the client meant to type into.
- */
+/** Replay DOM.focus before insertion because native focusing can blur the target. */
 export class CdpDomFocusReplay {
-  // Why: holds each session's last DOM.focus params to replay right before the next
-  // Input.insertText, countering the native webContents.focus() that would blur the target.
   private pendingDomFocusBySession = new Map<
     string | undefined,
     Promise<Record<string, unknown> | undefined>
@@ -27,16 +22,13 @@ export class CdpDomFocusReplay {
   }
 
   invalidateForMethod(method: string, effectiveSessionId?: string): void {
-    // Why: a stored focus is only valid for the immediately following Input.insertText;
-    // any other command may have moved DOM focus, so invalidate the replay in one place.
+    // Intervening commands may change focus, invalidating the next-insert replay.
     if (method !== 'DOM.focus' && method !== 'Input.insertText') {
       this.pendingDomFocusBySession.delete(effectiveSessionId)
     }
   }
 
-  // Why: this must stay synchronous up to the `.set()` call so the pending-focus
-  // entry exists before the event loop can dispatch a pipelined Input.insertText
-  // message, closing the race where the replay would otherwise be silently skipped.
+  // Store synchronously so a pipelined insert sees the pending DOM.focus.
   forwardDomFocus(
     client: WebSocket,
     clientId: number,
@@ -71,8 +63,7 @@ export class CdpDomFocusReplay {
     }
   }
 
-  // Why: synchronous so the replay is taken when Input.insertText arrives, before any
-  // later command can invalidate it.
+  // Consume synchronously before a later command can invalidate the replay.
   takePendingFocus(
     effectiveSessionId: string | undefined
   ): Promise<Record<string, unknown> | undefined> | undefined {
@@ -81,10 +72,7 @@ export class CdpDomFocusReplay {
     return pendingFocus
   }
 
-  /**
-   * `chooseRoute` picks how the text is delivered and runs before the replay, because the
-   * fallback route focuses the guest natively and that would blur the replayed element.
-   */
+  /** Choose the route before replay: native fallback focus can blur the target. */
   async insertText(
     client: WebSocket,
     clientId: number,
@@ -94,8 +82,7 @@ export class CdpDomFocusReplay {
     chooseRoute: () => Promise<TextInsertionRoute>
   ): Promise<void> {
     const pendingFocusParams = pendingFocus ? await pendingFocus : undefined
-    // Why: the client can disconnect while DOM.focus is in flight; don't replay its
-    // focus or forward its insert into the live page once it is no longer active.
+    // The client may disconnect while DOM.focus is pending.
     if (!this.responder.isActiveClient(client)) {
       return
     }
@@ -147,8 +134,7 @@ export class CdpDomFocusReplay {
         this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
         return
       }
-      // Why: the replay DOM.focus also awaited a round-trip; bail if the client vanished
-      // during it so its insert never lands in the live page.
+      // Replay also awaited a round trip; discard inserts from a disconnected client.
       if (!this.responder.isActiveClient(client)) {
         return
       }

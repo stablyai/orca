@@ -11,7 +11,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 const mockApi = {
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({}),
     remove: vi.fn().mockResolvedValue(undefined),
     updateMeta: vi.fn().mockResolvedValue({})
@@ -452,7 +451,7 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('stashes deferred SSH session ids for worktrees not yet in worktreesByRepo', async () => {
-    // Why: at cold start SSH worktrees aren't in worktreesByRepo, so the stash must fall back to the repo id embedded in the composite worktree id — else restored panes strand an "SSH connection is not active" toast.
+    // Cold-start SSH rows may lack worktree metadata; infer repo from composite ID or restored panes report inactive SSH.
     const store = createTestStore()
     const worktreeId = 'repo1::/home/user/remote-project'
     const sshSessionId = 'ssh:ssh-target-1@@pty-7'
@@ -482,11 +481,7 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('stops deferring a session once its SSH target is known-absent, but keeps deferring present targets', async () => {
-    // #9911: a repo can outlive its SSH target (removed out of band). Once the
-    // authoritative target list has loaded, its persisted session is dead — don't
-    // re-defer it. A stranded deferred id reads as liveness in the orphan sweep, so
-    // after a later missing-target pane mount clears ptyIdsByTabId it would pin the
-    // dead tab forever. A present (merely disconnected) target must still defer.
+    // Authoritative target removal makes deferred sessions dead liveness evidence (#9911); skip them or orphan sweep pins dead tabs. Disconnected present targets still defer.
     const store = createTestStore()
     const goneWt = 'repo-gone::/home/user/remote-gone'
     const liveWt = 'repo-live::/home/user/remote-live'
@@ -496,7 +491,6 @@ describe('hydrateWorkspaceSession', () => {
         { ...TEST_REPO, id: 'repo-live', connectionId: 'ssh-target-present' }
       ],
       worktreesByRepo: {},
-      // Authoritative target list is loaded and lists only the present target.
       sshTargetsHydrated: true,
       sshTargetLabels: new Map([['ssh-target-present', 'Present']])
     })
@@ -520,10 +514,8 @@ describe('hydrateWorkspaceSession', () => {
     store.getState().hydrateWorkspaceSession(session)
     await store.getState().reconnectPersistedTerminals()
 
-    // Removed target: no stranded deferred/pending reconnect evidence.
     expect(store.getState().deferredSshSessionIdsByTabId['tab-gone']).toBeUndefined()
     expect(store.getState().pendingReconnectPtyIdByTabId['tab-gone']).toBeUndefined()
-    // Present-but-disconnected target: still deferred for a normal reconnect.
     expect(store.getState().deferredSshSessionIdsByTabId['tab-live']).toBe(
       'ssh:ssh-target-present@@pty-8'
     )
@@ -585,7 +577,7 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('seeds worktree nav history with the restored active worktree', () => {
-    // Why: seeding the restored worktree at index 0 gives the first user switch a prior entry, so Back isn't disabled until a second click.
+    // Seed restored workspace at history[0] so the first switch enables Back.
     const store = createTestStore()
     const worktreeId = 'repo1::/wt-1'
     seedStore(store, {
@@ -637,11 +629,34 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().worktreeNavHistory).toEqual([worktreeId])
   })
 
+  it('ignores a persisted workspace key that disagrees with the restored active worktree', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-current'
+    const staleFolderKey = folderWorkspaceKey('folder-stale')
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-current' })]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: 'repo1',
+        activeWorktreeId: worktreeId,
+        activeWorkspaceKey: staleFolderKey
+      },
+      { additionalValidWorkspaceKeys: [staleFolderKey] }
+    )
+
+    expect(store.getState().activeWorkspaceKey).toBe(worktreeWorkspaceKey(worktreeId))
+  })
+
   it('leaves nav history empty when no active worktree is restored', () => {
     const store = createTestStore()
     seedStore(store, { worktreesByRepo: {} })
 
-    // Why: pre-seed stale values so the assertions can only pass if hydration actively overwrites nav history in this branch.
+    // Seed stale history to prove hydration actively replaces it.
     store.setState({ worktreeNavHistory: ['stale-a', 'stale-b'], worktreeNavHistoryIndex: 1 })
 
     const session: WorkspaceSessionState = {
@@ -659,11 +674,11 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('drops invalid restored worktree from nav history seed', () => {
-    // Why: the history seed must follow the validated activeWorktreeId (nulled when stale), or a deleted worktree sits at history[0] and fails Back.
+    // Seed only validated selection or deleted workspaces occupy history[0] and break Back.
     const store = createTestStore()
     seedStore(store, { worktreesByRepo: { repo1: [] } })
 
-    // Why: pre-seed stale values so the assertions can only pass if hydration actively clears nav history for the invalid worktree.
+    // Seed stale history to prove invalid selection actively clears it.
     store.setState({ worktreeNavHistory: ['stale-a', 'stale-b'], worktreeNavHistoryIndex: 1 })
 
     const session: WorkspaceSessionState = {
@@ -682,7 +697,7 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('records a subsequent visit on top of the hydration seed so Back is enabled after the first click', () => {
-    // Why: the hydration seed at index 0 lets the first sidebar click enable Back immediately (without it, Back needs a second click).
+    // Restored history[0] enables Back on the first sidebar click.
     const store = createTestStore()
     const wt1 = 'repo1::/wt-1'
     const wt2 = 'repo1::/wt-2'
@@ -714,7 +729,7 @@ describe('hydrateWorkspaceSession', () => {
 
 describe('hydrationSucceeded flag (issue #1158)', () => {
   it('defaults to false so the session writer is gated off at startup', () => {
-    // Why: default false so a startup error keeps the debounced writer gated off, protecting good on-disk state from an empty snapshot.
+    // Gate persistence until clean hydration so startup errors cannot overwrite saved state with empty snapshots.
     const store = createTestStore()
     expect(store.getState().hydrationSucceeded).toBe(false)
   })

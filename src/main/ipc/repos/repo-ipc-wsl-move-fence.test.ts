@@ -3,8 +3,8 @@ import { BrowserWindow } from 'electron'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
-import type { Store } from '../../persistence'
+import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { wslMoveCutoverFixture as cutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
@@ -138,7 +138,8 @@ describe('RuntimeRepositorySettingsController under a WSL move', () => {
       forgetTerminalTopology: vi.fn(),
       invalidateResolvedWorktrees: vi.fn(),
       invalidateWorktreeScan: vi.fn(),
-      notifyReposChanged
+      notifyReposChanged,
+      notifyWorktreesChanged: vi.fn()
     })
 
     await expect(controller.update('repo-1', { displayName: 'renamed' })).rejects.toBeInstanceOf(

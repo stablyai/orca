@@ -1,15 +1,10 @@
-// The file id main gives a file it opens itself (CLI, phone, a host with no window).
-
 import { ownedEditorFileId } from '../workspace-session-pane-ownership'
 import { editorTabFile, sameEditorFile } from './workspace-layout-editor-tab-file'
 import type { LayoutEditorFile, WorkspaceLayout } from './workspace-layout-model'
 
 type OpenedFile = Pick<LayoutEditorFile, 'filePath' | 'runtimeEnvironmentId'>
 
-/**
- * The id an editor tab of the file already shows; else its owned id. Why never the bare path: the
- * window gives a path to one owner across every host, and main sees only this host's workspaces.
- */
+/** Reuse a displayed file ID, otherwise use its owned ID. Bare paths belong to one owner across hosts, beyond main’s partition-local view. */
 export function editorOpenFileId(
   workspace: Pick<WorkspaceLayout, 'worktreeId' | 'tabs' | 'editorFiles'>,
   file: OpenedFile

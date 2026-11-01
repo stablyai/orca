@@ -1,9 +1,6 @@
 import { cn } from '@/lib/utils'
-import type { DiffLine } from './native-chat-diff'
+import type { NativeChatDiffLine as DiffLine } from '../../../../shared/native-chat/tools/native-chat-diff'
 
-/** Inline coloured diff, used for Edit/Write tool calls and diff-style tool
- *  results. Adds/dels use the git-decoration tokens with a faint tinted ground,
- *  matching the terminal's diff palette (no invented colors). */
 export function NativeChatDiffView({ lines }: { lines: DiffLine[] }): React.JSX.Element {
   return (
     <div
@@ -15,8 +12,8 @@ export function NativeChatDiffView({ lines }: { lines: DiffLine[] }): React.JSX.
           key={i}
           className={cn(
             'whitespace-pre-wrap break-words px-2',
-            line.kind === 'add' && 'bg-[var(--diff-added-ground)] text-chat-diff-added',
-            line.kind === 'del' && 'bg-[var(--diff-removed-ground)] text-chat-diff-removed',
+            line.kind === 'add' && 'bg-[var(--diff-added-background)] text-chat-diff-added',
+            line.kind === 'del' && 'bg-[var(--diff-removed-background)] text-chat-diff-removed',
             line.kind === 'meta' && 'text-chat-foreground-faint',
             line.kind === 'context' && 'text-chat-foreground'
           )}

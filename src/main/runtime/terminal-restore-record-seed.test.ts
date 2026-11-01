@@ -13,14 +13,7 @@ import type {
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../shared/runtime-session-contracts'
 import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
 
-// STA repro (post-restart blind orchestrator incident): after an app relaunch
-// the daemon survives and spawn reattaches silently, but the restore payload
-// (snapshot/scrollback/replay + lastTitle) arrives as an RPC result, never as
-// an onPtyData event. The runtime's terminal records therefore stayed empty:
-// `terminal list` showed connected terminals with no title/preview/lastOutputAt
-// and `terminal read` returned a zero-line tail for a running session.
-// seedTerminalRestoreTail must fill preview/tail/title from the payload —
-// WITHOUT fabricating recency (lastOutputAt) or emitting side-effect facts.
+// Reattach restore arrives as RPC data, not onPtyData; seed preview/tail/title without inventing recency or side-effect facts.
 
 const WORKTREE_ID = 'repo-1::/tmp/probe-worktree'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -111,7 +104,6 @@ describe('seedTerminalRestoreTail', () => {
     const terminal = terminals[0]!
     expect(terminal.preview).toContain('$ npm test')
     expect(terminal.preview).toContain('all 42 tests passed')
-    // CR redraws collapse to the surviving frame, exactly like live bytes.
     expect(terminal.preview).toContain('spinner frame 2')
     expect(terminal.preview).not.toContain('spinner frame 1')
     expect(terminal.preview).not.toContain('\x1b')
@@ -144,7 +136,6 @@ describe('seedTerminalRestoreTail', () => {
     expect(terminal.preview).toContain('live line')
     expect(terminal.lastOutputAt).toBe(1234567)
 
-    // A remount reattach delivering the same payload again must be a no-op.
     runtime.seedTerminalRestoreTail(PTY_ID, { text: 'restored line\r\n' })
     const read = await runtime.readTerminal(terminal.handle)
     expect(read.tail).toEqual(['restored line', 'live line'])
@@ -182,7 +173,6 @@ describe('seedTerminalRestoreTail', () => {
     expect(terminals[0]!.lastOutputAt).toBeNull()
   })
 
-  // A runtime adopting a surviving session may already have published its tab as "Terminal N".
   it('republishes session tabs when a seeded title lands', () => {
     const runtime = makeRuntimeWithLeaf()
     const touch = vi.spyOn(
@@ -617,19 +607,30 @@ describe('terminal view promise characterization', () => {
     await expect(runtime.writeTerminalPreviewInput('view-pty', '')).resolves.toBe(false)
     expect(initialDriver).not.toHaveBeenCalled()
     const receivers: OrcaRuntimeService[] = []
-    runtime['writeTerminalInputChunks'] = async function (this: OrcaRuntimeService, ...args) {
+    const writeChunks = runtime['writeTerminalInputChunks']
+    const currentDriver = vi.fn(function (this: OrcaRuntimeService, _ptyId: string) {
       receivers.push(this)
-      expect(args.length).toBe(3)
-      expect(args[2].inputKind).toBe('driving')
-      runtime.getDriver = function (this: OrcaRuntimeService) {
-        receivers.push(this)
-        return { kind: 'mobile', clientId: 'phone' }
-      }
-      await args[2].beforeWrite?.(args[0])
-      return undefined
-    }
+      return { kind: 'mobile' as const, clientId: 'phone' }
+    })
+    runtime['writeTerminalInputChunks'] = vi.fn(function (
+      this: OrcaRuntimeService,
+      ...args: Parameters<typeof writeChunks>
+    ) {
+      receivers.push(this)
+      runtime.getDriver = currentDriver
+      return writeChunks.apply(this, args)
+    })
     await expect(runtime.writeTerminalPreviewInput('view-pty', 'paste')).resolves.toBe(false)
-    expect(initialDriver).toHaveBeenCalledOnce()
+    expect(runtime['writeTerminalInputChunks']).toHaveBeenCalledExactlyOnceWith(
+      'view-pty',
+      'paste',
+      {
+        inputKind: 'driving',
+        inputSource: 'desktop'
+      }
+    )
+    expect(initialDriver).not.toHaveBeenCalled()
+    expect(currentDriver).toHaveBeenCalledExactlyOnceWith('view-pty')
     expect(receivers).toEqual([runtime, runtime])
   })
 })

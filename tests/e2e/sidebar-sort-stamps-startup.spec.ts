@@ -111,8 +111,7 @@ test('a restart clears a tier nothing backs, keeps a hook row’s and an SSH hos
               : folder
           )
         : state.folderWorkspaces
-      // The folder workspace's terminal died while Orca was closed: its id is on record, its
-      // session is gone from the daemon.
+      // Keep the folder terminal’s recorded id after its daemon session died while Orca was closed.
       const session =
         state.workspaceSession && typeof state.workspaceSession === 'object'
           ? state.workspaceSession

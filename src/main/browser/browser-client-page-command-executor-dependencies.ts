@@ -12,21 +12,15 @@ import type {
   BrowserClientRetainedPage
 } from './browser-client-page-retained-state'
 
-/**
- * Storage identity of the connection a page's partition is derived from.
- *
- * The superseded identities name partitions an older build already populated, so a client
- * upgrade adopts that jar instead of deriving an empty one: `pairingAuthorityConnectionIdentity`
- * is the pairing-revision identity (equal to the current one for hosts that never re-pair in
- * place), and `legacyAuthorityConnectionIdentity` the older per-process one.
- */
+/** Superseded connection identities let upgrades adopt populated partitions. */
 export type BrowserClientPageAuthorityIdentity = {
   authorityConnectionIdentity: string
+  /** Previous identity tied to the pairing revision. */
   pairingAuthorityConnectionIdentity: string
+  /** Earlier per-process identity. */
   legacyAuthorityConnectionIdentity: string
 }
 
-// Why pick: transition inputs carry the whole host start, and only the identity belongs here.
 export function pageAuthorityIdentity(
   input: BrowserClientPageAuthorityIdentity
 ): BrowserClientPageAuthorityIdentity {
@@ -67,7 +61,7 @@ export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuth
     registration: BrowserClientRetainedPage['registration']
   }): Promise<void>
   onPageUnavailable?(browserPageId: string, pageHostGeneration: number): void
-  // Why: remote-path uploads need the negotiated file channel; without both the command fails closed.
+  // Remote uploads require both a negotiated file channel and upload staging.
   fileChannel?: BrowserClientFileChannelTransport
   uploadStaging?: BrowserClientUploadStaging
   maxPages?: number

@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { AgentTransitionDetector } from '../agent-hooks/agent-transition-detector'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime-core'
 import { DeliveryReceipts, type DeliveryReceiptDb } from './external-conversation-delivery-receipts'
 import type { ExternalConversationLinkStore } from './external-conversation-links'
@@ -14,13 +15,7 @@ export type ExternalConversationStore = ExternalConversationLinkStore & {
   onSettingsChanged?: (listener: (updates: Partial<GlobalSettings>) => void) => unknown
 }
 
-/**
- * Owns the seam's lifetime, on the settings-change pattern `installStructuredAgentAvailability`
- * uses: one exists exactly while `experimentalConnectors` is on. The flag is
- * first read on the first `current()`, which each runtime host makes at startup so an enabled
- * seam watches its links from then; a change after that disposes or rebuilds the seam. The host is the
- * authority, so every connector entry point asks it rather than its caller's profile.
- */
+/** Host settings own seam lifetime; startup initializes it and later setting changes dispose or recreate it. */
 export function installExternalConversations(
   store: ExternalConversationStore | null,
   runtime: {
@@ -29,12 +24,13 @@ export function installExternalConversations(
     subscribeAgentProviderSessionChangesFn:
       | ExternalConversationSeamDeps['onProviderSessionsChanged']
       | null
+    agentTransitions: Pick<AgentTransitionDetector, 'latestRow' | 'subscribe'>
   } & ExternalConversationSeamDeps['sessionRows']
 ): { current(): ExternalConversationSeam | null } {
   if (!store) {
     return { current: () => null }
   }
-  // One per process, so leftover settlement only reaches a previous process's receipts.
+  // Reuse receipts across enable periods so only previous-process deliveries count as leftovers.
   const receipts = new DeliveryReceipts(() => runtime.getOrchestrationDb())
   let seam: ExternalConversationSeam | null = null
   let reconciled = false
@@ -53,9 +49,11 @@ export function installExternalConversations(
             }
           }),
         sessionRows: runtime,
-        // A host without a hook store reports no sessions; reopen then refuses for want of one.
+        // Without hook session reports, reopening cannot prove which session to resume.
         onProviderSessionsChanged: (listener) =>
-          runtime.subscribeAgentProviderSessionChangesFn?.(listener) ?? (() => {})
+          runtime.subscribeAgentProviderSessionChangesFn?.(listener) ?? (() => {}),
+        readHookRow: (paneKey) => runtime.agentTransitions.latestRow(paneKey),
+        onAgentPaneChange: (listener) => runtime.agentTransitions.subscribe(listener)
       })
     } else if (!enabled && seam) {
       seam.dispose('connectors_disabled')

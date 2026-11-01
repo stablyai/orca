@@ -32,11 +32,10 @@ export function codexAcquireCatalogListing(
   return entry ? listingFromEntry(entry) : null
 }
 
-/** Installed inventory supplies every session's capability choices. */
 export function codexSessionCapabilities(
   session: Pick<CodexSession, 'catalogAccess' | 'options'> &
-    Partial<Pick<CodexSession, 'reportedOptions'>>,
-  model = session.options.get('model') ?? session.reportedOptions?.model
+    Partial<Pick<CodexSession, 'reportedOptions' | 'appliedTurnOptions'>>,
+  model = session.appliedTurnOptions?.model
 ): ReturnType<typeof structuredAgentSessionCapabilityView> {
   return structuredAgentSessionCapabilityView(
     codexAcquireCatalogListing(session.catalogAccess) ?? { origin: 'unknown' },

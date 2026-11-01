@@ -16,8 +16,7 @@ import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 import { createRelayServer, HOST_HELLO_SHED_OLDEST_WAIT_MS } from './relay-server.js'
 import { RELAY_WEBSOCKET_FORCE_CLOSE_MS } from './relay-websocket-close.js'
 
-// A step-5 cell whose database pool is wedged: every query waits forever and the hello shed
-// is armed. Booked and recently seated hosts must still connect; everything else must not.
+// Wedged database and armed shedding must still admit booked/recently seated hosts, while refusing strangers.
 
 async function unusedPort(): Promise<number> {
   const server = createNetServer()
@@ -448,10 +447,7 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
       expect(warned('orca_relay_cell_seat_log_drift')).toEqual([])
     }, 10_000)
 
-    // A drained session leaves the map at once, but its socket closes only after its release (up
-    // to 3 s) and the peer's close reply (up to the 1 s force-close). A desktop of the same
-    // identity dialling back in that window restarted at generation 1, so the old socket's late
-    // leave, at generation 1 too, removed the live seat from the feed.
+    // Drained sockets can close seconds after map removal; reusing their generation let late leaves erase reconnected live seats.
     it('keeps a session that reconnected while its drained predecessor was still closing', async () => {
       const cell = await startCell({ admitMode: 'reserve' })
       const identity = await cell.host()
@@ -478,8 +474,7 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
       expect(seatEpochs(cell)).toEqual([10])
     }, 10_000)
 
-    // The same identity connecting afresh at each turn, as desktops sharing one identity do: each
-    // turn replaces the session and its seat together, so no sweep finds anything to repair.
+    // Repeated fresh joins for one identity replace session and seat together, leaving no drift to repair.
     it('stays on the live session when the same identity connects afresh each turn', async () => {
       const cell = await startCell({ admitMode: 'reserve' })
       const identity = await cell.host()

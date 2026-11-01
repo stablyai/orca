@@ -3,8 +3,7 @@ import { nonEmpty } from './dashboard-card-labels'
 import type { DashboardAgentRow } from './useDashboardData'
 import { dashboardCardDotState } from './dashboard-row-bucket'
 
-/** Subagent child rows, grouped under the parent pane whose session spawned
- *  them — they have no pane of their own, so the board nests them on the card. */
+/** Nest terminal-less subagents on the card of their spawning parent pane. */
 export function groupSubagentsByParentPaneKey(
   rows: readonly DashboardAgentRow[]
 ): Map<string, DashboardCardSubagent[]> {

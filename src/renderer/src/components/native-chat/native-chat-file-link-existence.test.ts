@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ParsedTerminalFileLink } from '@/lib/terminal-links'
+import type { ParsedTerminalFileLink } from '../../../../shared/terminal-links'
 import type * as FileLinkTargetModule from '@/components/terminal-pane/terminal-file-link-target'
 import type { FileLinkPathExistence } from '@/components/terminal-pane/terminal-file-link-target'
 import type * as FilePathMappingModule from '@/components/terminal-pane/terminal-file-path-mapping'

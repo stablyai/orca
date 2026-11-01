@@ -146,7 +146,6 @@ function census(state: PersistedState) {
   return collectOrcadMigrationUntransferredDependencyCensus(state, exportState(state))
 }
 
-/** The Details line Settings shows for a refused move. */
 function refusal(state: PersistedState): string {
   const manifest = exportState(state)
   return orcadMigrationRefusalReason(
@@ -164,14 +163,13 @@ describe('#27281: saved tabs with no visible tab to close', () => {
   function reported(): PersistedState {
     const state = sourceState()
     const partition = host(state)
-    // Every tab closed: the host copy keeps empty rows for each worktree.
     partition.tabsByWorktree = { [WORKTREE_A]: [], [WORKTREE_B]: [] }
     partition.unifiedTabs = { [WORKTREE_A]: [], [WORKTREE_B]: [] }
     partition.tabGroups = { [WORKTREE_A]: [], [WORKTREE_B]: [] }
     partition.openFilesByWorktree = { [WORKTREE_A]: [openFile()] }
     partition.browserTabsByWorktree = { [WORKTREE_B]: [browserWorkspace('browser-1', WORKTREE_B)] }
     partition.browserPagesByWorkspace = { 'browser-1': [browserPage('browser-1', WORKTREE_B)] }
-    // Weeks-old terminals from before sessions were kept per host, in the desktop's own copy.
+    // Legacy desktop tabs may outlive newer host-partition closes.
     state.workspaceSession.tabsByWorktree = {
       [WORKTREE_A]: [terminal('legacy-1'), terminal('legacy-2')],
       [WORKTREE_B]: [terminal('legacy-3', WORKTREE_B)]
@@ -198,7 +196,7 @@ describe('#27281: saved tabs with no visible tab to close', () => {
     expect(state).toEqual(before)
   })
 
-  // From #27526 (akushonkamen): the move never carries client-hosted pages.
+  // Regression #27526: client-hosted pages never migrate.
   it('does not refuse on a client-hosted page whose browser tab is gone', () => {
     const state = sourceState()
     const page: PersistedClientHostedBrowserPage = {
@@ -245,11 +243,10 @@ describe('#28946: stale tab selections and isolated browser profiles', () => {
     expect(census(state).totalCount).toBe(0)
     const clientState = exportState(state).payload.dormantState?.clientState
     expect(clientState?.mobileClientTabSelectionsByDeviceId).toBeUndefined()
-    // The retained profile keeps them, device registration included.
     expect(state).toEqual(before)
   })
 
-  // Every host a phone ever showed a terminal on: the phone names the pane, not the tab.
+  // Mobile terminal selections name panes rather than tabs.
   it('carries a phone selection that names a live terminal pane', () => {
     const state = sourceState()
     host(state).tabsByWorktree = { [WORKTREE_A]: [terminal('tab-1')] }
@@ -353,11 +350,9 @@ describe('#28946: stale tab selections and isolated browser profiles', () => {
         recentTabIds: ['tab-1', 'browser-tab-shared']
       }
     ])
-    // The acknowledgements were only ever refused as a knock-on of the browser tab.
     expect(dormant?.clientState?.uiRouting?.acknowledgedAgentsByPaneKey).toEqual(
       state.ui.acknowledgedAgentsByPaneKey
     )
-    // The retained profile keeps the isolated tab and its profile.
     expect(state).toEqual(before)
   })
 

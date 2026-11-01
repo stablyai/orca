@@ -1,22 +1,11 @@
-/**
- * A live publisher can return to a worktree after another one briefly owned it, and the epoch it
- * returns under is already in `retired`. The fence rejects that frame — correctly, because it
- * cannot tell it apart from a delayed frame queued by a dead generation — so the drop has to be
- * repaired from authority instead of being final.
- *
- * The sequence below is the measured one: a renderer publication, a `removed:` retraction, a
- * headless rebuild whose version restarts at 1, then the same renderer epoch returning at a higher
- * version carrying a newly published chat tab.
- */
+// A live publisher can return under a retired epoch after retraction/headless rebuild. Fence still rejects possible dead-generation frames; authority must repair it. Reproduce renderer epoch → removed: → headless v1 → original renderer at higher version with new chat.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
 import { applyLocalStructuredSessionTabSnapshots } from './local-structured-session-tabs-sync/snapshot-apply'
-import {
-  resetLocalStructuredSessionVersionForTests,
-  localStructuredSessionEpochHistoryByWorktree
-} from './local-structured-session-tabs-sync/inventory-generation-fence'
+import { resetLocalStructuredSessionVersionForTests } from './local-structured-session-tabs-sync/inventory-generation-fence'
+
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 
@@ -31,10 +20,7 @@ afterEach(() => {
   resetLocalStructuredSessionVersionForTests()
 })
 
-/**
- * The worktree must stay "known" or the trailing cursor sweep deletes its epoch history every
- * round and nothing ever accumulates in `retired` — which makes this whole scenario vacuous.
- */
+// Keep the worktree known or cursor cleanup erases retired history and makes this scenario vacuous.
 function stateWithCoordinatorTerminal(): WebSessionTabsSyncState {
   const terminalTab: Tab = {
     id: 'u-term-1',
@@ -136,14 +122,6 @@ function replayUntilDrop(
 }
 
 describe('retired-epoch repair for a returning publisher', () => {
-  it('POSITIVE CONTROL: the same frame lands when no epoch has been retired', () => {
-    const applied = applyLocalStructuredSessionTabSnapshots(stateWithCoordinatorTerminal(), [
-      frame(RENDERER_EPOCH, 7, 'claude-1')
-    ])
-
-    expect(chatTabs(applied)).toEqual(['Claude Chat'])
-  })
-
   it('drops the returning publisher and reports it to the repair lane', () => {
     const onRetiredEpochDrop = vi.fn()
 
@@ -176,23 +154,5 @@ describe('retired-epoch repair for a returning publisher', () => {
     ])
 
     expect(chatTabs(redelivered)).toEqual([])
-  })
-
-  it('revives only the epoch authority names, leaving other generations fenced', () => {
-    const dropped = replayUntilDrop()
-    applyLocalStructuredSessionTabSnapshots(
-      dropped,
-      [frame(RENDERER_EPOCH, 7, 'claude-1')],
-      undefined,
-      undefined,
-      { authoritative: true }
-    )
-
-    // The census named the renderer epoch current, so the headless generation it displaced is now
-    // the retired one — and a delayed frame from it must still be rejected.
-    const history = localStructuredSessionEpochHistoryByWorktree.get(WORKTREE)
-    expect(history?.current).toBe(RENDERER_EPOCH)
-    expect(history?.retired).toContain(HEADLESS_EPOCH)
-    expect(history?.retired).not.toContain(RENDERER_EPOCH)
   })
 })

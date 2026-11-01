@@ -54,7 +54,6 @@ vi.mock('node:fs', async (original) => {
     }
   }
 })
-// The real born-restricted create, with faults injected around it.
 vi.mock('../../shared/secure-path-windows-acl', async (original) => {
   const real = await original<typeof WindowsAcl>()
   const files = await vi.importActual<typeof fs>('node:fs')

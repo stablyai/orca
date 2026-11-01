@@ -4,7 +4,6 @@ import { AI_VAULT_SERVICE_PROTOCOL_VERSION } from './session-scanner-service-pro
 const listClaudeSubagentSessions = vi.hoisted(() => vi.fn())
 const listOmpSubagentSessions = vi.hoisted(() => vi.fn())
 
-// Only the per-agent listers are replaced; the entry and its reader run for real.
 vi.mock('./session-scanner-claude-subagents', () => ({ listClaudeSubagentSessions }))
 vi.mock('./session-scanner-omp-subagent-listing', () => ({ listOmpSubagentSessions }))
 vi.mock('./session-parse-cache-persistence', () => ({

@@ -4,7 +4,7 @@ import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/terminal
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
 import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
@@ -142,8 +142,7 @@ export function buildMirroredTerminalTabs(
       surfaces
         .map((surface) => existingById.get(toWebTerminalSurfaceTabId(surface.id)))
         .find((tab): tab is TerminalTab => Boolean(tab))
-    // Why: a headless host publishes the literal "Terminal" while an idle pane
-    // has no live PTY. Keep the client's known title until a ready surface reports one.
+    // Idle headless panes publish default Terminal; retain known title until a ready surface supplies one.
     const hostTitle = activeSurface.title.trim() || surfaces[0]?.title.trim() || ''
     const hostTitleIsPlaceholder =
       hostTitle === '' || (activeSurface.status === 'pending-handle' && hostTitle === 'Terminal')
@@ -176,18 +175,14 @@ export function buildMirroredTerminalTabs(
         worktreeId: snapshot.worktree,
         title,
         defaultTitle: existing?.defaultTitle ?? title,
-        // Why: the host transport carries no generated title, so rebuilding the tab
-        // without this dropped the client's agent-prompt label on every snapshot.
+        // Host omits generated titles; retain client agent-prompt labels across rebuilds.
         ...(existing?.generatedTitle ? { generatedTitle: existing.generatedTitle } : {}),
         ...(existing?.aiVaultTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
-        // Why: the recovery ledger is client-local and the host carries none, so
-        // rebuilding without it would restore this tab's remount allowance on
-        // every snapshot — the counting loop recovery is meant to end (b5cfc6ca).
+        // Host omits client recovery ledger; preserve it or every snapshot rearms remount allowance (b5cfc6ca).
         ...(existing?.recovery ? { recovery: existing.recovery } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         ...(startupCwd ? { startupCwd } : {}),
-        // Why: the host's manual name is the one the CLI and phones see; it must outrank this
-        // client's saved-session title (#29975). Older hosts omit it, so keep ours then.
+        // Host manual names outrank client saved-session titles for CLI/phone parity; older hosts omit them, so retain local names (#29975).
         customTitle:
           activeSurface.customTitle !== undefined
             ? activeSurface.customTitle

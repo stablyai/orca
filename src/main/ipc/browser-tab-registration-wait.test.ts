@@ -30,7 +30,6 @@ import { buildDocPreviewUrl } from '../../shared/doc-preview-scheme'
 
 const WAIT_MS = 1_000
 
-/** Registers a document guest the way the attach door does, which is what notifies the waiters. */
 function attachDocumentGuest(browserPageId: string): void {
   const grant = mintDocPreviewGrant({
     owner: { kind: 'ssh', connectionId: 'ssh-1' },
@@ -50,7 +49,6 @@ function attachDocumentGuest(browserPageId: string): void {
   installDocPreviewGuestPolicy(guest as never, { id: 91, send: vi.fn() })
 }
 
-/** Whether a wait has settled, without letting its rejection escape as an unhandled one. */
 function track(pending: Promise<void>): () => 'pending' | 'resolved' | 'rejected' {
   let state: 'pending' | 'resolved' | 'rejected' = 'pending'
   pending.then(
@@ -86,9 +84,7 @@ describe('a workspace document registering', () => {
     expect(settled()).toBe('resolved')
   })
 
-  // Why these two stay pending: they are how the CLI and agents ask for a browser tab to drive, and
-  // a preview is neither drivable by them nor visible to them. Satisfying either would hand the
-  // caller a surface that answers nothing, instead of letting it keep waiting for a real tab.
+  // CLI/agent any-tab waits need drivable browser tabs; documents satisfy only their own page wait.
   it('leaves the waits that ask for any browser tab still waiting', async () => {
     const worktreeWait = track(waitForWorktreeTabRegistration('wt-1', WAIT_MS))
     const anyWait = track(waitForAnyTabRegistration(WAIT_MS))
@@ -99,8 +95,7 @@ describe('a workspace document registering', () => {
     expect(worktreeWait()).toBe('pending')
     expect(anyWait()).toBe('pending')
 
-    // The presence half: those waits do settle, so a mutant that never resolves them would pass the
-    // assertions above by being uniformly stuck.
+    // Verify unsatisfied waits actually time out.
     await vi.advanceTimersByTimeAsync(WAIT_MS)
     expect(worktreeWait()).toBe('rejected')
     expect(anyWait()).toBe('rejected')

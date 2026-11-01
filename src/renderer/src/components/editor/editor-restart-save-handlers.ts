@@ -24,7 +24,6 @@ export function createEditorRestartSaveHandlers({
   handlePrepareHotExit: (event: Event) => Promise<void>
 } {
   const getLatestWritableContent = (file: OpenFile): string | null => {
-    // Why: headless controller reads editorDrafts rather than mounting the editor UI to read component-local buffers.
     return store.getState().editorDrafts[file.id] ?? null
   }
 
@@ -50,7 +49,7 @@ export function createEditorRestartSaveHandlers({
 
       const duplicateDirtySavePaths = getDuplicateDirtySavePaths(dirtyFiles)
       if (duplicateDirtySavePaths.length > 0) {
-        // Why: edit and diff tabs can share a path with different drafts; refuse rather than race an implicit winner.
+        // Different dirty records can share a path; refuse restart rather than choose an implicit save winner.
         detail.reject(
           'Some unsaved files are open in multiple dirty tabs. Save them manually before restarting.'
         )
@@ -109,8 +108,7 @@ export function createEditorRestartSaveHandlers({
         return
       }
 
-      // Why: preload dispatches beforeunload immediately after this resolves;
-      // App owns the one combined session/UI checkpoint for restart and update.
+      // Resolve only after saving; preload unloads immediately and App owns the combined restart/update checkpoint.
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))

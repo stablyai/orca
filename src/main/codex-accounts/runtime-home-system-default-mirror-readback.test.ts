@@ -22,8 +22,8 @@ vi.mock('electron', () => ({
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -353,13 +353,10 @@ describe('CodexRuntimeHomeService', () => {
     settings.activeCodexManagedAccountId = 'account-1'
     service.syncForCurrentSelection()
 
-    // Deselect managed account — should restore system default once
     settings.activeCodexManagedAccountId = null
     service.syncForCurrentSelection()
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(systemAuth)
 
-    // Codex used to refresh tokens directly in ~/.codex. With an Orca-owned
-    // runtime home, the same refresh must be read back to the system default.
     writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
     service.syncForCurrentSelection()
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(refreshedAuth)

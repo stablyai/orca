@@ -36,7 +36,6 @@ function endpointKind(
   }
 }
 
-/** The row's expanded diagnostics: a plain lead, the raw error to copy, and where to look next. */
 export function RuntimeServerRowDetails({
   endpoint,
   details,
@@ -46,7 +45,7 @@ export function RuntimeServerRowDetails({
   unreachable,
   children
 }: RuntimeServerRowDetailsProps): React.JSX.Element {
-  // Why collapsed: the raw error is for copying into a bug report, not for reading first.
+  // Lead with explanatory copy; keep raw diagnostic errors collapsed for copying.
   const [errorOpen, setErrorOpen] = useState(false)
   const runtimeStatus = details?.runtimeStatus ?? null
   const hostModelSummary = getHostModelCapabilitySummary(runtimeStatus)

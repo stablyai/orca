@@ -41,8 +41,7 @@ describe('mergeProjectHostSetupCompatibilityState', () => {
     expect(merged.projectHostSetups.map((setup) => setup.hostId)).toEqual(['local', 'ssh:devbox'])
   })
 
-  // Setting a location on a host that already had a placeholder projects a ready setup for
-  // the same project+host; the placeholder must not survive to shadow it.
+  // Ready repo projections must displace same-project/host placeholders or they shadow setup state.
   it('drops a placeholder once a repo covers the same project and host', () => {
     const merged = mergeProjectHostSetupCompatibilityState(
       { projects: [], projectHostSetups: [pendingSetup()] },

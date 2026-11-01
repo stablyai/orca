@@ -62,8 +62,7 @@ export function useFolderWorkspaceComposerPathStatus(
     if (!pathStatusRequest || pathStatusCacheKey === null) {
       return null
     }
-    // Why: subscribe to cache writes, but only let the TTL-aware accessor decide
-    // whether a cached negative status is still authoritative.
+    // Subscribe to writes, but let the TTL-aware accessor decide whether negative results remain authoritative.
     void cachedPathStatusEntry
     void cacheExpiryTick
     return getFreshFolderWorkspacePathStatus(pathStatusRequest, pathStatusRouteOptions)

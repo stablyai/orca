@@ -61,7 +61,7 @@ describe('client UI RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { settings } })
   })
 
-  it('rejects paired attempts to mutate the host-owned structured chat setting', async () => {
+  it('rejects paired attempts to write the retired Chat UI switch', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateClientSettings: vi.fn()
@@ -431,9 +431,7 @@ describe('client UI RPC methods', () => {
   })
 
   it('lets a paired client clear the OSC 52 default-on notice', async () => {
-    // Why pin this key: the update schema is strict, so an omitted field does not get
-    // stripped — it rejects the whole call. The renderer only logs that failure, so the
-    // one-shot notice would re-toast on every launch of every web/SSH/relay client.
+    // A missing strict-schema key rejects the whole update; clients only log it, so the one-shot notice would repeat on every launch.
     const updated: PersistedUIState = {
       ...getDefaultUIState(),
       osc52ClipboardDefaultOnNoticePending: false
@@ -562,10 +560,7 @@ describe('client UI RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
   })
 
-  // Why one case per field: the schema is strict, so a single unlisted key makes
-  // the dispatcher reject the ENTIRE ui.set payload with invalid_argument instead
-  // of stripping it. A combined payload would pass as soon as any one field were
-  // restored, hiding the rest of the drift.
+  // Separate field cases expose schema drift for every key.
   it.each([
     ['taskResumeState.linearMode', { taskResumeState: { linearMode: 'projects' } }],
     [
@@ -591,6 +586,7 @@ describe('client UI RPC methods', () => {
     ['browserImportHintHidden', { browserImportHintHidden: true }],
     ['mobileEmulatorTabIntroDismissed', { mobileEmulatorTabIntroDismissed: true }],
     ['mobileEmulatorAgentSetupDismissed', { mobileEmulatorAgentSetupDismissed: true }],
+    ['pluginsAlphaNoticeDismissed', { pluginsAlphaNoticeDismissed: true }],
     ['alwaysShowDefaultBranchWorkspace', { alwaysShowDefaultBranchWorkspace: false }]
   ])('accepts %s, which the renderer persists through ui.set', async (_label, payload) => {
     const runtime = {
@@ -611,8 +607,7 @@ describe('client UI RPC methods', () => {
       updateUIState: vi.fn(() => getDefaultUIState())
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
-    // Mirrors App.tsx's 150ms writer: one unlisted key here dropped every other
-    // preference in the same call for paired web/SSH/relay clients.
+    // Model App.tsx's 150ms batched writer: one missing key must not lose unrelated paired-client preferences.
     const payload = {
       sidebarWidth: 280,
       rightSidebarOpen: true,
@@ -674,9 +669,7 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateUIState).not.toHaveBeenCalled()
   })
 
-  // Why the contract flipped: an unknown VALUE used to fail the whole batch, so
-  // one drifted enum member took sidebar widths, filters and agent acks down
-  // with it. Unknown KEYS still reject — the parity assertions catch those.
+  // Unknown values must not discard unrelated preferences; unknown keys still reject and are covered by parity checks.
   it.each([
     ['worktree card property', { worktreeCardProperties: ['status', 'pr-status'] }],
     ['feature interaction id', { featureInteractions: { unknown: { firstInteractedAt: 100 } } }],
@@ -728,8 +721,7 @@ describe('client UI RPC methods', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
-    // 'cli' was missing from the schema, so Settings → Default card mode sent a
-    // payload the host rejected outright.
+    // Missing cli previously made Settings' default card modes reject the whole payload.
     const response = await dispatcher.dispatch(
       makeRequest('ui.set', { worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES] })
     )

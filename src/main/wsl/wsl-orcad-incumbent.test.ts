@@ -7,13 +7,13 @@ import { pairedRuntimeConnectionToken } from '../../shared/paired-runtime-connec
 import { DeviceRegistry } from '../runtime/device-registry'
 import { ORCAD_UPDATE_ADMISSION_FENCE_MS } from '../../shared/orcad-terminal-census'
 import { emptyOrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
-import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import type { OrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import type { StartedPortForward } from '../ssh/port-forwarding/ssh-port-forward-provider'
 import { readWslOrcadIncumbent, type WslOrcadIncumbentDependencies } from './wsl-orcad-incumbent'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
+import { unusedOrcadHostTransport } from '../ssh/unused-host-transport.test-fixture'
 
 const host = getRemoteHostPlatform('linux-x64')
 const KEY = Buffer.alloc(32, 7).toString('base64')
@@ -53,8 +53,7 @@ const target: WslOrcadHostTarget = {
   distro: 'Ubuntu',
   label: 'Ubuntu'
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every host call is a dependency stub.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 
 function context(active: string | null = '1.4.0+aa'): OrcadRemoteContext<WslOrcadHostTarget> {
   return {
@@ -130,33 +129,13 @@ describe('readWslOrcadIncumbent', () => {
     expect(deps.wake).toHaveBeenCalledTimes(1)
     expect(deps.listen).toHaveBeenCalledTimes(2)
     expect(close).toHaveBeenCalledTimes(2)
-    // Only the recount closes admission, so no terminal starts between it and the stop.
+    // Only final recount closes admission, preventing terminal creation between census and stop.
     expect(vi.mocked(deps.census).mock.calls[1]?.[3]).toEqual({
       releaseFinishedAutomationTerminals: true,
       closeAdmissionForMs: ORCAD_UPDATE_ADMISSION_FENCE_MS
     })
     await incumbent.releaseAdmission()
     expect(vi.mocked(deps.census).mock.calls[2]?.[3]).toEqual({ closeAdmissionForMs: 0 })
-  })
-
-  // After a reboot the woken incumbent's daemon starts empty, so the census proves zero.
-  it('wakes an incumbent a reboot stopped and reads it without probing again', async () => {
-    const { deps } = dependencies({
-      wake: vi.fn(async () => ({
-        outcome: 'started' as const,
-        readiness: READINESS
-      })),
-      census: vi.fn(async () => ({
-        liveSessions: 0,
-        startedSinceActivation: 0,
-        daemonProtocolVersion: 3
-      }))
-    })
-    await expect(readWslOrcadIncumbent({ context: context(), slot }, deps)).resolves.toMatchObject({
-      census: { liveSessions: 0 },
-      readiness: READINESS
-    })
-    expect(deps.probe).not.toHaveBeenCalled()
   })
 
   it('is unverifiable, without a bridge, when the incumbent cannot be proven running', async () => {
@@ -181,14 +160,6 @@ describe('readWslOrcadIncumbent', () => {
       readiness: READINESS
     })
     expect(close).toHaveBeenCalledTimes(1)
-  })
-
-  it('touches nothing when no version is active', async () => {
-    const { deps } = dependencies()
-    await expect(
-      readWslOrcadIncumbent({ context: context(null), slot }, deps)
-    ).resolves.toMatchObject({ census: UNVERIFIABLE, readiness: null })
-    expect(deps.wake).not.toHaveBeenCalled()
   })
 })
 

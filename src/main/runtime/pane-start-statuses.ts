@@ -1,9 +1,4 @@
-// Main's start of a pane's terminal (layout-owner build): live state laid over the published layout
-// like a pane's live title, never saved. A start ends in a binding, which clears it, or a failure,
-// which stays until main's next start into the pane. A pane may still be bound to the terminal it
-// had (a restart into it): a status says that binding is not live, and lasts only while the
-// binding it was first published with stands, so any later bind (a window's own spawn, an adopt)
-// ends it. Keys are never reused.
+// Start facts are live-only and expire on a new binding; failures persist until another start unless a later bind supersedes them.
 
 import { NEWER_DAEMON_HOLD_ERROR } from '../../shared/newer-daemon-hold'
 import type {

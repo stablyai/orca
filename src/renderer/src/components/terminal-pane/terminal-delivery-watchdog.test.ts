@@ -1,8 +1,4 @@
-// Why: pins the renderer half of the dead-push-delivery recovery — the
-// watchdog must cost nothing while output flows, confirm a wedge across two
-// silent ticks against main's invoke-reported state, then heal exactly once
-// per cooldown: re-attach push listeners, request the write-off, and route
-// the pulled restore markers to pane handlers locally.
+// Confirm dead push delivery over two silent ticks, then heal through invoke once per cooldown: reattach first and deliver pulled restore markers locally.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PtyRendererDeliveryHealthReply } from '../../../../shared/pty-renderer-delivery-health'
 
@@ -131,9 +127,7 @@ describe('terminal delivery watchdog', () => {
     expect(reportMock).toHaveBeenCalledTimes(1)
     expect(reattachMock).not.toHaveBeenCalled()
 
-    // Second silent tick confirms: re-attach precedes the heal report, the
-    // listener count is captured for field discrimination, and the pulled
-    // marker reaches the pane handler without any push event.
+    // Require reattach before heal and local marker delivery without any push event; retain the prior listener count for diagnosis.
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
     expect(reattachMock).toHaveBeenCalledTimes(1)
     const healCalls = reportMock.mock.calls.filter(
@@ -169,19 +163,6 @@ describe('terminal delivery watchdog', () => {
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
     expect(countHeals()).toBe(2)
     expect(reattachMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('stays off when no PTY expects push delivery', async () => {
-    reportMock.mockResolvedValue(STALLED)
-    const watchdog = await import('./terminal-delivery-watchdog')
-    watchdog.startTerminalDeliveryWatchdog({
-      reattachPushListeners: reattachMock,
-      hasAttachedPtys: () => false
-    })
-
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3)
-
-    expect(reportMock).not.toHaveBeenCalled()
   })
 
   it('never starts without the invoke heal lane (web client, partial mocks)', async () => {

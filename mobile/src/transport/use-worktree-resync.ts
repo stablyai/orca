@@ -2,10 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState } from './types'
 
-// Why (#8498): extracted from HostScreen so the file stays under its
-// max-lines budget. Handles the reconnect edge (refetch on transition into
-// 'connected') and manual pull-to-refresh, neither of which the steady-state
-// focus/embedded polls cover.
 export function useWorktreeResync(args: {
   client: RpcClient | null
   connState: ConnectionState
@@ -14,8 +10,7 @@ export function useWorktreeResync(args: {
 }): { refreshing: boolean; onRefresh: () => Promise<void> } {
   const { client, connState, fetchWorktrees, fetchRepoMetadata } = args
 
-  // Why (#8498): socket-only reconnect left a stale cached snapshot after
-  // background/sleep. Refetch on the transition INTO 'connected', not every poll tick.
+  // Reconnect must refetch cached worktrees after background/sleep (#8498).
   const prevConnStateRef = useRef(connState)
   useEffect(() => {
     const prev = prevConnStateRef.current
@@ -23,13 +18,10 @@ export function useWorktreeResync(args: {
     if (prev !== 'connected' && connState === 'connected' && client) {
       void fetchWorktrees({ allowDuringModal: true })
     }
-    // Why: repo metadata refetch on reconnect is owned by startHostWorktreeRefresh (mount +
-    // reposChanged + stream replay); this effect only refetches worktrees, so fetchRepoMetadata
-    // is intentionally not a dependency here.
+    // startHostWorktreeRefresh owns repo metadata refresh; reconnect here refetches worktrees only.
   }, [connState, client, fetchWorktrees])
 
   const [refreshing, setRefreshing] = useState(false)
-  // Why (#8498): let the user force a fresh snapshot instead of the possibly-poisoned cache.
   const onRefresh = useCallback(async () => {
     if (!client || connState !== 'connected') {
       return

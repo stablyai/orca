@@ -41,8 +41,7 @@ export function canUseParentPrChecksGitHubPRCacheEntry(
   if (pr.state === 'merged' && !mergedPrMatchesCurrentHead) {
     return false
   }
-  // Why: a newer hosted-review miss should suppress older branch PR cache unless
-  // a merged PR is proven to still describe the checked-out worktree head.
+  // Newer hosted-review misses suppress old PR cache entries unless a merged PR still matches the checked-out head.
   if (
     hostedReviewEntry?.data === null &&
     !mergedPrMatchesCurrentHead &&

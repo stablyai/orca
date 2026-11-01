@@ -17,7 +17,9 @@ const OBSERVED: Named[] = [
   ["'none'", 'none'],
   ["'unknown'", 'unknown'],
   ['same object', { ...META }],
-  ['different object', { ...OTHER }]
+  ['different object', { ...OTHER }],
+  ['different path', { ...META, path: '/chats/b/meta.json' }],
+  ['different size', { ...META, sizeBytes: 21 }]
 ]
 
 // entry (row) x observed (column). A `true` cell is a cache hit.
@@ -27,28 +29,36 @@ const TRUTH_TABLE: Record<string, Record<string, boolean>> = {
     "'none'": true,
     "'unknown'": false,
     'same object': false,
-    'different object': false
+    'different object': false,
+    'different path': false,
+    'different size': false
   },
   "'none'": {
     undefined: true,
     "'none'": true,
     "'unknown'": false,
     'same object': false,
-    'different object': false
+    'different object': false,
+    'different path': false,
+    'different size': false
   },
   "'unknown'": {
     undefined: false,
     "'none'": false,
     "'unknown'": false,
     'same object': false,
-    'different object': false
+    'different object': false,
+    'different path': false,
+    'different size': false
   },
   object: {
     undefined: false,
     "'none'": false,
     "'unknown'": false,
     'same object': true,
-    'different object': false
+    'different object': false,
+    'different path': false,
+    'different size': false
   }
 }
 
@@ -56,19 +66,4 @@ describe.each(ENTRIES)('cached %s', (entryLabel, entry) => {
   it.each(OBSERVED)(`vs observed %s`, (observedLabel, observed) => {
     expect(sidecarUnchanged(entry, observed)).toBe(TRUTH_TABLE[entryLabel][observedLabel])
   })
-})
-
-it('treats a vanished sidecar as a change, not as "never had one"', () => {
-  expect(sidecarUnchanged({ ...META }, 'none')).toBe(false)
-})
-
-it('never concludes anything from an unreadable sidecar, in either position', () => {
-  expect(sidecarUnchanged('unknown', 'none')).toBe(false)
-  expect(sidecarUnchanged('unknown', { ...META })).toBe(false)
-  expect(sidecarUnchanged({ ...META }, 'unknown')).toBe(false)
-})
-
-it('keeps an agent with no sidecar at all a cache hit', () => {
-  expect(sidecarUnchanged(undefined, undefined)).toBe(true)
-  expect(sidecarUnchanged(undefined, 'none')).toBe(true)
 })

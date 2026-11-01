@@ -1,14 +1,4 @@
-/**
- * Which server an SSH host runs, decided once per connect.
- *
- * Every host runs managed orcad: an empty host deploys it, a host with Orca state converts through
- * the journaled migration, and a converted host connects through its tunnel, updating first when
- * it runs an older build and its terminals allow. Any other outcome leaves the host unserved with
- * a reason, such as relay terminals that are live or unproven (which the legacy bridge may keep
- * serving), or a host orcad can't run on, recorded so setup isn't retried on every connect. A host
- * whose sshd refuses port forwarding reaches its server through the stdio bridge
- * (orcad-managed-tunnel-transport.ts) instead.
- */
+/** Deploy empty hosts, migrate source state, or connect/update managed hosts when terminal safety permits. Publish explicit unserved reasons on refusal; use stdio when sshd blocks forwarding. */
 import type {
   OrcadManagedConversionResult,
   OrcadManagedDeployResult
@@ -27,9 +17,8 @@ import {
   type ManagedServerUpdateDeps
 } from './managed-server-update-check'
 import { managedResultAfterUpdate, unservedManagedResult } from './managed-server-serving-gate'
-import { orcadMigrationConflictGuidance } from './orcad-migration-conflict-guidance'
 import { keptForBridgedTerminals, relayTerminalReason } from './ssh-host-server-bridged-unserved'
-import { boundedDetail, setupFailure, type SetupFailure } from './ssh-host-server-setup-failure'
+import { deferred, setupFailed } from './ssh-host-server-setup-outcome'
 import {
   classifyOrcadHostUnavailable,
   ORCAD_TUNNEL_UNAVAILABLE_REASON
@@ -39,7 +28,6 @@ import {
   reportHostServerConversion,
   reportHostServerDeploy,
   reportHostServerEvent,
-  reportHostServerSetupError,
   startHostServerDecisionTrace,
   type HostServerDecisionTrace,
   type HostServerReport
@@ -54,13 +42,13 @@ export type HostServerOnConnectResult =
       update?: SshManagedServerUpdateNote
       serving?: SshManagedServerServingNote
       linked?: SshManagedServerLinkedProject[]
+      automationsLeftDisabled?: number
       /** Another desktop's update held the host; recheck until it clears. Never published. */
       fenceHeld?: true
     }
   | {
       route: 'unserved'
       reason: SshManagedServerRelayReason
-      /** A blocker the user must act on, or why orcad can't run on this host. */
       detail?: string
       terminals?: number
       terminalsElsewhere?: boolean
@@ -76,7 +64,6 @@ export type HostServerOnConnectResult =
 
 export type HostServerTerminalVerdict = {
   verdict: 'exited' | 'live' | 'unverifiable'
-  /** Relay terminals known to be running or unproven. */
   count: number
   /** Counted only by the host-wide census: another desktop or session runs them. */
   elsewhere?: boolean
@@ -87,25 +74,21 @@ export type HostServerTerminalVerdict = {
 export type HostServerOnConnectDeps = {
   managedEnvironmentId: (target: SshTarget) => string | null
   ensureTunnel: (environmentId: string) => Promise<void>
-  /** Behind the tunnel: answers, or is started from its activated slot if proven stopped. */
+  /** Wake only on proven stopped activation, then verify serving behind the tunnel. */
   ensureServing: (environmentId: string) => Promise<OrcadManagedServing>
-  /** Marks a commit whose reply outlived the move as finished; its source rows are kept. */
-  retainCommittedSource: (target: SshTarget) => Promise<void>
-  /** False when this build carries no orcad template, so nothing is tried on the host. */
+  /** Finish retained-source bookkeeping after late commit replies without deleting source rows; resolves how many moved automations the server kept off. */
+  retainCommittedSource: (target: SshTarget) => Promise<number>
   hasTemplate: () => boolean
-  /** A recorded "orcad can't run here" whose key still matches this build. */
   recordedUnavailable: (target: SshTarget) => string | null
   recordUnavailable: (target: SshTarget, reason: string) => void
-  /** True when the host holds no Orca state, so it deploys without a migration. */
   isEmptyHost: (target: SshTarget) => boolean
   relayTerminals: (target: SshTarget) => Promise<HostServerTerminalVerdict>
   deploy: (target: SshTarget) => Promise<OrcadManagedDeployResult>
-  /** `hostProof`: the connect's own terminal verdict, for a conversion asked before any session. */
+  /** Reuse the connect's pre-session terminal proof when available. */
   convert: (
     target: SshTarget,
     hostProof: HostServerTerminalVerdict | null
   ) => Promise<OrcadManagedConversionResult>
-  /** A registered server whose conversion has not committed and been kept yet. */
   hasUnfinishedConversion: (target: SshTarget) => boolean
   /** Releases a conversion fence once its server provably holds nothing. */
   abandonConversion: (target: SshTarget) => Promise<void>
@@ -116,7 +99,6 @@ export type HostServerOnConnectDeps = {
   isFencedBeforeStaging: (target: SshTarget) => boolean
   /** Unregisters that unreachable server and releases its fence, leaving the host unmoved. */
   releaseUnreachableSetup: (target: SshTarget) => Promise<void>
-  /** Receives each decision, conversion and deploy failure as raw codes for telemetry. */
   report: HostServerReport
 } & ManagedServerUpdateDeps
 
@@ -149,7 +131,7 @@ async function decide(
     try {
       await deps.ensureTunnel(existing)
     } catch (error) {
-      // Why only before staging: once the server holds staged state, only it can say what moved.
+      // Before staging only: once remote state exists, destination evidence must resolve it.
       if (
         classifyOrcadHostUnavailable(error) === ORCAD_TUNNEL_UNAVAILABLE_REASON &&
         deps.isFencedBeforeStaging(target)
@@ -165,7 +147,7 @@ async function decide(
       throw error
     }
     if (deps.hasUnfinishedConversion(target)) {
-      // Why before routing: until the commit lands the server is empty, so finish it or back out.
+      // Finish/abort unfinished conversion before routing; registration alone proves no durable catalog.
       return await convertHost(target, deps, trace, { checkTerminals: false })
     }
     const serving = await deps.ensureServing(existing)
@@ -173,8 +155,9 @@ async function decide(
     if (unserved) {
       return unserved
     }
+    let automationsLeftDisabled = 0
     try {
-      await deps.retainCommittedSource(target)
+      automationsLeftDisabled = await deps.retainCommittedSource(target)
     } catch (error) {
       console.warn('[ssh] Could not mark a finished migration retained:', error)
     }
@@ -183,7 +166,10 @@ async function decide(
     )
     trace.update = update.reason
     trace.recorded = update.recorded
-    return managedResultAfterUpdate(existing, serving, update)
+    return {
+      ...managedResultAfterUpdate(existing, serving, update),
+      ...(automationsLeftDisabled > 0 ? { automationsLeftDisabled } : {})
+    }
   }
   const recorded = deps.recordedUnavailable(target)
   if (recorded) {
@@ -217,7 +203,7 @@ async function convertHost(
   try {
     terminals = options.checkTerminals ? await deps.relayTerminals(target) : null
     if (terminals && terminals.verdict !== 'exited' && !terminals.bridged) {
-      // Why unverifiable too: loss of contact is never evidence that a relay terminal exited.
+      // Lost contact cannot prove relay terminals exited.
       return {
         route: 'unserved',
         reason: relayTerminalReason(terminals.verdict),
@@ -240,23 +226,6 @@ async function convertHost(
     const failed = await setupFailed(target, deps, trace, error, false)
     return keptForBridgedTerminals(failed, terminals, error)
   }
-}
-
-function setupFailed(
-  target: SshTarget,
-  deps: HostServerOnConnectDeps,
-  trace: HostServerDecisionTrace,
-  error: unknown,
-  empty: boolean
-): Promise<HostServerOnConnectResult> {
-  console.warn('[ssh] Managed Orca server setup failed:', error)
-  reportHostServerSetupError(deps.report, target, trace, error)
-  const unavailable = classifyOrcadHostUnavailable(error)
-  const conflict = empty ? null : orcadMigrationConflictGuidance(error)
-  if (conflict) {
-    return unfinished(target, deps, unavailable, empty, 'refused', { detail: conflict })
-  }
-  return unfinished(target, deps, unavailable, empty, 'failed', setupFailure(error))
 }
 
 async function afterDeploy(
@@ -291,7 +260,10 @@ async function afterConversion(
       return {
         route: 'managed',
         environmentId: result.environment.id,
-        ...(result.linkedProjects ? { linked: result.linkedProjects } : {})
+        ...(result.linkedProjects ? { linked: result.linkedProjects } : {}),
+        ...(result.automationsLeftDisabled
+          ? { automationsLeftDisabled: result.automationsLeftDisabled }
+          : {})
       }
     case 'deferred':
       return deferred(target, deps, result, false)
@@ -306,50 +278,4 @@ async function afterConversion(
         ...(result.canLeaveBehind ? { canLeaveBehind: true } : {})
       }
   }
-}
-
-function deferred(
-  target: SshTarget,
-  deps: HostServerOnConnectDeps,
-  result: { code: string; reason: string },
-  empty: boolean
-): Promise<HostServerOnConnectResult> {
-  console.warn(`[ssh] Managed Orca server setup deferred (${result.code}):`, result.reason)
-  const unavailable = classifyOrcadHostUnavailable({ code: result.code })
-  return unfinished(target, deps, unavailable, empty, 'deferred', { detail: result.reason })
-}
-
-/**
- * A setup that stopped short: its claim or fence goes first, since nothing remote serves the host
- * yet. A host orcad can't run on also records why.
- */
-async function unfinished(
-  target: SshTarget,
-  deps: HostServerOnConnectDeps,
-  unavailable: string | null,
-  empty: boolean,
-  reason: 'deferred' | 'failed' | 'refused',
-  failure: SetupFailure
-): Promise<HostServerOnConnectResult> {
-  try {
-    await (empty ? deps.abandonDeploy(target) : deps.abandonConversion(target))
-  } catch (error) {
-    // A staged or registered destination keeps its fence; the connect reports it below.
-    console.warn('[ssh] The managed Orca server setup keeps its fence:', error)
-  }
-  // Why re-read: only the journal says whether the abort released the host or left it locked.
-  const held = !empty && !unavailable && deps.hasUnfinishedConversion(target)
-  if (!unavailable) {
-    // Shown under the SSH host, with the host's orcad.log tail when the failure carries one.
-    return {
-      route: 'unserved',
-      reason,
-      detail: boundedDetail(failure.detail),
-      ...(failure.contactLost ? { contactLost: true as const } : {}),
-      ...(failure.nodeDownloadBlocked ? { nodeDownloadBlocked: failure.nodeDownloadBlocked } : {}),
-      ...(held ? { held: true as const } : {})
-    }
-  }
-  deps.recordUnavailable(target, unavailable)
-  return { route: 'unserved', reason: 'orcad_unavailable', detail: unavailable }
 }

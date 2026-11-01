@@ -77,7 +77,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     const pathA = await addLinkedWorktree(commonDir, 'wt-a', 'ref: refs/heads/feature-a')
     const pathB = await addLinkedWorktree(commonDir, 'wt-b', 'ref: refs/heads/feature-b')
     const cache = createWorktreeHeadIdentityCache()
-    // Cold start: no cache and no scope, so every entry is read.
     const identities = await readIdentities(commonDir, cache)
     expect(identities).toHaveLength(3)
     expect(headOf(identities, pathA)).toBe(OID_B)
@@ -94,8 +93,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
   it('re-reads only the committing worktree and leaves the rest cached', async () => {
     const { commonDir, cache, pathA, pathB } = await seed()
 
-    // A commit in wt-a moves its branch; wt-b's branch also moves on disk but
-    // no watcher event named it, so the incremental read must not observe it.
+    // Only wt-a is named by the event; wt-b must retain its cached branch identity.
     await writeLooseRef(commonDir, 'refs/heads/feature-a', OID_D)
     await writeLooseRef(commonDir, 'refs/heads/feature-b', OID_D)
 
@@ -125,7 +123,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     const { commonDir, cache, pathA } = await seed()
     await writeLooseRef(commonDir, 'refs/heads/feature-c', OID_D)
     const pathC = await addLinkedWorktree(commonDir, 'wt-c', 'ref: refs/heads/feature-c')
-    // The other entries move on disk with no event of their own and must stay cached.
     await writeLooseRef(commonDir, 'refs/heads/feature-a', OID_D)
 
     const identities = await readIdentities(commonDir, cache, LISTING_HEAD_IDENTITY_SCOPE)
@@ -147,8 +144,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
 
   it('re-reads an admin entry whose name was removed and immediately reused', async () => {
     const { commonDir, cache, pathA } = await seed()
-    // One debounce window can coalesce `git worktree remove` + `git worktree
-    // add` onto the same admin dir name, so the listing alone is not enough.
+    // Coalesced remove/add can reuse an admin name; a listing refresh alone cannot retain its identity.
     await rm(join(commonDir, 'worktrees', 'wt-a'), { recursive: true, force: true })
     await writeLooseRef(commonDir, 'refs/heads/reused', OID_D)
     const reusedPath = await addLinkedWorktree(commonDir, 'wt-a', 'ref: refs/heads/reused')
@@ -169,8 +165,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
 
   it('keeps the memo when the worktrees listing fails for anything but absence', async () => {
     const { commonDir, cache, pathA, pathB } = await seed()
-    // Stand in for EIO/ESTALE/EMFILE: readdir rejects with ENOTDIR, which is
-    // not evidence that every worktree was removed.
+    // ENOTDIR models unreadable metadata, not proof that every checkout was removed.
     await rm(join(commonDir, 'worktrees'), { recursive: true, force: true })
     await writeFile(join(commonDir, 'worktrees'), 'not a directory\n')
 
@@ -178,8 +173,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
 
     expect(headOf(identities, pathA)).toBe(OID_B)
     expect(headOf(identities, pathB)).toBe(OID_C)
-    // The add/remove that triggered the burst is still unseen, so the next
-    // refresh must re-enumerate whatever scope it is given.
+    // Failed listing must retry on the next refresh even without another listing event.
     expect(cache.entryNames).toBeNull()
 
     await rm(join(commonDir, 'worktrees'), { force: true })
@@ -201,8 +195,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
 
   it('needs the full scope, not a narrow one, to survive a packed-refs rewrite', async () => {
     const { commonDir, cache, pathA, pathB } = await seed()
-    // A fetch repacked refs: the loose files are gone and the oids moved, with
-    // no event under any admin dir.
+    // Packed-ref rewrites can move every branch with no per-worktree event.
     await rm(join(commonDir, 'refs', 'heads'), { recursive: true, force: true })
     await writeFile(
       join(commonDir, 'packed-refs'),
@@ -215,8 +208,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
       ].join('\n')
     )
 
-    // Negative control: this is exactly why `packed-refs` must classify to the
-    // full scope — any narrower scope misses the repack for unnamed entries.
+    // A narrow read intentionally misses unnamed repacked branches, requiring packed-refs to use full scope.
     const narrow = await readIdentities(commonDir, cache, headIdentityScopeForEntry('wt-a'))
     expect(headOf(narrow, pathA)).toBe(OID_D)
     expect(headOf(narrow, pathB)).toBe(OID_C)
@@ -230,8 +222,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
 
   it('keeps a worktree whose checkout was deleted behind Orca back', async () => {
     const { commonDir, cache, pathA } = await seed()
-    // Only the checkout is gone; git prunes the admin entry lazily, and the
-    // structural listing — not this reader — owns the prunable verdict.
+    // Checkout absence is a prunable-listing concern; Git may retain its admin metadata.
     await rm(pathA, { recursive: true, force: true })
 
     const identities = await readIdentities(
@@ -246,17 +237,14 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
   it('follows a branch shared by several worktrees without re-reading them', async () => {
     const commonDir = await makeCommonDir()
     await writeLooseRef(commonDir, 'refs/heads/shared', OID_B)
-    // `git worktree add --force` lets two worktrees hold one branch, and only
-    // the committing one gets a HEAD reflog append.
+    // Forced worktrees can share a branch, but only the committing checkout gets a reflog append.
     const pathA = await addLinkedWorktree(commonDir, 'wt-a', 'ref: refs/heads/shared')
     const pathB = await addLinkedWorktree(commonDir, 'wt-b', 'ref: refs/heads/shared')
     const cache = createWorktreeHeadIdentityCache()
     await readIdentities(commonDir, cache)
 
     await writeLooseRef(commonDir, 'refs/heads/shared', OID_D)
-    // Make wt-b unreadable: if the replay re-read it, it would resolve to
-    // nothing and drop out. Surviving with the new oid proves it was replayed
-    // from the memo rather than re-read.
+    // Break the sibling read so its updated identity can only come from shared-ref replay.
     await rm(join(commonDir, 'worktrees', 'wt-b', 'gitdir'), { force: true })
     const identities = await readIdentities(commonDir, cache, headIdentityScopeForEntry('wt-a'))
 
@@ -269,8 +257,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     await writeLooseRef(commonDir, 'refs/heads/feature-c', OID_D)
     const pathC = await addLinkedWorktree(commonDir, 'wt-c', 'ref: refs/heads/feature-c')
 
-    // An entry-only scope (`worktrees/wt-c/HEAD`) with no listing bit must not
-    // resolve to zero work just because the memo predates the entry.
+    // A scoped entry missing from the cached listing still needs a read.
     const identities = await readIdentities(commonDir, cache, headIdentityScopeForEntry('wt-c'))
 
     expect(headOf(identities, pathC)).toBe(OID_D)
@@ -306,8 +293,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
 
   it('keeps the last verified identity when an entry read fails transiently', async () => {
     const { commonDir, cache, pathA, pathB } = await seed()
-    // EISDIR stands in for EIO/EACCES/ENFILE: the read fails for a reason that
-    // is not absence, so the entry is UNKNOWN — never reported as gone.
+    // EISDIR models unreadable metadata; it must remain unknown rather than absent.
     await rm(join(commonDir, 'worktrees', 'wt-a', 'HEAD'))
     await mkdir(join(commonDir, 'worktrees', 'wt-a', 'HEAD'))
 
@@ -315,11 +301,9 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     expect(headOf(scoped, pathA)).toBe(OID_B)
     expect(cache.unverified.has('wt-a')).toBe(true)
 
-    // And an unknown never evicts a sibling that merely shares the branch.
     expect(headOf(scoped, pathB)).toBe(OID_C)
 
-    // Retried on the very next pass even though nothing names it, and the pass
-    // is reported incomplete so it cannot pass for a freshness checkpoint.
+    // Unknown entries retry next pass and cannot establish a complete freshness checkpoint.
     const stillBroken = await readGitCommonHeadIdentities(commonDir, cache)
     expect(stillBroken.complete).toBe(false)
 
@@ -349,7 +333,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     await mkdir(join(commonDir, 'refs', 'heads', 'shared'))
     const identities = await readIdentities(commonDir, cache, headIdentityScopeForEntry('wt-a'))
 
-    // An unknown must not be replayed onto siblings as "this branch is gone".
     expect(headOf(identities, pathA)).toBe(OID_B)
     expect(headOf(identities, pathB)).toBe(OID_B)
   })
@@ -361,7 +344,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/feature-a\n')
     const cache = createWorktreeHeadIdentityCache()
 
-    // No `gitdir` yet (mid `git worktree add`): unresolvable, so nothing is memoized.
+    // In-progress add can lack gitdir; unresolved entries must not become permanent cache misses.
     expect(await readIdentities(commonDir, cache)).toHaveLength(1)
     expect(cache.entries.has('wt-a')).toBe(false)
 
@@ -369,7 +352,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     const worktreePath = join(dirname(dirname(commonDir)), 'wt-a')
     await writeFile(join(entry, 'gitdir'), `${join(worktreePath, '.git')}\n`)
 
-    // A later refresh that never names wt-a still recovers it.
     const identities = await readIdentities(commonDir, cache, PRIMARY_HEAD_IDENTITY_SCOPE)
     expect(headOf(identities, worktreePath)).toBe(OID_B)
   })
@@ -388,8 +370,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
   it('matches admin entry names across unicode normalization', async () => {
     const commonDir = await makeCommonDir()
     await writeLooseRef(commonDir, 'refs/heads/accent', OID_B)
-    // Decomposed on disk (what APFS hands back for a name typed as NFD), and the
-    // watcher may report either form; the fold has to bridge them.
+    // APFS decomposed names and normalized watcher names must resolve to the same entry.
     const decomposed = 'wt-e\u0301'
     const composed = decomposed.normalize('NFC')
     expect(composed).not.toBe(decomposed)

@@ -5,12 +5,8 @@ import {
 } from '../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
+import { retryFailedGeneration } from './first-work-generation-backoff'
 
-/**
- * Non-git folder workspaces have no branch to rename; the first-work hook
- * instead generates a workspace title. Shares the branch-name generation
- * machinery and the caller's stop/retry verdict semantics.
- */
 export async function runFolderWorkspaceTitleAutoRename(
   worktreeId: string,
   prompt: string,
@@ -19,7 +15,6 @@ export async function runFolderWorkspaceTitleAutoRename(
   stop: (reason: string, clearError?: boolean) => true,
   retry: (reason: string) => false
 ): Promise<boolean> {
-  // Retry keeps the title pending until the move settles.
   if (deps.isFolderWorkspaceWslMoveBlocked?.(worktreeId) === true) {
     return retry('a WSL move is taking the workspace')
   }
@@ -60,10 +55,7 @@ export async function runFolderWorkspaceTitleAutoRename(
     return retry('a WSL move started during generation')
   }
   if (!generated.success) {
-    if (!generated.canceled) {
-      deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)
-    }
-    return retry(`generation failed: ${generated.error}`)
+    return retryFailedGeneration(worktreeId, generated, deps, retry)
   }
 
   const newDisplayName = humanizeBranchSlug(generated.slug)

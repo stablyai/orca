@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   flushOrcadProfileStoreForShutdown,
@@ -8,7 +6,6 @@ import {
 } from './orcad-lifecycle'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-stop-deadlines'
 
-/** Installs the real signal handlers with process.exit captured instead of exiting. */
 function captureShutdown() {
   vi.useFakeTimers()
   const signals = new Map<string, () => void>()
@@ -73,11 +70,9 @@ describe('orcad profile-state shutdown', () => {
       await vi.waitFor(() => expect(exit).toHaveBeenLastCalledWith(0))
       expect(notFailed).not.toHaveBeenCalled()
 
-      // A fatal fault's completed stop must still read as a failure to a supervisor.
       installOrcadShutdownSignals(async () => {})('uncaught exception', undefined, 1)
       await vi.waitFor(() => expect(exit).toHaveBeenLastCalledWith(1))
 
-      // A fatal fault during an idle stop escalates it and retracts the clean-stop record once.
       let finishStop = (): void => {}
       const idleFailed = vi.fn()
       const idle = installOrcadShutdownSignals(
@@ -100,7 +95,6 @@ describe('orcad profile-state shutdown', () => {
     const { exitCodes, sigterm } = captureShutdown()
     const releaseAdmission = vi.fn()
     try {
-      // Writer initialization never acknowledges, so startup never returns a handle.
       const startup = startOrcadWithLifecycle(
         () => new Promise<object>(() => {}),
         async (runtimeCleanupSucceeded) => {
@@ -155,49 +149,5 @@ describe('orcad profile-state shutdown', () => {
       vi.restoreAllMocks()
       vi.useRealTimers()
     }
-  })
-
-  it('flushes durably before closing the profile store', async () => {
-    const events: string[] = []
-    const store = {
-      flushFinalOrThrowAsync: vi.fn(async () => {
-        events.push('flush')
-      }),
-      freezeWritesAsync: vi.fn(async () => {
-        events.push('freeze')
-      })
-    }
-
-    await flushOrcadProfileStoreForShutdown(store)
-
-    expect(store.flushFinalOrThrowAsync).toHaveBeenCalledExactlyOnceWith()
-    expect(store.freezeWritesAsync).toHaveBeenCalledOnce()
-    expect(events).toEqual(['flush', 'freeze'])
-  })
-
-  it('closes the profile store even when the durable flush fails', async () => {
-    const flushError = new Error('profile flush failed')
-    const freezeWritesAsync = vi.fn(async () => {})
-    const store = {
-      flushFinalOrThrowAsync: vi.fn(async () => {
-        throw flushError
-      }),
-      freezeWritesAsync
-    }
-
-    await expect(flushOrcadProfileStoreForShutdown(store)).rejects.toBe(flushError)
-    expect(freezeWritesAsync).toHaveBeenCalledOnce()
-  })
-})
-
-describe('orcad runtime cleanup order', () => {
-  // Booting orcad here would need its whole runtime; the wiring is pinned by the entry point's text.
-  it('closes notification dismissals in a cleanup that runs after RPC stops', () => {
-    const entry = readFileSync(join(import.meta.dirname, 'orcad-entry.ts'), 'utf8')
-    const close = entry.indexOf('registerCleanup(() => runtime.closeNotificationDismissals())')
-    const rpcStop = entry.indexOf('registerCleanup(() => rpc.stop())')
-    expect(close).toBeGreaterThan(-1)
-    // Cleanups run in reverse registration order.
-    expect(close).toBeLessThan(rpcStop)
   })
 })

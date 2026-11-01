@@ -1,9 +1,4 @@
-/**
- * The agent-row signal keys on where OpenCode paints its separator, not on the character: a `·` in
- * the footer path under the box or in a session tab title is drawn before the row in these real
- * starts, and must not move the read the signal fires on. Each is written into a recorded capture
- * in place of characters of the same length, so every read keeps its recorded size.
- */
+/** A footer/title dot must not trigger the agent-row separator; same-length edits preserve captured read timing. */
 
 import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
@@ -18,7 +13,6 @@ const OPENCODE_2_STARTS = [
   'opencode-2-0-21-timed-enter-after-agent-row',
   'opencode-cmd-2-0-21-timed-warm-server'
 ]
-// Only these starts paint a session tab strip before the row.
 const TAB_STRIP_STARTS = [
   'opencode-2-0-21-timed-natural-load-enter-dropped',
   'opencode-2-0-21-timed-enter-after-agent-row'
@@ -32,7 +26,6 @@ function readyRead(chunks: readonly string[]): number {
   return chunks.findIndex((chunk) => scanner.observe(chunk).ready)
 }
 
-/** Overwrites `data` at `offset` with `text`, then cuts it back into the recorded read sizes. */
 function overwrite(chunks: readonly string[], offset: number, text: string): string[] {
   const data = chunks.join('')
   const edited = data.slice(0, offset) + text + data.slice(offset + text.length)
@@ -45,7 +38,6 @@ function readAt(chunks: readonly string[], offset: number): number {
   return chunks.findIndex((chunk) => (end += chunk.length) > offset)
 }
 
-/** Offset of the footer path's first directory, on the line under the box's bottom corner. */
 function footerDirectoryOffset(data: string): number {
   const alt = data.indexOf(ALT_SCREEN_ENTER)
   const corner = new RegExp(`\\x1b\\[(\\d+);\\d+H${SGR}\\u2579`, 'g')
@@ -57,7 +49,6 @@ function footerDirectoryOffset(data: string): number {
   return match.index + match[0].length
 }
 
-/** Offset of the first character a session tab title paints on the top line. */
 function tabTitleCharOffset(data: string): number {
   const title = new RegExp(`\\x1b\\[1;\\d+H${SGR}(?=[A-Za-z])`, 'g')
   title.lastIndex = data.indexOf(ALT_SCREEN_ENTER)
@@ -70,7 +61,6 @@ describe('a separator OpenCode draws off the agent row does not make it ready', 
     const { chunks } = readTimedRuntimeFixture(name)
     const data = chunks.join('')
     const at = footerDirectoryOffset(data)
-    // Only painted path text is replaced.
     expect(data.slice(at, at + FOOTER_DIRECTORY.length)).toMatch(/^[\w./-]+$/)
     const edited = overwrite(chunks, at, FOOTER_DIRECTORY)
     expect(readAt(edited, at)).toBeLessThan(readyRead(chunks))

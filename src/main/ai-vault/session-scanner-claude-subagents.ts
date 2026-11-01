@@ -17,7 +17,7 @@ import {
   wslGatedStat
 } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import { recordSessionScanIssue } from './session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
 import { sessionIdFromFileName, sessionSortTime } from './session-scanner-accumulator'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import {
@@ -27,32 +27,22 @@ import {
 } from './session-scanner-subagent-transcripts'
 import {
   asRecord,
-  errorMessage,
   extractString,
   normalizeTitleText,
   parseJsonObject
 } from './session-scanner-values'
 
-// A subagent writing nothing for this long without a terminal notification is
-// treated as no longer running (its status stays unknown rather than stale).
+// Without a terminal report, old transcripts have unknown status rather than remaining running.
 const SUBAGENT_RUNNING_RECENCY_MS = 5 * 60_000
-// Match the main scanner's deliberate parse batching (SESSION_PARSE_CONCURRENCY):
-// opening every subagent read stream at once stalls over SSH/WSL UNC paths.
+// Bound simultaneous streams to avoid stalling SSH/WSL reads.
 const SUBAGENT_PARSE_CONCURRENCY = 8
-// 'scan', not 'exact', even though a user expands this on demand: it is bulk
-// directory work feeding the same parsers as the main scan, and the exact lane
-// stays reserved for live transcript probes.
+// Bulk subagent reads use scan priority; reserve the exact lane for live transcript probes.
 const SUBAGENT_FS_PRIORITY = 'scan'
 
 const TOOL_USE_RESULT_MARKER = '"toolUseResult"'
-// A sync-Task toolUseResult sets a status only when it carries an agentId. Tool
-// output records (Read/Bash) also carry "toolUseResult" and are the largest lines
-// in a transcript, so gating on this second marker keeps the status pass from
-// JSON-parsing ~all of the file's bytes on every on-demand fetch.
+// Require agentId to avoid decoding large ordinary tool outputs during the status pass.
 const TOOL_USE_RESULT_AGENT_ID_MARKER = '"agentId"'
 
-// Statuses reported by parent-transcript <task-notification> records
-// (background Tasks) and toolUseResult records (synchronous Tasks).
 const TERMINAL_TASK_STATUSES: Record<string, AiVaultSubagentRunStatus> = {
   completed: 'completed',
   failed: 'failed',
@@ -65,11 +55,7 @@ type ClaudeSubagentMeta = {
   agentType: string | null
 }
 
-/**
- * List the Task subagent transcripts of one Claude session, on demand. The
- * main scan prunes `subagents/` subtrees for speed, so this is the only path
- * that reads them — and only when the user expands a session's details.
- */
+/** Read subagents on demand; the main History scan prunes their subtrees. */
 export async function listClaudeSubagentSessions(args: {
   parentFilePath: string
   platform?: NodeJS.Platform
@@ -84,10 +70,13 @@ export async function listClaudeSubagentSessions(args: {
   try {
     entries = await wslGatedReaddir(subagentsDir, SUBAGENT_FS_PRIORITY)
   } catch (err) {
-    // A gate refusal is a stalled distro, not a session without subagents —
-    // report it so the panel offers a retry instead of showing an empty list.
+    // Surface WSL gate refusal so the panel can retry instead of reporting no subagents.
     if (err instanceof WslTranscriptFsError) {
-      recordSessionScanIssue(issues, { agent: 'claude', path: subagentsDir, message: err.message })
+      recordSessionScanIssue(issues, {
+        agent: 'claude',
+        path: subagentsDir,
+        ...scanIssueTextFromError(err)
+      })
     }
     return { sessions: [], issues }
   }
@@ -99,11 +88,8 @@ export async function listClaudeSubagentSessions(args: {
     return { sessions: [], issues }
   }
 
-  // One pass over the parent transcript resolves every subagent's status.
   const statusByAgentId = await collectSubagentTaskStatuses(args.parentFilePath)
-  // Why: the layout fixes the parent's sessionId (<parent>.jsonl -> subagents/);
-  // deriving it here avoids a subagent transcript with no sessionId records
-  // linking to its own filename-derived id instead of the parent.
+  // Derive parent identity from the layout; missing subagent sessionId must not substitute its own filename.
   const parentSessionId = sessionIdFromFileName(args.parentFilePath)
   const parsed: (AiVaultSession | null)[] = []
   for (let index = 0; index < transcriptNames.length; index += SUBAGENT_PARSE_CONCURRENCY) {
@@ -161,12 +147,9 @@ async function parseSubagentTranscript(args: {
     const meta = await readSubagentMeta(args.filePath)
     return {
       ...session,
-      // Why: the spawn description is the name the main agent gave this Task;
-      // it beats the transcript-derived fallback (the raw Task prompt).
+      // Prefer the parent-assigned Task name over the raw prompt fallback.
       title: meta.description ?? session.title,
       subagent: {
-        // The parent's sessionId is derived from its file path, not the
-        // subagent transcript, so it survives transcripts with no sessionId.
         parentSessionId: args.parentSessionId,
         agentType: meta.agentType,
         status: resolveSubagentStatus({
@@ -180,7 +163,7 @@ async function parseSubagentTranscript(args: {
     recordSessionScanIssue(args.issues, {
       agent: 'claude',
       path: args.filePath,
-      message: errorMessage(err)
+      ...scanIssueTextFromError(err)
     })
     return null
   }
@@ -195,16 +178,11 @@ function resolveSubagentStatus(args: {
   if (terminal) {
     return terminal
   }
-  // No terminal notification yet: a recently-written transcript is running;
-  // a stale one has no trustworthy status (e.g. the parent was interrupted).
+  // Without a terminal report, infer running only from recent transcript activity.
   return args.now - args.mtimeMs <= SUBAGENT_RUNNING_RECENCY_MS ? 'running' : null
 }
 
-// The parent transcript reports subagent completion in two shapes: sync Tasks
-// finish with a toolUseResult record ({ agentId, status }); background Tasks
-// launch with status 'async_launched' and finish with a <task-notification>
-// whose <task-id> is the agentId. Last record wins, so interim statuses (e.g.
-// 'async_launched', notification 'running') are superseded by terminal ones.
+// Sync Tasks use toolUseResult; background Tasks use notifications. The last reported status wins.
 async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<string, string>> {
   const statuses = new Map<string, string>()
   const input = openTranscriptReadStream(
@@ -225,15 +203,7 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
       if (!record) {
         continue
       }
-      // Only records whose text IS the notification set a status; a user prompt
-      // (or a sync-Task toolUseResult report) that merely quotes one also trips
-      // the raw-line prefilter, so it must not consume the record — fall through
-      // to the toolUseResult branch below rather than dropping a real status.
-      // Accepted limitation: a user message that BEGINS with a verbatim
-      // notification is indistinguishable from a real delivery (records carry no
-      // provenance marker), so it can set a bogus status. The impact is a wrong
-      // dot on a view-only row, so we don't gate on user-type markers here (that
-      // would risk dropping genuine harness-delivered statuses).
+      // Quoted markers must fall through to toolUseResult; verbatim leading notifications lack provenance to distinguish them.
       if (hasNotification) {
         const text = taskNotificationText(record)
         if (text.startsWith(CLAUDE_TASK_NOTIFICATION_MARKER)) {
@@ -254,19 +224,14 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
   } catch {
     // A missing/unreadable parent transcript degrades to recency-only status.
   } finally {
-    // readline.close() leaves the underlying stream open; destroy it so a
-    // mid-read failure cannot leak the gated transcript handle.
+    // readline.close() leaves its input open; destroy the gated stream even after read failures.
     lines.close()
     input.destroy()
   }
   return statuses
 }
 
-// The <status> marker follows <tool-use-id>/<output-file> lines in real
-// notifications, so it sits well past the 96-char title cap — the notification
-// text must be read untruncated (unlike titles/previews). Both delivery shapes
-// appear: queue-operation records carry it as top-level `content`; user-message
-// records under `message.content` (a string, or text content blocks).
+// Read full notification text: status can occur beyond title/preview truncation limits.
 function taskNotificationText(record: Record<string, unknown>): string {
   const direct = extractString(record.content)
   if (direct) {
@@ -290,8 +255,6 @@ function taskNotificationBlockText(block: unknown): string {
   return extractString(record?.text) ?? extractString(record?.content) ?? ''
 }
 
-// Claude writes an `agent-<id>.meta.json` sidecar for every subagent transcript,
-// carrying the Task tool's spawn `description` and its resolved `agentType`.
 async function readSubagentMeta(transcriptPath: string): Promise<ClaudeSubagentMeta> {
   const metaPath = `${transcriptPath.slice(0, -extname(transcriptPath).length)}.meta.json`
   try {
@@ -302,7 +265,6 @@ async function readSubagentMeta(transcriptPath: string): Promise<ClaudeSubagentM
       agentType: extractString(record?.agentType)
     }
   } catch {
-    // The sidecar is optional; the transcript still yields a usable title.
     return { description: null, agentType: null }
   }
 }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ownRetainedString, resetOwnRetainedStringCopier } from './own-retained-string'
 import { copyUtf16SuffixToOwnedString } from './owned-utf16-suffix'
 
@@ -7,7 +7,7 @@ const PARENTS = 32
 const TAIL_CHARS = 4096
 
 function collectHeap(): number {
-  const gc = (globalThis as { gc?: () => void }).gc
+  const gc = globalThis.gc
   if (!gc) {
     throw new Error('global.gc unavailable - config/vitest.config.ts must pass --expose-gc')
   }
@@ -62,7 +62,7 @@ describe('ownRetainedString', () => {
     expect(ownRetainedString(value).length).toBe(value.length)
   })
 
-  it('leaves already-flat short strings alone', () => {
+  it('preserves short strings at the copy threshold', () => {
     // Below V8 SlicedString::kMinLength a slice is already a standalone copy.
     for (const value of ['', '\x1b', '\ud800', 'x'.repeat(12)]) {
       const parent = `${'y'.repeat(64 * 1024)}${value}`
@@ -73,7 +73,6 @@ describe('ownRetainedString', () => {
   })
 
   it('matches the block copier when Buffer is unavailable', () => {
-    const original = (globalThis as { Buffer?: unknown }).Buffer
     const values = [
       '漢\ud800|\udc00|\ud83d'.repeat(512),
       `\x1b]9999;${'x'.repeat(4096)}\ude00`,
@@ -83,15 +82,19 @@ describe('ownRetainedString', () => {
 
     resetOwnRetainedStringCopier()
     // Renderer and mobile bundles have no Buffer; the fallback must be byte-identical.
-    delete (globalThis as { Buffer?: unknown }).Buffer
+    vi.stubGlobal('Buffer', undefined)
     try {
+      const owned = retainedBytes((parent) =>
+        ownRetainedString(parent.slice(parent.length - TAIL_CHARS))
+      )
+      expect(owned).toBeLessThan(4 * 1024 * 1024)
       values.forEach((value, index) => {
         expect(ownRetainedString(value)).toBe(value)
         expect(ownRetainedString(value)).toBe(withBuffer[index])
         expect(ownRetainedString(value)).toBe(copyUtf16SuffixToOwnedString(value, value.length))
       })
     } finally {
-      ;(globalThis as { Buffer?: unknown }).Buffer = original
+      vi.unstubAllGlobals()
     }
   })
 })

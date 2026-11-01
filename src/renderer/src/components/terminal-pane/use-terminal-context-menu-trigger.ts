@@ -68,8 +68,7 @@ export function useTerminalContextMenuTrigger({
         : null
     contextPaneIdRef.current = clickedPane?.id ?? null
 
-    // Why: when users opt into terminal-style right-click, a selection copies
-    // and no selection pastes. Ctrl+right-click keeps the app menu reachable.
+    // Configured right-click copies selection or pastes; Ctrl+right-click preserves menu access.
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
       if (!clickedPane) {
@@ -81,7 +80,7 @@ export function useTerminalContextMenuTrigger({
           writeClipboardText: window.api.ui.writeTerminalClipboardText,
           clearSelectionOnSuccess: true
         }).catch(() => {
-          /* ignore clipboard write failures */
+          // Failed copy leaves selection available for retry.
         })
       } else {
         void pasteResolvedPane('right-click')

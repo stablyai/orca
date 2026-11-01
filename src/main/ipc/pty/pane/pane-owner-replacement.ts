@@ -1,6 +1,6 @@
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { PersistPtyBindingArgs } from '../../../persistence/loading-store/pty-binding-persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'
@@ -46,10 +46,7 @@ export async function stopReplacedPaneOwner(
   }
 }
 
-/**
- * The replacement's bind is the swap: decided inside the bind's durable mutation, it takes a leaf
- * still naming the stopped id, or one the renderer already cleared; any other owner wins.
- */
+/** Swap inside the durable mutation: accept the stopped ID or a renderer-cleared leaf; another owner wins. */
 export function swapReplacedPaneBinding(
   store: Store,
   binding: PersistPtyBindingArgs,

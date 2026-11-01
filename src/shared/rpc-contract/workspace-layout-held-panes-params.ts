@@ -1,5 +1,4 @@
-// `layout.reopenHeldPanes`: a paired desktop's Reopen of a layout-owner server's held panes, under
-// the server's own ids. Served only by a server advertising LAYOUT_REOPEN_HELD_PANES_CAPABILITY.
+// Paired reopen uses server-owned IDs; requires LAYOUT_REOPEN_HELD_PANES_CAPABILITY.
 import { z } from 'zod'
 
 export const LayoutReopenHeldPanesParams = z.object({

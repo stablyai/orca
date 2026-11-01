@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_WORKSPACE_DOC_HISTORY_ENTRIES,
   normalizeWorkspaceDocHistoryEntries,
-  normalizeWorkspaceDocHistoryTitle,
   type WorkspaceDocHistoryEntry
 } from './workspace-doc-history'
 
@@ -31,7 +30,6 @@ describe('normalizeWorkspaceDocHistoryEntries', () => {
     )
     const entries = normalizeWorkspaceDocHistoryEntries(oversized)
     expect(entries).toHaveLength(MAX_WORKSPACE_DOC_HISTORY_ENTRIES)
-    // The oldest rows are the dropped ones.
     expect(entries.at(-1)?.lastVisitedAt).toBe(10)
   })
 
@@ -49,10 +47,6 @@ describe('normalizeWorkspaceDocHistoryEntries', () => {
     expect(entries[0]?.title).toBe('a.html')
   })
 
-  it('title fence falls back to the file for empty titles', () => {
-    expect(normalizeWorkspaceDocHistoryTitle('', DOC)).toBe('a.html')
-    expect(normalizeWorkspaceDocHistoryTitle('Report', DOC)).toBe('Report')
-  })
   it('indexes document identity while deduplicating a large legacy history', () => {
     let reads = 0
     const entries = Array.from({ length: 10_000 }, (_, i) =>

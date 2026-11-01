@@ -1,12 +1,18 @@
 import { constants, copyFile, lstat, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { readAuthorizedDocPreviewFile } from '../../shared/doc-preview-file-access'
+import {
+  readAuthorizedDocPreviewFile,
+  readAuthorizedDocPreviewFileChunk
+} from '../../shared/doc-preview-file-access'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
-import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem-auth'
-import { isENOENT } from '../ipc/filesystem-path-containment'
-import { assertNotExists, rethrowWithUserMessage } from '../ipc/filesystem-create-path-guards'
-import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem-symlink-directory-entries'
+import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import {
+  assertNotExists,
+  rethrowWithUserMessage
+} from '../ipc/filesystem/filesystem-create-path-guards'
+import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem/filesystem-symlink-directory-entries'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { listMarkdownDocuments } from '../ipc/markdown-documents'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
@@ -18,6 +24,7 @@ import type {
   FileWriteResult
 } from '../../shared/file-write-disk-precondition'
 import { writeLocalTextFileWithDiskPrecondition } from '../ipc/filesystem/local-disk-write-precondition'
+import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
 
 export type LocalFilesystemProviderOptions = {
   /** Read lazily so a call that fails earlier never touches the store. */
@@ -26,11 +33,10 @@ export type LocalFilesystemProviderOptions = {
   resolveAuthorizedPath: typeof ResolveAuthorizedPath
 }
 
-/**
- * Contract methods with a runtime-command local twin. Reads, listing and watching keep
- * their existing local call sites: their local limits and result shapes differ from the contract.
- */
-export type LocalFilesystemProvider = Required<Pick<IFilesystemProvider, 'listMarkdownDocuments'>> &
+/** Local twins for runtime commands; reads/listing/watching retain call sites with different limits/shapes. */
+export type LocalFilesystemProvider = Required<
+  Pick<IFilesystemProvider, 'listMarkdownDocuments' | 'readDocPreviewFileChunk'>
+> &
   Pick<
     IFilesystemProvider,
     | 'readDir'
@@ -48,7 +54,6 @@ export type LocalFilesystemProvider = Required<Pick<IFilesystemProvider, 'listMa
     | 'copy'
     | 'search'
   > & {
-    /** `writeFile` that first refuses when disk no longer matches the caller's baseline. */
     writeFileWithDiskPrecondition(
       filePath: string,
       content: string,
@@ -56,15 +61,19 @@ export type LocalFilesystemProvider = Required<Pick<IFilesystemProvider, 'listMa
     ): Promise<FileWriteResult>
   }
 
-/** This machine's file operations behind the store's path authorization; build one per call. */
+/** Build per call so path authorization uses the current store. */
 export function createLocalFilesystemProvider(
   options: LocalFilesystemProviderOptions
 ): LocalFilesystemProvider {
   const { resolveAuthorizedPath } = options
-  const authorize = (path: string) => resolveAuthorizedPath(path, options.requireStore())
-  // Why: rename, copy and delete act on a symlink itself, never on what it points to.
-  const authorizeLink = (path: string) =>
-    resolveAuthorizedPath(path, options.requireStore(), { preserveSymlink: true })
+  // Authorized in the caller's spelling; a UNC drive-mount path is opened by its drive path.
+  const authorize = async (path: string) =>
+    windowsFsPath(await resolveAuthorizedPath(path, options.requireStore()))
+  // Rename/copy/delete must authorize the symlink itself, preserving its target.
+  const authorizeLink = async (path: string) =>
+    windowsFsPath(
+      await resolveAuthorizedPath(path, options.requireStore(), { preserveSymlink: true })
+    )
   const writeBase64 = async (filePath: string, contentBase64: string, append: boolean) => {
     const content = Buffer.from(contentBase64, 'base64')
     const authorizedPath = await authorize(filePath)
@@ -100,6 +109,7 @@ export function createLocalFilesystemProvider(
       )
     },
     readDocPreviewFile: readAuthorizedDocPreviewFile,
+    readDocPreviewFileChunk: readAuthorizedDocPreviewFileChunk,
     writeFile: async (filePath, content) => {
       await writeTextFile(filePath, content, undefined)
     },
@@ -143,7 +153,7 @@ export function createLocalFilesystemProvider(
       const authorizedSource = await authorizeLink(source)
       const authorizedDestination = await authorizeLink(destination)
       await mkdir(dirname(authorizedDestination), { recursive: true })
-      // Why: COPYFILE_EXCL keeps the no-clobber invariant; callers already deconflict names.
+      // Callers deconflict names; COPYFILE_EXCL preserves no-clobber if a destination appears meanwhile.
       await copyFile(authorizedSource, authorizedDestination, constants.COPYFILE_EXCL)
     },
     search: async (searchOptions, { signal } = {}) => {
@@ -165,7 +175,7 @@ export function createLocalFilesystemProvider(
         wslDistro,
         wslDistroForOutput,
         signal,
-        // Why: request abort owns cancellation; only the renderer IPC search keeps a by-id registry.
+        // Request abort owns cancellation; only renderer IPC needs a by-id registry.
         onSpawn: () => () => undefined
       })
     },

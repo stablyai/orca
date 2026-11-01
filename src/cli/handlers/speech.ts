@@ -14,7 +14,7 @@ function formatKeyStatus(status: OpenAiSpeechKeyStatus): string {
     : 'OpenAI key saved on this host.'
 }
 
-// Why stdin and never a flag: argv shows up in shell history and process listings.
+// Keep secrets out of argv, shell history, and process listings.
 export async function readOpenAiKeyFromStdin(
   stdin: AsyncIterable<unknown> & { isTTY?: boolean } = process.stdin
 ): Promise<string> {
@@ -44,7 +44,6 @@ export async function readOpenAiKeyFromStdin(
   return key
 }
 
-// Why: `--host runtime:<id>` can reach an older server, whose raw `method_not_found` reads as a bug.
 export async function callOpenAiKeyMethod(
   client: Pick<HandlerContext['client'], 'call'>,
   method: string,

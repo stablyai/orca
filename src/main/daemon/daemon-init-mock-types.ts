@@ -1,6 +1,5 @@
 import type { Mock } from 'vitest'
 
-/** Fake DaemonSpawner instance every mocked `new DaemonSpawner()` records. */
 export type MockSpawner = {
   ensureRunning: Mock
   resetHandle: Mock
@@ -11,7 +10,6 @@ export type MockSpawner = {
   staleDaemonRecycleVersion: string | null
 }
 
-/** Fake DaemonPtyAdapter instance every mocked `new DaemonPtyAdapter()` records. */
 export type MockAdapter = {
   protocolVersion: number
   options: {
@@ -35,7 +33,6 @@ export type MockAdapter = {
   hasRetiredForIdle: Mock
   onData: Mock
   onExit: Mock
-  // Why: the router calls onData/onExit on each adapter; the stub returns a no-op unsubscribe so router subscription doesn't explode.
   callOrder: string[]
 }
 
@@ -47,7 +44,6 @@ export type MockSpawnerConstructor = new (opts: {
 
 export type MockAdapterConstructor = new (opts: MockAdapter['options']) => MockAdapter
 
-/** Handle the fake spawner hands back from ensureRunning/getHandle. */
 export type MockSpawnerHandle = {
   mode?: 'degraded-new-pty-fallback'
   quarantine?: 'host-image-severed'
@@ -56,21 +52,18 @@ export type MockSpawnerHandle = {
   shutdown: () => Promise<void>
 }
 
-/** Slice of net.Socket the daemon socket probe drives. */
 export type MockProbeSocket = {
   on: (event: string, callback: () => void) => MockProbeSocket
   removeListener: (event: string, callback: () => void) => MockProbeSocket
   destroy: () => void
 }
 
-/** Identity the fake daemon child reports through DaemonClient.getDaemonIdentity. */
 export type LaunchedDaemonIdentity = {
   pid: number
   startedAtMs: number
   launchNonce: string
 }
 
-/** Local (non-daemon) PTY provider the degraded/fallback paths install. */
 export type MockLocalPtyProvider = {
   routesFreshSpawnsToLocalProvider: undefined
   spawn: Mock<(opts: { sessionId?: string }) => Promise<{ id: string }>>
@@ -104,7 +97,6 @@ export type EnsureRunningOverride = () => Promise<{
   adopted?: true
 }>
 
-/** Every stub daemon-init's suites share, plus the control knobs they mutate per test. */
 export type DaemonInitMockState = {
   getPathMock: Mock<() => string>
   getAppPathMock: Mock<() => string>
@@ -153,7 +145,6 @@ export type DaemonInitMockState = {
   trackDaemonAdoptedMock: Mock<(...args: unknown[]) => void>
 }
 
-/** net.connect stubs the suites install in beforeEach. */
 export type NetConnectStubs = {
   installDefaultNetConnectStub: () => void
   mockOnlyDaemonSocketAlive: (socketSuffix: string) => void

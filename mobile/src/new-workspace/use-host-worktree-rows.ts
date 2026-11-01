@@ -8,7 +8,6 @@ type WorktreeRow = Pick<Worktree, 'path' | 'repoId' | 'branch'>
 
 const NO_ROWS: readonly WorktreeRow[] = []
 
-/** The host's worktrees for the Create Workspace drawer's name and branch checks: one read. */
 export function useHostWorktreeRows(
   client: RpcClient | null,
   connected: boolean,
@@ -30,7 +29,6 @@ export function useHostWorktreeRows(
           setRows(catalog.value.worktrees as WorktreeRow[])
         }
       })
-      // An unread list leaves the checks without rows, as the host screen's drawer is before its first read.
       .catch(() => {})
     return () => {
       live = false

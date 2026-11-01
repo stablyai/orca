@@ -19,7 +19,6 @@ function getCandidateLocalWorktreePaths(
   return new Set([worktreePath, resolvedWorktreePath].map(comparableLocalPath))
 }
 
-/** Repos owning a registered worktree at one of `candidatePaths`, in one pass over the meta table. */
 function collectRepoIdsWithRegisteredWorktreeMeta(
   store: RuntimeStore,
   candidatePaths: Set<string>
@@ -46,8 +45,7 @@ export function getLocalRepoForRegisteredWorktree(
   }
 
   const candidatePaths = getCandidateLocalWorktreePaths(worktreePath, resolvedWorktreePath)
-  // Built at most once, and only when a repo actually needs it, so the meta table is never
-  // rescanned per repo — 59 IPC call sites hit this, some per keystroke.
+  // Lazily scan meta once, not once per repo, on frequent IPC paths.
   let repoIdsWithMeta: Set<string> | undefined
   return store
     .getRepos()
@@ -61,8 +59,7 @@ export function getLocalRepoForRegisteredWorktree(
     )
 }
 
-/** Git options for a repo already resolved by `getLocalRepoForRegisteredWorktree`,
- *  so a caller needing both does not walk every repo's worktree meta twice. */
+/** Reuse a resolved repo without scanning worktree metadata again. */
 export function getLocalGitOptionsForRepo(
   store: RuntimeStore,
   repo: Repo | undefined
@@ -70,8 +67,7 @@ export function getLocalGitOptionsForRepo(
   if (!repo || typeof store.getProjects !== 'function' || typeof store.getSettings !== 'function') {
     return {}
   }
-  // Why: file discovery must use the same resolved runtime as project git,
-  // terminals, and agents even when the worktree path is a Windows path.
+  // Match project Git/terminal runtime even for Windows-spelled paths.
   return getLocalProjectWorktreeGitOptions(store, repo)
 }
 

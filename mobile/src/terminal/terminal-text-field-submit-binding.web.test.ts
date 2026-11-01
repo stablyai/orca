@@ -7,7 +7,6 @@ import { bindTerminalTextFieldSubmit as bindOnWeb } from './terminal-text-field-
 
 vi.mock('../platform/host-os', () => ({ hostOs: vi.fn(() => 'android') }))
 
-/** A ref holding whatever the platform hands back, which on RN Web is the DOM node. */
 const asField = (node: unknown): TextInput | null =>
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the point of these cases is that a DOM node is what the native signature receives on RN Web, which is the mismatch this sibling exists for.
   node as TextInput | null
@@ -49,7 +48,6 @@ describe('the web sibling', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
-  // RN Web renders a multiline field as a textarea, where the same keystroke is a paragraph.
   it('submits a multiline field on its paragraph break', () => {
     const onSubmit = vi.fn()
     const field = document.createElement('textarea')
@@ -61,10 +59,7 @@ describe('the web sibling', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1)
   })
 
-  /**
-   * The case the brief guards: an IME still choosing a candidate reports its commit as
-   * `insertCompositionText`, and Enter there belongs to the keyboard, not to the terminal.
-   */
+  // IME candidate acceptance emits insertCompositionText, so it must not submit terminal input.
   it('leaves a composition commit alone', () => {
     const onSubmit = vi.fn()
     const field = mountField()
@@ -100,8 +95,6 @@ describe('the web sibling', () => {
     expect(() => bindOnWeb(asField(null), vi.fn())()).not.toThrow()
   })
 
-  // A release that wrapped the field in something other than a form control is left alone rather
-  // than given a listener that could never see a line break.
   it('leaves a node that is not a field alone', () => {
     const onSubmit = vi.fn()
     const div = document.createElement('div')
@@ -114,8 +107,9 @@ describe('the web sibling', () => {
   })
 })
 
-describe('live terminal keyboard chords', () => {
-  function setup(accept = true) {
+describe.each(['android', 'ios'] as const)('live terminal keyboard chords on %s', (os) => {
+  function setup(accept = true, platform: ReturnType<typeof hostOs> = os) {
+    vi.mocked(hostOs).mockReturnValueOnce(platform)
     const field = mountField()
     const onChord = vi.fn(() => accept)
     const unbind = bindOnWeb(asField(field), vi.fn(), onChord)
@@ -126,7 +120,7 @@ describe('live terminal keyboard chords', () => {
         key: name,
         ...options
       })
-      // happy-dom treats every Alt as AltGraph; browsers report them separately.
+      // Happy DOM conflates Alt with AltGraph; browsers distinguish them.
       vi.spyOn(event, 'getModifierState').mockReturnValue(false)
       field.dispatchEvent(event)
       return event
@@ -141,7 +135,8 @@ describe('live terminal keyboard chords', () => {
     ['Tab', { shiftKey: true }, '\x1b[Z'],
     ['ArrowUp', {}, '\x1b[A'],
     ['ArrowLeft', { ctrlKey: true }, '\x1b[1;5D'],
-    ['b', { altKey: true }, '\x1bb']
+    ['Enter', { shiftKey: true }, '\x1b[13;2u'],
+    ['ArrowLeft', { altKey: true }, '\x1b[1;3D']
   ])('claims %s once before RNWeb can resend it', (name, options, bytes) => {
     const { field, onChord, key } = setup()
     const parentKey = vi.fn()
@@ -151,11 +146,28 @@ describe('live terminal keyboard chords', () => {
     expect(parentKey).not.toHaveBeenCalled()
   })
 
+  it.each(['b', '@', '[', ']', '{', ' '])(
+    'keeps Option-generated %j native on iOS and Alt chords on Android',
+    (name) => {
+      const { onChord, key } = setup()
+      expect(key(name, { altKey: true }).defaultPrevented).toBe(os === 'android')
+      expect(onChord.mock.calls).toEqual(os === 'android' ? [[{ bytes: `\x1b${name}` }]] : [])
+    }
+  )
+
   it.each([
     ['a', {}],
     ['Enter', {}],
+    ['Enter', { ctrlKey: true, shiftKey: true }],
+    ['Enter', { altKey: true, shiftKey: true }],
+    ['Enter', { shiftKey: true, isComposing: true }],
+    ['Enter', { shiftKey: true, keyCode: 229 }],
     ['Backspace', {}],
     ['Delete', {}],
+    ['ArrowLeft', {}],
+    ['ArrowRight', {}],
+    ['Home', {}],
+    ['End', {}],
     ['c', { ctrlKey: true, isComposing: true }],
     ['c', { ctrlKey: true, keyCode: 229 }],
     ['c', { ctrlKey: true, altKey: true }],
@@ -186,9 +198,8 @@ describe('live terminal keyboard chords', () => {
     expect(onChord).not.toHaveBeenCalled()
   })
 
-  it.each(['ios', 'web'] as const)('leaves %s keyboard handling unchanged', (os) => {
-    vi.mocked(hostOs).mockReturnValueOnce(os)
-    const { key, onChord } = setup()
+  it('leaves standalone web keyboard handling unchanged', () => {
+    const { key, onChord } = setup(true, 'web')
     expect(key('Tab').defaultPrevented).toBe(false)
     expect(key('c', { ctrlKey: true }).defaultPrevented).toBe(false)
     expect(onChord).not.toHaveBeenCalled()

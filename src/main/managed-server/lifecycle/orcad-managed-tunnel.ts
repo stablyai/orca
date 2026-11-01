@@ -5,6 +5,7 @@ import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { probeManagedOrcadTunnel } from './orcad-managed-tunnel-resume'
 import { ensureManagedOrcadServing } from './orcad-managed-serving'
 import { OrcadManagedTunnelManager } from './orcad-managed-tunnel-manager'
+import { buildOnBindableLocalPort } from './orcad-managed-tunnel-local-port'
 import { getRemoteRuntimeSharedControlAnsweredAt } from '../../ipc/runtime-environments/runtime-environment-shared-control-answers'
 import {
   getSshConnectionManager,
@@ -54,33 +55,33 @@ function pairingRecovery(userDataPath: string): ManagedOrcadPairingRecovery {
   }
 }
 
-/** Returns the environment as stored once the tunnel stands: a re-pair replaces its credentials. */
+/** Return stored credentials: tunnel repair may have replaced the pairing. */
 export async function ensureOrcadManagedTunnel(
   userDataPath: string,
   selector: string
 ): Promise<KnownRuntimeEnvironment> {
   const { id } = resolveEnvironment(userDataPath, selector)
-  await buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
-    managedTunnels.ensure(environment, () => resolveEnvironmentOrNull(userDataPath, id))
+  await buildOnBindableLocalPort(userDataPath, id, () =>
+    buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
+      managedTunnels.ensure(environment, () => resolveEnvironmentOrNull(userDataPath, id))
+    )
   )
   return resolveEnvironment(userDataPath, id)
 }
 
-/** After a redeploy: the reused forward may target the port the previous server bound. */
 export async function rebuildOrcadManagedTunnel(
   userDataPath: string,
   selector: string
 ): Promise<'built' | 'repaired'> {
   const { id } = resolveEnvironment(userDataPath, selector)
-  return buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
-    managedTunnels.rebuild(environment, () => resolveEnvironmentOrNull(userDataPath, id))
+  return buildOnBindableLocalPort(userDataPath, id, () =>
+    buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
+      managedTunnels.rebuild(environment, () => resolveEnvironmentOrNull(userDataPath, id))
+    )
   )
 }
 
-/**
- * A socket through a standing tunnel had its token refused. Forwarding anew re-proves which
- * server answers, so only our own server's refusal re-pairs; a foreign one fails as foreign.
- */
+/** Reprove pinned-server refusal before repair; foreign servers must fail identity validation. */
 export function recoverRefusedManagedOrcadPairing(
   userDataPath: string,
   environmentId: string
@@ -88,7 +89,7 @@ export function recoverRefusedManagedOrcadPairing(
   return rebuildOrcadManagedTunnel(userDataPath, environmentId)
 }
 
-/** Whether a failed re-pair stands for the pairing stored now; one for an older pairing judges nothing current. */
+/** Ignore failures belonging to older pairing revisions. */
 export function managedOrcadPairingFailureStands(
   userDataPath: string,
   environmentId: string
@@ -102,7 +103,7 @@ export function managedOrcadPairingFailureStands(
   )
 }
 
-/** An explicit connect is the user asking again, so recent failed re-pairs must not answer it. */
+/** Explicit connect clears recent repair failures. */
 export function forgetFailedManagedOrcadPairingRepair(
   userDataPath: string,
   environmentId: string
@@ -126,7 +127,7 @@ export function disposeOrcadManagedTunnels(): void {
   managedTunnels.dispose()
 }
 
-/** Why on quit: a system-ssh tunnel is its own `ssh -L` process and would outlive Orca. */
+// System SSH forwards have independent processes and can outlive Orca.
 export function shutdownOrcadManagedTunnels(): Promise<void> {
   return managedTunnels.shutdown()
 }
@@ -155,7 +156,6 @@ export function closeOrcadManagedTunnel(environmentId: string): Promise<void> {
   return managedTunnels.close(environmentId)
 }
 
-/** Part of the SSH session's teardown, so a Disconnect leaves no managed `ssh -L` listening. */
 export function closeOrcadManagedTunnelsForTarget(targetId: string): Promise<void> {
   return managedTunnels.closeTarget(targetId)
 }

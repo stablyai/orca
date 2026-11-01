@@ -19,25 +19,35 @@ describe('scrcpyVideoRegistry', () => {
 
     const events: ScrcpyVideoEvent['type'][] = []
     const unsubscribe = scrcpyVideoRegistry.subscribe('dev', (event) => events.push(event.type))
-    expect(events).toEqual(['meta', 'frame']) // replayed cached meta + config
+    expect(events).toEqual(['meta', 'frame'])
 
     scrcpyVideoRegistry.pushFrame('dev', frame(false))
     expect(events).toEqual(['meta', 'frame', 'frame'])
 
     unsubscribe()
     scrcpyVideoRegistry.pushFrame('dev', frame(false))
-    expect(events).toEqual(['meta', 'frame', 'frame']) // no delivery after unsubscribe
+    expect(events).toEqual(['meta', 'frame', 'frame'])
 
     scrcpyVideoRegistry.stop('dev')
     expect(close).toHaveBeenCalledTimes(1)
     expect(scrcpyVideoRegistry.has('dev')).toBe(false)
   })
 
-  it('ignores pushes for unknown devices', () => {
-    expect(() =>
-      scrcpyVideoRegistry.pushMeta('missing', { codecId: 'h264', width: 1, height: 1 })
-    ).not.toThrow()
-    expect(scrcpyVideoRegistry.subscribe('missing', () => {})()).toBeUndefined()
+  it('routes control only to the live session registered for the device', () => {
+    const control = { videoSize: () => null, sendControl: () => true }
+    scrcpyVideoRegistry.attachControl('ctl', control)
+    expect(scrcpyVideoRegistry.control('ctl')).toBeNull()
+
+    scrcpyVideoRegistry.register('ctl', () => {})
+    scrcpyVideoRegistry.attachControl('ctl', control)
+    expect(scrcpyVideoRegistry.control('ctl')).toBe(control)
+
+    // A replacement session must not inherit the previous server's control socket.
+    scrcpyVideoRegistry.register('ctl', () => {})
+    expect(scrcpyVideoRegistry.control('ctl')).toBeNull()
+    scrcpyVideoRegistry.attachControl('ctl', control)
+    scrcpyVideoRegistry.stop('ctl')
+    expect(scrcpyVideoRegistry.control('ctl')).toBeNull()
   })
 
   it('replays the current GOP (keyframe + following deltas) to late subscribers', () => {
@@ -61,7 +71,6 @@ describe('scrcpyVideoRegistry', () => {
     scrcpyVideoRegistry.subscribe('gop', (event) => seen.push(tag(event)))()
     expect(seen).toEqual(['K1', 'D2'])
 
-    // A new keyframe drops the prior GOP so replay always starts decodeable.
     scrcpyVideoRegistry.pushFrame('gop', {
       config: false,
       keyFrame: true,

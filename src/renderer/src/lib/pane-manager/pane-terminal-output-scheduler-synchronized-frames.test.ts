@@ -358,9 +358,7 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).toHaveBeenCalledWith('\x1b[?2026h\x1b[?25lpartial', expect.any(Function))
   })
 
-  // Why: issue #8754 — ConPTY splits Codex spinner frames into an open chunk and a
-  // close chunk; hold and coalesce each cancelled the other's fallback timer, so a
-  // visible pane never repainted until the tab was blurred.
+  // ConPTY splits Codex frames; hold/coalesce used to cancel each other’s timers and freeze visible output until blur (#8754).
   it('keeps repainting when synchronized frames alternate hold and coalesce chunks', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()

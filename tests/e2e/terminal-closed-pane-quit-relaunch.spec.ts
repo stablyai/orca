@@ -1,11 +1,5 @@
-/**
- * A pane closed just before quit must stay closed after relaunch.
- *
- * Why this suite exists: closing a pane asks the terminal daemon to kill its shell, and on macOS
- * that kill waits out a descendant grace before it finishes. Quitting inside that window left the
- * daemon listing the dying session as live, so the relaunched app adopted it as an extra tab and its
- * attach spawned a fresh shell under the closed id.
- */
+// A just-closed pane must stay closed after immediate quit/relaunch.
+// macOS descendant kill grace can leave a dying daemon session listed live, which old startup adopted and respawned under its closed id.
 
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'

@@ -47,7 +47,6 @@ beforeEach(() => {
   vi.resetAllMocks()
   harness = createManagedLifecycleHarness()
   mocks.state.store = harness.targetStore
-  // The host was deleted: every connect is refused.
   mocks.connect.mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:2841'))
   mocks.resolveContext.mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:2841'))
 })
@@ -73,7 +72,7 @@ describe('a managed server whose host is gone (P1-E)', () => {
       forgetManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' }, policy())
     ).resolves.toEqual({
       outcome: 'forgotten',
-      // Never `exited`: nothing on the host was observed.
+      // No host observation means local forgetting cannot report proven exit.
       verdict: 'unverifiable',
       environmentId: 'environment-1',
       sshTargetId: 'ssh-1'
@@ -82,7 +81,6 @@ describe('a managed server whose host is gone (P1-E)', () => {
     expect(mocks.resolveContext).not.toHaveBeenCalled()
     expect(listEnvironments(harness.userDataPath)).toEqual([])
     expect(getManagedOrcadFenceEnvironmentId(harness.current())).toBeNull()
-    // What ssh:removeTarget checks: the host is a plain SSH target again.
     expect(isManagedOrcadSshTarget(harness.current())).toBe(false)
     expect(harness.flushes).toHaveLength(1)
     expect(mocks.retire).toHaveBeenCalledWith('environment-1')

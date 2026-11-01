@@ -15,7 +15,7 @@ export function sessionPartitions(
     [localHostId, withRequiredWorkspaceSessionMaps(state.workspaceSession)],
     ...Object.entries(state.workspaceSessionsByHostId ?? {}).flatMap(
       ([hostId, session]): [string, WorkspaceSessionState][] =>
-        // A partition written before its maps were filled in on write still loads without them.
+        // Older sparse partitions may omit required maps.
         session ? [[hostId, withRequiredWorkspaceSessionMaps(session)]] : []
     )
   ]
@@ -23,18 +23,13 @@ export function sessionPartitions(
 
 export type MergedSessionFragments = {
   session: WorkspaceSessionState | null
-  /** Worktrees two partitions saved differently, when `session` is null. */
   conflicts: string[]
 }
 
-/**
- * Null when two partitions disagree about the same worktree. The same marker in both (a renderer
- * snapshot can copy one into the local and the host partition) is not a disagreement, and neither
- * is an empty row beside a populated one: like the app's own adoption, empty is not evidence.
- */
+/** Conflicting populated rows refuse; matching or empty copies provide no conflicting evidence. */
 export function mergeSessionFragments(
   fragments: WorkspaceSessionState[],
-  /** Tabs some partition recorded as closed: a row listing one never wins over an empty row. */
+  /** Closed-tab evidence outranks populated rows that still list the tab. */
   closedTabIds: ReadonlySet<string>
 ): MergedSessionFragments {
   const ownerKeys = new Set<string>()
@@ -66,7 +61,6 @@ export function mergeSessionFragments(
   return merged ? { session: merged, conflicts: [] } : { session: null, conflicts: [] }
 }
 
-/** Field and owner key of every populated row, except a tab row naming a closed tab. */
 function populatedOwnerRows(
   fragments: readonly WorkspaceSessionState[],
   closedTabIds: ReadonlySet<string>
@@ -131,7 +125,7 @@ function agreesOnOwner(
   keyedValues: ReadonlyMap<string, string>
 ): boolean {
   return OWNER_KEYED_FIELDS.every((field) => {
-    // A fence, not a choice: mergeWorkspaceSessions keeps the highest revision.
+    // Revisions are fences, so mergeWorkspaceSessions takes the highest.
     if (field === 'terminalTopologyRevisionByRepoId') {
       return true
     }

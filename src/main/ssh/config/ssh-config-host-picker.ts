@@ -9,9 +9,7 @@ import { normalizeSshConfigAlias } from '../../../shared/ssh-config-alias'
 import { loadUserSshConfig, type SshConfigHost } from './ssh-config-parser'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-g-config-resolution'
 
-// Why: every keystroke in the picker filter re-queries the main process. Parsing (and
-// Include-expanding) ~/.ssh/config per keystroke is the whole cost, and the file cannot
-// change between them, so hold the parse for the picker session and refresh on reopen.
+// Cache parsing/Include expansion for picker keystrokes; refresh when reopened.
 let cachedConfigHosts: SshConfigHost[] | null = null
 
 export function invalidateUserSshConfigHostCache(): void {
@@ -29,7 +27,9 @@ export function searchSshConfigHosts(
   hosts: SshConfigHost[],
   existingTargets: readonly Pick<SshTarget, 'configHost' | 'label'>[],
   query = '',
-  suppressedAliases: readonly string[] = []
+  suppressedAliases: readonly string[] = [],
+  // Aliases the import skips because an existing target already has their route.
+  routeDuplicateAliases: ReadonlySet<string> = new Set()
 ): SshConfigHostListResult {
   const existingAliases = new Set(
     existingTargets.flatMap((target) =>
@@ -50,13 +50,14 @@ export function searchSshConfigHosts(
       continue
     }
     seenAliases.add(normalizedAlias)
-    const alreadyInOrca = existingAliases.has(normalizedAlias)
-    // Why: tombstones only block passive bulk import — the picker still lists the
-    // Host so deleting one Orca target never looks like "~/.ssh/config is empty".
-    const previouslyRemoved = !alreadyInOrca && suppressedAliasSet.has(normalizedAlias)
+    const aliasInOrca = existingAliases.has(normalizedAlias)
+    const alreadyInOrca = aliasInOrca || routeDuplicateAliases.has(normalizedAlias)
+    // Tombstones suppress bulk import, not picker visibility, so deleting a target cannot make config look empty.
+    // Alias-only, because Restore re-adopts by alias.
+    const previouslyRemoved = !aliasInOrca && suppressedAliasSet.has(normalizedAlias)
     totalHostCount += 1
-    // Why: "Add all" must match importFromSshConfig without reAdopt (tombstones stay).
-    newHostCount += alreadyInOrca || previouslyRemoved ? 0 : 1
+    // Match passive import: Add all preserves tombstones.
+    newHostCount += alreadyInOrca || suppressedAliasSet.has(normalizedAlias) ? 0 : 1
     if (!matchesQuery(entry, normalizedQuery)) {
       continue
     }
@@ -79,26 +80,25 @@ export function listUserSshConfigHostSummaries(
   existingTargets: readonly Pick<SshTarget, 'configHost' | 'label'>[],
   query?: string,
   suppressedAliases?: readonly string[],
-  options?: { refresh?: boolean }
+  options?: { refresh?: boolean; routeDuplicateAliases?: ReadonlySet<string> }
 ): SshConfigHostListResult {
   return searchSshConfigHosts(
     getUserSshConfigHosts(options?.refresh === true),
     existingTargets,
     query,
-    suppressedAliases
+    suppressedAliases,
+    options?.routeDuplicateAliases
   )
 }
 
 export async function resolveUserSshConfigHost(
   alias: string,
   resolver: (host: string) => Promise<SshResolvedConfig | null> = resolveWithSshG,
-  // Why: read the file again rather than the picker-session cache — the point of the check
-  // below is to catch a row the user edited out of ~/.ssh/config after opening the picker.
+  // Re-read config so aliases removed after picker opening cannot become targets.
   loadConfigHosts: () => SshConfigHost[] = () => getUserSshConfigHosts(true)
 ): Promise<SshConfigHostResolution | null> {
   const configHosts = loadConfigHosts()
-  // Why: `ssh -G` answers for unknown aliases too, echoing the alias back as the hostname.
-  // Resolving one would mint a target for a host that is no longer configured.
+  // ssh -G resolves unknown aliases too; only mint targets still present in config.
   if (!configHostMatches(configHosts, alias)) {
     return null
   }
@@ -115,9 +115,7 @@ export async function resolveUserSshConfigHost(
     ...(resolved.identityAgent ? { identityAgent: resolved.identityAgent } : {}),
     identitiesOnly: resolved.identitiesOnly,
     forwardAgent: resolved.forwardAgent,
-    // Why: `ssh -G` reports the effective value, which on many distros is the /etc/ssh
-    // default `GSSAPIAuthentication yes`. Stamping that onto a manual target would force
-    // a GSSAPI-first handshake the user never asked for, so honour the Host entry only.
+    // Honor explicit Host GSSAPI only; inherited distro defaults must not force an unrequested GSSAPI-first handshake.
     gssapiAuthentication: configHostRequestsGssapi(configHosts, alias),
     ...(resolved.proxyCommand ? { proxyCommand: resolved.proxyCommand } : {}),
     proxyUseFdpass: resolved.proxyUseFdpass,

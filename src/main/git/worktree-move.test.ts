@@ -1,4 +1,3 @@
-// moveWorktree: relocating a checkout via `git worktree move`.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

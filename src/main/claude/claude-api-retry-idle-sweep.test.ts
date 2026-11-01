@@ -1,10 +1,9 @@
-// A Claude that keeps retrying a refused request is working, so the idle sweep must not stop it.
-// Every retry frame's publish is the activity the sweep reads, even though a run writes one row.
+// Each retry frame must publish activity even when all attempts revise one row.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
@@ -16,10 +15,13 @@ import {
   hostTestAttachParams,
   resetHostTestOperationIds
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 
 const SWEEP_MS = 5
@@ -45,7 +47,6 @@ function apiRetry(attempt: number): Record<string, unknown> {
   }
 }
 
-/** Long enough for many sweep ticks, so "still open" means the sweep declined. */
 function waitOutSeveralSweeps(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, SWEEP_MS * 20))
 }
@@ -97,6 +98,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -110,7 +112,6 @@ describe('a Claude retrying a refused request', () => {
     }
     const translator = createClaudeJournalTranslator({ sink, fallbackIdPrefix: '1' })
 
-    // Five frames ten minutes apart: fifty minutes, well past the thirty-minute idle window.
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       clock += RETRY_GAP_MS
       translator.handle({ type: 'message', sessionId: SESSION, message: apiRetry(attempt) })
@@ -128,10 +129,9 @@ describe('a Claude retrying a refused request', () => {
       failure: { detail: { text: expect.stringContaining('"attempt":5') } }
     })
 
-    // Once the frames stop, the same clock does let the sweep close it.
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS
     await vi.waitFor(() => {
-      expect(closeSession).toHaveBeenCalledWith(SESSION)
+      expect(closeSession).toHaveBeenCalledWith(SESSION, undefined)
       expect(host.hasSession(SESSION)).toBe(false)
     })
   })

@@ -25,7 +25,6 @@ function setup(): { children: AiVaultServiceTestChild[]; client: AiVaultScannerS
   return { children, client }
 }
 
-/** Starts one scan on a ready child and returns its request id. */
 async function startScan(
   client: AiVaultScannerServiceClient,
   children: AiVaultServiceTestChild[],

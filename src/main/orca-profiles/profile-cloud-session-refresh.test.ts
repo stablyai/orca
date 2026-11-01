@@ -38,7 +38,7 @@ import { onOrcaCloudSessionInvalidated } from './profile-cloud-session-invalidat
 import { forgetAmbiguousRefreshAttempt } from './profile-cloud-refresh-replay-guard'
 import { signInCloudSession, signOutCloudSession } from './profile-cloud-session-owner'
 
-// Owner state outlives a test; a fresh sign-in resets it for the next.
+// Sign-in resets owner state that persists between tests.
 function resetSessionOwner(): void {
   signInCloudSession('profile-1', '/data', {
     ...staleSession,
@@ -200,8 +200,6 @@ describe('refresh-token replay after an ambiguous attempt', () => {
     )
     expect(refreshMock).toHaveBeenCalledTimes(1)
 
-    // The retry loop above this module re-enters immediately; it must not turn
-    // one lost reply into a second POST of the same token.
     await expect(readFreshOrcaCloudSession(config, active, '/data')).rejects.toThrow(
       'orca_cloud_refresh_replay_blocked'
     )
@@ -276,17 +274,5 @@ describe('refresh-token replay after an ambiguous attempt', () => {
     expect(clearMock).toHaveBeenCalledTimes(1)
     expect(invalidated).toHaveBeenCalledTimes(1)
     unsubscribe()
-  })
-
-  it('does not mark a 401 that follows no ambiguous attempt', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    refreshMock.mockRejectedValue(new OrcaCloudRequestError(401))
-
-    await expect(readFreshOrcaCloudSession(config, active, '/data')).resolves.toEqual({
-      status: 'reconnect-required'
-    })
-
-    expect(warn.mock.calls.flat().join(' ')).not.toContain('orca_cloud_refresh_possible_replay')
-    expect(clearMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,5 +1,7 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { clearClientHostedBrowserRowSelection } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import { noteUserWorkspaceSwitch } from '@/lib/workspace-switch-user-act'
+import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { TabBarItem } from './tab-bar-item-model'
 import type { TabBarProps } from './tab-bar-props'
@@ -61,11 +63,11 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
     latest.current = source
   })
   return useMemo(() => {
-    // Why: this is the strip's single activation fan-out, so retiring a client-hosted placeholder
-    // here covers every row kind — including re-clicking the tab that was already active, which the
-    // group's activeTabId never moves for.
+    // Clear client-hosted selection for every real-tab activation, including re-clicks that leave activeTabId unchanged.
     function activateRealTab(activate: () => void): void {
       clearClientHostedBrowserRowSelection()
+      // Picking a tab is the user acting on its workspace: its restore may start a stopped distro.
+      noteUserWorkspaceSwitch(useAppStore.getState().activeWorktreeId)
       activate()
     }
     const actions: TabBarItemActions = {
@@ -94,7 +96,6 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
       togglePinned: (item) => latest.current.togglePinned(item),
       toggleViewMode: (tabId) => latest.current.toggleTabViewMode(tabId)
     }
-    // Switch point: pin goes to main first (rename, color and view do from their store actions).
     return ORCA_LAYOUT_OWNER_IS_MAIN
       ? { ...actions, ...withLayoutOwnerTabProps(actions, () => latest.current.props.worktreeId) }
       : actions

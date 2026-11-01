@@ -1,10 +1,9 @@
-// The child an operation that needs the provider runs on, and the refusal of one that did not run.
-
-import { refuse, refuseUnclassified } from '../../../shared/agent-session-wire-refusals'
-import type {
-  AgentSessionMutationEnvelope,
-  AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+import {
+  refuse,
+  refuseUnclassified,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { sameProviderChild } from './structured-agent-session-provider-child'
@@ -41,8 +40,6 @@ export function operationDidNotRun(expired = false): {
   }
 }
 
-/** The child an operation runs on, and its readiness while it starts; a null child means none is
- *  there to run on, and one must start first. */
 export function selectStructuredAgentSessionOperationChild(
   context: StructuredAgentSessionMutationContext,
   sessionId: string
@@ -54,7 +51,7 @@ export function selectStructuredAgentSessionOperationChild(
       readiness: StructuredAgentSessionStartReadiness | null
     } {
   const child = context.sessions.get(sessionId)?.child
-  if (!child || child.close) {
+  if (context.startFlights.get(sessionId) || !child || child.close) {
     return { ok: true, child: null, readiness: null }
   }
   const identity = { generation: child.generation, fence: child.fence }
@@ -65,7 +62,7 @@ export function selectStructuredAgentSessionOperationChild(
   return readiness ? { ok: true, child: identity, readiness } : operationDidNotRun()
 }
 
-/** Replay uses the ledger answer; a new operation uses only its selected ready child. */
+/** Replay uses the ledger; new operations use only the selected ready child. */
 export function openWithReadyStructuredAgentSessionChild(
   context: StructuredAgentSessionMutationContext,
   envelope: AgentSessionMutationEnvelope,

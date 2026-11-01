@@ -15,25 +15,9 @@ import {
   readShellCsp
 } from './preview/mobile-web-app-render-harness.mjs'
 
-/**
- * The session route's terminal, driven from a shell double that answers the streams a host does.
- *
- * `mobile-web-app-session-render.test.mjs` mounts this route against a double that answers no RPC,
- * so its terminal never attaches and it says so. This is the other half: a tab snapshot with one
- * terminal in it, and a `terminal.subscribe` stream the double serves. Both are the shapes the page
- * reads, not the host's — the double decides no behaviour, it only carries what this file wrote.
- *
- * The oracle is the document, not the route's chrome: `#terminal-surface` exists the moment the
- * component mounts, and it stays 0x0 with no children until the document receives `init`. So the
- * check is that the surface has a real grid, which is exactly what the hybrid RC emulator run did
- * not get — `[fit]measure-fail` with `notReady: true`, a document that answered a measure with no
- * `term` because no `init` had ever reached it.
- *
- * What made it red: the page's client provider answered `getClientId` with `null`, and
- * `use-mobile-session-terminal-subscription.ts` refuses to subscribe without a client identity. No
- * `terminal.subscribe`, no `scrollback`, no `init`. The first case below is the narrow one and
- * catches a regression at its source; the second reads the painted grid.
- */
+// Serve real-shaped tab snapshot and terminal stream; no-RPC session-render never attaches terminal.
+// Surface exists at mount but grid opens only after init. Placeholder client identity gates terminal.subscribe; null once left surface 0×0.
+// One test pins subscription identity and another reads painted grid, avoiding chrome-only false passes.
 
 const HOST_ID = 'terminal-init-host'
 const WORKTREE = 'wt-1'
@@ -50,10 +34,8 @@ const SHELL_HOST = {
 }
 const HANDLE = 'pty-handle-terminal-init'
 const TAB_ID = 'tab-terminal-init'
-/** The bytes the snapshot carries, so the buffer the document opens holds this run's fixture. */
 const SCROLLBACK_MARKER = 'orca-terminal-init-marker'
 
-/** The tab snapshot the route applies, in the shape `applySessionTabs` reads off the stream. */
 const TABS_SNAPSHOT = {
   type: 'snapshot',
   worktree: `id:${WORKTREE}`,
@@ -73,7 +55,6 @@ const TABS_SNAPSHOT = {
   ]
 }
 
-/** The first stream event a live terminal sends, which is what carries `init` into the document. */
 const SCROLLBACK_EVENT = {
   type: 'scrollback',
   seq: 1,
@@ -83,7 +64,7 @@ const SCROLLBACK_EVENT = {
   displayMode: 'phone'
 }
 
-/** Read off the manifest rather than restated, for the reason the session render check reads it. */
+// Read manifest grants so fixture stays aligned with route.
 function sessionGrants() {
   const declared = MOBILE_WEB_PAGE_ROUTES.find((route) => route.pathname === SESSION_PATTERN)
   if (!declared) {
@@ -129,13 +110,7 @@ afterAll(async () => {
   }
 })
 
-/**
- * The session route, mounted, with its tab snapshot already applied.
- *
- * The two streams are named so the double accepts them instead of refusing; the replies are the
- * reads the screen makes on the way up, each answered with the least the screen needs so nothing
- * below is looking at a retry or an error state.
- */
+// Answer minimum startup reads and name both streams so assertions observe loaded session, not refusal/retry states.
 async function openSessionWithTerminalTab() {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   await page.addInitScript(installShellDouble, {
@@ -172,13 +147,7 @@ async function openSessionWithTerminalTab() {
   return { errors, page }
 }
 
-/**
- * The surface's box, and the grid xterm opened inside it, in cells.
- *
- * Serialized into the page, so it closes over nothing. The screen is sized in pixels and the helper
- * textarea is exactly one cell, which is how a cell count is read back from a renderer that paints
- * to a canvas and leaves no row elements to count.
- */
+// Serialized page function closes over nothing; xterm helper textarea measures one cell where canvas/WebGL exposes no text rows.
 function readTerminalGrid() {
   const surface = document.getElementById('terminal-surface')
   const box = surface.getBoundingClientRect()
@@ -202,14 +171,12 @@ function readTerminalGrid() {
   }
 }
 
-/** The stream the page opened for `method`, or a failure naming every stream it did open. */
 async function waitForSubscribe(page, method) {
   try {
     await page.waitForFunction(
       (name) => (globalThis.__orcaRenderCheckSubscribes ?? []).some((one) => one.method === name),
       method,
-      // Both streams open within a second of the mount they follow, so this is headroom rather
-      // than a wait: what it bounds is how long a broken attach path takes to say so.
+      // Streams normally open within a second; bound failure reporting with headroom rather than adding fixed wait.
       { timeout: 30_000, polling: 100 }
     )
   } catch {
@@ -234,9 +201,7 @@ describeRender(
       const { page } = await openSessionWithTerminalTab()
       const subscribe = await waitForSubscribe(page, 'terminal.subscribe')
       expect(subscribe.params.terminal).toBe(HANDLE)
-      // The gate that was closed, and the exact string the page may claim. It is the placeholder
-      // and never the credential: the native shell swaps in this device's real identity as the
-      // frame leaves it, which is what the host compares against the socket it authenticated.
+      // Page claims placeholder only; native shell substitutes authenticated device identity as frame leaves.
       expect(subscribe.params.client).toEqual({
         id: pageClientIdentity.placeholder,
         type: 'mobile'
@@ -251,12 +216,8 @@ describeRender(
         ([id, event]) => globalThis.__orcaRenderCheckEmitEvent(id, event),
         [subscribe.id, SCROLLBACK_EVENT]
       )
-      // The surface exists from the moment the component mounts, so its presence proves nothing.
-      // `.xterm-screen` does: it is created by `term.open()`, which only ever runs from the
-      // document's `init`. The emulator run had the surface with zero children inside a correctly
-      // sized container, which is this element missing.
-      // Then the grid readable: xterm sizes its one-cell helper textarea only on a cursor move or
-      // resize, so a read the moment the screen exists can land before the replay has drained.
+      // Require xterm-screen created by init/term.open, not surface present at mount.
+      // Await replay/resize before reading one-cell helper textarea; screen existence can precede measurable grid.
       await page.waitForFunction(
         () => {
           const cell = document.querySelector('#terminal-surface .xterm-helper-textarea')
@@ -274,14 +235,10 @@ describeRender(
       )
       const painted = await page.evaluate(readTerminalGrid)
       console.log('[terminal-init]', JSON.stringify(painted))
-      // The box the emulator read as 0x0.
+      // Catch emulator’s original 0×0 surface failure.
       expect(painted.surface.width).toBeGreaterThan(0)
       expect(painted.surface.height).toBeGreaterThan(0)
-      // And the grid it opened, which is the one this run's scrollback named: the screen is sized
-      // in cells, so a document that opened on its own defaults rather than on this event would
-      // report a different pair. This is what the terminal renders through — under WebGL there are
-      // no row elements and no text on the document, so the bytes in the buffer are
-      // `mobile-web-app-terminal-render.test.mjs`'s oracle and the attach path is this one's.
+      // Match scrollback grid dimensions to reject defaults; terminal-render separately checks buffer bytes because WebGL exposes no text rows.
       expect(painted.grid).toEqual({ cols: SCROLLBACK_EVENT.cols, rows: SCROLLBACK_EVENT.rows })
       expect(errors).toEqual([])
       await page.close()

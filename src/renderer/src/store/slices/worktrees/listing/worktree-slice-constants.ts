@@ -10,11 +10,9 @@ export const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
 export const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 export const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
 export const FOLDER_WORKSPACE_ACTIVITY_PERSIST_INTERVAL_MS = 1_000
-// Why: each repo's `git worktree list` is an independent main-process child; a higher ceiling cuts startup scan batches (#7225) while staying bounded against launching every git probe at once.
+// Bound independent per-repo git children while reducing startup scan batches (#7225).
 export const WORKTREE_REFRESH_CONCURRENCY = 8
 // Why: a mobile-scope web pairing is denied worktree/repo RPCs (else silently empty workspaces); surface one deduped toast (stable id) instead of spamming per-repo.
 export const RUNTIME_SCOPE_FORBIDDEN_TOAST_ID = 'runtime-scope-forbidden'
-// Why: main retires the persisted SSH metadata a scan proved gone, but that IPC is async and the next fallback
-// read can already be in flight, so this session memory covers the window until the delete lands. It is not the
-// durable half: reloads start empty and rely on the metadata itself being gone.
+// Session suppression bridges async metadata deletion; durable removal must survive reloads.
 export const AUTHORITATIVE_REMOVAL_MEMORY_LIMIT = 512

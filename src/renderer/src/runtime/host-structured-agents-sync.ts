@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -13,12 +12,11 @@ import {
   ensureLocalRuntimeCapabilities,
   subscribeLocalRuntimeCapabilitiesKnown
 } from './local-runtime-capabilities'
-import { localStructuredChatsInUse } from './local-structured-chats'
+import { localStructuredChatsInUse, newAgentLaunchesMayOpenChats } from './local-structured-chats'
 
-// Why gated: a host older than this build installs its structured host to answer, which a profile
-// that never uses structured chat must not pay for; only with chats in use can a launch route to one.
-function structuredChatSettingOn(state: Pick<AppState, 'settings'>): boolean {
-  return isNativeChatEnabled(state.settings)
+// Older hosts install structured storage just to answer; ask only with chats in use so unused profiles avoid that cost.
+function launchesMayOpenChats(state: Pick<AppState, 'settings'>): boolean {
+  return newAgentLaunchesMayOpenChats(state.settings)
 }
 
 async function syncLocalHost(settings: AppState['settings']): Promise<void> {
@@ -46,14 +44,11 @@ function syncPairedHosts(statuses: AppState['runtimeStatusByEnvironmentId']): vo
   retainHostStructuredAgents(hostIds)
 }
 
-/** Reads each host's registered agents once its status says it publishes them and structured chat
- *  is in use, and again when a paired host's runtime changes. The local host is read when the chat
- *  setting turns on and whenever its capabilities land, so a read made before they were known is
- *  made again. Returns the unsubscribe. */
+/** Read registered agents when structured chat is in use and host capabilities arrive; paired runtime changes re-read. Local Chat | CLI choice and capability changes retry early unknown reads. Returns unsubscribe. */
 export function installHostStructuredAgentsSync(): () => void {
   const initial = useAppStore.getState()
   void syncLocalHost(initial.settings)
-  if (structuredChatSettingOn(initial)) {
+  if (launchesMayOpenChats(initial)) {
     syncPairedHosts(initial.runtimeStatusByEnvironmentId)
   }
   const stopLocal = subscribeLocalRuntimeCapabilitiesKnown(() => {
@@ -62,8 +57,8 @@ export function installHostStructuredAgentsSync(): () => void {
     }
   })
   const stopStore = useAppStore.subscribe((state, previousState) => {
-    const on = structuredChatSettingOn(state)
-    const turnedOn = on && !structuredChatSettingOn(previousState)
+    const on = launchesMayOpenChats(state)
+    const turnedOn = on && !launchesMayOpenChats(previousState)
     if (turnedOn) {
       void syncLocalHost(state.settings)
     }

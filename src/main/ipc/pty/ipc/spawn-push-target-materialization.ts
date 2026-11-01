@@ -4,11 +4,7 @@ import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 
-// Why (#17828): pty:spawn is the desktop GUI's own terminal path (new tab, split, reattach) --
-// raw git commands can run here before any Orca-driven sync, so a deferred fork-PR remote must
-// exist first. Mirrors the agent/background-terminal hook in
-// runtime-terminal-spawn-push-target-materialization.ts, which this delegates to; fire-and-forget
-// and a no-op once the remote already exists, so it is safe on every spawn including reattaches.
+// GUI terminals can run Git before Orca sync; request deferred push-target setup on spawn and reattach (#17828).
 export function triggerPtySpawnPushTargetMaterialization(
   deps: PtySpawnIpcDeps,
   args: PtySpawnIpcArgs
@@ -21,14 +17,13 @@ export function triggerPtySpawnPushTargetMaterialization(
   if (!parsed) {
     return
   }
-  // Why: never let a partial/fake Store (many pty:spawn unit tests supply a narrow one) or an
-  // unexpected lookup failure turn this best-effort hook into a spawn-blocking exception.
+  // Partial stores and failed lookups must not turn this best-effort hook into a spawn failure.
   try {
-    // A host-qualified read migrates a legacy row the move must keep frozen.
+    // Host-qualified reads can migrate legacy rows; leave moving WSL rows frozen.
     if (isWslMoveWorktreeBlocked(args.worktreeId, LOCAL_EXECUTION_HOST_ID)) {
       return
     }
-    // The local copy's own rows: a same-id twin on another host has its own push target.
+    // Same-ID twins on another host have independent push targets.
     const pushTarget = (
       deps.store.getWorktreeMetaForHost
         ? deps.store.getWorktreeMetaForHost(args.worktreeId, LOCAL_EXECUTION_HOST_ID)

@@ -78,7 +78,6 @@ describe('ExternalConversationSeam reopen', () => {
     expect(link()).toEqual([
       expect.objectContaining({ paneKey: PANE, providerSession: SESSION, captureHostId: 'local' })
     ])
-    // The tab closes: its PTY and its hook rows go with it.
     terminal.exit()
     terminal.reopenable()
     expect(await seam.send(host, KEY, 'd1', 'what did you say?')).toEqual(REOPENED)
@@ -99,7 +98,6 @@ describe('ExternalConversationSeam reopen', () => {
       })
     )
     expect(link()).toEqual([expect.objectContaining({ paneKey: REOPENED_PANE })])
-    // The reopened agent is the conversation's from now on.
     expect(await seam.send(host, KEY, 'd2', 'next')).toEqual({ outcome: 'accepted' })
     expect(terminal.resumeAgentSessionInWorkspace).toHaveBeenCalledTimes(1)
   })
@@ -168,7 +166,7 @@ describe('ExternalConversationSeam reopen', () => {
     const { seam, host, terminal, link } = await started(records, 'ssh:box')
     terminal.state.rows = [sessionRow(PANE, 'box')]
     expect(await seam.send(host, KEY, 'd1', 'one')).toEqual({ outcome: 'accepted' })
-    // The relay drops: the PTY stays registered but cannot be written, and nothing proves an exit.
+    // A disconnected relay cannot prove the old process exited, so reopening remains unsafe.
     terminal.sendTerminalAgentPrompt.mockRejectedValueOnce(new Error('terminal_not_writable'))
     expect(await seam.send(host, KEY, 'd2', 'two')).toEqual(UNREACHABLE)
     expect(terminal.resumeAgentSessionInWorkspace).toHaveBeenCalledWith(
@@ -193,7 +191,6 @@ describe('ExternalConversationSeam reopen', () => {
     expect(await head).toEqual({ outcome: 'accepted' })
     expect(await follower).toEqual(UNREACHABLE)
     expect(terminal.resumeAgentSessionInWorkspace).not.toHaveBeenCalled()
-    // The next message opens a new lane, which reopens.
     expect(await seam.send(host, KEY, 'd3', 'three')).toEqual(REOPENED)
     expect(terminal.writes).toEqual(['one', 'three'])
   })

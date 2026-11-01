@@ -5,9 +5,25 @@ import { RpcDispatcher } from '../../dispatcher'
 import { TERMINAL_METHODS } from '../terminal'
 import {
   _resetTerminalViewAttributesForTest,
-  getTerminalViewerColors,
-  setTerminalViewerColorsListener
+  getTerminalViewAttributes,
+  setTerminalViewAttributes
 } from '../../../terminal-view-attribute-store'
+import type {
+  TerminalViewAttributes,
+  TerminalViewRgb
+} from '../../../../../shared/terminal-view-attributes'
+
+function appearance(background: TerminalViewRgb): TerminalViewAttributes {
+  return {
+    foreground: [0x2e, 0x34, 0x34],
+    background,
+    cursor: [0x2e, 0x34, 0x34],
+    ansi: Array.from({ length: 256 }, (_, i): TerminalViewRgb => [i, i, i]),
+    colorSchemeMode: 'light',
+    cursorStyle: 'bar',
+    cursorBlink: false
+  }
+}
 
 function dispatcher(): RpcDispatcher {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method reads nothing from the runtime; the dispatcher needs only its id.
@@ -27,31 +43,27 @@ function setViewerColors(params: unknown) {
 describe('terminal.setViewerColors', () => {
   afterEach(() => _resetTerminalViewAttributesForTest())
 
-  it("makes a paired client's colours the ones a headless host answers with", async () => {
-    const published: unknown[] = []
-    setTerminalViewerColorsListener((colors) => published.push(colors))
-    const colors = { foreground: '#2e3434', background: '#ffffff' }
+  it("keeps a windowed host's own palette", async () => {
+    const own = appearance([0x28, 0x2c, 0x34])
+    setTerminalViewAttributes(own)
 
-    const response = await setViewerColors({ colors })
+    await setViewerColors({
+      colors: { foreground: '#2e3434', background: '#ffffff' },
+      attributes: appearance([0xff, 0xff, 0xff])
+    })
 
-    expect(response).toMatchObject({ ok: true, result: { applied: true } })
-    expect(getTerminalViewerColors()).toEqual(colors)
-    expect(published).toEqual([colors])
+    expect(getTerminalViewAttributes()).toEqual(own)
   })
 
-  it('keeps the current colours when the pair cannot answer both slots', async () => {
-    const response = await setViewerColors({ colors: { foreground: '#ffffff' } })
+  it("forgets an earlier client's palette when an older client pushes colours only", async () => {
+    await setViewerColors({
+      colors: { foreground: '#ffffff', background: '#282c34' },
+      attributes: appearance([0x28, 0x2c, 0x34])
+    })
 
-    expect(response).toMatchObject({ ok: true, result: { applied: false } })
-    expect(getTerminalViewerColors()).toBeNull()
-  })
+    await setViewerColors({ colors: { foreground: '#2e3434', background: '#ffffff' } })
 
-  it('ignores members a newer client adds', async () => {
-    const colors = { foreground: '#000000', background: '#ffffff' }
-
-    const response = await setViewerColors({ colors: { ...colors, cursor: '#ff0000' }, seq: 3 })
-
-    expect(response).toMatchObject({ ok: true, result: { applied: true } })
-    expect(getTerminalViewerColors()).toEqual(colors)
+    // A dark palette beside light OSC 10/11 would contradict; hidden palette queries go silent instead.
+    expect(getTerminalViewAttributes()).toBeNull()
   })
 })

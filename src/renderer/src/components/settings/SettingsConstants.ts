@@ -19,8 +19,7 @@ export function mergeFontSuggestions(
   systemFonts: readonly string[],
   previousFonts: readonly string[]
 ): string[] {
-  // Why: picker rendering can be capped later, but the source list must keep
-  // every installed font searchable/selectable.
+  // Keep every installed font searchable even if rendering is capped later.
   return Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...systemFonts, ...previousFonts]))
 }
 

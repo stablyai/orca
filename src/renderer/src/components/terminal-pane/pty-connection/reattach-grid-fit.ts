@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 
@@ -49,15 +49,12 @@ export async function fitReattachedPaneToGrid(
   const fit = safeFitAndThen(session.pane, 'reattach-pty-resize', continuation, {
     shouldContinue: gridPush.shouldContinue,
     retryIfUnmeasurable: true,
-    // Why only this caller: a restored floating workspace is display:none until the
-    // user opens it, so dropping the grid push strands the PTY at the replay grid.
+    // Hidden floating panels must defer grid push through reveal or leave the PTY pinned at replay geometry.
     deferIfHidden: true
   })
   session.pendingReattachFit = fit
   try {
-    // Why: reattach resize is fire-and-forget, so the continuation itself requests the
-    // applied-grid verification — it is the only point reached by both the immediate
-    // and the deferred-until-revealed path.
+    // Verify applied size in the continuation reached by both immediate and reveal-deferred fits.
     await fit.completion
   } finally {
     if (session.pendingReattachFit === fit) {

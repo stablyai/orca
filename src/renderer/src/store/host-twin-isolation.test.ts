@@ -1,9 +1,4 @@
-/**
- * Destructive and selection actions aimed at one twin must leave the other twin's state alone.
- * The action table is declared by hand: adding a destroy, hide, link or select entry point means
- * adding its row here. Cells listed in KNOWN_TWIN_LEAKS are today's failures (the Stage 1 worklist):
- * they assert the leak still happens, so a fix turns them red until the entry is deleted.
- */
+/** Twin-targeted actions must isolate survivors. Keep the hand-declared action table current; KNOWN_TWIN_LEAKS pins Stage 1 failures, so fixes require removing their entries. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
@@ -114,10 +109,7 @@ type TwinAction = {
   run: (fixture: HostTwinFixture, target: HostTwinSide) => Promise<unknown>
   /** Proves the action reached its target, so an isolated no-op can't pass. */
   applied: (fixture: HostTwinFixture, target: HostTwinSide) => void
-  /**
-   * Set when acting on one copy acts on the whole workspace by design (user decision
-   * 2026-10-17): the cell then asserts the survivor was acted on too.
-   */
+  // Workspace-wide by design (user decision 2026-10-17): assert survivor was acted on too.
   wholeWorkspace?: (fixture: HostTwinFixture, survivor: HostTwinSide) => void
 }
 

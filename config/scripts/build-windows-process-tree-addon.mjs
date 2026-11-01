@@ -1,23 +1,7 @@
 #!/usr/bin/env node
-/**
- * Compile `@vscode/windows-process-tree` for a relay host.
- *
- * The relay is deployed to machines with no compiler, and this addon cannot be
- * npm-installed there: it carries a binding.gyp, so npm rebuilds from source and
- * the build wants Spectre-mitigated libraries even where MSVC is present. The
- * binary inside the published tarball loads, but predates our patch and still
- * caps enumeration at 1024 processes -- a busy host then gets a truncated table
- * missing its own pid, which reads as "unavailable" only under load.
- *
- * So we compile it here, from the patched source pnpm already materialized, and
- * ship the result as a relay artifact. Windows arm64 cross-compiles from an x64
- * runner, so both arches come off one Windows job.
- *
- * Node headers, not Electron: the relay runs under the host's own `node`. The
- * addon is N-API, so one build serves every Node the remote might have.
- *
- *   node config/scripts/build-windows-process-tree-addon.mjs --arch=arm64
- */
+// Compile patched N-API addon with Node headers for compiler-free relay hosts; arm64 cross-builds from Windows x64.
+// Published binaries predate the >1024-process fix, while remote npm rebuild needs Spectre libraries; ship patched output instead.
+// Usage: node config/scripts/build-windows-process-tree-addon.mjs --arch=arm64
 import { execFileSync } from 'node:child_process'
 import {
   copyFileSync,
@@ -51,8 +35,7 @@ const { PE_MACHINE, describePeMachine, readPeMachine } = createRequire(import.me
 
 const ROOT = resolve(import.meta.dirname, '..', '..')
 const SUPPORTED_ARCHES = ['x64', 'arm64']
-// Why: under pnpm's global virtual store the installed dir is every worktree's, so the source
-// repairs and the build below run in a private copy instead.
+// Shared pnpm store belongs to every worktree; repair/build a private source copy.
 const SCRATCH_DIR =
   existsSync(INSTALLED_PACKAGE_DIR) && isSharedPackageDir(INSTALLED_PACKAGE_DIR, ROOT)
     ? mkdtempSync(join(tmpdir(), 'orca-windows-process-tree-'))
@@ -79,15 +62,7 @@ function parseArgs(argv) {
   }
 }
 
-/**
- * Refuse to build unpatched source.
- *
- * Each hunk fails differently: Spectre dies outright, the 1024-process cap
- * succeeds and lies, and `.targets` is cwd-relative so pnpm's nested layout
- * makes node-gyp miss node_addon_api.gyp on Windows. Checking the source
- * rather than trusting the install is what stops a silently unpatched tree
- * from being shipped as if it were patched.
- */
+// Verify all patch hunks: Spectre settings, process-cap removal and nested-layout node_addon_api.gyp paths; partial patches can build and silently truncate enumeration.
 function assertPatchApplied() {
   const bindingGyp = readFileSync(join(PACKAGE_DIR, 'binding.gyp'), 'utf8')
   if (bindingGyp.includes('SpectreMitigation')) {
@@ -309,8 +284,7 @@ function repairCreationTimeSources() {
     )
   })
 
-  // Each piece is guarded on its own: an early-out on the enum alone would let a
-  // tree with the enum but no buildNode splat pass as repaired.
+  // Check each repair independently; enum-only success must not hide missing buildNode splat.
   const NATIVE_CONST =
     "const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;"
   for (const relativePath of ['lib/index.ts', 'lib/index.js']) {
@@ -389,8 +363,7 @@ function repairCreationTimeSources() {
   return repaired
 }
 
-// pnpm can materialize this CRLF package without applying its patch. Repair the
-// load-bearing build settings before node-gyp so the release build stays safe.
+// Repair pnpm’s potentially unpatched CRLF source before node-gyp.
 function applyWindowsProcessTreeBuildFixes() {
   const bindingPath = join(PACKAGE_DIR, 'binding.gyp')
   const processPath = join(PACKAGE_DIR, 'src', 'process.cc')
@@ -421,9 +394,7 @@ function applyWindowsProcessTreeBuildFixes() {
     ''
   )
   processCc = processCc.replace(/process_count < 1024 && /, '')
-  // The memory and CPU readers only ever call GetProcessMemoryInfo/GetProcessTimes,
-  // which need no more than PROCESS_QUERY_LIMITED_INFORMATION; taking VM_READ is
-  // what EDR scores.
+  // Memory/CPU queries need only QUERY_LIMITED_INFORMATION; unnecessary VM_READ raises EDR scores.
   processCc = processCc.replaceAll(
     'OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid)',
     'OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)'

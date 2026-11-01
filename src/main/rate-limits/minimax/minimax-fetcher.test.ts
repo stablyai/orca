@@ -163,8 +163,7 @@ describe('fetchMiniMaxRateLimits', () => {
   })
 
   it('aborts a hung fetch after the timeout and classifies it as network', async () => {
-    // AbortSignal.timeout() uses an internal timer that fake timers cannot
-    // advance, so simulate the timeout firing with an already-aborted signal.
+    // Fake timers cannot drive AbortSignal.timeout internals; supply an already-aborted signal.
     vi.spyOn(AbortSignal, 'timeout').mockReturnValue(
       AbortSignal.abort(new DOMException('The operation timed out.', 'TimeoutError'))
     )
@@ -175,8 +174,6 @@ describe('fetchMiniMaxRateLimits', () => {
           error.name = 'TimeoutError'
           reject(error)
         }
-        // Both the session-cookie-jar and manual-cookie-header fetches receive
-        // the already-aborted timeout signal.
         if (init.signal.aborted) {
           abort()
           return
@@ -197,7 +194,6 @@ describe('fetchMiniMaxRateLimits', () => {
     expect(result.status).toBe('ok')
     expect(result.session?.usedPercent).toBe(30)
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    // First (session-cookie-jar) transport sends no Cookie header; the fallback does.
     expect(fetchMock.mock.calls[0][1].headers.Cookie).toBeUndefined()
     expect(fetchMock.mock.calls[1][1].headers.Cookie).toContain('_token=')
   })
@@ -355,8 +351,7 @@ describe('fetchMiniMaxRateLimits', () => {
     expect(result.error).toContain('unauth')
   })
 
-  // Why: the live API answers an expired cookie/key with HTTP 200 + status_code 1004,
-  // never 401/403, so this is the only signal that reaches the stale-credential path.
+  // MiniMax reports credential expiry as HTTP 200/status_code 1004, not HTTP auth status.
   it('classifies status_code 1004 on the cookie path as an expired session cookie', async () => {
     fetchMock.mockResolvedValueOnce(
       makeResponse({
@@ -517,14 +512,10 @@ describe('fetchMiniMaxRateLimits', () => {
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains')
     expect(init.headers.Authorization).toBe('Bearer sk-test-1234567890')
-    // Why: the API key path must not set browser-shaped headers — they're
-    // there to defeat hotlink protection on the cookie path and would only
-    // look like scraping on the API key path.
+    // Browser headers belong only to cookie transport; bearer requests should not resemble scraping.
     expect(init.headers.Referer).toBeUndefined()
     expect(init.headers['User-Agent']).toBeUndefined()
     expect(init.headers.Cookie).toBeUndefined()
-    // Why: cookie jar / session partition must not be touched on the bearer
-    // path, since the user is not using cookies for this endpoint mode.
     expect(cookiesSetMock).not.toHaveBeenCalled()
     expect(sessionFromPartitionMock).not.toHaveBeenCalled()
   })
@@ -540,14 +531,12 @@ describe('fetchMiniMaxRateLimits', () => {
     expect(url).toBe('https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains')
     expect(init.headers.Authorization).toBeUndefined()
     expect(init.headers.Cookie).toBeUndefined()
-    // Why: cookie transport relies on the session jar — verify it was
-    // populated for the CN host so the .io-only Referer mock doesn't crash.
+    // Exercise the CN cookie jar origin instead of the .io-only mock path.
     expect(cookiesSetMock).toHaveBeenCalled()
   })
 
   it('routes to API key on the overseas endpoint when both are configured', async () => {
-    // Why: the API key path is a Bearer header — endpoint-agnostic, the
-    // endpoint only picks the host URL. Either auth works on either endpoint.
+    // Endpoint selects the host, not the auth mode; bearer and cookie auth both work on either.
     fetchMock.mockResolvedValueOnce(makeResponse(makeOkPayload(50)))
     const result = await fetchMiniMaxRateLimits({
       cookie: FULL_COOKIE,
@@ -558,7 +547,6 @@ describe('fetchMiniMaxRateLimits', () => {
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('https://platform.minimax.io/v1/api/openplatform/coding_plan/remains')
     expect(init.headers.Authorization).toBe('Bearer sk-overseas-key')
-    // Why: API key path skips the cookie jar — cookiesSetMock is never called.
     expect(cookiesSetMock).not.toHaveBeenCalled()
   })
 
@@ -599,16 +587,14 @@ describe('fetchMiniMaxRateLimits', () => {
     expect(result.weekly).not.toBeNull()
     expect(result.weekly?.usedPercent).toBe(55)
     expect(result.weekly?.windowMinutes).toBe(10080)
-    // Why: resetsAt is anchored to now + the API's reported duration, so the
-    // status-bar countdown stays consistent with the session shape.
+    // Anchor the duration to now, matching the session countdown contract.
     const weeklyResets = result.weekly?.resetsAt ?? 0
     expect(weeklyResets).toBeGreaterThan(now + 3 * 24 * 60 * 60 * 1000 - 5_000)
     expect(weeklyResets).toBeLessThan(now + 3 * 24 * 60 * 60 * 1000 + 5_000)
   })
 
   it('returns weekly = null when the API omits weekly fields', async () => {
-    // Why: matches the existing makeOkPayload (no weekly fields) — guards
-    // against the case where the upstream rolls back to the 5h-only schema.
+    // Retain compatibility if upstream returns the older session-only schema.
     fetchMock.mockResolvedValueOnce(makeResponse(makeOkPayload(50)))
     const result = await fetchMiniMaxRateLimits({ cookie: FULL_COOKIE })
     expect(result.status).toBe('ok')
@@ -617,9 +603,7 @@ describe('fetchMiniMaxRateLimits', () => {
   })
 
   it('parses weekly usedPercent when weekly_remains_time is missing', async () => {
-    // Why: some accounts report the percent without a reset duration; the
-    // status bar falls back to the "wk" label via formatWindowLabel in that
-    // case. Don't drop the percent just because resetsAt is unknown.
+    // A missing reset duration must not discard a valid weekly percentage.
     const now = Date.now()
     fetchMock.mockResolvedValueOnce(
       makeResponse({

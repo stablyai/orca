@@ -1,5 +1,6 @@
 import { classifyClaudeBackgroundTaskKind } from './claude-background-task-kind'
 import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
+import { runsOrcaOrchestrationWait } from './orca-cli-invocations'
 
 const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'idle',
@@ -23,22 +24,17 @@ const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'timed_out'
 ])
 
-/** One agent entry from the `background_tasks` array Claude attaches to Stop
- *  (and SubagentStop) hook payloads. Non-agent tasks do not become rows. */
+/** Agent entries from Stop/SubagentStop background_tasks; non-agent tasks do not become rows. */
 export type ClaudeBackgroundAgentTask = {
   id: string
   agentType?: string
   description?: string
   running: boolean
-  /** True for `type: "teammate"` entries. Their ids never match lifecycle
-   *  agent_ids and they report "running" permanently — even after the named
-   *  agent finished — so they carry no per-agent state at all. */
+  /** Teammate IDs never match lifecycle agent_ids and stay running even after completion, so they prove no per-agent state. */
   teammate: boolean
 }
 
-/** Read the agent-typed entries of a hook payload's `background_tasks` field.
- *  `present: false` means the field was absent/malformed (older Claude builds),
- *  so callers must keep their tracked roster instead of clearing it. */
+/** Absent/malformed inventory on older Claude builds means retain the tracked roster; never clear it. */
 export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unknown>): {
   present: boolean
   tasks: ClaudeBackgroundAgentTask[]
@@ -46,6 +42,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   hasRunningNonAgentTask: boolean
   /** Ids of the running shell-like entries; one without an id is counted but not listed. */
   runningNonAgentTaskIds: string[]
+  /** Running shells blocked on `orca orchestration check --wait`, which recovers them after a listener restart. */
+  runningAgentWaitIds: string[]
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
@@ -54,13 +52,15 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       tasks: [],
       truncated: false,
       hasRunningNonAgentTask: false,
-      runningNonAgentTaskIds: []
+      runningNonAgentTaskIds: [],
+      runningAgentWaitIds: []
     }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
   let truncated = false
   let hasRunningNonAgentTask = false
   const runningNonAgentTaskIds: string[] = []
+  const runningAgentWaitIds: string[] = []
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       truncated = true
@@ -84,6 +84,9 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       const id = typeof obj.id === 'string' ? obj.id.trim() : ''
       if (id.length > 0) {
         runningNonAgentTaskIds.push(id)
+        if (runsOrcaOrchestrationWait(obj.command)) {
+          runningAgentWaitIds.push(id)
+        }
       }
     }
     if (!isAgentTask) {
@@ -101,5 +104,12 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       teammate: taskType === 'teammate'
     })
   }
-  return { present: true, tasks, truncated, hasRunningNonAgentTask, runningNonAgentTaskIds }
+  return {
+    present: true,
+    tasks,
+    truncated,
+    hasRunningNonAgentTask,
+    runningNonAgentTaskIds,
+    runningAgentWaitIds
+  }
 }

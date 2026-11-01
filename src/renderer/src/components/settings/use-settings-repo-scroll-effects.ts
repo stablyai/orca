@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -16,6 +16,29 @@ import {
   getSettingsScrollTarget,
   scrollSubsectionIntoView
 } from './settings-navigation-foundations'
+
+// A stopped WSL distro's repo stays "checking"; re-ask soon, and whenever the window comes back.
+const UNREAD_HOOKS_RETRY_MS = 10_000
+
+function onceOnRetrySignal(retry: () => void): () => void {
+  let fired = false
+  const fire = (): void => {
+    if (!fired && document.visibilityState !== 'hidden') {
+      fired = true
+      dispose()
+      retry()
+    }
+  }
+  const timer = setTimeout(fire, UNREAD_HOOKS_RETRY_MS)
+  window.addEventListener('focus', fire)
+  document.addEventListener('visibilitychange', fire)
+  function dispose(): void {
+    clearTimeout(timer)
+    window.removeEventListener('focus', fire)
+    document.removeEventListener('visibilitychange', fire)
+  }
+  return dispose
+}
 
 export function useSettingsRepoScrollEffects(
   model: SettingsStoreModel,
@@ -43,6 +66,9 @@ export function useSettingsRepoScrollEffects(
   } = interactions
   const { visibleNavSections, visibleSectionIds } = navigation
   const { neededRepos } = terminal
+  const [unreadHooksRetryTick, setUnreadHooksRetryTick] = useState(0)
+  // On a retry, only repos whose distro refused the last check are asked again.
+  const unreadHooksRef = useRef<ReadonlySet<string> | null>(null)
 
   useEffect(() => {
     const repoHostIdentitySet = new Set<string>(repos.map(getRepoHostIdentity))
@@ -60,69 +86,89 @@ export function useSettingsRepoScrollEffects(
     }
 
     let stale = false
+    let disposeRetry: (() => void) | null = null
     const requestSeq = ++repoHooksRequestSeqRef.current
     const liveRepoHostIdentities = new Set(repos.map(getRepoHostIdentity))
+    const retryOnly = unreadHooksRef.current
+    unreadHooksRef.current = null
+    const unread = new Set<string>()
 
     void Promise.all(
-      neededRepos.map(async (repo) => {
-        const repoHostIdentity = getRepoHostIdentity(repo)
-        if (isFolderRepo(repo)) {
-          setRepoHooksMap((previous) => {
-            if (previous[repoHostIdentity]) {
-              return previous
-            }
-            return {
-              ...previous,
-              [repoHostIdentity]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
-            }
-          })
-          return
-        }
-        try {
-          const hostId = getRepoExecutionHostId(repo)
-          const result = await checkRuntimeHooks(hostId, repo.id)
-          if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
+      neededRepos
+        .filter((repo) => !retryOnly || retryOnly.has(getRepoHostIdentity(repo)))
+        .map(async (repo) => {
+          const repoHostIdentity = getRepoHostIdentity(repo)
+          if (isFolderRepo(repo)) {
+            setRepoHooksMap((previous) => {
+              if (previous[repoHostIdentity]) {
+                return previous
+              }
+              return {
+                ...previous,
+                [repoHostIdentity]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
+              }
+            })
             return
           }
-          setRepoHooksMap((previous) => {
-            if (!liveRepoHostIdentities.has(repoHostIdentity)) {
-              return previous
+          try {
+            const hostId = getRepoExecutionHostId(repo)
+            // Showing Settings is no act on the repo's WSL distro (E9).
+            const result = await checkRuntimeHooks(hostId, repo.id, { background: true })
+            if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
+              return
             }
-            return { ...previous, [repoHostIdentity]: result }
-          })
-        } catch {
-          // Keep last known value on transient failures.
-          if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
-            return
+            // Unread is not "no orca.yaml": leave the pane checking rather than offer local-only commands.
+            if (result.unavailable) {
+              unread.add(repoHostIdentity)
+              return
+            }
+            setRepoHooksMap((previous) => {
+              if (!liveRepoHostIdentities.has(repoHostIdentity)) {
+                return previous
+              }
+              return { ...previous, [repoHostIdentity]: result }
+            })
+          } catch {
+            // Retain known hook settings through transient read failures.
+            if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
+              return
+            }
+            setRepoHooksMap((previous) => {
+              if (!liveRepoHostIdentities.has(repoHostIdentity)) {
+                return previous
+              }
+              if (previous[repoHostIdentity]) {
+                return previous
+              }
+              return {
+                ...previous,
+                [repoHostIdentity]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
+              }
+            })
           }
-          setRepoHooksMap((previous) => {
-            if (!liveRepoHostIdentities.has(repoHostIdentity)) {
-              return previous
-            }
-            if (previous[repoHostIdentity]) {
-              return previous
-            }
-            return {
-              ...previous,
-              [repoHostIdentity]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
-            }
-          })
-        }
-      })
-    )
+        })
+    ).then(() => {
+      if (!stale && unread.size > 0) {
+        disposeRetry = onceOnRetrySignal(() => {
+          unreadHooksRef.current = unread
+          setUnreadHooksRetryTick((tick) => tick + 1)
+        })
+      }
+    })
 
     return () => {
       stale = true
+      disposeRetry?.()
     }
-  }, [neededRepos, repoHooksRequestSeqRef, repos, setRepoHooksMap])
+  }, [neededRepos, repoHooksRequestSeqRef, repos, setRepoHooksMap, unreadHooksRetryTick])
 
   useEffect(() => {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
-    // Why: this pass re-decides whether to wait for the target, so drop any watch armed by the previous one.
+    // This pass re-evaluates the pending target; cancel the previous watch first.
     cancelPendingSettingsDeepLinkTargetWatch(pendingScrollTargetWatchRef)
 
-    // Why: subsection deep links clear a stale filter that could hide the target row; pane-level links keep it to force-open the matching section.
+    // Subsection links clear filters that could hide their rows; pane links retain filtering to force the pane open.
     if (
       scrollTargetId &&
       pendingNavSectionId &&
@@ -134,7 +180,7 @@ export function useSettingsRepoScrollEffects(
     }
 
     if (scrollTargetId && pendingNavSectionId && visibleSectionIds.has(pendingNavSectionId)) {
-      // Why: inactive panes don't render; activate the pane first, then find the subsection next render.
+      // Inactive panes have no DOM; activate before locating the subsection next render.
       if (activeSectionId !== pendingNavSectionId) {
         setActiveSectionId(pendingNavSectionId)
         return
@@ -143,11 +189,10 @@ export function useSettingsRepoScrollEffects(
       if (container) {
         container.scrollTo({ top: 0 })
       }
-      // Why: deep links can target a row inside the already-visible pane.
       if (scrollTargetId !== pendingNavSectionId) {
-        // Why: target can arrive before the lazy section mounts; keep pending refs until it does.
+        // Retain pending refs until the lazy subsection mounts.
         if (!getSettingsScrollTarget(scrollTargetId, container)) {
-          // Why: async panes (the server list, say) mount rows after this pass, and nothing else re-runs the effect.
+          // Async rows may mount without another effect pass; observe their arrival.
           pendingScrollTargetWatchRef.current = watchForSettingsDeepLinkTarget({
             root: container,
             isTargetPresent: () =>

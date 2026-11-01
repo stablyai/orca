@@ -2,15 +2,11 @@ import type { DeviceEntry } from './device-registry'
 import type { RpcCallerScope } from './rpc/rpc-caller-scope'
 import { createHash } from 'node:crypto'
 
-/**
- * Who an authenticated paired socket is. Socket bookkeeping (close, revoke) keys on `deviceId`;
- * per-client runtime state (terminal drivers, dictation, file grants) keys on `clientId`.
- */
+/** Socket revoke/close uses deviceId; per-client drivers, dictation and file grants use clientId. */
 export type DevicePrincipal = {
   deviceId: string
   scope: DeviceEntry['scope']
-  // Why: token rows keep their token here because shipped phones stamp it into terminal
-  // `client.id` params; a row without a token is keyed by its id.
+  // Shipped phones use bearer tokens in terminal client.id; keyed rows use device ids.
   clientId: string
   callerFingerprint: string
   credentialRevision: number

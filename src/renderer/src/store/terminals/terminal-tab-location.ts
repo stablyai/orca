@@ -1,11 +1,6 @@
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
-/**
- * The one scan over `tabsByWorktree`. Recovery's remount, its budget release
- * and its native-chat guard must all resolve a tab through this: answering
- * from a different index (getTab's `unifiedTabsByWorktree`) made every remount
- * erase the budget it had just consumed, and the cap never held (crash b5cfc6ca).
- */
+/** Recovery/remount/budget/native-chat guards must all use terminal rows; unified-index gaps previously erased each remount’s budget and defeated its cap (b5cfc6ca). */
 export function locateTerminalTab(
   tabsByWorktree: Readonly<Record<string, readonly TerminalTab[]>>,
   tabId: string

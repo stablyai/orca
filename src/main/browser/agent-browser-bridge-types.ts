@@ -2,16 +2,18 @@ import type { ChildProcess } from 'node:child_process'
 import type { CdpWsProxy } from './cdp-ws-proxy'
 import type { BrowserError } from './cdp-bridge'
 
-// Why: must exceed agent-browser's internal timeouts (goto 30s, wait 60s) so the bridge never kills a command before its own timeout fires.
+// Exceed agent-browser's internal navigation (30s) and default wait (25s) timeouts.
 export const EXEC_TIMEOUT_MS = 90_000
 export const CONSECUTIVE_TIMEOUT_LIMIT = 3
-export const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
 export const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
 export const AGENT_BROWSER_EXIT_DRAIN_MS = 500
-// Why separate from EXEC_TIMEOUT_MS: a close is a member of the 20s will-quit barrier and must finish well inside it.
+// Cleanup must finish within the 20s quit barrier.
 export const AGENT_BROWSER_CLEANUP_TIMEOUT_MS = 5_000
 export const AGENT_BROWSER_CLEANUP_CONCURRENCY = 4
 export const EMBEDDED_NAVIGATION_TIMEOUT_MS = 30_000
+export const AGENT_DOWNLOAD_START_TIMEOUT_MS = 10_000
+// Counted from the request, so the reply beats the CLI's 60s timeout; the download keeps going after.
+export const AGENT_DOWNLOAD_REPLY_DEADLINE_MS = 50_000
 export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
 export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
 
@@ -20,14 +22,16 @@ export type SessionState = {
   cdpEndpoint: string
   initialized: boolean
   consecutiveTimeouts: number
-  // Why: track active interception patterns so they can be re-enabled after session restart
+  // Restore these routes after a session restart.
   activeInterceptPatterns: string[]
   activeCapture: boolean
-  // Why: the daemon retires itself once idle; the gap since the last command is how the bridge notices.
+  // Detect idle daemon retirement from the gap between commands.
   lastCommandAt: number
-  // Why: verify the tab is alive at execution time, not just enqueue time — queue delay can destroy it in between.
+  // Revalidate after queue delay, when the tab may have disappeared.
   webContentsId: number
   activeProcess: ChildProcess | null
+  // agent-browser keeps the `snapshot --delta` baseline in this session's daemon.
+  hasDeltaBaseline?: boolean
 }
 
 export type QueuedCommand = {
@@ -43,7 +47,7 @@ export type ResolvedBrowserCommandTarget = {
 
 export type AgentBrowserCleanupOptions = {
   closeTimeoutMs?: number
-  /** Retire only the helper and proxy; commands waiting on the page still run, on a fresh session. */
+  /** Preserve queued commands for the replacement session. */
   keepQueuedCommands?: boolean
 }
 
@@ -53,13 +57,20 @@ export type AgentBrowserExecOptions = {
   envOverrides?: NodeJS.ProcessEnv
   timeoutMs?: number
   timeoutError?: BrowserError
+  /** The caller owns stdin, so the command goes as argv; only for Orca-authored tokens. */
   stdinText?: string
+  /** Send tokens as argv so global options apply; only for Orca-authored or raw CLI tokens. */
+  cliArgv?: boolean
 }
 
 export type EnqueueTargetedCommandOptions = {
   ensureSession?: boolean
-  // Why: text-mutating commands must never fall back to the global tab (may be a worktree the user is viewing).
+  /** Page actions report what they caused when an agent runs them. */
+  reportEffects?: boolean
+  // Text mutations must not fall back to a global tab from another worktree.
   requireScopedTarget?: boolean
+  // Element arguments that may be snapshot refs.
+  elements?: readonly (string | undefined)[]
 }
 
 export type AgentBrowserBridgeOptions = {

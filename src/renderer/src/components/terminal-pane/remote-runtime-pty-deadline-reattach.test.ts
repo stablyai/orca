@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -423,9 +422,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
         hostListCalls += 1
         return { ok: true, result: hostSnapshot('terminal-stale', hostListCalls + 1, 'epoch-1') }
       })
-      // The stream drops and the resubscribe fails fatally with a stale handle: markDisconnected()
-      // latches the banner, then stale routing fences the handle with require-replacement.
-      // Only that one attempt fails, so a later reattach would succeed and be observable.
+      // Fail one stale-handle resubscribe fatally; any later same-handle retry would succeed and expose invalid reuse.
       runtimeSubscribe.mockImplementationOnce(async () => {
         throw new Error('terminal_handle_stale')
       })
@@ -448,8 +445,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     }
   })
 
-  // #9092: a rebound subscribe still opening its stream when a second deadline latches must stay
-  // revivable by system resume / network online instead of needing a manual Reconnect.
+  // A second deadline during rebound subscribe must preserve online/resume revival (#9092).
   it('parks a rebound subscribe whose stream open fails after its deadline', async () => {
     vi.useFakeTimers()
     try {

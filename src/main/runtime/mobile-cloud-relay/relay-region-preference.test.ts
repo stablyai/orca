@@ -125,7 +125,6 @@ describe('Relay region preference', () => {
     ).resolves.toBe('us-central1')
     expect(calls.filter((origin) => origin === US)).toHaveLength(4)
     expect(calls.filter((origin) => origin === ASIA)).toHaveLength(4)
-    // 5 and 7 were the warm-ups; the cached latency is the best kept sample.
     expect(JSON.parse(readFileSync(cachePath(path), 'utf8'))).toMatchObject({ latencyMs: 40 })
   })
 
@@ -173,7 +172,6 @@ describe('Relay region preference', () => {
         now: () => 1_000
       }).resolve()
     ).resolves.toBeUndefined()
-    // The withheld hint is remembered briefly so a reconnect does not re-probe.
     const cached = JSON.parse(readFileSync(cachePath(path), 'utf8'))
     expect(cached).toEqual({ v: 2, directorUrl: DIRECTOR, region: null, expiresAt: 3_601_000 })
   })
@@ -190,7 +188,6 @@ describe('Relay region preference', () => {
         now: () => 1_000
       }).resolve()
     ).resolves.toBeUndefined()
-    // An unreachable region costs its warm-up probe only, not three more rounds.
     expect(calls.filter((origin) => origin === US)).toHaveLength(1)
 
     const fetch = vi.fn<typeof globalThis.fetch>()
@@ -298,7 +295,6 @@ describe('Relay region preference', () => {
       ).resolves.toBeUndefined()
     }
 
-    // Two-region catalog so the only reason for no hint is the flapping US path.
     const unstable = sampledProbe({ [US]: [15, 10, 20, 400], [ASIA]: [300, 200, 205, 210] })
     await expect(
       new RelayRegionPreferenceResolver({
@@ -348,8 +344,6 @@ describe('Relay region preference', () => {
     writeCache(path, 'us-central1', 10 * 24 * 60 * 60_000)
     const healthy = sampledProbe({ [US]: [300, 95, 100, 105], [ASIA]: [90, 30, 32, 34] })
 
-    // The far-future cache is discarded, so Asia wins outright rather than being
-    // held back by an incumbent's switch margin.
     await expect(
       new RelayRegionPreferenceResolver({
         directorUrl: DIRECTOR,
@@ -362,9 +356,7 @@ describe('Relay region preference', () => {
   })
 
   it('withholds the hint when the catalog lists fewer regions than the fleet serves', async () => {
-    // Why: the director lists only regions with a serving cell, so a roll wave
-    // shortens the catalog. A lone healthy region measured against nothing must
-    // not become a day-long hint pinning the desktop there.
+    // Roll waves shrink catalogs; a lone survivor must not earn a day-long hint without a competitor.
     const path = userDataPath()
     const healthy = sampledProbe({ [ASIA]: [90, 30, 32, 34] })
     await expect(
@@ -394,6 +386,7 @@ describe('Relay region preference', () => {
 
     await expect(resolver.resolve()).resolves.toBe('asia-east2')
     expect(fetch).not.toHaveBeenCalled()
+    expect(existsSync(cachePath(path))).toBe(false)
   })
 
   it('lets the environment override win and never self-heals its cache', async () => {
@@ -522,7 +515,6 @@ describe('Relay region cache self-heal', () => {
     expect(first.fetch).not.toHaveBeenCalled()
     expect(first.calls).toHaveLength(0)
 
-    // Nothing was checked, so a cache written later must still be checkable.
     writeCache(path, 'asia-east2', LIVE_EXPIRY)
     await first.resolver.invalidateIfAssignedCellIsFar(CELL)
     expect(existsSync(cachePath(path))).toBe(false)

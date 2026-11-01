@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { fixture } from '../../../persistence/loading-store/profile-state-delayed-authority-fixture'
-import { TEST_LEAF_1, TEST_LEAF_2 } from '../../../persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2 } from '../../../persistence/persistence-session-fixtures'
 import { swapReplacedPaneBinding } from './pane-owner-replacement'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'
 

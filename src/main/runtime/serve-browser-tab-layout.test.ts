@@ -118,6 +118,32 @@ describe('a browser tab a host with no window saves', () => {
     expect(saved.browserPagesByWorkspace?.['page-1']).toBeUndefined()
   })
 
+  it('leaves no trace once closed when a window saved it under its own tab ids (STA-11998)', () => {
+    const session = opened(sessionWithTerminal())
+    const browserTab = session.browserTabsByWorktree![WT]![0]!
+    const unifiedTab = session.unifiedTabs![WT]!.find((tab) => tab.id === 'page-1')!
+    const group = session.tabGroups![WT]![0]!
+    const windowSaved: WorkspaceSessionState = {
+      ...session,
+      browserTabsByWorktree: { [WT]: [{ ...browserTab, id: 'browser-tab-1' }] },
+      browserPagesByWorkspace: { 'browser-tab-1': session.browserPagesByWorkspace!['page-1']! },
+      unifiedTabs: {
+        [WT]: session.unifiedTabs![WT]!.map((tab) =>
+          tab === unifiedTab ? { ...tab, id: 'unified-1', entityId: 'browser-tab-1' } : tab
+        )
+      },
+      tabGroups: {
+        [WT]: [{ ...group, tabOrder: ['term-1', 'unified-1'], activeTabId: 'unified-1' }]
+      }
+    }
+
+    const saved = withClosedServeBrowserTab(HOST, windowSaved, WT, 'page-1')!
+
+    expect(saved.unifiedTabs?.[WT]?.map((tab) => tab.id)).toEqual(['term-1'])
+    expect(saved.browserTabsByWorktree?.[WT] ?? []).toEqual([])
+    expect(findSavedBrowserPage(saved, WT, 'page-1')).toBeNull()
+  })
+
   it('updates only the page of a window-saved tab that is not its active one', () => {
     const session = opened(sessionWithTerminal())
     const windowSaved: WorkspaceSessionState = {

@@ -6,7 +6,6 @@ import { ShellWaitingFrame } from './ShellWaitingFrame'
 
 const DOWNLOADING_LABEL = 'Downloading the latest app'
 
-/** The page bundle coming down from the host, as a bar over the bytes received. */
 export function ShellDownloadProgress({
   state,
   feed,
@@ -14,7 +13,6 @@ export function ShellDownloadProgress({
 }: {
   state: Extract<MobileWebShellSessionState, { kind: 'fetching' }>
   feed: DownloadProgressFeed
-  /** Null until the stored profile is read, which leaves the caption without a name. */
   host: HostDisplaySource | null
 }) {
   const hostTitle = useHostDisplay(host).title

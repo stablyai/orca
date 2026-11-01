@@ -15,9 +15,25 @@
         "kind": "unsupported"
       }
     },
-    "a3b75b607f63": {
+    "111e9a5009ba": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 4,
+      "value": [
+        {
+          "cancelled": false,
+          "method": "agentSession.subscribeStatus",
+          "payload": "agentSession.subscribeStatus#1"
+        }
+      ]
+    },
+    "44a27dbf05e2": {
       "name": "status.get#1",
-      "ordinal": 1,
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "d570a877b081": {
+      "name": "status.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -41,7 +57,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "capabilities": ["mobile.tasks.v1"]
@@ -49,10 +65,10 @@
         }
       }
     },
-    "d08f74d65ee6": {
-      "name": "status.get#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    "e28c488ce6b2": {
+      "name": "agentSession.subscribeStatus#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -69,13 +85,25 @@
       {
         "id": "unsupported",
         "observation": {
-          "sender": ["a3b75b607f63"],
-          "payloads": ["d08f74d65ee6"],
+          "sender": ["d570a877b081"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "053ddb72973f",
           "effects": []
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": ["d570a877b081"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "053ddb72973f",
+          "effects": ["111e9a5009ba"]
         }
       }
     ]

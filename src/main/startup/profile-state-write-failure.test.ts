@@ -39,7 +39,7 @@ class FakeWindow extends EventEmitter {
   isDestroyed() {
     return this.destroyed
   }
-  // Any of these would reveal or activate the app: the reporter must never call them.
+  // Any reveal/activation fails: persistence errors must remain in the background.
   show = this.reveal
   showInactive = this.reveal
   focus = this.reveal
@@ -67,7 +67,7 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(async () => {
-  // Release any reporter still waiting so module state does not leak between tests.
+  // Release pending reporters so module state cannot leak across tests.
   fixture.state.isQuitting = true
   fixture.app.emit('browser-window-created', {}, new FakeWindow(false))
   await new Promise((resolve) => setImmediate(resolve))

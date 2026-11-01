@@ -1,5 +1,4 @@
-// Layout-owner build: a pane with no live terminal is started by main, never by the window. The
-// window asks, waits for main's start to end, then attaches to the terminal main bound.
+// Ask layout-owner main to start, wait for its bound terminal, then attach without a window-owned spawn.
 
 import { useAppStore } from '@/store'
 import { sendLayoutApply } from '@/runtime/layout-apply-send'
@@ -23,10 +22,7 @@ type MainPaneStartHandlers = {
   refused?: () => void
 }
 
-/**
- * Asks main to start the pane, then attaches once main's start for it ends. False when main does
- * not own the pane's layout (a paired server's workspace), which keeps today's path.
- */
+/** Ask main and attach after its start; false preserves paired-server ownership for the caller. */
 export function startPaneThroughMain(
   session: ConnectPanePtySession,
   handlers: MainPaneStartHandlers
@@ -59,11 +55,7 @@ export function startPaneThroughMain(
   )
 }
 
-/**
- * Layout-owner build: the window's own start of a pane (a wake, a hibernated agent's wake, a
- * restart replacement, a reattach that found its terminal gone) asks main instead, then attaches
- * to the terminal main bound. `today` starts it when main does not start this pane.
- */
+/** Delegate window-initiated wake/restart/missing-reattach starts to main; today handles panes outside main’s ownership. */
 export function startPaneThroughMainThenAttach(
   session: ConnectPanePtySession,
   today: () => Promise<string | null>
@@ -72,8 +64,7 @@ export function startPaneThroughMainThenAttach(
     return today()
   }
   if (session.mainStartAttach) {
-    // Why main's own code: the attach to main's start found no terminal; asking again would loop on a pane
-    // whose terminal ends at once.
+    // Do not retry main’s own attach-missing verdict; immediate terminal death would otherwise loop starts.
     showPaneStartFailure(session, 'terminal_not_started')
     return Promise.resolve(null)
   }
@@ -102,11 +93,7 @@ export function startPaneThroughMainThenAttach(
   })
 }
 
-/**
- * Layout-owner build, at connect: whether main's start of the pane (under way, or one this view
- * asks for) stands in for the window's own. A sleeping pane is started on its first view; a held
- * pane attaches as today, and main's refusal holds it. `connect` attaches after.
- */
+/** Replace window starts with main-owned starts; sleeping panes wait for first view, while held panes attach and honor refusal. */
 export function defersToMainPaneStart(
   session: ConnectPanePtySession,
   connect: () => void

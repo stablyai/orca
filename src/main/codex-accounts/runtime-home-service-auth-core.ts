@@ -21,7 +21,6 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
     owner: { owner: 'system-default' } | { owner: 'managed'; accountId: string },
     options?: { expectedContents: string | null }
   ): boolean {
-    // Why: auth.json holds credentials; restrict to owner-only so other users on a shared machine cannot read it.
     const runtimeAuthPath = this.getRuntimeAuthPath()
     if (options && !this.fileContentsMatchExpected(runtimeAuthPath, options.expectedContents)) {
       return false
@@ -30,10 +29,7 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
       owner.owner === 'system-default' ? { owner: 'system-default', authJson: contents } : owner
     const runtimeAuthComparison = this.compareFileContents(runtimeAuthPath, contents)
     if (runtimeAuthComparison === null) {
-      // Why: an unreadable runtime auth.json may hold a token Codex rotated a
-      // moment ago. Treating "could not read" as "differs" sent execution to the
-      // unconditional write below, consuming that rotation and logging the user
-      // out for good. Refuse; the next sync retries.
+      // An unreadable file may hold newly rotated tokens; refuse rather than overwrite them.
       return false
     }
     const runtimeAuthAlreadyMatches = runtimeAuthComparison
@@ -75,12 +71,7 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
     return true
   }
 
-  /**
-   * `true`/`false` only when the bytes were actually read; `null` when the file
-   * could not be read at all. The old `catch { return false }` reported "these
-   * differ" for a file nobody could open, and every caller reads that as
-   * permission to write.
-   */
+  /** Missing files compare false; null means an inconclusive read that cannot authorize a write. */
   protected compareFileContents(targetPath: string, contents: string): boolean | null {
     try {
       return readFileSync(targetPath, 'utf-8') === contents
@@ -98,11 +89,7 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
     expectedContents: string | null
   ): boolean {
     if (expectedContents === null) {
-      // Why: `!existsSync` does report `true` for a locked file, but this branch
-      // is not where that matters — the write it guards is
-      // `writeFileAtomicallyIfUnchanged`, whose rename-and-compare re-checks the
-      // real file and refuses on its own. Classifying here would be a guard no
-      // test can drive.
+      // This precheck can misread locks as absence; atomic publication still refuses to overwrite.
       return !existsSync(targetPath)
     }
     return this.fileContentsEqual(targetPath, expectedContents)

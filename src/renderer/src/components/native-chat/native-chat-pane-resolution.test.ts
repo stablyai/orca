@@ -71,7 +71,6 @@ describe('resolveNativeChatSession', () => {
       resolveNativeChatSession({
         paneKey,
         launchAgent: 'claude',
-        // Entry exists (agent launched) but no providerSession reported yet.
         agentStatusEntry: entry({ paneKey, agentType: 'claude' }),
         ptyId: 'pty-1'
       })

@@ -61,6 +61,9 @@ export class DestroyedGuestTestContents extends EventEmitter {
   setUserAgent(): void {}
   setWindowOpenHandler(): void {}
   setBackgroundThrottling(): void {}
+  isCurrentlyAudible(): boolean {
+    return false
+  }
 
   destroy(): void {
     this.destroyed = true

@@ -1,5 +1,4 @@
-// Layout-owner build: main starts the pane and resumes its agent, so the window's "session
-// restored" or "resume unavailable" banner comes from the outcome main publishes for that start.
+// Main owns agent resume; show its published restored/unavailable outcome once per terminal start.
 
 import { useAppStore } from '@/store'
 import type { TerminalPaneResumeOutcome } from '@/store/terminals/terminal-state'
@@ -46,11 +45,7 @@ function noteShown(start: string, outcomes: Outcomes): boolean {
   return true
 }
 
-/**
- * At an attach's start, a check of whether the attach resumed the pane's agent: the window's own
- * resume unless its spawn said it could not, or, when main starts the pane (`windowResume` null),
- * a 'restored' outcome main published for the attached terminal since the attach began.
- */
+/** Capture attach-time resume evidence: the window’s own result, or main’s restored outcome for the bound terminal published since attach began. */
 export function attachResumeCheck(
   session: ConnectPanePtySession,
   windowResume: ColdRestoreAgentResumeStartup | null
@@ -74,12 +69,7 @@ export function attachResumeCheck(
   }
 }
 
-/**
- * After the view attached `ptyId`: shows the banner of main's start of that terminal, once. Read
- * at the attach: main's outcome rides the frame that binds the terminal, which the attach follows.
- * Why that holds: main flushes the frame before the spawn reply, both cross the same webContents
- * IPC, and the frame applies in a microtask before the attach's reply settles.
- */
+/** Show main’s start outcome once after attach; its binding frame precedes the reply on ordered IPC and applies before the reply settles. */
 export function showMainPaneResumeOutcome(session: ConnectPanePtySession, ptyId: string): void {
   if (!mainStartsPane(session)) {
     return

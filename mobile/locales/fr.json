@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "Autorisez Orca à utiliser l'appareil photo pour scanner des QR codes.",
+    "NSLocalNetworkUsageDescription": "Orca se connecte à l'application sur votre ordinateur via votre LAN.",
+    "NSMicrophoneUsageDescription": "Autorisez Orca à utiliser votre microphone pour la dictée vocale transmise à votre ordinateur appairé pour transcription.",
+    "NSPhotoLibraryUsageDescription": "Autorisez Orca à joindre des photos de votre photothèque à une session de terminal sur votre ordinateur appairé."
+  }
+}

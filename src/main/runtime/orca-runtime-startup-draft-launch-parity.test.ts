@@ -19,7 +19,6 @@ type DraftSettings = {
   detected: string[]
 }
 
-/** One create on a fresh runtime: what the user is left with, and how often agents were detected. */
 async function runCreate(
   route: 'create' | 'launch',
   settings: DraftSettings,
@@ -70,8 +69,7 @@ async function runCreate(
 
 const DRAFT = 'https://github.com/stablyai/orca/issues/123'
 
-// `worktree.create` now reaches the create through the launch executor; for a linked draft the
-// user must be left with exactly what the create alone gave them.
+// Linked-draft launch execution must preserve direct-create results.
 describe('a linked-draft create through the launch executor', () => {
   it.each([false, true])(
     'matches the create when the default agent cannot be launched (activate %s)',
@@ -87,7 +85,6 @@ describe('a linked-draft create through the launch executor', () => {
       const after = await runCreate('launch', settings, request)
 
       expect(after).toEqual(before)
-      // No agent started, so none is recorded and a background create still opens its shell.
       expect(before.createdWithAgent).toBeUndefined()
       if (!activate) {
         expect(before.spawned).toHaveLength(1)

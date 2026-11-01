@@ -2,17 +2,16 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
-// Baselines shared by the ratchet gates. An entry baseline lists one allowed entry per line; a
-// count baseline holds `<count> <path> [# note]` rows. `#` lines and blanks are ignored in both.
+// Entry baselines allow one item per line; count baselines use <count> <path> [# note]. Both ignore blank/# lines.
 
 /** Tracked files under `pathspecs`, so build output and untracked scratch are never scanned. */
 export function listTrackedFiles(root, pathspecs) {
-  return execFileSync('git', ['ls-files', ...pathspecs], {
+  return execFileSync('git', ['ls-files', '-z', ...pathspecs], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024
   })
-    .split('\n')
+    .split('\0')
     .filter(Boolean)
 }
 
@@ -53,10 +52,7 @@ function writeEntryBaseline(root, ratchet, entries) {
   )
 }
 
-/**
- * Gate for an entry ratchet `{ name, baselinePath, header, collect(root), fix }`: a new entry
- * fails with `fix`, a stale one fails until pruned. `--prune` drops stale entries only.
- */
+// Entry ratchet fails new/stale entries; --prune only removes stale entries, never grants new allowances.
 export function runEntryRatchet(ratchet, root, arg) {
   const baselineFile = path.join(root, ratchet.baselinePath)
   const prune = `pnpm check:${ratchet.name}-ratchet --prune`
@@ -173,10 +169,7 @@ export function pruneCountBaseline(root, baselinePath, header, current) {
   return totalCount(pruned)
 }
 
-/**
- * Gate for a count ratchet `{ name, baselinePath, header, collect(root), fix, unit }`: a file above
- * its baseline fails with `fix`, one below it fails until pruned. `--prune` lowers rows only.
- */
+// Count ratchet fails growth/shrinkage; --prune only lowers allowances, while growth needs a code fix.
 export function runCountRatchet(ratchet, root, arg) {
   const current = ratchet.collect(root)
   if (arg === '--prune') {
@@ -188,7 +181,9 @@ export function runCountRatchet(ratchet, root, arg) {
   const baseline = parseCountBaseline(
     fs.existsSync(baselineFile) ? fs.readFileSync(baselineFile, 'utf8') : ''
   )
-  const { grown, shrunk } = diffCounts(current, baseline)
+  const inScope = ratchet.scope?.(root)
+  const keep = (counts) => (inScope ? new Map([...counts].filter(([key]) => inScope(key))) : counts)
+  const { grown, shrunk } = diffCounts(keep(current), keep(baseline))
   for (const { file, now, allowed } of grown) {
     console.error(`${file}: ${now} ${ratchet.unit}, baseline allows ${allowed}.`)
   }

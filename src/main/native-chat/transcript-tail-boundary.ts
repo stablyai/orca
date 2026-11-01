@@ -3,10 +3,7 @@ import type { TranscriptFileHandle } from './wsl-transcript-fs-access'
 
 export const TAIL_CHUNK_BYTES = 64 * 1024
 
-/**
- * The byte at `position`, or null when the file shrank below it between the
- * caller's stat and this read (allocUnsafe would otherwise hand back garbage).
- */
+/** Return null after shrink; never expose uninitialized bytes from an empty allocUnsafe read. */
 export async function readTranscriptByteAt(
   handle: TranscriptFileHandle,
   filePath: string,
@@ -28,7 +25,6 @@ export async function readTranscriptByteAt(
   return bytesRead === 1 ? byte[0] : null
 }
 
-/** End offset (exclusive) of the last newline-terminated line at or before `end`. */
 export async function findLastCompleteLineEnd(
   handle: TranscriptFileHandle,
   filePath: string,
@@ -38,7 +34,6 @@ export async function findLastCompleteLineEnd(
   signal?.throwIfAborted()
   const lastByte = await readTranscriptByteAt(handle, filePath, end - 1, signal)
   if (lastByte === null) {
-    // File shrank between stat and probe.
     return 0
   }
   if (lastByte === 0x0a) {
@@ -61,7 +56,7 @@ export async function findLastCompleteLineEnd(
     )
     signal?.throwIfAborted()
     if (bytesRead < buffer.length) {
-      // File shrank mid-walk: any boundary computed from stale offsets is wrong.
+      // Shrink invalidates boundaries derived from the old offsets.
       return 0
     }
     const newline = buffer.subarray(0, bytesRead).lastIndexOf(0x0a)

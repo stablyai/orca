@@ -4,6 +4,7 @@ import type { OrcadMigrationBlocker } from './orcad-migration/orcad-migration-pr
 import type { OrcadMigrationSourceCutoverPhase } from './orcad-migration/orcad-migration-source-cutover'
 import type { OrcadDaemonRetirementVerdict } from './orcad-stop-request'
 import type { SshManagedServerLinkedProject } from './ssh-types'
+import type { OrcadStaleLockEvidence } from './orcad-stale-lock-reclaim'
 
 export const ORCAD_MANAGED_REMOTE_PORT = 6_768
 
@@ -25,6 +26,12 @@ export type OrcadManagedDeferral = {
   /** False when force cannot make the rejected lifecycle transition safe. */
   forceable?: boolean
 }
+
+/** The one deferral Update anyway may pass: counted terminals the daemon carries across. */
+export const ORCAD_UPDATE_TERMINALS_RUNNING_CODE = 'orcad_update_terminals_running'
+
+/** Update anyway passes counted live-terminal deferrals, preserves version admission, and requires the confirmed incumbent build. */
+export type OrcadManagedPastLiveTerminals = { incumbentVersion: string | null }
 
 export type OrcadManagedDeployResult =
   | {
@@ -69,20 +76,44 @@ export type OrcadManagedStopResult =
     }
   | OrcadManagedRefusal
 
-/**
- * Restarting the server from the current SSH session. Refused while any terminal runs or can't be
- * counted (`liveSessions: null`): the terminal daemon outlives orcad and keeps what it inherited.
- */
+/** Refuse restart with live or unverifiable terminals: the daemon outlives orcad and retains its inherited environment. */
 export type OrcadManagedRestartResult =
   | { outcome: 'restarted'; environmentId: string }
   | { outcome: 'terminals-running'; liveSessions: number | null }
   | { outcome: 'not-restarted'; reason: string }
 
-/**
- * Unlinks the server from this desktop without reaching its host, for a host that is gone or
- * unreachable. Never a claim of exit: the server may still run there, so the verdict stays
- * `unverifiable`.
- */
+/** A dry run, or a confirmation pinned to the lock record that dry run showed. */
+export type OrcadManagedStaleLockReclaimRequest =
+  | { yes: false }
+  | { yes: true; expectNonce: string }
+
+/** `orcad --reclaim-stale-lock` run on a managed host's active slot (#32177). */
+export type OrcadManagedStaleLockReclaimResult =
+  | {
+      status: 'none' | 'eligible' | 'refused'
+      message: string
+      lockPath: string
+      evidence?: OrcadStaleLockEvidence
+    }
+  /** `notRestarted` says why the server did not start again once its lock was cleared. */
+  | {
+      status: 'reclaimed'
+      environmentId: string
+      message: string
+      lockPath: string
+      /** The record the reclaim acted on. */
+      evidence?: OrcadStaleLockEvidence
+      notRestarted?: string
+    }
+  /** No remote reclaim occurred. reclaimWithoutPin requires manual reclaim because the host cannot pin confirmation;
+   * otherwise lockPath names the lock to delete manually. */
+  | { status: 'unsupported'; message: string; lockPath?: string; reclaimWithoutPin?: true }
+  /** The slot runs the command but gave no answer this client understands; nothing is known. */
+  | { status: 'no-answer'; message: string }
+  /** Another lifecycle step holds the host; nothing changed. */
+  | { status: 'busy'; message: string }
+
+/** Forget only unlinks this desktop; an unreachable server may still run, so its verdict remains unverifiable. */
 export type OrcadManagedForgetResult =
   | {
       outcome: 'forgotten'
@@ -142,6 +173,10 @@ export type OrcadManagedRuntimeStatus = {
   } | null
   /** The last update this client deferred for this server, cleared once one goes through. */
   deferredUpdate: (OrcadManagedDeferral & { deferredAt: string }) | null
+  /** The Orca release that activated `activeVersion`; absent when unknown or from older desktops. */
+  activeAppVersion?: string | null
+  /** This desktop's bundled build when Update would move the host to it; absent from older desktops. */
+  availableUpdate?: string | null
 }
 
 export type OrcadManagedConversionResult =
@@ -152,6 +187,8 @@ export type OrcadManagedConversionResult =
       migrationId: string
       /** Projects the server already held, so this desktop's own state for them did not move. */
       linkedProjects?: SshManagedServerLinkedProject[]
+      /** Moved automations the server would not re-enable; they stay off there. */
+      automationsLeftDisabled?: number
     }
   | OrcadManagedDeferral
   | OrcadManagedRefusal

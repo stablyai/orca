@@ -15,7 +15,6 @@ export type HostAccountSignInPhase =
 
 /** What a login running on the host asks of the person on another device. */
 export type HostAccountSignInPrompt = {
-  /** The page to open in that device's browser. */
   url: string
   /** Codex's one-time device code, typed into that page. */
   userCode: string | null
@@ -25,7 +24,6 @@ export type HostAccountSignInPrompt = {
 
 /** How a login running on the host reaches the person signing in elsewhere. */
 export type HostAccountSignInChannel = {
-  /** Aborts the login: the person cancelled, or the flow ended. */
   signal: AbortSignal
   onPrompt: (prompt: HostAccountSignInPrompt) => void
   /** The code the person pasted back; rejects if the flow ends first. */
@@ -39,10 +37,21 @@ export type HostAccountSignInStatus = {
   revision: number
   phase: HostAccountSignInPhase
   prompt?: HostAccountSignInPrompt
+  /** English text; older clients show it as-is. */
   error?: string
+  /** Set when `error` is Orca's own HOST_ACCOUNT_SIGN_IN_FAILURE_COPY text; absent from older hosts. */
+  errorCode?: string
   claude?: ClaudeRateLimitAccountsState
   codex?: CodexRateLimitAccountsState
 }
+
+// One English table for sign-in failures Orca names itself; the login's own errors stay uncoded.
+export const HOST_ACCOUNT_SIGN_IN_FAILURE_COPY = {
+  ownerSilent: 'The device that started this sign-in stopped answering.',
+  superseded: 'An account change on this host stopped the sign-in. Start it again.'
+} as const
+
+export type HostAccountSignInFailureCode = keyof typeof HOST_ACCOUNT_SIGN_IN_FAILURE_COPY
 
 export const HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES: ReadonlySet<HostAccountSignInPhase> = new Set([
   'signedIn',

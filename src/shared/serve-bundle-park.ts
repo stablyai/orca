@@ -61,11 +61,8 @@ function readBundleIdentity(bundlePath: string): string {
   }
 }
 
-/**
- * Only a launchd service whose label `orca serve service install` wrote takes part: the installer
- * stops a server only when a service manager it can name keeps the supervisor running. Everyone
- * else keeps today's refusal. `label` is for an owner that restarts its own child, like orcad.
- */
+/** Only installer-known launchd supervisors participate; unmanaged servers retain install refusal.
+ * label supports owners that restart their own child, such as orcad. */
 export function openServeBundlePark(input: {
   executable: string
   label?: string

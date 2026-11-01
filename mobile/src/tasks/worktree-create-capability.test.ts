@@ -7,10 +7,7 @@ import {
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { readNewWorktreeRuntimeCapabilities } from './worktree-create-capability'
-import {
-  WORKTREE_CREATE_DEDUPE_TTL_CLIENT_CEILING_MS,
-  WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS
-} from './worktree-create-idempotency-policy'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 
 type StatusOutcome =
   | 'cutover'
@@ -24,6 +21,7 @@ type StatusOutcome =
 function statusClient(outcomes: StatusOutcome[]): RpcClient {
   let call = 0
   return {
+    ...createFakeRpcClient(),
     sendRequest: async () => {
       const outcome = outcomes[Math.min(call, outcomes.length - 1)]!
       call += 1
@@ -43,7 +41,7 @@ function statusClient(outcomes: StatusOutcome[]): RpcClient {
         _meta: { runtimeId: 'r' }
       }
     }
-  } as unknown as RpcClient
+  }
 }
 
 describe('readNewWorktreeRuntimeCapabilities', () => {
@@ -58,6 +56,8 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
         ])
       )
     ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
       tasksSupported: true,
       worktreeCreateIdempotency: { dedupeTtlMs: 20_000 },
       agentLaunch: false,
@@ -66,17 +66,17 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
   })
 
   it('reads agent.launch support from the same status.get probe', async () => {
-    // Why: mobile must not send `agent.launch` to a host that never advertised it, and one probe
-    // has to answer that alongside create idempotency so a create cannot straddle two answers.
+    // Resolve launch and create-idempotency support in one probe so creation cannot straddle inconsistent answers.
     await expect(
       readNewWorktreeRuntimeCapabilities(
         statusClient([{ capabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY] }])
       )
     ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
       tasksSupported: false,
       worktreeCreateIdempotency: false,
-      // Advertising the method is not advertising the ledger: `operationId` degrades silently on a
-      // host that has one and not the other, so the two are answered separately.
+      // Method support does not imply ledger support; older hosts may silently strip operationId.
       agentLaunch: { replay: false },
       hostPlatform: 'darwin'
     })
@@ -95,6 +95,8 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
         ])
       )
     ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
       tasksSupported: false,
       worktreeCreateIdempotency: false,
       agentLaunch: { replay: true },
@@ -102,8 +104,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
     })
   })
 
-  // A host cannot admit an operation for a method it does not have, so the ledger capability alone
-  // must not turn the launch route on.
+  // Ledger capability alone cannot enable a missing launch method.
   it('ignores the replay capability on a host without agent.launch', async () => {
     await expect(
       readNewWorktreeRuntimeCapabilities(
@@ -128,8 +129,10 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
     await expect(
       readNewWorktreeRuntimeCapabilities(statusClient([['worktree.create-idempotency.v1']]))
     ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
       tasksSupported: false,
-      worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_CLIENT_CEILING_MS },
+      worktreeCreateIdempotency: { dedupeTtlMs: 60_000 },
       agentLaunch: false,
       hostPlatform: 'darwin'
     })
@@ -146,6 +149,8 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
         ])
       )
     ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
       tasksSupported: false,
       worktreeCreateIdempotency: { dedupeTtlMs: 0 },
       agentLaunch: false,
@@ -171,6 +176,8 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
           ])
         )
       ).resolves.toEqual({
+        branchIntentV2: false,
+        branchIntentV2Request: false,
         tasksSupported: false,
         worktreeCreateIdempotency: { dedupeTtlMs: 0 },
         agentLaunch: false,
@@ -190,8 +197,10 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
         ])
       )
     ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
       tasksSupported: false,
-      worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS },
+      worktreeCreateIdempotency: { dedupeTtlMs: 60_000 },
       agentLaunch: false,
       hostPlatform: 'darwin'
     })
@@ -210,6 +219,8 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
           ])
         )
       ).resolves.toEqual({
+        branchIntentV2: false,
+        branchIntentV2Request: false,
         tasksSupported: false,
         worktreeCreateIdempotency: { dedupeTtlMs: 0 },
         agentLaunch: false,
@@ -230,6 +241,8 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
         ])
       )
     ).resolves.toEqual({
+      branchIntentV2: false,
+      branchIntentV2Request: false,
       tasksSupported: false,
       worktreeCreateIdempotency: { dedupeTtlMs: 30_000 },
       agentLaunch: false,

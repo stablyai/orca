@@ -1,3 +1,4 @@
+import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session-start-time'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status-freshness'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
@@ -17,7 +18,7 @@ import type {
 import {
   isClientOwnedAgentStatus,
   isMirroredAgentStatusOwnedBy,
-  isFencedClientAgentStatus,
+  clientAgentStatusFencesHost,
   hostAgentStatusPiercesClientAuthority,
   isMirroredAgentPaneKeyForTabs,
   batchAgentPaneKeysForTabs,
@@ -86,21 +87,21 @@ export function buildMirroredAgentStatusPatch(
       existing,
       now
     )
-    // Why: keep fresher OSC state while taking remapped ownership metadata from the authoritative host snapshot.
+    // Retain fresher OSC state while remapping authoritative host identity.
     const hostIdentityPredatesCurrentTurn =
       existing !== undefined &&
       entry.state === 'done' &&
       existing.state !== 'done' &&
       existing.stateStartedAt > entry.stateStartedAt
-    // Why: cross-machine wall clocks are not comparable, so the host frame could
-    // outrank live client status forever; a proven client writer keeps its own
-    // state (still adopting the host's identity fields below) unless the host
-    // carries a state class the client's bytes can never see.
-    const clientOwnsEntry =
-      isFencedClientAgentStatus(entry.paneKey, existing, now) &&
-      !hostAgentStatusPiercesClientAuthority(entry)
+    // Cross-machine clocks cannot arbitrate live byte ownership; keep client state except host-only classes, adopting host identity below.
+    const hostPiercesAuthority = hostAgentStatusPiercesClientAuthority(entry)
+    const clientOwnsEntry = clientAgentStatusFencesHost(entry.paneKey, existing, entry, now)
     const nextEntry =
-      existing && (clientOwnsEntry || existing.updatedAt > entry.updatedAt)
+      existing &&
+      (clientOwnsEntry ||
+        (!hostPiercesAuthority &&
+          isAgentStatusFresh(existing, now) &&
+          existing.updatedAt > entry.updatedAt))
         ? {
             ...normalizeCompatibleAgentStatusEntryForOwner(existing, entry.agentType),
             ...(clientOwnsEntry && existing.state === 'working' && entry.state === 'working'
@@ -112,9 +113,7 @@ export function buildMirroredAgentStatusPatch(
             providerSession:
               existing.providerSession ??
               (hostIdentityPredatesCurrentTurn ? undefined : entry.providerSession),
-            // Why: hook-only content the byte pipeline can never see, and every OSC
-            // write blanks it, so a fenced pane's message line stayed empty forever
-            // (#12906). Host-first unlike providerSession: only the host can mint one.
+            // Only hooks mint message content and OSC blanks it; take host-first even behind the client fence (#12906), unlike providerSession.
             lastAssistantMessage:
               (hostIdentityPredatesCurrentTurn ? undefined : entry.lastAssistantMessage) ??
               existing.lastAssistantMessage,
@@ -124,10 +123,17 @@ export function buildMirroredAgentStatusPatch(
                 : entry.lastAssistantMessageIsToolOutput
           }
         : entry
-    nextByPaneKey.set(
-      entry.paneKey,
+    const accepted =
       nextEntry === entry ? entry : withHostProgramStatus(nextEntry, entry.programStatus)
-    )
+    const retained = existing ? undefined : state.retainedAgentsByPaneKey?.[entry.paneKey]
+    nextByPaneKey.set(entry.paneKey, {
+      ...accepted,
+      firstStateStartedAt: resolveAgentSessionStartedAt({
+        entry: accepted,
+        previous: existing ?? retained?.entry,
+        previousStartedAt: retained?.startedAt
+      })
+    })
   }
 
   let nextAgentStatusByPaneKey = state.agentStatusByPaneKey
@@ -151,13 +157,7 @@ export function buildMirroredAgentStatusPatch(
     if (nextByPaneKey.has(paneKey)) {
       continue
     }
-    // Why: the host surface carrying no status is not proof the agent stopped —
-    // hook-only hosts publish nothing for OSC-driven panes. Keep a live entry
-    // this renderer owns; it decays through the normal freshness boundary.
-    // Ownership, not freshness, is the gate here: with no competing host value
-    // there is nothing to arbitrate, and a client asleep past the stale
-    // boundary would otherwise erase every pane it owns on the first snapshot
-    // after wake (STA-3107) instead of decaying it like a local pane.
+    // Host omission cannot prove OSC-driven exit. Retain owned rows through staleness so wake decays them like local panes instead of erasing them (STA-3107).
     if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])) {
       continue
     }
@@ -177,7 +177,10 @@ export function buildMirroredAgentStatusPatch(
 
   for (const [paneKey, entry] of nextByPaneKey) {
     const existing = nextAgentStatusByPaneKey[paneKey]
-    if (agentStatusEntryEqual(existing, entry)) {
+    if (
+      agentStatusEntryEqual(existing, entry) &&
+      existing?.firstStateStartedAt === entry.firstStateStartedAt
+    ) {
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
@@ -204,6 +207,7 @@ export function buildMirroredAgentStatusPatch(
       !!existing && agentMainAgentVerdict(existing) !== agentMainAgentVerdict(entry)
     const entrySortRelevantChange =
       !existing ||
+      existing.firstStateStartedAt !== entry.firstStateStartedAt ||
       existing.state !== entry.state ||
       !isAgentStatusFresh(existing, now) ||
       entryFreshnessChanged ||

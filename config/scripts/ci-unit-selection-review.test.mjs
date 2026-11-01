@@ -50,7 +50,7 @@ it('does not call incomplete, duplicate, interrupted or selected evidence a full
     [a, { ...b, timing: { ...b.timing, status: 'interrupted' } }],
     [a, b].map((row) => ({ ...row, plan: { ...plan, mode: 'selected' } }))
   ]) {
-    expect(reviewUnitSelection(rows).every((row) => !row.completeFullRun)).toBe(true)
+    expect(reviewUnitSelection(rows).map((row) => row.completeFullRun)).toEqual([false])
   }
 })
 

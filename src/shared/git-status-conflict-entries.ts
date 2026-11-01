@@ -67,8 +67,7 @@ function parseConflictKind(xy: string): GitConflictKind | null {
   }
 }
 
-// Why: `status` here is a rendering-compat choice for icon/color plumbing, not semantic; the conflict badge carries the real meaning.
-// Why: for deleted_by_*/added_by_* variants Git's result depends on merge strategy, so ask whether the path is in the working tree.
+// Status is an icon/color compatibility value; conflict badges carry semantics. For deleted/added-by variants, inspect worktree presence.
 async function getConflictCompatibilityStatus(
   worktreePath: string,
   filePath: string,
@@ -83,9 +82,7 @@ async function getConflictCompatibilityStatus(
     return 'deleted'
   }
 
-  // Why: `mW` is the worktree mode Git already stat'ed for this row — `000000` means absent. Reading
-  // it costs nothing and stays consistent with the rest of the snapshot, whereas a re-probe here is a
-  // 9p/network round trip per asymmetric conflict on a WSL or remote worktree.
+  // mW already contains snapshot-consistent presence (000000 means absent); reprobes cost a 9P/network trip per conflict.
   if (OCTAL_FILE_MODE.test(modeWorktree)) {
     return modeWorktree === '000000' ? 'deleted' : 'modified'
   }
@@ -95,8 +92,7 @@ async function getConflictCompatibilityStatus(
     await access(path.join(worktreePath, filePath))
     return 'modified'
   } catch (error) {
-    // Why: only a definite "not there" reads as deleted; any other fs failure keeps the row visible
-    // rather than falsely showing 'deleted'.
+    // Only definite absence means deleted; other filesystem failures keep the row visible.
     const code = (error as NodeJS.ErrnoException).code
     return code === 'ENOENT' || code === 'ENOTDIR' ? 'deleted' : 'modified'
   }

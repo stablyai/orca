@@ -1,21 +1,19 @@
-// Claude's echo of a sent message both answers the send and opens its turn. Whatever order the
-// host publishes those in, a chat reading its frames one at a time must read working throughout:
-// Stop and every session list's Working come from that one rule.
+// Each intermediate echo/turn frame must preserve Working so Stop and session lists stay consistent.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
-import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
+import { ClaudeStructuredSessionAdapter } from '../../claude/structured/claude-structured-session-adapter'
 import {
   fakeClaude,
   PROVIDER_SESSION_ID
-} from '../../claude/claude-structured-session-test-support'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+} from '../../claude/structured/claude-structured-session-test-support'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
@@ -26,7 +24,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
@@ -52,6 +53,7 @@ beforeEach(async () => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false
     }),
     onEvent: (event) => {
@@ -60,7 +62,6 @@ beforeEach(async () => {
         lifecycle.push(host.handleAdapterEvent(mapped))
       }
     },
-    // As the runtime wires it.
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     openConnection: claude.current.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
@@ -91,6 +92,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -142,7 +144,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   await settled()
   const connection = claude.current.connections[0]!
   if (backlog) {
-    // The previous cycle's result in the same read, its write issued just ahead of the echo's.
+    // Queue the previous result immediately ahead of the new echo in the same read.
     connection.handlers.onMessage?.({
       type: 'result',
       subtype: 'success',
@@ -155,7 +157,6 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
       result: ''
     })
   }
-  // Claude echoes the written message back, which is what opens its turn.
   connection.handlers.onMessage?.({ ...connection.sent.at(-1)!, uuid: 'echo-uuid' })
   await settled()
 

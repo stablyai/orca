@@ -1,7 +1,4 @@
-// Replays hook payloads recorded from Claude Code 2.1.287 over a real PTY
-// (__fixtures__/claude-task-notification-hooks.jsonl, sidecar beside it). Claude owes the main
-// agent one <task-notification> for every background task that ends, and delivers it after the
-// task stops running — so "nothing running" is not "finished" (#23942).
+// Replay real Claude 2.1.287 PTY hooks from the adjacent fixture: ended background tasks still owe main-agent notifications, so no running work does not imply completion (#23942).
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -137,14 +134,8 @@ describe('Claude owed task notifications outside the captures', () => {
 
     // A stamped working row is announced at once; this Stop is ~100 ms from the wake-up turn.
     const owedOnly = post({ hook_event_name: 'Stop', background_tasks: [] })
+    expect(owedOnly?.payload.state).toBe('working')
     expect(owedOnly?.payload.turnCompletedAt).toBeUndefined()
-
-    launchAgent(post, 'a2')
-    const childRunning = post({
-      hook_event_name: 'Stop',
-      background_tasks: [{ id: 'a2', type: 'subagent', status: 'running' }]
-    })
-    expect(childRunning?.payload.turnCompletedAt).toEqual(expect.any(Number))
   })
 
   it('drops what a replaced conversation was owed', () => {
@@ -408,7 +399,7 @@ describe('Claude owed task notifications that never arrive', () => {
     wallClock.mockRestore()
   })
 
-  it("restates under the stored row's launch token and owner, as a row with no hook event", () => {
+  it("restates under the stored row's launch token and session, as a row with no hook event", () => {
     const { post, restated } = host()
     const tokened = (payload: Record<string, unknown>) =>
       post(payload, PANE_KEY, { launchToken: 'launch-1' })
@@ -421,7 +412,12 @@ describe('Claude owed task notifications that never arrive', () => {
 
     vi.advanceTimersByTime(LEASE)
 
-    expect(restated[0]).toMatchObject({ launchToken: 'launch-1', payload: { state: 'done' } })
+    expect(restated[0]).toMatchObject({
+      launchToken: 'launch-1',
+      source: 'claude',
+      providerSession: { key: 'session_id', id: SESSION },
+      payload: { state: 'done' }
+    })
     expect(restated[0].hookEventName).toBeUndefined()
   })
 

@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
@@ -146,7 +146,6 @@ afterEach(() => {
   })
 })
 
-// The chat's own stream retrying is not the host's outage: with the host up, nothing is said.
 it('adds no host line and no read line to a loaded chat while its host stays connected', () => {
   renderPane()
   act(() => {

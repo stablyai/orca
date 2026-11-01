@@ -86,7 +86,7 @@ export function createMarkdownLinkAction(
               getLinkSourceLocalOpenOwner(initialState, sourceOwner, ctx.worktreeId)
             )
           ) {
-            // Why: a file:// link outside the worktree is client-local; remote runtime/SSH editors must not treat server paths as client paths.
+            // Outside-worktree file:// is client-local; never interpret remote runtime/SSH paths as desktop files.
             showLocalPathOpenBlockedToast()
             return
           }
@@ -138,7 +138,6 @@ export function createMarkdownLinkAction(
         return
       }
 
-      // target.kind === 'markdown'
       const { absolutePath, relativePath, line, column } = target
       let stats: { isDirectory: boolean }
       try {

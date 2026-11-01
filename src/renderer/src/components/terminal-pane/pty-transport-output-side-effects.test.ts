@@ -347,7 +347,7 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
-  it('delivers every side effect in order when the queue stays below the cap', async () => {
+  it('delivers the side-effect count and final title when the queue stays below the cap', async () => {
     vi.useFakeTimers()
     try {
       const { createPtyOutputProcessor } = await import('./pty-output-processor')

@@ -47,13 +47,11 @@ function probePortPage(
 }
 
 export type BrowserNewTabServers = {
-  /** This worktree's servers. */
   own: BrowserNewTabServer[]
   /** Other worktrees' servers on the same host, so this tab reaches them at the same address. */
   others: BrowserNewTabServer[]
 }
 
-/** Listeners on this worktree's host that answer with a web page, freshly scanned on open. */
 export function useBrowserNewTabServers(
   worktreeId: string,
   runtimeTarget: RuntimeClientTarget | null

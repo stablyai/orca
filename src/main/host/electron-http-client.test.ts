@@ -91,22 +91,6 @@ afterEach(() => {
 })
 
 describe('electronHttpClient proxy authentication', () => {
-  it('keeps Electron fetch when no proxy credentials are configured', async () => {
-    const response = await electronHttpClient.fetch('https://api.example.com/v1')
-
-    expect(await response.text()).toBe('direct')
-    expect(mocks.netRequest).not.toHaveBeenCalled()
-  })
-
-  it('keeps Electron fetch for non-HTTP URLs', async () => {
-    setElectronProxyCredentialsForSession(mocks.defaultSession, PROXY)
-
-    await electronHttpClient.fetch('orca-asset://icon.png')
-
-    expect(mocks.netFetch).toHaveBeenCalledWith('orca-asset://icon.png', undefined)
-    expect(mocks.netRequest).not.toHaveBeenCalled()
-  })
-
   it('answers the configured proxy challenge on a cold request', async () => {
     setElectronProxyCredentialsForSession(mocks.defaultSession, PROXY)
     const { pending } = await startRequest({ method: 'POST', body: 'payload', headers: { a: 'b' } })

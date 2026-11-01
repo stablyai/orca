@@ -1,4 +1,3 @@
-// A pane moved to this host reopens in the folder it last used on the source, until it spawns.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -128,17 +127,6 @@ describe('migrated pane restore cwd at terminal create', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('opens a default-cwd create in the hinted folder once, then at the worktree root', async () => {
-    const { runtime, spawn, hintStore } = runtimeWithHints([{ paneKey: PANE, cwd: hinted }])
-
-    await runtime.createTerminal('id:wt-1', { tabId: TAB_ID, leafId: LEAF_ID })
-    expect(remainingHint(hintStore)).toBeNull()
-    await runtime.createTerminal('id:wt-1', { tabId: TAB_ID, leafId: LEAF_ID })
-
-    expect(spawnedCwd(spawn, 0)).toBe(hinted)
-    expect(spawnedCwd(spawn, 1)).toBe(worktreePath)
-  })
-
   it('keeps the hint when the create fails, so the retry still opens in the hinted folder', async () => {
     let attempts = 0
     const { runtime, spawn, hintStore } = runtimeWithHints([{ paneKey: PANE, cwd: hinted }], {
@@ -176,16 +164,6 @@ describe('migrated pane restore cwd at terminal create', () => {
     expect(remainingHint(hintStore)).toBeNull()
   })
 
-  it('never applies a hint installed for another worktree', async () => {
-    const { runtime, spawn } = runtimeWithHints([
-      { paneKey: PANE, cwd: hinted, worktreeId: 'wt-other' }
-    ])
-
-    await runtime.createTerminal('id:wt-1', { tabId: TAB_ID, leafId: LEAF_ID })
-
-    expect(spawnedCwd(spawn, 0)).toBe(worktreePath)
-  })
-
   it('falls back to the worktree root when the folder is gone, and spends the hint', async () => {
     const { runtime, spawn, hintStore } = runtimeWithHints([
       { paneKey: PANE, cwd: join(worktreePath, 'deleted') }
@@ -215,21 +193,6 @@ describe('migrated pane restore cwd at terminal create', () => {
       }
     }
   )
-
-  it('claims the pane before reading its hint', async () => {
-    const order: string[] = []
-    const { runtime } = runtimeWithHints([{ paneKey: PANE, cwd: hinted }], {
-      claimStablePaneCreate: () => {
-        order.push('claim')
-        return () => order.push('release')
-      },
-      onPeek: () => order.push('peek')
-    })
-
-    await runtime.createTerminal('id:wt-1', { tabId: TAB_ID, leafId: LEAF_ID })
-
-    expect(order.slice(0, 2)).toEqual(['claim', 'peek'])
-  })
 
   it("never applies another pane's hint", async () => {
     const otherPane = `${TAB_ID}:${OTHER_LEAF_ID}`

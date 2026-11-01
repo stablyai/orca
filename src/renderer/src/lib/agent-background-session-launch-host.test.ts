@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
 import { resolveAgentBackgroundLaunchHost } from './agent-background-session-launch-host'
 
 function sshState(remotePlatform: 'linux' | 'win32') {
@@ -112,8 +113,7 @@ describe('resolveAgentBackgroundLaunchHost', () => {
     ).toThrow('unavailable or ambiguous')
   })
 
-  // Why two hosts: a single-SSH fixture passes even when the route is read off another host's
-  // row, which is the shape of the `ssh:m4air` -> openclaw leak.
+  // Two hosts expose cross-host row lookup errors that a single SSH fixture would hide.
   it('routes both spellings of SSH ownership to their own host', () => {
     const legacy = resolveAgentBackgroundLaunchHost({
       store: makeFolderHostState({ connectionId: null, folderPath: '/project' }) as never,
@@ -199,7 +199,7 @@ describe('resolveAgentBackgroundLaunchHost', () => {
       worktreePath: '/srv/repo'
     })
 
-    expect(host).toMatchObject({ connectionId: null, isRemote: false, platform: 'linux' })
+    expect(host).toMatchObject({ connectionId: null, isRemote: true, platform: 'linux' })
   })
 
   it("uses a worktree's nested SSH host over its repo's runtime default", () => {
@@ -232,7 +232,7 @@ describe('resolveAgentBackgroundLaunchHost', () => {
     expect(host).toMatchObject({ platform: 'linux', isLocalHost: false, isRemote: true })
   })
 
-  it('quotes for the Orca server that owns a folder workspace', () => {
+  it('uses the headless runtime CLI for a folder workspace (#33920)', () => {
     const host = resolveAgentBackgroundLaunchHost({
       ...asLaunchInputs(
         makeFolderHostState({
@@ -246,7 +246,17 @@ describe('resolveAgentBackgroundLaunchHost', () => {
       worktreePath: '/project'
     })
 
-    expect(host.platform).toBe('linux')
+    expect(host).toMatchObject({ platform: 'linux', connectionId: null, isLocalHost: false })
+    expect(
+      buildAgentStartupPlan({
+        agent: 'claude-agent-teams',
+        prompt: '',
+        cmdOverrides: {},
+        platform: host.platform,
+        isRemote: host.isRemote,
+        allowEmptyPromptLaunch: true
+      })?.launchCommand
+    ).toBe('orca claude-teams')
   })
 
   it('refuses a launch whose SSH host never reported its OS', () => {

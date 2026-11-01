@@ -1,8 +1,7 @@
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { LargeDiffRenderLimit } from './large-diff-render-limit'
 
-// ─── Git Status ─────────────────────────────────────────────
-// Re-exported from git-status-types.ts so mobile shares the wire contract without this desktop aggregate.
+// Mobile consumes git-status-types.ts directly to avoid this desktop aggregate.
 
 export type GitBranchChangeEntry = {
   path: string
@@ -64,6 +63,8 @@ export type GitDiffBinaryResult = {
   mimeType?: string
   /** True only for a proven deletion — distinct from an empty modified side caused by a read failure or size cap. */
   modifiedDeleted?: boolean
+  /** A side passed the 10 MiB read cap: too large to diff, not necessarily binary. Older clients show it as binary. */
+  tooLarge?: boolean
 } & (
   | { originalIsBinary: true; modifiedIsBinary: boolean }
   | { originalIsBinary: boolean; modifiedIsBinary: true }

@@ -150,9 +150,7 @@ export function getRichMarkdownCommentAnchorTop(
       markdownSourceLineOffset,
       prebuiltBlocks
     )
-    // Why: range notes should sort by the start of the selected text. Anchoring
-    // to the end puts overlapping ranges with the same final line in creation
-    // order, so a 43-45 card can render above a 41-45 card.
+    // Sort range notes by selection start so overlapping ranges ending on the same line remain in source order.
     const anchorPos = getRichMarkdownRangeStart(ranges) ?? block.from
     const coords = editor.view.coordsAtPos(
       Math.max(1, Math.min(anchorPos, editor.state.doc.content.size))
@@ -247,8 +245,7 @@ export function getRichMarkdownAnnotationTarget(
     return null
   }
   const rootRect = root.getBoundingClientRect()
-  // Why: long selections can extend below the visible editor shell; keep the
-  // add-note affordance reachable instead of anchoring to hidden selection area.
+  // Clamp the add-note button to the visible shell when long selections extend below it.
   const buttonTop = getRichMarkdownAnnotationButtonTop(rect.bottom - rootRect.top, rootRect.height)
   const left = Math.max(
     RICH_MARKDOWN_ANNOTATION_MIN_LEFT_PX,

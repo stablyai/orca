@@ -41,8 +41,7 @@ function waitForSftpCallback<T>(
       if (!signal || settled) {
         return
       }
-      // Why: the folder owner closes SFTP on abort; wait for its callback so
-      // Windows local handles quiesce before the temporary tree is removed.
+      // Abort closes SFTP; await its callback so Windows handles quiesce before temporary-tree removal.
       abortTimer = setTimeout(() => settle(abortReason(signal)), ABORTED_SFTP_OPERATION_GRACE_MS)
     }
     signal?.addEventListener('abort', onAbort, { once: true })

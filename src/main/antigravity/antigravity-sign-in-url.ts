@@ -1,14 +1,12 @@
 import { ANTIGRAVITY_BROWSER_MARKER } from './antigravity-browser-helper'
 import type { AntigravitySignInPending } from './antigravity-sign-in-callback'
 
-/** The line the server prints before its sign-in link. */
 export const ANTIGRAVITY_SIGN_IN_PROMPT = 'Open the following link to authenticate the ACP server: '
 
 const MAX_URL_CHARS = 16_384
 const MAX_LINE_CHARS = ANTIGRAVITY_SIGN_IN_PROMPT.length + MAX_URL_CHARS + 2
 
-/** The link only when it is Google's sign-in page sending the browser back to a loopback port on
- *  this host: it is opened for the person, so anything else is withheld. */
+/** Only expose Google sign-in URLs that return to a loopback port on this host. */
 export function antigravitySignInUrl(
   link: string
 ): ({ url: string } & AntigravitySignInPending) | null {
@@ -33,8 +31,7 @@ export function antigravitySignInUrl(
   return valid ? { url: link, redirectUri: one('redirect_uri'), state: one('state') } : null
 }
 
-/** A sign-in line's valid link; null for a malformed or overlong one, which is never an answer;
- *  undefined for any other line. Only error output carries the helper's line. */
+/** Return a valid URL, null for invalid sign-in output, or undefined for unrelated lines. */
 export function readAntigravitySignInLine(
   line: string,
   source: 'stdout' | 'stderr'

@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-connectivity-handlers'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
@@ -25,14 +25,23 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
   getUserDataPath: () => string
   remoteRuntimeSubscriptions: Map<string, RetainedRemoteRuntimeSubscription>
   pendingSubscriptions: Map<string, PendingRuntimeSubscription>
+  createAssociationObserver?: (
+    environmentId: string,
+    identity: string
+  ) => { observe: (frame: unknown) => void; dispose: () => void }
   recordLayoutFrame: (
     environmentId: string,
     method: string,
     response: RuntimeRpcResponse<unknown>
   ) => void
 }): void {
-  const { getUserDataPath, remoteRuntimeSubscriptions, pendingSubscriptions, recordLayoutFrame } =
-    args
+  const {
+    getUserDataPath,
+    remoteRuntimeSubscriptions,
+    pendingSubscriptions,
+    recordLayoutFrame,
+    createAssociationObserver
+  } = args
   ipcMain.handle(
     'runtimeEnvironments:subscribe',
     async (
@@ -80,10 +89,21 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
       const sender = event.sender
       const ownerWebContentsId = sender.id
       const setupController = new AbortController()
+      const associationObserver =
+        args.method === 'agentSession.subscribeStatus'
+          ? createAssociationObserver?.(
+              environment.id,
+              JSON.stringify([
+                environment.runtimeId,
+                environment.pairingRevision ?? environment.createdAt
+              ])
+            )
+          : undefined
       let rendererGone = sender.isDestroyed()
       let subscription: RemoteRuntimeSubscription | null = null
       const rendererLifetime = abortWhenRendererGone(sender)
       const disposeRendererLifetime = (): void => {
+        associationObserver?.dispose()
         rendererLifetime.dispose()
         rendererLifetime.signal.removeEventListener('abort', closeSubscription)
       }
@@ -102,9 +122,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
         disposeRendererLifetime()
         subscription?.close()
       }
-      // Why: the renderer treats close as terminal and drops its handle, so send it once.
-      // Latch before sending so a re-entrant call cannot duplicate it, and never
-      // throw: a dying renderer must not abort its siblings' retirement.
+      // Notify close once, latched before send; a dying renderer must not interrupt sibling retirement.
       let closeNotified = false
       let transportClosed = false
       const notifyClosed = (): void => {
@@ -144,8 +162,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
                 return
               }
               if (payload.type === 'close') {
-                // Why: retirement advances the generation before closing, so gating
-                // close on it stranded the renderer with a dead subscription.
+                // Retirement advances generation before close; the old generation still needs its terminal notification.
                 notifyClosed()
                 return
               }
@@ -154,6 +171,13 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
                   subscriptionId,
                   ...payload
                 })
+                if (payload.type === 'response' && payload.response.ok) {
+                  try {
+                    associationObserver?.observe(payload.response.result)
+                  } catch (error) {
+                    console.warn('[ai-vault] association observation failed', error)
+                  }
+                }
                 // After the send, so recording never delays or changes what the window gets.
                 if (payload.type === 'response') {
                   recordLayoutFrame(environment.id, args.method, payload.response)

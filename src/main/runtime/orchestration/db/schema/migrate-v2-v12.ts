@@ -2,14 +2,14 @@ import { LEGACY_RUN_ID } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'
 
 export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: number): void {
-  // v1 → v2: SQLite can't ALTER a CHECK, so rebuild messages to allow 'heartbeat'; fold in v3's delivered_at to skip a second rebuild.
+  // SQLite cannot alter CHECK; rebuild once for v2 heartbeat and v3 delivered_at.
   if (current < 2) {
     if (!this.hasColumn('dispatch_contexts', 'last_heartbeat_at')) {
       this.db.exec(`ALTER TABLE dispatch_contexts ADD COLUMN last_heartbeat_at TEXT`)
     }
 
     if (!this.messagesTypeCheckAllowsHeartbeat()) {
-      // Why: recreate indexes here — DROP TABLE drops them; createTables re-runs only next startup, so skipping full-scans until restart.
+      // DROP TABLE removes indexes; recreate now to avoid full scans until the next startup.
       this.db.exec(`
           CREATE TABLE messages_new (
             id            TEXT NOT NULL,
@@ -51,7 +51,7 @@ export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: num
     }
   }
 
-  // v2 → v3: add messages.delivered_at. hasColumn probe skips DBs that already got it via the v1→v2 rebuild (else a dup-column error aborts the txn).
+  // The v1 rebuild already adds delivered_at; probe before the v3 ALTER.
   if (current < 3) {
     if (!this.hasColumn('messages', 'delivered_at')) {
       this.db.exec(`ALTER TABLE messages ADD COLUMN delivered_at TEXT`)

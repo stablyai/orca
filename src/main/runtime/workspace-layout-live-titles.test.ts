@@ -81,7 +81,6 @@ describe('live pane titles on the layout stream', () => {
     expect(events).toHaveLength(1)
     expect(paneOf(events[0])).toEqual({ leafId: LEAF, ptyId: PTY_ID, liveTitle: 'npm run build' })
 
-    // The same title again is no change.
     runtime.onPtyData(PTY_ID, '\x1b]0;npm run build\x07', Date.now())
     await flush()
     expect(events).toHaveLength(1)

@@ -1,10 +1,7 @@
 import { Redirect, useLocalSearchParams } from 'expo-router'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 
-// The Pull Request view is now a segment of the Source Control hub. This route
-// stays as a thin redirect so existing deep links land on the hub with the Pull
-// Request segment selected. The wide-layout dock opens the same hub with
-// initialTab="pr" (SessionDockColumn), not this route.
+// Redirect legacy deep links to Source Control’s PR tab; wide SessionDockColumn opens that hub directly with initialTab="pr".
 export default function PrRedirect() {
   const params = useLocalSearchParams<{
     hostId?: string | string[]

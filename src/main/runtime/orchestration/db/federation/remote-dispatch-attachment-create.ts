@@ -101,6 +101,20 @@ export function getRemoteDispatchAttachment(
     .get(dispatchId) as RemoteDispatchAttachmentRow | undefined
 }
 
+/** The newest remote Dispatch this host runs for a Run whose home is another computer. */
+export function findRemoteAttachmentForHomeRun(
+  this: OrchestrationDb,
+  runId: string
+): RemoteDispatchAttachmentRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
+  return this.db
+    .prepare(
+      `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
+       WHERE home_run_id = ? ORDER BY rowid DESC LIMIT 1`
+    )
+    .get(runId) as RemoteDispatchAttachmentRow | undefined
+}
+
 export function recordRemoteAttachmentStage(
   this: OrchestrationDb,
   params: {
@@ -180,6 +194,7 @@ export function updateRemoteAttachmentSetupEvidence(
 export type RemoteDispatchAttachmentCreateMethods = {
   createRemoteDispatchAttachment: typeof createRemoteDispatchAttachment
   getRemoteDispatchAttachment: typeof getRemoteDispatchAttachment
+  findRemoteAttachmentForHomeRun: typeof findRemoteAttachmentForHomeRun
   recordRemoteAttachmentStage: typeof recordRemoteAttachmentStage
   updateRemoteAttachmentSetupEvidence: typeof updateRemoteAttachmentSetupEvidence
 }
@@ -188,6 +203,7 @@ export function attachRemoteDispatchAttachmentCreate(ctor: { prototype: object }
   Object.assign(ctor.prototype, {
     createRemoteDispatchAttachment,
     getRemoteDispatchAttachment,
+    findRemoteAttachmentForHomeRun,
     recordRemoteAttachmentStage,
     updateRemoteAttachmentSetupEvidence
   })

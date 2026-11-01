@@ -9,7 +9,7 @@ export const RUNTIME_MANUALLY_DISCONNECTED_MESSAGE = 'Runtime environment is man
 
 export function markRuntimeEnvironmentManuallyDisconnected(environmentId: string): void {
   manuallyDisconnectedEnvironmentIds.add(environmentId)
-  // Why: a disconnected server must lose its reach into the desktop browser at once.
+  // Disconnect must revoke the server's desktop browser access immediately.
   resetDesktopBrowserBridgeEnvironment(environmentId)
 }
 

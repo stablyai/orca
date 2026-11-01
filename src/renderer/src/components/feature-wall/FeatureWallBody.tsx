@@ -8,6 +8,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { cn } from '@/lib/utils'
 import { PreviewMedia, RelatedFeatures } from './FeatureWallPreview'
+import { getLocalizedFeatureWallWorkflowCopy } from './feature-wall-tour-localized-copy'
 import { TasksAnimatedVisual } from './TasksAnimatedVisual'
 import { WorkspacesAnimatedVisual } from './WorkspacesAnimatedVisual'
 import { WorkbenchAnimatedVisual } from './WorkbenchAnimatedVisual'
@@ -138,8 +139,7 @@ export function FeatureWallBody(props: {
   const shouldUseOnboardingTourZones =
     source === 'onboarding' && hasAnimatedVisual && Boolean(settingContent)
   const shouldStickSetupToBottom = shouldUseOnboardingTourZones
-  // Why: several visuals expand/collapse internally; setup controls should sit
-  // after a stable stage so they do not jump with the animation loop.
+  // Reserve a stable stage so expanding visuals cannot move setup controls.
   const visualStageHeight = isTasks
     ? 'h-[288px]'
     : isWorkbenchEditor
@@ -235,7 +235,7 @@ export function FeatureWallBody(props: {
             posterUrl={posterUrl}
             gifUrl={gifUrl}
             showGif={showGif}
-            workflowTitle={selected.title}
+            workflowTitle={getLocalizedFeatureWallWorkflowCopy(selected.id).title}
           />
         ) : null}
 

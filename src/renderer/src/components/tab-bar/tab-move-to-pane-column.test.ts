@@ -1,5 +1,4 @@
-// The window's own move, as a paired server's workspace keeps it. A local workspace's move goes
-// through main and its frame draws it: tab-moves-drawn-from-frames.test.ts.
+// Test window-owned paired-host moves; local main-owned frame placement is covered in tab-moves-drawn-from-frames.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
 import type { Tab } from '../../../../shared/tab-types'

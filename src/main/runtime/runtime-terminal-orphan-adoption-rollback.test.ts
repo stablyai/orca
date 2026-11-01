@@ -18,8 +18,8 @@ import {
   emptySession,
   leaf
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
-import type { Store } from '../persistence'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
+import type { Store } from '../persistence/loading-store/store'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { adoptRuntimeTerminalOrphansFromInventory } from './runtime-terminal-orphan-adoption'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'

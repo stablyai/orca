@@ -1,3 +1,4 @@
+import type { BrowserSnapshotOptions } from '../../shared/rpc-contract/browser-observation-params'
 import type {
   BrowserBackResult,
   BrowserEvalResult,
@@ -10,7 +11,7 @@ import type {
   BrowserWaitResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
-import { formatScreenshot, formatSnapshot, printResult } from '../format'
+import { formatScreenshot, formatSnapshot, printResult, saveBrowserScreenshot } from '../format'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -18,17 +19,24 @@ import {
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget } from '../selectors'
-
-// Why: selector/text/url waits can legitimately take longer than a normal RPC
-// round-trip, even when Orca is healthy. Give browser.wait an explicit timeout
-// budget so slow waits do not get mislabeled as "Orca is not running" by the
-// generic client timeout path.
-const DEFAULT_BROWSER_WAIT_RPC_TIMEOUT_MS = 60_000
+import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
 
 export const BROWSER_NAV_HANDLERS: Record<string, CommandHandler> = {
   snapshot: async ({ flags, client, cwd, json }) => {
+    const options: BrowserSnapshotOptions = {
+      interactive: flags.has('interactive') || undefined,
+      compact: flags.has('compact') || undefined,
+      depth: getOptionalPositiveIntegerFlag(flags, 'depth'),
+      selector: getOptionalStringFlag(flags, 'selector'),
+      urls: flags.has('urls') || undefined,
+      delta: flags.has('delta') || undefined,
+      full: flags.has('full') || undefined
+    }
     const target = await getBrowserCommandTarget(flags, cwd, client)
-    const result = await client.call<BrowserSnapshotResult>('browser.snapshot', target)
+    const result = await client.call<BrowserSnapshotResult>('browser.snapshot', {
+      ...options,
+      ...target
+    })
     printResult(result, json, formatSnapshot)
   },
   screenshot: async ({ flags, client, cwd, json }) => {
@@ -36,9 +44,11 @@ export const BROWSER_NAV_HANDLERS: Record<string, CommandHandler> = {
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserScreenshotResult>('browser.screenshot', {
       format: format === 'jpeg' ? 'jpeg' : undefined,
+      ifChanged: flags.has('if-changed') || undefined,
+      annotate: flags.has('annotate') || undefined,
       ...target
     })
-    printResult(result, json, formatScreenshot)
+    printResult(saveBrowserScreenshot(result), json, formatScreenshot)
   },
   goto: async ({ flags, client, cwd, json }) => {
     const url = getRequiredStringFlag(flags, 'url')
@@ -112,9 +122,7 @@ export const BROWSER_NAV_HANDLERS: Record<string, CommandHandler> = {
         state,
         ...target
       },
-      {
-        timeoutMs: timeout ? timeout + 5000 : DEFAULT_BROWSER_WAIT_RPC_TIMEOUT_MS
-      }
+      { timeoutMs: browserWaitRequestTimeoutMs(timeout) }
     )
     printResult(result, json, (v) => JSON.stringify(v, null, 2))
   },
@@ -130,6 +138,6 @@ export const BROWSER_NAV_HANDLERS: Record<string, CommandHandler> = {
       format,
       ...target
     })
-    printResult(result, json, (v) => `Full-page screenshot captured (${v.format})`)
+    printResult(saveBrowserScreenshot(result), json, formatScreenshot)
   }
 }

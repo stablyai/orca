@@ -36,10 +36,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-/**
- * Entries whose `path` getter counts reads. Every filter/group/flatten step the tree runs reads
- * `path`, so the count is a direct proxy for "did the tree get built".
- */
+/** Count path reads as a deterministic proxy for tree construction work. */
 function countingEntries(count: number): {
   entries: GitBranchChangeEntry[]
   reads: () => number
@@ -95,7 +92,6 @@ describe('CombinedDiffFileTree while collapsed', () => {
     renderTree(entries, true)
     renderTree(entries, false)
 
-    // Every entry is filtered and placed into the tree once the panel is visible.
     expect(reads()).toBeGreaterThanOrEqual(entries.length)
     expect(host.textContent).toContain('Files')
   })

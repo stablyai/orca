@@ -53,7 +53,6 @@ export const createProjectRowActions = (
         }
       }
     }
-    // Optimistic content patch.
     const nextContent = { ...previousRow.content }
     if (updates.title !== undefined) {
       nextContent.title = updates.title
@@ -88,7 +87,7 @@ export const createProjectRowActions = (
     const optimisticRow: GitHubProjectRow = { ...previousRow, content: nextContent }
     applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
-    // Why: labels/assignees go through the issue endpoint for both (GitHub PRs are issues for those); title/body split PR→updatePullRequestBySlug vs issue→updateIssueBySlug.
+    // Labels/assignees use issue endpoints for both kinds; title/body require PR-versus-issue endpoints.
     let envelope: GitHubProjectMutationResult = { ok: true }
     // Why: slug-only Project rows have no registered Orca repo, so fall back to the view source in the cache key, not the focused host.
     const target = runtimeTargetForProjectRowOwner(
@@ -120,7 +119,7 @@ export const createProjectRowActions = (
               args,
               { timeoutMs: 30_000 }
             )
-          : await window.api.gh.updatePullRequestBySlug(args)
+          : await window.api.gh.updatePullRequestBySlug({ ...args, wakeWslDistro: true })
       if (!prRes.ok) {
         envelope = prRes
       }
@@ -156,7 +155,7 @@ export const createProjectRowActions = (
               args,
               { timeoutMs: 30_000 }
             )
-          : await window.api.gh.updateIssueBySlug(args)
+          : await window.api.gh.updateIssueBySlug({ ...args, wakeWslDistro: true })
       if (!issueRes.ok) {
         envelope = issueRes
       }
@@ -241,7 +240,7 @@ export const createProjectRowActions = (
             args,
             { timeoutMs: 30_000 }
           )
-        : await window.api.gh.updateIssueTypeBySlug(args)
+        : await window.api.gh.updateIssueTypeBySlug({ ...args, wakeWslDistro: true })
     if (!res.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }
@@ -267,7 +266,7 @@ export const createProjectRowActions = (
       nextContent.body = patch.body
     }
     if (patch.state !== undefined) {
-      // Why: ProjectV2 row.state is GitHub's UPPERCASE enum ('OPEN'|'CLOSED'|'MERGED') but the dialog tracks lowercase; upper-case so the patch matches the canonical row shape.
+      // ProjectV2 uses uppercase state enums while dialog uses lowercase; normalize optimistic patches.
       nextContent.state = patch.state.toUpperCase()
     }
     if (patch.labels !== undefined) {

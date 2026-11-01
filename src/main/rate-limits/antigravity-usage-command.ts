@@ -1,63 +1,40 @@
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 
-/**
- * The quota read is a slash command run in print mode.
- *
- * Why print mode and not an HTTP call: agy keeps its Google credential in the OS keyring and mints
- * its own access token against `daily-cloudcode-pa`, so nothing outside agy can authenticate the
- * quota endpoint. Verified on agy 1.2.11: the call spends no quota and starts no conversation
- * (`num_turns: 0`, every token counter 0, empty `conversation_id`).
- *
- * `/usage` over `/quota`: both resolve to the same `usage` command, and `/usage` is the spelling agy
- * lists in its own help.
- */
+// Use agy print-mode /usage: only agy can authenticate daily-cloudcode-pa using its OS-keyring Google credential.
+// agy 1.2.11 verified zero quota/tokens/turns and empty conversation_id; /usage and /quota resolve identically, but help lists /usage.
 export const ANTIGRAVITY_USAGE_ARGS: readonly string[] = [
   '-p',
   '/usage',
   '--output-format',
   'json',
-  // Why bound it inside agy too: the process timeout below kills a hung child, but agy's own
-  // deadline lets it exit cleanly and print a diagnostic instead of dying mid-write.
+  // Set agy’s own deadline too so a hung command can print diagnostics before process timeout kills it mid-write.
   '--print-timeout',
   '20s'
-  // Do NOT add --disable-slash-commands here. It stops agy expanding `/usage` as a command, so the
-  // text is sent to the model as an ordinary prompt: the call then starts a conversation, spends
-  // quota, and on an account near its limit returns RESOURCE_EXHAUSTED (429) instead of a reading.
-  // Verified against agy 1.2.11 — the flag turned a free metadata read into a billed model turn.
+  // Never add --disable-slash-commands: agy 1.2.11 then sends /usage as a billed prompt and may answer 429 instead of quota.
 ]
 
-/**
- * How long the child may run before Orca kills it.
- *
- * Observed cost on a warm macOS install is 2.1–2.6 s (three consecutive runs), which is the CLI
- * starting its language server and refreshing the quota. The ceiling is generous because a cold
- * start also pays a binary self-check, and the fetch runs on its own promise so a slow read delays
- * nothing else in the cycle.
- */
+// Warm macOS reads take 2.1–2.6s; allow cold binary self-check too. Fetch has its own promise, so slow reads do not block cycle.
 export const ANTIGRAVITY_USAGE_TIMEOUT_MS = 30_000
 
-/**
- * Added to every probe's environment.
- *
- * Why: a due update check makes agy start `--bg-updater`, whose own console child opens a visible
- * window on Windows and takes focus (#27390); a background quota read must not update the CLI
- * either. Verified on agy 1.4.2: only `true` disables it (`1` still spawns the updater).
- */
+// Disable background updater to avoid Windows console/focus theft (#27390) and CLI updates during quota probes; agy 1.4.2 requires true, not 1.
 export const ANTIGRAVITY_PROBE_ENV = { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' } as const
 
 // Before agy 1.1.11, `/usage` in print mode spends a model turn (agy's bundled changelog).
 export const ANTIGRAVITY_MIN_USAGE_VERSION = '1.1.11'
 
-/** The version probe; free in every sense — no conversation, no quota. */
+// Version probe spends no quota and starts no conversation.
 export const ANTIGRAVITY_VERSION_ARGS: readonly string[] = ['--version']
 
-/** Why bound it: the probe runs before every quota read, so a wedged CLI must not stall the cycle. */
+// Bound version probe so wedged CLI cannot stall every quota cycle.
 export const ANTIGRAVITY_VERSION_TIMEOUT_MS = 5_000
+
+// Each interactive sign-in read opens a browser (#26484); only a refresh or native credential change lifts this hold.
+export const ANTIGRAVITY_SIGN_IN_HOLD_RETRY_AT_MS = Number.MAX_SAFE_INTEGER
 
 /** Cap on captured output; the envelope is a single JSON line well under a kilobyte. */
 export const ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES = 512 * 1024
 
-/** The command name Orca already uses to detect Antigravity, so both agree on the binary. */
+// Use same Antigravity binary name as command detection.
 export function antigravityCommandName(): string {
   return TUI_AGENT_CONFIG.antigravity.detectCmd
 }

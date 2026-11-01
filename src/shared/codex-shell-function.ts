@@ -1,21 +1,16 @@
-// Orca's `codex` shell function for every shell family: runs launch prep and adds
-// --no-daemon. Pure text, so any host that writes a shell script can embed it.
-// Why --no-daemon: Codex 0.156+ otherwise shares one server per CODEX_HOME that runs every tab's
-// hooks with the first tab's Orca env and dies with it (#22873).
-// These args need that server (or exit 2 beside the flag), and Codex counts any `-c` as leaving it.
+import {
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+  REMOTE_VIEWER_CLIPBOARD_ENV
+} from './remote-viewer-clipboard-env'
+
+// Embed launch-prep/--no-daemon wrappers on all hosts. Codex 0.156+ otherwise shares CODEX_HOME servers with the first tab’s Orca hooks/env and lifetime (#22873). agents/queue/--remote require sharing; any -c opts out.
 const CODEX_SHARED_SERVER_ARGS = ['agents', 'queue', '--remote'] as const
-// An explicit --no-daemon needs no second one.
 export const CODEX_NO_DAEMON_SKIP_ARGS = [...CODEX_SHARED_SERVER_ARGS, '--no-daemon'] as const
 const argPattern = (args: readonly string[]): string => `^(${args.join('|')}|--remote=.*)$`
 const CODEX_SHARED_SERVER_ARG_PATTERN = argPattern(CODEX_SHARED_SERVER_ARGS)
 const CODEX_NO_DAEMON_SKIP_ARG_PATTERN = argPattern(CODEX_NO_DAEMON_SKIP_ARGS)
 
-/**
- * The caller identity `orca` reads, which a user's `shell_environment_policy` (`inherit = "core"`)
- * strips from every command Codex runs (#25775). Codex applies `set` after `inherit` and `exclude`
- * (so an `exclude = ["ORCA_*"]` is overridden) but before `include_only`, which still wins. Never a
- * token: argv is readable by every local user.
- */
+/** Restore nonsecret Orca caller identity stripped by inherit=core (#25775). set overrides inherit/exclude but include_only still wins; never send tokens through locally readable argv. */
 export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
   'ORCA_TERMINAL_HANDLE',
   'ORCA_PANE_KEY',
@@ -24,8 +19,7 @@ export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
   'ORCA_USER_DATA_PATH'
 ] as const
 
-// Why values holding `'` are skipped: a TOML literal can't carry one, and Codex's fallback for the
-// failed parse truncates some (`/a'`, `/a' #b`) — a wrong path is worse than none.
+// Skip apostrophes: TOML literals cannot hold them and Codex parse fallback may truncate paths; missing identity is safer than wrong identity.
 const identitySetArg = (key: string, value: string): string =>
   `shell_environment_policy.set.${key}='${value}'`
 
@@ -42,6 +36,9 @@ if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
     local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}"
+    if [[ "\${${REMOTE_VIEWER_CLIPBOARD_ENV}:-}" == 1 && -z "\${SSH_CONNECTION+x}" && -z "\${SSH_TTY+x}" ]]; then
+      local -x SSH_CONNECTION='${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
+    fi
     if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
@@ -81,14 +78,18 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
     end
-    command codex $argv
+    if test "$${REMOTE_VIEWER_CLIPBOARD_ENV}" = 1; and not set -q SSH_CONNECTION; and not set -q SSH_TTY
+      set -lx SSH_CONNECTION '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
+      command codex $argv
+    else
+      command codex $argv
+    end
   end
 end
 set -e __orca_codex_type`
 }
 
-// Why the identity loop is one line: this wrapper rides in PowerShell's command-line budget
-// (windows-shell-args.ts), which a long startup command also needs.
+// Keep the identity loop compact to share PowerShell’s command-line budget with startup commands.
 export function getPowerShellCodexShellLaunchPreflight(): string {
   return `$orcaCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($orcaCodexCommand -and
@@ -121,11 +122,17 @@ if ($orcaCodexCommand -and
             foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $orcaCodexIdentity += '-c', "${identitySetArg('$k', '$v')}" } }
         }
         $orcaCodexArgs = @(__OrcaEscapeNativeArgs $orcaCodexExecutable.Source (@($orcaCodexIdentity) + @($args)))
+        $orcaCodexRemoteClipboard = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY)
+        if ($orcaCodexRemoteClipboard) { $env:SSH_CONNECTION = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' }
         # Why: a native command inside a function never sees the function's pipeline input on its own.
-        if ($MyInvocation.ExpectingInput) {
-            $input | & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
-        } else {
-            & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+        try {
+            if ($MyInvocation.ExpectingInput) {
+                $input | & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+            } else {
+                & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+            }
+        } finally {
+            if ($orcaCodexRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }
         }
         $global:LASTEXITCODE = $LASTEXITCODE
     }

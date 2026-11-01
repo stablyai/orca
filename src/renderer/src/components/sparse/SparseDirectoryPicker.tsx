@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronRight, ChevronsUpDown, Folder, LoaderCircle, Plus } from 'lucide-react'
+import { ChevronRight, ChevronsUpDown, LoaderCircle, Plus } from 'lucide-react'
+import { FolderIcon } from '@/components/FileTypeIcon'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -11,7 +12,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { getWorktreeSymlinkPathFilterState } from '@/components/settings/worktree-symlink-path-filter'
 import { joinPath } from '@/lib/path'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 import {
   getSparseBrowseTrail,
   joinSparseBrowsePath,
@@ -185,10 +187,17 @@ export function SparseDirectoryPicker({
                   >
                     <Plus className="size-4 shrink-0 text-muted-foreground" />
                     <span className="truncate text-xs">
-                      {translate('sparsePreset.addTypedPath', 'Add')}{' '}
-                      <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
-                        {queryTrimmed}
-                      </code>
+                      <Trans
+                        i18n={i18n}
+                        defaults={translate('sparsePreset.addTypedPathCode', 'Add <path/>')}
+                        components={{
+                          path: (
+                            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+                              {queryTrimmed}
+                            </code>
+                          )
+                        }}
+                      />
                     </span>
                   </CommandItem>
                 )
@@ -208,7 +217,11 @@ export function SparseDirectoryPicker({
                     disabled={alreadySelected}
                     onSelect={() => commit(path)}
                   >
-                    <Folder className="size-4 shrink-0 text-muted-foreground" />
+                    <FolderIcon
+                      folderPath={entry.name}
+                      open={false}
+                      className="size-4 shrink-0 text-muted-foreground"
+                    />
                     <span className="flex-1 truncate font-mono text-xs">{entry.name}</span>
                     {alreadySelected ? (
                       <span className="text-[11px] text-muted-foreground">

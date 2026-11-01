@@ -3,6 +3,7 @@ import { latestSessionConversationTurn } from '../../../src/shared/ai-vault-sess
 import { aiVaultAgentLabel } from '../../../src/shared/ai-vault-types'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import { formatTimeAgo } from '../worktree/agent-row-display'
+import { translate } from '../i18n/mobile-i18n'
 
 export type MobileAgentHistoryCard = {
   id: string
@@ -20,9 +21,7 @@ export type MobileAgentHistoryResumeActionState = {
   loading: boolean
 }
 
-// Why: a session belongs to the active worktree when its recorded cwd is inside
-// (or equal to) the worktree path; session rows carry no host id, so this is a
-// path-prefix check (same logic the desktop badge uses).
+// No host id in session rows; current-worktree membership uses equal/descendant cwd prefix, matching desktop.
 export function isSessionInActiveWorktree(
   session: Pick<AiVaultSession, 'cwd'>,
   activeWorktreePath: string | null
@@ -44,7 +43,8 @@ export function buildMobileAgentHistoryCard(
     id: session.id,
     agent: session.agent,
     agentLabel: aiVaultAgentLabel(session.agent),
-    title: session.title || 'Untitled session',
+    title:
+      session.title || translate('agentHistory.sessionCard.untitledSession', 'Untitled session'),
     lastMessage: latestTurn?.text.trim() ?? '',
     messageCount: session.messageCount,
     timeAgo: Number.isFinite(updatedAtMs) ? formatTimeAgo(updatedAtMs, now) : '',

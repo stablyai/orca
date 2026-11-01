@@ -19,8 +19,7 @@ type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
 >[number]
 
-// Why: the pane leans on the skill, so the nudge is one line — the skill carries
-// provider choice, prerequisites, the snapshot build, agent auth, and validation.
+// Keep the nudge short; the skill owns provider choice, setup, authentication and validation.
 const AGENT_PROMPT =
   'Use the orca-per-workspace-env skill to set up a per-workspace environment for this repo.'
 

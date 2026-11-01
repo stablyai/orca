@@ -48,7 +48,7 @@ async function run(program: string, args: readonly string[], timeoutMs = 60_000)
   return result.stdout.trim()
 }
 
-// Why an entrypoint: a noexec tmpfs home starts empty, so the key and modes are written at start.
+// A noexec tmpfs home starts empty; stage keys/modes in the entrypoint.
 const ENTRYPOINT = [
   '#!/bin/sh',
   'set -eu',
@@ -132,8 +132,7 @@ async function startDockerTarget(cell: DockerHostileHostCell): Promise<DockerHos
     await run('docker', [...args, image])
     const target = cell.noEgress
       ? {
-          // Why the bridge address: an internal network publishes no ports, but the Linux host
-          // shares that bridge and reaches the container directly.
+          // No-egress containers expose no ports; Linux reaches their internal bridge directly.
           host: await run('docker', [
             'inspect',
             '-f',
@@ -248,13 +247,11 @@ function observerCommand(target: HostileHostTarget, command: string): string[] {
     : ['/bin/sh', '-c', command]
 }
 
-/** Runs a POSIX sh command on the host, outside SSH, as the test's own observer. */
 export function hostExec(target: HostileHostTarget, command: string): Promise<string> {
   const [program, ...args] = observerCommand(target, command)
   return run(program, args, 120_000)
 }
 
-/** Exit status only: for probes whose failure is the expected answer. */
 export async function hostExecStatus(target: HostileHostTarget, command: string): Promise<number> {
   const [program, ...args] = observerCommand(target, command)
   const result = await runProcess({ program, args, timeoutMs: 60_000 })

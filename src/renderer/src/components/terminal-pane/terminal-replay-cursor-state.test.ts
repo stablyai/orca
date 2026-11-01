@@ -226,9 +226,7 @@ describe('terminal replay state reset', () => {
 
       await writeTerminal(term, POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
 
-      // Why: agent detection can false-positive on a dead TUI's leftovers, so
-      // even the live-agent reset must not leave a shell cursor permanently
-      // invisible; a live agent re-hides it on the post-reattach repaint.
+      // False-positive agent identity must not leave shell cursors hidden; live agents can hide again on repaint.
       expect(readCursorHidden(term)).toBe(false)
     } finally {
       term.dispose()
@@ -247,8 +245,7 @@ describe('terminal replay state reset', () => {
 
       await writeTerminal(term, POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
 
-      // Why: live TUIs such as cursor-agent can rely on focus events to repaint
-      // their own hidden-cursor input caret after renderer reattach.
+      // Live TUIs can require focus events to repaint their own hidden-cursor caret after reattach.
       expect(readSendFocus(term)).toBe(true)
     } finally {
       term.dispose()

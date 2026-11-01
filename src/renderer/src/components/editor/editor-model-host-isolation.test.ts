@@ -83,7 +83,6 @@ describe('same-path models on different execution hosts', () => {
     async (filePath) => {
       const { owners } = createHostModels(filePath)
       expect(new Set(owners.map((owner) => owner.modelKey)).size).toBe(HOSTS.length)
-      // Each owner's file keeps its real name last, so language services read its extension.
       for (const owner of owners) {
         // Drive letters fold to lower case in model URIs.
         expect(

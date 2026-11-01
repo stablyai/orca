@@ -1,27 +1,10 @@
-/**
- * Why an image the policy admits was never fetched, asked of the frame that should have fetched it.
- *
- * The network log says whether a request happened. This says what the document thinks happened,
- * which is the other half: on CI's Chrome 152 the `<img>` reported `complete` with a zero
- * `naturalWidth` and a resolved `currentSrc` while no request was ever made, and those two readings
- * cannot both be true of a request that went out and failed.
- *
- * Every reading here is taken only when an arm has already aborted, so none of it costs a passing
- * run. The frame is reached through Playwright's CDP evaluate, which answers in a sandboxed frame
- * whose own scripts are blocked.
- */
+// Failure-only CDP probe compares frame image state with request log: Chrome once reported complete/zero-width/resolved-src without emitting fetch.
+// Evaluate works even when frame scripts are sandbox-blocked; passing arms pay no diagnostic-read cost.
 
-/** Two seconds: long enough for a request to reach the asset listener, which is in this process. */
+// Allow local listener two seconds to observe fresh probe request.
 const FRESH_IMAGE_MS = 2000
 
-/**
- * Every document commit in a subframe, counted from now.
- *
- * Subscribed at mount rather than read at the abort, because a parse leaves nothing behind to count:
- * a second document is a new window, so the init script's own timestamp is overwritten rather than
- * appended. Two commits would mean the artifact parsed twice and the second parse could be meeting a
- * failure the first one cached.
- */
+// Subscribe at mount to count subframe commits; reparsing resets window timestamp and may reuse cached failure, invisible to abort-only read.
 function recordFrameParses(page) {
   const parses = []
   page.on('framenavigated', (frame) => {
@@ -33,14 +16,7 @@ function recordFrameParses(page) {
   return () => [...parses]
 }
 
-/**
- * What the frame says about its images, and whether a request made right now is seen.
- *
- * The fresh image is the part that splits the two live explanations. Its URL has never existed, so
- * nothing can have cached a failure for it; if the rig sees that request and not the artifact's,
- * the frame can fetch and something about the parser-inserted element is the cause, and if the rig
- * sees neither, requests from this frame are not reaching the rig at all.
- */
+// Fresh never-used URL distinguishes parser-image/cached failure from frame unable to reach listener at all.
 async function describeImageEvidence(page, frame, { originPrefix, requestLog, parses, serverSaw }) {
   if (!frame) {
     return `no frame to ask; ${requestLog.describe()}`
@@ -58,20 +34,10 @@ async function describeImageEvidence(page, frame, { originPrefix, requestLog, pa
         readyState: document.readyState,
         initAt: window.__initAt ?? null,
         images: document.images.length,
-        // Every subresource this document actually fetched, from the document's own side. An entry
-        // here for a URL the rig never saw would mean the request left the frame and died before it.
+        // Frame resource entry without listener hit means request left document but failed before server.
         resources: performance.getEntriesByType('resource').map((one) => one.name),
-        // The frame's own account of the entry, and only that. Readable at all because the asset
-        // listener sends `Timing-Allow-Origin`: without it every field below reads zero for a
-        // cross-origin resource, which was true of this reading until it was checked and would have
-        // made a healthy request look like a failed one. Even with it, `responseStatus` still read
-        // zero on a request that succeeded, so the discriminators are `transferSize`,
-        // `encodedBodySize` and `nextHopProtocol`.
-        //
-        // `startTime` and `duration` are NOT comparable to any attachment time here: they are
-        // relative to this document's navigation, while every `at` in the request log is Node's
-        // `performance.now()`, relative to process start. The early-or-late question is answered on
-        // the Node clock alone, by `asked` against `attached` in the request log.
+        // Timing-Allow-Origin exposes transferSize/encodedBodySize/protocol; responseStatus can remain zero even after success.
+        // Frame startTime/duration use document-navigation clock, Node log uses process clock; compare asked/attached only within Node clock.
         remoteTiming: performance
           .getEntriesByType('resource')
           .filter((one) => one.name === remote?.src)
@@ -122,19 +88,13 @@ async function describeImageEvidence(page, frame, { originPrefix, requestLog, pa
   return [
     `frame ${JSON.stringify(inFrame)}`,
     `subframe parses ${JSON.stringify(parses())}`,
-    // "seen" is the listener's own record, which is the oracle every arm now reads; what the
-    // browser-side log saw is reported beside it, since the two disagreeing is itself the finding.
+    // Listener hit is oracle; report browser log alongside because disagreement itself is finding.
     `fresh ${JSON.stringify(freshUrl)} issued ${JSON.stringify(issued)} served ${String(serverSaw?.(freshPath) ?? 'no server')} observed ${String(requestLog.asked().includes(freshUrl))} element ${JSON.stringify(fresh)}`,
     requestLog.describe()
   ].join('; ')
 }
 
-/**
- * Subscribes now and hands back the reading, so a caller wires one thing rather than three.
- *
- * The subscription is the only part that has to happen at mount; everything it reports is asked for
- * later, and only by an arm that aborted.
- */
+// Subscribe at mount, defer diagnostic reads until arm aborts.
 export function watchImageEvidence(page, originPrefix, requestLog, serverSaw) {
   const parses = recordFrameParses(page)
   return async (frame) =>

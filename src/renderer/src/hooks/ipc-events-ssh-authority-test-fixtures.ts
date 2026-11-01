@@ -3,7 +3,6 @@ import { buildStoreState } from './ipc-events-agent-status-store-test-fixtures'
 import type { StoreLike } from './ipc-events-agent-status-store-test-fixtures'
 import { buildWindowApi } from './ipc-events-agent-status-window-test-fixtures'
 
-/** Store doubles for the partial-authority reconciliation path; the spec wires them. */
 export function buildSshAuthorityReconciliationHarness(args: {
   partialAuthority: { providerEpoch?: string; connectionGeneration?: number }
   latestAuthority: { providerEpoch: string; connectionGeneration: number }

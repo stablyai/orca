@@ -27,8 +27,7 @@ export function createTerminalLayoutActions(
   | 'syncPaneDetachPtyOwnership'
 > {
   return {
-    // Why separate from setTabLayout: ordinary-park scrollback must not ride the remote projection.
-    // See WorkspaceSessionState.localOnlyScrollbackByTabId; read via resolveLeafScrollbackBuffers.
+    // Ordinary-park scrollback stays local, outside remote projection; resolveLeafScrollbackBuffers reads WorkspaceSessionState.localOnlyScrollbackByTabId.
     setTabLocalOnlyScrollback: (tabId, buffersByLeafId) => {
       set((s) => {
         const current = s.localOnlyScrollbackByTabId ?? {}

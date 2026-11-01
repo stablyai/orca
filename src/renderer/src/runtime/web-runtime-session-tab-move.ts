@@ -34,7 +34,7 @@ export async function moveWebRuntimeSessionTab(
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
   if (args.kind === 'reorder') {
-    // Why: record local order synchronously before async host resolution, so a pre-move snapshot can't snap the tab back.
+    // Record local order before async resolution so pre-move snapshots cannot snap it back.
     recordWebSessionReorderIntent(
       intentOwner,
       args.worktreeId,
@@ -45,39 +45,12 @@ export async function moveWebRuntimeSessionTab(
   }
 
   try {
-    const { resolveHostSessionGroupIdForWebSessionTab, resolveHostSessionTabIdForWebSessionTab } =
-      await import('./web-session-tabs-sync/tracking-mappings')
-    const state = useAppStore.getState()
-    const groups = state.groupsByWorktree?.[args.worktreeId] ?? []
-    const targetGroup = groups.find((group) => group.id === args.targetGroupId)
-    const recordedHostGroupId = (tabId: string): string | null =>
-      resolveHostSessionGroupIdForWebSessionTab({
-        environmentId,
-        worktreeId: args.worktreeId,
-        tabId
-      })
-    // Why: until the next server list, a split-off tab still records its source group, as tabs outside do.
-    const hostGroupIdsOutsideTarget = new Set(
-      groups
-        .filter((group) => group.id !== args.targetGroupId)
-        .flatMap((group) => group.tabOrder)
-        .filter((tabId) => tabId !== args.tabId)
-        .map(recordedHostGroupId)
-    )
-    // Why: a group this desktop split off has another id on the host, so name it by a tab it holds.
-    const targetHostGroupId =
-      (targetGroup?.tabOrder ?? [])
-        .filter((tabId) => tabId !== args.tabId)
-        .map(recordedHostGroupId)
-        .find((groupId) => groupId !== null && !hostGroupIdsOutsideTarget.has(groupId)) ??
-      // No server-known tab in the target group: the desktop id, unknown to the server, as before.
+    const { targetGroup, targetHostGroupId, resolveHostBackedTabId } = await hostDropResolvers(
+      environmentId,
+      args.worktreeId,
+      args.tabId,
       args.targetGroupId
-    const resolveHostBackedTabId = (tabId: string): string | null =>
-      resolveHostSessionTabIdForWebSessionTab(state, {
-        environmentId,
-        worktreeId: args.worktreeId,
-        tabId
-      }) ?? (isWebTerminalSurfaceTabId(tabId) ? toHostSessionTabId(tabId) : null)
+    )
     const toHostTabId = (tabId: string): string => resolveHostBackedTabId(tabId) ?? tabId
     const movedHostTabId =
       args.kind === 'reorder' ? resolveHostBackedTabId(args.tabId) : toHostTabId(args.tabId)
@@ -96,14 +69,9 @@ export async function moveWebRuntimeSessionTab(
       return false
     }
     const targetHostIndex =
-      args.kind === 'move-to-group' && typeof args.index === 'number'
-        ? (targetGroup?.tabOrder
-            .slice(0, args.index)
-            .map(resolveHostBackedTabId)
-            .filter((tabId): tabId is string => Boolean(tabId)).length ?? args.index)
-        : args.kind === 'move-to-group'
-          ? args.index
-          : undefined
+      args.kind === 'move-to-group'
+        ? hostBackedIndex(targetGroup, args.index, resolveHostBackedTabId)
+        : undefined
     const base = {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       tabId: movedHostTabId,
@@ -114,7 +82,7 @@ export async function moveWebRuntimeSessionTab(
         ? {
             ...base,
             kind: 'reorder' as const,
-            // Why: the host reorder API only accepts host tab ids, so local-only tabs must be omitted from the mirrored order.
+            // Host reorder accepts only host tab IDs; omit local-only tabs.
             tabOrder: reorderedHostTabOrder
           }
         : args.kind === 'split'
@@ -126,7 +94,7 @@ export async function moveWebRuntimeSessionTab(
           : {
               ...base,
               kind: 'move-to-group' as const,
-              // Why: web groups can contain local-only tabs, so host insertion indexes count only the filtered host-backed order.
+              // Host indexes must count only host-backed tabs in mixed web groups.
               index: targetHostIndex
             }
     const response = await callEnvironment({
@@ -146,4 +114,75 @@ export async function moveWebRuntimeSessionTab(
     )
     return false
   }
+}
+
+type DesktopGroup = { id: string; tabOrder: string[] }
+
+/** Names a desktop group and its tabs as the host does, for a drop of `movingTabId` into it. */
+async function hostDropResolvers(
+  environmentId: string,
+  worktreeId: string,
+  movingTabId: string,
+  targetGroupId: string
+): Promise<{
+  targetGroup: DesktopGroup | undefined
+  targetHostGroupId: string
+  resolveHostBackedTabId: (tabId: string) => string | null
+}> {
+  const { resolveHostSessionGroupIdForWebSessionTab, resolveHostSessionTabIdForWebSessionTab } =
+    await import('./web-session-tabs-sync/tracking-mappings')
+  const state = useAppStore.getState()
+  const groups = state.groupsByWorktree?.[worktreeId] ?? []
+  const targetGroup = groups.find((group) => group.id === targetGroupId)
+  const recordedHostGroupId = (tabId: string): string | null =>
+    resolveHostSessionGroupIdForWebSessionTab({ environmentId, worktreeId, tabId })
+  // Before the next server list, split-off tabs still carry their source group like outside tabs.
+  const hostGroupIdsOutsideTarget = new Set(
+    groups
+      .filter((group) => group.id !== targetGroupId)
+      .flatMap((group) => group.tabOrder)
+      .filter((tabId) => tabId !== movingTabId)
+      .map(recordedHostGroupId)
+  )
+  // Name client-split host groups by a contained tab; desktop group IDs differ.
+  const targetHostGroupId =
+    (targetGroup?.tabOrder ?? [])
+      .filter((tabId) => tabId !== movingTabId)
+      .map(recordedHostGroupId)
+      .find((groupId) => groupId !== null && !hostGroupIdsOutsideTarget.has(groupId)) ??
+    // No server-known tab in the target group: the desktop id, unknown to the server, as before.
+    targetGroupId
+  const resolveHostBackedTabId = (tabId: string): string | null =>
+    resolveHostSessionTabIdForWebSessionTab(state, { environmentId, worktreeId, tabId }) ??
+    (isWebTerminalSurfaceTabId(tabId) ? toHostSessionTabId(tabId) : null)
+  return { targetGroup, targetHostGroupId, resolveHostBackedTabId }
+}
+
+// Why: web groups can contain local-only tabs, so host insertion indexes count only the filtered host-backed order.
+function hostBackedIndex(
+  targetGroup: DesktopGroup | undefined,
+  index: number | undefined,
+  resolveHostBackedTabId: (tabId: string) => string | null
+): number | undefined {
+  return typeof index === 'number'
+    ? (targetGroup?.tabOrder
+        .slice(0, index)
+        .map(resolveHostBackedTabId)
+        .filter((tabId): tabId is string => Boolean(tabId)).length ?? index)
+    : index
+}
+
+/** A new tab's drop into a desktop group, named as the host names the group and its position. */
+export async function resolveHostTabDropTarget(
+  environmentId: string,
+  args: { worktreeId: string; tabId: string; targetGroupId: string; index?: number }
+): Promise<{ targetGroupId: string; index?: number }> {
+  const { targetGroup, targetHostGroupId, resolveHostBackedTabId } = await hostDropResolvers(
+    environmentId,
+    args.worktreeId,
+    args.tabId,
+    args.targetGroupId
+  )
+  const index = hostBackedIndex(targetGroup, args.index, resolveHostBackedTabId)
+  return { targetGroupId: targetHostGroupId, ...(index !== undefined ? { index } : {}) }
 }

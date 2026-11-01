@@ -112,10 +112,7 @@ export type SidebarFeedIndex = {
   repoOf: (worktree: Pick<Worktree, 'repoId' | 'hostId'>) => Repo | undefined
 }
 
-/**
- * Its own host's registration when the catalog has one. A host that lists a same-id copy without
- * its own registration still reads as that repo's, as the window reads it.
- */
+/** Prefer the row host’s registration; missing same-ID registrations use repoMap fallback like the window. */
 function repoOfWorktree(
   repoMap: ReadonlyMap<string, Repo>,
   reposByKey: ReadonlyMap<HostScopedRepoKey, Repo>,
@@ -129,19 +126,27 @@ function repoOfWorktree(
   )
 }
 
+/** Each row's own host's registration, for lists whose repoMap keeps one registration per id. */
+export function createHostScopedRepoOf(
+  repos: readonly Repo[],
+  repoMap: ReadonlyMap<string, Repo>
+): SidebarFeedIndex['repoOf'] {
+  const reposByKey = new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo]))
+  return (worktree) => repoOfWorktree(repoMap, reposByKey, worktree)
+}
+
 export function indexSidebarFeed(
   domains: SidebarFeedDomains,
   repos: readonly Repo[]
 ): SidebarFeedIndex {
   const workspaces = readFeedWorkspaces(domains)
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
-  const reposByKey = new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo]))
   return {
     workspaces,
     worktrees: workspaces.flatMap((entry) => (entry.folderWorkspace ? [] : [entry.worktree])),
     folderWorkspaces: workspaces.flatMap((entry) => entry.folderWorkspace ?? []),
     repoMap,
-    repoOf: (worktree) => repoOfWorktree(repoMap, reposByKey, worktree)
+    repoOf: createHostScopedRepoOf(repos, repoMap)
   }
 }
 
@@ -157,10 +162,7 @@ export function rankSidebarFeedWorktrees(
   ).map(getWorktreeHostIdentity)
 }
 
-/**
- * Presentation only: `live` with each workspace that `heldFrom` also lists keeping the Recent
- * stamp it had there, so project sections ordered by Recent hold still. New rows keep theirs.
- */
+/** Keep prior Recent stamps for existing rows during project recency hold; new rows retain live stamps. */
 export function withHeldProjectRecency(
   live: SidebarFeedIndex,
   heldFrom: SidebarFeedIndex

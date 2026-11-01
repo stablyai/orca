@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { openDetectedFilePath } from './terminal-link-handlers'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import * as filePreview from '@/lib/file-preview'
+
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -9,7 +10,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
-const { storeState, statMock, openFileMock, openFilePathMock, runtimeEnvironmentCallMock } = doubles
+const { storeState, openFileMock, openFilePathMock, runtimeEnvironmentCallMock } = doubles
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -48,61 +49,125 @@ function hostAnswers(result: unknown): void {
 }
 
 describe('a paired-server link outside its own workspace', () => {
-  it('opens a main-repo file in the workspace the host says holds it', async () => {
+  it('opens granted HTML outside every registered workspace as a preview', async () => {
     hostAnswers({
-      worktree: 'wt-main',
-      relativePath: 'src/index.ts',
-      absolutePath: '/repo/src/index.ts',
+      worktree: 'wt-feat',
+      relativePath: null,
+      absolutePath: '/tmp/report.html',
       exists: true,
-      isDirectory: false
+      isDirectory: false,
+      openTarget: {
+        kind: 'absolute-file',
+        provider: 'local',
+        absolutePath: '/tmp/report.html',
+        grantId: 'file-grant'
+      }
     })
+    const plan = { status: 'doc-preview' } as const
+    const previewPlan = vi
+      .spyOn(filePreview, 'getWorkspaceFilePreviewPlan')
+      .mockReturnValueOnce(plan)
+    const openPreview = vi.spyOn(filePreview, 'openFileInBrowserTab').mockReturnValueOnce(plan)
+    try {
+      openDetectedFilePath('/tmp/report.html', null, null, featureWorktree)
+      await flushDoubleRaf()
 
-    openDetectedFilePath('/repo/src/index.ts', 3, null, featureWorktree)
-    await flushDoubleRaf()
-
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'env-1',
-        method: 'files.resolveTerminalPath',
-        params: { worktree: 'id:wt-feat', pathText: '/repo/src/index.ts', crossWorkspace: true }
+      expect(openPreview).toHaveBeenCalledWith({
+        filePath: '/tmp/report.html',
+        worktreeId: 'wt-feat'
       })
-    )
-    expect(statMock).not.toHaveBeenCalled()
-    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-main', {
-      providesInitialSurface: true,
-      executionHostId: 'runtime:env-1'
-    })
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/repo/src/index.ts',
-        relativePath: 'src/index.ts',
-        worktreeId: 'wt-main',
-        runtimeEnvironmentId: 'env-1'
-      }),
-      { forceContentReload: true }
-    )
+      expect(openFileMock).not.toHaveBeenCalled()
+      expect(openFilePathMock).not.toHaveBeenCalled()
+      expect(downloadAndOpenRemoteTerminalFile).not.toHaveBeenCalled()
+    } finally {
+      previewPlan.mockRestore()
+      openPreview.mockRestore()
+    }
   })
 
-  it("opens the host's spelling of the path so the tab stays a workspace file", async () => {
+  it('keeps HTML from a host that cannot re-grant it in the editor', async () => {
+    hostAnswers({
+      worktree: 'wt-feat',
+      relativePath: null,
+      absolutePath: '/tmp/report.html',
+      exists: true,
+      isDirectory: false,
+      openTarget: {
+        kind: 'absolute-file',
+        provider: 'local',
+        absolutePath: '/tmp/report.html',
+        grantId: 'file-grant',
+        readOnly: true
+      }
+    })
+    const previewPlan = vi
+      .spyOn(filePreview, 'getWorkspaceFilePreviewPlan')
+      .mockReturnValue({ status: 'doc-preview' })
+    const openPreview = vi.spyOn(filePreview, 'openFileInBrowserTab')
+    try {
+      openDetectedFilePath('/tmp/report.html', null, null, featureWorktree)
+      await flushDoubleRaf()
+
+      expect(openPreview).not.toHaveBeenCalled()
+      expect(openFileMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '/tmp/report.html',
+          terminalArtifactGrantId: 'file-grant',
+          readOnly: true
+        }),
+        expect.anything()
+      )
+    } finally {
+      previewPlan.mockRestore()
+      openPreview.mockRestore()
+    }
+  })
+
+  it('retains the host-resolved HTML owner when opening in another workspace', async () => {
+    storeState.unifiedTabsByWorktree = {
+      'wt-feat': [
+        {
+          id: 'source',
+          entityId: 'term-1',
+          groupId: 'source-group',
+          contentType: 'terminal',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    }
     hostAnswers({
       worktree: 'wt-main',
-      relativePath: 'src/index.ts',
-      absolutePath: '/repo/src/index.ts',
+      relativePath: 'report.html',
+      absolutePath: '/repo/report.html',
       exists: true,
       isDirectory: false
     })
+    const plan = { status: 'doc-preview' } as const
+    const previewPlan = vi
+      .spyOn(filePreview, 'getWorkspaceFilePreviewPlan')
+      .mockReturnValueOnce(plan)
+    const openPreview = vi.spyOn(filePreview, 'openFileInBrowserTab').mockReturnValueOnce(plan)
+    try {
+      openDetectedFilePath('/repo/report.html', null, null, {
+        ...featureWorktree,
+        sourceTabId: 'source'
+      })
+      await flushDoubleRaf()
 
-    openDetectedFilePath('/repo/lib/../src/index.ts', null, null, featureWorktree)
-    await flushDoubleRaf()
-
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/repo/src/index.ts',
-        relativePath: 'src/index.ts',
-        worktreeId: 'wt-main'
-      }),
-      { forceContentReload: true }
-    )
+      expect(openPreview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '/repo/report.html',
+          worktreeId: 'wt-main',
+          fileExecutionHostId: 'runtime:env-1',
+          linkContext: expect.objectContaining({
+            linkIntent: expect.objectContaining({ workspaceId: 'wt-feat', hostId: 'runtime:env-1' })
+          })
+        })
+      )
+    } finally {
+      previewPlan.mockRestore()
+      openPreview.mockRestore()
+    }
   })
 
   it('downloads a Shift-clicked host file instead of opening the same path on this computer', async () => {
@@ -143,27 +208,6 @@ describe('a paired-server link outside its own workspace', () => {
     expect(openFileMock).not.toHaveBeenCalled()
   })
 
-  it('says the host has no workspace for a path outside all of them and this computer', async () => {
-    statMock.mockRejectedValueOnce(new Error('ENOENT: no such file'))
-    hostAnswers({
-      worktree: 'wt-feat',
-      relativePath: null,
-      absolutePath: '/etc/hosts',
-      exists: false,
-      isDirectory: false
-    })
-    const onOpenFailure = vi.fn()
-
-    openDetectedFilePath('/etc/hosts', null, null, { ...featureWorktree, onOpenFailure })
-    await flushDoubleRaf()
-
-    expect(openFileMock).not.toHaveBeenCalled()
-    expect(onOpenFailure).toHaveBeenCalledWith({
-      verdict: 'unverifiable',
-      error: new Error('/etc/hosts is outside every workspace on its host')
-    })
-  })
-
   it('reports a sibling-workspace file the host verified absent as missing', async () => {
     hostAnswers({
       worktree: 'wt-y',
@@ -182,23 +226,5 @@ describe('a paired-server link outside its own workspace', () => {
 
     expect(openFileMock).not.toHaveBeenCalled()
     expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'missing' }))
-  })
-
-  it('keeps a file inside its own workspace on the plain stat path', async () => {
-    hostAnswers({ size: 1, isDirectory: false, mtime: 1 })
-
-    openDetectedFilePath('/repo/.orca/worktrees/feat-x/a.ts', null, null, featureWorktree)
-    await flushDoubleRaf()
-
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'files.stat' })
-    )
-    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'files.resolveTerminalPath' })
-    )
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ relativePath: 'a.ts', worktreeId: 'wt-feat' }),
-      { forceContentReload: true }
-    )
   })
 })

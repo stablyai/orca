@@ -57,6 +57,7 @@ export type AutomationEditDestinationInput = {
     projectId: string
     workspaceId: string
   }
+  targetEdited?: boolean
   rowKey: string | null
   automationDialogTarget: AutomationHostTarget
   editHostEntries: Parameters<typeof revalidateAutomationCreateDestination>[1]
@@ -80,11 +81,12 @@ export function resolveAutomationEditDestination(
     input.editingDestination.destination.entry.stableKey !==
       input.rowRecoveryHost(input.rowKey)?.stableKey
   const destinationChanged =
-    input.currentAutomation !== null &&
-    (destinationHostChanged ||
-      input.currentAutomation.projectId !== input.draft.projectId ||
-      input.currentAutomation.workspaceId !== (input.draft.workspaceId || null) ||
-      input.currentAutomation.workspaceMode !== input.draft.workspaceMode)
+    input.targetEdited ??
+    (input.currentAutomation !== null &&
+      (destinationHostChanged ||
+        input.currentAutomation.projectId !== input.draft.projectId ||
+        input.currentAutomation.workspaceId !== (input.draft.workspaceId || null) ||
+        input.currentAutomation.workspaceMode !== input.draft.workspaceMode))
   if (!input.editingAutomationId || !input.currentAutomation || !destinationChanged) {
     return { ok: true, editDestination: undefined, moveTarget: null }
   }
@@ -100,7 +102,7 @@ export function resolveAutomationEditDestination(
       ok: false,
       notice: {
         message: translate(
-          'auto.components.automations.createDestination.stale',
+          'auto.components.automations.createDestination.projectStale',
           '{host} changed while this form was open. Choose the project again before saving.'
         ).replace('{host}', revalidated.entry.label),
         recovery: 'retry',
@@ -133,7 +135,7 @@ export function resolveAutomationEditDestination(
 function unavailableDestinationNotice(): AutomationActionNotice {
   return {
     message: translate(
-      'auto.components.automations.createDestination.unavailable',
+      'auto.components.automations.createDestination.projectUnavailable',
       'Choose an available project on this host before saving.'
     ),
     recovery: 'retry',
@@ -261,5 +263,21 @@ export async function saveExistingAutomation(
     },
     'save',
     destination
+  )
+}
+
+export function showAutomationSavedToast(
+  moveTarget: AutomationCreateDestination | null,
+  editingAutomationId: string | null
+): void {
+  toast.success(
+    moveTarget
+      ? translate(
+          'auto.components.automations.AutomationsPage.moved',
+          'Automation moved to {host}.'
+        ).replace('{host}', () => moveTarget.entry.authorityLabel)
+      : editingAutomationId !== null
+        ? translate('auto.components.automations.AutomationsPage.244727e655', 'Automation updated.')
+        : translate('auto.components.automations.AutomationsPage.2a20596d6b', 'Automation saved.')
   )
 }

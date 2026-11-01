@@ -56,6 +56,28 @@ describe('new workspace setup choices', () => {
     expect(current().runSetup).toBe(false)
     expect(current().showAdvanced).toBe(false)
   })
+  it('asks about orca.yaml default-tab commands when the repo has no setup script', async () => {
+    const client = new FakeSession('connected')
+    client.sendRequest.mockResolvedValue({
+      ...hooks,
+      result: {
+        hooks: null,
+        source: 'orca.yaml',
+        setupRunPolicy: 'ask',
+        setupConfig: {
+          source: 'yaml',
+          kind: 'default-tabs',
+          command: '# defaultTabs[1]\npnpm dev'
+        },
+        setupTrust: { contentHash: 'hash', scriptContent: '# defaultTabs[1]\npnpm dev' }
+      }
+    })
+    await act(async () => {
+      renderer = create(createElement(Harness, { client, selectedRepo: repo }))
+    })
+    expect(current().setupCommand).toBe('# defaultTabs[1]\npnpm dev')
+    expect(current().showAdvanced).toBe(true)
+  })
   it('does not show another runtime’s setup script for a repository with the same id', async () => {
     const previous = new FakeSession('connected')
     previous.sendRequest.mockResolvedValue(hooks)

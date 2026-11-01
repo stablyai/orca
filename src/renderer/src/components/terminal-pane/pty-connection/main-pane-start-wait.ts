@@ -1,5 +1,4 @@
-// Layout-owner build: a pane main is starting a terminal for waits and then attaches to it, and a
-// start that failed shows why. Neither starts a terminal of its own.
+// Wait for main’s terminal start and attach, or show its failure; the window cannot spawn a replacement.
 
 import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -7,19 +6,21 @@ import { recordPtyConnectDiagnostic } from './pty-connect-limits'
 import type { PaneStartStatus } from '../../../../../shared/workspace-layout/workspace-layout-published'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { resolveTerminalTabId } from './terminal-tab-id'
+import { parseWslDistroHold } from '../../../../../shared/wsl-distro-stopped-hold'
+import { holdPaneForStoppedWslDistro } from '../wsl-distro-stopped-hold-state'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 type PaneStartWait = { connects: Set<() => void>; failed: Set<() => void> }
 
 const waiting = new WeakMap<ConnectPanePtySession, PaneStartWait>()
+// A pane's stopped-distro card, cleared when main's start of it ends.
+const heldCards = new WeakMap<ConnectPanePtySession, () => void>()
 
 /** The starts this gate waits on; a sleeping or held pane starts on its first view (C1c). */
 const gated = (status: PaneStartStatus | undefined): boolean =>
   status === 'starting' || status === 'resuming' || status === 'failed'
 
-/**
- * Whether the pane waits on main's start; every waiter's `connect` runs once main's start for it
- * ends, and `onFailed` runs when main shows the start failed.
- */
+/** Call connect after main’s start ends, or onFailed on its published failure. */
 export function waitsForMainPaneStart(
   session: ConnectPanePtySession,
   connect: () => void,
@@ -71,6 +72,8 @@ export function waitsForMainPaneStart(
       return
     }
     // Main's start ended: the pane is bound to its terminal now, or main took it back.
+    heldCards.get(session)?.()
+    heldCards.delete(session)
     adoptMainBinding(session, state)
     unsubscribe()
     waiting.delete(session)
@@ -107,6 +110,25 @@ export function showPaneStartFailure(
   session: ConnectPanePtySession,
   reason: string | undefined
 ): void {
+  const hold = reason ? parseWslDistroHold(reason) : null
+  if (hold && !session.disposed && !session.runtimeEnvironmentId) {
+    // Main held background work on a stopped (or unchecked) distro: the card's Start asks main to start it.
+    const state = useAppStore.getState()
+    const pane = {
+      worktreeId: session.deps.worktreeId,
+      tabId: resolveTerminalTabId(state, session.deps.tabId),
+      leafId: session.pane.leafId
+    }
+    heldCards.get(session)?.()
+    const forget = holdPaneForStoppedWslDistro(session.cacheKey, {
+      ...hold,
+      release: () =>
+        callRuntimeRpc({ kind: 'local' }, 'layout.startWslHeldPanes', { panes: [pane] })
+    })
+    heldCards.set(session, forget)
+    session.waitTeardowns.push(forget)
+    return
+  }
   if (!session.disposed) {
     session.deps.onPtyErrorRef?.current?.(
       session.pane.id,

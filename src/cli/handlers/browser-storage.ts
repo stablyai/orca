@@ -12,7 +12,7 @@ export const BROWSER_STORAGE_HANDLERS: Record<string, CommandHandler> = {
   },
   'storage local set': async ({ flags, client, cwd, json }) => {
     const key = getRequiredStringFlag(flags, 'key')
-    // Why: the server accepts any string value; setItem(key, '') differs from an unset key.
+    // An empty value differs from an absent key.
     const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<unknown>('browser.storage.local.set', {

@@ -66,6 +66,7 @@ type AddRepoLocalStartStepProps = {
   nestedScanInProgress: boolean
   nestedScanId: string | null
   hostSelector?: ReactNode
+  notice?: ReactNode
   actionsDisabled?: boolean
   browseHostKind?: 'local' | 'runtime'
   offersServerSshHosts?: boolean
@@ -83,6 +84,7 @@ export function AddRepoLocalStartStep({
   nestedScanInProgress,
   nestedScanId,
   hostSelector,
+  notice,
   actionsDisabled = false,
   browseHostKind = 'local',
   offersServerSshHosts,
@@ -104,9 +106,7 @@ export function AddRepoLocalStartStep({
     offersServerSshHosts
   })
 
-  // The white fill + ⏎ chip is a roving selection indicator, not a fixed "primary" badge:
-  // it follows keyboard focus so Enter always activates the highlighted action. Browse is
-  // autofocused on open, so it starts selected; Tab and ↑/↓ move the highlight.
+  // The highlight and Enter chip follow keyboard focus; Browse is only the initial selection.
   const [selectedKind, setSelectedKind] = useState<string | null>(primaryAction.kind)
   const visibleSelectedKind = actionsUnavailable ? null : selectedKind
 
@@ -116,7 +116,6 @@ export function AddRepoLocalStartStep({
     }
   }, [actionsUnavailable])
 
-  // ↑/↓ rove focus across the action buttons in visual order; focus drives the selection.
   const handleArrowNavigation = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
       return
@@ -167,6 +166,7 @@ export function AddRepoLocalStartStep({
         onKeyDown={handleArrowNavigation}
       >
         {hostSelector}
+        {notice}
         <AddRepoPrimaryStartAction
           icon={primaryAction.icon}
           title={primaryAction.title}
@@ -177,15 +177,11 @@ export function AddRepoLocalStartStep({
           onClick={primaryAction.onClick}
           onFocus={() => setSelectedKind(primaryAction.kind)}
         />
-
-        {/* Keep secondary entry methods always visible so they stay discoverable without an extra click. */}
-        {/* Label clarifies the lighter-weight rows are alternate entry methods, not lesser features. */}
         <div className="space-y-1.5">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {translate('auto.components.sidebar.AddRepoStartSteps.87596c1446', 'Other ways to add')}
           </p>
-          {/* Outline uses the `input` token (white-ish in dark mode) to match Browse's visible outline variant;
-              primary-foreground is near-black in dark mode and rendered the border invisible. */}
+          {/* Use input for the outline; primary-foreground is near-black and disappears in dark mode. */}
           <div className="overflow-hidden rounded-md border border-input bg-background">
             {secondaryActions.map((action, index) => (
               <AddRepoSecondaryStartAction
@@ -224,14 +220,12 @@ type AddRepoStartActionProps = {
   title: string
   description: string
   disabled: boolean
-  // Selected = keyboard-focused: renders the selection wash + trailing ⏎ chip so Enter's target is obvious.
   selected: boolean
   onClick: () => void
   onFocus: () => void
   buttonRef?: Ref<HTMLButtonElement>
 }
 
-// Shared trailing chip so the ⏎ glyph travels with the selected action across primary and secondary rows.
 const AddRepoEnterChip = (): React.JSX.Element => (
   <span aria-hidden="true" className="shrink-0">
     <ShortcutKeyCombo
@@ -251,8 +245,6 @@ const AddRepoPrimaryStartAction = ({
   onFocus,
   buttonRef
 }: AddRepoStartActionProps): React.JSX.Element => (
-  // A neutral wash marks the roving keyboard selection without making the row
-  // read like the committed primary action.
   <Button
     ref={buttonRef}
     type="button"
@@ -306,7 +298,6 @@ function AddRepoSecondaryStartAction({
       className={cn(
         'flex min-h-[3.25rem] w-full items-center gap-3 border border-transparent px-3 py-2.5 text-left transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:cursor-default disabled:opacity-40',
         className,
-        // Selected mirrors the primary card's neutral wash so the highlight moves between rows.
         selected
           ? 'border-ring bg-foreground/10 text-foreground focus-visible:ring-0 dark:bg-accent dark:text-accent-foreground'
           : 'hover:bg-accent focus-visible:bg-accent focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50'

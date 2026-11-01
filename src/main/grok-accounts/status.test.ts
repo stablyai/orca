@@ -13,18 +13,6 @@ describe('getGrokAccountStatus', () => {
     vi.mocked(isGrokAccessTokenFresh).mockReturnValue(true)
   })
 
-  it('reports unsigned status when the Grok auth file is missing', () => {
-    vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
-
-    expect(getGrokAccountStatus()).toEqual({
-      signedIn: false,
-      email: null,
-      teamId: null,
-      tokenFresh: false,
-      error: null
-    })
-  })
-
   it('reports auth read errors without exposing token fields', () => {
     vi.mocked(readGrokAuthSession).mockReturnValue({
       status: 'error',

@@ -1,11 +1,7 @@
 import type { TerminalImeBoundaryTrace } from './terminal-ime-boundary-probe'
 
-/**
- * Reconstructs the text the input method and compositor actually handed the terminal textarea:
- * committed compositions, committed non-composing insertions and plain key presses, with Enter
- * as a line feed. Comparing it with the expected line separates input that never reached the
- * page (an IBus/compositor drop Orca cannot see) from input Orca received and then lost.
- */
+// Reconstruct textarea delivery (composition commits, non-composing insertions, plain keys, Enter→LF).
+// Separate IME/compositor input that never reached the page from delivered input Orca lost.
 export function readImeDomDeliveredText(trace: TerminalImeBoundaryTrace): string {
   let text = ''
   for (const event of trace.dom) {

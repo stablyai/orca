@@ -47,9 +47,7 @@ function decodeCookieEnvelope(raw: Buffer): MiniMaxCookieEnvelope | null {
   }
 }
 
-// Why: migrates cookies saved before the envelope format existed. Older files
-// hold raw bytes (safeStorage-encrypted or plaintext), so we sniff the content
-// to tell the two apart rather than removing this as seemingly dead code.
+// Legacy files contain raw encrypted or plaintext bytes; sniff them before envelope migration.
 function looksLikeCookieHeader(value: string): boolean {
   const trimmed = value.trim()
   if (!trimmed) {
@@ -97,13 +95,7 @@ function readLegacyCookie(raw: Buffer): string {
   throw new Error('MiniMax session cookie could not be decrypted')
 }
 
-/**
- * How the stored cookie is protected, or null when none is stored.
- *
- * Envelope kind where there is one; otherwise the same sniff the legacy reader uses, so
- * a pre-envelope file is reported as what it actually is. No decrypt, so this is safe to
- * call from a status handler without provoking a keychain prompt.
- */
+/** Inspect protection without decryption/keychain prompts; legacy files use the reader's sniff. */
 export function getMiniMaxSessionCookieProtection(): SecretAtRestProtection | null {
   const cookiePath = getMiniMaxCookiePath()
   if (!existsSync(cookiePath)) {
@@ -166,8 +158,7 @@ export function readMiniMaxSessionCookie(): string | null {
   if (!existsSync(keyPath)) {
     return null
   }
-  // Why: keep hardening out of the decode/decrypt try below so a chmod/ACL
-  // failure isn't misreported as a decrypt failure (matches hasMiniMaxSessionCookie).
+  // Keep permission failures outside decryption handling so they retain their actual diagnosis.
   try {
     hardenExistingSecureFile(keyPath)
   } catch (error) {

@@ -5,10 +5,6 @@ import { useSourceControlHostedReviewCreation } from './use-hosted-review-creati
 import { useSourceControlHostedReviewEligibility } from './use-hosted-review-eligibility'
 import { useSourceControlPullRequestGeneration } from './use-pull-request-generation'
 
-/**
- * The hand-driven review path: draft the fields, keep eligibility fresh while they are edited, and
- * create the review on the host.
- */
 export function useSourceControlReviewFlows(foundation: SourceControlPanelFoundation) {
   const {
     activeRepo,

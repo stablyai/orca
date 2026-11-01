@@ -128,8 +128,7 @@ export function createCheckRunDetailsActions(
         ) {
           return s
         }
-        // Why: the sidebar resolves the MR's project asynchronously, so an early patch
-        // must not blank a ref we already know.
+        // Async sidebar project lookup must not clear a previously known MR ref.
         const githubRepository = state.githubRepository ?? current.githubRepository ?? null
         const gitlabProjectRef = state.gitlabProjectRef ?? current.gitlabProjectRef ?? null
         const nextCheckRunDetails: OpenCheckRunDetailsState = {
@@ -211,8 +210,7 @@ export function createCheckRunDetailsActions(
       }
       patch({ details: checkRunDetails.details, loading: true, error: null })
       try {
-        // Why: refreshing a GitLab job tab through the GitHub check-runs API returns
-        // null and would blank the tab the user just asked to reload.
+        // GitLab jobs require GitLab trace; GitHub check-runs returns null and blanks the refreshed tab.
         const details = check.gitlabJobId
           ? await loadGitLabJobLogDetails({
               repoPath: repo.path,

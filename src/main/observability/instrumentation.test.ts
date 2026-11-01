@@ -51,12 +51,8 @@ function makeCapturingSink(): CapturedSink {
       }
       records.push(record)
     },
-    flush() {
-      /* no-op */
-    },
-    close() {
-      /* no-op */
-    }
+    flush() {},
+    close() {}
   }
 }
 
@@ -189,8 +185,7 @@ describe('addWorktreeCreatePhaseAttributes', () => {
 
   it('counts concurrent phases once when measuring unattributed time', () => {
     const { attributes, span } = capture()
-    // Create resolves shared directories and .worktreeinclude concurrently; summing their
-    // durations would claim 400ms of coverage for a 200ms window.
+    // Concurrent phases must not double-count covered wall time.
     addWorktreeCreatePhaseAttributes(span, {
       totalDurationMs: 1000,
       phases: [
@@ -201,7 +196,6 @@ describe('addWorktreeCreatePhaseAttributes', () => {
 
     expect(attributes['worktree.create.phase.resolve_shared_directories_ms']).toBe(200)
     expect(attributes['worktree.create.phase.resolve_worktreeinclude_ms']).toBe(150)
-    // Covered wall clock is 100..300, so 800ms is genuinely unaccounted for.
     expect(attributes['worktree.create.unattributed_ms']).toBe(800)
   })
 

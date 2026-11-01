@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab } from '../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { chatTabLayoutCommand, loadChatTabLayout } from './agent-session-tab-layout'
+import { chatTabLayoutCommand, loadChatTabLayout } from './agent-session/agent-session-tab-layout'
 
 const WT = 'repo-1::/tmp/worktree-a'
 
@@ -35,7 +35,6 @@ function session(tabs: Tab[], activeGroupId?: string): WorkspaceSessionState {
   }
 }
 
-/** The command for `change` against `stored` as main loads it. */
 function commandOn(
   stored: WorkspaceSessionState,
   change: Parameters<typeof chatTabLayoutCommand>[3]
@@ -70,7 +69,6 @@ describe("a host's chat tab change as main's layout command", () => {
   })
 
   describe("a paired client's chosen place (L270)", () => {
-    /** Two groups: group-1 holds [a, c], group-2 holds [d]; group-1 is remembered active. */
     function twoGroups(): WorkspaceSessionState {
       const tabs = [
         chatTab('a', 'tab-a'),
@@ -130,7 +128,9 @@ describe("a host's chat tab change as main's layout command", () => {
   })
 
   it('closes the tab that shows the chat, under its saved id, forced', () => {
-    expect(commandOn(session([chatTab('a', 'saved-tab')]), { close: 'a' })).toEqual({
+    expect(
+      commandOn(session([chatTab('a', 'saved-tab')]), { close: 'a', tabId: 'saved-tab' })
+    ).toEqual({
       type: 'closeTabs',
       workspace: WT,
       tabIds: ['saved-tab'],

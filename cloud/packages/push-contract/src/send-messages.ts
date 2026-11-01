@@ -8,9 +8,7 @@ import { OpaqueIdSchema, SequenceSchema } from './wire-scalars.js'
 
 export const PushNotificationSchema = z
   .object({
-    // Absent for terminal-bell, which the desktop raises without a notification record.
-    // Printable ASCII only: the id becomes the APNs collapse header, and the
-    // desktop builds it from URL-encoded parts, so anything else is not Orca's.
+    // Absent for terminal-bell; printable ASCII only because desktop URL-encoded IDs become APNs collapse headers.
     notificationId: z
       .string()
       .min(1)

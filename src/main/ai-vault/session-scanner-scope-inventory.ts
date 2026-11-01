@@ -24,7 +24,6 @@ export type CwdBucketInventory = {
   issues: { before: number; issue: AiVaultScanIssue }[]
 }
 
-/** Bounded CPU chunks must let cancellation and other scanner requests run. */
 export async function yieldScanInventory(index: number, signal?: AbortSignal): Promise<void> {
   if (index % 256 === 0) {
     await yieldToEventLoop()
@@ -111,7 +110,7 @@ export async function inventoryCwdBucketFiles(
   return inventory
 }
 
-/** Replay the original selector, interleaving earlier diagnostics at their original positions. */
+/** Replay selection with diagnostics in discovery order. */
 export async function selectCwdBucketFiles(
   inventory: CwdBucketInventory,
   args: Pick<

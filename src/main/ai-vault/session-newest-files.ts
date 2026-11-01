@@ -10,9 +10,8 @@ export class SessionNewestFiles {
     this.limit = Math.max(0, Math.trunc(limit) || 0)
   }
 
-  /** Returns the file this add left out: the new one, or the oldest it displaced. */
+  /** Return the new or displaced file that was not retained. */
   add(file: FileWithMtime): FileWithMtime | null {
-    // The backfill enumerates with no limit; skip the insert search entirely.
     if (!Number.isFinite(this.limit)) {
       this.files.push(file)
       return null

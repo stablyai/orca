@@ -1,11 +1,9 @@
-// Desktop words for the attachment refusals, kept beside the other failure pieces' translations.
-
 import { translate } from '@/i18n/i18n'
 import {
   AGENT_SESSION_FAILURE_COPY as COPY,
   type AgentSessionFailureCopyId,
   type AgentSessionFailureCopyValues
-} from '../../../../shared/agent-session-failure-copy'
+} from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 
 export const ATTACHMENT_FAILURE_PIECES = {
   attachmentEmpty: () =>

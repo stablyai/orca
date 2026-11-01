@@ -6,8 +6,7 @@ import type { DaemonCodeIdentity } from '../../shared/daemon-adoption-telemetry'
 
 const CODESIGN_TIMEOUT_MS = 3_000
 
-// An unlinked executable prints no `Executable=` and exits 1 with this (Darwin 25.5). The exiting-
-// pid error ('host has no guest') means the path did resolve, so it must not match.
+// An unlinked image lacks Executable= and exits 1 (Darwin 25.5); an exiting PID's "host has no guest" differs.
 const UNLINKED_EXECUTABLE_PATTERN = /No such file or directory/
 // Squirrel parks the outgoing bundle under a `…ShipIt…` directory in $TMPDIR or ~/Library/Caches.
 const PARKED_BUNDLE_PATTERN = /\/[^/]*ShipIt[^/]*\//
@@ -65,7 +64,7 @@ async function probe(pid: number): Promise<MacProcessCodeIdentity> {
   }
 }
 
-// Concurrent asks about one pid (a burst of spawns) share a probe; nothing outlives it.
+// Share concurrent probes for one PID without caching completed results.
 let inFlight: { pid: number; pending: Promise<MacProcessCodeIdentity> } | null = null
 
 /** Read fresh on every ask: a parked bundle can be deleted mid-run, flipping `parked` to `unresolvable`. */

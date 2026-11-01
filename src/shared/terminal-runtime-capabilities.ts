@@ -1,3 +1,4 @@
+import { TERMINAL_LIMIT_RUNTIME_CAPABILITY } from './terminal-limit-policy'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from './program-status/protocol'
 import { TERMINAL_QUICK_COMMAND_RUNTIME_CAPABILITIES } from './terminal-quick-command-capabilities'
 
@@ -26,7 +27,11 @@ export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 export const TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY =
   'terminal.create-shell-selection.v1' as const
 
+// Why: an older host strips terminal.split's `retrySplit` and splits again, duplicating the command.
+export const TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY = 'terminal.split-retry.v1' as const
+
 export const TERMINAL_RUNTIME_CAPABILITIES = [
+  TERMINAL_LIMIT_RUNTIME_CAPABILITY,
   'terminal.binary-stream.v1',
   PROGRAM_STATUS_RUNTIME_CAPABILITY,
   'terminal.multiplex.v1',
@@ -37,5 +42,6 @@ export const TERMINAL_RUNTIME_CAPABILITIES = [
   TERMINAL_SPAWN_INTENT_RUNTIME_CAPABILITY,
   ...TERMINAL_QUICK_COMMAND_RUNTIME_CAPABILITIES,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
-  TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY
+  TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
+  TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY
 ] as const

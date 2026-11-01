@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import { normalizeProxyUrl } from '../../../shared/network-proxy'
 import { normalizeKagiSessionLink } from '../../../shared/browser-url'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { NativeChatUpgradeTipAudience } from '../../../shared/native-chat-upgrade-tip-audience'
+import type { ChatUiLaunchTipAudience } from '../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { SshPtyConsumerRecovery } from '../../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
@@ -42,11 +42,16 @@ import { normalizeLoadedProfileState } from './normalize-loaded-profile-state'
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
 
+type LoadedProfileState = PersistedState & {
+  settings: PersistedState['settings'] & { experimentalNativeChat?: unknown }
+}
+
 type LoadedStateParsingOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'dataFile'
   | 'githubCacheDirty'
   | 'loadNeedsSave'
+  | 'originalExperimentalNativeChat'
   | 'protectedSecrets'
   | 'storageAuthority'
   | 'terminalScrollbackSnapshotStorage'
@@ -58,18 +63,11 @@ export class LoadedStateParsingOperations {
     private readonly cohorts: LoadedCohortMigrationOperations
   ) {}
 
-  /**
-   * Load the legacy storage representation supplied by a migration/importer.
-   *
-   * This deliberately uses the same decrypt, normalization, migration, and
-   * sidecar handling as a file load. An invalid imported document must fail
-   * closed instead of falling back to an unrelated on-disk backup.
-   */
+  /** Imported documents use normal migration/decryption; invalid input must not fall back to unrelated disk state. */
   loadSerialized(raw: string): PersistedState {
     return this.loadInternal(raw)
   }
 
-  /** Load only from an injected authority; never consult the legacy JSON path. */
   loadFromAuthority(raw: string | undefined): PersistedState {
     return this.loadInternal(raw)
   }
@@ -79,15 +77,15 @@ export class LoadedStateParsingOperations {
   }
 
   private loadInternal(serialized?: string, parsedInput?: Record<string, unknown>): PersistedState {
-    // Capture "has run Orca before?" for telemetry cohort; the telemetry field is new, so field inference misclassifies old users as fresh.
+    // Pre-telemetry profiles lack cohort fields, so source existence determines upgrade status.
     const fileExistedOnLoad = serialized !== undefined || parsedInput !== undefined
     logStartupMilestone('persistence-load-start', {
       fileExists: fileExistedOnLoad
     })
 
     let result: PersistedState | null = null
-    let parsed: PersistedState | undefined
-    let nativeChatUpgradeTipAudience: NativeChatUpgradeTipAudience | null = null
+    let parsed: LoadedProfileState | undefined
+    let chatUiLaunchTipAudience: ChatUiLaunchTipAudience | null = null
     try {
       if (fileExistedOnLoad) {
         const readStartedAt = performance.now()
@@ -107,9 +105,12 @@ export class LoadedStateParsingOperations {
         if (parsed === undefined) {
           throw new Error('Profile state startup snapshot is missing')
         }
-        // Why: decide from the profile as saved, before defaults or migrations can touch Chat UI.
-        nativeChatUpgradeTipAudience = this.cohorts.captureNativeChatUpgradeTipAudience(parsed)
-        // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
+        // Freeze audience before defaults or migrations alter the saved Chat UI state.
+        chatUiLaunchTipAudience = this.cohorts.captureChatUiLaunchTipAudience(parsed)
+        this.runtime.originalExperimentalNativeChat =
+          parsed.settings && Object.hasOwn(parsed.settings, 'experimentalNativeChat')
+            ? { experimentalNativeChat: parsed.settings.experimentalNativeChat }
+            : undefined
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = this.runtime.protectedSecrets.decrypt(
             PROTECTED_SECRET_SLOT.opencodeSessionCookie,
@@ -124,9 +125,7 @@ export class LoadedStateParsingOperations {
             parsed.settings.httpProxyUrl,
             (value) => normalizeProxyUrl(value).ok
           )
-          // Why (STA-3442): after a keychain reset decrypt returns raw ciphertext; a non-URL
-          // value must not masquerade as a configured proxy (silent DIRECT fallback) or
-          // re-persist as garbage. Plaintext URLs still pass, preserving the upgrade path.
+          // Preserve failed proxy ciphertext as inert data; only valid URLs may configure networking.
           if (
             decryptedProxy.status === 'unavailable' ||
             (decryptedProxy.status === 'failed' && !decryptedProxy.plaintext)
@@ -267,23 +266,34 @@ export class LoadedStateParsingOperations {
       this.runtime.loadNeedsSave = true
     }
 
+    // The retired upgrade tip's audience record is dropped from saved state.
+    const loaded: PersistedState & { nativeChatUpgradeTipAudience?: unknown } = result
+    const { nativeChatUpgradeTipAudience: retiredUpgradeTipAudience, ...current } = loaded
+    if (retiredUpgradeTipAudience !== undefined) {
+      this.runtime.loadNeedsSave = true
+    }
+    const audience =
+      chatUiLaunchTipAudience ?? this.cohorts.captureChatUiLaunchTipAudience(undefined)
     const migrated = {
-      ...this.cohorts.migrateTabSwitchKeybindings(
-        this.cohorts.migrateTelemetry(result, fileExistedOnLoad),
-        fileExistedOnLoad
+      ...this.cohorts.carryChatUiChoices(
+        this.cohorts.migrateTabSwitchKeybindings(
+          this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
+          fileExistedOnLoad
+        ),
+        parsed,
+        audience
       ),
-      nativeChatUpgradeTipAudience:
-        nativeChatUpgradeTipAudience ?? this.cohorts.captureNativeChatUpgradeTipAudience(undefined)
+      chatUiLaunchTipAudience: audience
     }
 
-    // githubCache is a sidecar file now (see getGithubCacheFile); legacy in-file caches seed the session, then get stripped.
+    // Legacy inline caches seed the session, then move to the cache sidecar.
     const legacyCache = migrated.githubCache
     const hasLegacyCache =
       Object.keys(legacyCache?.pr ?? {}).length > 0 ||
       Object.keys(legacyCache?.issue ?? {}).length > 0
     if (hasLegacyCache) {
       this.runtime.loadNeedsSave = true
-      // Why: mark dirty so the first flush writes the sidecar even without a poll refresh this session, preserving the seed.
+      // Persist the seed even when no cache poll refresh occurs this session.
       this.runtime.githubCacheDirty = true
     } else {
       migrated.githubCache = readGithubCacheSnapshot(this.runtime.dataFile) ?? migrated.githubCache

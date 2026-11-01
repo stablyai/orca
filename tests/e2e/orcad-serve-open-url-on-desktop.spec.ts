@@ -1,14 +1,5 @@
-/**
- * #30731: `orca open-url` on a paired `orca serve` running orcad with no browser engine opens the
- * page in the paired desktop's browser, its network routed through the server.
- *
- * Needs the packaged orcad slot (`pnpm build:orcad`). Background launch only; nothing is focused.
- *
- * Run:
- *   ORCA_E2E_ORCAD_SERVE=1 ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test \
- *     tests/e2e/orcad-serve-open-url-on-desktop.spec.ts --config tests/playwright.config.ts \
- *     --project electron-headless --workers=1
- */
+// #30731: orcad serve has no browser engine; open-url must render on its paired desktop while routing through the server.
+// Build the packaged slot with pnpm build:orcad, then run the electron-headless project with ORCA_E2E_ORCAD_SERVE=1 ORCA_BACKGROUND_LAUNCH=1.
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 

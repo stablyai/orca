@@ -1,11 +1,4 @@
-/**
- * Whether any Orca relay on an SSH host still runs work, asked over the bootstrap connection
- * before a relay session exists. Local leases only cover this desktop's terminals; the host's own
- * relay endpoints also show terminals another desktop opened there.
- *
- * Loss of contact is never evidence of exit (docs/reference/ssh-execution-boundary.md): a listing
- * that failed, ran out of room, or an endpoint the probe could not classify is `unverifiable`.
- */
+/** Census all account-owned relays, including other desktops, before a session exists. Failed/truncated listings and unknown endpoints stay unverifiable; lost contact never proves exit (docs/reference/ssh-execution-boundary.md). */
 import type { SshConnection } from '../connection/ssh-connection'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../remote-exec/remote-frame-protocol'
@@ -27,10 +20,7 @@ export type HostRelayEndpointCensus = { verdict: HostRelayEndpointVerdict; count
 
 const MAX_CENSUS_ENDPOINTS = 32
 
-/**
- * Every relay socket under this user's relay directories, whichever target or desktop bound it:
- * the socket name hashes the target id, and another desktop's target id is not ours to know.
- */
+/** Other desktops hash different target ids; list every socket in this account's relay directories. */
 function hostRelayEndpointListCommand(remoteHome: string): string {
   return [
     `base=${quotePosixShell(`${remoteHome}/${RELAY_REMOTE_DIR}`)}`,
@@ -47,7 +37,6 @@ export async function censusHostRelayEndpoints(
   args: {
     host: RemoteHostPlatform
     remoteHome: string
-    /** A Node for endpoints whose daemon is not running; null when the host has none. */
     fallbackNodePath: () => Promise<string | null>
     signal?: AbortSignal
   }
@@ -74,7 +63,7 @@ export async function censusHostRelayEndpoints(
   if (endpoints.length > MAX_CENSUS_ENDPOINTS) {
     return { verdict: 'unverifiable', count: endpoints.length }
   }
-  // Each relay is asked with the runtime it runs on; a dead daemon's socket with any runtime here.
+  // Use each daemon's runtime; a dead socket may use any available Node.
   const runtimes = await readRelayDaemonRuntimes(conn, args.signal)
   const anyRuntime = runtimes.values().next().value ?? null
   let fallback: Promise<string | null> | undefined
@@ -103,10 +92,7 @@ export async function censusHostRelayEndpoints(
     : { verdict: 'idle', count: 0 }
 }
 
-/**
- * The probe proves a relay idle only when it can read its whole process tree; otherwise the relay
- * itself is asked, and only when it cannot answer does the probe's conservative reading stand.
- */
+/** Prove idle from a complete process tree or the relay's own reply; otherwise retain the conservative probe verdict. */
 async function classifyEndpoint(
   conn: SshConnection,
   host: RemoteHostPlatform,

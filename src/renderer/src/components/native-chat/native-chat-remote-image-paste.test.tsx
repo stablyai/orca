@@ -1,11 +1,9 @@
 // @vitest-environment happy-dom
-// #27997: a clipboard image pasted into a terminal-backed chat on a managed SSH host or paired
-// server, through the real composer attachment guards rather than a fake chip store.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement, useEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const mocks = vi.hoisted(() => ({
   saveClipboardImageAsTempFile: vi.fn(),
@@ -18,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => true
 }))
@@ -137,8 +135,7 @@ const SERVER_OWNER: NativeChatAttachmentOwner = {
 }
 
 beforeEach(async () => {
-  // Why: a draft first written before the load lands is rebuilt from storage, which keeps a
-  // remote paste by name only; a running app has loaded long before any paste.
+  // Hydrate before paste as the app does; pre-load drafts retain remote images by name only.
   await hydrateNativeChatComposerDrafts()
   vi.resetAllMocks()
   mocks.readClipboardText.mockResolvedValue('')

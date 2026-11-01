@@ -1,29 +1,19 @@
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import type { HostStatusReply } from './host-status-reply-schema'
 
-/** The oldest page this shell serves: the `MOBILE_WEB_PAGE_VERSION` of the page built beside it. An
- *  older desktop is walled rather than served, so the shell keeps no path for an older page. */
+// Keep this shell’s page floor explicit; older pages require updating the desktop.
 export const MOBILE_WEB_PAGE_VERSION_FLOOR = 1
 
-/** The manifest schemas this app shell can mount. Widening it is a shell release, so the list is
- *  stated here rather than read off the contract's current version: the contract names the schema
- *  the desktop writes, which is exactly the number this shell may not recognise. */
+// Widen supported schemas only with a shell release; the writer’s current schema may be newer than this shell.
 export const SUPPORTED_MOBILE_WEB_BUNDLE_SCHEMA_VERSIONS = [1] as const
 
-/** Only the two `status.get` fields `host-status-gates.ts` already feeds `evaluateCompat`, taken
- *  from the reply type rather than restated: an upstream rename would otherwise leave a hand-copied
- *  shape behind and silently change every verdict through `?? 0` without failing a build. The two
- *  defaults point opposite ways, which is `evaluateCompat`'s own choice, not an accident here: an
- *  absent `protocolVersion` reads as the oldest host that could have answered, while an absent
- *  `minCompatibleMobileVersion` reads as no floor at all, so a host that states no floor does not
- *  get one invented for it. */
+// Reuse reply fields so renames fail typechecking; missing host protocol means oldest, while a missing mobile floor means none.
 export type MobileWebBundleHostStatus = Pick<
   HostStatusReply,
   'protocolVersion' | 'minCompatibleMobileVersion'
 >
 
-/** The manifest fields the wall reads. Null means no manifest has been read yet, which is still
- *  enough to answer the capability question. */
+// A missing manifest still permits answering the host capability question.
 export type MobileWebBundleCompatManifest = {
   schemaVersion: number
   runtimeProtocolVersion: number
@@ -33,14 +23,10 @@ export type MobileWebBundleCompatManifest = {
 }
 
 export type MobileWebBundleCompatVerdict =
-  /** `manifestChecked` false means only the capability was answered; no manifest had been read
-   *  yet, so this is permission to fetch one, not permission to open it. */
+  // Before a manifest is checked, ok permits fetching it, not opening it.
   | { kind: 'ok'; manifestChecked: boolean }
-  /** This desktop build ships no bundle at all. */
   | { kind: 'blocked'; reason: 'bundle-unavailable' }
-  /** The bundle is written in a manifest schema this shell does not know. */
   | { kind: 'blocked'; reason: 'bundle-shell-too-old'; schemaVersion: number }
-  /** The host is older than the bundle it is serving. */
   | {
       kind: 'blocked'
       reason: 'bundle-incompatible'
@@ -48,7 +34,6 @@ export type MobileWebBundleCompatVerdict =
       hostProtocolVersion: number
       requiredHostProtocolVersion: number
     }
-  /** The host serves a page older than this shell's floor. */
   | {
       kind: 'blocked'
       reason: 'bundle-incompatible'
@@ -56,7 +41,6 @@ export type MobileWebBundleCompatVerdict =
       pageVersion: number
       requiredPageVersion: number
     }
-  /** The bundle is older than the host expects; the caller refetches. */
   | {
       kind: 'blocked'
       reason: 'bundle-incompatible'
@@ -71,20 +55,9 @@ function knowsSchemaVersion(schemaVersion: number): boolean {
   )
 }
 
-/**
- * Whether a mobile web bundle may be opened against the host that served it.
- *
- * Pure and terminal: every blocked verdict is a wall the user leaves by updating one of the two
- * apps, never by falling back to a native workspace. Order matters — the capability answer comes
- * first because a host without a bundle has no manifest to disagree about, and the schema answer
- * comes before the protocol window because an unknown schema makes the numbers in it unreadable.
- *
- * Same `?? 0` defaults as `evaluateCompat`, and they are not symmetric. An absent
- * `protocolVersion` is the oldest host that could have answered, so it never reads as permission.
- * An absent `minCompatibleMobileVersion` is fail-open by design: a host that declares no floor for
- * the bundle it serves does not get one guessed at, and the desktop-side check above is what still
- * catches a host too old for that bundle.
- */
+// Evaluate capability before manifest, then schema before protocol fields it may make unreadable.
+// Missing host protocol fails the bundle floor; a missing declared mobile floor invents no restriction.
+// Compatibility walls require updating an app rather than falling back to native workspaces.
 export function evaluateMobileWebBundleCompat(input: {
   hostCapabilities: readonly string[]
   hostStatus: MobileWebBundleHostStatus

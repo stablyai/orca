@@ -1,7 +1,6 @@
 import type { TopLevelView } from './ui-chrome-types'
 
-// Record keys are exhaustive so adding a top-level view also updates every
-// persistence boundary that validates values loaded from disk or IPC.
+// Exhaustive keys make new views update every persistence/IPC validator.
 const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
   terminal: true,
   settings: true,
@@ -15,7 +14,6 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
 }
 
 export function isTopLevelView(value: unknown): value is TopLevelView {
-  // Why: hasOwn (not `in`) so inherited keys like "constructor"/"__proto__" from a
-  // corrupt sidecar can't pass as a view and leave the main surface blank.
+  // Reject inherited prototype keys from corrupt sidecars or they can blank the main surface.
   return typeof value === 'string' && Object.hasOwn(TOP_LEVEL_VIEW_LOOKUP, value)
 }

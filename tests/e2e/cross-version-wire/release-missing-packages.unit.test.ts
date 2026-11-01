@@ -30,7 +30,6 @@ function syntheticRelease(files: Record<string, string>): ReleaseCheckout {
 
 const currentManifest = { dependencies: { 'declared-but-uninstalled': '^1.0.0' } }
 
-/** Mirrors extraction: scan every release source file, then install the stand-ins. */
 function installStandIns(
   checkout: ReleaseCheckout,
   files: Record<string, string>

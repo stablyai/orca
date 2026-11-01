@@ -51,6 +51,7 @@ export function resolveAgentStatusIdentity(args: {
   existing?: ExistingAgentIdentity
   incoming?: AgentType
   incomingProcess?: AgentProcessIdentity
+  incomingSession?: string
   now: number
   staleAfterMs?: number
 }): AgentIdentityResolution {
@@ -81,6 +82,17 @@ export function resolveAgentStatusIdentity(args: {
       inheritedFromActivePane: otherProcessOwner
     }
   }
+  const owner = args.existing.agentPresence
+  if (
+    owner?.session &&
+    !owner.ended &&
+    owner.agent === incomingAgentType &&
+    owner.session === args.incomingSession &&
+    !otherProcessOwner
+  ) {
+    // Why: a child that posted while the owner idled must not silence the owner's own session.
+    return { agentType: incomingAgentType, inheritedFromActivePane: false }
+  }
   const canonical = resolveCanonicalPaneAgentIdentity({
     hookAgent: incomingAgentType as TuiAgent,
     hookIsLive: true,
@@ -91,8 +103,7 @@ export function resolveAgentStatusIdentity(args: {
     (otherProcessOwner || isActiveExistingIdentity(args.existing, args.now, staleAfterMs))
   ) {
     return {
-      // Why: child agent CLIs inherit ORCA_PANE_KEY from their parent terminal.
-      // An idle turn does not end its foreground process or resume identity.
+      // Inherited ORCA_PANE_KEY does not grant child CLI ownership; idle leaves foreground process/resume identity intact.
       agentType: existingAgentType,
       inheritedFromActivePane: true
     }

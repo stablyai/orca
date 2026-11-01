@@ -27,14 +27,12 @@ import { censusHostRelayEndpoints, readRelayEndpointProbe } from './ssh-host-rel
 import { RELAY_DAEMON_ARGV_COMMAND } from './ssh-relay-endpoint-runtime'
 
 let daemonArgv = ''
-/** The endpoint listing answers `listing`; the daemon argv read answers `daemonArgv`. */
 function hostAnswers(listing: string): void {
   execCommand.mockImplementation(async (_conn: unknown, command: string) =>
     command === RELAY_DAEMON_ARGV_COMMAND ? daemonArgv : listing
   )
 }
 
-// The census only hands the connection to the mocked exec and probe.
 const conn: SshConnection = Object.create(null)
 const linux = getRemoteHostPlatform('linux-x64')
 const sock = (n: number) => `/home/dev/.orca-remote/relay-1.4.${n}/relay-abc.sock`
@@ -65,7 +63,7 @@ describe('the host-side relay endpoint census', () => {
   beforeEach(() => {
     execCommand.mockReset()
     probeRelayEndpointIncumbent.mockReset()
-    // By default the relay itself cannot be asked, so the probe's reading stands.
+    // Without a relay reply, retain the probe's conservative verdict.
     countRelayEndpointPtys.mockReset().mockResolvedValue(null)
     daemonArgv = ''
   })

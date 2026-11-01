@@ -1,4 +1,3 @@
-// Main's saved layout for the placement test: a split tab, then a trailing tab (layout-owner build).
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   TEST_WORKTREE_ID,
@@ -12,7 +11,6 @@ export const SPLIT_LEFT = `split::${LEFT_LEAF}`
 export const SPLIT_RIGHT = `split::${RIGHT_LEAF}`
 export const TRAILING = `trailing::${TRAILING_LEAF}`
 
-/** Main's saved layout with a split tab and a trailing tab, as the placement test's host has. */
 export function splitPlacementStore() {
   const tab = (id: string, sortOrder: number) => ({
     id,

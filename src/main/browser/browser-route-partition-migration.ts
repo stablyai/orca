@@ -13,34 +13,18 @@ export type BrowserRoutePartitionMigrationStore = {
 export type BrowserRoutePartitionMigration = {
   bindings: BrowserRoutePartitionMigrationStore
   identity: BrowserRoutePartitionIdentity
-  /**
-   * Identity the shipping build derives for the same route, when it differs from `identity`.
-   * Every binding keeps this as its fingerprint, so a downgraded build still opens the jar.
-   */
+  /** Keep the older build's fingerprint so downgrades reopen the same storage. */
   compatibleIdentity?: BrowserRoutePartitionIdentity
-  /** Identity of the superseded scheme, or null when there is nothing to adopt. */
   legacyIdentity: BrowserRoutePartitionIdentity | null
   storageScope: string
   derivePartition?: (identity: BrowserRoutePartitionIdentity) => DerivedBrowserRoutePartition
 }
 
-/** A resolved partition; a new binding also records `aliasFingerprint` beside its fingerprint. */
 export type ResolvedBrowserRoutePartition = DerivedBrowserRoutePartition & {
   aliasFingerprint?: string
 }
 
-/**
- * Partition that holds `identity`'s browser storage, adopting an older name for it.
- *
- * Superseded identities hashed values that change without the server changing -- its
- * per-process `runtimeId`, or a re-paired server's pairing revision -- so deriving afresh
- * would hand the user an empty partition and log them out of every site. A binding already
- * minted from an older identity is adopted instead and keeps its cookies.
- *
- * When `compatibleIdentity` differs, the binding's fingerprint follows it and `identity`
- * rides along as an alias: the shipping build reads only the fingerprint, so a downgrade at
- * any pairing reopens the same jar. The returned fingerprint is always the binding's own.
- */
+// Adopt old partition names to preserve cookies across restarts and re-pairing.
 export function resolveBrowserRoutePartitionBinding(
   migration: BrowserRoutePartitionMigration
 ): ResolvedBrowserRoutePartition {
@@ -52,7 +36,7 @@ export function resolveBrowserRoutePartitionBinding(
     compatible.bindingFingerprint === derived.bindingFingerprint
       ? undefined
       : derived.bindingFingerprint
-  // Re-points `partition` at the current pairing, unless an older build's jar already holds it.
+  // Preserve this partition's fingerprint if another partition already holds the compatible one.
   const adopt = (partition: string): ResolvedBrowserRoutePartition => {
     const holder = bindings.findPartitionByFingerprint(compatible.bindingFingerprint)
     const fingerprint =
@@ -69,8 +53,7 @@ export function resolveBrowserRoutePartitionBinding(
       : { partition: bound, bindingFingerprint: bindings.get(bound) ?? derived.bindingFingerprint }
   }
   if (bindings.get(derived.partition) !== null) {
-    // Why: only this identity derives that name, so a binding there is its own jar whose alias
-    // an older build's rewrite dropped.
+    // An older build may have rewritten this identity's binding without its alias.
     return alias ? adopt(derived.partition) : derived
   }
   const compatibleBound =
@@ -80,8 +63,7 @@ export function resolveBrowserRoutePartitionBinding(
   }
   if (legacyIdentity !== null) {
     const legacy = derive(legacyIdentity)
-    // Why: adopt only a partition this exact legacy identity minted -- any other binding
-    // on that name belongs to a different route and must keep its own storage.
+    // Adopt only an exact legacy fingerprint to avoid taking another route's storage.
     if (
       legacy.partition !== derived.partition &&
       bindings.get(legacy.partition) === legacy.bindingFingerprint

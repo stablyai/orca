@@ -107,8 +107,7 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
     try {
       const result = await window.api.orcaProfiles.switchProfile({ profileId })
       if (result?.status !== 'relaunching') {
-        // Why: only a relaunch may keep the switcher locked; a stale
-        // "already-active" answer would otherwise disable it forever.
+        // Only actual relaunch locks switcher; stale already-active answers must unlock it.
         set({ orcaProfileSwitching: false })
       }
       return result

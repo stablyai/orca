@@ -1,13 +1,4 @@
-/**
- * A paired viewer must not erase a verified mirrored PTY binding while a
- * restarted `orca serve` process republishes the same surface as pending, and
- * the surviving daemon PTY must keep appending to its durable history log.
- *
- * Run:
- *   pnpm exec playwright test \
- *     tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Retain verified mirrored PTY bindings while serve restart republishes pending surfaces; the surviving daemon must keep appending durable history.
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -17,7 +8,7 @@ import { profileStateDatabaseFile } from '../../src/main/persistence/profile-sta
 import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
-import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import {
@@ -292,14 +283,12 @@ async function callRuntime<TResult>(
   ) as Promise<TResult>
 }
 
-async function showClient(app: ElectronApplication, page: Page): Promise<void> {
+// Why not shown: automated launches keep windows hidden; the resize step needs only a known size.
+async function sizeClientWindow(app: ElectronApplication, page: Page): Promise<void> {
   const window = await app.browserWindow(page)
   await window.evaluate((browserWindow) => {
     browserWindow.setSize(1100, 720)
-    browserWindow.show()
-    browserWindow.focus()
   })
-  await expect.poll(() => window.evaluate((browserWindow) => browserWindow.isVisible())).toBe(true)
 }
 
 async function waitForWorktree(host: HeadlessPairedRuntimeHost, repoId: string): Promise<string> {
@@ -582,7 +571,7 @@ test('retains a verified mirrored PTY binding through a serve restart pending sn
     const worktreeId = await waitForWorktree(host, added.result.repo.id)
     client = await launchPairedElectronClient(host.offer, testInfo, 'serve-restart-binding')
     client.page.on('pageerror', (error) => pageErrors.push(String(error)))
-    await showClient(client.app, client.page)
+    await sizeClientWindow(client.app, client.page)
     await waitForClientWorktree(client.page, worktreeId)
 
     terminal = await createMirroredTerminal(client, worktreeId)
@@ -637,8 +626,7 @@ test('retains a verified mirrored PTY binding through a serve restart pending sn
     expect(host.app.process().pid, 'The serve Electron process must actually be replaced').not.toBe(
       hostPidBeforeRestart
     )
-    // Layout-owner build: main's load binds the pane again from its tab row while the PTY lives, so
-    // the replacement host publishes it ready at once and never pending.
+    // Layout-owner main restores the live binding from its tab row, so this build publishes ready immediately.
     if (!LAYOUT_OWNER_BUILD) {
       let pendingReceipt: PairedTerminalSnapshotReceipt | null = null
       await expect

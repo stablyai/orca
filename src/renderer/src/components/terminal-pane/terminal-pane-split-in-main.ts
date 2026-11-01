@@ -1,5 +1,4 @@
-// Layout-owner build: the window's splits are written and started by main under the window's pane
-// id. Main's frame draws the pane, which attaches to main's terminal (frame reconciliation).
+// Main writes/starts splits under the window pane ID; frame reconciliation draws and attaches its terminal.
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
@@ -26,10 +25,7 @@ export type SplitInMainRequest = {
   keepSourceFocused?: true
 }
 
-/**
- * Asks main to split. False when a paired server owns the workspace's layout: the caller splits
- * as today, as it does through `asToday` when main finds the tab is a paired server's twin.
- */
+/** Ask main; paired/twin refusals delegate to the caller’s window split path. */
 export function splitPaneInMain(request: SplitInMainRequest, asToday: () => void): boolean {
   if (runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), request.worktreeId)) {
     return false
@@ -47,10 +43,7 @@ export function splitPaneInMain(request: SplitInMainRequest, asToday: () => void
   return true
 }
 
-/**
- * A pane with no terminal yet in a workspace a paired server's frames draw: that server's main
- * writes and starts the split, and its frames draw the pane. False for any other workspace.
- */
+/** For unbound panes in server-framed workspaces, paired main writes/starts the split and frames draw it; otherwise return false. */
 export function splitServerPane(request: SplitInMainRequest): boolean {
   const environmentId = runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), request.worktreeId)
   const route = environmentId ? serverLayoutApplyRoute(environmentId, request.worktreeId) : null

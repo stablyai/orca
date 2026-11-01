@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
 import { setCachedRepos } from '../cache/repo-cache'
 import type { RpcClient } from '../transport/rpc-client'
@@ -7,7 +7,7 @@ import { buildRepoHostIdByRepoId } from '../worktree/worktree-host-context-label
 import { buildSshHostHealthById } from '../worktree/worktree-host-health'
 import type { SectionRepo } from '../worktree/workspace-list-types'
 import type { HostRepoCatalogRow } from './host-screen-reply-schema'
-import { hostPlatformRead, hostRepoCatalogRead } from './host-screen-operations'
+import { hostPlatformRead, hostRepoCatalogSnapshotRead } from './host-screen-operations'
 import {
   acceptedMetadata,
   readHostSshTargetLabels,
@@ -17,7 +17,6 @@ import type { HostScreenState } from './use-host-screen-state'
 
 const REPO_METADATA_REFRESH_MS = 60_000
 
-/** A desktop repo.list row as Project sections read it, for a desktop that serves no catalog. */
 function desktopSectionRepo(repo: HostRepoCatalogRow): SectionRepo {
   return {
     id: repo.id,
@@ -47,6 +46,12 @@ export function useHostRepoMetadata(args: {
     setHostPlatform,
     setRepoHostIdByRepoId
   } = state
+  // The catalog behind the last snapshot id, per client: an unchanged reply reuses it.
+  const repoSnapshotRef = useRef<{
+    client: RpcClient
+    snapshotId: string
+    catalog: HostRepoCatalogRow[]
+  } | null>(null)
 
   const fetchRepoMetadata = useCallback(
     async (options: { force?: boolean; queueIfInFlight?: boolean } = {}) => {
@@ -69,24 +74,43 @@ export function useHostRepoMetadata(args: {
       try {
         do {
           fetchRepoMetadataPendingRef.current.delete(requestClient)
+          const held =
+            repoSnapshotRef.current?.client === requestClient ? repoSnapshotRef.current : null
           const repoReply = await settledMetadataReply(() =>
-            hostRepoCatalogRead.request(requestClient)
+            hostRepoCatalogSnapshotRead.request(requestClient, {
+              afterSnapshotId: held?.snapshotId ?? null
+            })
           )
           if (clientRef.current !== requestClient || hostId !== requestHostId) {
             return
           }
-          const repos = repoReply && hostRepoCatalogRead.interpret(repoReply)
+          const repos = repoReply && hostRepoCatalogSnapshotRead.interpret(repoReply)
           if (!repos || !repos.accepted) {
             return
           }
-          const catalog = repos.value
+          const reply = repos.value
+          const catalog =
+            reply.kind === 'catalog'
+              ? reply.repos
+              : reply.snapshotId === held?.snapshotId
+                ? held.catalog
+                : null
+          // An unchanged reply for a token this client no longer holds asks again in full next time.
+          if (!catalog) {
+            repoSnapshotRef.current = null
+            return
+          }
           repoMetadataFetchedAtRef.current = Date.now()
+          if (reply.kind === 'catalog') {
+            repoSnapshotRef.current = reply.snapshotId
+              ? { client: requestClient, snapshotId: reply.snapshotId, catalog }
+              : null
+          }
+          // Reapply on unchanged too: a host switch clears the shown repos while the token survives.
           setCachedRepos(requestHostId, catalog)
           setDesktopRepos(catalog.map(desktopSectionRepo))
           setRepoHostIdByRepoId(buildRepoHostIdByRepoId(catalog))
-          // Why: rows name their host when the list spans hosts or an SSH host may be unhealthy,
-          // so a local-only catalog never pays for the label lookups. Counted over repos, not the
-          // id-keyed map: one repo id registered on two hosts is two hosts.
+          // Fetch labels only for mixed-host or potentially unhealthy SSH rows. Count repos, not the id-keyed map: the same repo id may exist on two hosts.
           const hostIds = new Set(catalog.map((repo) => getRepoExecutionHostId(repo)))
           const hasSshHost = [...hostIds].some((id) => parseExecutionHostId(id)?.kind === 'ssh')
           if (hostIds.size > 1 || hasSshHost) {
@@ -101,7 +125,7 @@ export function useHostRepoMetadata(args: {
             setHostLabelById(hostLabelById)
             setHostPlatform(acceptedMetadata(hostPlatform, hostPlatformRead.interpret) ?? null)
           } else {
-            // Why: a host that left the catalog must not keep badging rows that still name it.
+            // Clear labels for departed hosts so stale metadata cannot badge remaining rows.
             setHostHealthById(new Map())
             setHostLabelById(new Map())
           }

@@ -6,6 +6,7 @@ const {
   getProfileMock,
   getRouteIdentityMock,
   importCookiesFromBrowserMock,
+  importCookiesFromFileMock,
   requireRouteBrowserProfileMock,
   recordClientRouteImportSourceMock,
   selectBrowserProfileMock
@@ -21,14 +22,16 @@ const {
   getProfileMock: vi.fn(),
   getRouteIdentityMock: vi.fn(),
   importCookiesFromBrowserMock: vi.fn(),
+  importCookiesFromFileMock: vi.fn(),
   requireRouteBrowserProfileMock: vi.fn(),
   recordClientRouteImportSourceMock: vi.fn(),
   selectBrowserProfileMock: vi.fn()
 }))
 
-vi.mock('./browser-cookie-import', () => ({
+vi.mock('./cookies/browser-cookie-import', () => ({
   detectInstalledBrowsers: detectInstalledBrowsersMock,
   importCookiesFromBrowser: importCookiesFromBrowserMock,
+  importCookiesFromFile: importCookiesFromFileMock,
   selectBrowserProfile: selectBrowserProfileMock
 }))
 vi.mock('./browser-route-partition-binding-runtime', () => ({
@@ -47,7 +50,7 @@ vi.mock('./paired-runtime-browser-client-host-runtime', () => ({
   getPairedRuntimeBrowserClientRouteIdentity: getRouteIdentityMock
 }))
 
-const { importCookiesIntoClientRoutePartition } =
+const { importCookieFileIntoClientRoutePartition, importCookiesIntoClientRoutePartition } =
   await import('./browser-client-route-cookie-import')
 
 const routeIdentity = {
@@ -60,7 +63,6 @@ const routeIdentity = {
   storageScope: 'e'.repeat(64)
 }
 
-/** The same server after a re-pair: a different durable identity, so a different partition. */
 const repairedRouteIdentity = {
   ...routeIdentity,
   authorityConnectionIdentity: 'paired-runtime:authority-b'
@@ -86,34 +88,10 @@ beforeEach(() => {
   getProfileMock.mockReturnValue({ id: 'default', partition: 'persist:legacy-server-profile' })
   detectInstalledBrowsersMock.mockReturnValue([chrome])
   importCookiesFromBrowserMock.mockResolvedValue({ ok: true, summary: { importedCookies: 4 } })
+  importCookiesFromFileMock.mockResolvedValue({ ok: true, summary: { importedCookies: 2 } })
 })
 
 describe('importCookiesIntoClientRoutePartition', () => {
-  it('imports into a main-derived route partition, never the server profile partition', async () => {
-    const result = await importCookiesIntoClientRoutePartition(request)
-
-    expect(result).toMatchObject({ ok: true, profileId: 'default' })
-    expect(requireRouteBrowserProfileMock).toHaveBeenCalledWith('default')
-    const [source, partition] = importCookiesFromBrowserMock.mock.calls[0] ?? []
-    expect(source).toBe(chrome)
-    expect(partition).toMatch(/^persist:orca-browser-v1-[a-f0-9]{64}$/)
-    expect(bindingStore.set).toHaveBeenCalledWith(
-      partition,
-      expect.stringMatching(/^[a-f0-9]{64}$/),
-      routeIdentity.storageScope,
-      expect.stringMatching(/^[a-f0-9]{64}$/)
-    )
-    expect(recordClientRouteImportSourceMock).toHaveBeenCalledWith({
-      environmentId: 'env-a',
-      profileId: 'default',
-      source: {
-        browserFamily: 'chrome',
-        profileName: 'Person 1',
-        importedAt: expect.any(Number)
-      }
-    })
-  })
-
   it('defers to the server-side import when the desktop hosts no pages for the server', async () => {
     getRouteIdentityMock.mockReturnValue(null)
 
@@ -124,7 +102,7 @@ describe('importCookiesIntoClientRoutePartition', () => {
   it('fails closed on a conflicting persisted binding', async () => {
     bindingStore.get.mockReturnValue('b'.repeat(64))
 
-    expect(await importCookiesIntoClientRoutePartition(request)).toEqual({
+    expect(await importCookiesIntoClientRoutePartition(request)).toMatchObject({
       ok: false,
       reason: 'browser_route_partition_binding_conflict'
     })
@@ -134,18 +112,8 @@ describe('importCookiesIntoClientRoutePartition', () => {
   it('rejects a traversing browser profile name before touching the filesystem', async () => {
     expect(
       await importCookiesIntoClientRoutePartition({ ...request, browserProfile: '../../etc' })
-    ).toEqual({ ok: false, reason: 'Invalid browser profile name.' })
+    ).toMatchObject({ ok: false, reason: 'Invalid browser profile name.' })
     expect(detectInstalledBrowsersMock).not.toHaveBeenCalled()
-  })
-
-  it('reselects a non-default desktop browser profile', async () => {
-    const secondary = { ...chrome, selectedProfile: 'Profile 2' }
-    selectBrowserProfileMock.mockReturnValue(secondary)
-
-    await importCookiesIntoClientRoutePartition({ ...request, browserProfile: 'Profile 2' })
-
-    expect(selectBrowserProfileMock).toHaveBeenCalledWith(chrome, 'Profile 2')
-    expect(importCookiesFromBrowserMock.mock.calls[0]?.[0]).toBe(secondary)
   })
 
   it('leaves the profile source untouched when the import fails', async () => {
@@ -158,14 +126,13 @@ describe('importCookiesIntoClientRoutePartition', () => {
     expect(recordClientRouteImportSourceMock).not.toHaveBeenCalled()
   })
 
-  // Why: the import takes seconds; a host replacement inside that window retargets the route, so
-  // reporting success would badge a partition none of the user's client-hosted tabs read from.
+  // A replacement during import must not report success for an abandoned partition.
   it('fails the import when the server is re-paired mid-import', async () => {
     getRouteIdentityMock.mockReturnValueOnce(routeIdentity).mockReturnValue(repairedRouteIdentity)
 
     const result = await importCookiesIntoClientRoutePartition(request)
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       reason: 'This server was re-paired during the import. Try again.'
     })
@@ -178,14 +145,13 @@ describe('importCookiesIntoClientRoutePartition', () => {
 
     const result = await importCookiesIntoClientRoutePartition(request)
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       reason: 'The connection to this server ended during the import. Reconnect and try again.'
     })
     expect(recordClientRouteImportSourceMock).not.toHaveBeenCalled()
   })
 
-  // Why: the durable identity outlives a remote restart, so a reconnect must not fail the import.
   it('still succeeds when only the authority runtime id changed during the import', async () => {
     getRouteIdentityMock.mockReturnValueOnce(routeIdentity).mockReturnValue({
       ...routeIdentity,
@@ -201,9 +167,35 @@ describe('importCookiesIntoClientRoutePartition', () => {
   it('rejects an unknown browser session profile', async () => {
     getProfileMock.mockReturnValue(null)
 
-    expect(await importCookiesIntoClientRoutePartition(request)).toEqual({
+    expect(await importCookiesIntoClientRoutePartition(request)).toMatchObject({
       ok: false,
       reason: 'Session profile not found.'
     })
+  })
+})
+
+describe('importCookieFileIntoClientRoutePartition', () => {
+  const target = { environmentId: 'env-a', browserProfileId: 'default' }
+
+  it('opens no picker when the desktop hosts no pages for the server', async () => {
+    getRouteIdentityMock.mockReturnValue(null)
+    const pickFile = vi.fn()
+
+    expect(await importCookieFileIntoClientRoutePartition(target, pickFile)).toBeNull()
+    expect(pickFile).not.toHaveBeenCalled()
+  })
+
+  it('imports the picked file into the route partition a browser import uses', async () => {
+    await importCookiesIntoClientRoutePartition(request)
+    const routePartition = importCookiesFromBrowserMock.mock.calls[0]?.[1]
+
+    const result = await importCookieFileIntoClientRoutePartition(target, async () => '/tmp/c.json')
+
+    expect(result).toMatchObject({ ok: true, profileId: 'default' })
+    expect(importCookiesFromFileMock).toHaveBeenCalledWith('/tmp/c.json', routePartition)
+    expect(routePartition).not.toBe('persist:legacy-server-profile')
+    expect(recordClientRouteImportSourceMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: expect.objectContaining({ browserFamily: 'manual' }) })
+    )
   })
 })

@@ -12,10 +12,7 @@ const KIND_LABELS: Record<string, string> = {
 
 const CLEAR = 'close one of them'
 
-/**
- * Identities the server keeps unique but this desktop saved more than once (#30610). Caught here
- * so the refusal names the tabs, not a server-side conflict nothing on the server explains.
- */
+/** Name duplicate tabs locally so refusal explains identities the server would reject (#30610). */
 export function collectDuplicateOrcadMigrationSessionIdentities(
   session: WorkspaceSessionState
 ): string[] {

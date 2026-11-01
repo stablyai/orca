@@ -10,24 +10,21 @@ import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
 import { DaemonProcessGrowthMonitor } from './daemon-process-growth-monitor'
 import { HostTerminalLedger, resolveMaxHostTerminals } from './host-terminal-ledger'
 import { LegacyRestoreRecords, legacyRestoreRecordsPathFor } from './legacy-restore-records'
+import type { HostTerminalPolicy } from './host-terminal-policy'
 import { TerminalSpawnGate, type TerminalSpawnAdmissionMode } from './terminal-spawn-gate'
 
 type DaemonAutomaticWorkGuardOptions = {
   markerPath: string | undefined
   /** Where every daemon on this host shares its terminal count; undefined caps this one alone. */
   hostTerminalLedgerDir?: string | undefined
+  terminalPolicy?: HostTerminalPolicy
   mode: TerminalSpawnAdmissionMode
   log: { log: (event: string, details: Record<string, unknown>) => void }
   listSessions: () => readonly { sessionId: string; pid: number | null }[]
   ownsEndpoint: () => boolean
-  /** Test seam for the growth monitor's process table. */
   monitor?: DaemonProcessGrowthMonitor
 }
 
-/**
- * Everything that decides whether the daemon may start automatic work: the fork gate,
- * the same-boot crash marker, and the process-growth breaker that pauses it.
- */
 export class DaemonAutomaticWorkGuard {
   readonly gate: TerminalSpawnGate
   private readonly marker: AutomaticWorkRunMarker
@@ -50,6 +47,7 @@ export class DaemonAutomaticWorkGuard {
         onLevelChanged: (level) => this.onPressureChanged(level),
         onTrip: (trips) => this.onTrip(trips)
       })
+    const policy = options.terminalPolicy
     this.gate = new TerminalSpawnGate({
       log: (event, details) => options.log.log(event, details),
       mode: options.mode,
@@ -57,6 +55,7 @@ export class DaemonAutomaticWorkGuard {
       automaticWorkMode: () => this.automaticWorkMode(),
       armAutomaticWork: () => this.marker.arm(),
       legacyRestores: this.legacyRestores,
+      resolveMaximum: policy ? () => policy.admissionMaximum() : undefined,
       hostTerminals: new HostTerminalLedger({
         dir: options.hostTerminalLedgerDir ?? null,
         maxTerminals: resolveMaxHostTerminals(),
@@ -72,21 +71,21 @@ export class DaemonAutomaticWorkGuard {
     this.gate.startHostTerminals()
   }
 
-  /** Called after every session was disposed on an orderly shutdown. */
+  /** Stop only after orderly disposal of all sessions. */
   stop(): void {
     this.monitor.stop()
     this.gate.stopHostTerminals()
     this.marker.markCleanExit()
   }
 
-  /** An exit on purpose that skips teardown (macOS login-session retirement). */
+  /** Record intentional exits that bypass session teardown, such as macOS login retirement. */
   recordOrderlyExit(): void {
     this.monitor.stop()
     this.gate.stopHostTerminals()
     this.marker.markCleanExit()
   }
 
-  /** A stop requested from outside (SIGTERM/SIGINT), recorded before the teardown starts. */
+  /** Record external stop signals before teardown starts. */
   recordStopRequested(): void {
     this.marker.recordStopRequested()
   }
@@ -103,7 +102,6 @@ export class DaemonAutomaticWorkGuard {
     return type === 'resumeAutomaticWork' ? this.resume() : this.status()
   }
 
-  /** The operator's resume: clears a crash or pressure pause and lets waiting restores through. */
   resume(): AutomaticWorkResumeResult {
     const before = this.automaticWorkMode()
     this.marker.resume()
@@ -126,9 +124,7 @@ export class DaemonAutomaticWorkGuard {
   }
 
   private onTrip(trips: readonly ProcessGrowthTrip[]): void {
-    // Why pause, not kill: running agents keep running and only new automatic work stops
-    // (owner decision Q3). Why in memory for this run: an observe-only host must not leave
-    // one behind for when it starts enforcing, and a resume or restart clears it.
+    // Pause new automatic work without killing agents; keep pressure pauses in memory for this run.
     if (this.options.mode === 'enforce') {
       this.pressurePausedSince ??= Date.now()
     }

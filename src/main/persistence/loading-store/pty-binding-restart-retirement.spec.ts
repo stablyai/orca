@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { fixture } from './profile-state-delayed-authority-fixture'
-import { TEST_LEAF_1 } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1 } from '../persistence-session-fixtures'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 
 export function registerPtyBindingRestartRetirementTests(): void {

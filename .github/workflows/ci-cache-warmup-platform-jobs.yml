@@ -15,7 +15,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-24.04-arm, blacksmith-4vcpu-ubuntu-2404]
+        # Separate cache stores per pool; native keys are image-scoped, and ci-cache-warmup.yml warms hosted 24.04 x64.
+        runner:
+          [
+            blacksmith-4vcpu-ubuntu-2404-arm,
+            blacksmith-8vcpu-ubuntu-2404,
+            ubuntu-24.04-arm,
+            ubuntu-22.04
+          ]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     env:
@@ -28,8 +35,37 @@ jobs:
         with:
           native-runtime: node
           node-version: '24'
-          cache-electron-package: 'true'
+          # Hosted consumers of these images restore neither the Electron archive nor the root store.
+          cache-electron-package: ${{ startsWith(matrix.runner, 'blacksmith-') }}
+          cache-pnpm-store: ${{ startsWith(matrix.runner, 'blacksmith-') }}
           cache-pnpm-store-lookup-only: 'true'
+      - name: Populate shared Electron archive
+        if: startsWith(matrix.runner, 'blacksmith-')
+        run: node config/scripts/install-electron-package-binary.mjs
+      - name: Verify native cache is usable
+        run: node config/scripts/ensure-native-runtime.mjs --check-only
+
+  # node-server's hosted macOS lane needs nothing; this serves hosted macOS PR contracts and updater tests.
+  warm-macos-runtime:
+    if: github.event_name != 'pull_request'
+    concurrency:
+      group: ci-cache-warmup-macos-runtime-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name != 'schedule' }}
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+          # A main-scoped archive stops each macOS PR from saving its own copy.
+          cache-electron-package: 'true'
+          cache-pnpm-store: 'false'
       - name: Populate shared Electron archive
         run: node config/scripts/install-electron-package-binary.mjs
       - name: Verify native cache is usable
@@ -42,7 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, windows-11-arm]
+        os: [windows-2022, windows-11-arm, windows-2025]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -59,8 +95,14 @@ jobs:
       - name: Verify native cache is usable
         run: node config/scripts/ensure-native-runtime.mjs --check-only
 
+      - name: Resolve the Windows Rust build scope
+        id: rust-scope
+        if: runner.arch == 'X64' && matrix.os != 'windows-2025'
+        shell: bash
+        run: node config/scripts/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+
       - name: Cache Windows CLI launcher
-        if: runner.arch == 'X64'
+        if: runner.arch == 'X64' && matrix.os != 'windows-2025'
         uses: actions/cache@v5
         with:
           path: |
@@ -69,16 +111,14 @@ jobs:
             native/windows-agent-hook/.build
             native/windows-agent-hook/target
             ~/.cargo/registry
-          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'native/windows-agent-hook/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'resources/build/icon.ico', 'package.json') }}
+          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'config/scripts/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+          restore-keys: |
+            windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
 
       - name: Build the Windows native executables
-        if: runner.arch == 'X64'
+        if: runner.arch == 'X64' && matrix.os != 'windows-2025'
         shell: pwsh
         run: |
-          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-            rustup toolchain install stable --profile minimal
-            rustup default stable
-          }
           node config/scripts/build-windows-agent-hook.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node config/scripts/build-windows-cli-launcher.mjs
@@ -90,12 +130,151 @@ jobs:
         with:
           arches: arm64
 
+      # node-server, Windows E2E and the survival lanes restore these exact keys.
+      - name: Warm the Windows x64 server launcher
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/prepare-windows-cli-launcher
+        with:
+          arches: x64
+      - name: Warm the Windows agent hook
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/prepare-windows-agent-hook
+
+      - name: Warm the Windows server prebuild
+        id: orcad-prebuild
+        if: matrix.os != 'windows-2025'
+        uses: ./.github/actions/prepare-orcad-prebuilds
+        with:
+          resolve-windows-cache: 'true'
+          restore-windows-cache: 'true'
+      # Same check a consumer runs before trusting a restored slot.
+      - name: Validate the Windows server prebuild before saving
+        id: orcad-prebuild-validate
+        if: >-
+          github.event_name != 'pull_request' && matrix.os != 'windows-2025' &&
+          steps.orcad-prebuild.outputs.cache-hit != 'true' && steps.orcad-prebuild.outputs.cache-key != ''
+        run: node config/scripts/orcad-windows-prebuild-cache.mjs --validate
+      - name: Save the Windows server prebuild
+        if: steps.orcad-prebuild-validate.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.orcad-prebuild.outputs.cache-path }}
+          key: ${{ steps.orcad-prebuild.outputs.cache-key }}
+
+  # Windows packaging and E2E restore these; PRs no longer save their own copies.
+  warm-windows-electron:
+    concurrency:
+      group: ci-cache-warmup-windows-electron-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name != 'schedule' }}
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+          cache-pnpm-store: 'false'
+
+  # Hosted Linux packaging and packaged-browser E2E restore these; PRs no longer save their own copies.
+  warm-linux-electron:
+    concurrency:
+      group: ci-cache-warmup-linux-electron-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+          cache-pnpm-store: 'false'
+
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+      # pr.yml package restores this exact path and key.
+      - name: Seed shared Linux packaging downloads
+        id: eb-cache
+        if: github.event_name != 'pull_request'
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/electron-builder
+          key: electron-builder-linux-${{ steps.eb-versions.outputs.versions }}
+          lookup-only: true
+      # The same toolsets electron-builder fetches for AppImage, deb and rpm.
+      - name: Download Linux packaging tools
+        if: github.event_name != 'pull_request' && steps.eb-cache.outputs.cache-hit != 'true'
+        run: >-
+          node -e "const linux = require('app-builder-lib/out/toolsets/linux.js');
+          const { getIconsToolsetPath } = require('app-builder-lib/out/toolsets/icons.js');
+          const { Arch } = require('builder-util');
+          const { toolsets } = require('./config/electron-builder-pr-linux.config.cjs');
+          (async () => { await getIconsToolsetPath(); await linux.getFpmPath();
+          await linux.getAppImageTools(toolsets.appimage, Arch.x64) })().catch((error) => { console.error(error); process.exit(1) })"
+
+  # Mobile verify restores this bundle on pull requests without saving.
+  warm-mobile-bundle:
+    if: github.event_name != 'pull_request'
+    concurrency:
+      group: ci-cache-warmup-mobile-bundle-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    env:
+      BUNDLE_FROZEN: 'true'
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          working-directory: mobile
+      - name: Resolve fastlane bundle cache
+        id: ruby-bundle
+        env:
+          GEMFILE_HASH: ${{ hashFiles('mobile/Gemfile', 'mobile/Gemfile.lock') }}
+        run: |
+          . /etc/os-release
+          printf 'key=mobile-bundle-v1-%s-%s-%s-%s\n' "$ID-$VERSION_ID" "$(ruby -e 'print RUBY_PLATFORM')" "$(ruby -e 'print RbConfig::CONFIG["ruby_version"]')" "$GEMFILE_HASH" >> "$GITHUB_OUTPUT"
+      - name: Seed fastlane bundle
+        id: ruby-bundle-cache
+        uses: actions/cache@v5
+        with:
+          path: mobile/vendor/bundle
+          key: ${{ steps.ruby-bundle.outputs.key }}
+          lookup-only: true
+      - name: Install fastlane
+        if: steps.ruby-bundle-cache.outputs.cache-hit != 'true'
+        run: |
+          bundle config set --local path "$PWD/vendor/bundle"
+          bundle config set --local deployment true
+          bundle install --jobs 4
+
   warm-linux-package-fixtures:
     if: github.event_name != 'pull_request'
     concurrency:
-      group: ci-cache-warmup-linux-package-fixtures-${{ github.event.pull_request.number || github.ref }}
+      group: ci-cache-warmup-linux-package-fixtures-${{ matrix.runner }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'schedule' }}
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [blacksmith-4vcpu-ubuntu-2404, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     env:
       ORCA_BACKGROUND_LAUNCH: '1'

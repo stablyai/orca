@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parse as parseToml } from 'smol-toml'
 import {
   applyJcodeManagedHooks,
   parseJcodeHooksTable,
@@ -30,7 +31,6 @@ emoji = false
 turn_end = "~/bin/my-turn-notify"
 `
     const result = applyJcodeManagedHooks(source, EVENTS, MANAGED_COMMAND, 'jcode-hook.sh')
-    // Why: the user-owned turn_end is kept verbatim and reported partial.
     expect(result.userOwnedEvents).toEqual(['turn_end'])
     expect(result.content).toContain('turn_end = "~/bin/my-turn-notify"')
     for (const event of ['session_start', 'session_end', 'post_tool']) {
@@ -57,8 +57,7 @@ post_tool = ${tomlQuoteString(MANAGED_COMMAND)}
   })
 
   it('tolerates jcode-owned scalar non-string hook settings', () => {
-    // Why: jcode seeds `pre_tool_timeout_ms = 5000` into its own [hooks] table;
-    // it is config, not a command, so parsing must skip it instead of erroring.
+    // jcode seeds numeric pre_tool_timeout_ms; it is config, not a hook command.
     const table = parseJcodeHooksTable('[hooks]\npre_tool_timeout_ms = 5000\n')
     expect(table).toEqual({})
     const result = applyJcodeManagedHooks(
@@ -85,8 +84,7 @@ session_start = "~/bin/mine"
   })
 
   it('keeps every table declared after [hooks] when removing managed entries', () => {
-    // Why: `remote` rebuilds the file from the lines it keeps, so an early exit at
-    // the next table header silently truncated the rest of a user's config.
+    // Remote editing rebuilds the file; stopping at the next header would truncate user tables.
     const source = `[hooks]
 turn_end = ${tomlQuoteString(MANAGED_COMMAND)}
 pre_tool_timeout_ms = 5000
@@ -120,7 +118,7 @@ turn_end = ${tomlQuoteString(MANAGED_COMMAND)}
   })
 
   it('never deletes a user hook whose comment merely mentions the managed script', () => {
-    // Why: matching the raw line treated the comment as the value — real config loss.
+    // A managed-script mention in a trailing comment does not confer ownership.
     const source = `[hooks]
 turn_end = "~/bin/mine" # replaces agent-hooks/jcode-hook.sh
 `
@@ -144,7 +142,7 @@ turn_end = "~/bin/mine" # replaces agent-hooks/jcode-hook.sh
     const source = `['hooks']\npre_tool_timeout_ms = 5000 # ms\n`
     expect(parseJcodeHooksTable(source)).toEqual({})
     const result = applyJcodeManagedHooks(source, EVENTS, MANAGED_COMMAND, 'jcode-hook.sh')
-    // Why: a second [hooks] table makes jcode reject the whole config.
+    // A duplicate hooks table makes jcode reject the config.
     expect(result.content.match(/^\[?'?hooks/gm)?.length).toBe(1)
     expect(result.content).toContain('pre_tool_timeout_ms = 5000 # ms')
   })
@@ -154,7 +152,52 @@ turn_end = "~/bin/mine" # replaces agent-hooks/jcode-hook.sh
     const result = applyJcodeManagedHooks(source, EVENTS, MANAGED_COMMAND, 'jcode-hook.sh')
     expect(result.content).toContain('\r\n')
     expect(result.content).not.toContain('\n[hooks]')
-    // Why: preserved CRLF lines must not gain a second `\r` on every edit.
     expect(result.content).not.toContain('\r\r')
+  })
+
+  it.each([
+    ['inline', '[hooks]\npre_tool = ["a.sh"] # gate\n', ['a.sh']],
+    ['inline trailing comma', "[hooks]\npre_tool = [ 'a.sh', ]\n", ['a.sh']],
+    [
+      'multi-line without trailing comma',
+      '[hooks]\r\npre_tool = [\r\n  "a.sh",\r\n  "b.sh"\r\n]\r\n',
+      ['a.sh', 'b.sh']
+    ],
+    [
+      'closing bracket after last element',
+      '[hooks]\npre_tool = [\n  "a.sh", # c\n  "b.sh"]\n',
+      ['a.sh', 'b.sh']
+    ],
+    ['empty', '[hooks]\npre_tool = [ # none yet\n]\n', []]
+  ])('appends to and removes from a %s hook array', (_name, source, user) => {
+    const applied = applyJcodeManagedHooks(source, ['pre_tool'], MANAGED_COMMAND, 'jcode-hook.sh')
+    expect(applied.userOwnedEvents).toEqual([])
+    expect(parseToml(applied.content).hooks).toEqual({ pre_tool: [...user, MANAGED_COMMAND] })
+    expect(parseJcodeHooksTable(applied.content)?.pre_tool).toEqual([...user, MANAGED_COMMAND])
+    expect(removeJcodeManagedHooks(applied.content, 'jcode-hook.sh').content).toBe(source)
+  })
+
+  it('repoints a stale managed array element in place and drops managed duplicates', () => {
+    const stale = tomlQuoteString('/Users/old/.orca/agent-hooks/jcode-hook.cmd')
+    const current = tomlQuoteString(MANAGED_COMMAND)
+    const source = `[hooks]\npre_tool = ["a.sh", ${stale}, "b.sh", ${current}]\nturn_end = [${stale}, ${stale}]\n`
+    const applied = applyJcodeManagedHooks(
+      source,
+      ['pre_tool', 'turn_end'],
+      MANAGED_COMMAND,
+      'jcode-hook.sh'
+    )
+    expect(parseToml(applied.content).hooks).toEqual({
+      pre_tool: ['a.sh', MANAGED_COMMAND, 'b.sh'],
+      turn_end: [MANAGED_COMMAND]
+    })
+  })
+
+  it('rejects hook arrays holding values jcode cannot run', () => {
+    expect(parseJcodeHooksTable('[hooks]\npre_tool = ["a.sh", 5]\n')).toBeNull()
+    expect(parseJcodeHooksTable('[hooks]\npre_tool = [["a.sh"]]\n')).toBeNull()
+    expect(parseJcodeHooksTable('[hooks]\npre_tool = ["a.sh" "b.sh"]\n')).toBeNull()
+    expect(parseJcodeHooksTable('[hooks]\npre_tool = ["a.sh",\n')).toBeNull()
+    expect(parseJcodeHooksTable('[hooks]\npre_tool =\n["a.sh"]\n')).toBeNull()
   })
 })

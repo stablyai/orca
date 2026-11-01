@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   TERMINAL_VIEWPORT_MIN_ROWS,
   clampTerminalViewport
@@ -9,18 +9,12 @@ import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-di
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-// Why: the two resizes must reach the program as separate SIGWINCHs. Node's tty (Claude Code,
-// Codex) re-reads the size on SIGWINCH and repaints only if it changed, so the put-back waits
-// this long after the host confirmed the short grid, not after the client sent it.
+// Wait after host-confirmed short grid before restoring height so Node TUIs observe two distinct SIGWINCH sizes.
 export const REMOTE_PROGRAM_REDRAW_RESTORE_MS = 250
 // Why: hosts that predate desktop fit answers never confirm; put the row back anyway.
 export const REMOTE_PROGRAM_REDRAW_ACK_TIMEOUT_MS = 2_000
 
-/**
- * The one place a remote pane asks its program to repaint after the host could not give the
- * pane a screen image (#26887). An idle TUI only writes diffs, so without this the pane keeps
- * whatever frame it had before the disconnect until the user happens to resize.
- */
+/** When no host image exists, nudge idle differential TUIs to repaint instead of retaining a stale frame or the loss banner until manual resize (#26887). */
 export function bindRemoteProgramRedraw(session: ConnectPanePtySession): void {
   session.remoteProgramRedrawRestore = null
 
@@ -35,13 +29,10 @@ export function bindRemoteProgramRedraw(session: ConnectPanePtySession): void {
     if (
       session.disposed ||
       !ptyId ||
-      !isRemoteRuntimePtyId(ptyId) ||
       session.remoteProgramRedrawRestore !== null ||
-      // Why: a claim sent while the stream is recovering is only deferred, and recovery replays
-      // just the last grid, so the short one would never reach the program.
+      // Recovery replays only the last deferred grid; claiming mid-recovery would skip the short size and its repaint.
       !session.transport.isConnected() ||
-      // Why: a hidden pane's grid is not authoritative, and a phone or another desktop that holds
-      // the size must not have it taken; the repaint those viewers drive covers this pane too.
+      // Hidden panes cannot claim geometry, and a mobile/desktop owner’s repaint already covers this viewer.
       !session.isRendererPtyResizeAuthoritative() ||
       session.shouldSuppressDesktopPtyResize()
     ) {
@@ -51,8 +42,7 @@ export function bindRemoteProgramRedraw(session: ConnectPanePtySession): void {
     if (cols < 1 || rows < 1) {
       return
     }
-    // Why rows, not cols: a height change does not rewrap the host's scrollback. Measured on the
-    // host's clamped grid, or a pane at the minimum height would ask for two identical sizes.
+    // Nudge rows to avoid scrollback rewrap; use clamped host height so minimum-size panes request two distinct grids.
     const hostRows = clampTerminalViewport(cols, rows).rows
     const nudgeRows = hostRows > TERMINAL_VIEWPORT_MIN_ROWS ? hostRows - 1 : hostRows + 1
     let restoreTimer: ReturnType<typeof setTimeout> | null = null
@@ -66,8 +56,7 @@ export function bindRemoteProgramRedraw(session: ConnectPanePtySession): void {
     }
     const restore = (): void => {
       finish()
-      // Why not forwardPtyResize: this moved the PTY by a row, so it must put it back even if the
-      // pane was hidden meanwhile; only a viewer that took the size since owns it now.
+      // Restore the borrowed row even after hiding unless another viewer took ownership meanwhile.
       if (session.transport.getPtyId() !== ptyId || session.shouldSuppressDesktopPtyResize()) {
         return
       }
@@ -98,6 +87,10 @@ export function bindRemoteProgramRedraw(session: ConnectPanePtySession): void {
     if (!session.transport.resize(cols, nudgeRows, { claim: true })) {
       finish()
       return
+    }
+    if (!isRemoteRuntimePtyId(ptyId)) {
+      // Local main never confirms a desktop fit; IPC order alone keeps the two sizes distinct.
+      scheduleRestore()
     }
     recordTerminalFreezeBreadcrumb('remote-program-redraw', {
       id: redactPtyIdForDiagnostics(ptyId),

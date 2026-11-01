@@ -49,7 +49,7 @@ export function registerWorkerStartTerminalTargetTests(): void {
     })
   })
 
-  // The other door into the same self-adoption: manual dispatch never compared `to` to the caller.
+  // Manual inject is another self-adoption path; compare target with caller too.
   describe('orchestration.dispatch --to the caller', () => {
     const harness = createOrchestrationWorkerReleaseHarness()
     beforeEach(() => harness.setup())
@@ -105,8 +105,7 @@ export function registerWorkerStartTerminalTargetTests(): void {
       ).rejects.toMatchObject({ code: 'terminal_is_coordinator' })
     })
 
-    // Low-level topologies (and the e2e specs that drive them from one pane) dispatch context
-    // to the caller's own terminal; nothing is written into the pane, so nothing self-adopts.
+    // Context-only self-dispatch writes no preamble and remains valid for low-level topologies.
     it('still records a context-only dispatch aimed at the coordinator handle', async () => {
       const task = harness.db.createTask({ spec: 'self context', runId: harness.activeRunId })
 
@@ -123,8 +122,7 @@ export function registerWorkerStartTerminalTargetTests(): void {
       expect(harness.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     })
 
-    // The rejection for a missing agent tells the caller to dispatch without --inject, which the
-    // coordinator guard forbids; the self-target answer must not depend on agent presence.
+    // Self-injection must refuse regardless of agent detection; without-inject advice cannot authorize it.
     it.each([
       ['the coordinator handle', 'term_coord'],
       ['an alias of the coordinator pane', 'term_coord_alias']
@@ -169,8 +167,7 @@ export function registerWorkerStartTerminalTargetTests(): void {
 
   const PTY_ID = 'pty_worker'
 
-  // Why: a shell back at its prompt after the agent exits reads as ready too, so the brief needs the
-  // launched agent found in front, or the shell runs it.
+  // A returned shell also reads ready; prove the launched agent is in front before writing the brief.
   describe('a worker start writes its brief only into the agent it launched', () => {
     const h = createOrchestrationWorkerReleaseHarness()
     afterEach(() => h.cleanup())

@@ -18,6 +18,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
+import { isReviewThreadResolutionInFlight } from '@/store/github/review-thread-resolution-in-flight'
 import { basename } from '@/lib/path'
 import { isBotPRComment } from '../../../../../shared/pr-comment-audience'
 import { setPRBotAuthorOverride } from '@/lib/pr-bot-author-overrides'
@@ -26,18 +28,21 @@ import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
 import type { PRCommentPresentationClasses } from '../pr-comment-presentation'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function CopyButton({
   text,
-  title = 'Copy comment'
+  title = translate(
+    'auto.components.right.sidebar.checks.panel.content.copyComment',
+    'Copy comment'
+  )
 }: {
   text: string
   title?: string
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after this row action unmounts; avoid
-  // starting a reset timer that will outlive the component.
+  // Clipboard IPC may settle after unmount; do not start a reset timer then.
   const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
@@ -97,6 +102,8 @@ export function ResolveButton({
   onResolve: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
 }): React.JSX.Element {
   const [loading, setLoading] = useState(false)
+  // Why: the optimistic move remounts this button in the other section, losing local loading state.
+  const inFlight = useAppStore((s) => isReviewThreadResolutionInFlight(s, threadId))
   const loadingResetTimerRef = useRef<number | null>(null)
 
   const clearLoadingResetTimer = useCallback((): void => {
@@ -127,7 +134,7 @@ export function ResolveButton({
 
   return (
     <span ref={setResolveButtonRootRef} className="contents">
-      {loading ? (
+      {loading || inFlight ? (
         <LoaderCircle className="size-3 animate-spin text-muted-foreground shrink-0" />
       ) : (
         <button
@@ -146,7 +153,6 @@ export function ResolveButton({
   )
 }
 
-/** Format a line range string like "L12" or "L5-L12". */
 export function formatLineRange(comment: PRComment): string | null {
   if (!comment.line) {
     return null
@@ -197,17 +203,6 @@ export function CommentLocationLabel({
   )
 }
 
-/** True for top-level PR conversation comments the viewer can edit or delete. */
-export function isMutablePRConversationComment(comment: PRComment): boolean {
-  if (comment.threadId || comment.path) {
-    return false
-  }
-  if (comment.url && comment.url.includes('pullrequestreview')) {
-    return false
-  }
-  return Number.isSafeInteger(comment.id) && comment.id > 0
-}
-
 export function CommentMoreMenu({
   comment,
   botAuthorOverrides,
@@ -223,8 +218,7 @@ export function CommentMoreMenu({
 }): React.JSX.Element | null {
   const authorLogin = normalizePRCommentAuthorLogin(comment.author)
   const isOverriddenBot = authorLogin.length > 0 && botAuthorOverrides.has(authorLogin)
-  // Why: the override is an escape hatch for bots the heuristics miss, so hide
-  // the action when the author is already detected as a bot without it.
+  // Offer the bot override only for authors heuristics miss or users already overrode.
   const hasMarkAsBot = authorLogin.length > 0 && (isOverriddenBot || !isBotPRComment(comment))
   const hasGoToComment = Boolean(comment.url)
   const hasEdit = Boolean(onStartEdit)
@@ -262,7 +256,7 @@ export function CommentMoreMenu({
         ) : null}
         {hasQueue && (hasGoToComment || hasEdit || hasDelete) ? <DropdownMenuSeparator /> : null}
         {hasGoToComment && (
-          <DropdownMenuItem onSelect={() => window.api.shell.openUrl(comment.url)}>
+          <DropdownMenuItem onSelect={() => openAppHttpLink(comment.url)}>
             <ExternalLink />
             {translate(
               'auto.components.right.sidebar.checks.panel.content.d3923d18fe',
@@ -312,7 +306,6 @@ export function CommentMoreMenu({
   )
 }
 
-/** Build copy text that includes file location context for review comments. */
 export function buildCopyText(comment: PRComment): string {
   if (!comment.path) {
     return comment.body
@@ -333,7 +326,6 @@ export function QueueForAgentButton({
     'auto.components.right.sidebar.checks.panel.content.f8a2c91d04',
     'Queue for agent'
   )
-  // Why: always-visible row action, but ghost styling keeps it from reading as a card-level CTA.
   return (
     <button
       type="button"

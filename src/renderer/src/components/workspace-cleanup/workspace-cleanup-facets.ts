@@ -23,6 +23,7 @@ import {
   type WorkspaceCleanupWorktreeFacts
 } from './workspace-cleanup-host-identity'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
 export type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupFacetSources = {
@@ -176,8 +177,7 @@ export function countWorkspaceCleanupMeasuredRows(rows: readonly WorkspaceCleanu
   return rows.reduce((count, row) => count + (row.sizeBytes === null ? 0 : 1), 0)
 }
 
-// Why: monitoring is still registered background work, so it filters as active — offering
-// such a workspace as idle would invite cleaning up a running dev server (#10997).
+// Registered monitoring is active work; classifying it idle could invite deleting a live dev server (#10997).
 function toWorkspaceCleanupAgentState(
   status: LiveAgentWorktreeStatus | undefined
 ): WorkspaceCleanupAgentState {
@@ -230,6 +230,7 @@ function buildSearchText(facets: Omit<WorkspaceCleanupFacets, 'searchText'>): st
     facets.review.title,
     facets.review.provider,
     facets.gitState,
+    getWorkspaceCleanupGitChipLabel(facets.gitState),
     ...facets.ticketSources,
     ...facets.blockers
   ]

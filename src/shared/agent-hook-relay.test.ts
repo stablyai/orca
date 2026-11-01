@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  AGENT_HOOK_INSTALL_PLUGINS_METHOD,
-  AGENT_HOOK_NOTIFICATION_METHOD,
-  AGENT_HOOK_REQUEST_REPLAY_METHOD,
-  AGENT_HOOK_SHED_FIELDS_KEY,
   ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV,
   createShedSubagentsField,
   isAgentHookSource,
@@ -13,12 +9,6 @@ import {
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 
 describe('agent-hook-relay wire shape', () => {
-  it('exposes stable JSON-RPC method names', () => {
-    expect(AGENT_HOOK_NOTIFICATION_METHOD).toBe('agent.hook')
-    expect(AGENT_HOOK_REQUEST_REPLAY_METHOD).toBe('agent_hook.requestReplay')
-    expect(AGENT_HOOK_INSTALL_PLUGINS_METHOD).toBe('agent_hook.installPlugins')
-  })
-
   it('validates hook sources crossing persisted and relay trust boundaries', () => {
     expect(isAgentHookSource('claude')).toBe(true)
     expect(isAgentHookSource('kimi')).toBe(true)
@@ -64,12 +54,10 @@ describe('restoreShedStatusFields', () => {
     const restored = restoreShedStatusFields(shed, [createShedSubagentsField(roster)], cached)
     expect(restored.subagents).toEqual(roster)
     expect(restored.state).toBe('done')
-    // Only the named field comes back.
     expect(restored.lastAssistantMessage).toBeUndefined()
   })
 
   it('does not restore a shed roster across a prompt identity change', () => {
-    expect(AGENT_HOOK_SHED_FIELDS_KEY).toBe('shedFields')
     const nextTurn = { ...shed, prompt: 'next prompt' }
     const restored = restoreShedStatusFields(
       nextTurn,
@@ -104,17 +92,18 @@ describe('restoreShedStatusFields', () => {
     expect(restoreShedStatusFields(shed, undefined, cached)).toBe(shed)
     expect(restoreShedStatusFields(shed, [], cached)).toBe(shed)
     expect(restoreShedStatusFields(shed, [], cached).lastAssistantMessage).toBeUndefined()
-    // A hostile/garbled marker must not throw or restore.
     expect(restoreShedStatusFields(shed, 'subagents', cached)).toBe(shed)
     expect(restoreShedStatusFields(shed, ['subagents'], cached)).toBe(shed)
     expect(restoreShedStatusFields(shed, [{ toString: () => 'subagents' }], cached)).toBe(shed)
   })
 
-  it('does not overwrite a value the envelope still carries', () => {
-    const fresh: ParsedAgentStatusPayload = { ...shed, lastAssistantMessage: 'fresh' }
-    expect(
-      restoreShedStatusFields(fresh, ['lastAssistantMessage'], cached).lastAssistantMessage
-    ).toBe('fresh')
+  it('does not overwrite a roster the envelope still carries', () => {
+    const freshRoster = [
+      { id: 'child-fresh', agentType: 'reviewer', state: 'working' as const, startedAt: 2 }
+    ]
+    const fresh: ParsedAgentStatusPayload = { ...shed, subagents: freshRoster }
+    const restored = restoreShedStatusFields(fresh, [createShedSubagentsField(roster)], cached)
+    expect(restored.subagents).toEqual(freshRoster)
   })
 
   it('is a no-op with no cached payload for the pane', () => {

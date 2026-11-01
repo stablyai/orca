@@ -11,20 +11,15 @@ import { getCodexManagedScriptFileName } from './codex-hook-identity'
 import { getRealHomeCodexHookHome, type CodexHookHome } from './codex-hook-orca-approvals'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-moves'
 
-/**
- * The opt-out's removal of every Orca entry from the real ~/.codex/hooks.json (or another
- * home Orca edits in place), moving user approvals that shift; the caller removes Orca's own approvals.
- */
+/** Move shifted user approvals; the caller removes Orca's own approvals. */
 export function sweepRealHomeCodexHook(
   home: CodexHookHome = getRealHomeCodexHookHome()
 ): 'removed' | 'unavailable' {
   const { hooksJsonPath } = home
-  // Why: single read — the pre-write generation guard must compare against
-  // the exact bytes this sweep's parse came from.
+  // Guard the exact bytes parsed against concurrent saves.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
   if (!config) {
-    // Why: a failed or malformed read proves no cleanup; keep the managed lane
-    // until a later pass can inspect and remove the real-home entry.
+    // Keep the managed lane until a readable file proves cleanup succeeded.
     return 'unavailable'
   }
   if (!config.hooks || previousRaw === null) {

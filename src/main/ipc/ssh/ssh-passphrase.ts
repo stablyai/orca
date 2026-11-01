@@ -39,14 +39,14 @@ export function requestCredential(
     resolve(value)
   }
   const onAbort = (): void => finish(null)
-  // Why: an abort is the connection's own teardown; only the user's Cancel (or silence) declines.
+  // Teardown abort is not a credential decline; only user cancellation or timeout declines.
   const decline = (): void => {
     if (!pendingRequests.has(requestId)) {
       return
     }
     recordSshCredentialDeclined(targetId, signal)
     finish(null)
-    // Why: one Cancel answers the host; a queued prompt for it would otherwise open next.
+    // One Cancel declines the host, including queued prompts that would otherwise open next.
     for (const [otherId, other] of pendingRequests) {
       if (otherId !== requestId && other.targetId === targetId) {
         other.close()

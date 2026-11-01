@@ -11,53 +11,44 @@ import {
 } from '../../shared/serve-abort-park'
 import { tryReadMetadata } from './metadata'
 import { probeRuntimeListener, type RuntimeListenerProbe } from './runtime-listener-probe'
-import { getCliStatus } from './status'
+import { getOfflineRuntimeAdmission, type OfflineRuntimeAdmission } from './status'
 import { RuntimeClientError } from './types'
 
-/** Who holds this profile, in the execution-boundary vocabulary: only `absent` lets serve start. */
+/** Only an absent owner permits a new serve process. */
 export type ServeProfileVerdict =
   | { verdict: 'live'; evidence: 'rpc' | 'listening'; pid: number | null }
   | { verdict: 'unverifiable'; reason: 'endpoint-held' | 'access-denied'; pid: number | null }
   | { verdict: 'absent' }
 
-/** The part of `orca status` the verdict reads. */
-type ServeProfileStatus = {
-  result: { app: { pid?: number | null }; runtime: { reachable: boolean } }
-}
-
 type PreflightDeps = {
   readMetadata: (userDataPath: string) => RuntimeMetadata | null
-  readStatus: (userDataPath: string) => Promise<ServeProfileStatus>
+  readAdmission: (userDataPath: string) => Promise<OfflineRuntimeAdmission>
   probeListener: (metadata: RuntimeMetadata) => Promise<RuntimeListenerProbe>
 }
 
 const DEFAULT_DEPS: PreflightDeps = {
   readMetadata: tryReadMetadata,
-  readStatus: getCliStatus,
+  readAdmission: getOfflineRuntimeAdmission,
   probeListener: probeRuntimeListener
 }
 
-/**
- * Why before the exec: macOS aborts a second Electron main inside `_RegisterApplication`, before
- * any Orca JavaScript can apply the one-Orca-per-profile rule, so the CLI must decide first.
- * Only a definitive refusal frees the profile; a recorded pid alone proves nothing (pids recycle).
- */
+/** macOS can abort a second Electron before JS runs; only proven absence permits launch. */
 export async function decideServeProfileVerdict(
   userDataPath: string,
   metadata: RuntimeMetadata,
   deps: PreflightDeps = DEFAULT_DEPS
 ): Promise<ServeProfileVerdict> {
-  let status: ServeProfileStatus
+  let status: OfflineRuntimeAdmission
   try {
-    status = await deps.readStatus(userDataPath)
+    status = await deps.readAdmission(userDataPath)
   } catch (error) {
     if (error instanceof RuntimeClientError && error.code === 'runtime_access_denied') {
       return { verdict: 'unverifiable', reason: 'access-denied', pid: metadata.pid ?? null }
     }
     throw error
   }
-  const pid = status.result.app.pid ?? metadata.pid ?? null
-  if (status.result.runtime.reachable) {
+  const pid = status.pid ?? metadata.pid ?? null
+  if (status.reachable) {
     return { verdict: 'live', evidence: 'rpc', pid }
   }
   const probe = await deps.probeListener(metadata)
@@ -89,7 +80,7 @@ function refusalEnvelope(code: string, message: string, data: unknown): RuntimeR
   return { id: 'local', ok: false, error: { code, message, data }, _meta: { runtimeId: null } }
 }
 
-/** Why: `--json` callers parse stdout; recipe stdout is a strict schema channel, so it gets stderr. */
+/** Recipe stdout has a strict schema; refusals belong on stderr. */
 function writeRefusal(
   args: { json?: boolean; recipeJson?: boolean },
   envelope: RuntimeRpcFailure
@@ -101,7 +92,7 @@ function writeRefusal(
   }
 }
 
-/** What separates "this environment" from another: launchd session type, SSH, app sandbox. */
+/** Separate launchd sessions, SSH environments, and app sandboxes. */
 export function serveEnvironmentFingerprint(env: NodeJS.ProcessEnv = process.env): string {
   let manager = 'unknown'
   try {
@@ -123,10 +114,7 @@ export type ElectronServePreflightArgs = {
   force?: boolean
 }
 
-/**
- * Null means start now. A number is the exit code of a refusal already reported. Synchronous
- * when nothing has ever published this profile, so a fresh launch keeps its old timing.
- */
+/** Null permits launch; refusal returns an exit code. Fresh profiles are checked synchronously. */
 export function preflightElectronServe(
   args: ElectronServePreflightArgs,
   userDataPath: string,
@@ -155,7 +143,7 @@ export function preflightElectronServe(
   return refuseIfProfileServed(args, userDataPath, options.deps)
 }
 
-/** The runtime-neutral half: refuse with exit 3 while another Orca serves or may serve this profile. */
+/** Exit 3 means another runtime serves or may serve this profile. */
 export function refuseIfProfileServed(
   args: ElectronServePreflightArgs,
   userDataPath: string,

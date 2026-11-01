@@ -76,34 +76,6 @@ export function settingsMountAdapters(
         dispose: hook.unmount
       }
     },
-    'settings.home-providers': (context) => {
-      const load = modules.load(
-        'mobile/src/home/mobile-home-host-requests.ts'
-      ).fetchMobileHomeTaskProviders
-      let providers: unknown = {}
-      let disposed = false
-      return {
-        action(name) {
-          if (name === 'unmount') {
-            disposed = true
-            return
-          }
-          load(
-            context.client,
-            'host-1',
-            (update: (value: unknown) => unknown) => {
-              providers = update(providers)
-              context.effect('providers', providers)
-            },
-            () => disposed
-          )
-        },
-        state: () => providers,
-        dispose: () => {
-          disposed = true
-        }
-      }
-    },
     'settings.resume-metadata': ({ client }) => {
       const load = modules.load<typeof ResumeMetadata>(
         'mobile/src/agent-history/mobile-agent-history-resume-metadata.ts'

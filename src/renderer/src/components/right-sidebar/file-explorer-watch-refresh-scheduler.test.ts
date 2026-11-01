@@ -54,8 +54,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
   it('dedupes dir refreshes that differ only in path spelling', async () => {
     const { refreshDir, scheduler } = setup()
 
-    // Spellings only the runtime-path normalizer folds: Windows separators and a
-    // trailing slash. Raw-string keying would issue three reads of one dir.
+    // Fold Windows separators/trailing slashes so one directory does not cause three reads.
     scheduler.requestDirRefresh('C:/repo/src/')
     scheduler.requestDirRefresh('C:\\repo\\src')
     scheduler.requestDirRefresh('C:/repo/src')
@@ -68,8 +67,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
   })
 
   it('still refreshes a pending dir that a full refresh does not cover', async () => {
-    // Regression guard: dirCache keys are a strict superset of expanded dirs, so
-    // a full refresh must not subsume pending dir refreshes.
+    // Full refresh covers expanded dirs only; collapsed cache entries still need pending reads.
     const { refreshTree, refreshDir, scheduler } = setup()
 
     scheduler.requestDirRefresh('/repo/collapsed')
@@ -95,9 +93,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
   })
 
   it('re-issues covered dir refreshes when the tree refresh was superseded', async () => {
-    // Regression guard: refreshTree bails without re-reading the expanded dirs when its root
-    // load is superseded. Nothing marks an expanded dir stale, so dropping these would leave
-    // them stale until a manual refresh — collapse/re-expand does not heal it.
+    // Superseded root reads skip expanded dirs; preserve their refreshes because re-expansion will not mark them stale.
     const gate = createDeferred()
     const { refreshDir, scheduler } = setup({
       refreshTree: () => gate.promise,
@@ -116,8 +112,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
   })
 
   it('drops pending dir refreshes when the tree refresh could not read the root', async () => {
-    // Regression guard: a failed root read means the transport is down, so re-issuing buys one
-    // dead timeout per dir and holds inFlight open, blocking every later refresh.
+    // Failed root transport would add dead per-dir timeouts and block future refreshes.
     const gate = createDeferred()
     const { refreshDir, scheduler } = setup({
       refreshTree: () => gate.promise,
@@ -237,9 +232,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
   })
 
   it('stops refreshing queued dirs when cancelled mid-run', async () => {
-    // Regression guard: refreshDir is bound to a live ref that React reassigns
-    // before the effect cleanup runs, so a queued path surviving cancel() would
-    // be read against the NEXT worktree's binding.
+    // Queued reads must stop before React rebinds the live refreshDir ref to the next worktree.
     const gate = createDeferred()
     const refreshDir = vi.fn(async (dirPath: string) => {
       if (dirPath === '/repo/d0') {
@@ -273,8 +266,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     scheduler.requestFullRefresh()
     await vi.advanceTimersByTimeAsync(0)
 
-    // refreshTree already ran against the old expanded set, so this dir was
-    // never re-read and its pending refresh must survive.
+    // The full refresh used the old expanded set; preserve newly expanded dirs' pending reads.
     expanded.add('/repo/late')
     gate.resolve()
     await vi.advanceTimersByTimeAsync(0)

@@ -84,7 +84,7 @@ export function RuntimeEnvironmentsPane({
         'No server connected'
       )
     }
-    // Why the store: the default may be a WSL host, which the listed servers leave out.
+    // The default may be WSL, which this listed-server subset omits.
     return (
       useAppStore.getState().runtimeEnvironments.find((environment) => environment.id === value)
         ?.name ?? 'remote server'
@@ -141,12 +141,12 @@ export function RuntimeEnvironmentsPane({
       return
     }
     consumedAddServerIntentSignalRef.current = addServerIntentSignal
-    // Why: composer deep-links should land on the pairing form, not just the server list.
+    // Composer deep-links must open pairing rather than just the server list.
     setDialog('add')
   }, [addServerIntentSignal, setDialog])
   const managedReload = managedCatalog.reload
   useEffect(() => {
-    // Why: SSH hosts and unfinished moves change on the SSH Hosts page while this one is mounted.
+    // Reload installs after changes to SSH hosts or unfinished moves on other mounted pages.
     if (dialog === 'install') {
       void managedReload().catch(() => {})
     }

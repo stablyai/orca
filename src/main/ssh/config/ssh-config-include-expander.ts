@@ -1,6 +1,7 @@
 import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { homedir, hostname, userInfo } from 'node:os'
 import { posix, win32 } from 'node:path'
+import { compareCodePoints } from '../../../shared/sidebar-list/text-order'
 
 type PathApi = typeof posix | typeof win32
 
@@ -73,8 +74,7 @@ function expandSshConfigFile(
 }
 
 function appendExpandedLines(target: string[], lines: readonly string[]): void {
-  // Why: SSH config includes are user-controlled files, and a large included
-  // file can exceed the JavaScript call argument limit when spread into push.
+  // Avoid spreading user-controlled Include lines; large files can exceed JavaScript argument limits.
   for (const line of lines) {
     target.push(line)
   }
@@ -169,7 +169,8 @@ function resolveIncludePaths(pattern: string, context: IncludeExpansionContext):
   const absolutePattern = resolveIncludePatternPath(withTokens, context)
   if (hasGlobPattern(absolutePattern)) {
     try {
-      const matches = globSync(absolutePattern).sort((left, right) => left.localeCompare(right))
+      // OpenSSH glob(3) orders matches bytewise, not by locale collation.
+      const matches = globSync(absolutePattern).sort(compareCodePoints)
       if (matches.length > MAX_INCLUDE_GLOB_MATCHES) {
         console.warn(
           `[ssh] Include pattern "${absolutePattern}" matched ${matches.length} files; processing first ${MAX_INCLUDE_GLOB_MATCHES}`

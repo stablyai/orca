@@ -28,8 +28,7 @@ export class AcpIncomingRequests {
     this.open.clear()
   }
 
-  // Each handler answers its own request (a permission answers `cancelled`); -32800 only if it
-  // throws. The runtime never answers for a live handler: an answer still being saved must win.
+  // Handlers own cancellation replies; do not preempt an answer still being saved.
   cancel(): void {
     for (const request of this.open.values()) {
       if (!request.cancelled) {
@@ -63,7 +62,7 @@ export class AcpIncomingRequests {
     void Promise.race([
       abandoned,
       Promise.resolve().then(() => {
-        // A cancelled request still reaches its handler, so a permission can answer `cancelled`.
+        // Cancellation still reaches the handler so permissions can answer `cancelled`.
         if (request.closed) {
           throw controller.signal.reason
         }

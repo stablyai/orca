@@ -37,8 +37,7 @@ describe('projectWslMoveState', () => {
     const movedFields = Object.entries(WORKSPACE_SESSION_DISPOSITIONS)
       .filter(([, row]) => row.disposition === 'move')
       .map(([field]) => field)
-      // Focus is re-projected on the host; client-hosted pages and their close intents are
-      // runtime-authored, so a bridge project's partition never holds them.
+      // Focus is reprojected; runtime-authored browser pages/intents cannot live in bridge partitions.
       .filter(
         (field) =>
           ![

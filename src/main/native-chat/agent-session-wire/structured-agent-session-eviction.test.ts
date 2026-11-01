@@ -62,7 +62,6 @@ describe("the route release after a child's exit", () => {
     ])
   })
 
-  // Bookkeeping for a process already gone: none of it may keep the child on record.
   it('reports a failed step with its name and still runs every step after it', async () => {
     const recorded = recordingStructuredAgentSessionLogger()
     const ctx = { ...context(new Error('sink already gone')), logger: recorded.logger }
@@ -77,9 +76,7 @@ describe("the route release after a child's exit", () => {
   })
 })
 
-// The runtime caches ONE sink per session id and hands the same instance to the next attach, so an
-// eviction that closes without discarding leaves a reopened chat wired to a permanently closed
-// sink — it accepts every provider event and publishes none.
+// Cached sinks must be discarded after close so reopened chats can publish through fresh sinks.
 describe('eviction against the real sink cache', () => {
   it('lets the session publish again after it is evicted and reattached', async () => {
     const state = runtimeState()

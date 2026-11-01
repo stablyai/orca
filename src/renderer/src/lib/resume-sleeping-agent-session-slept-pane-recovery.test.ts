@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
@@ -74,8 +74,7 @@ describe('waking panes slept by a manual workspace sleep', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
-  // Why: every slept tab except the active one is unowned, so an active-class record there would
-  // spawn a duplicate tab and strand the original as a bare shell.
+  // Inactive slept tabs are unowned; classifying their records active would spawn duplicates and strand originals as bare shells.
   it('keeps a slept done record on a non-active tab for in-place cold restore', () => {
     const record = makeRecord({ state: 'done' })
     useAppStore.setState({

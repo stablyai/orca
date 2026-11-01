@@ -39,15 +39,13 @@ export type WorkspaceCleanupDismissal = {
   dismissedAt: number
   fingerprint: string
   classifierVersion: number
-  // Why (STA-4343): `repoId::path` ids repeat across hosts, so ignoring one
-  // host's row must not hide another host's. Optional: a dismissal persisted
-  // before this field keeps its legacy id-only match.
+  // Host-qualify repeating repoId::path identities; old dismissals retain their legacy id-only match (STA-4343).
   executionHostId?: ExecutionHostId
 }
 
 export type WorkspaceCleanupUIState = {
   dismissals: Record<string, WorkspaceCleanupDismissal>
-  // Why optional: a host that predates the flat list still writes dismissals-only state.
+  // Optional for older hosts that publish dismissals only.
   browse?: WorkspaceCleanupBrowseState
 }
 
@@ -91,8 +89,7 @@ export type WorkspaceCleanupScanArgs = {
   worktreeIds?: string[]
   skipGitWorktreeIds?: string[]
   scanId?: string
-  // Why: optional so an older client still receives the legacy suggestion-only
-  // broad scan; only a client that renders the full list asks for every row.
+  // Old clients retain suggestion-only broad scans; full-list clients explicitly opt into every row.
   includeAllWorkspaces?: boolean
   /** Re-stat activity for targeted rows; removal preflight needs fresh, batched evidence scans do not. */
   refreshActivity?: boolean
@@ -172,8 +169,7 @@ const WORKSPACE_CLEANUP_QUEUE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = n
 export const WORKSPACE_CLEANUP_FORCE_REMOVE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> =
   new Set(['dirty-files', 'unpushed-commits', 'unknown-base'])
 
-// Why (STA-4686): deleting the active workspace hands focus off like a sidebar delete, and a live
-// agent gets an explicit stop confirmation at delete time, so both are plain labels here.
+// Active deletion uses sidebar-style focus handoff; live agents require stop confirmation at deletion, so neither blocks bulk selection (STA-4686).
 export const WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS: ReadonlySet<WorkspaceCleanupBlocker> =
   new Set(['dismissed'])
 
@@ -291,8 +287,7 @@ export function shouldHideWorkspaceCleanupCandidate(
     dismissal?.worktreeId === candidate.worktreeId &&
     dismissal.fingerprint === candidate.fingerprint &&
     dismissal.classifierVersion === WORKSPACE_CLEANUP_CLASSIFIER_VERSION &&
-    // A host-qualified dismissal hides only its own host's row; a legacy one
-    // (no host recorded) keeps hiding every row that matches the fingerprint.
+    // New dismissals hide only their host’s row; legacy unqualified ones retain fingerprint-only matching.
     (dismissal.executionHostId === undefined ||
       dismissal.executionHostId === getWorkspaceCleanupCandidateHostId(candidate))
   )

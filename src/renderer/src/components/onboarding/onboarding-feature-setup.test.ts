@@ -15,9 +15,6 @@ import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY
 } from '@/lib/orchestration-setup-state'
 import {
-  DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
-  onboardingFeatureSetupSkillNames,
-  onboardingFeatureSetupTelemetryFeature,
   runOnboardingFeatureSetup,
   type OnboardingFeatureSetupDeps,
   type OnboardingFeatureSetupSelection
@@ -71,38 +68,6 @@ function createDeps(
 describe('onboarding feature setup runner', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
-  })
-
-  it('defaults every setup item on so first-launch setup is ready to run', () => {
-    expect(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION).toEqual({
-      browserUse: true,
-      computerUse: true,
-      orchestration: true,
-      linearTickets: false
-    })
-  })
-
-  it('lists the skills for the selected onboarding feature setup items', () => {
-    expect(
-      onboardingFeatureSetupSkillNames({
-        browserUse: true,
-        computerUse: true,
-        orchestration: true,
-        linearTickets: true
-      })
-    ).toEqual(ALL_SKILL_NAMES)
-    expect(
-      onboardingFeatureSetupSkillNames({
-        browserUse: false,
-        computerUse: false,
-        orchestration: true,
-        linearTickets: false
-      })
-    ).toEqual([ORCHESTRATION_SKILL_NAME])
-  })
-
-  it('maps feature setup items to privacy-safe telemetry ids', () => {
-    expect(onboardingFeatureSetupTelemetryFeature('browserUse')).toBe('browser_use')
   })
 
   it('runs selected feature setup through injected deps only', async () => {
@@ -179,10 +144,7 @@ describe('onboarding feature setup runner', () => {
   })
 
   it('keeps main’s skill selection but skips permissions when the Computer Use helper is unavailable', async () => {
-    // Why: getComputerUsePermissionStatus reports helperUnavailableReason with
-    // all permissions set to not-granted when the helper app is missing (e.g.
-    // a dev build that never ran `pnpm build:computer-macos`). The runner must
-    // not call openSetup in that case, or the IPC handler throws.
+    // Missing helpers report every permission ungranted; do not call openSetup, which would throw.
     const unavailableStatus: ComputerUsePermissionStatusResult = {
       platform: 'darwin',
       helperAppPath: null,

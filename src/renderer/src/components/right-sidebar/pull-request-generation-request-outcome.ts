@@ -11,11 +11,7 @@ function isRequestRunning(
   return record?.context.requestId === requestId && record.status === 'running'
 }
 
-/**
- * Settles a generation request's outcome once its record stops running rather than when the request
- * returns: Stop cancels the record at once, and a cancel that cannot reach a slow host must not keep
- * the run's caller (a Create PR click) waiting.
- */
+/** Settle when the record stops, not when the host request returns, so unreachable cancellation cannot stall a Create PR click. */
 export async function settlePullRequestGenerationRequest(
   generationKey: string,
   requestId: number,
@@ -34,12 +30,12 @@ export async function settlePullRequestGenerationRequest(
     resolveIfStopped(useAppStore.getState().pullRequestGenerationRecords)
   })
   try {
-    // Why: the request keeps running after Stop; its late result is dropped by the record's requestId and status checks.
+    // Stop leaves the request running; requestId/status checks discard late results.
     await Promise.race([request, stoppedRunning])
   } finally {
     unsubscribe()
   }
   const record = useAppStore.getState().pullRequestGenerationRecords[generationKey]
-  // Why: failed, stopped, or superseded runs carry no result for this request.
+  // Failed/stopped/superseded requests have no result for this run.
   return { result: record?.context.requestId === requestId ? record.result : null }
 }

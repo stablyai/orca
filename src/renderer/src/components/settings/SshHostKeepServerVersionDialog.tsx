@@ -13,7 +13,7 @@ import {
 } from '../ui/dialog'
 import { getManagedOrcadApi } from './use-managed-server-catalog'
 
-/** An older build changed this host; it is offered moving those additions or keeping the server’s. */
+/** Offer migration of changes made by an older build or retain the managed server’s version. */
 export function hasSshHostSourceChanged(target: SshTarget): boolean {
   return Boolean(getManagedOrcadApi() && target.orcadFence?.sourceChangedAt)
 }

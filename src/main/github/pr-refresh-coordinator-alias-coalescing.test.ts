@@ -123,9 +123,7 @@ describe('pr-refresh-coordinator', () => {
       currentHeadOid: 'head-a'
     })
 
-    // Enqueue the survivor first, then the representative (active coalescing
-    // promotes the latter to representative), then invalidate the representative
-    // so the still-queued entry rebinds to the survivor before draining.
+    // Promote the second alias, then invalidate it to force rebinding to the queued survivor.
     enqueuePRRefresh(survivor, 'active', 80, 1)
     enqueuePRRefresh(representative, 'active', 80, 1)
     enqueuePRRefresh({ ...representative, isArchived: true }, 'active', 80, 1)
@@ -178,8 +176,7 @@ describe('pr-refresh-coordinator', () => {
       fetchedAt: Date.now()
     })
 
-    // Same worktree/branch, moved head, coalescing visible→visible (no promote):
-    // the representative head must track the newest report before the drain.
+    // Coalescing without promotion must still update the representative head.
     reportVisiblePRRefreshCandidates(
       [makeCandidate({ linkedPRNumber: 12, worktreeId: 'wt-a', currentHeadOid: 'head-a' })],
       1,
@@ -341,8 +338,7 @@ describe('pr-refresh-coordinator', () => {
   })
 
   describe('pruneWorktreePRRefreshAliases', () => {
-    // Several local worktrees tracking the same linked PR coalesce into one
-    // queue entry (same refreshKey) whose alias map keeps one entry each.
+    // Linked-PR keys share one queue entry while retaining each worktree alias.
     const LINKED_PR_KEY = 'local::runtime:host::/repo::pr::42'
 
     function makeLinkedCandidate(worktreeId: string): GitHubPRRefreshCandidate {
@@ -368,7 +364,6 @@ describe('pr-refresh-coordinator', () => {
 
       pruneWorktreePRRefreshAliases('wt-1')
       pruneWorktreePRRefreshAliases('wt-3')
-      // Last alias gone -> the whole queue entry is dropped.
       expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(0)
     })
 
@@ -380,12 +375,10 @@ describe('pr-refresh-coordinator', () => {
         _getPRRefreshQueueSizeForTests
       } = await import('./pr-refresh-coordinator')
 
-      // wt-1 becomes the entry's representative candidate (enqueued first).
       enqueuePRRefresh(makeLinkedCandidate('wt-1'), 'visible', 40, 1)
       enqueuePRRefresh(makeLinkedCandidate('wt-2'), 'visible', 40, 1)
       expect(_getPRRefreshQueueSizeForTests()).toBe(1)
 
-      // Removing the representative worktree must not orphan the entry.
       pruneWorktreePRRefreshAliases('wt-1')
       expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
       expect(_getPRRefreshQueueSizeForTests()).toBe(1)

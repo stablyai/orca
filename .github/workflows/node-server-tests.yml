@@ -28,9 +28,9 @@ on:
         type: boolean
         default: false
       fast_runners:
-        description: Use faster runners where the platform and architecture are available
+        description: Use Blacksmith where the platform and architecture are available
         type: boolean
-        default: false
+        default: true
   # Release and dev builds qualify every platform for the template they ship.
   workflow_call:
     inputs:
@@ -43,9 +43,9 @@ on:
         type: boolean
         default: false
       fast_runners:
-        description: Use faster runners where the platform and architecture are available
+        description: Use Blacksmith where the platform and architecture are available
         type: boolean
-        default: false
+        default: true
   # Requalify fresh builds daily; publish missing immutable Windows cache keys.
   schedule:
     - cron: '30 11 * * *'
@@ -153,16 +153,17 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(needs.changes.outputs.runners || '["ubuntu-22.04","ubuntu-24.04-arm","macos-15","macos-15-intel","windows-2022","windows-11-arm"]') }}
-    # Keep platform keys stable for slot names and Windows cross-compilation.
+    # Keep platform keys stable for slot names and Windows cross-compilation. PR and scheduled runs use the
+    # free hosted label; only explicit fast_runners callers rent Blacksmith where it has the platform.
     runs-on: >-
-      ${{ inputs.fast_runners && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15","macos-15-intel":"macos-15-large","windows-2022":"blacksmith-8vcpu-windows-2025","windows-11-arm":"orca-windows-11-arm64-8core"}')[matrix.os] || matrix.os }}
+      ${{ inputs.fast_runners && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
-      JOBS: ${{ inputs.fast_runners && 'max' || '' }}
+      JOBS: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'max' || '' }}
     steps:
       - name: Parallelize Windows checkout
-        if: inputs.fast_runners && runner.os == 'Windows'
+        if: (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && runner.os == 'Windows'
         shell: bash
         run: |
           git config --global checkout.workers 0
@@ -186,6 +187,7 @@ jobs:
         if: runner.os == 'Linux'
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
       - name: Build the last Bun orcad for the cross-runtime tests
         id: bun-orcad
         background: true
@@ -407,7 +409,10 @@ jobs:
           persist-credentials: false
       - name: Trust the checked-out workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # A direct install (6-9s) beats restoring the 417 MB store plus a linking install.
       - uses: ./.github/actions/install-node-dependencies
+        with:
+          cache-pnpm-store: 'false'
       - name: Build and smoke this runner's node-pty prebuild slot under the pinned Node
         run: |
           pnpm build:orcad-prebuilds

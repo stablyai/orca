@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { AcpToolTimeline } from '../../acp/acp-tool-timeline'
 import { PiRpcMessages } from '../../pi/rpc-messages'
 import { PiRpcContextUsage } from '../../pi/rpc-context-usage'

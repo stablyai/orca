@@ -19,7 +19,6 @@ import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
 import { keepFrozen } from './layout-command-commit'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
 
-/** A pane the repair drops, and the pane of the same tab that keeps its terminal. */
 export type DuplicatePtyPaneTransfer = {
   worktreeId: string
   tabId: string
@@ -35,10 +34,9 @@ function boundByOtherTab(session: WorkspaceSessionState, tabId: string, ptyId: s
   )
 }
 
-/** The partition with one pane per terminal, and the owner transfers that implies; null when none. */
 export function planDuplicatePtyPaneRepair(
   session: WorkspaceSessionState,
-  /** A workspace whose stored session must stay as it is (a paused WSL move). */
+  /** Paused WSL sessions must keep their stored trees. */
   isFrozen: (worktreeId: string) => boolean = () => false
 ): { session: WorkspaceSessionState; transfers: DuplicatePtyPaneTransfer[] } | null {
   let layouts: Record<string, TerminalLayoutSnapshot> | null = null
@@ -46,14 +44,14 @@ export function planDuplicatePtyPaneRepair(
   for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
     const repaired = normalizeTerminalLayoutPtyOwnership(layout)
     const worktreeId = findWorktreeIdForTab(session, tabId)
-    // The write keeps a frozen workspace's stored tree, so its owners must not move either.
+    // Frozen trees must retain ownership too.
     if (!repaired.changed || (worktreeId && isFrozen(worktreeId))) {
       continue
     }
     layouts ??= { ...session.terminalLayoutsByTabId }
     layouts[tabId] = repaired.snapshot
     for (const transfer of resolveTerminalLayoutPtyOwnershipTransfers(layout, repaired.snapshot)) {
-      // The window's transfer guards: only pane keys that parse, and no terminal another tab binds.
+      // Match renderer guards: valid pane keys and no terminal bound by another tab.
       if (
         worktreeId &&
         !tabId.includes(':') &&
@@ -68,7 +66,7 @@ export function planDuplicatePtyPaneRepair(
   return layouts ? { session: { ...session, terminalLayoutsByTabId: layouts }, transfers } : null
 }
 
-/** The dropped pane's sleep record and incarnation follow it, as the window's transfer moves them. */
+/** Sleep records and incarnations follow the dropped pane's ownership transfer. */
 function rekeyPaneSessionRecords(
   session: WorkspaceSessionState,
   move: DuplicatePtyPaneTransfer
@@ -94,12 +92,7 @@ function rekeyPaneSessionRecords(
   }
 }
 
-/**
- * Repairs every non-runtime partition holding a terminal in two panes of one tab. Every transfer
- * runs before the write, so disk never drops a pane key whose owners have not moved yet. `transfer`
- * returns false for a pane whose owner is not this tab's to move (its records stay), and throws
- * when a move failed, which skips the write so the next start retries.
- */
+/** Transfer owners before writing; false retains records, thrown failures skip persistence for retry. */
 export function repairDuplicatePtyPanesMutation(
   context: TerminalTopologyCommitContext,
   transfer: (move: DuplicatePtyPaneTransfer) => boolean
@@ -107,7 +100,7 @@ export function repairDuplicatePtyPanesMutation(
   return () => {
     const plans = context
       .hostIds()
-      // A paired server's partition is a display copy of that server's own layout.
+      // Paired-server partitions are display copies of server-owned layouts.
       .filter((hostId) => !hostId.startsWith('runtime:'))
       .flatMap((hostId: ExecutionHostId) => {
         const plan = planDuplicatePtyPaneRepair(
@@ -152,7 +145,7 @@ export function repairDuplicatePtyPanesMutation(
     }
     return {
       value: plans.length,
-      // Latest write first: a restore only undoes a value no later write replaced.
+      // Undo newest-first, preserving any later replacement writes.
       rollback: () => {
         for (let index = restores.length - 1; index >= 0; index -= 1) {
           restores[index]?.()

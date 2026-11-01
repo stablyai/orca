@@ -20,15 +20,11 @@ type WorktreeBaseWatcherEvent = {
 export type WorktreeBaseChangeClass = {
   structureRepoIds: string[]
   gitStatusRepoIds: string[]
-  // logs/HEAD and other true head-move triggers: notify Source Control like
-  // status churn, but distinct so only these re-read head identities. An index
-  // rewrite cannot move HEAD, so it must never land here.
+  // Head moves refresh status plus head identity; index churn must stay status-only.
   headIdentityRepoIds: string[]
-  // Which slice of the common dir's head identities this event can have moved.
-  // Every classification must state one; `EMPTY` is a claim that no head moved.
+  // Every classification states its scope; EMPTY proves no head moved.
   headIdentityScope: WorktreeHeadIdentityScope
-  // Whose status the gitStatus/headIdentity repo ids can have changed, so only
-  // that worktree's Source Control refreshes; `FULL` means unattributable.
+  // Attribute status to worktrees; FULL means the change cannot be narrowed.
   gitStatusScope: WorktreeHeadIdentityScope
 }
 
@@ -71,8 +67,7 @@ function isRootCompletionEvent(parts: string[], config: WorktreeBaseRepoWatchCon
   return parts.length === 1
 }
 
-// Why: root creation can arrive before Git finishes registration; the `.git`
-// marker is the checkout-complete signal, while deeper file churn is ignored.
+// Root creation may precede Git registration; .git marks checkout completion.
 function isGitMarkerCompletionEvent(parts: string[], config: WorktreeBaseRepoWatchConfig): boolean {
   if (config.nestWorkspaces) {
     return (
@@ -107,32 +102,18 @@ function matchingBaseRepoIds(
   return repoIds
 }
 
-// Why: branch switches and commits in the primary checkout rewrite these
-// top-level common-dir files; matching them keeps root-checkout branch/status
-// as fresh as linked worktrees. Deeper churn (objects, refs/heads, logs) is
-// ignored.
-// `config.worktree` is structural because it is the only file whose write
-// flips `git worktree list`'s sparse flag, and no status/commit path touches
-// it — so it cannot re-open the index-churn fanout this classifier closes, and
-// it can move no head either. A rewritten `packed-refs` by contrast can move
-// any branch oid without touching a single admin dir, so no cached head
-// survives it.
+// Primary metadata affects checkout state; config.worktree changes only listing structure, while packed-refs can move any head.
 const GIT_COMMON_PRIMARY_STRUCTURAL_SCOPES = new Map<string, WorktreeHeadIdentityScope>([
   ['HEAD', PRIMARY_HEAD_IDENTITY_SCOPE],
   ['packed-refs', FULL_HEAD_IDENTITY_SCOPE],
   ['config.worktree', EMPTY_HEAD_IDENTITY_SCOPE]
 ])
 const GIT_COMMON_LINKED_STRUCTURAL_FILES = new Set(['HEAD', 'gitdir', 'locked', 'config.worktree'])
-// `HEAD` carries the branch and `gitdir` the checkout path; `locked` and
-// `config.worktree` are written by `git worktree lock` / sparse toggles, neither
-// of which can move a head.
+// HEAD/gitdir affect identity; locked/config.worktree change structure without moving heads.
 const GIT_COMMON_LINKED_HEAD_SOURCE_FILES = new Set(['HEAD', 'gitdir'])
 const GIT_COMMON_LINKED_STATUS_FILES = new Set(['index'])
 
-// `logs/HEAD` is the head-identity trigger for head moves that rewrite no
-// watched leaf (commit --amend, reset --soft): every ref update through a
-// checkout appends there, while `git status` churn never touches it. It is
-// kept separate from index churn so only these events re-read head identities.
+// logs/HEAD captures amend/reset moves without index/HEAD leaf writes; status-only churn never appends it.
 function isHeadLogParts(parts: string[], offset: number): boolean {
   return parts.length === offset + 2 && parts[offset] === 'logs' && parts[offset + 1] === 'HEAD'
 }
@@ -199,14 +180,12 @@ function headIdentityChange(
     gitStatusRepoIds: [],
     headIdentityRepoIds: repoIds,
     headIdentityScope,
-    // A head move rewrites a shared branch ref (e.g. a commit to `main`), which
-    // is any checkout's local upstream; refs/heads leaves are not polled, so fan out.
+    // Shared branch moves can change any checkout's local upstream; refs/heads are not polled directly.
     gitStatusScope: FULL_HEAD_IDENTITY_SCOPE
   }
 }
 
-// Why: Git records linked worktrees under the common dir's `worktrees`
-// metadata, which is lower churn than watching checkout contents.
+// Git common worktree metadata avoids watching high-churn checkout contents.
 function classifyGitCommonEvent(
   target: WorktreeBaseWatchTarget,
   event: WorktreeBaseWatcherEvent
@@ -218,8 +197,7 @@ function classifyGitCommonEvent(
   const repoIds = allRepoIds(target)
   if (parts.length === 1) {
     if (parts[0] === 'worktrees') {
-      // The admin root itself appearing, vanishing, or being swapped means the
-      // watcher's view of every entry is suspect.
+      // Admin-root replacement invalidates the watcher's view of every entry.
       return structuralChange(repoIds, FULL_HEAD_IDENTITY_SCOPE)
     }
     const primaryScope = GIT_COMMON_PRIMARY_STRUCTURAL_SCOPES.get(parts[0])
@@ -230,8 +208,7 @@ function classifyGitCommonEvent(
       return gitStatusChange(repoIds, PRIMARY_HEAD_IDENTITY_SCOPE)
     }
     if (parts[0] === 'config') {
-      // Status-tier: an external `git push -u` writes only branch upstreams here,
-      // which can move no HEAD or listing but can change any checkout's status.
+      // External push -u changes shared upstream config without moving a head or listing.
       return gitStatusChange(repoIds, FULL_HEAD_IDENTITY_SCOPE)
     }
     return NO_CHANGE
@@ -247,9 +224,7 @@ function classifyGitCommonEvent(
     return NO_CHANGE
   }
   if (parts.length === 2) {
-    // Name the entry as well as the listing: a remove+add reusing one admin dir
-    // name coalesces into a single refresh, and the listing alone would keep
-    // serving the removed worktree's cached head.
+    // Reused admin-directory names need identity invalidation beyond a listing-only refresh.
     return event.type === 'update'
       ? NO_CHANGE
       : structuralChange(

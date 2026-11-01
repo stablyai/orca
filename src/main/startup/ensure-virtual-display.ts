@@ -12,15 +12,11 @@ import {
   xvfbSocketPath
 } from './x-display-artifacts'
 
-// Why: headless `orca serve` backs browser panes with offscreen BrowserWindows.
-// On Linux, Electron has no display platform without an X server and segfaults
-// when such a window loads a page (verified: --headless/--ozone-platform=headless
-// also crash; only a virtual display works). So before app.whenReady, ensure a
-// virtual X display via Xvfb when none is present. macOS/Windows need nothing.
+// Linux offscreen serve needs X11 before ready; Electron headless/Ozone-headless also crash on page load, so provision Xvfb when absent.
 
 const XVFB_STARTUP_TIMEOUT_MS = 5_000
 const XVFB_POLL_INTERVAL_MS = 50
-// Why a range: accounts on one machine each need their own display (#26602); :99 stays the first choice.
+// Accounts need separate displays (#26602); prefer :99, then search a range.
 const FIRST_VIRTUAL_DISPLAY_NUMBER = 99
 const VIRTUAL_DISPLAY_NUMBER_COUNT = 32
 const XVFB_INSTALL_GUIDANCE =
@@ -29,11 +25,13 @@ const XVFB_INSTALL_GUIDANCE =
 let xvfbProcess: ChildProcess | null = null
 
 function configureHeadlessServeChromiumFlags(): void {
-  // Why: cloud sandboxes often expose a tiny /dev/shm; Chromium treats an
-  // exhausted shared-memory mount as ENOSPC and can fatal in utility services
-  // such as font_data. Keep browser panes on disk-backed temp storage instead.
+  // Small sandbox /dev/shm mounts can exhaust and crash Chromium utility services; use disk-backed temp.
   app.commandLine.appendSwitch('disable-dev-shm-usage')
-  // Why: externally managed displays are commonly Xvfb too; a GPU-process fork can trap before serve readiness.
+  // Opt-in for hosts that expose a GPU to this process (#22450).
+  if (process.env.ORCA_SERVE_GPU === '1') {
+    return
+  }
+  // External displays may also be Xvfb; GPU forks can trap before serve readiness.
   app.disableHardwareAcceleration()
   app.commandLine.appendSwitch('disable-gpu')
 }
@@ -46,17 +44,11 @@ function isManagedDisplayNumber(displayNumber: number): boolean {
 }
 
 function sleepSync(ms: number): void {
-  // Why: this runs in the synchronous pre-whenReady startup path, so block
-  // without spinning the CPU or spawning a process.
+  // Pre-ready startup is synchronous; wait without CPU spinning or a child process.
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
-// Why not socket presence alone: a stale socket we failed to unlink (a root-owned one left by a
-// crashed system Xvfb, which `User=orca` serve cannot remove) still exists after our own Xvfb
-// refused to bind the display. Treating that as ready sets DISPLAY to a dead server and Chromium
-// dies in Ozone init with SIGSEGV instead of reporting an unusable display.
-// Why our PID in the lock: another account's server may win the same free number between our
-// check and our Xvfb's bind, and its live lock must not read as our display being ready.
+// Require our live lock PID plus socket: stale foreign sockets and bind-race winners must not count as our ready Xvfb.
 type DisplayStart = 'ready' | 'taken' | 'timeout'
 
 function waitForDisplayReady(
@@ -72,7 +64,7 @@ function waitForDisplayReady(
     if (lockPid !== xvfbPid) {
       return isManagedDisplayServerAlive(displayNumber) ? 'taken' : null
     }
-    // Why the liveness probe too: lock and socket both survive a SIGKILLed Xvfb.
+    // Socket and lock survive SIGKILL; verify server liveness too.
     return isUnixSocket(xvfbSocketPath(displayNumber)) && isManagedDisplayServerAlive(displayNumber)
       ? 'ready'
       : null
@@ -87,7 +79,6 @@ function waitForDisplayReady(
   return probe() ?? 'timeout'
 }
 
-// Validate display syntax and local sockets before Chromium reaches Ozone initialization.
 export function hasUsableLinuxDisplay(env: NodeJS.ProcessEnv = process.env): boolean {
   if (process.platform !== 'linux') {
     return true
@@ -134,15 +125,13 @@ function hasUsableXDisplay(value: string | undefined): boolean {
   }
 
   const localDisplay = /^(?:unix\/?)?:(\d+)(?:\.\d+)?$/i.exec(display)
-  // Remote endpoints cannot be proven with local socket checks.
+  // Local socket checks cannot prove remote endpoint reachability.
   if (!localDisplay) {
     return /^\S+:\d+(?:\.\d+)?$/.test(display)
   }
   const displayNumber = Number(localDisplay[1])
   if (isUnixSocket(xvfbSocketPath(displayNumber))) {
-    // Why :99 is never treated as foreign: Orca's own teardown unlinks the lock before the socket,
-    // so a lockless :99 socket is our own half-finished cleanup even when DISPLAY names it. Higher
-    // numbers stay foreign-checked: a container may publish them without a lock.
+    // Own lockless :99 may be torn teardown; higher configured displays may be externally published without a lock.
     return displayNumber === FIRST_VIRTUAL_DISPLAY_NUMBER
       ? isManagedDisplayServerAlive(displayNumber)
       : isForeignDisplayServerAlive(displayNumber)
@@ -151,8 +140,7 @@ function hasUsableXDisplay(value: string | undefined): boolean {
 }
 
 function hasUsableWaylandDisplay(env: NodeJS.ProcessEnv): boolean {
-  // Why: WAYLAND_SOCKET is an already-connected fd handed over by the compositor, so there is no
-  // path to stat and WAYLAND_DISPLAY may be unset entirely. Its presence IS the display.
+  // WAYLAND_SOCKET is an inherited connected FD, so no display name/path is required.
   const inheritedFd = env.WAYLAND_SOCKET?.trim()
   if (inheritedFd && /^\d+$/.test(inheritedFd)) {
     return true
@@ -169,11 +157,7 @@ function hasUsableWaylandDisplay(env: NodeJS.ProcessEnv): boolean {
   return Boolean(runtimeDir && isAbsolute(runtimeDir) && isUnixSocket(join(runtimeDir, display)))
 }
 
-/**
- * Ensure a usable X display for headless Linux serve. Returns true when a
- * display is available (pre-existing or freshly started), false when browser
- * panes cannot be supported on this host. Safe to call on any platform.
- */
+/** Safe across platforms; false means headless Linux serve cannot support browser panes. */
 export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boolean }): boolean {
   if (!options.isServeMode || process.platform !== 'linux') {
     return process.platform !== 'linux'
@@ -181,9 +165,7 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
 
   configureHeadlessServeChromiumFlags()
 
-  // Offscreen serve windows require X11; Wayland alone still needs Xvfb.
-  // Never delete artifacts from an externally managed display: a container may
-  // expose its socket without the host lock/PID being visible here.
+  // Offscreen serve needs X11 even with Wayland. Never remove externally managed socket artifacts.
   const configuredDisplay = process.env.DISPLAY?.trim()
   if (configuredDisplay) {
     if (hasUsableXDisplay(configuredDisplay)) {
@@ -206,18 +188,15 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
       continue
     }
     if (ownership === 'mine') {
-      // Why: reuse this account's display ONLY if a live X server actually backs it. A crashed
-      // prior run can leave an orphan socket; trusting it by path alone would advertise browser
-      // support that then fails at tab creation.
+      // Reuse only a live server: orphan sockets would advertise browser support that crashes on first tab.
       if (isManagedDisplayServerAlive(displayNumber)) {
         if (isUnixSocket(xvfbSocketPath(displayNumber))) {
           process.env.DISPLAY = `:${displayNumber}`
           return true
         }
-        // Why: a live lock without its socket is a server still starting; its lock is not ours to remove.
+        // A live lock without its socket belongs to a server still starting; leave it alone.
         continue
       }
-      // Why: stale socket/lock — clean them up so Xvfb can rebind the display.
       removeStaleDisplayArtifacts(displayNumber)
     }
     const started = startVirtualDisplay(displayNumber)
@@ -242,14 +221,14 @@ function startVirtualDisplay(displayNumber: number): DisplayStart | 'unavailable
       [display, '-screen', '0', '1280x1024x24', '-nolisten', 'tcp', '-terminate'],
       {
         stdio: 'ignore',
-        // Why: foreground Ctrl-C must not kill Xvfb before Electron disconnects.
+        // Foreground Ctrl+C must not kill Xvfb before Electron disconnects.
         detached: true
       }
     )
     xvfbProcess.once('error', (error) => {
       console.warn('[serve] Xvfb failed to start:', error instanceof Error ? error.message : error)
     })
-    // PATH lookup failures emit asynchronously, but a successful spawn has a PID immediately.
+    // Successful spawn supplies PID immediately; failed PATH lookup reports asynchronously.
     if (xvfbProcess.pid === undefined) {
       xvfbProcess = null
       return 'unavailable'
@@ -280,7 +259,7 @@ function startVirtualDisplay(displayNumber: number): DisplayStart | 'unavailable
 
   process.env.DISPLAY = display
 
-  // Why: -terminate only takes effect after Xvfb accepts its first client.
+  // -terminate waits for a first client; retain explicit cleanup until Electron is ready.
   process.once('exit', stopVirtualDisplay)
   app.once('ready', () => process.removeListener('exit', stopVirtualDisplay))
 
@@ -291,9 +270,7 @@ export function stopVirtualDisplay(): void {
   if (xvfbProcess && !xvfbProcess.killed) {
     try {
       xvfbProcess.kill()
-    } catch {
-      // already exiting
-    }
+    } catch {}
   }
   xvfbProcess = null
 }

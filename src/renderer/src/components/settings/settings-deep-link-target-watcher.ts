@@ -1,11 +1,6 @@
-/**
- * A deep link can name a row that does not exist yet: panes such as Remote Orca
- * Servers render their rows only after an async fetch resolves. The scroll
- * effect parks its target in a ref, but nothing re-runs it when those rows
- * finally mount, so this watcher reports the moment they do.
- */
+/** Async rows can mount after the scroll effect; observe them so pending deep links resume. */
 
-/** Give up eventually; a target that never mounts must not leave an observer alive. */
+/** Bound observer lifetime when a target never mounts. */
 const TARGET_WAIT_TIMEOUT_MS = 5000
 
 export type SettingsDeepLinkTargetWatch = {
@@ -13,7 +8,6 @@ export type SettingsDeepLinkTargetWatch = {
 }
 
 export function watchForSettingsDeepLinkTarget(args: {
-  /** Subtree to observe; falls back to the document body when the pane has no scroll container yet. */
   root: HTMLElement | null
   isTargetPresent: () => boolean
   onTargetPresent: () => void

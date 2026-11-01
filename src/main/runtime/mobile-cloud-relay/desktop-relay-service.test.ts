@@ -66,8 +66,7 @@ describe('liveness safety net lifecycle', () => {
   afterEach(() => vi.useRealTimers())
 
   it('fences hard: the tick stops on fence and re-arms on the next auth mutation', () => {
-    // Why: a tick surviving the pre-sign-out fence could catch the window
-    // before the profile wipe and briefly resurrect a broker.
+    // Surviving ticks must not resurrect the broker between sign-out fencing and profile wipe.
     vi.useFakeTimers()
     const coordinator = {
       reconcile: vi.fn(),

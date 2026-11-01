@@ -10,6 +10,7 @@ import {
 } from '../../../shared/keybindings'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
+import { localizedKeybindingTitle } from '@/components/settings/keybinding-title-copy'
 
 const STORAGE_PREFIX = 'orca.terminalShortcutCapturedNotice.'
 const NOTICE_DURATION_MS = 20_000
@@ -62,17 +63,15 @@ export function showTerminalShortcutCaptureNotification({
     getEffectiveKeybindingsForAction(actionId, platform, keybindings),
     platform
   )
-  // Why: this toast stays up longer than normal, so keep it compact while still
-  // exposing the captured shortcut and the edit path.
+  // Keep this longer-lived toast compact while showing shortcut and edit path.
   toast.message(
     translate(
       'auto.lib.terminal.shortcut.capture.notification.141ad6c004',
       'Terminal shortcut handled'
     ),
     {
-      description: `${definition.title} (${bindingLabel})`,
-      // Why: this is the user's one-time rebind path for a captured shortcut; it
-      // needs enough reading time without becoming persistent chrome.
+      description: `${localizedKeybindingTitle(definition)} (${bindingLabel})`,
+      // Allow reading time for one-time shortcut rebinding without making the toast persistent.
       duration: NOTICE_DURATION_MS,
       dismissible: true,
       className: '!w-[420px] !max-w-[calc(100vw-2rem)] !gap-2 !py-2 !pl-3 !pr-2',

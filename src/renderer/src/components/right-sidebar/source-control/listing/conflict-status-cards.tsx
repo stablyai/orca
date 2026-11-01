@@ -92,7 +92,6 @@ export function ConflictSummaryCard({
         {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
           <Button
             type="button"
-            // Why: abort is the escape hatch, so use the quiet outline action instead of reading as destructive.
             variant="outline"
             size="sm"
             className="mt-1.5 h-7 w-full text-xs"
@@ -110,12 +109,14 @@ export function ConflictSummaryCard({
   )
 }
 
-// Why: separate from ConflictSummaryCard because a rebase/merge/cherry-pick can be in progress with no conflicts (between steps, or resolved but pre-continue).
+// Paused rebase/merge/cherry-pick operations may need recovery even with no conflicted files.
 export function OperationBanner({
   conflictOperation,
   isRecoveryBusy = false,
   isAbortingOperation = false,
   onAbortOperation,
+  isCompletingMerge = false,
+  onCompleteMerge,
   sourceControlAiActionsVisible = false,
   onResolveWithAI
 }: {
@@ -123,6 +124,8 @@ export function OperationBanner({
   isRecoveryBusy?: boolean
   isAbortingOperation?: boolean
   onAbortOperation?: (operation: GitConflictOperation) => void
+  isCompletingMerge?: boolean
+  onCompleteMerge?: () => void
   sourceControlAiActionsVisible?: boolean
   onResolveWithAI?: () => void
 }): React.JSX.Element {
@@ -148,6 +151,7 @@ export function OperationBanner({
             )
 
   const Icon = conflictOperation === 'rebase' ? GitPullRequestArrow : GitMerge
+  const canCompleteMerge = conflictOperation === 'merge' && !!onCompleteMerge
 
   return (
     <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
@@ -156,14 +160,33 @@ export function OperationBanner({
         <span className="text-xs font-medium text-foreground">{label}</span>
       </div>
       <div className="mt-2 space-y-1.5">
-        {/* Paused operations can need recovery without unmerged paths. */}
-        {sourceControlAiActionsVisible && onResolveWithAI ? (
+        {canCompleteMerge ? (
           <Button
             type="button"
             variant="default"
             size="sm"
             className="h-7 w-full text-xs"
-            disabled={isAbortingOperation || isRecoveryBusy}
+            disabled={isCompletingMerge || isAbortingOperation || isRecoveryBusy}
+            onClick={onCompleteMerge}
+          >
+            {isCompletingMerge ? (
+              <RefreshCw className="size-3.5 animate-spin" />
+            ) : (
+              <GitMerge className="size-3.5" />
+            )}
+            {translate(
+              'auto.components.right.sidebar.source.control.conflict.status.cards.completeMerge',
+              'Complete merge'
+            )}
+          </Button>
+        ) : null}
+        {sourceControlAiActionsVisible && onResolveWithAI ? (
+          <Button
+            type="button"
+            variant={canCompleteMerge ? 'outline' : 'default'}
+            size="sm"
+            className="h-7 w-full text-xs"
+            disabled={isAbortingOperation || isRecoveryBusy || isCompletingMerge}
             onClick={onResolveWithAI}
           >
             <Sparkles className="size-3.5" />
@@ -173,11 +196,10 @@ export function OperationBanner({
         {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
           <Button
             type="button"
-            // Why: abort is the escape hatch, so use the quiet outline action instead of reading as destructive.
             variant="outline"
             size="sm"
             className="h-7 w-full text-xs"
-            disabled={isAbortingOperation}
+            disabled={isAbortingOperation || isCompletingMerge}
             onClick={() => onAbortOperation(conflictOperation)}
           >
             {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}

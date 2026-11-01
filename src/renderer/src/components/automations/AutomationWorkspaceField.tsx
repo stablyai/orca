@@ -92,8 +92,7 @@ export function AutomationWorkspaceField({
           />
         ) : (
           <CreateFromPicker
-            // Why: branch search state belongs to the selected project,
-            // so repo switches should reset it before the next paint.
+            // Reset project-specific branch search before paint when the project changes.
             key={draft.projectId}
             repoId={draft.projectId}
             repoMap={repoMap}

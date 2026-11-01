@@ -9,13 +9,8 @@ import {
 } from './schedule-driver'
 import type { RecordingScenario } from './recording-scenario'
 
-/**
- * One golden and the scenarios it is recorded from. Derived here rather than inside the suites so
- * the census and `rpc:record --prune` read the same derivation that records the file: a restated
- * expansion could agree with itself while disagreeing with what was recorded.
- *
- * Every `title` starts with the golden id, so `rpc:record <id>` can select it by test name.
- */
+// Share derivation with census/pruning so all consumers enumerate the recordings actually written.
+// Prefix titles with golden ids so rpc:record can select by test name.
 export type DerivedGolden = {
   id: string
   title: string
@@ -30,7 +25,6 @@ export type DerivedGolden = {
 const SIBLING_SCHEDULE_BASES = [
   'b3',
   'settings-new-tab-ssh',
-  'settings-home-providers-fulfilled',
   'settings-workspace-context-fulfilled',
   'settings-resume-metadata-fulfilled',
   'settings-task-hydration-fulfilled',
@@ -74,10 +68,8 @@ function omitRetiredInventoryAdmission(scenario: RecordingScenario): RecordingSc
   }
 }
 
-/** The manifest scenario a pilot golden expands from, which its suite also mounts and mutates. */
 export type PilotGolden = DerivedGolden & { scenario: RecordingScenario }
 
-/** One golden per manifest scenario, recorded as written. */
 export function pilotGoldens(manifest: readonly RecordingScenario[]): PilotGolden[] {
   return manifest.map((scenario) => ({
     id: scenario.id,
@@ -88,7 +80,6 @@ export function pilotGoldens(manifest: readonly RecordingScenario[]): PilotGolde
   }))
 }
 
-/** Every golden generated from a family's base scenario: reply matrices and owned schedules. */
 export function familyGoldens(manifest: readonly RecordingScenario[]): DerivedGolden[] {
   const families = new Map<string, RecordingScenario[]>()
   for (const scenario of manifest) {
@@ -171,7 +162,6 @@ export function familyGoldens(manifest: readonly RecordingScenario[]): DerivedGo
   return goldens
 }
 
-/** Every golden the oracle freezes, pilot and family alike. */
 export function derivedGoldens(manifest: readonly RecordingScenario[]): DerivedGolden[] {
   return [...pilotGoldens(manifest), ...familyGoldens(manifest)]
 }

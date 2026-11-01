@@ -1,8 +1,4 @@
-/**
- * An isolated real sshd for opt-in OpenSSH tests (ORCA_REAL_OPENSSH_TEST=1): its own host and
- * client keys, ssh_config and ControlPath under one temp dir, so nothing reads or writes `~/.ssh`.
- * The client config multiplexes through a ControlMaster, as a user's own ssh_config would.
- */
+/** Opt-in ORCA_REAL_OPENSSH_TEST=1 isolates keys/config/ControlPath from ~/.ssh and supplies a user-style ControlMaster. */
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import {
   chmodSync,
@@ -63,7 +59,7 @@ export type RealOpenSshFixture = {
   configFile: string
   target: SshTarget
   buildOptions: () => SystemSshBuildArgsOptions
-  /** Runs the client `ssh` against the fixture's config (`-O forward`, `-O cancel`, `-O check`). */
+  /** Fixture-configured client for master control commands. */
   ssh: (args: readonly string[]) => string
   /** New logins fail from here on; the open master keeps working, like a login it cannot repeat. */
   refuseNewLogins: () => void
@@ -73,7 +69,7 @@ export type RealOpenSshFixture = {
 export async function startRealOpenSshFixture(
   extra: { sshd?: readonly string[]; client?: readonly string[] } = {}
 ): Promise<RealOpenSshFixture> {
-  // Why /tmp: a ControlPath under macOS's long TMPDIR overflows the unix socket path limit.
+  // macOS TMPDIR can overflow the ControlPath Unix socket limit; use /tmp there.
   const dir = mkdtempSync(join(process.platform === 'darwin' ? '/tmp' : tmpdir(), 'orca-ros-'))
   execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', join(dir, 'hostkey')])
   execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', join(dir, 'clientkey')])
@@ -99,7 +95,7 @@ export async function startRealOpenSshFixture(
       ...(extra.sshd ?? [])
     ].join('\n')
   )
-  // Why a space: a quoted ControlPath with one is valid, and recovery must keep it whole.
+  // A valid ControlPath may contain spaces; recovery must preserve them.
   mkdirSync(join(dir, 'control sockets'))
   const controlPath = join(dir, 'control sockets', 'cm-%C')
   const configFile = join(dir, 'ssh_config')
@@ -171,7 +167,7 @@ export async function startRealOpenSshFixture(
       const exited = new Promise((resolve) => sshd.once('exit', resolve))
       sshd.kill('SIGTERM')
       await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 2_000))])
-      // Why the wait: the master and sshd's session children finish exiting after these return.
+      // Master/session children can outlive these commands; wait before removing their files.
       await new Promise((resolve) => setTimeout(resolve, 500))
       rmSync(dir, { recursive: true, force: true, maxRetries: 3 })
     }

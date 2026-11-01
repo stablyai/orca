@@ -1,6 +1,3 @@
-// Choosing how a chat send lands when the agent's TUI input line still holds a
-// launch-context draft that Orca itself injected.
-
 import { buildAgentTuiClearInputForText } from '../../../../shared/agent-tui-input-clear'
 import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
 
@@ -31,10 +28,7 @@ function composerContinuationIsEmpty(lines: string[], promptIndex: number, glyph
   return true
 }
 
-/**
- * Whether the rendered composer prompt is observably empty. Placeholder text,
- * unrelated edits, and unreadable screens are all unconfirmed.
- */
+/** Only an observably empty prompt confirms clearing; placeholders, edits and unreadable screens do not. */
 export function agentInputLineCleared(screen: string | null | undefined): boolean {
   if (!screen) {
     return false
@@ -49,10 +43,7 @@ export function agentInputLineCleared(screen: string | null | undefined): boolea
   return false
 }
 
-/**
- * A serialized screen cannot prove the whole parked draft still matches: visual
- * wrapping loses logical-line boundaries. Always replace from the composer copy.
- */
+/** Visual wrapping loses logical lines, so replace from the composer copy rather than trusting a screen match. */
 export function planNativeChatLaunchDraftSend(args: {
   /** Text Orca injected into the TUI line, or null when nothing is parked there. */
   seededText: string | null | undefined
@@ -68,8 +59,7 @@ export function planNativeChatLaunchDraftSend(args: {
   }
 }
 
-/** What a composer send needs: which path to take, and the clear/confirm bytes
- *  the ordinary send paths should use when it is a draft replacement. */
+/** Select replacement clearing and optional confirmation for the normal send paths. */
 export function resolveNativeChatLaunchDraftSend(args: {
   launchDraft: { agent: string; text: string } | null | undefined
   launchDraftResolved: boolean
@@ -80,9 +70,7 @@ export function resolveNativeChatLaunchDraftSend(args: {
   sendOptions: { clearInput: string; confirmCleared: () => boolean } | undefined
 } {
   const { launchDraft, launchDraftResolved, agent, readScreen } = args
-  // A resolved draft was already submitted or cleared TUI-side, so nothing of
-  // ours is on the line any more — treating it as parked would clear or submit
-  // a buffer that no longer holds it.
+  // A resolved prefill no longer owns TUI input; clearing again could erase the user’s replacement.
   const seededText =
     launchDraft && launchDraft.agent === agent && !launchDraftResolved ? launchDraft.text : null
   const plan = planNativeChatLaunchDraftSend({ seededText })

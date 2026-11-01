@@ -1,4 +1,5 @@
-/** One row of the workspace card: an icon, a title over a detail line, and optional trailing state. */
+import { ArrowUpRight } from 'lucide-react'
+
 export function BrowserNewTabRow({
   icon,
   title,
@@ -16,14 +17,18 @@ export function BrowserNewTabRow({
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full min-w-0 items-center gap-3 rounded-lg px-2 py-1.5 text-left outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      className="group/row flex w-full min-w-0 items-center gap-3.5 rounded-xl px-3 py-2.5 text-left outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
     >
-      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted">{icon}</span>
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted group-hover/row:bg-background group-focus-visible/row:bg-background">
+        {icon}
+      </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm text-foreground">{title}</span>
         <span className="block truncate text-xs text-muted-foreground">{detail}</span>
       </span>
-      {trailing}
+      {trailing ?? (
+        <ArrowUpRight className="size-4 shrink-0 text-muted-foreground opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100" />
+      )}
     </button>
   )
 }

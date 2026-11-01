@@ -311,7 +311,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
 
-    // Fire an event for an unknown paneKey while not ready — must NOT call setAgentStatus.
     onSetListenerRef.current({
       paneKey: FUTURE_PANE_KEY,
       state: 'working',
@@ -364,7 +363,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const snapshot: AgentStatusSetData[] = []
     const worktrees: AppState['worktreesByRepo'][string] = []
     const tabsByWorktree: AppState['tabsByWorktree'] = {}
-    // Tab-bar entries, so a layout-owner build leaves the titles to main.
     const unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] = {}
     const terminalLayoutsByTabId: AppState['terminalLayoutsByTabId'] = {}
     for (let index = 0; index < paneCount; index += 1) {
@@ -374,7 +372,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       const paneKey = makePaneKey(tabId, leafId)
       worktrees.push(makeWorktree({ id: worktreeId, repoId: TEST_REPO.id }))
       tabsByWorktree[worktreeId] = [
-        makeTab({ id: tabId, worktreeId, title: 'Pi', ptyId: `pty-${index}` })
+        makeTab({ id: tabId, worktreeId, title: 'Hermes', ptyId: `pty-${index}` })
       ]
       unifiedTabsByWorktree[worktreeId] = [makeUnifiedTab({ id: tabId, worktreeId, groupId: 'g' })]
       terminalLayoutsByTabId[tabId] = {
@@ -387,7 +385,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         worktreeId,
         state: 'waiting',
         prompt: `remote prompt ${index}`,
-        agentType: 'pi',
+        agentType: 'hermes',
         receivedAt: 1_700_000_000_000 + index,
         stateStartedAt: 1_700_000_000_000 + index
       })
@@ -453,10 +451,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await vi.waitFor(() => {
       expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
       expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.title).toBe(
-        'Pi - action required'
+        'Hermes - action required'
       )
-      // A layout-owner build's main derives the titles from its own agent status, and its frame
-      // (not modelled here) draws them: the window sends and writes none.
+      // Main derives layout-owner tab titles; its unmodeled frames draw them without renderer writes.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeFalsy()
       } else {
@@ -672,8 +669,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(tabIdLookupCount).toBe(paneCount)
     expect(getMigrationUnsupportedSnapshot).toHaveBeenCalledTimes(1)
 
-    // The routing index is memoized on the tab map, so a second snapshot against the same tabs
-    // reuses it instead of re-indexing every owner.
+    // Repeated snapshots with unchanged tabs must reuse the ownership index.
     tabIdLookupCount = 0
     resolveUnsupportedSnapshot(unsupportedSnapshot)
     await vi.waitFor(() => {

@@ -95,12 +95,7 @@ function compileGlobSegment(pattern: string): GlobSegment {
 
 let globMatchSteps = 0
 
-/**
- * Monotonic count of matcher steps taken since process start.
- *
- * Budget tests assert on a delta so an algorithmic regression fails deterministically instead of
- * riding on how fast the machine running the suite happens to be.
- */
+/** Monotonic matcher work counter lets budget tests measure deltas independent of machine speed. */
 export function readNestedRepoGlobMatchSteps(): number {
   return globMatchSteps
 }
@@ -144,8 +139,7 @@ function pathSegmentsMatch(
   memoize: boolean
 ): boolean {
   const memoStride = candidateSegments.length + 1
-  // Allocating the table costs more than the walk it would save on the overwhelmingly common
-  // shapes, so only rules that can actually revisit a pair pay for it.
+  // Memoize only patterns that can revisit a pair; ordinary walks cost less than a table.
   const visited = memoize ? new Map<number, boolean>() : undefined
   const matchFrom = (patternIndex: number, candidateIndex: number): boolean => {
     globMatchSteps++
@@ -174,8 +168,7 @@ function pathSegmentsMatch(
 function compilePathSegments(pattern: string): GlobSegment[] {
   const segments: GlobSegment[] = []
   for (const segment of pattern.split('/')) {
-    // `**` spans zero or more segments, so `**/**` accepts exactly what `**` accepts: collapsing a
-    // run keeps one adversarial line from handing the path matcher dozens of forking segments.
+    // Consecutive ** matches are equivalent; collapse them to bound adversarial path branching.
     if (segment === '**') {
       if (segments.at(-1) !== '**') {
         segments.push(segment)
@@ -204,8 +197,7 @@ function parseGitignoreRules(content: string, baseSegments: string[]): IgnoreRul
       return {
         pattern,
         segmentPatterns,
-        // One `**` walks the candidate segments once; two or more reach the same (pattern,
-        // candidate) pair by many routes, which is what turns the walk exponential.
+        // Multiple ** segments can revisit pattern/candidate pairs exponentially.
         memoizePathWalk: segmentPatterns.filter((segment) => segment === '**').length > 1,
         negate,
         basenameOnly,

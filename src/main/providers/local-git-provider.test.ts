@@ -208,7 +208,12 @@ const cases: ParityCase[] = [
     'gitExecFileAsync',
     [['status'], { cwd: WT, timeout: 5 }]
   ],
-  ['getRemoteFileUrl', (p) => p.getRemoteFileUrl(WT, 'a', 3), 'getRemoteFileUrl', [WT, 'a', 3]],
+  [
+    'getRemoteFileUrl',
+    (p) => p.getRemoteFileUrl(WT, 'a', 3, 8),
+    'getRemoteFileUrl',
+    [WT, 'a', 3, 8, {}]
+  ],
   ['getRemoteCommitUrl', (p) => p.getRemoteCommitUrl(WT, 'abc'), 'getRemoteCommitUrl', [WT, 'abc']]
 ]
 
@@ -231,8 +236,8 @@ describe('createLocalGitProvider', () => {
     await call(createLocalGitProvider({ wslDistro: 'Ubuntu' }))
     const args = git[fnName].mock.calls[0]
     const options = args.at(-1)
-    if (fnName === 'getRemoteFileUrl' || fnName === 'getRemoteCommitUrl') {
-      // These read the Windows-hosted git directly, exactly as the local arm does today.
+    if (fnName === 'getRemoteCommitUrl') {
+      // URL reads require Windows-hosted Git readiness, matching local execution.
       expect(git.awaitWindowsHostGitEnvironmentReady).toHaveBeenCalledWith({ cwd: WT })
       return
     }

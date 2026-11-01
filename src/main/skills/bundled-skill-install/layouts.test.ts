@@ -51,12 +51,11 @@ type Layout = {
   name: string
   arrange: (home: SkillHome) => Promise<void>
   ops: [Label, BundledSkillOpKind, BundledSkillLeaveReason?][]
-  /** What the CLI prints for the skill; leaves are warnings, never failures. */
+  /** CLI warning leaves do not imply failure. */
   text: string
   badge?: 'update' | null
   agents?: SkillInstallProviderId[]
   force?: Label[]
-  /** Update rather than install: only locations that already hold the skill. */
   installedOnly?: boolean
   filesystem?: BundledSkillFilesystem
   /** Paths outside every target that the run must leave byte-identical. */
@@ -349,10 +348,9 @@ describe('bundled skill install across real layouts', () => {
     expect(plan.planDigest).toBe(preview.planDigest)
     const summary = summarizeBundledSkillOutcomes(result)
     expect(summary.skills.map((skill) => skill.line)).toEqual([layout.text])
-    // Leaving a folder alone is a warning; only a failed or changed op fails the CLI.
+    // Refused folders warn; only failed or changed operations fail the CLI.
     expect(summary.exitCode).toBe(0)
 
-    // Files after: what each op promised, and nothing else moved.
     for (const op of plan.skills[0].ops) {
       if (op.kind === 'link' || op.content === 'link') {
         expect(await realpath(op.path)).toBe(await realpath(home.shared))
@@ -373,7 +371,6 @@ describe('bundled skill install across real layouts', () => {
       expect(lockBefore).toBe(NPX_LOCK)
     }
 
-    // A second preview finds nothing left to do except what it already refused.
     const again = await previewBundledSkillInstall({ ...input, force: [] })
     expect(again.skills[0].ops.every((op) => op.kind === 'keep' || op.kind === 'leave')).toBe(true)
   })
@@ -406,7 +403,7 @@ describe('bundled skill install edges', () => {
     expect(await snapshot(join(project, '.agents', '.orca-skill-backups'))).toBe('missing')
   })
 
-  // Why: a file symlink needs Developer Mode on Windows; the product never makes one.
+  // This test needs file symlinks (Developer Mode on Windows); product installs use directory links.
   it.skipIf(process.platform === 'win32')(
     'moves a backup across filesystems by copying, verifying, then removing',
     async () => {
@@ -436,7 +433,6 @@ describe('bundled skill install edges', () => {
       [join(project, '.agents', 'skills', NAME), 'write', undefined],
       [join(project, '.claude', 'skills', NAME), 'update', undefined]
     ])
-    // Project scope never raises the update badge.
     expect(summarizeBundledSkillPlan(plan).badge).toBeNull()
     expect(await snapshot(home.shared)).toBe('missing')
   })
@@ -456,7 +452,6 @@ describe('bundled skill install edges', () => {
     expect(await readFile(join(home.claude, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
     expect(await readlink(profileSkills)).toBe(dirname(home.claude))
 
-    // The other spelling's preview is now stale, so its run writes nothing.
     const stale = await installBundledSkills(viaHome, previewViaHome.planDigest)
     expect(stale.skills).toEqual([{ name: NAME, status: 'changed', ops: [] }])
   })
@@ -481,7 +476,6 @@ describe('bundled skill install edges', () => {
       'leave',
       'other'
     ])
-    // After a Replace the folder holds this build's bytes, which settles despite the receipt.
     await previewAndInstall(serviceInput(home, { force: [home.shared] }))
     expect(opsOf(await previewBundledSkillInstall(serviceInput(home)))[0]).toEqual([
       home.shared,

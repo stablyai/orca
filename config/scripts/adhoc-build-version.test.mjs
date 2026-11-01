@@ -14,10 +14,7 @@ describe('createAdhocBuildVersion', () => {
     )
   })
 
-  // Why seconds matter: adhoc builds are dispatched on demand, so two people
-  // cutting from different branches inside the same minute is ordinary. At
-  // hourly's resolution the second one would collide on the tag and die after its
-  // whole pack-and-notarize run.
+  // Concurrent branch builds need second-resolution tags; minute collisions otherwise fail after packaging/notarization.
   it('distinguishes two builds cut in the same minute', () => {
     const first = createAdhocBuildVersion('1.4.160', new Date('2026-07-28T14:05:02Z'))
     const second = createAdhocBuildVersion('1.4.160', new Date('2026-07-28T14:05:41Z'))
@@ -32,9 +29,7 @@ describe('createAdhocBuildVersion', () => {
     expect(compareAppVersions(version, '1.4.160')).toBeLessThan(0)
   })
 
-  // Why this ordering is load-bearing: an adhoc build is somebody's unlanded
-  // branch. It must sit below every other channel of the same base version so no
-  // routine check can walk a developer onto one — only an explicit pinned jump.
+  // Unlanded adhoc builds must sort below routine channels; only explicit pinned jumps may select them.
   it('sorts below the hourly build of the same base version', () => {
     expect(
       compareAppVersions(
@@ -61,9 +56,7 @@ describe('normalizeAdhocLabel', () => {
     expect(normalizeAdhocLabel('origin/wasm-terminal')).toBe('wasm-terminal')
   })
 
-  // Why replaced rather than rejected: the label is free text from whoever ran
-  // the workflow. A `•` would forge the title's field separator and a newline
-  // would break the `$GITHUB_OUTPUT` line the workflow parses.
+  // Dispatch label separators/newlines could forge title fields or GITHUB_OUTPUT lines.
   it('neutralizes characters that would corrupt the title or the output line', () => {
     expect(normalizeAdhocLabel('a • b')).toBe('a-b')
     expect(normalizeAdhocLabel('a\nname=evil')).toBe('a-name-evil')
@@ -91,9 +84,7 @@ describe('formatAdhocReleaseName', () => {
     expect(name('2026-07-31T20:54:00Z')).toBe('1.4.163 • wasm-terminal • Jul 31, 1:54PM • e698241')
   })
 
-  // Why both sides of DST: the tag's stamp is UTC and the title is Pacific, so
-  // the offset between them is not a constant. A test pinned to one season would
-  // pass all summer and start failing in November.
+  // Tag is UTC, title is Pacific: test both DST offsets or a seasonal failure stays hidden.
   it('follows the Pacific offset across DST', () => {
     expect(name('2026-01-15T02:30:00Z')).toContain(' Jan 14, 6:30PM ')
     expect(name('2026-07-31T07:00:00Z')).toContain(' Jul 31, 12:00AM ')

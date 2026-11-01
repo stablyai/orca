@@ -66,7 +66,10 @@ describe('reusing a prepared Windows relay addon', () => {
 
   it('refuses missing, truncated and wrong-architecture binaries', () => {
     const options = prepared()
-    for (const bytes of [Buffer.from('spawnOutsideJob'), peImage({ arch: 'arm64' })]) {
+    for (const bytes of [
+      Buffer.from('spawnOutsideJob'),
+      Buffer.concat([peImage({ arch: 'arm64' }), Buffer.from('spawnOutsideJob')])
+    ]) {
       writeFileSync(options.addonPath, bytes)
       expect(canReusePreparedAddon(options)).toBe(false)
     }

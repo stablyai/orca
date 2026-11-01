@@ -32,7 +32,6 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 
 type Pending = Parameters<typeof stamp>[1]
 
-/** Replays events through the real reducer, collecting what each step would log. */
 type Replayed = {
   session: MobileWebShellSession
   trace: ShellLogTrace
@@ -137,7 +136,6 @@ describe('shell lifecycle log lines', () => {
       'web-shell-flow Web shell: activating app | source=download',
       `web-shell-page Web shell: page painted | source=download build=${BUILD} activatedMs=1234`
     ])
-    // The generation directory names a device path and never reaches the log.
     expect(JSON.stringify(lines)).not.toContain('/Users/someone')
   })
 
@@ -225,7 +223,7 @@ describe('shell stall lines', () => {
     const opened = replay([{ type: 'gates-changed', gates: gates() }])
     expect(opened.session.state.kind).toBe('checking')
     expect(stall(opened)).toMatchObject({ detail: 'gates=open cache=unread' })
-    // An empty cache leaves `cached` null, so only the trace can tell the manifest wait apart.
+    // With empty cache, trace alone distinguishes a manifest wait from an unfinished cache read.
     const awaitingManifest = replay([{ type: 'cache-read', generation: null }], opened)
     expect(stall(awaitingManifest)).toMatchObject({ detail: 'gates=open cache=read' })
   })
@@ -255,7 +253,6 @@ describe('shell stall lines', () => {
     expect(stall(refusing)).toMatchObject({
       detail: `build=${BUILD} page ready=yes readyAsks=3 documentLoaded=yes`
     })
-    // A replacement document starts its own count.
     const reloaded = replay([{ type: 'document-started' }, { type: 'page-ready' }], refusing)
     expect(stall(reloaded)).toMatchObject({
       detail: `build=${BUILD} page ready=yes readyAsks=1 documentLoaded=no`

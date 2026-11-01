@@ -16,16 +16,13 @@ vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
-// The fakes' fixed jitter puts the known-offline wait at 5039ms.
 const HOST_OFFLINE_WAIT_MS = 5_039
-// ...and the attach-timeout redial at 1003ms.
 const ATTACH_TIMEOUT_REDIAL_MS = 1_003
 
 function attachTimeout(): RelayOuterError {
   return new RelayOuterError(4404, true, MOBILE_RELAY_PHONE_CLOSE_REASON.HOST_ATTACH_TIMEOUT)
 }
 
-// A cell that refuses every relay dial with `failure` until `succeedAfter` dials.
 function cellRefusing(failure: () => Error, succeedAfter = Number.POSITIVE_INFINITY) {
   const logical = new FakeLogicalClient('disconnected', 'lan')
   const migrateTo = logical.migrateTo.getMockImplementation()!
@@ -102,7 +99,6 @@ describe('relay dial refused because the desktop data link missed its attach dea
     expect(openRelay).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
     expect(openRelay).toHaveBeenCalledTimes(3)
-    // The quick redial is spent for this failure streak.
     await vi.advanceTimersByTimeAsync(HOST_OFFLINE_WAIT_MS - 1)
     expect(openRelay).toHaveBeenCalledTimes(3)
     expect(resolveRelay).not.toHaveBeenCalled()

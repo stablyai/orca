@@ -64,7 +64,7 @@ export function disposeClosedEditorModels(
     }
   )
 }
-/** Closed edit views whose dirty record is kept, with the model the record owns. */
+/** Closed dirty views retain the model owned by their kept record. */
 export function keptClosedEditorTabs<TModel>(
   pending: ReadonlyMap<string, ClosedEditorTab>,
   kept: EditorBufferKeptRecords | undefined,

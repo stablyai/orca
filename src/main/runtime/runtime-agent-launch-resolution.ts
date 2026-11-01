@@ -2,15 +2,20 @@ import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import { createHash } from 'node:crypto'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ClaudeAgentTeamsMode } from '../../shared/claude-agent-teams-tmux-compat'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import {
   executionRuntimePlatform,
   remoteExecutionPlatform
 } from '../../shared/agent-launch-runtime'
-import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import {
+  getTuiAgentLaunchCommand,
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { recognizeAgentLaunchCommand } from '../../shared/agent-command-line-intent'
 
 export function mergeTerminalEnvDeletionKeys(
   first: readonly string[] | undefined,
@@ -84,6 +89,28 @@ export function resolveBareAgentLaunchCommand(args: {
   }
 
   return null
+}
+
+/** Why: flags keep `omp --model x` unmanaged, but the pane is still omp's for tui-idle and identity. */
+export function resolveLaunchCommandPaneAgent(command: string | null | undefined): TuiAgent | null {
+  const recognized = recognizeAgentLaunchCommand(command)
+  return recognized && isTuiAgent(recognized.agent) ? recognized.agent : null
+}
+
+/** The agent a fresh launch's command starts; a command override keeps the planned agent. No command starts none. */
+export function resolveLaunchedAgent(
+  command: string | null | undefined,
+  plannedAgent: unknown
+): TuiAgent | null {
+  if (!command) {
+    return null
+  }
+  const recognized = resolveLaunchCommandPaneAgent(command)
+  // A known agent run headless (`claude --print`) has no composer; only an unrecognized override keeps the plan.
+  if (recognized || recognizeAgentLaunchCommand(command, { includeHeadlessOneShot: true })) {
+    return recognized
+  }
+  return isTuiAgent(plannedAgent) ? plannedAgent : null
 }
 
 export function inferCapturedClaudeAgentTeamsMode(

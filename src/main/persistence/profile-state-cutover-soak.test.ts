@@ -74,7 +74,7 @@ function createProfile(profileId: string, theme: string): MigratedProfile {
     JSON.stringify({
       ...fixture,
       settings: { ...fixture.settings, theme },
-      // Keep enough unrelated data to make repeated complete-document commits meaningful.
+      // Unrelated payload makes complete-document commit costs meaningful.
       soakExtension: { bytes: 'x'.repeat(96 * 1024), nullable: null }
     })
   )
@@ -169,9 +169,10 @@ describe('profile-state candidate cutover soak', () => {
         throw new Error('cutover fixture lost its automation')
       }
 
+      const expectedFontSize = reopened.store.getSettings().terminalFontSize + 1
       reopened.store.updateSettings({
         theme: round % 2 === 0 ? 'dark' : 'light',
-        terminalFontSize: reopened.store.getSettings().terminalFontSize + 1
+        terminalFontSize: expectedFontSize
       })
       reopened.store.updateUI({ activeView: round % 2 === 0 ? 'tasks' : 'terminal' })
       reopened.store.patchWorkspaceSession({
@@ -198,6 +199,20 @@ describe('profile-state candidate cutover soak', () => {
       reopened.store.freezeWrites()
 
       const restarted = reopen(profile)
+      expect(restarted.store.getSettings().theme).toBe(round % 2 === 0 ? 'dark' : 'light')
+      expect(restarted.store.getSettings().terminalFontSize).toBe(expectedFontSize)
+      expect(restarted.store.getUI().activeView).toBe(round % 2 === 0 ? 'tasks' : 'terminal')
+      expect(restarted.store.getWorkspaceSession().browserUrlHistory).toEqual(
+        expect.arrayContaining([
+          {
+            url: `https://fixture.test/soak/${round}`,
+            normalizedUrl: `https://fixture.test/soak/${round}`,
+            title: `Soak ${round}`,
+            lastVisitedAt: round + 10,
+            visitCount: 1
+          }
+        ])
+      )
       expect(restarted.store.getWorkspaceSession().activeTabId).toBe('tab-local')
       expect(restarted.store.getWorkspaceSession('ssh:build-host').activeTabId).toBe('tab-remote')
       expect(restarted.store.getFolderWorkspace(folderWorkspace.id)).toMatchObject({

@@ -59,10 +59,7 @@ export function readWorkspaceRecord<TRecord>(
     : store?.getWorktreeMeta(worktreeId)
 }
 
-/**
- * A pane with no SSH host runs on this machine. With same-id twins the raw-id row may be the other
- * twin's, so such a pane reads and writes the local copy by name.
- */
+/** Unhosted panes are local; with same-id twins, raw-id rows may belong elsewhere, so address the local copy explicitly. */
 function localTwinHostId(
   store: Pick<WorkspaceRecordStore<unknown, never>, 'getRepos'>,
   worktreeId: string

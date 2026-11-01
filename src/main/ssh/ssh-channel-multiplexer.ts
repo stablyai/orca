@@ -42,10 +42,7 @@ type RequestHandler = (params: Record<string, unknown>) => unknown
 
 type MultiplexerDisposeReason = 'shutdown' | 'connection_lost'
 
-// Why: the renderer uses the message/code to distinguish temporary disconnects
-// (show reconnection overlay) from permanent shutdown (show error toast), so
-// every producer of a disposal rejection must mint it here — a divergent copy
-// silently downgrades the relay-lost UI to a bug-report toast.
+// Centralize disposal errors so every producer preserves reconnect-overlay vs permanent-shutdown handling.
 export function createSshDisposalError(reason: MultiplexerDisposeReason): Error & { code: string } {
   const lost = reason === 'connection_lost'
   const err = new Error(
@@ -58,13 +55,10 @@ export function createSshDisposalError(reason: MultiplexerDisposeReason): Error 
 const REQUEST_TIMEOUT_MS = 30_000
 const MAX_ORDINARY_UNACKED_TIMESTAMPS = 4095
 const MAX_UNACKED_TIMESTAMPS = MAX_ORDINARY_UNACKED_TIMESTAMPS + 1
-// Why: a tick gap far beyond the interval means the process was paused
-// (system sleep, App Nap timer throttling) — not that the link is dead (#7773).
+// Long tick gaps mean sleep/App Nap, not link death (#7773).
 const WAKE_GAP_MS = KEEPALIVE_SEND_MS * 3
 
-// Why: callers branch on "the request timed out" (fall back to a slower path,
-// report a host issue). Matching the message text made every unrelated error
-// carrying the same phrase take the timeout branch.
+// Use typed request timeout identity; matching wording misclassified unrelated failures.
 export const SSH_MUX_REQUEST_TIMEOUT_CODE = 'SSH_MUX_REQUEST_TIMEOUT'
 
 function sshMuxRequestTimeoutError(method: string, timeoutMs: number): Error {
@@ -73,16 +67,7 @@ function sshMuxRequestTimeoutError(method: string, timeoutMs: number): Error {
   })
 }
 
-/**
- * True when a request may have run on the host despite failing here.
- *
- * A response deadline and a link declared lost are the same verdict: the frame reached the wire and
- * the peer's answer did not come back, so the work is `unverifiable`, never absent. Declaring a
- * wedged link lost at TIMEOUT_MS turned what used to surface as SSH_MUX_REQUEST_TIMEOUT into
- * CONNECTION_LOST, so callers that phrase the verdict to a user must branch on this rather than on
- * the timeout alone or they silently start reporting absence
- * (docs/reference/ssh-execution-boundary.md).
- */
+/** Timeout or connection loss can hide completed host work. Both mean unverifiable, never absent; callers must classify this broader outcome (docs/reference/ssh-execution-boundary.md). */
 export function isSshRequestOutcomeUnverifiable(error: unknown): boolean {
   const code = error instanceof Error ? (error as Error & { code?: unknown }).code : undefined
   return code === SSH_MUX_REQUEST_TIMEOUT_CODE || code === 'CONNECTION_LOST'
@@ -100,9 +85,7 @@ export class SshChannelMultiplexer {
   private pendingRequests = new Map<number, PendingRequest>()
   private notificationHandlers: NotificationHandler[] = []
   private requestHandlers = new Map<string, RequestHandler>()
-  // Why: per-method dispatch map keeps streaming consumers (fs.streamChunk,
-  // fs.streamEnd, fs.streamError) from accreting string-match logic in the
-  // generic notification listener that already serves fs.changed.
+  // Dispatch streaming subscribers by method without adding branches to the generic fs.changed listener.
   private methodNotificationHandlers = new Map<string, Set<MethodNotificationHandler>>()
   private disposeHandlers: ((reason: 'shutdown' | 'connection_lost') => void)[] = []
   private connectionHealthTimer: ReturnType<typeof setInterval> | null = null
@@ -110,11 +93,9 @@ export class SshChannelMultiplexer {
   private disposeReason: 'shutdown' | 'connection_lost' | null = null
   private decoderReadPaused = false
 
-  // Track the oldest unacked outgoing message timestamp
   private unackedTimestamps = new Map<number, number>()
 
-  // Why: liveness probes (#7773) resolve on the first frame of any kind —
-  // a keepalive ack proves the relay round-trip without a full RPC.
+  // Any inbound frame, including keepalive ACK, proves resume liveness without an RPC.
   private livenessProbeWaiters: { succeed: () => void; fail: () => void }[] = []
 
   constructor(transport: MultiplexerTransport) {
@@ -196,14 +177,10 @@ export class SshChannelMultiplexer {
     }
   }
 
-  // Why: the session needs to know when the relay channel dies so it can
-  // auto-reconnect. Without this, a relay channel close (e.g. --connect
-  // bridge exits) leaves the session in 'ready' state with a dead mux
-  // and no recovery path — the SSH connection stays up so onStateChange
-  // never fires the reconnect logic.
+  // Channel closure must notify the session: SSH itself may remain connected, so connection-state handlers cannot recover a dead mux.
   onDispose(handler: (reason: 'shutdown' | 'connection_lost') => void): () => void {
     if (this.disposed) {
-      // Why: a late subscriber must still learn the channel died; retaining it would leak the closure (#11953).
+      // Notify late subscribers immediately instead of retaining dead-session closures (#11953).
       try {
         handler(this.disposeReason ?? 'shutdown')
       } catch {
@@ -220,9 +197,6 @@ export class SshChannelMultiplexer {
     }
   }
 
-  /**
-   * Send a JSON-RPC request and wait for the response.
-   */
   async request(
     method: string,
     params?: Record<string, unknown>,
@@ -261,8 +235,7 @@ export class SshChannelMultiplexer {
         }
         pending.cleanup()
         this.pendingRequests.delete(id)
-        // Why: Space scans can run long on SSH hosts. Let the relay stop its
-        // local filesystem work instead of only dropping the client promise.
+        // Cancel host-side filesystem work too; rejecting only this promise leaves scans running.
         this.notify('rpc.cancel', { id })
         const error = new Error(`Request "${method}" was cancelled`) as Error & { name: string }
         error.name = 'AbortError'
@@ -272,8 +245,7 @@ export class SshChannelMultiplexer {
         const pending = this.pendingRequests.get(id)
         if (pending) {
           pending.cleanup()
-          // Why: request timeouts should stop relay-side long-running work,
-          // not just detach the client from the eventual response.
+          // Stop host-side work on timeout rather than merely ignoring its reply.
           this.notify('rpc.cancel', { id })
         }
         this.pendingRequests.delete(id)
@@ -294,9 +266,6 @@ export class SshChannelMultiplexer {
     })
   }
 
-  /**
-   * Send a JSON-RPC notification (no response expected).
-   */
   notify(method: string, params?: Record<string, unknown>): void {
     if (this.disposed) {
       return
@@ -334,11 +303,7 @@ export class SshChannelMultiplexer {
     )
   }
 
-  /**
-   * Send a fresh keepalive and resolve true when any frame arrives before the
-   * timeout. Used on system resume to distinguish a link that survived sleep
-   * from a dead one before tearing the session down (#7773).
-   */
+  /** Probe after resume before teardown: any fresh inbound frame proves a surviving relay link (#7773). */
   probeLiveness(timeoutMs: number): Promise<boolean> {
     if (this.disposed) {
       return Promise.resolve(false)
@@ -389,8 +354,7 @@ export class SshChannelMultiplexer {
 
     this.writer.dispose(this.disposedError())
     this.unackedTimestamps.clear()
-    // Why: relay teardown can race with late provider registration; disposed
-    // muxes must not retain provider/session closures through subscribers.
+    // Clear subscribers during teardown so late provider registration cannot leak session closures.
     this.notificationHandlers.length = 0
     this.methodNotificationHandlers.clear()
     this.decoder.reset()
@@ -409,8 +373,6 @@ export class SshChannelMultiplexer {
   isDisposed(): boolean {
     return this.disposed
   }
-
-  // ── Private ───────────────────────────────────────────────────────
 
   private disposedError(): Error & { code: string } {
     return createSshDisposalError(this.disposeReason ?? 'shutdown')
@@ -440,13 +402,11 @@ export class SshChannelMultiplexer {
   }
 
   private handleFrame(frame: DecodedFrame): void {
-    // Why: any decoded frame proves the relay round-trip is alive; resolve
-    // pending resume probes before ordinary dispatch (#7773).
+    // Resolve resume probes on any decoded frame before ordinary dispatch (#7773).
     for (const waiter of this.livenessProbeWaiters.splice(0)) {
       waiter.succeed()
     }
 
-    // Update ack tracking
     if (frame.id > this.highestReceivedSeq) {
       this.highestReceivedSeq = frame.id
     }
@@ -543,16 +503,13 @@ export class SshChannelMultiplexer {
 
   private handleNotification(msg: JsonRpcNotification): void {
     const params = msg.params ?? {}
-    // Why: handlers may unsubscribe during iteration (via the returned disposer
-    // from onNotification / onNotificationByMethod), which mutates the live
-    // collection and skips the next handler. Iterating a snapshot prevents that.
+    // Snapshot handlers because unsubscribe during dispatch would skip successors.
     const snapshot = Array.from(this.notificationHandlers)
     for (const handler of snapshot) {
       try {
         handler(msg.method, params)
       } catch (err) {
-        // Why: relay notifications arrive on the SSH stream callback; one
-        // bad subscriber must not escape as a main-process uncaught exception.
+        // Contain subscriber exceptions inside the SSH stream callback so they cannot crash main.
         console.warn(
           `[ssh-mux] Notification handler failed for ${msg.method}: ${
             err instanceof Error ? err.message : String(err)
@@ -567,8 +524,7 @@ export class SshChannelMultiplexer {
         try {
           handler(params)
         } catch (err) {
-          // Why: file-stream and PTY listeners are per-method subscribers; keep
-          // the mux alive even if one consumer rejects a malformed notification.
+          // A malformed file/PTY notification must not kill the mux when its consumer throws.
           console.warn(
             `[ssh-mux] Method notification handler failed for ${msg.method}: ${
               err instanceof Error ? err.message : String(err)
@@ -579,17 +535,14 @@ export class SshChannelMultiplexer {
     }
   }
 
-  // Why: one 5s interval owns both the periodic keepalive and dead-link check,
-  // halving per-connection timers while preserving their send-then-check order.
+  // One timer preserves keepalive-send-before-health-check order while halving per-connection timers.
   private startConnectionHealthTimer(): void {
     let lastTickAt = Date.now()
     this.connectionHealthTimer = setInterval(() => {
       const now = Date.now()
       const sinceLastTick = now - lastTickAt
       lastTickAt = now
-      // Why: after sleep/App Nap the pre-pause keepalive looks stale on the
-      // first post-wake tick, killing a healthy link (#7773). Reset staleness
-      // before this tick's fresh probe, then allow the next full window.
+      // After sleep/App Nap reset old staleness before probing, then allow a full health window (#7773).
       const resumedAfterWake = sinceLastTick > WAKE_GAP_MS
       if (resumedAfterWake) {
         this.rebaseHealthClocks(now)
@@ -597,18 +550,13 @@ export class SshChannelMultiplexer {
 
       this.sendKeepAlive()
 
-      // Why: a saturated writer used to suppress this check outright, which wedged a half-open
-      // link forever — no drain, so no frame ever left, and the writer's single-outstanding
-      // liveness guard silenced the one probe that could have noticed. The relay sends its own
-      // keepalive every KEEPALIVE_SEND_MS, so a slow-but-alive peer still refreshes
-      // lastReceivedAt; only a link that delivers nothing inbound is declared lost.
+      // Never skip health checks for outbound saturation: inbound peer keepalives prove slow-but-live links; total inbound silence detects wedges.
       if (this.disposed || resumedAfterWake || this.decoderReadPaused) {
         return
       }
 
       const noDataReceived = now - this.lastReceivedAt > TIMEOUT_MS
 
-      // Check oldest unacked message
       let oldestUnacked = Infinity
       for (const ts of this.unackedTimestamps.values()) {
         if (ts < oldestUnacked) {
@@ -617,7 +565,6 @@ export class SshChannelMultiplexer {
       }
       const oldestUnackedStale = oldestUnacked !== Infinity && now - oldestUnacked > TIMEOUT_MS
 
-      // Connection considered dead when BOTH conditions met
       if (noDataReceived && oldestUnackedStale) {
         this.handleProtocolError(new Error('Connection timed out (no ack received)'))
       }

@@ -1,12 +1,4 @@
-/**
- * Human-readable automation output for the CLI.
- *
- * The host lines come from the authority's own projection, never from the
- * stored `executionTarget*` fields: a target that was removed — or removed and
- * re-registered under the same id — leaves those fields untouched, so printing
- * them alone would render a dead host identically to a healthy one and leave
- * `orca automations show` unable to complete the recovery it is named in.
- */
+// Use authority-projected owners: stored target fields survive host removal and re-registration.
 
 import type { Automation, AutomationRun } from '../shared/automations-types'
 import type { AutomationListItem } from '../shared/automation-list-scope'
@@ -95,7 +87,6 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     `baseBranch: ${automation.baseBranch ?? 'null'}`,
     `reuseSession: ${automation.reuseSession}`,
     `target: ${automation.executionTargetType}:${automation.executionTargetId}`,
-    // Omitted rather than guessed: a host that reports no owner has none to report.
     ...(result.owner ? [`host: ${formatOwnerSelector(result.owner.selector)}`] : []),
     `prompt: ${automation.prompt}`
   ].join('\n')

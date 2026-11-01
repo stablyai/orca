@@ -7,10 +7,7 @@ import { getDefaultSettings } from '../../../shared/constants'
 import { getFolderWorkspaceStatusRequestSnapshot } from '@/store/folder-workspaces/folder-path-status'
 import { makeGroup, makeUnifiedTab } from '@/components/worktree-jump-palette-test-fixtures'
 
-// Why: drives the real activation module against a real store, so a regression in
-// the workspace dispatch or in the path-status guard itself both surface here.
-// Mocking the module under test would let the gate be bypassed while still passing.
-// Only the store singleton, the toast sink and the path-status IPC are substituted.
+// Drive real activation/store/path guarding; replace only singleton/toast/path IPC so mocking cannot hide dispatch or guard regressions.
 
 const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
@@ -71,8 +68,7 @@ async function seedFolderWorkspace(
     folderWorkspacePathStatuses: {}
   })
   mocks.getPathStatus.mockResolvedValue({ path: folderWorkspace.folderPath, ...status })
-  // Why the real fetch: it writes the cache under the exact key + request snapshot
-  // that the activation guard reads back, so the fixture can't drift from production.
+  // Real fetch writes the exact cache key/request read by activation, preventing fixture drift.
   await store
     .getState()
     .fetchFolderWorkspacePathStatus(

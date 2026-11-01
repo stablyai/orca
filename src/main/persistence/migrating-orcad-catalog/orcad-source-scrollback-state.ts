@@ -10,6 +10,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import {
   makeTerminalScrollbackSnapshotRef,
   readTerminalScrollbackStoredBytesSync,
+  readTerminalScrollbackStoredSnapshotSync,
   type TerminalScrollbackSnapshotStorage
 } from '../../terminal-scrollback-snapshots'
 import { compareKeys } from './orcad-source-key-order'
@@ -40,8 +41,13 @@ export function hasDuplicateOrcadMigrationScrollbackDescriptors(
 export function projectOrcadMigrationSessionScrollback(
   session: WorkspaceSessionState,
   storage?: TerminalScrollbackSnapshotStorage,
-  /** "Move anyway": a pane's history that can't move stays on this desktop; the pane still moves. */
-  leaveBehind = false
+  /** "Move anyway" can retain untransferable history while moving its pane. */
+  leaveBehind = false,
+  /**
+   * A WSL move's panes whose daemon checkpoint travels as a `terminal-history` blob: the host's
+   * daemon restores it, so no renderer snapshot or ref may also paint it.
+   */
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): ProjectedOrcadMigrationScrollback {
   const projected = structuredClone(session)
   const snapshots: OrcadMigrationTerminalScrollbackSnapshot[] = []
@@ -58,20 +64,23 @@ export function projectOrcadMigrationSessionScrollback(
       ...Object.keys(sourceLayout.scrollbackRefsByLeafId ?? {})
     ])
     for (const leafId of [...leafIds].sort(compareKeys)) {
+      // Its checkpoint is newer than any snapshot saved before, and the host restores it itself.
+      if (daemonHistoryLeaf?.(tabId, leafId)) {
+        continue
+      }
       const buffer = inlineLeafBuffer(localOnly, sourceLayout.buffersByLeafId, leafId)
       const sourceRef = sourceLayout.scrollbackRefsByLeafId?.[leafId]
       const ref = buffer ? makeTerminalScrollbackSnapshotRef(tabId, leafId) : sourceRef
       const bytes = buffer
         ? Buffer.from(buffer, 'utf8')
         : sourceRef
-          ? readTerminalScrollbackStoredBytesSync(sourceRef, storage)
-          : null
-      if (
-        !ref ||
-        !bytes ||
-        bytes.length === 0 ||
-        bytes.length > TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT
-      ) {
+          ? readTerminalScrollbackStoredSnapshotSync(sourceRef, storage)
+          : 'absent'
+      if (bytes === 'absent') {
+        // Nothing was saved, so the pane moves with no history to lose.
+        continue
+      }
+      if (!ref || !bytes || bytes.length > TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT) {
         ;(leaveBehind ? leftBehindItems : blockedItems).push(
           `saved terminal history Orca could not read for tab ${tabId}`
         )
@@ -102,7 +111,7 @@ export function projectOrcadMigrationSessionScrollback(
       delete layout.scrollbackRefsByLeafId
     }
   }
-  // Both inline homes ride the snapshot channel; inlined, a few big panes overflow the manifest cap.
+  // Route both inline stores through snapshots; a few large panes would overflow the manifest.
   delete projected.localOnlyScrollbackByTabId
   if (
     snapshots.length > MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS ||
@@ -122,7 +131,7 @@ export function readOrcadMigrationSourceScrollbackChunk(args: {
   offset: number
   length: number
   storage?: TerminalScrollbackSnapshotStorage
-  /** Kept on disk for an export in flight, so a tab closed mid-transfer still reads from storage. */
+  /** Pending exports can read retained files even after their tabs close. */
   retained?: boolean
 }): { bytesBase64: string; totalBytes: number; eof: boolean } {
   const bytes = findSnapshotBytes(args.state, args.descriptor, args.storage, args.retained)

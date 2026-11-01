@@ -26,11 +26,18 @@ export const TERMINAL_QUERY_METHODS = [
       if (ORCA_LAYOUT_OWNER_IS_MAIN && params.placeUnshownLiveTerminals && params.worktree) {
         await runtime.placeUnshownLiveTerminalsOf(params.worktree)
       }
-      return runtime.listTerminals(params.worktree, params.limit, {
+      const result = await runtime.listTerminals(params.worktree, params.limit, {
         handles: params.handles,
         requireFreshPtyLiveness: params.requireFreshPtyLiveness,
         includeVisualLayouts: params.includeVisualLayouts
       })
+      if (params.includePreview !== false) {
+        return result
+      }
+      return {
+        ...result,
+        terminals: result.terminals.map(({ preview: _preview, ...terminal }) => terminal)
+      }
     }
   }),
   defineMethod({
@@ -73,8 +80,7 @@ export const TERMINAL_QUERY_METHODS = [
     })
   }),
   defineMethod({
-    // Read-only identity probe. Deliberately NOT `terminal.show`: this one resolves a structured
-    // worker too, and must therefore never hand back anything that looks writable.
+    // Read identity only: structured workers have no writable terminal, so never return terminal.show's shape.
     name: 'terminal.resolveIdentity',
     permission: 'workspace',
     params: TerminalHandle,

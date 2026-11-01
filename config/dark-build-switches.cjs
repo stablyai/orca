@@ -1,10 +1,8 @@
 const { existsSync } = require('node:fs')
 const { join } = require('node:path')
 
-// Dark build switches: a build compiles a switch's path in only when its variable is 'main'. Such a
-// main build leaves the switch's marker in out/main, the phone page bundle (out/mobile-web), out/orcad
-// and a --dark-test-template orcad template; packaging refuses any of them, and packaging and a
-// release orcad template also refuse the variable itself.
+// Only main-valued switches compile dark paths; marked main/mobile-web/orcad/template outputs cannot ship.
+// Packaging and release templates also reject enabled switch environment variables.
 const DARK_BUILD_SWITCHES = [
   // src/shared/layout-owner-switch.ts
   { variable: 'ORCA_LAYOUT_OWNER', off: 'window' },
@@ -38,12 +36,10 @@ function turnedOnDarkBuildDefines(env = process.env) {
   )
 }
 
-/** Every marker a switched-on build can leave, so a bundle check accounts for them. */
 function darkBuildMarkerFileNames() {
   return DARK_BUILD_SWITCHES.map(markerFileName)
 }
 
-/** The marker each switched-on build leaves in its output. */
 function darkBuildMarkers(env = process.env) {
   return turnedOn(env).map((darkSwitch) => ({
     fileName: markerFileName(darkSwitch),

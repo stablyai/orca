@@ -20,8 +20,8 @@ vi.mock('electron', () => ({
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -134,8 +134,6 @@ describe('CodexAccountService config sync', () => {
 
     await service.selectAccount('account-2')
 
-    // Each managed host account launches against its own home, so a switch must
-    // leave both credential files alone and never copy either into the mirror.
     expect(existsSync(runtimeAuthPath)).toBe(false)
     expect(readFileSync(join(firstManagedHomePath, 'auth.json'), 'utf-8')).toBe(firstAuth)
     expect(readFileSync(join(secondManagedHomePath, 'auth.json'), 'utf-8')).toBe(secondAuth)
@@ -324,7 +322,7 @@ describe('CodexAccountService config sync', () => {
       testState.userDataDir,
       'account-1',
       '',
-      '{"account":"managed"}\n'
+      createCodexAuthJson('user@example.com', 'provider-1', 'fixture-refresh')
     )
     const settings = createSettings({
       codexManagedAccounts: [
@@ -357,6 +355,14 @@ describe('CodexAccountService config sync', () => {
 
     expect(result.accounts).toHaveLength(1)
     expect(result.activeAccountId).toBe(null)
+    const normalized = store.getSettings()
+    const stableAuth = readFileSync(join(managedHomePath, 'auth.json'), 'utf8')
+    store.updateSettings.mockClear()
+    expect(service.listAccounts()).toEqual(result)
+    expect(service.listAccounts()).toEqual(result)
+    expect(store.getSettings()).toBe(normalized)
+    expect(store.updateSettings).not.toHaveBeenCalled()
+    expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf8')).toBe(stableAuth)
   })
 
   it('rejects paths that escape the managed accounts root', async () => {

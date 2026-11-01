@@ -7,8 +7,7 @@ export const ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS = {
   'x-content-type-options': 'nosniff'
 } as const
 
-// Why: the loopback callback cannot load Orca's renderer bundle, so this
-// standalone page mirrors its canonical light/dark tokens without external assets.
+// The standalone loopback callback mirrors renderer tokens without loading external assets.
 export const ORCA_CLOUD_CALLBACK_SUCCESS_PAGE = `<!doctype html>
 <html lang="en">
   <head>

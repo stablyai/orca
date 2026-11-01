@@ -1,6 +1,4 @@
-// `session.tabs.updatePaneLayout` from older desktops (design 2.6, rule 11): the whole pane tree
-// they send becomes the commands that reach it, compared with the current tree in the owner's
-// order. A structure no single command reaches is refused; titles and the chat pane still apply.
+// Translate an older desktop’s whole pane tree to commands against owner order. Refuse structures no single command reaches while retaining title/chat updates.
 
 import type { TerminalPaneLayoutNode } from '../../terminal-tab-types'
 import {
@@ -16,7 +14,7 @@ import type { LayoutTerminalTab, WorkspaceLayout } from '../workspace-layout-mod
 export type PaneLayoutTranslation = {
   /** In apply order; the runtime applies them as one change, so one update is published. */
   commands: LayoutCommand[]
-  /** The sent tree changes panes or moves more than one; new: the handler replies `{updated: false}` (today it always replies true). */
+  /** Refused pane changes/multiple moves produce updated:false; metadata commands still apply. */
   structureRefused: boolean
 }
 
@@ -38,7 +36,7 @@ export function translateUpdatePaneLayout(
   const current = tab.panes.root
   const leafIds = collectLayoutLeafIdsInOrder(current)
   const commands: LayoutCommand[] = []
-  // Today a sent title map replaces the stored one, so a pane missing from it loses its title.
+  // Title maps replace rather than merge; omitted pane entries clear their titles.
   if (sent.titlesByLeafId) {
     for (const leafId of leafIds) {
       const title = sent.titlesByLeafId[leafId] ?? null
@@ -57,7 +55,7 @@ export function translateUpdatePaneLayout(
       commands.push({ ...on, type: 'setChatPane', leafId: chatLeafId })
     }
   }
-  // A null tree leaves the panes alone, as today.
+  // Preserve legacy null-tree no-op semantics.
   if (!sent.root || !current) {
     return { commands, structureRefused: false }
   }
@@ -86,11 +84,7 @@ export function translateUpdatePaneLayout(
 
 type PaneMove = { leafId: string; targetLeafId: string; side: PaneSide }
 
-/**
- * The one pane move that turns `current` into `sent`, ignoring ratios. A moved pane always ends in
- * a split with its target pane, so only splits of two panes in `sent` are candidates: linear in
- * the tree, which matters because the tree is untrusted input of up to 1024 nodes.
- */
+/** Find one move ignoring ratios. Only two-leaf target splits qualify, keeping the search linear in untrusted trees of up to 1024 nodes. */
 function findSinglePaneMove(
   current: TerminalPaneLayoutNode,
   sent: TerminalPaneLayoutNode
@@ -140,7 +134,6 @@ function candidateMoves(node: TerminalPaneLayoutNode): PaneMove[] {
   return moves
 }
 
-/** Both trees have the same shape; whether every divider sits at the same ratio. */
 function sameRatios(left: TerminalPaneLayoutNode, right: TerminalPaneLayoutNode): boolean {
   if (left.type === 'leaf' || right.type === 'leaf') {
     return true

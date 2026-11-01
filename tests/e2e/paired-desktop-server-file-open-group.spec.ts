@@ -1,12 +1,4 @@
-/**
- * A switch-on desktop paired to a switch-on `orca serve` reports the group it shows in each server
- * workspace its frames draw (`layout.reportView`), so a file the CLI opens on the server lands in
- * that group, whichever of the workspace's groups the server's saved view names (H5c-v).
- *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
- *   pnpm exec playwright test tests/e2e/paired-desktop-server-file-open-group.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=2
- */
+// H5c-v: with ORCA_LAYOUT_OWNER=main, layout.reportView must send the desktop’s shown group so server CLI file-open lands there, independent of saved server selection.
 import { existsSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { HOST_TERMINAL_SURFACE_SEPARATOR } from '../../src/shared/terminal-surface-id'

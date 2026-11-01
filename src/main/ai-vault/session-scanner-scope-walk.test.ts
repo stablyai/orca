@@ -126,7 +126,7 @@ async function writeRollout(sessionsDir: string, id: string, cwd: string, day: s
   await writeFile(
     path,
     jsonLines([
-      // Codex's first record carries its base instructions, past the first 8 KB read.
+      // Large Codex headers must still expose cwd beyond the initial read chunk.
       { timestamp, type: 'session_meta', payload: { id, cwd, instructions: 'x'.repeat(20_000) } },
       {
         timestamp,
@@ -171,7 +171,6 @@ describe('scanAiVaultSessions — scope before the recency cap', () => {
     const scoped = await scan([workspace])
     const inScope = scoped.sessions.filter((session) => session.cwd === workspace)
     expect(inScope.map((session) => session.sessionId)).toEqual(['01a14083-old'])
-    // The host's cached list is cut by the same scope rule, so the recovered row survives it.
     expect(
       truncateAiVaultListResult(scoped, 2, [workspace]).sessions.map((s) => s.sessionId)
     ).toContain('01a14083-old')
@@ -239,7 +238,6 @@ it('admits the newest scoped activity when copied Hermes files have newer mtimes
   const scopedIds = (rows: AiVaultListResult) =>
     rows.sessions.filter((row) => row.cwd === '/repo').map((row) => row.sessionId)
   expect(scopedIds(deeper)[0]).toBe('hermes-16')
-  // A deeper cached scan serving depth 1 keeps every scoped row it found.
   expect(scopedIds(truncateAiVaultListResult(deeper, 1, ['/repo']))).toEqual(scopedIds(deeper))
 })
 

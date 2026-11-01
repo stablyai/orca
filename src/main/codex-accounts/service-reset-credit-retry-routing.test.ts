@@ -23,8 +23,8 @@ vi.mock('electron', () => ({
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -65,7 +65,7 @@ async function createResetService(
     } as never,
     createRuntimeHome() as never
   )
-  /** The usage refresh that follows a reset, which moves the offer. */
+  // Simulate a post-reset usage refresh changing the offer revision.
   const refresh = () => {
     state.codex = { ...state.codex!, updatedAt: state.codex!.updatedAt + 1 }
   }

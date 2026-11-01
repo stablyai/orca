@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
 
-/** Captures the committed screen that owns an in-flight terminal create. */
 export function useMobileTerminalCreateRouteOwner(
   scope: Pick<
     MobileSessionAttachmentsModel,

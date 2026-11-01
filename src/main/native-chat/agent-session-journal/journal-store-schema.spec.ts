@@ -1,10 +1,8 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// Two independent version axes, both fail closed.
-//
-//   `PRAGMA user_version`  the DB SHAPE, known before the first read
-//   the row's `v` field    the row BODY shape, met during replay
-//
-// A newer build can change either alone, so both are needed.
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+// Database and row versions evolve independently; both must reject unsupported newer content.
 
 import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
@@ -12,10 +10,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
-  AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import type Database from '../../sqlite/sync-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'
@@ -27,7 +24,7 @@ import {
   insertTestJournalRowJson,
   SAVED_BY_NEWER_ORCA
 } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalStoreSchemaTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -40,7 +37,7 @@ export function registerJournalStoreSchemaTests(): void {
 
   let root: string
   let clock = 1_000
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
 
   function tick(): number {
     clock += 1
@@ -69,7 +66,7 @@ export function registerJournalStoreSchemaTests(): void {
     try {
       run(opened.db)
     } finally {
-      opened.close()
+      await opened.close()
     }
   }
 
@@ -79,7 +76,6 @@ export function registerJournalStoreSchemaTests(): void {
       .digest('hex')
   }
 
-  /** Appends a raw `row_json` the way a newer build or a bad write would leave it. */
   async function appendRawRow(epoch: string, seq: number, rowJson: string): Promise<void> {
     await withDatabase((db) => {
       expect(liveTestJournalRows(db, IDENTITY.sessionId)[0]?.epoch).toBe(epoch)
@@ -87,7 +83,6 @@ export function registerJournalStoreSchemaTests(): void {
     })
   }
 
-  /** A row only a newer build could have written. */
   function futureRow(epoch: string, seq: number): string {
     return JSON.stringify({
       v: 99,
@@ -113,7 +108,6 @@ export function registerJournalStoreSchemaTests(): void {
   })
 
   describe('axis 1: the database shape', () => {
-    // A newer build's database: none of its chats open here, and nothing here writes to it.
     it('refuses every chat in a database a newer build stamped, and writes nothing', async () => {
       const journal = await open()
       await journal.appendItem(item(0), body('a'), {
@@ -125,7 +119,7 @@ export function registerJournalStoreSchemaTests(): void {
       const before = await digest(journalDatabasePath(root))
 
       await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-      // A chat the database never held is refused the same way rather than being founded.
+      // New chat IDs must not bypass the database-wide refusal.
       await expect(
         journals.open({ identity: { ...IDENTITY, sessionId: 'session-2' }, stateDirectory: root })
       ).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
@@ -133,7 +127,6 @@ export function registerJournalStoreSchemaTests(): void {
       expect(await digest(journalDatabasePath(root))).toBe(before)
     })
 
-    // Tables a newer schema changed read as a chat only an update opens, not as damage.
     it("refuses as a newer Orca's a chat whose tables a newer build changed", async () => {
       const journal = await open()
       await journal.appendItem(item(0), body('a'), {
@@ -149,7 +142,6 @@ export function registerJournalStoreSchemaTests(): void {
       await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
     })
 
-    // The only older version brought forward; 1 and 2 are refused (journal-database.spec.ts).
     it('stamps the current user_version on a version-0 file that already has its tables', async () => {
       const journal = await open()
       await journal.appendItem(item(0), body('a'), {
@@ -181,7 +173,6 @@ export function registerJournalStoreSchemaTests(): void {
       await appendRawRow(epoch, nextSeq, futureRow(epoch, nextSeq))
 
       await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-      // Never skipped, never deleted: the row this build cannot read is still there.
       await withDatabase((db) => {
         const stored = liveTestJournalRows(db, IDENTITY.sessionId).find(
           (row) => row.seq === nextSeq
@@ -225,8 +216,7 @@ export function registerJournalStoreSchemaTests(): void {
       const epoch = journal.epoch
       const nextSeq = journal.cursor().sequence + 1
       await journal.close()
-      // `parseJournalRow` admits any string itemId, so replay must degrade a
-      // malformed percent key to an opaque id instead of throwing URIError.
+      // Malformed percent keys remain opaque IDs rather than throwing URIError.
       await appendRawRow(
         epoch,
         nextSeq,

@@ -1,5 +1,4 @@
-// Routes an omnibox switch row to the matching palette activation and reports
-// how the destination should take keyboard focus once the menu closes.
+// Route switch rows through palette activation and return focus handoff for after the menu closes.
 
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { translate } from '@/i18n/i18n'
@@ -14,8 +13,7 @@ export type OpenTabSelectionOutcome =
   | { status: 'blocked' }
   | { status: 'failed'; message: string }
 
-// Every source distinguishes a dead workspace from a target that went stale
-// inside a live one; only the stale wording differs.
+// Distinguish dead workspaces from stale targets inside live ones across all sources.
 function failed(reason: string, staleMessage: string): OpenTabSelectionOutcome {
   return {
     status: 'failed',

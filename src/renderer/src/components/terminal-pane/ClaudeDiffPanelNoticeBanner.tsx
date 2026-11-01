@@ -57,8 +57,7 @@ function useClaudeDiffPanelMayAutoOpen(
   return mayAutoOpen
 }
 
-/** Tells the user once that the diff panel Claude Code opens in a wide pane is Claude's own, and
- *  how to hide it. Shown only while Claude's saved config still lets the panel open unasked. */
+/** Explain Claude’s own wide-pane diff panel only while saved config still allows it to open automatically. */
 export function ClaudeDiffPanelNoticeBanner({
   ptyId,
   tabId,

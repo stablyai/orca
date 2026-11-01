@@ -26,8 +26,8 @@ vi.mock('../../hooks', () => ({
   parseOrcaYaml: () => ({ issueCommand: 'shared' })
 }))
 vi.mock('../../issue-command-file', () => ({
-  readIssueCommand: mocks.localRead,
-  writeIssueCommand: mocks.localWrite
+  readIssueCommandUnlessWslStopped: mocks.localRead,
+  writeIssueCommandUnlessWslStopped: mocks.localWrite
 }))
 vi.mock('../../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
@@ -47,8 +47,7 @@ vi.mock('../../../shared/setup-script-imports', () => ({
   }
 }))
 vi.mock('../../effective-hook-config', () => ({
-  getEffectiveSetupRunPolicy: () => 'manual',
-  getDefaultTabCommandTrustContent: () => undefined
+  getEffectiveSetupRunPolicy: () => 'manual'
 }))
 import { RuntimeRepositoryHooksCommands } from '../../runtime/runtime-repository-hooks-commands'
 import { RuntimeRepositoryIssueCommand } from '../../runtime/runtime-repository-issue-command'
@@ -133,7 +132,7 @@ const localCalls = [
   mocks.effectiveHooks
 ]
 
-// Why: this process serves no SSH filesystem, so an SSH owner is neither read remotely nor locally.
+// This process must inspect SSH-owned repos neither remotely nor locally.
 function expectRoute(target: string | null): void {
   if (target) {
     for (const method of localCalls) {

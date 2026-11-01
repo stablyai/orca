@@ -1,5 +1,4 @@
-// Why not localeCompare: Electron, the phone WebView and Node ship different ICU data, so the same
-// sidebar must not order its text through a collator. Everything here is plain Unicode arithmetic.
+// Avoid ICU collators: Electron/phone/Node versions differ. Shared sidebar order uses Unicode arithmetic.
 
 const DIGIT_0 = 0x30
 const DIGIT_9 = 0x39
@@ -105,11 +104,8 @@ function compareFoldedThenCanonical(
   )
 }
 
-/**
- * Device-independent order for sidebar text: case and accents ignored, digit runs by value, the
- * rest by code point; case and accents then break exact ties. Returns 0 only for canonically equal
- * text; callers break that tie by host-qualified id.
- */
+/** Device-independent case/accent-folded natural order, then canonical code-point ties.
+ * Only canonically equal text returns zero; callers then break ties by host-qualified ID. */
 export function compareSidebarText(left: string, right: string): number {
   return compareFoldedThenCanonical(left, right, foldSidebarText)
 }

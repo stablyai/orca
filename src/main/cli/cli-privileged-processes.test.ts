@@ -1,99 +1,62 @@
+// A low-spec Windows machine timed out the first user-PATH write at 5 s; a retry then succeeded.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
-const runProcessMock = vi.hoisted(() => vi.fn())
+const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
-import {
-  runMacPrivilegedCommand,
-  runWindowsPathCommand,
-  writeWindowsUserPath
-} from './cli-privileged-processes'
+import { writeWindowsUserPath } from './cli-privileged-processes'
+import { WINDOWS_PATH_WRITE_TIMEOUT_MS } from './cli-install-constants'
 
-describe('Windows CLI PATH process boundary', () => {
-  beforeEach(() => runProcessMock.mockReset())
+function result(overrides: Partial<ProcessResult> = {}): ProcessResult {
+  return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false, ...overrides }
+}
 
-  it('uses the canonical process wrapper with the bounded timeout', async () => {
-    runProcessMock.mockResolvedValue({
-      code: 0,
-      signal: null,
-      stdout: 'ok',
-      stderr: '',
-      timedOut: false
-    })
+const TIMED_OUT = result({ code: null, timedOut: true })
 
-    await expect(runWindowsPathCommand(['-NoProfile'])).resolves.toBe('ok')
-    expect(runProcessMock).toHaveBeenCalledWith({
-      program: 'powershell',
-      args: ['-NoProfile'],
-      timeoutMs: 5_000
-    })
-  })
-
-  it('preserves the timeout error presented by CLI registration', async () => {
-    runProcessMock.mockResolvedValue({
-      code: null,
-      signal: null,
-      stdout: '',
-      stderr: '',
-      timedOut: true
-    })
-
-    await expect(runWindowsPathCommand([])).rejects.toThrow(
-      'Windows PATH command timed out after 5000ms.'
-    )
-  })
-
-  it('retains stderr for permission classification', async () => {
-    runProcessMock.mockResolvedValue({
-      code: 1,
-      signal: null,
-      stdout: '',
-      stderr: 'UnauthorizedAccessException',
-      timedOut: false
-    })
-
-    await expect(runWindowsPathCommand([])).rejects.toMatchObject({
-      code: 1,
-      message: 'UnauthorizedAccessException',
-      stderr: 'UnauthorizedAccessException'
-    })
-  })
-
-  it('doubles typographic single quotes in the PATH literal', async () => {
-    runProcessMock.mockResolvedValue({
-      code: 0,
-      signal: null,
-      stdout: '',
-      stderr: '',
-      timedOut: false
-    })
-
-    await writeWindowsUserPath('C:\\O\u2019Brien\\bin')
-    expect(runProcessMock.mock.calls[0][0].args.at(-1)).toBe(
-      "[Environment]::SetEnvironmentVariable('Path', 'C:\\O\u2019\u2019Brien\\bin', 'User')"
-    )
-  })
+beforeEach(() => {
+  runProcessMock.mockReset()
 })
 
-describe('macOS CLI privileged process boundary', () => {
-  beforeEach(() => runProcessMock.mockReset())
+describe('writeWindowsUserPath', () => {
+  it('allows a slow PowerShell well past the old 5 s deadline', async () => {
+    runProcessMock.mockResolvedValue(result())
 
-  it('uses the canonical process wrapper without a shell', async () => {
-    runProcessMock.mockResolvedValue({
-      code: 0,
-      signal: null,
-      stdout: '',
-      stderr: '',
-      timedOut: false
-    })
+    await writeWindowsUserPath('C:\\Users\\me\\bin')
 
-    await runMacPrivilegedCommand("ln -s 'source' 'target'")
+    expect(WINDOWS_PATH_WRITE_TIMEOUT_MS).toBeGreaterThanOrEqual(15_000)
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ program: 'powershell', timeoutMs: WINDOWS_PATH_WRITE_TIMEOUT_MS })
+    )
+  })
 
-    expect(runProcessMock).toHaveBeenCalledWith({
-      program: 'osascript',
-      args: ['-e', "do shell script \"ln -s 'source' 'target'\" with administrator privileges"],
-      timeoutMs: null
-    })
+  it('retries once after a timeout and succeeds', async () => {
+    runProcessMock.mockResolvedValueOnce(TIMED_OUT).mockResolvedValueOnce(result())
+
+    await expect(writeWindowsUserPath('C:\\Users\\me\\bin')).resolves.toBeUndefined()
+
+    expect(runProcessMock).toHaveBeenCalledTimes(2)
+    expect(runProcessMock.mock.calls[1]).toEqual(runProcessMock.mock.calls[0])
+  })
+
+  it('gives up after a second timeout', async () => {
+    runProcessMock.mockResolvedValue(TIMED_OUT)
+
+    await expect(writeWindowsUserPath('C:\\Users\\me\\bin')).rejects.toThrow(
+      `Windows PATH command timed out after ${WINDOWS_PATH_WRITE_TIMEOUT_MS}ms.`
+    )
+    expect(runProcessMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry a PowerShell failure', async () => {
+    runProcessMock.mockResolvedValue(
+      result({ code: 1, stderr: 'Access to the registry is denied.' })
+    )
+
+    await expect(writeWindowsUserPath('C:\\Users\\me\\bin')).rejects.toThrow(
+      'Access to the registry is denied.'
+    )
+    expect(runProcessMock).toHaveBeenCalledOnce()
   })
 })

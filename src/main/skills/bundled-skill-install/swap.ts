@@ -23,10 +23,7 @@ function siblingPath(target: string, marker: string): string {
   return join(dirname(target), `.${basename(target)}${marker}${randomUUID()}`)
 }
 
-/**
- * One place per executing host, outside every skills root (agents would load it) and outside
- * any project (it would show up in the repo).
- */
+/** Backups stay outside skill roots (agents would load them) and projects (they would pollute repos). */
 export function bundledSkillBackupPath(homeDirectory: string, name: string): string {
   const utc = new Date().toISOString().replace(/[:.]/gu, '-')
   return join(homeDirectory, '.agents', '.orca-skill-backups', `${name}-${utc}-${randomUUID()}`)
@@ -66,7 +63,6 @@ async function requireUnchanged(verify: () => Promise<boolean>, path: string): P
   }
 }
 
-/** `write` / `copy`: stage beside the empty slot, then rename in. */
 export async function putBundledSkillFolder(
   filesystem: BundledSkillFilesystem,
   target: string,
@@ -83,11 +79,7 @@ export async function putBundledSkillFolder(
   }
 }
 
-/**
- * `update`: two renames, since POSIX cannot atomically replace a non-empty folder. A crash
- * between them leaves `.orca-old` beside a missing target, which the next plan restores.
- * Returns the old copy's path for the caller to re-check and settle.
- */
+/** POSIX cannot replace a nonempty directory atomically; an interrupted two-rename update leaves .orca-old for the next plan to restore. Return old copy for rechecking. */
 export async function swapBundledSkillFolder(
   filesystem: BundledSkillFilesystem,
   target: string,
@@ -113,10 +105,7 @@ export async function swapBundledSkillFolder(
   return old
 }
 
-/**
- * `replace`: the foreign object (a link moves as itself, never what it points to) goes to
- * backups before anything takes its place, so no `.orca-old` holds user content.
- */
+/** Back up the foreign object itself before replacement; never put user content in disposable .orca-old siblings. */
 export async function replaceBundledSkillPath(
   filesystem: BundledSkillFilesystem,
   target: string,
@@ -150,7 +139,6 @@ export async function replaceBundledSkillPath(
   }
 }
 
-/** Moves a non-released leftover aside; returns where it went. */
 export async function backUpBundledSkillPath(
   filesystem: BundledSkillFilesystem,
   path: string,

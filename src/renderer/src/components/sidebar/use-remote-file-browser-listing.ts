@@ -21,9 +21,9 @@ export function useRemoteFileBrowserListing(
   targetId: string | undefined,
   runtimeEnvironmentId: string | undefined
 ): RemoteFileBrowserListing {
-  // Per-picker listing cache keyed by resolved path, so typing issues at most one remote call per committed segment.
+  // Cache listings per picker so repeated segment resolution can reuse successful remote reads.
   const listingCacheRef = useRef<Map<string, BrowseResult>>(new Map())
-  // Resolved remote home, cached after the first browseDir('~'); anchors `~`/`~/...` without hardcoding a home dir.
+  // Resolve the remote home once rather than guessing a host path.
   const homePathRef = useRef<string | null>(null)
 
   const fetchListing = useCallback(
@@ -43,7 +43,7 @@ export function useRemoteFileBrowserListing(
                 dirPath
               )
       listingCacheRef.current.set(result.resolvedPath, result)
-      // Also key by the requested dirPath (e.g. `~`, relative) so an identical request doesn't re-hit the SSH backend.
+      // Cache requested aliases too so repeated home/relative requests reuse the resolved listing.
       if (dirPath !== result.resolvedPath) {
         listingCacheRef.current.set(dirPath, result)
       }

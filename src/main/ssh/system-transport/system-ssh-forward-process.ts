@@ -1,5 +1,7 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcessHandle as ChildProcess } from '@orca/process-host/process-spec'
+import { spawnProcess } from '@orca/process-host'
 import { connect } from 'node:net'
+import { createSshOperationAbortError } from '../connection/ssh-exec-options'
 import { buildForwardProcessSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 import { reserveLocalForwardPort } from './system-ssh-forward-port-reservation'
@@ -8,13 +10,12 @@ import type { SshTarget } from '../../../shared/ssh-types'
 export const SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS = 750
 export const SYSTEM_SSH_FORWARD_LISTENER_PROBE_INTERVAL_MS = 50
 export const SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS = 2_000
-// Why short: SIGKILL is uncatchable, so a child that has not reported exit this long after it is
-// either already reaped or beyond anything teardown can do about it.
+// Bound teardown if runtime never reports exit after SIGKILL; expiry proves no child death.
 export const SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS = 500
 
 type SystemSshPortForwardProcess = {
   process: ChildProcess
-  /** The local port the forward listens on, chosen here when the caller asked for any (0). */
+  /** Chosen here when requested port is 0. */
   localPort: number
   waitForStartup: () => Promise<void>
   close: () => Promise<void>
@@ -35,11 +36,11 @@ export function spawnSystemSshPortForward(
     )
   }
   const args = buildSystemSshPortForwardArgs(target, localPort, remoteHost, remotePort, options)
-  // Why: port-forward ssh processes are not wired to Orca credential prompts;
-  // system SSH forwards must authenticate via OpenSSH config, agent, or control socket.
-  return spawn(sshPath, args, {
-    stdio: ['ignore', 'ignore', 'pipe'],
-    windowsHide: true
+  // No Orca credential prompts are wired here; forward authentication belongs to OpenSSH.
+  return spawnProcess({
+    program: sshPath,
+    args,
+    stdio: ['ignore', 'ignore', 'pipe']
   })
 }
 
@@ -52,9 +53,7 @@ export function buildSystemSshPortForwardArgs(
 ): string[] {
   const args = buildForwardProcessSshArgs(target, options)
   const destinationIndex = args.lastIndexOf('--')
-  // Why `no`: this second login re-reads the host's ssh_config, so a LocalForward/RemoteForward
-  // there collides with the one Orca's main connection already holds, and `yes` exits on it.
-  // ClearAllForwardings would also drop this -L; stopOnOwnListenFailure checks ours instead.
+  // Ignore collisions with configured forwards already held by the main login; ClearAllForwardings would drop our -L too. Probe ours instead.
   const forwardArgs = [
     '-N',
     '-o',
@@ -72,22 +71,22 @@ export function buildSystemSshPortForwardArgs(
   return args
 }
 
-/**
- * An `ssh -N` forward, already listening on the port it reports. Never asks a ControlMaster to
- * cancel a forward: any fixed port reaches here, so that is the managed tunnel's call alone.
- */
+/** Only managed tunnels may cancel a master's persisted forward; generic fixed-port callers never do. */
 export function startSystemSshPortForwardProcess(
   target: SshTarget,
   localPort: number,
   remoteHost: string,
   remotePort: number,
-  options?: SystemSshBuildArgsOptions
+  options?: SystemSshBuildArgsOptions,
+  signal?: AbortSignal
 ): Promise<SystemSshPortForwardProcess> {
+  signal?.throwIfAborted()
   const orphanArgs =
     localPort === 0
       ? undefined
       : buildSystemSshPortForwardArgs(target, localPort, remoteHost, remotePort, options)
   return reserveLocalForwardPort(localPort, orphanArgs).then((boundPort) => {
+    signal?.throwIfAborted()
     const process = spawnSystemSshPortForward(target, boundPort, remoteHost, remotePort, options)
     stopOnOwnListenFailure(process, boundPort)
     return {
@@ -135,9 +134,12 @@ function stopOnOwnListenFailure(process: ChildProcess, localPort: number): void 
   process.once('exit', stop)
 }
 
+/** `listenerTimeoutMs` requires a listener by then instead of accepting a still-silent forward. */
 export function waitForSystemSshForwardStartup(
   process: ChildProcess,
-  localPort: number
+  localPort: number,
+  listenerTimeoutMs?: number,
+  signal?: AbortSignal
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let stderr = ''
@@ -151,6 +153,7 @@ export function waitForSystemSshForwardStartup(
       if (graceTimer) {
         clearTimeout(graceTimer)
       }
+      signal?.removeEventListener('abort', onAbort)
       process.off('error', onError)
       process.off('exit', onExit)
       process.stderr?.off('data', onStderr)
@@ -163,6 +166,7 @@ export function waitForSystemSshForwardStartup(
       cleanup()
       callback()
     }
+    const onAbort = (): void => finish(() => reject(createSshOperationAbortError()))
     const onStderr = (chunk: Buffer): void => {
       stderr += chunk.toString('utf-8')
     }
@@ -174,7 +178,7 @@ export function waitForSystemSshForwardStartup(
     }
     const scheduleProbe = (): void => {
       probeTimer = setTimeout(() => {
-        probeLocalForward(localPort).then(
+        probeLocalForward(localPort, signal).then(
           () => finish(resolve),
           () => {
             if (!settled) {
@@ -189,8 +193,23 @@ export function waitForSystemSshForwardStartup(
     process.once('error', onError)
     process.once('exit', onExit)
     graceTimer = setTimeout(() => {
-      finish(resolve)
-    }, SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS)
+      if (listenerTimeoutMs === undefined) {
+        finish(resolve)
+        return
+      }
+      finish(() =>
+        reject(
+          new Error(
+            `System SSH port forward did not listen on 127.0.0.1:${localPort} within ${listenerTimeoutMs}ms`
+          )
+        )
+      )
+    }, listenerTimeoutMs ?? SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+      return
+    }
     scheduleProbe()
   })
 }
@@ -232,14 +251,11 @@ export function waitForSystemSshForwardStop(process: ChildProcess): Promise<void
       // Why: update/reconnect callers must not rebind while a stubborn ssh -L
       // process still owns the local port.
       kill('SIGKILL')
-      // Why a second timer: SIGKILL is never acknowledged, so if the runtime never reports the exit —
-      // a reparented child, a lost handle — nothing else can settle this promise and quit waits on it
-      // forever. Resolving here bounds teardown; it does not claim the child is gone.
+      // Lost exit notification must not hang quit forever; this timer bounds teardown without proving death.
       postKillTimer = setTimeout(finish, SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS)
     }, SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS)
 
-    // Why before any signal: a child that already exited needs no SIGTERM, and signalling a reaped pid
-    // can land on whatever the OS reassigned it to.
+    // Never signal a reaped pid: the OS may have reassigned it.
     if (hasExited()) {
       finish()
       return
@@ -273,14 +289,16 @@ function bestErrorLine(stderr: string): string {
   )
 }
 
-function probeLocalForward(localPort: number): Promise<void> {
+function probeLocalForward(localPort: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const socket = connect({ host: '127.0.0.1', port: localPort })
     const cleanup = (): void => {
+      signal?.removeEventListener('abort', onAbort)
       socket.off('connect', onConnect)
       socket.off('error', onError)
       socket.off('timeout', onTimeout)
     }
+    const onAbort = (): void => onError(createSshOperationAbortError())
     const onConnect = (): void => {
       cleanup()
       socket.destroy()
@@ -300,5 +318,9 @@ function probeLocalForward(localPort: number): Promise<void> {
     socket.once('connect', onConnect)
     socket.once('error', onError)
     socket.once('timeout', onTimeout)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
   })
 }

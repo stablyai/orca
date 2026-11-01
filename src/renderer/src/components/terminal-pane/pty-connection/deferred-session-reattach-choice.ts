@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
@@ -87,16 +87,14 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
     !isRemoteRuntimePtyId(candidateReattachSessionId) &&
     getEagerPtyBufferHandle(candidateReattachSessionId)
   )
-  // Why: a still-live locally-spawned PTY (e.g. a background automation agent) keeps an eager buffer until a pane adopts it.
-  // It must be adopted via attach()+replay — connect({ sessionId }) on its non-session ptyId would spawn a fresh shell and orphan the agent.
+  // Adopt live eager PTYs via attach+replay; session connect with their non-session ID would orphan the agent behind a fresh shell.
   const eagerLivePtyId =
     candidateReattachSessionId &&
     candidateHasEagerBuffer &&
     currentTabLivePtyIds.includes(candidateReattachSessionId)
       ? candidateReattachSessionId
       : null
-  // Why: after a daemon crash + cold restore, a stale session-to-tab mapping can make a tab hold a ptyId from another worktree.
-  // Restoring it would paint the wrong terminal content, so drop the reattach and spawn fresh.
+  // Reject stale cross-worktree PTY mappings after daemon restore so replay cannot paint another workspace’s terminal.
   const pairedParkedReattachSessionId =
     session.mountFollowsTerminalPark &&
     candidateReattachSessionId &&
@@ -120,13 +118,11 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
   if (deferredReattachSessionId) {
     startDeferredSessionReattachUnlessHiddenAgentResume(session, deferredReattachSessionId)
   } else if (detachedRemoteLeafPtyId || detachedLivePtyId || eagerLivePtyId) {
-    // Why: mirrored web-leaf panes must attach to their exact remote PTY, not spawn a replacement host tab.
-    // eagerLivePtyId covers a still-live background PTY (e.g. an automation agent) with a live eager buffer to adopt.
+    // Attach exact mirrored-leaf PTYs or adopt live eager agents; neither should spawn a replacement host tab.
     const attachPtyId = detachedRemoteLeafPtyId ?? detachedLivePtyId ?? eagerLivePtyId!
     recordPtyConnectDiagnostic(`pane=${session.pane.id} -> ATTACH detached=${attachPtyId}`)
     session.allowInitialIdleCacheSeed = false
-    // Why: surface synchronous attach failures via session.reportError so the pane shows a diagnostic instead of a blank surface.
-    // On throw, clear the stale ptyId from the tab and fresh-spawn — else the next remount reads the same dead id and loops here.
+    // Report synchronous attach failure and clear its stale binding before fresh spawn, or every remount retries the dead ID.
     try {
       session.clearPaneMode2031State()
       session.clearHiddenOutputRestoreState()
@@ -171,8 +167,7 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
             return
           }
           if (!spawnedPtyId) {
-            // Why: React StrictMode can mount+spawn then immediately remount; if the first mount produced no PTY id,
-            // the remounted pane must issue its own spawn instead of attaching to a completed-but-empty promise (a dead surface).
+            // StrictMode remount must respawn after an empty completed spawn promise instead of attaching to a dead surface.
             if (!isWebTerminalSurfaceTabId(session.deps.tabId)) {
               console.warn(
                 `Pending PTY spawn for tab ${session.deps.tabId} resolved without a PTY id, retrying fresh spawn`

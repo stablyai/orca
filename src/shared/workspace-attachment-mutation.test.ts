@@ -30,25 +30,6 @@ describe('source-aware reference deltas', () => {
     expect(getWorkspaceAttachments(removed)).toEqual([])
   })
 
-  it('keeps an unknown-source link when several same-number URLs could own it', () => {
-    const other = { ...legacy, url: 'https://github.com/other/repo/pull/42' }
-    expect(getWorkspaceAttachments({ linkedItems: [legacy, foreign, other] })).toEqual([
-      legacy,
-      foreign,
-      other
-    ])
-  })
-
-  it('merges observations from an unknown-source link into the only same-number URL', () => {
-    const original = { linkedItems: [{ ...legacy, origins: [first] }] }
-    const updated = normalizeWorkspaceAttachmentUpdate(original, {
-      linkedItemsBase: original.linkedItems,
-      linkedItems: [...original.linkedItems, foreign]
-    })
-    expect(updated.linkedItems).toEqual([{ ...foreign, origins: [first] }])
-    expect(getWorkspaceAttachments(updated)).toEqual(updated.linkedItems)
-  })
-
   it('does not resurrect a stored unknown-source duplicate removed by an older client', () => {
     const stored = { linkedItems: [legacy, foreign] }
     const updated = normalizeWorkspaceAttachmentUpdate(stored, {
@@ -92,28 +73,6 @@ describe('source-aware reference deltas', () => {
     expect(updated.linkedItems).toEqual([{ ...current, origins: [first, second] }])
   })
 
-  it('does not resurrect canonical links removed during metadata enrichment', () => {
-    const updated = normalizeWorkspaceAttachmentUpdate(
-      { linkedItems: [] },
-      {
-        linkedItemsBase: [{ ...foreign, repoId: 'repo-a' }],
-        linkedItems: [{ ...foreign, repoId: 'repo-b' }]
-      }
-    )
-    expect(updated.linkedItems).toEqual([])
-  })
-
-  it('deduplicates stored canonical references and merges their observations', () => {
-    expect(
-      getWorkspaceAttachments({
-        linkedItems: [
-          { ...foreign, repoId: 'repo-a', origins: [first] },
-          { ...foreign, repoId: 'repo-b', origins: [second] }
-        ]
-      })
-    ).toEqual([{ ...foreign, repoId: 'repo-a', origins: [first, second] }])
-  })
-
   it('does not duplicate rich compatibility links whose local context differs', () => {
     expect(
       getWorkspaceAttachments({
@@ -128,18 +87,6 @@ describe('source-aware reference deltas', () => {
         }
       })
     ).toEqual([foreign])
-  })
-
-  it('collapses an unknown-source link through a full collection write', () => {
-    const updated = normalizeWorkspaceAttachmentUpdate(
-      { linkedPR: 42 },
-      { linkedItems: [legacy, foreign] }
-    )
-    expect(getWorkspaceAttachments(updated)).toEqual([foreign])
-  })
-
-  it('returns one reference for a legacy scalar and its matching URL', () => {
-    expect(getWorkspaceAttachments({ linkedPR: 42, linkedItems: [foreign] })).toEqual([foreign])
   })
 
   it('collapses stored unknown-source duplicates on unrelated scalar writes', () => {

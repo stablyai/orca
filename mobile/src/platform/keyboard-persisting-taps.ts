@@ -13,17 +13,13 @@ function isTextField(element: Element | null): boolean {
   )
 }
 
-/** A focusable element between the tap and the container; an ancestor above it is not in the bar. */
+// Stop at the container so focusable ancestors outside this bar cannot claim the tap.
 function isPressableInside(container: HTMLElement, target: Element): boolean {
   const pressable = target.closest('[tabindex]:not([tabindex="-1"])')
   return pressable !== null && pressable !== container && container.contains(pressable)
 }
 
-/**
- * `keyboardShouldPersistTaps` for the page: react-native-web ignores it, and a Pressable there is a
- * focusable element that takes focus on mousedown, which blurs the text field and closes the IME.
- * `handled` keeps focus only for a tap on something pressable; `always` for any tap.
- */
+// RN Web ignores keyboardShouldPersistTaps; prevent mousedown focus theft by Pressables to keep the IME open.
 export function keepTextFocusThroughTaps(
   container: HTMLElement,
   mode: KeyboardPersistingTaps
@@ -42,7 +38,6 @@ export function keepTextFocusThroughTaps(
   return () => container.removeEventListener('mousedown', onMouseDown, true)
 }
 
-/** A ref for the View that holds the taps; on the page that View is its DOM element. */
 export function useKeyboardPersistingTaps(mode: KeyboardPersistingTaps) {
   const releaseRef = useRef<(() => void) | null>(null)
   return useCallback(

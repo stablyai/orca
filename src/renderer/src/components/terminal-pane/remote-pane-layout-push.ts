@@ -11,11 +11,7 @@ export type RemotePaneLayoutPusher = {
   push: (input: { worktreeId: string; tabId: string; layout: TerminalLayoutSnapshot }) => void
 }
 
-/**
- * Pane geometry is host-authoritative for remote tabs, so persists must push it — but
- * persists also fire on pane-title churn, which leaves the host-visible layout untouched.
- * Dedupe against the last push so unchanged layouts cost no remote round trip.
- */
+/** Push host-owned geometry only when changed; title-driven persists must not spend redundant remote round trips. */
 export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
   let lastAttempt: {
     id: number
@@ -26,8 +22,7 @@ export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
   let nextAttemptId = 0
   return {
     push: ({ worktreeId, tabId, layout }) => {
-      // Why: a resent full title map is not a rename; only these panes were renamed here.
-      // A rename is always sent, even back to a title the last push carried.
+      // Send explicit local renames even back to the last-pushed title; resending the full map is not rename intent.
       const renamedLeafIds = takeUnsentPaneTitleRenames(collectLeafIdsInOrder(layout.root))
       if (
         renamedLeafIds.length === 0 &&

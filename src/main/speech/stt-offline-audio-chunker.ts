@@ -1,14 +1,7 @@
-// Why: offline recognizers decode a whole buffer per call, and ONNX Runtime's
-// arena allocations scale with buffer length. Chromium's allocator shim kills
-// the entire app on any single allocation >= 2 GiB (#7925), so audio must be
-// decoded in bounded chunks regardless of how long dictation runs.
+// Bound ONNX allocations: Chromium kills the app on a single allocation >=2GiB (#7925).
 export const OFFLINE_DECODE_CHUNK_SECONDS = 30
 
-// Why: cutting audio mid-word degrades transcription at chunk boundaries.
-// Search the tail of each chunk for its quietest window and split at its
-// center, so cuts land on real inter-word pauses whenever one exists. The
-// window must be pause-sized (~100ms): shorter windows match momentary
-// quiet inside a word (e.g. plosive closures) and cut mid-word.
+// Split near quiet tail pauses to avoid mid-word cuts; ~100ms windows exclude short intra-word closures.
 const SPLIT_SEARCH_SECONDS = 5
 const SPLIT_ENERGY_WINDOW_SECONDS = 0.1
 
@@ -25,7 +18,7 @@ export class OfflineAudioChunker {
     this.energyWindowSamples = Math.max(1, Math.round(SPLIT_ENERGY_WINDOW_SECONDS * sampleRate))
   }
 
-  /** Buffers samples and returns any full chunks now ready to decode. */
+  /** Return complete bounded chunks as samples arrive. */
   push(samples: Float32Array): Float32Array[] {
     if (samples.length === 0) {
       return []
@@ -45,7 +38,7 @@ export class OfflineAudioChunker {
     return ready
   }
 
-  /** Returns all remaining buffered audio (any length below the chunk limit). */
+  /** Return the remaining audio, below the chunk limit. */
   flush(): Float32Array | null {
     if (this.bufferedSamples === 0) {
       return null
@@ -86,7 +79,7 @@ export class OfflineAudioChunker {
         bestIndex = start + Math.floor(window / 2)
       }
     }
-    // Why: the split must consume at least one sample or push() would loop forever.
+    // Consume at least one sample or push() loops forever.
     return Math.max(1, bestIndex)
   }
 }

@@ -329,9 +329,6 @@ describe('estimateRenderRowSize', () => {
   })
 
   it('activates a secondary header as soon as its row reaches the top (no spacer dead zone)', () => {
-    // Regression: the swap must fire when the header row reaches the top
-    // (scrollOffset === start), not 8px later. Gating on start + spacer left
-    // the previous repo's opaque header pinned over the incoming one.
     expect(
       getActiveStickyHeaderIndexForScroll({
         rangeStartIndex: 1,

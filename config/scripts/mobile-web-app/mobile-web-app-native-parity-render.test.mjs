@@ -1,7 +1,4 @@
-/**
- * Where the browser's defaults paint something the native app does not, measured in the engine the
- * Android shell runs, at a phone's density, with the plugins and document styles the page ships.
- */
+// Measure browser defaults absent from native UI at phone density, with shipped plugins/document styles.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,9 +16,8 @@ import { createBundleServer, readShellCsp } from './preview/mobile-web-app-rende
 
 const mobileDir = fileURLToPath(new URL('../../../mobile', import.meta.url))
 
-// The emulator the audit measured on is 480 dpi, which a WebView reports as 3. Chromium by launch
-// flag, not Playwright's emulated scale, under which it floors borders to CSS px as no phone does.
-// WebKit (the iOS shell) takes the emulated scale, which is how it paints a sub-pixel border.
+// Android’s measured 480dpi is scale 3: Chromium launch flag preserves subpixel borders, unlike Playwright emulation.
+// WebKit uses emulated scale, matching iOS subpixel border paint.
 const ENGINES = [
   {
     name: 'chromium',
@@ -42,8 +38,7 @@ const ENGINES = [
   }
 ]
 
-// Required, not imported: the page's own dependencies require react-native, and esbuild then
-// resolves every importer to the package's CommonJS build, so that is the copy the page ships.
+// Require CommonJS copy like page dependencies; importing would measure a different react-native build.
 const PAGE_ENTRY = `
 import { createElement as h } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -75,7 +70,7 @@ beforeAll(async () => {
   scratch = await mkdtemp(join(mobileDir, '.tmp', 'native-parity-render-'))
   const outDir = join(scratch, 'bundle')
   await mkdir(outDir, { recursive: true })
-  // The page's own options minus its entry and chunking, so a shim the builder drops fails here.
+  // Reuse page options except entry/chunking so dropping a builder shim fails here.
   const shipped = mobileWebAppBuildOptions([])
   await esbuild.build({
     ...shipped,
@@ -136,14 +131,14 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
   it('paints a StyleSheet.hairlineWidth-tall separator one device pixel tall at a fractional offset', async () => {
     const page = await openPage(engine)
     try {
-      // 10.1 CSS px down: a 0.5 px separator straddles two device rows there in both engines.
+      // At 10.1 CSS px, 0.5px separator straddles two device rows in both engines.
       const shot = pngjs.PNG.sync.read(
         await page.locator('[data-testid="separator-box"]').screenshot({ scale: 'device' })
       )
       const column = Math.floor(shot.width / 2)
       let darkRows = 0
       for (let y = 0; y < shot.height; y++) {
-        // Pure black only: the clip's last row can catch the #222222 border drawn below it.
+        // Count pure black only; final clip row may include neighboring #222222 border.
         if (shot.data[(y * shot.width + column) * 4] < 16) {
           darkRows++
         }
@@ -170,8 +165,7 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
   })
 
   it('leaves only selectable text and editable fields selectable, as native does', async () => {
-    // The iOS shell keeps WebKit text interaction on so fields take text, and a hold on plain text
-    // would otherwise raise WebKit's selection over the page's own long press.
+    // iOS keeps WebKit text interaction for fields; plain-text holds must not raise selection over page long-press.
     const page = await openPage(engine)
     try {
       await page.type('[data-testid="input"]', 'typed')
@@ -192,7 +186,7 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
   })
 
   it("selects through the browser's own gesture only what native lets the user select", async () => {
-    // A double-click, not a Range: a script can select text a user cannot.
+    // Double-click tests user selectability; script-created Range can select otherwise unselectable text.
     const page = await openPage(engine)
     try {
       const selectedBy = async (testId) => {
@@ -217,8 +211,7 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
   })
 
   it('applies the same to text a modal portals outside #root, and keeps its fields selectable', async () => {
-    // react-native-web's Modal appends to document.body, so a rule on #root would miss sheets.
-    // The fields' callout exemption goes unmeasured: desktop WebKit lacks the property.
+    // RN-Web Modal portals to body, outside #root rules; desktop WebKit cannot measure fields’ callout exemption.
     const page = await openPage(engine, '#modal')
     try {
       await page.waitForSelector('[data-testid="modal-text"]')

@@ -1,5 +1,4 @@
-// Layout-owner build only: main drops the stored layout of workspaces the catalog no longer
-// validates, by the same rule the window applies when it hydrates, so neither keeps what the other dropped.
+// Main and renderer must share workspace validity or load will resurrect layouts one side discarded.
 
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -31,7 +30,7 @@ type PurgeStore = {
 const ownedByPairedHost = (hostId: string | null | undefined): boolean =>
   parseExecutionHostId(hostId)?.kind === 'runtime'
 
-/** The window's hydration rule: floating and every folder key always stay (the window adds them). */
+/** Match hydration: floating and folder workspaces always survive. */
 function invalidWorkspaceKeys(
   session: WorkspaceSessionState,
   catalog: WorkspaceValidityCatalog,
@@ -53,7 +52,7 @@ function dropInvalidWorkspaces(
   inScope: (key: string) => boolean = () => true
 ): void {
   for (const hostId of store.getWorkspaceSessionHostIds()) {
-    // A paired host's catalog lives on that host; not seeing it here proves nothing.
+    // A missing paired-host catalog cannot prove its workspaces invalid.
     if (ownedByPairedHost(hostId)) {
       continue
     }
@@ -63,10 +62,7 @@ function dropInvalidWorkspaces(
   }
 }
 
-/**
- * At load no listing has run, so only an unregistered repo is invalid. Repos a paired host still
- * names, and a staged migration's repos, count as registered, exactly as the load sweep keeps them.
- */
+/** Before listing, purge only unregistered repos; paired-host and staged-migration repos still count. */
 export function dropInvalidWorkspaceLayoutsAtLoad(store: PurgeStore, state: PersistedState): void {
   const repoIds = new Set(store.getRepos().map((repo) => repo.id))
   for (const staged of state.orcadMigrationStagedCatalogs ?? []) {
@@ -92,10 +88,7 @@ export function dropInvalidWorkspaceLayoutsAtLoad(store: PurgeStore, state: Pers
   })
 }
 
-/**
- * After a listing main serves: drops that repo's workspaces an authoritative scan no longer finds.
- * Hidden rows still count as found: hiding a worktree must not close its tabs.
- */
+/** Authoritative scans can invalidate absent workspaces; hidden rows must retain their tabs. */
 export function dropWorkspacesTheListingInvalidates(
   store: PurgeStore,
   result: DetectedWorktreeListResult | { providerAbortStatus: unknown } | null
@@ -104,14 +97,14 @@ export function dropWorkspacesTheListingInvalidates(
     return
   }
   const { repoId, catalogVersion } = result
-  // A create or remove since the scan began leaves its rows short of live worktrees.
+  // Catalog mutations since scan start make absence evidence stale.
   if (
     !catalogVersion ||
     isWorktreeCatalogVersionBefore(catalogVersion, getLocalWorktreeCatalogVersion(repoId))
   ) {
     return
   }
-  // A repo id registered on two hosts shares its keys; one host's scan cannot speak for the other.
+  // One host's scan cannot invalidate keys shared by same-ID repos on other hosts.
   if (store.getRepos().filter((repo) => repo.id === repoId).length !== 1) {
     return
   }

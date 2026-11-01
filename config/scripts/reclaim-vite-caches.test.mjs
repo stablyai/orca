@@ -182,6 +182,14 @@ it('does not sweep while cache initialization holds the maintenance lock', async
 
 it('tracks a real Vite server until shutdown has completed', async () => {
   const options = await fixture()
+  let unblockClose
+  let enteredClose
+  const closeBlocked = new Promise((resolve) => {
+    unblockClose = resolve
+  })
+  const closeEntered = new Promise((resolve) => {
+    enteredClose = resolve
+  })
   const server = await createServer({
     configFile: false,
     root: options.worktree,
@@ -189,13 +197,30 @@ it('tracks a real Vite server until shutdown has completed', async () => {
     logLevel: 'silent',
     server: { middlewareMode: true, watch: null, hmr: false },
     optimizeDeps: { noDiscovery: true, include: [] },
-    plugins: [createViteCacheRetentionPlugin(options.cacheRoot)]
+    plugins: [
+      createViteCacheRetentionPlugin(options.cacheRoot),
+      {
+        name: 'hold-vite-close',
+        async closeBundle() {
+          enteredClose()
+          await closeBlocked
+        }
+      }
+    ]
   })
   try {
     await age(options.cacheRoot)
     expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({ entries: 0 })
   } finally {
-    await server.close()
+    const closing = server.close()
+    try {
+      await closeEntered
+      await age(options.cacheRoot)
+      expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({ entries: 0 })
+    } finally {
+      unblockClose()
+      await closing
+    }
   }
   expect(await readdir(join(options.cacheRoot, VITE_CACHE_USAGE_DIRECTORY))).toEqual([])
   expect(await reclaimViteCaches({ ...options, apply: true })).toMatchObject({ entries: 0 })

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -7,6 +7,7 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { formatFileExplorerPathsForClipboard } from './file-explorer-selection'
+import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import {
   fileExplorerHasRedo,
   fileExplorerHasUndo,
@@ -30,12 +31,7 @@ export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): b
   )
 }
 
-/**
- * Keyboard shortcuts for the file explorer.
- *
- * All shortcuts (bare-key and modifier) only fire when focus is inside
- * the explorer container — they must never intercept the editor or terminal.
- */
+/** Scope all explorer shortcuts to its focused container so editor/terminal input remains untouched. */
 export function useFileExplorerKeys(opts: {
   containerRef: React.RefObject<HTMLDivElement | null>
   rowProjection: FileExplorerRowProjection
@@ -52,6 +48,7 @@ export function useFileExplorerKeys(opts: {
   requestDeleteAll: (nodes: TreeNode[]) => void
   scrollToIndex: (index: number) => void
   activeWorktreeId: string | null
+  pathOwner: LocalPathOpenOwner
 }): void {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
@@ -70,6 +67,10 @@ export function useFileExplorerKeys(opts: {
   selectedPathsRef.current = opts.selectedPaths
   const selectedNodeRef = useRef(opts.selectedNode)
   selectedNodeRef.current = opts.selectedNode
+  const pathOwnerRef = useRef(opts.pathOwner)
+  useLayoutEffect(() => {
+    pathOwnerRef.current = opts.pathOwner
+  }, [opts.pathOwner])
   const startRenameRef = useRef(opts.startRename)
   startRenameRef.current = opts.startRename
   const requestDeleteRef = useRef(opts.requestDelete)
@@ -88,9 +89,7 @@ export function useFileExplorerKeys(opts: {
   activeWorktreeIdRef.current = opts.activeWorktreeId
 
   useEffect(() => {
-    // Find the row index whose button is currently focused. Each virtualized
-    // row's wrapper carries data-index; the inline-rename slot is the only
-    // wrapper without a real TreeNode, so it falls back to the row above.
+    // Use virtual-row data-index; inline rename has no TreeNode and falls back to the row above.
     const findFocusedIndex = (): number | null => {
       const el = document.activeElement as HTMLElement | null
       if (!el || !opts.containerRef.current?.contains(el)) {
@@ -153,9 +152,7 @@ export function useFileExplorerKeys(opts: {
         return
       }
 
-      // ── Undo/redo for explorer mutations (only when this panel should own the chord).
-      // Why: require focus inside the explorer shell (includes the scrollbar, not just
-      // the viewport — Radix renders the scrollbar as a sibling of the viewport).
+      // Undo owns the whole shell, including Radix’s scrollbar sibling outside the viewport.
       const inExplorer = focusInExplorer()
       const platform = getShortcutPlatform()
       const wantUndo =
@@ -180,7 +177,6 @@ export function useFileExplorerKeys(opts: {
         return
       }
 
-      // ── Bare-key shortcuts: only when explorer has focus ──
       if (focusInExplorer()) {
         if (
           applyFileExplorerNavigation(
@@ -204,7 +200,6 @@ export function useFileExplorerKeys(opts: {
           return
         }
 
-        // ── Space activates the focused row (open file / toggle folder). ──
         if (e.key === ' ' && !e.shiftKey) {
           const focused = findFocusedIndex()
           const node =
@@ -221,7 +216,8 @@ export function useFileExplorerKeys(opts: {
         const node =
           (focused !== null ? rowProjectionRef.current.getRowAtIndex(focused) : null) ??
           selectedNodeRef.current
-        if (node) {
+        // Rows listed through an outside folder link are browse-only; main refuses their writes.
+        if (node && !node.outsideProject) {
           if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
             e.preventDefault()
             startRenameRef.current(node)
@@ -235,15 +231,15 @@ export function useFileExplorerKeys(opts: {
           )
           if (wantsDelete) {
             e.preventDefault()
-            const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
+            const selectedNodes = rowProjectionRef.current
+              .getRowsByPaths(selectedPathsRef.current)
+              .filter((selected) => !selected.outsideProject)
             requestDeleteAllRef.current(selectedNodes.length > 1 ? selectedNodes : [node])
             return
           }
         }
       }
 
-      // ── Modifier shortcuts: only when focus is inside the explorer ──
-      // Scoped to explorer focus to avoid intercepting editor/terminal shortcuts
       if (!focusInExplorer()) {
         return
       }
@@ -272,19 +268,17 @@ export function useFileExplorerKeys(opts: {
       if (fallbackNodes.length === 0) {
         return
       }
-      // ⌥⇧⌘C (Mac) / Ctrl+Shift+Alt+C (Win) — Copy Relative Path
       if (wantsCopyRelativePath) {
         e.preventDefault()
         window.api.ui.writeClipboardText(
-          formatFileExplorerPathsForClipboard(fallbackNodes, 'relative')
+          formatFileExplorerPathsForClipboard(fallbackNodes, 'relative', pathOwnerRef.current)
         )
         return
       }
-      // ⌥⌘C (Mac) / Shift+Alt+C (Win) — Copy Path
       if (wantsCopyPath) {
         e.preventDefault()
         window.api.ui.writeClipboardText(
-          formatFileExplorerPathsForClipboard(fallbackNodes, 'absolute')
+          formatFileExplorerPathsForClipboard(fallbackNodes, 'absolute', pathOwnerRef.current)
         )
       }
     }

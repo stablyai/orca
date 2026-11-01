@@ -57,12 +57,10 @@ export function parseWslClaudePluginMetadataOutput(
 }
 
 async function executeWslMetadataRead(distro: string, script: string): Promise<string> {
-  // Why bash: this payload was authored for bash, and the migration must not
-  // quietly change its interpreter.
+  // Preserve the payload's Bash interpreter.
   const result = await runWslProcess({
     distro,
-    // 'none': base64/printf/stat over $HOME paths. The probe would spend up
-    // to 4s of a 5s budget before the read of a file up to 4MB begins.
+    // Metadata needs no login PATH; probing can consume 4s of the 5s budget before a 4MB read.
     loginPath: 'none',
     script,
     shell: 'bash',
@@ -84,8 +82,7 @@ export async function discoverClaudePluginSkillSourcesInWsl(args: {
 }): Promise<SkillScanRoot[]> {
   const paths = getClaudePluginMetadataPaths(args.homeDir, args.cwd, pathPosix)
   const orderedPaths = [paths.installedPlugins, ...paths.settings]
-  // Why: plugin enablement and install paths belong to the distro just like
-  // SKILL.md identity; reading them through UNC could apply Windows semantics.
+  // Read plugin metadata inside its distro; UNC access could apply Windows path semantics.
   const output = await executeWslMetadataRead(
     args.distro,
     buildWslClaudePluginMetadataCommand(orderedPaths)

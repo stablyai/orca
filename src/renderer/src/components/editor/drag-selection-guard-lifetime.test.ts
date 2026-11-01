@@ -46,7 +46,7 @@ afterEach(async () => {
     editor.destroy()
   }
   await Promise.resolve()
-  // Why: release the original source's leaked callback when running the regression override.
+  // Release leaked baseline callbacks when running the regression override.
   for (const listener of selectionListeners) {
     document.removeEventListener('selectionchange', listener)
   }

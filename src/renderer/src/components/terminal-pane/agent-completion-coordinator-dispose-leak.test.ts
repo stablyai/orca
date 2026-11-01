@@ -1,16 +1,4 @@
-/**
- * Memory-leak regression: lastCompletionIdentityByPaneKey must not retain an entry
- * per genuinely-torn-down coordinator.
- *
- * `dispatchCompletion` does `lastCompletionIdentityByPaneKey.set(options.paneKey, …)`
- * on every agent completion. `paneKey` is `${tabId}:${leafUUID}` — a never-reused
- * per-pane UUID, so the key space is unbounded. The map is module-scoped on purpose
- * so it survives a live-stream remount (dispose-then-recreate with the same paneKey
- * while the PTY/hook stream stays live). But `dispose()` cleared only local timers
- * and never the map, so on genuine teardown (PTY gone) the identity leaked — one
- * entry per closed pane for the renderer session. The fix evicts on dispose only
- * when the pane is no longer live, preserving the cross-remount dedup.
- */
+/** Evict completion identities on genuine teardown, but retain same-pane live-remount dedup without leaking never-reused leaf UUIDs. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   createAgentCompletionCoordinator,
@@ -34,8 +22,7 @@ function makeOptions(paneKey: string, live: { value: boolean }): AgentCompletion
   }
 }
 
-// A working->done hook sequence with finite stateStartedAt makes the coordinator
-// write a completion identity into the module map (the leaking write).
+// Complete a stamped working→done turn to populate the shared identity map.
 function driveCompletion(
   paneKey: string,
   live: { value: boolean }
@@ -71,18 +58,15 @@ describe('agent completion coordinator identity map stays bounded (leak regressi
   it('writes an identity on completion and clears it on genuine teardown', () => {
     const live = { value: true }
     const coordinator = driveCompletion('tab-1:leaf-x', live)
-    // The map is genuinely exercised by the completion.
     expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(1)
 
-    // Genuine teardown: the PTY is gone.
     live.value = false
     coordinator.dispose()
     expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(0)
   })
 
   it('retains the identity across a live remount (dispose while still live)', () => {
-    // Cross-remount dedup: the pane remounts (dispose-then-recreate) while the
-    // stream stays live, so the identity must survive the dispose.
+    // Retain identity across remount while the same pane stream stays live.
     const live = { value: true }
     const coordinator = driveCompletion('tab-1:leaf-remount', live)
     expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(1)

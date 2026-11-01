@@ -4,7 +4,11 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { runPullRequestStateUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
-import { GITHUB_PR_MERGE_METHOD_LABELS } from '../../../../../shared/github/pull-request-merge-methods'
+import {
+  getPullRequestMergeConfirmationTitle,
+  getPullRequestMergeMethodLabel,
+  getPullRequestStateConfirmationTitle
+} from '@/components/github/pull-request-confirmation-copy'
 import type { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
 import type {
   GitHubOwnerRepo,
@@ -15,6 +19,7 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { translate } from '@/i18n/i18n'
 import type { GitHubPRMergeStatePresentation } from '@/components/github-pr-merge-state'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export async function changePullRequestState(args: {
   canMutateState: boolean
@@ -45,10 +50,7 @@ export async function changePullRequestState(args: {
       ? translate('auto.components.PullRequestPage.77482513f8', 'Close')
       : translate('auto.components.PullRequestPage.2f5195c6a0', 'Reopen')
   const confirmed = await args.confirm({
-    title: translate('auto.components.PullRequestPage.eec3706a6a', '{{value0}} PR #{{value1}}?', {
-      value0: label,
-      value1: args.item.number
-    }),
+    title: getPullRequestStateConfirmationTitle(args.nextState, args.item.number),
     description:
       args.nextState === 'closed'
         ? translate(
@@ -126,12 +128,9 @@ export async function mergePullRequest(args: {
   if (args.mergeDisabled) {
     return
   }
-  const label = GITHUB_PR_MERGE_METHOD_LABELS[args.method]
+  const label = getPullRequestMergeMethodLabel(args.method)
   const confirmed = await args.confirm({
-    title: translate('auto.components.PullRequestPage.eec3706a6a', '{{value0}} PR #{{value1}}?', {
-      value0: label,
-      value1: args.item.number
-    }),
+    title: getPullRequestMergeConfirmationTitle(args.method, args.item.number),
     description: translate(
       'auto.components.PullRequestPage.a63b3c159c',
       'This will update the pull request on GitHub.'
@@ -165,7 +164,7 @@ export async function mergePullRequest(args: {
             prRepo: args.prRepo
           })
     if (!result.ok) {
-      toast.error(result.error)
+      toast.error(codeHostErrorText(result))
       return
     }
     args.applyStatePatch('merged')
@@ -237,7 +236,7 @@ export async function setPullRequestAutoMerge(args: {
             prRepo: args.prRepo
           })
     if (!result.ok) {
-      toast.error(result.error)
+      toast.error(codeHostErrorText(result))
       return
     }
     if (args.mergeTarget.kind === 'environment') {

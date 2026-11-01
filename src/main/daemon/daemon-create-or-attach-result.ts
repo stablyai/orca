@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
-import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
+import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export type DaemonCreateOrAttachResult = {
@@ -14,12 +14,10 @@ export type DaemonCreateOrAttachResult = {
   wslDistro?: string | null
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   incarnationId?: PtyIncarnationId
-  /**
-   * Whether the daemon process itself could read the requested cwd at spawn. Only the daemon's own
-   * verdict counts: macOS TCC scopes folder access per process tree, so the app's view of the same
-   * path proves nothing about the daemon's (#17696). Omitted by daemons predating this field.
-   */
+  /** Daemon-side cwd access only; app-side TCC access is independent. Older daemons omit this field. */
   cwdReadableByDaemon?: boolean
+  /** The live child can no longer take input through its PTY; older daemons omit this field. */
+  inputClosed?: true
 }
 
 export function getDaemonSessionResultMetadata(session: {
@@ -34,8 +32,7 @@ export function getDaemonSessionResultMetadata(session: {
   return {
     ...(session.launchAgent ? { launchAgent: session.launchAgent } : {}),
     ...(session.historySeeded !== undefined ? { historySeeded: session.historySeeded } : {}),
-    // Why: null authoritatively identifies a native session; omission is
-    // reserved for older daemons that predate this wire field.
+    // Null identifies native sessions; only older daemons omit the field.
     wslDistro: session.wslDistro
   }
 }

@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'

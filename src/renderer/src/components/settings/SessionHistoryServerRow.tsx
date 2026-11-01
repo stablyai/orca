@@ -121,7 +121,7 @@ export function SessionHistoryServerRow({
     )
   }
   if (!connected) {
-    // Checking is not yet evidence of an unreachable host, so it does not claim the index was left behind.
+    // Checking cannot yet establish that the host is unreachable.
     const checking = connectionState === 'checking'
     return (
       <SessionHistoryComputerRow
@@ -137,7 +137,6 @@ export function SessionHistoryServerRow({
       />
     )
   }
-  // An off computer says so with its switch; a sentence repeating it is noise.
   let statusText: string | undefined = sessionSearchCheckingMessage()
   if (failed) {
     statusText = sessionSearchReadErrorMessage()
@@ -155,7 +154,6 @@ export function SessionHistoryServerRow({
   )
 }
 
-/** What the pane needs to count and order this row, from what the row already knows. */
 function resolveServerState(args: {
   tooOld: boolean
   connected: boolean
@@ -166,7 +164,7 @@ function resolveServerState(args: {
   if (args.tooOld) {
     return 'needs-update'
   }
-  // A probe still in flight is not evidence of an unreachable host.
+  // An in-flight probe cannot establish that the host is unreachable.
   if (args.checking) {
     return 'checking'
   }

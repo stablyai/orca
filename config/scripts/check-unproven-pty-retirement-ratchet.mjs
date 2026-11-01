@@ -2,9 +2,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
 
-// Ratchet on PTY retirements that rest on no exit proof (src/main/pty-exit-proof.ts): unproven
-// ones, and ownership drops outside `finishPtyShutdown`, which name no evidence at all. Each drops
-// the handle a later stop could use while the process may still run. Counts may only go down.
+// Ratchet retirements lacking exit proof and ownership drops outside finishPtyShutdown downward: both can lose the stop handle while processes live.
 
 const BASELINE_PATH = 'config/unproven-pty-retirement-baseline.txt'
 const SCAN_ROOTS = ['src']

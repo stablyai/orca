@@ -7,7 +7,7 @@ import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import {
   findCoveringLocalWatchRoot,
   observeLocalWatcherEvents
-} from '../../ipc/local-watcher-event-observers'
+} from '../../ipc/filesystem/watchers/local-watcher-event-observers'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
 import { usesHostGitForWslLinkedWorktree } from '../wsl-linked-worktree-git-routing'
 import {
@@ -36,7 +36,6 @@ const STAT_CONCURRENCY = 8
 const trackers = new Map<string, DriveCheckoutSuspectPaths>()
 let stopObserving: (() => void) | null = null
 
-/** Whether `args` run under the Windows-checkout minimal stat config in this checkout. */
 function runsMinimalStat(
   args: string[],
   worktreePath: string,
@@ -79,10 +78,7 @@ function trackerFor(worktreePath: string, options: GetStatusOptions): DriveCheck
   return tracker
 }
 
-/**
- * Replaces minimal-stat unstaged rows for `checked` paths with the default-stat
- * rows. Staged rows compare index to HEAD, which checkStat never touches.
- */
+/** Replace checked unstaged rows; staged index-to-HEAD rows are independent of checkStat. */
 export function mergeSuspectStatus(
   minimal: readonly GitStatusEntry[],
   checked: ReadonlySet<string>,
@@ -169,10 +165,7 @@ async function readTargetedStatus(
   return parser.entries
 }
 
-/**
- * Rechecks watcher-reported paths with default checkStat and overrides their
- * minimal-stat rows. Without a live watcher for the checkout this is a no-op.
- */
+/** Recheck watcher suspects with default stat, retaining confirmed-dirty paths even without a live watcher. */
 export async function reconcileDriveCheckoutSuspects(
   worktreePath: string,
   entries: GitStatusEntry[],
@@ -247,10 +240,7 @@ function pathspecScope(pathspec: string): string {
   return scope === '.' ? '' : scope
 }
 
-/**
- * Suspects inside `pathspecs` (worktree-relative files or folders; `.` is the whole worktree)
- * when writes there run minimal-stat, else none. Reads only the existing tracker.
- */
+/** Read existing suspects within worktree-relative pathspecs (. means all), only for minimal-stat writes. */
 export function driveCheckoutSuspectsWithin(
   worktreePath: string,
   pathspecs: readonly string[],

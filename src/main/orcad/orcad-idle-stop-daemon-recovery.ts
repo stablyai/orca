@@ -1,10 +1,5 @@
-/**
- * Restores terminal admission after a returning client cancels an idle stop.
- *
- * Once the daemon accepts idle retirement, or may have accepted it, it never admits a terminal
- * again, so a server that stays up must replace it. A replacement ends whatever the old daemon
- * still runs, so it happens only after the daemon itself atomically agreed to retire.
- */
+// Cancelled idle stops may leave daemon admission closed. Replace only after atomic retirement
+// agreement: replacement could otherwise kill the old daemon’s live sessions.
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import type { OrcadDaemonRetirement } from './orcad-daemon-retirement'
 import { ORCAD_DAEMON_RETIREMENT_TIMEOUT_MS } from './orcad-stop-deadlines'
@@ -13,13 +8,12 @@ type RetirementOutcome = Pick<OrcadDaemonRetirement, 'retirement' | 'lateRetirem
 
 type OrcadIdleStopDaemonRecoveryPorts = {
   admissionClosed: () => boolean
-  /** Asks the daemon to retire again; its own census and fence make the verdict atomic. */
+  /** Atomically recheck census and retirement fence in the daemon. */
   retireAgain: () => Promise<RetirementOutcome>
   replaceDaemon: () => Promise<unknown>
   timeoutMs?: number
 }
 
-/** `serving` when new terminals can start; `unservable` when this server cannot run any. */
 export async function recoverDaemonAfterCancelledIdleStop(
   outcome: RetirementOutcome,
   ports: OrcadIdleStopDaemonRecoveryPorts
@@ -33,7 +27,7 @@ export async function recoverDaemonAfterCancelledIdleStop(
     if (!ports.admissionClosed()) {
       return 'serving'
     }
-    // A lost stop reply leaves the daemon's verdict unknown; only the daemon can settle it.
+    // Only the daemon can resolve a lost retirement reply.
     const retry = await ports
       .retireAgain()
       .catch((): RetirementOutcome => ({ retirement: 'unverifiable' }))

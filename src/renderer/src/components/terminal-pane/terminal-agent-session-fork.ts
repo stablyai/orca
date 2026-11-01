@@ -1,6 +1,8 @@
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { settleAgentTabLaunch } from '@/lib/launch-agent-in-new-tab-host-agents'
+import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import {
   buildAgentSessionForkPrompt,
   buildBoundedSessionTranscript
@@ -101,8 +103,7 @@ export function prepareAgentSessionForkFromPane({
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.launchAgent
   )
   const agent = sourceAgent ?? tabAgent
-  // Why: v1 is a context fork, not a process clone. Capturing scrollback keeps
-  // SSH and local panes on the same path because both expose xterm state here.
+  // This forks context, not the process; xterm capture works for both local and SSH panes.
   const prompt = buildAgentSessionForkPrompt({
     capturedText: pane.serializeAddon.serialize({ scrollback: 800 }),
     sourceLabel: paneKey,
@@ -134,9 +135,7 @@ export async function copyAgentSessionForkContext(
   return copyForkContext(fork.prompt, fork.pane)
 }
 
-// Why: the standalone "Copy Context" action copies the bounded transcript on its
-// own — for pasting into another tool — so it must not carry the fork prompt's
-// "this is a fork… acknowledge and wait" framing the dialog button uses.
+// Standalone Copy Context omits the dialog’s fork instructions so it can be pasted into another tool.
 export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promise<boolean> {
   const transcript = buildBoundedSessionTranscript(
     pane.serializeAddon.serialize({ scrollback: 800 })
@@ -280,8 +279,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     promptDelivery: 'draft',
     launchSource: 'terminal_context_menu',
     agentSessionLaunchPlan,
-    // Why: the launcher opens the fork's surface itself (chat, host terminal or local terminal), so
-    // revealing must not seed a sibling shell beside it.
+    // The launcher opens the fork surface; revealing must not seed a sibling shell.
     beforeSurfaceOpen: () =>
       activateAndRevealWorktree(forkWorktreeId, {
         sidebarRevealBehavior: 'auto',
@@ -289,7 +287,14 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
       }) !== false,
     ...(launchPlatform ? { launchPlatform } : {})
   })
-  if (!result) {
+  const settled = await settleAgentTabLaunch(result)
+  const delivery =
+    result?.promptDeliveryResult ??
+    (settled.kind === 'structured' ? settled.promptDeliveryResult : undefined)
+  if (
+    (settled.kind !== 'terminal' && settled.kind !== 'structured') ||
+    (delivery && !(await newAgentPromptOutcome({ delivery })).delivered)
+  ) {
     activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
     return copyAgentSessionForkContext(fork)
   }

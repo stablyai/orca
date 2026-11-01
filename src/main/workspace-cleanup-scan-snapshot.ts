@@ -33,7 +33,7 @@ type PersistedWorkspaceCleanupScanSnapshot = {
   result: WorkspaceCleanupScanResult
 }
 
-/** Why a fingerprint: a classifier bump reshuffles tiers/blockers wholesale, so an older snapshot must read as absent, not stale-but-plausible. */
+/** Classifier changes invalidate cached tiers and blockers. */
 export function workspaceCleanupScanSnapshotFingerprint(): string {
   return `classifier:${WORKSPACE_CLEANUP_CLASSIFIER_VERSION}|includeAllWorkspaces`
 }
@@ -59,7 +59,6 @@ function isPersistableCandidate(value: unknown): value is WorkspaceCleanupCandid
   )
 }
 
-/** Shape guard so a corrupt persisted blob degrades to null instead of throwing at startup. */
 function parseSnapshot(parsed: unknown): WorkspaceCleanupScanResult | null {
   if (!isRecord(parsed)) {
     return null
@@ -117,7 +116,7 @@ function patchCandidates(
     return replacement ?? candidate
   })
   candidates.push(...freshById.values())
-  // Why keep scannedAt: it marks the last FULL scan; a focused rescan must not advertise fleet-wide freshness.
+  // Only a full scan may advance fleet-wide freshness.
   return { ...existing, candidates }
 }
 
@@ -188,13 +187,7 @@ function clearSupersededPrunes(
   }
 }
 
-/**
- * Persist a completed scan: a broad (includeAllWorkspaces) scan replaces the snapshot, anything
- * narrower patches matching rows into it. Never throws — the snapshot is a refetchable cache.
- */
-// Why: skip the full snapshot read whose only purpose is the scannedAt
-// comparison — on a large fleet that read is a multi-hundred-KB synchronous
-// JSON.parse per scan.
+// Avoid reading and parsing the full snapshot just to compare scan times.
 const lastPersistedScannedAtByFile = new Map<string, number>()
 const MAX_PERSISTED_SCAN_FILES = 512
 
@@ -217,8 +210,7 @@ export async function persistWorkspaceCleanupScanResult(
   try {
     await withSidecarSnapshotQueue(file, async () => {
       const filteredResult = excludeRowsPrunedDuringScan(file, result)
-      // worktreeIds (even empty) is a targeted scan; persisting it as broad
-      // would replace the fleet snapshot with a subset.
+      // Even an empty worktreeIds array scopes the scan; it cannot replace the fleet snapshot.
       const broad =
         !args.worktreeId && !Array.isArray(args.worktreeIds) && args.includeAllWorkspaces === true
       if (broad) {
@@ -242,7 +234,7 @@ export async function persistWorkspaceCleanupScanResult(
         return
       }
       const existing = await readWorkspaceCleanupScanSnapshot(snapshotDirectory)
-      // Why: a focused/legacy scan is a subset; without a broad baseline it is not a fleet snapshot.
+      // A focused scan cannot establish a fleet-wide baseline.
       if (!existing) {
         return
       }
@@ -296,7 +288,6 @@ async function pruneWorkspaceCleanupScanSnapshotsWithRegisteredTombstones(
   }
 }
 
-/** Drop removed workspaces in one sidecar transaction. Never throws. */
 export async function pruneWorkspaceCleanupScanSnapshots(
   snapshotDirectory: string,
   targets: readonly WorkspaceCleanupScanSnapshotPruneTarget[]
@@ -316,7 +307,6 @@ export async function finalizeWorkspaceCleanupScanSnapshotPrunes(
   )
 }
 
-/** Drop a removed workspace so it never resurrects from cache. Never throws. */
 export async function pruneWorkspaceCleanupScanSnapshot(
   snapshotDirectory: string,
   worktreeId: string,

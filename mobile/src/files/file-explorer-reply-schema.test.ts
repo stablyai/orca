@@ -27,7 +27,6 @@ describe('file explorer reply schemas', () => {
   it('requires the capped list and the note it draws', () => {
     const listed = { files: [], truncated: true }
     expect(legacyFileListSchema.safeParse(listed).success).toBe(true)
-    // One at a time, so a sibling requirement cannot stand in for the member under test.
     for (const member of ['files', 'truncated'] as const) {
       const { [member]: _dropped, ...without } = listed
       expect(legacyFileListSchema.safeParse(without).success).toBe(false)

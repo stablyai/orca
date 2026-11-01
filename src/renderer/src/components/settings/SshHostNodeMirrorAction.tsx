@@ -7,7 +7,6 @@ import {
 } from '@/ssh/node-dist-mirror-recovery'
 import { Button } from '../ui/button'
 
-/** The way out of a setup that couldn't download Node.js: set a mirror, or check the one set. */
 export function SshHostNodeMirrorAction({
   targetId,
   status,

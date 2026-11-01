@@ -10,7 +10,6 @@ type PromptClaim = {
   expiry: ReturnType<typeof setTimeout>
 }
 
-/** Authorizes one startup operation against current execution-owner facts. */
 export class OpenCodeStartupPromptClaims {
   private readonly pending = new Map<string, PromptClaim>()
 

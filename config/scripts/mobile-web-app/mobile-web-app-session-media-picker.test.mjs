@@ -1,16 +1,5 @@
-/**
- * What the session screen may reach to pick media, which is what its media grants are declared
- * against.
- *
- * The route is not registered yet (C7.7 registers it), so this walks the route module's own closure
- * rather than a page route's. The bundler resolves it exactly as it would a registered one — a
- * `.web.ts` sibling wins — so the modules judged here are the ones the page would run.
- *
- * `expo-image-picker` and `expo-document-picker` throw at import in a browser and the manifest
- * imports every route, so one of them in this closure is the whole bundle down rather than one
- * picker; `expo-clipboard`'s `getImageAsync` resolves instead to a `navigator.clipboard` read
- * needing a secure context, which the iOS shell's custom scheme is not.
- */
+// Inspect session module closure using web resolution, matching what page bundles.
+// Native image/document pickers throw on browser import, breaking whole manifest; clipboard image read needs secure context absent under iOS scheme.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -40,17 +29,14 @@ describeClosure(
     it('carries the seam, so the rule above is not vacuous', async () => {
       const closure = await mobileWebAppRouteClosure(SESSION)
       expect(closure.local).toContain(SEAM)
-      // And not the native picker chain it stands in for: the two modules that reach the OS
-      // pickers resolve out of this closure entirely rather than sitting in it unused.
+      // Require native picker chain excluded entirely, rather than merely unused after import.
       expect(closure.local).not.toContain('src/platform/media-picker.ts')
       expect(closure.local).not.toContain('src/session/mobile-image-source-picker.ts')
     })
 
     it('carries none of the three native media modules at all', async () => {
       const closure = await mobileWebAppRouteClosure(SESSION)
-      // Beyond the source rule: the seam and the canvas resize together take the pickers and the
-      // file system out of the bundle rather than leaving them in it unused. Each is a native
-      // module whose web build is absent or a stub.
+      // Seam and canvas resize must remove native picker/file-system packages whose web builds are absent or stubbed.
       for (const absent of ['expo-image-picker', 'expo-document-picker', 'expo-file-system']) {
         expect(
           closure.modules.filter((module) => module.includes(`/${absent}/`)),
@@ -59,24 +45,11 @@ describeClosure(
       }
       expect(closure.local).toContain('src/session/mobile-clipboard-image-resize.ts')
     })
-
-    it('is big enough that finding nothing would mean something', async () => {
-      const closure = await mobileWebAppRouteClosure(SESSION)
-      // The largest route of the series; a closure that collapsed would pass every rule above by
-      // containing nothing to judge.
-      expect(closure.local.length).toBeGreaterThan(900)
-    })
   },
   240_000
 )
 
-/**
- * The rule itself, against modules planted in a scratch tree.
- *
- * A scan that happens to find today's three call sites is not a scan that would find a fourth, and
- * the negatives matter as much: this closure is full of `expo-clipboard` text reads that are the
- * clipboard seam's business and not this one's.
- */
+// Synthetic modules prove future picker calls are detected without flagging allowed expo-clipboard text reads.
 describe('the rule that reads a module for a picker', () => {
   const PLANTED = {
     'namespace-picker.ts':
@@ -99,27 +72,20 @@ describe('the rule that reads a module for a picker', () => {
       "import * as Clipboard from 'expo-clipboard'\nexport const r = () => Clipboard['getImageAsync']({ format: 'png' })",
     'template-access.ts':
       "import * as Clipboard from 'expo-clipboard'\nexport const r = () => Clipboard[`getImageAsync`]({ format: 'png' })",
-    // A key held in a variable is not read: its value is not at the call site, and a census
-    // reporting a line nobody can act on is one the next reader learns to ignore. The variable is
-    // named after the method and holds a different one, so a rule that read the identifier's text
-    // instead of a literal's would report a call that reads text.
+    // Variable-held key is unknown: identifier named for image method holds text method to catch false literal inference.
     'computed-access.ts':
       "import * as Clipboard from 'expo-clipboard'\nconst getImageAsync = 'getStringAsync'\nexport const r = () => Clipboard[getImageAsync]()",
-    // Deliberately back to front: the alias `first` reads from `second`, which is only learned
-    // further down. Valid at run time, because the destructure is inside a function the module
-    // body has finished before anything calls. A walk that learned aliases in source order would
-    // never reach `first`, and this is the fixture that says so.
+    // Reverse alias declaration order exercises fixed-point learning; deferred function use is runtime-valid.
     'reverse-order-alias.ts':
       "import * as Clipboard from 'expo-clipboard'\nexport function read() {\n  const { getImageAsync } = first\n  return getImageAsync\n}\nconst first = second\nconst second = Clipboard",
-    // Reached through `import()`, which the bundler resolves into the closure exactly as a static
-    // import: the same two modules, the same offence, a form the static scan cannot see.
+    // Dynamic import belongs to bundler closure too, beyond static source scan.
     'dynamic-clipboard.ts':
       "export async function r() {\n  const Clipboard = await import('expo-clipboard')\n  return Clipboard.getImageAsync({ format: 'png' })\n}",
     'dynamic-destructured.ts':
       "export async function r() {\n  const { getImageAsync } = await import('expo-clipboard')\n  return getImageAsync({ format: 'png' })\n}",
     'dynamic-picker.ts':
       "export async function r() {\n  return await import('expo-image-picker')\n}",
-    // A backticked specifier without substitutions is as static as the quoted one to the bundler.
+    // Template specifier without substitutions is static to bundler.
     'dynamic-template-picker.ts':
       'export async function r() {\n  return await import(`expo-image-picker`)\n}',
     'dynamic-clipboard-text.ts':

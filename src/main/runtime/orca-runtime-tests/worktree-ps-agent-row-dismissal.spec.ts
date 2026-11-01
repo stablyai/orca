@@ -5,12 +5,7 @@ import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 
-/**
- * One store means one dismissal. Before PR 1b the runtime kept its own copy of the OSC row, so a
- * row the user dismissed on the desktop stayed in `orca worktree ps` and on the phone until the
- * PTY exited. These drive the real OSC byte path so the producer under test is the runtime's own
- * parse, not a hand-built snapshot.
- */
+/** Drive real OSC parsing so desktop dismissal also removes runtime and mobile rows. */
 const LEAF_ID = '77777777-7777-4777-8777-777777777777'
 const REMINTED_LEAF_ID = '88888888-8888-4888-8888-888888888888'
 const PANE_KEY = `tab-dismiss:${LEAF_ID}`
@@ -72,7 +67,6 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
 
     statusWiring.statusStore.dropStatusEntry(PANE_KEY)
 
-    // The PTY is untouched and still connected; only the store was told.
     expect(runtime['ptysById'].get('dismiss-pty')?.connected).toBe(true)
     const afterDismissal = await runtime.getWorktreePs()
     expect(
@@ -88,7 +82,6 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
       emitWorkingStatus(runtime, 1)
       expect(republish).toHaveBeenCalledWith(TEST_WORKTREE_ID)
 
-      // The same payload again changes nothing a client would render.
       republish.mockClear()
       emitWorkingStatus(runtime, 2)
       expect(republish).not.toHaveBeenCalled()
@@ -250,8 +243,7 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
   it('keeps runtime-owned legacy OSC rows in worktree.ps and mobile projections', async () => {
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
-    // Switch-on a saved legacy pane id is reminted to a UUID at load (store.ts:115, then
-    // terminal-layout-normalization.ts:149-160), so main's layout never holds `pane:7` (L80 E5).
+    // Main normalizes saved legacy pane ids to UUIDs before loading the layout.
     const leafId = ORCA_LAYOUT_OWNER_IS_MAIN ? '77777777-7777-4777-8777-777777777777' : 'pane:7'
     const paneKey = ORCA_LAYOUT_OWNER_IS_MAIN ? `legacy-tab:${leafId}` : 'legacy-tab:7'
     registerLivePty(runtime, 'legacy-pty', TEST_WORKTREE_ID, null, { tabId: 'legacy-tab', leafId })

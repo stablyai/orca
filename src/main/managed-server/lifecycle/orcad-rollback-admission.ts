@@ -1,4 +1,3 @@
-/** What a rollback's fenced recount refuses on, run through runFencedStop like an update's. */
 import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
 import type { OrcadRollbackResult } from '../install/orcad-remote-rollback'
 

@@ -57,7 +57,7 @@ function transcriptHandle(body = BODY) {
 }
 
 beforeEach(() => {
-  // The deadline quarantines the route, and a late release never lifts it.
+  // Late release never clears deadline quarantine, so reset between cases.
   resetWslTranscriptFsGateForTests()
   clearNativeChatTranscriptCache()
   mocks.resolve.mockReset()
@@ -65,9 +65,8 @@ beforeEach(() => {
   mocks.open.mockReset()
   releaseStall = undefined
   mocks.resolve.mockResolvedValue(UNC_PATH)
-  // The file itself never changes across the refusal and the recovery.
   mocks.stat.mockResolvedValue({ mtimeMs: 42, size: BODY.length })
-  // performance.now drives the route quarantine clock, so it must be faked too.
+  // Quarantine uses performance.now, which must advance with fake timers.
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
 })
 
@@ -87,7 +86,6 @@ describe('cached native chat transcript read after WSL gate refusals', () => {
     expect(await refused).toEqual({ error: WSL_TRANSCRIPT_FS_SLOW_MESSAGE })
     releaseStall?.()
     releaseStall = undefined
-    // The deadline's route back-off has to expire before the retry is admitted.
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
     mocks.open.mockResolvedValue(transcriptHandle())
 
@@ -108,7 +106,6 @@ describe('cached native chat transcript read after WSL gate refusals', () => {
 
     releaseStall?.()
     releaseStall = undefined
-    // The deadline's route back-off has to expire before the retry is admitted.
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
     mocks.open.mockResolvedValue(transcriptHandle())
 

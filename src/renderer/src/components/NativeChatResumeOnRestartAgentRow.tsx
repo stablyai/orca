@@ -13,30 +13,8 @@ import { resumeActivityLabel } from './native-chat-resume-activity-label'
 import { ResumeTreeRow } from './NativeChatResumeTreeRow'
 import { ResumeTreeDepthContext } from './native-chat-resume-tree-state'
 
-/**
- * One offered chat as a leaf of the resume tree: its checkbox in the list's shared left column, then,
- * indented for its depth, the provider glyph, "name - what it was doing", the model and an age —
- * the pieces of the sidebar's compact agent row.
- *
- * The sidebar's own `CompactAgentRow` cannot be reused — it takes a `DashboardAgentRow`, which
- * requires a live pane, tab and status entry, and every chat here is by definition stopped. The
- * pieces that do NOT need a live session are reused directly: `AgentIcon`, `agentTypeToIconAgent`,
- * `formatAgentTypeLabel`, `formatShortTimeAgo`, and the same model treatment (monospace, truncated,
- * hidden when empty).
- *
- * No state dot, deliberately. Every `AgentDotState` would mislead: `idle` and `unverifiable` both
- * presuppose a live pane, `interrupted` claims a stop or a newer message ended the turn, `failed`
- * a fault, `done` a finish, `working` a spinner. A missing dot beats a dot that says these agents
- * are running.
- *
- * After the name, what the chat was doing when Orca went away — mid-reply, waiting on the user,
- * subagents or monitoring — so rows the sidebar showed as working for different reasons differ.
- *
- * A chat an earlier resume could not carry on is the same row — selectable where a retry can run,
- * so Resume retries it — plus a status icon, a dismiss control, and a line saying what to do.
- *
- * A leaf of the resume tree; the enclosing workspace node supplies its depth.
- */
+/** Render stopped chats with the sidebar’s reusable icon/model/name pieces; CompactAgentRow requires a live pane/tab/status.
+ * Omit live-state dots because no state is proven. Failed resumes retain the row with actionable status; the enclosing workspace supplies depth. */
 export function ResumeCandidateRow({
   candidate,
   workspaceName,
@@ -104,7 +82,7 @@ export function ResumeCandidateRow({
         )
       }
     >
-      {/* AgentIcon carries no label of its own, so the provider was invisible to assistive tech. */}
+      {/* AgentIcon has no label, so name its provider for assistive technology. */}
       <span role="img" aria-label={agentLabel} className="inline-flex shrink-0">
         <AgentIcon agent={agentTypeToIconAgent(candidate.agent)} size={13} />
       </span>
@@ -123,7 +101,7 @@ export function ResumeCandidateRow({
           {model}
         </span>
       )}
-      {/* `formatShortTimeAgo` takes (timestamp, now) and subtracts internally — NOT a delta. */}
+      {/* formatShortTimeAgo takes a timestamp and current time, not a delta. */}
       <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
         {formatShortTimeAgo(candidate.recordedAt, listedAt)}
       </span>

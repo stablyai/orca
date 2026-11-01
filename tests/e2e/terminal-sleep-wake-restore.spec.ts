@@ -23,7 +23,7 @@ type SleepWakeTerminalDebug = {
   activeWorktreeId: string | null
   tabs: {
     id: string
-    ptyId?: string
+    ptyId: string | null
     generation?: number
     pendingActivationSpawn?: boolean | number
   }[]

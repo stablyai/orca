@@ -1,8 +1,7 @@
-// Where the browser-history block lands inside the omnibox entry rows: with the
-// typed URL when the query is a web address, otherwise below every file the
-// query matched and above the new-file and web-search fallbacks.
+// Place history with matching URL entries, otherwise below file matches and above creation/search fallbacks.
 
 import { dropUrlEntriesCoveredByHistoryRows } from './open-tab-entry-dedupe'
+import { normalizeBrowserHistoryUrl } from '../../../../shared/workspace-session-browser-history'
 import {
   isActiveEntryOption,
   type ActiveEntryOption,
@@ -16,8 +15,7 @@ function isTypedUrlOption(option: TabEntryOption): boolean {
   return kind === 'explicit-url' || kind === 'host-url'
 }
 
-// Leaving the workspace is the heavier action, so a local file outranks a
-// remembered page even when the match was fuzzy.
+// Prefer workspace files over navigating away to remembered pages, including fuzzy file matches.
 function isFileOption(option: TabEntryOption): boolean {
   const { kind } = option.classification
   return kind === 'existing-file' || kind === 'absolute-file' || kind === 'html-file-url'
@@ -27,14 +25,12 @@ function historyInsertIndex(
   options: readonly ActiveEntryOption[],
   keptOptions: readonly ActiveEntryOption[]
 ): number {
-  // History sits with the typed URL row (in its slot once it replaced it), so
-  // visiting a site never changes what Enter does on its name.
+  // Reuse typed-URL placement so browsing history cannot change Enter’s destination ranking.
   const urlIndex = options.findIndex(isTypedUrlOption)
   if (urlIndex !== -1) {
     return keptOptions.includes(options[urlIndex]) ? urlIndex + 1 : urlIndex
   }
-  // Scanning for the last one, not the leading run: the classifier promotes web
-  // search above fuzzy files for phrase queries, and history belongs under both.
+  // Find the last file match because phrase queries can interleave web search before fuzzy files.
   let insertAt = 0
   for (const [index, option] of keptOptions.entries()) {
     if (isFileOption(option)) {
@@ -54,10 +50,22 @@ export function placeHistoryRowsInEntryOptions(
   if (historyRows.length === 0) {
     return rows
   }
+  const urlClassification = options.find(isTypedUrlOption)?.classification
+  const normalizedTypedUrl =
+    urlClassification?.kind === 'explicit-url' || urlClassification?.kind === 'host-url'
+      ? normalizeBrowserHistoryUrl(urlClassification.url)
+      : undefined
+  const typedUrlHistoryRow = historyRows.find(
+    (row) => row.entry.normalizedUrl === normalizedTypedUrl
+  )
+  // A replacement must keep the typed destination ahead of more frequently visited subpages.
+  const rankedHistoryRows = typedUrlHistoryRow
+    ? [typedUrlHistoryRow, ...historyRows.filter((row) => row !== typedUrlHistoryRow)]
+    : historyRows
   const insertAt = historyInsertIndex(options, keptOptions)
   return [
     ...rows.slice(0, insertAt),
-    ...historyRows.map((option) => ({ kind: 'history' as const, option })),
+    ...rankedHistoryRows.map((option) => ({ kind: 'history' as const, option })),
     ...rows.slice(insertAt)
   ]
 }

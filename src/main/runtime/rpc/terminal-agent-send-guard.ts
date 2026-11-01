@@ -35,8 +35,7 @@ export async function assertTerminalAgentSendable(
     if (remainingMs <= 0) {
       throw new Error('terminal_guard_no_agent')
     }
-    // Why: title and foreground caches refresh asynchronously; require fresh
-    // positive evidence within a wall-clock bound so slow SSH reads cannot multiply it.
+    // Title/foreground caches update asynchronously; require fresh positive evidence within one wall-clock bound, including slow SSH reads.
     await new Promise((resolve) =>
       setTimeout(resolve, Math.min(AGENT_STATUS_RECHECK_INTERVAL_MS, remainingMs))
     )

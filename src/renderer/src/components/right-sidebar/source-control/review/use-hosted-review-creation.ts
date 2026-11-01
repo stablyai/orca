@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { normalizeHostedReviewHeadRef } from '../../../../../../shared/hosted-review-refs'
 import { resolveBlockedCreateReviewNoticeMessage } from '../../source-control-create-review-blocked-action'
+import { localizedCreateFailure } from '../../hosted-review-create-failure-copy'
 import type { SourceControlAi } from '../ai/use-ai'
 import { stripBaseRef } from '../../create-pull-request-base-ref-normalization'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
@@ -16,11 +17,9 @@ import type { SourceControlPullRequestGeneration } from './use-pull-request-gene
 import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
 import { useGenerateBeforeCreatePullRequest } from '../../use-generate-before-create-pull-request'
 import { createdReviewIsForeground } from '../../created-review-foreground'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
-/**
- * Submits the composer as a hosted review (optionally stacked) and reconciles the "already open" and
- * partially-created-stack outcomes, both of which still leave a real review to link.
- */
+/** Already-open and partial-stack failures can leave a real review that still needs linking. */
 export function useSourceControlHostedReviewCreation({
   activePullRequestGenerationKey,
   activeRepo,
@@ -89,7 +88,7 @@ export function useSourceControlHostedReviewCreation({
       }
 
       if (!hostedReviewCreation.canCreate) {
-        // Why: blocked Create Review clicks are intentional; the inline notice tells the user which prerequisite to clear.
+        // Blocked clicks show inline prerequisite guidance.
         const message = resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation)
         if (message) {
           setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
@@ -164,7 +163,7 @@ export function useSourceControlHostedReviewCreation({
             context
           )
           if (context.openChecks && resolvedPrCreationDefaults.openAfterCreate) {
-            window.api.shell.openUrl(result.url)
+            openAppHttpLink(result.url, { worktreeId: activeWorktreeId })
           }
           return
         }
@@ -190,7 +189,8 @@ export function useSourceControlHostedReviewCreation({
                   'Open on {{value0}}',
                   { value0: hostedReviewCreateCopy.providerName }
                 ),
-                onClick: () => window.api.shell.openUrl(result.existingReview!.url)
+                onClick: () =>
+                  openAppHttpLink(result.existingReview!.url, { worktreeId: activeWorktreeId })
               }
             }
           )
@@ -208,9 +208,7 @@ export function useSourceControlHostedReviewCreation({
           }
         }
 
-        // Why: stacked creation can create the pull request and still fail to register
-        // the stack. Link the review that exists before surfacing the stack failure, or
-        // the workspace stays unaware of a PR the user can already see on GitHub.
+        // Link the created review before reporting stack-registration failure so the workspace knows it exists.
         if ('createdReview' in result && result.createdReview?.url) {
           const { number, url } = result.createdReview
           if (number) {
@@ -227,7 +225,7 @@ export function useSourceControlHostedReviewCreation({
 
         setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
           tone: 'destructive',
-          message: result.error
+          message: localizedCreateFailure(result, hostedReviewCreateProvider)
         })
       } catch (error) {
         setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
@@ -288,7 +286,7 @@ export function useSourceControlHostedReviewCreation({
       if (!worktreeId || createPrInFlightRef.current[worktreeId]) {
         return
       }
-      // Why: like the prepare-branch route, the click is in flight until its create settles, so the composer stays up through generation instead of closing while eligibility refreshes.
+      // Hold the click through creation so eligibility refreshes cannot close the composer during generation.
       createPrInFlightRef.current[worktreeId] = true
       setCreatePrInFlightByWorktree((prev) => ({ ...prev, [worktreeId]: true }))
       try {

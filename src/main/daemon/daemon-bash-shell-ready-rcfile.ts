@@ -10,12 +10,17 @@ export function getDaemonBashShellReadyRcfileContent(): string {
   return `# Orca daemon bash shell-ready wrapper
 ${BASH_FEATURE_CHANNEL_BLOCK}
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
-# Why a plain variable: the channel is consumed and destroyed in these first
-# lines, so nothing this shell later spawns can see or inherit the selection.
+# Consume the feature channel before profiles so child processes cannot inherit the selection.
 __orca_ready_marker=""
 __orca_has_feature ready && __orca_ready_marker=1
 unset _orca_shell_features
 unset -f __orca_has_feature
+# A system bashrc may already run ble.sh; it never exports this state, so exported copies are inherited.
+for __orca_ble_var in _ble_attached _ble_decode_bind_state; do
+  [[ -n "\${!__orca_ble_var+set}" ]] || continue
+  case "$(declare -p "$__orca_ble_var" 2>/dev/null)" in "declare -x"*) unset "$__orca_ble_var" ;; esac
+done
+unset __orca_ble_var
 [[ -f /etc/profile ]] && source /etc/profile
 if [[ -f "$HOME/.bash_profile" ]]; then
   source "$HOME/.bash_profile"
@@ -24,10 +29,7 @@ elif [[ -f "$HOME/.bash_login" ]]; then
 elif [[ -f "$HOME/.profile" ]]; then
   source "$HOME/.profile"
 fi
-# Why: enable bracketed paste so Orca can deliver a multiline startup prompt as
-# a single literal paste (ESC[200~…ESC[201~); without it, older readline builds
-# treat each embedded newline as Enter and mangle the prompt into PS2
-# continuation. Modern readline defaults this on; force it for the rest.
+# Force bracketed paste on older readline so multiline startup prompts remain one literal paste.
 [[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
 __orca_restore_agent_teams_path() {
   [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
@@ -38,19 +40,15 @@ __orca_restore_agent_teams_path() {
 }
 __orca_restore_agent_teams_path
 ${ORCA_CLI_POSIX_PATH_RESTORE}
-# Why: user startup files may set the default OpenCode config after Orca's
-# spawn env; restore the Orca-managed config dir before the first prompt.
+# Restore the managed OpenCode config after user profiles may have replaced it.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 ${MANAGED_DATA_ACCOUNT_POSIX_RESTORE}
-[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
+[[ -n "\${ORCA_MIMOCODE_CONFIG_DIR:-}" ]] && export MIMOCODE_CONFIG_DIR="\${ORCA_MIMOCODE_CONFIG_DIR}"
 ${getPosixOmpShellWrapper()}
-# Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
+# Preserve the managed CODEX_HOME after user profiles.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 ${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
-# Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
-# status when the foreground command exits — mirrors the zsh daemon wrapper.
-# Without this, bash users (default on most Linux distros) keep a stuck
-# 'working' spinner after the CLI exits without a Stop/SessionEnd hook.
+# OSC 133 C/D clears stale agent status when a CLI exits without a stop hook.
 __orca_initializing_wrapper=1
 __orca_osc133_precmd() {
   local exit_code=$?
@@ -97,30 +95,34 @@ __orca_osc133_preexec() {
     __bp_*) [[ -n "\${__orca_in_prompt_command:-}" ]] && return 0 ;;
   esac
   __orca_run_user_debug_trap
-  # Why: a framework (bash-preexec/starship) may replace our DEBUG trap at the
-  # first prompt; __orca_osc133_epilogue re-takes it each prompt and stores the
-  # framework's trap here, so the framework's own preexec still runs while our
-  # command-start C survives its re-arm.
+  # Chain the framework trap captured before each prompt's lifecycle re-arm.
   if [[ -n "\${__orca_chained_debug_trap:-}" ]]; then
     eval "$__orca_chained_debug_trap" || true
   fi
   [[ -z "\${__orca_in_prompt_command:-}" ]] || return 0
-  # Why: a chained trap can invoke us more than once for a single command, so
-  # emit C only on the first fire (the __orca_in_command gate), and never for a
-  # prompt-time hook — ours or bash-preexec's __bp_* helpers.
+  # Emit C once per foreground command, excluding prompt hooks and repeated chained-trap calls.
   [[ -z "\${__orca_in_command:-}" ]] || return 0
   printf "\\033]133;C\\007"
   __orca_in_command=1
 }
-# Why: adopt the latest user trap before Orca retakes lifecycle ownership.
+# Adopt the latest user trap before reclaiming lifecycle ownership.
 __orca_osc133_epilogue() {
   unset __orca_in_prompt_command
   __orca_adopt_outer_debug_trap
   trap '__orca_osc133_preexec' DEBUG
   # Readline renders PS1 after entering raw mode; prompt hooks still run in cooked mode.
   if [[ -n "$__orca_ready_marker" ]]; then
-    PS1="\${PS1-}"'\\[\\e]777;orca-shell-ready\\a\\]'
-    __orca_ready_marker=""
+    # Attached ble.sh (0.3+) discards Bash's own prompt output and owns the TTY, so print directly.
+    if [[ -n "\${_ble_attached-}" ]]; then
+      # Its first render runs this before the key decoder attaches; wait for a later prompt.
+      if [[ "\${_ble_decode_bind_state:-none}" != none ]]; then
+        printf "\\033]777;orca-shell-ready\\007"
+        __orca_ready_marker=""
+      fi
+    else
+      PS1="\${PS1-}"'\\[\\e]777;orca-shell-ready\\a\\]'
+      __orca_ready_marker=""
+    fi
   fi
 }
 ${BASH_PROMPT_COMMAND_COMPOSITION_BLOCK}
@@ -140,8 +142,7 @@ fi
 unset __orca_debug_trap_spec __orca_debug_trap_command __orca_had_functrace
 unset -f __orca_normalize_prompt_command_part __orca_normalize_prompt_command __orca_prepend_prompt_command __orca_append_prompt_command
 unset __orca_prompt_command_normalized
-# Why: arm DEBUG after wrapper setup; otherwise bash treats our own rcfile
-# commands as a foreground command and emits a fake C/D before the first prompt.
+# Arm DEBUG after setup so rcfile commands cannot emit a fake lifecycle before the first prompt.
 __orca_initial_prompt=1
 trap '__orca_osc133_preexec' DEBUG
 unset __orca_initializing_wrapper

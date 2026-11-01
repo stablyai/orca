@@ -19,7 +19,6 @@ import {
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -29,7 +28,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -40,7 +38,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = createStoreCascadesMockApi()
 
-// Why: sleep must drop live + retained agent-status rows, else a mid-turn agent stays "working" until the 30-min stale TTL.
+// Sleep must clear live/retained status or mid-turn agents remain working until the 30-minute TTL.
 describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -166,7 +164,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('terminal_liveness_unavailable')
 
-    // Why: done resumable agent keeps its origin:'live' anchor (#9454); an inconclusive stop rolls back to it, not undefined, and never commits worktree-sleep.
+    // Inconclusive stop restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
       origin: 'live',
       agent: 'codex',
@@ -225,7 +223,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('exact_terminal_stop_unverified')
 
-    // Why: done resumable agent keeps its origin:'live' anchor (#9454); an unverified stop rolls back to it, not undefined, and never commits worktree-sleep.
+    // Unverified stop restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
       origin: 'live',
       agent: 'codex',
@@ -712,7 +710,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('stop failed')
 
-    // Why: done resumable agent keeps its origin:'live' anchor (#9454); a failed stop rolls back to it, not undefined, and never commits worktree-sleep.
+    // Failed stop restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
       origin: 'live',
       agent: 'codex',

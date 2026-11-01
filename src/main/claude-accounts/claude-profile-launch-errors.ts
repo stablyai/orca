@@ -4,7 +4,6 @@ import {
 } from '../../shared/claude-profile-routing'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 
-// Typed so a chat names the situation; a terminal reads the same message.
 export function claudeProfileMissing(): AgentSessionPreSpawnError {
   return new AgentSessionPreSpawnError(new Error(CLAUDE_PROFILE_MISSING_MESSAGE), {
     reason: 'claudeAccountFolderMissing'

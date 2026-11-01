@@ -5,6 +5,7 @@ import type { TerminalCheckpointFile } from './types'
 import { getHistorySessionDirName } from './history-paths'
 import { decodeTerminalHistoryLog, LOG_HEADER_BYTES } from './terminal-history-log'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
+import { historyReplayWindowsPty } from './daemon-history-replay-pty'
 import { HeadlessEmulator } from './headless-emulator'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
@@ -41,7 +42,7 @@ export type RestorableHistoryProbe =
   | { status: 'restorable'; sessionId: string }
   | { status: 'unreadable'; sessionId: string }
 
-// Why: parallel pane mounts should interleave with main-process work without multiplying replay slices per turn.
+// Serialize restore replays so parallel pane mounts cannot multiply main-process work per turn.
 const coldRestoreReplaySemaphore = new PrioritySemaphore(1)
 
 export class HistoryReader {
@@ -51,10 +52,7 @@ export class HistoryReader {
     this.basePath = basePath
   }
 
-  // Why: spawn needs a cheap "could this cold-restore?" predicate before
-  // deciding to pay detectColdRestore's full checkpoint+log replay. Reads only
-  // the small meta.json, using the same unclean-shutdown test detectColdRestore
-  // starts with.
+  // Check small metadata before paying for checkpoint parsing and log replay.
   probeRestorableHistory(sessionId: string): RestorableHistoryProbe {
     if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
       return { status: 'unreadable', sessionId }
@@ -96,10 +94,7 @@ export class HistoryReader {
       return { status: 'unreadable', sessionId }
     }
     const meta = metaRead.meta
-    // Why ignoreCleanEnd: in the spawn probe race, the dying session's exit
-    // event can write endedAt between the aliveness probe and the post-spawn
-    // fallback detect. The caller established restore eligibility before the
-    // probe, so the just-written clean end must not downgrade the restore.
+    // An exit can set endedAt after the spawn probe; honor eligibility already established by the caller.
     if (meta.endedAt !== null && !opts?.ignoreCleanEnd) {
       return { status: 'none' }
     }
@@ -110,10 +105,7 @@ export class HistoryReader {
     const checkpoint = checkpointRead.status === 'readable' ? checkpointRead.checkpoint : null
     const checkpointReadFailed = checkpointRead.status === 'unreadable'
 
-    // Why log replay is preferred over the checkpoint alone: the log carries
-    // byte-exact output up to ~5s before the crash (up to the full-snapshot
-    // cooldown, ~45s, for a streaming session mid-deferral), while the
-    // checkpoint can be a full log-cap (~5MB of output) stale.
+    // Incremental logs contain newer output than the last full checkpoint.
     const logRestore = await this.restoreFromIncrementalLog(
       sessionDir,
       meta,
@@ -131,8 +123,7 @@ export class HistoryReader {
     }
 
     if (!checkpoint) {
-      // Why: backward compatibility with pre-checkpoint sessions, and corrupt
-      // checkpoints — the old scrollback.bin is the best remaining data.
+      // Legacy scrollback remains usable when a checkpoint is absent or corrupt.
       const legacyPath = join(sessionDir, 'scrollback.bin')
       const legacyExists = existsSync(legacyPath)
       const legacyRestore = await detectColdRestoreFromLegacyScrollback(
@@ -225,10 +216,7 @@ export class HistoryReader {
     }
   }
 
-  // Why a scratch emulator: replaying base + raw records through the same
-  // emulator the daemon used reproduces the exact terminal state at the last
-  // appended batch — including alt-screen and mode handling — and reuses
-  // getSnapshot()'s normalization instead of string-level reconstruction.
+  // Replay through the daemon emulator to preserve modes, alternate screens and snapshot normalization.
   private async restoreFromIncrementalLog(
     sessionDir: string,
     meta: SessionMeta,
@@ -237,7 +225,7 @@ export class HistoryReader {
   ): Promise<IncrementalLogRestore> {
     const logPath = join(sessionDir, 'output.log')
     try {
-      // Why: final checkpoints leave a header-only log; they need no scarce replay slot and must not queue sleep teardown behind startup restores.
+      // Header-only final logs need no replay slot and must not queue teardown behind startup restores.
       if ((await stat(logPath)).size <= LOG_HEADER_BYTES) {
         return { restoreInfo: null, readFailed: false }
       }
@@ -256,10 +244,7 @@ export class HistoryReader {
       if (!log || log.batches.length === 0) {
         return { restoreInfo: null, readFailed: true }
       }
-      // Generation mismatch means the log does not continue this checkpoint
-      // (e.g. crash between checkpoint rename and log reset, or a pre-log
-      // checkpoint without a generation field). Replaying it would duplicate or
-      // garble content; the checkpoint alone is consistent.
+      // A mismatched generation cannot extend this checkpoint; replay would duplicate or corrupt output.
       if (checkpoint) {
         if (typeof checkpoint.generation !== 'number' || log.generation !== checkpoint.generation) {
           return { restoreInfo: null, readFailed: false }
@@ -272,7 +257,8 @@ export class HistoryReader {
         cols: checkpoint?.cols ?? meta.cols,
         rows: checkpoint?.rows ?? meta.rows,
         scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS,
-        wslDistro
+        wslDistro,
+        windowsPty: historyReplayWindowsPty(meta.resizeModel)
       })
       const replay = new ColdRestoreReplayWriter(emulator)
       try {
@@ -319,8 +305,7 @@ export class HistoryReader {
           ...(cwd === null ? { cwdFromSpawn: true } : {})
         }
       } catch {
-        // Why: a replay failure must degrade to checkpoint-only restore, never
-        // surface as a failed spawn.
+        // Degrade to checkpoint-only restore instead of failing spawn.
         return { restoreInfo: null, readFailed: true }
       } finally {
         emulator.dispose()

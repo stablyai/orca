@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import type { AgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 const { useAppStore } = await import('../../store')
 const { useNativeChatInteractivePromptCard } =
@@ -24,7 +24,7 @@ afterEach(() => {
 })
 
 describe('useNativeChatInteractivePromptCard', () => {
-  // The hook runs in the pane's view, so each render here re-renders the whole transcript.
+  // This hook runs in the pane, so each render also rerenders the transcript.
   it('does not re-render for a tool call that carries no prompt', () => {
     setStatus({ state: 'working', toolName: 'Read' })
     let renders = 0

@@ -79,7 +79,7 @@ export function SidebarHostScopeMenuSection({
     ).map((host) => host.id)
   )
 
-  // Why checked rows pinned under a filter: a host the filter shows must stay uncheckable.
+  // Pin checked filter matches so users can still uncheck them.
   const rows = useBoundedHostRows(hostRows, allVisible ? undefined : checkedRowIds)
 
   const toggleAllHosts = (): void => {
@@ -98,8 +98,6 @@ export function SidebarHostScopeMenuSection({
     }
   }
 
-  // Why: one Sort-by-style row (label left, value right) — nested panel holds
-  // the multi-select, so the parent menu stays a flat list of single rows.
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -137,7 +135,7 @@ export function SidebarHostScopeMenuSection({
         {rows.searchable ? (
           <HostListSearchField value={rows.query} onChange={rows.setQuery} inMenu />
         ) : null}
-        {/* Why a max height: up to 50 host rows plus pinned ones must scroll, not run off screen. */}
+        {/* Bound up to 50 host rows plus pinned matches so the menu stays on screen. */}
         <div className="max-h-80 overflow-y-auto scrollbar-sleek">
           {rows.shown.map((host) => (
             <DropdownMenuCheckboxItem

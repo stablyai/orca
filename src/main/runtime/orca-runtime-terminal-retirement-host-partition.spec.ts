@@ -117,7 +117,6 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
     reads: (ExecutionHostId | undefined)[]
   }
 
-  /** A store that keeps one workspace session per execution host, like the real one. */
   function partitionedStore(): PartitionedStoreHarness {
     const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
       [LOCAL_EXECUTION_HOST_ID, getDefaultWorkspaceSession()],
@@ -208,7 +207,6 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
           staleHostId,
           {
             ...getDefaultWorkspaceSession(),
-            // A prior close can leave an empty retained row in the stale partition.
             tabsByWorktree: { [SSH_WORKTREE_ID]: [] }
           }
         ]
@@ -286,7 +284,6 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
             }
           }
         ],
-        // The SSH copy of the same `repoId::path` currently has no terminals.
         [
           SSH_HOST_ID,
           { ...getDefaultWorkspaceSession(), tabsByWorktree: { [SSH_WORKTREE_ID]: [] } }
@@ -479,7 +476,7 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
 
       sessions.set(ownerHostId, getDefaultWorkspaceSession())
       const fellBack = controller.get(worktreeId) === sessions.get('runtime:e0')
-      // Only a runtime owner rotates onto another copy; that copy is never read as its own.
+      // Runtime owners may rotate onto another copy but must never mistake it for their own partition.
       expect(fellBack).toBe(ownerHostId.startsWith('runtime:'))
       expect(controller.getOwnPartition(worktreeId)?.tabsByWorktree[worktreeId]).toBeUndefined()
     })
@@ -569,7 +566,6 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
 
       await runtime.onPtyExit(SSH_PTY_LEFT, 0, 'incarnation-a')
 
-      // The durable retirement must land in the pane's own host partition.
       expect(harness.writes.map((write) => write.hostId)).toEqual([SSH_HOST_ID])
       const sshSession = harness.sessions.get(SSH_HOST_ID)!
       expect(sshSession.terminalLayoutsByTabId.tab).toMatchObject({
@@ -587,7 +583,6 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
         harness.sessions.get(LOCAL_EXECUTION_HOST_ID)?.terminalTopologyRevisionByRepoId
       ).toEqual(localBefore.terminalTopologyRevisionByRepoId)
 
-      // And the published surface is actually gone for clients.
       expect((await runtime.listMobileSessionTabs(`id:${SSH_WORKTREE_ID}`)).tabs).toEqual([
         expect.objectContaining({ id: 'tab::right' })
       ])

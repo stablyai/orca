@@ -54,8 +54,7 @@ describe('handleOscLink', () => {
       true
     )
 
-    // openDetectedFilePath is async (fire-and-forget), so flush the microtask queue
-    // before asserting on positive behavior.
+    // Flush fire-and-forget opening before positive assertions.
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))

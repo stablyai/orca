@@ -1,10 +1,5 @@
 #!/usr/bin/env node
-/**
- * Bundle the programs Orca runs inside WSL distros: the WSL agent-hook relay, the WSL browser
- * network relay, the Claude profile helper, and the OpenCode SQLite reader. Each is a
- * self-contained CommonJS bundle with only Node.js built-ins; the Windows app ships them from
- * out/relay/wsl via the relay extraResources mapping.
- */
+// Ship self-contained builtins-only CommonJS WSL hook/network/profile/SQLite programs via out/relay/wsl extraResources.
 import { build } from 'esbuild'
 import { JSONC_PARSER_ESM_ALIAS } from '../build-plugins/jsonc-parser-esm.ts'
 import { createHash } from 'node:crypto'
@@ -16,7 +11,6 @@ import {
 } from '../../src/shared/remote-bundle-artifacts.ts'
 
 const __dirname = import.meta.dirname
-// Why: the script lives under config/scripts, so go two levels up to reach the repo root.
 const ROOT = join(__dirname, '..', '..')
 // Why: lets a contract test build into a temp tree instead of clobbering a developer's out/relay.
 const OUT_ROOT = process.env.ORCA_WSL_GUEST_OUT_ROOT ?? join(ROOT, 'out', 'relay')

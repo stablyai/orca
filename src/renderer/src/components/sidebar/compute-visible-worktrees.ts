@@ -10,8 +10,7 @@ import { buildDesktopWorkspaceRowFactReader } from './desktop-workspace-row-fact
 import { sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
 
-// Why its own module: the store's attention slice asks it without an import cycle. The filter
-// rules live in the shared builder; this binds them to the window's store index and activity facts.
+// Separate store binding avoids attention-slice import cycles; shared builders retain the filter rules.
 
 export type VisibleWorktreeOptions = {
   filterRepoIds: readonly string[]

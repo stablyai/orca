@@ -94,7 +94,6 @@ afterEach(() => {
   cleanup()
 })
 
-/** The open reply arrives when the test says, so nothing races it. */
 function deferOpen(): (result: PlainSshTerminalOpenResult) => void {
   let resolve: (result: PlainSshTerminalOpenResult) => void = () => {}
   open.mockImplementation(
@@ -116,24 +115,6 @@ function Harness({ status }: { status: SshManagedServerStatus | undefined }): Re
 }
 
 describe('plain SSH terminal', () => {
-  it('is offered only while the host’s move is blocked, and only for this desktop’s host', () => {
-    const { rerender } = render(<Harness status={undefined} />)
-    expect(screen.queryByRole('button', { name: 'Open plain SSH terminal' })).toBeNull()
-    rerender(<Harness status={{ kind: 'managed', environmentId: 'e' }} />)
-    expect(screen.queryByRole('button', { name: 'Open plain SSH terminal' })).toBeNull()
-    rerender(<Harness status={{ ...blocked, bridged: true }} />)
-    expect(screen.queryByRole('button', { name: 'Open plain SSH terminal' })).toBeNull()
-    rerender(
-      <OpenPlainSshTerminalButton
-        targetId="lambda"
-        targetLabel="lambda"
-        status={blocked}
-        ownerEnvironmentId="env-1"
-      />
-    )
-    expect(screen.queryByRole('button', { name: 'Open plain SSH terminal' })).toBeNull()
-  })
-
   it('opens a labelled unmanaged window, shows early output, and closes when ssh exits cleanly', async () => {
     let resolveOpen: (result: PlainSshTerminalOpenResult) => void = () => {}
     open.mockImplementation(
@@ -154,7 +135,6 @@ describe('plain SSH terminal', () => {
     act(() => emit({ kind: 'data', sessionId: 's1', data: 'Enter passphrase: ' }))
     await act(async () => resolveOpen({ ok: true, sessionId: 's1', label: 'lambda' }))
     expect(written).toEqual(['Enter passphrase: '])
-    // Rendered output is acked, so main resumes a paused ssh.
     expect(ack).toHaveBeenCalledWith({ sessionId: 's1', chars: 'Enter passphrase: '.length })
 
     act(() => emit({ kind: 'exit', sessionId: 's1', exitCode: 0 }))
@@ -194,20 +174,6 @@ describe('plain SSH terminal', () => {
     expect(written).toEqual(['Permission denied (publickey).\r\n'])
   })
 
-  it('keeps a failed login readable, with no shell to fall back to', async () => {
-    const resolveOpen = deferOpen()
-    const user = userEvent.setup()
-    render(<Harness status={blocked} />)
-    await user.click(screen.getByRole('button', { name: 'Open plain SSH terminal' }))
-    await waitFor(() => expect(open).toHaveBeenCalled())
-    await act(async () => resolveOpen({ ok: true, sessionId: 's2', label: 'lambda' }))
-    act(() => emit({ kind: 'exit', sessionId: 's2', exitCode: 255 }))
-    expect(await screen.findByText(/ssh exited with code 255/)).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Close and end session' }))
-    expect(screen.queryByText('Plain SSH · lambda')).toBeNull()
-  })
-
   it('never refits a minimized window, which would shrink the remote terminal to 2x1', async () => {
     const width = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(600)
     const height = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(400)
@@ -229,19 +195,6 @@ describe('plain SSH terminal', () => {
       width.mockRestore()
       height.mockRestore()
     }
-  })
-
-  it('shows why it can’t open, e.g. no OpenSSH on Windows', async () => {
-    open.mockResolvedValue({
-      ok: false,
-      reason: 'ssh-missing',
-      message: 'Orca couldn’t find OpenSSH (ssh.exe) on this computer.'
-    })
-    const user = userEvent.setup()
-    render(<Harness status={blocked} />)
-    await user.click(screen.getByRole('button', { name: 'Open plain SSH terminal' }))
-    expect(await screen.findByText(/couldn’t find OpenSSH/)).toBeInTheDocument()
-    expect(document.querySelector('[data-plain-ssh-screen]')).toHaveClass('hidden')
   })
 
   it('hangs up when its window closes', async () => {

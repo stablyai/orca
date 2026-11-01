@@ -34,8 +34,7 @@ export function useActivityThreadSelection({
     getScope
   })
 
-  // Why a ref: rows are React.memo'd on these handlers, and the selection callbacks change
-  // identity with every selection change.
+  // Keep handlers stable for memoized rows while refs track selection callbacks.
   const selectionRef = useRef(selection)
   const onSelectThreadRef = useRef(onSelectThread)
   useEffect(() => {

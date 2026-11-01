@@ -3,12 +3,9 @@ import type { OrchestrationDb } from '../orchestration-db'
 /** Mail a settling helper creator never handled, now owned by its Run's mailbox. */
 export type MailHandBack = { mailbox: string; messageIds: string[]; types: string[] }
 
-/**
- * A settled worker no longer reads its mailbox, so its helpers' unread reports and unanswered
- * questions (even ones it read) become the Run coordinator's, delivered as if they just arrived.
- */
+/** Transfer unread reports and unanswered helper questions, including read ones, to the settled creator's Run. */
 export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): void {
-  // Why: every settlement runs this, so read only the Run, not the whole dispatch row.
+  // Every settlement runs this; fetch only the needed Run id.
   const runId = db.db
     .prepare('SELECT run_id FROM dispatch_contexts WHERE id = ?')
     .get(dispatchId)?.run_id
@@ -16,7 +13,7 @@ export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): vo
     return
   }
   const mailbox = `dispatch:${dispatchId}`
-  // Why: the recipient mailbox is the ownership fact; report payloads and senders are optional.
+  // Mailbox ownership is authoritative; payload and sender fields can be absent.
   const rows = db.db
     .prepare(
       `SELECT id, type FROM messages
@@ -42,7 +39,7 @@ export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): vo
     messageIds: rows.map((row) => String(row.id)),
     types: [...new Set(rows.map((row) => String(row.type)))]
   }
-  // Why: the old mailbox's delivery stamp and pointer reservation would hide the rows from the Run.
+  // Clear old delivery and pointer stamps so the Run can see transferred rows.
   db.db
     .prepare(
       `UPDATE messages
@@ -54,7 +51,7 @@ export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): vo
   db.fenceUnacknowledgedMailboxDeliveries(mailbox)
   db.pendingMailHandBacks.push(handBack)
   if (db.pendingMailHandBacks.length === 1) {
-    // Why: settlements are synchronous, so this runs after the outermost COMMIT or ROLLBACK.
+    // Synchronous settlement lets this microtask run after the outermost commit or rollback.
     queueMicrotask(() => {
       for (const pending of db.pendingMailHandBacks.splice(0)) {
         db.mailHandBackListener?.(pending)

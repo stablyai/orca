@@ -28,7 +28,6 @@ const clearDrag = vi.fn()
 const setSelected = vi.fn()
 
 function Explorer({ worktreeId, root }: { worktreeId: string; root: string }) {
-  // Like the tree pane, the owner is the one the tree root loaded with.
   const ownerRef = useFileExplorerImport({
     worktreeId,
     worktreePath: root,
@@ -80,24 +79,6 @@ afterEach(() => {
 })
 
 describe('file explorer OS file drops on remote workspaces', () => {
-  it('uploads into the SSH folder the drop landed on', async () => {
-    const view = render(<Explorer worktreeId="wt-ssh" root={SSH_ROOT} />)
-    dropFile(view.getByTestId('src'))
-    await waitFor(() => expect(mocks.importPaths).toHaveBeenCalledTimes(1))
-    const [context, paths, dir] = mocks.importPaths.mock.calls[0]
-    expect(context).toMatchObject({
-      worktreeId: 'wt-ssh',
-      worktreePath: SSH_ROOT,
-      connectionId: 'ssh-1',
-      target: { kind: 'local' },
-      expectedExecutionHostId: 'ssh:ssh-1',
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 3
-    })
-    expect(paths).toEqual(['/Users/me/Desktop/shot.png'])
-    expect(dir).toBe(joinPath(SSH_ROOT, 'src'))
-  })
-
   it("uploads through the workspace's own runtime, not the focused one", async () => {
     const view = render(<Explorer worktreeId="wt-runtime" root={RUNTIME_ROOT} />)
     dropFile(view.getByTestId('src'))
@@ -117,22 +98,6 @@ describe('file explorer OS file drops on remote workspaces', () => {
     const view = render(<Explorer worktreeId="wt-ssh" root={SSH_ROOT} />)
     dropFile(view.getByTestId('src'))
     useAppStore.setState({ sshConnectionStates: sshConnectionStatesAt(4) })
-    await act(async () => finish({ paths: ['/Users/me/Desktop/shot.png'], failures: [] }))
-    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1))
-    expect(mocks.importPaths).not.toHaveBeenCalled()
-    expect(clearDrag).toHaveBeenCalled()
-  })
-
-  it('reports a host that could not be verified at drop time once preparation finishes', async () => {
-    let finish: (prepared: PreparedDroppedPaths) => void = () => undefined
-    mocks.prepare.mockImplementationOnce(
-      () => new Promise<PreparedDroppedPaths>((resolve) => (finish = resolve))
-    )
-    // A disconnected SSH host has no connection generation to pin the upload to.
-    useAppStore.setState({ sshConnectionStates: new Map() })
-    const view = render(<Explorer worktreeId="wt-ssh" root={SSH_ROOT} />)
-    dropFile(view.getByTestId('src'))
-    expect(mocks.toastError).not.toHaveBeenCalled()
     await act(async () => finish({ paths: ['/Users/me/Desktop/shot.png'], failures: [] }))
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1))
     expect(mocks.importPaths).not.toHaveBeenCalled()

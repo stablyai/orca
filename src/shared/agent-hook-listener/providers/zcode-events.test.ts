@@ -5,11 +5,7 @@ import { normalizeAndAccept } from '../../agent-hook-listener-test-harness'
 const SESSION_ID = 'sess_01a0caa30e777d41bad746283a45633d'
 const TURN_ID = 'turn_e495d1a559aa478efba1bd75509afc'
 
-/**
- * ZCode's hook runner writes its own camelCase fields AND a Claude-compatible alias set
- * onto the same stdin object (`createCompatibleHookStdin`), so every fixture below carries
- * both — that is literally what lands on the wire.
- */
+/** ZCode fixtures include both native camelCase and Claude-compatible aliases, matching createCompatibleHookStdin on the wire. */
 function zcodeEvent(
   hookEventName: string,
   extra: Record<string, unknown> = {}
@@ -122,20 +118,22 @@ describe('normalizeZCodeEvent', () => {
       zcodeEvent('PreToolUse', toolFields('AskUserQuestion', { questions }))
     )
     expect(event?.payload).toMatchObject({ state: 'waiting', agentType: 'zcode' })
-    // Why: the clients render this verbatim as a live question card.
     expect(JSON.parse(event?.payload.interactivePrompt ?? '{}')).toMatchObject({ questions })
   })
 
-  it('returns to working after PostToolUse and after a tool failure', () => {
-    for (const eventName of ['PostToolUse', 'PostToolUseFailure']) {
-      const event = normalizeAndAccept(
-        state,
-        'zcode',
-        zcodeEvent(eventName, toolFields('Bash', { command: 'pnpm test' }))
-      )
+  it.each(['PostToolUse', 'PostToolUseFailure'])(
+    'returns to working after a waiting approval on %s',
+    (eventName) => {
+      const fields = toolFields('Bash', { command: 'pnpm test' })
+      const waiting = normalizeAndAccept(state, 'zcode', zcodeEvent('PermissionRequest', fields))
+      expect(waiting?.payload.state).toBe('waiting')
+      expect(waiting?.payload.interactivePrompt).toContain('pnpm test')
+
+      const event = normalizeAndAccept(state, 'zcode', zcodeEvent(eventName, fields))
       expect(event?.payload).toMatchObject({ state: 'working', agentType: 'zcode' })
+      expect(event?.payload.interactivePrompt).toBeUndefined()
     }
-  })
+  )
 
   it('reports done on Stop and surfaces the final assistant message', () => {
     const event = normalizeAndAccept(

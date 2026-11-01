@@ -65,8 +65,7 @@ export function SkillBundleInstallFlow(props: {
   const [result, setResult] = useState<SkillBundleInstallResult | null>(null)
   const [environmentId, setEnvironmentId] = useState('local')
   const [scope, setScope] = useState<'global' | 'workspace'>('global')
-  // Why: null means "follow detection"; storing the derived default instead
-  // would freeze the picker on whichever machine was selected first.
+  // Null follows detection as targets change; storing the derived default would freeze the first machine’s choice.
   const [providerChoice, setProviderChoice] = useState<Set<SkillInstallProviderId> | null>(null)
   const [workspace, setWorkspace] = useState('')
   const [executionTarget, setExecutionTarget] = useState<{ kind: 'wsl'; distro: string } | null>(

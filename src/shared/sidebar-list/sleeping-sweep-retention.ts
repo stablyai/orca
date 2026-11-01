@@ -1,16 +1,5 @@
-/**
- * Removal hysteresis for the "Hide sleeping" sweep (#15996).
- *
- * Why: an open-but-idle workspace stays visible only through `ptyIdsByTabId`, and
- * many rebind paths (SSH reconnect, remote-runtime reattach, deferred session
- * reattach) clear a tab's binding a commit before they re-register it. That gap
- * is unverifiable, not evidence of sleep, so a row that was live keeps its place
- * for a short settle window. Producers need not advertise the rebind, which
- * matters because remote-runtime recovery state lives outside the store.
- *
- * Only removal is delayed; appearing stays immediate, and a row that was never
- * seen live, or that the caller marks as confirmed asleep, gets no grace.
- */
+/** Rebinds temporarily clear live tab bindings (#15996); retain previously live rows through that unverifiable gap
+ * without requiring recovery state from producers. New activity appears immediately; never-live or confirmed-sleep rows get no grace. */
 
 // Why 1.5s: covers a remote rebind over a slow link while a real sleep still reads as prompt.
 export const SLEEPING_SWEEP_SETTLE_MS = 1_500
@@ -44,10 +33,7 @@ export type SleepingSweepRetentionResult = {
 
 const EMPTY_RETAINED_IDS: ReadonlySet<string> = new Set()
 
-/**
- * Advance the grace bookkeeping one pass. Mutates `state`, but is idempotent for
- * a given (nowMs, inputs) pair so a double-invoked render cannot double-count.
- */
+/** Mutate grace state idempotently for identical time/inputs so double renders cannot double-count. */
 export function updateSleepingSweepRetention(args: {
   state: SleepingSweepRetentionState
   candidateWorktreeIds: readonly string[]

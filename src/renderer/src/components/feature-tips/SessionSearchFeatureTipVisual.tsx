@@ -9,7 +9,6 @@ import {
 type DemoPhase = 'idle' | 'typing' | 'searching' | 'results' | 'focused' | 'erasing'
 type DemoState = { scene: number; phase: DemoPhase; chars: number }
 
-// Per-step delay; typing and erasing advance one character per step.
 const PHASE_MS: Record<DemoPhase, number> = {
   idle: 1100,
   typing: 65,
@@ -45,7 +44,6 @@ export function SessionSearchFeatureTipVisual(): JSX.Element {
   const scenes = getSessionSearchDemoScenes()
   const recentRows = getSessionSearchDemoRecentRows()
   const [state, setState] = useState<DemoState>({ scene: 0, phase: 'idle', chars: 0 })
-  // Why: reduced motion freezes on the first answered search instead of looping.
   const shown: DemoState = reducedMotion
     ? { scene: 0, phase: 'results', chars: scenes[0].query.length }
     : state
@@ -58,7 +56,6 @@ export function SessionSearchFeatureTipVisual(): JSX.Element {
     }
     const timeoutId = window.setTimeout(
       () => setState((current) => nextDemoState(current, queryLength, scenes.length)),
-      // Why: a beat after the last keystroke before the search starts.
       state.phase === 'typing' && state.chars === queryLength
         ? PHASE_MS.typing * 2
         : PHASE_MS[state.phase]

@@ -8,18 +8,11 @@ import {
 import { fitInteractivePrompt } from '../shared/agent-status-field-normalization'
 import type { RelayDispatcher } from './dispatcher'
 
-// Why: shed the biggest, most reconstructible fields first — state/paneKey must survive or the pane
-// stays stuck on its last spinner, and an over-capacity frame is now dropped rather than sent.
-// Why: interactivePrompt is last on purpose — a blocking question is load-bearing (without its card
-// the pane sits on `waiting` with no way to answer from web or mobile). The roster is shed earlier
-// only because it is cheaper to rebuild, NOT because it is cosmetic: a missing roster blanks live
-// subagent rows and unblocks pane hibernation, which is why shed fields are named on the wire —
-// `restoreShedStatusFields` re-attaches the restorable ones from Orca's cached payload.
+// Shed reconstructible fields first; keep state/paneKey and preserve interactivePrompt longest so waiting panes remain answerable.
+// Mark shed rosters on the wire so clients restore cached subagents instead of permitting hibernation.
 const SHED_ORDER = ['lastAssistantMessage', 'subagents', 'interactivePrompt'] as const
 
-// Why: these envelopes are fire-and-forget state snapshots — no ack, no producer-side retry — and
-// the only other delivery path is the reattach replay. A queue-full drop would otherwise leave the
-// pane on a stale spinner until the SSH link cycles, so a rejected snapshot is retried briefly.
+// Snapshots have no ack; briefly retry queue-full rejection so stale state need not wait for reattach replay.
 const REDELIVERY_INTERVAL_MS = 250
 const MAX_REDELIVERY_ATTEMPTS = 40
 // Why: a wedged link must not pin snapshots for panes that are already gone; recency-evict the rest.
@@ -113,9 +106,7 @@ function logUnsendableEnvelope(
   }
 }
 
-/** Publishes an agent-hook envelope, dropping optional detail fields until the frame fits the
- *  smallest attached sink. A frame the sink queue merely has no room for is retried in the
- *  background; one that no shedding can fit is dropped. */
+// Fit one envelope to every sink by shedding optional fields; retry queue-full frames, drop frames that cannot fit.
 export function publishAgentHookEnvelope(
   dispatcher: RelayDispatcher,
   envelope: AgentHookRelayEnvelope | AgentHookUnavailableEnvelope
@@ -139,9 +130,7 @@ export function publishAgentHookEnvelope(
     }
     return
   }
-  // Why: a fan-out must choose one payload before it writes anything, or the first client keeps a
-  // frame a smaller later client forces us to shed. A single sink writes nothing when it rejects,
-  // so there the attempt itself is the measurement — one encode instead of a probe plus a publish.
+  // Measure all fan-out sinks before writing so none receive an unshed variant; a single rejecting sink writes nothing.
   const measureBeforePublish = clientIds.length > 1
   let candidate = envelope
   const shedFields: string[] = []
@@ -170,8 +159,7 @@ export function publishAgentHookEnvelope(
       }
     }
     if (step >= SHED_ORDER.length) {
-      // Nothing left to shed and it still does not fit: waiting cannot make it sendable, and this
-      // snapshot supersedes any pending one, which is now stale.
+      // An irreducibly oversized snapshot cannot improve by waiting and supersedes any older pending snapshot.
       if (measureBeforePublish) {
         logUnsendableEnvelope(dispatcher, params, clientIds)
       }
@@ -191,8 +179,7 @@ export function publishAgentHookEnvelope(
       clearPendingEnvelope(dispatcher, envelope.paneKey)
       return
     }
-    // Why: the hook server caches envelopes and replays them after --connect, so shedding in place
-    // would permanently strip the cached copy too.
+    // Copy before shedding: the server caches this envelope for reconnect replay.
     candidate = { ...candidate, payload: { ...candidate.payload } }
     const shedField =
       field === 'subagents' ? createShedSubagentsField(candidate.payload.subagents ?? []) : field
@@ -215,8 +202,7 @@ function setPendingEnvelope(
     dispatcher.onDisposed(() => stopRedelivery(dispatcher))
     dispatcher.onLegacyPtyCapacity(() => runFinalCapacityPass(dispatcher))
   }
-  // Latest-wins: one snapshot per pane, never a growing queue. Delete-then-set keeps Map insertion
-  // order = recency so the cap below evicts the longest-idle pane.
+  // Keep only the newest snapshot per pane; delete/set makes recency eviction follow Map order.
   state.pending.delete(paneKey)
   state.pending.set(paneKey, { params, clientIds, attemptsLeft: MAX_REDELIVERY_ATTEMPTS })
   while (state.pending.size > MAX_PENDING_PANES) {

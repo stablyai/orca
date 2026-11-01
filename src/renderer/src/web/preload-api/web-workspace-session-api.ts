@@ -21,9 +21,7 @@ export function sessionStorageKeyForHost(hostId?: string | null): string {
     : `${SESSION_STORAGE_KEY}.${resolved}`
 }
 
-/** The web client's own partition census: the host-suffixed keys it has written. Boot reads these
- *  instead of inferring the set from the repo catalog, which cannot name a target whose only
- *  workspace is a folder. */
+/** Boot from written host partitions, not the repo catalog: folder-only targets have no repo row. */
 export function listStoredWorkspaceSessionHostIds(): ExecutionHostId[] {
   const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
   const prefix = `${SESSION_STORAGE_KEY}.`
@@ -85,7 +83,9 @@ export function createWebWorkspaceSessionApi(): Partial<PreloadApi> {
       closeTerminalSurface: async () => {},
       // localStorage writes synchronously, so there is no deferred web flush.
       flush: async () => {},
-      readTerminalScrollback: () => null
+      // No local snapshot store: host-run panes read theirs from the host (host-terminal-scrollback-hydration).
+      readTerminalScrollback: () => null,
+      hasTerminalScrollback: () => false
     }
   }
 }

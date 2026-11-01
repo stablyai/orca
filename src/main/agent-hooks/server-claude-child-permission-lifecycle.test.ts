@@ -84,7 +84,7 @@ describe('Claude child permission lifecycle', () => {
         tool_name: 'Bash',
         tool_input: { command: 'false' }
       })
-      // Why: the lead's own progress overwrites the listener's wait slot; only the server keeps the prompt.
+      // Lead progress replaces the listener wait slot; the server must retain the child prompt.
       await postClaudeHook({ hook_event_name: 'PreToolUse', tool_name: 'Read' })
       await postClaudeHook({
         hook_event_name: 'StopFailure',

@@ -1,7 +1,3 @@
-// Validates a PTY working directory before spawn, so node-pty cannot fail with
-// an opaque ENOENT. Split from local-pty-utils to keep that file under its line
-// cap; the async path carries the cancellation contract described below.
-
 import { existsSync, statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { release } from 'node:os'
@@ -10,11 +6,7 @@ import { wslUncDirectoryExistsAsync } from '../wsl'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 
 const pendingWorkingDirectoryValidations = new Map<string, Promise<void>>()
-// Why: a dead UNC share answers `stat` in ~21s on Windows and holds one of
-// libuv's 4 default fs threads the whole time, so a handful of distinct paths on
-// one unreachable server would starve every other async fs read in the daemon —
-// moving the head-of-line stall off the event loop and into the thread pool.
-// Matches the per-distro lane in rate-limits/auth-filesystem-operation.ts.
+// Per-route limits keep dead UNC shares from consuming the default four-thread libuv fs pool.
 const MAX_CONCURRENT_UNC_VALIDATIONS = 2
 
 type UncRouteLane = {
@@ -58,7 +50,6 @@ export class WorkingDirectoryValidationAbortedError extends Error {
   }
 }
 
-/** Test seam: both maps are module-level, so an unsettled probe would leak across tests. */
 export function _resetWorkingDirectoryValidationStateForTest(): void {
   pendingWorkingDirectoryValidations.clear()
   uncRouteLanes.clear()
@@ -79,6 +70,15 @@ export function formatLocalPtyEnvironmentDiag(extra: Record<string, string> = {}
     .join(', ')
 }
 
+/** A spawn refused because its folder is gone, as the daemon reports it back across its wire. */
+export function isMissingWorkingDirectoryError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : ''
+  return (
+    message.startsWith('Working directory "') &&
+    (message.includes('" does not exist.') || message.endsWith('" is not a directory.'))
+  )
+}
+
 function throwMissingWorkingDirectory(cwd: string): never {
   throw new Error(
     `Working directory "${cwd}" does not exist. ` +
@@ -87,13 +87,8 @@ function throwMissingWorkingDirectory(cwd: string): never {
   )
 }
 
-/**
- * Validate that a working directory exists and is a directory.
- * Rejects with a descriptive Error if not.
- */
 export async function validateWorkingDirectory(cwd: string, signal?: AbortSignal): Promise<void> {
-  // Why: the distro probe spawns wsl.exe (~70 ms warm, 300+ ms for a stopped
-  // distro), so it must never run synchronously on the main process.
+  // Distro probes spawn wsl.exe; never run them synchronously on main.
   if (isWslUncPath(cwd)) {
     return validateWorkingDirectoryAsync(cwd, { signal })
   }
@@ -106,14 +101,7 @@ export async function validateWorkingDirectory(cwd: string, signal?: AbortSignal
   }
 }
 
-/**
- * Validate a cwd without blocking the daemon's shared event loop.
- *
- * `fs.stat` takes no AbortSignal and a dead SMB/NFS mount can hang it for
- * minutes, so an aborted caller abandons the shared probe rather than
- * interrupting it: the probe stays shared for whoever is still waiting, and the
- * caller stops holding a create in flight.
- */
+/** Cancellation abandons the caller, not the shared uninterruptible filesystem probe. */
 export function validateWorkingDirectoryAsync(
   cwd: string,
   options: { signal?: AbortSignal } = {}
@@ -124,11 +112,7 @@ export function validateWorkingDirectoryAsync(
     validation = validateWorkingDirectoryUncached(cwd)
     pendingWorkingDirectoryValidations.set(key, validation)
     const started = validation
-    // Why: dropped only on settle. `fs.stat` is uninterruptible, so retiring a
-    // still-running probe on a timer frees no libuv thread — it only lets the
-    // next caller pin a second one. Callers escape through `signal` instead, so
-    // sharing one hung probe no longer strands them, and the route lane below
-    // caps how many distinct paths on one dead host can block at once.
+    // Retain until settlement: expiring a hung stat frees no thread and lets retries pin more.
     const forget = (): void => {
       if (pendingWorkingDirectoryValidations.get(key) === started) {
         pendingWorkingDirectoryValidations.delete(key)
@@ -148,9 +132,7 @@ function validateWorkingDirectoryUncached(cwd: string): Promise<void> {
 }
 
 async function probeWorkingDirectory(cwd: string): Promise<void> {
-  // Why: Win32 stat against the WSL 9P share (\\wsl.localhost\...) can falsely
-  // report ENOENT for directories that exist on the Linux side. Ask the distro
-  // itself; only fall back to the fs check when wsl.exe is inconclusive.
+  // WSL 9P stat can falsely report ENOENT; ask the distro first, then fall back only if inconclusive.
   if (isWslUncPath(cwd)) {
     const existsInDistro = await wslUncDirectoryExistsAsync(cwd)
     if (existsInDistro === false) {

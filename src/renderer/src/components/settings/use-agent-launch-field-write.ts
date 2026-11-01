@@ -19,7 +19,11 @@ export function useAgentLaunchFieldWrite(): {
     queuedValues.current.add(value)
     setPending(true)
     const completion: Promise<void> = result
-      .then(onSaved)
+      .then(() => {
+        if (tail.current === completion) {
+          onSaved?.()
+        }
+      })
       .catch(() => {})
       .finally(() => {
         queuedValues.current.delete(value)

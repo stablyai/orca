@@ -1,5 +1,5 @@
 import React from 'react'
-import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { canToggleNativeChat } from '../../../../shared/native-chat-availability'
 import { resolveNativeChatTabAgentEvidence } from './native-chat-tab-agent-evidence'
 import type { DropIndicator } from './drop-indicator'
 import {
@@ -73,8 +73,7 @@ export function renderTabBarItems({
     statusByRelativePath
   } = runtime
 
-  // A selected client-hosted row covers the pane, so the tab it covers must stop looking active —
-  // the group's own activeTabId never moves for it, and two underlines would show at once.
+  // Client-hosted selection leaves group activeTabId intact; suppress the covered tab’s underline to avoid two active slots.
   const clientHostedRowOwnsActiveState = activeClientHostedBrowserRowId !== null
 
   function isActiveItem(item: TabBarItem): boolean {

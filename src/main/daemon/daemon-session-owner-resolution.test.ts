@@ -477,7 +477,6 @@ describe('DaemonSessionOwnerResolver', () => {
     })
   })
 
-  // #30486: one unanswering older daemon stranded every restored pane the current daemon still ran.
   it('accepts the exact persisted incarnation while another inventory fails', async () => {
     const exactOwner = provider(async () => [
       { id: 'session', incarnationId: 'persisted', cwd: '', title: 'candidate' }
@@ -531,7 +530,6 @@ describe('DaemonSessionOwnerResolver', () => {
 
     await expect(resolver.spawnAttachOnly(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
     expect(reachable.spawn).not.toHaveBeenCalled()
-    // The sole remaining provider now answers directly.
     await expect(resolver.spawnAttachOnly(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
     expect(reachable.spawn).toHaveBeenCalledOnce()
     expect(gone.listProcesses).toHaveBeenCalledOnce()

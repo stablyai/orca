@@ -24,9 +24,10 @@ import {
 } from '../../worktree-sidebar-drop-preview'
 import { getWorktreeDragGroups, getWorktreeDragIndexes } from './groups'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
-import { getNaturalWorktreeIds } from '../../natural-worktree-ids'
+import { getNaturalWorktreeKeys } from '../../natural-worktree-keys'
 import {
   composeWorktreeHostIdentity,
+  getWorktreeHostIdentity,
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -35,41 +36,39 @@ import type { DraggedWorktreeCopies } from './dragged-worktree-copies'
 export type WorktreeStatusDropRequest = {
   pointerY: number
   status: WorkspaceStatus
-  draggedIds: readonly string[]
+  /** Host identities, as the sidebar's drag groups key their members. */
+  draggedKeys: readonly string[]
 }
 
 export type WorktreeDragSession = ReturnType<typeof useWorktreeDragSession>
 
-// Owns the geometry side of a sidebar row drag: which groups exist, which ids travel
-// together, and where the insertion line lands for a given pointer position.
 export function useWorktreeDragSession(args: {
   rows: HostSectionRow[]
   scrollRef: React.RefObject<HTMLDivElement | null>
 }) {
   const { rows, scrollRef } = args
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
-  // Why: cross-group hovers hit-test a group the session never captured, so hold
-  // that group's drop decision separately or a card expanding in the target group
-  // moves the insertion line under a still pointer.
+  // Hold cross-group drop anchors separately so expanding target cards cannot move the line under a still pointer.
   const statusDropAnchorsRef = useRef<Map<string, WorktreeSidebarDropAnchor>>(new Map())
 
   const worktreeDragGroups = useMemo(() => getWorktreeDragGroups(rows), [rows])
   const worktreeDragUnitGroups = useMemo(() => getWorktreeDragUnitGroups(rows), [rows])
-  const naturalDragWorktreeIds = useMemo(() => getNaturalWorktreeIds(rows), [rows])
+  const naturalDragWorktreeKeys = useMemo(() => getNaturalWorktreeKeys(rows), [rows])
   const worktreeLineageDragRows = useMemo(
     () =>
       rows
         .filter((row): row is WorktreeItemRow => row.type === 'item')
         .filter(
           (row) =>
-            row.sectionKey !== PINNED_GROUP_KEY || !naturalDragWorktreeIds.has(row.worktree.id)
+            row.sectionKey !== PINNED_GROUP_KEY ||
+            !naturalDragWorktreeKeys.has(getWorktreeHostIdentity(row.worktree))
         )
         .map((row) => ({
           worktreeId: row.worktree.id,
           hostId: row.worktree.hostId,
           depth: row.depth
         })),
-    [naturalDragWorktreeIds, rows]
+    [naturalDragWorktreeKeys, rows]
   )
   const getReorderDraggedIds = useCallback(
     (draggedIds: readonly string[]) =>
@@ -91,15 +90,15 @@ export function useWorktreeDragSession(args: {
       })),
     [worktreeLineageDragRows]
   )
-  const getReorderUnitDraggedIds = useCallback(
-    (sourceGroupKey: string, reorderDraggedIds: readonly string[]) => {
+  const getReorderUnitDraggedKeys = useCallback(
+    (sourceGroupKey: string, reorderDraggedKeys: readonly string[]) => {
       const group = worktreeDragUnitGroups.find((candidate) => candidate.key === sourceGroupKey)
       if (!group) {
-        return reorderDraggedIds
+        return reorderDraggedKeys
       }
-      const unitIds = new Set(group.worktreeIds)
-      const filtered = reorderDraggedIds.filter((worktreeId) => unitIds.has(worktreeId))
-      return filtered.length > 0 ? filtered : reorderDraggedIds
+      const unitKeys = new Set(group.worktreeIds)
+      const filtered = reorderDraggedKeys.filter((key) => unitKeys.has(key))
+      return filtered.length > 0 ? filtered : reorderDraggedKeys
     },
     [worktreeDragUnitGroups]
   )
@@ -165,8 +164,7 @@ export function useWorktreeDragSession(args: {
         return null
       }
       const scrollTop = container.scrollTop
-      // Why: only real pointer or scroll movement should re-decide the slot; a
-      // card growing under a still pointer must not move it.
+      // Reevaluate only on pointer/scroll movement so card growth cannot change a stationary drop target.
       const anchor = shouldReevaluateWorktreeSidebarDropAnchor({
         anchor: session.anchor,
         pointerY,
@@ -178,7 +176,7 @@ export function useWorktreeDragSession(args: {
         pointerY,
         groupKey: session.sourceGroupKey,
         rects: session.rects,
-        draggedIds: session.reorderUnitDraggedIds,
+        draggedIds: session.reorderUnitDraggedKeys,
         draggingWorktreeId: session.draggingWorktreeId,
         grab: session.grab,
         anchor
@@ -212,7 +210,7 @@ export function useWorktreeDragSession(args: {
         pointerY: request.pointerY,
         groupKey,
         rects: getWorktreeSidebarDragRectsForGroup(container, groupKey),
-        draggedIds: request.draggedIds,
+        draggedIds: request.draggedKeys,
         draggingWorktreeId: session?.draggingWorktreeId ?? null,
         grab: session?.grab ?? null,
         anchor
@@ -231,8 +229,7 @@ export function useWorktreeDragSession(args: {
     [computeWorktreeDropForGroup, scrollRef]
   )
 
-  // Why: consumers pass session-derived callbacks into memoised cards; a fresh object every
-  // render would defeat those bail-outs.
+  // Keep session callback identity stable for memoized cards.
   return useMemo(
     () => ({
       worktreeDragSessionRef,
@@ -243,7 +240,7 @@ export function useWorktreeDragSession(args: {
       groupIndexByRowKey,
       getReorderDraggedIds,
       getReorderDraggedCopies,
-      getReorderUnitDraggedIds,
+      getReorderUnitDraggedKeys,
       refreshWorktreeDragSession,
       computeWorktreeDrop,
       computeWorktreeStatusDrop
@@ -253,7 +250,7 @@ export function useWorktreeDragSession(args: {
       computeWorktreeStatusDrop,
       getReorderDraggedCopies,
       getReorderDraggedIds,
-      getReorderUnitDraggedIds,
+      getReorderUnitDraggedKeys,
       groupIndexByRowKey,
       groupKeyByRowKey,
       refreshWorktreeDragSession,

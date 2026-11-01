@@ -1,5 +1,4 @@
-// Desktop words for the background-tasks strip: each shared piece translated whole, with the
-// shared English as its fallback, so desktop and the phone never word one roster differently.
+// Translate whole shared pieces with shared English fallbacks so desktop and mobile roster wording agree.
 
 import { translate } from '@/i18n/i18n'
 import {
@@ -22,90 +21,100 @@ const PIECES: Record<BackgroundTaskCopyId, (values?: BackgroundTaskCopyValues) =
   task: () => translate('components.native-chat.backgroundTasks.task', COPY.task),
   detailsUnavailable: () =>
     translate('components.native-chat.backgroundTasks.detailsUnavailable', COPY.detailsUnavailable),
-  countAgentsOne: () =>
-    translate('components.native-chat.backgroundTasks.countAgentsOne', COPY.countAgentsOne),
-  countAgentsMany: (values) =>
-    translate(
-      'components.native-chat.backgroundTasks.countAgentsMany',
-      COPY.countAgentsMany,
-      values
-    ),
-  countShellOne: () =>
-    translate('components.native-chat.backgroundTasks.countShellOne', COPY.countShellOne),
-  countShellMany: (values) =>
-    translate('components.native-chat.backgroundTasks.countShellMany', COPY.countShellMany, values),
+  countAgents: (values) =>
+    translate('components.native-chat.backgroundTasks.countAgents', COPY.countAgents.other, {
+      ...values,
+      count: values?.count,
+      defaultValue_one: COPY.countAgents.one
+    }),
+  countShell: (values) =>
+    translate('components.native-chat.backgroundTasks.countShell', COPY.countShell.other, {
+      ...values,
+      count: values?.count,
+      defaultValue_one: COPY.countShell.one
+    }),
   countShellCommandOne: () =>
     translate(
       'components.native-chat.backgroundTasks.countShellCommandOne',
       COPY.countShellCommandOne
     ),
-  countMonitorsOne: () =>
-    translate('components.native-chat.backgroundTasks.countMonitorsOne', COPY.countMonitorsOne),
-  countMonitorsMany: (values) =>
-    translate(
-      'components.native-chat.backgroundTasks.countMonitorsMany',
-      COPY.countMonitorsMany,
-      values
-    ),
-  countWorkflowsOne: () =>
-    translate('components.native-chat.backgroundTasks.countWorkflowsOne', COPY.countWorkflowsOne),
-  countWorkflowsMany: (values) =>
-    translate(
-      'components.native-chat.backgroundTasks.countWorkflowsMany',
-      COPY.countWorkflowsMany,
-      values
-    ),
-  countTasksOne: () =>
-    translate('components.native-chat.backgroundTasks.countTasksOne', COPY.countTasksOne),
-  countTasksMany: (values) =>
-    translate('components.native-chat.backgroundTasks.countTasksMany', COPY.countTasksMany, values),
+  countMonitors: (values) =>
+    translate('components.native-chat.backgroundTasks.countMonitors', COPY.countMonitors.other, {
+      ...values,
+      count: values?.count,
+      defaultValue_one: COPY.countMonitors.one
+    }),
+  countWorkflows: (values) =>
+    translate('components.native-chat.backgroundTasks.countWorkflows', COPY.countWorkflows.other, {
+      ...values,
+      count: values?.count,
+      defaultValue_one: COPY.countWorkflows.one
+    }),
+  countTasks: (values) =>
+    translate('components.native-chat.backgroundTasks.countTasks', COPY.countTasks.other, {
+      ...values,
+      count: values?.count,
+      defaultValue_one: COPY.countTasks.one
+    }),
   headerTotal: (values) =>
-    translate('components.native-chat.backgroundTasks.headerTotal', COPY.headerTotal, values),
+    translate('components.native-chat.backgroundTasks.headerTotal', COPY.headerTotal.other, {
+      ...values,
+      count: values?.count,
+      defaultValue_one: COPY.headerTotal.one
+    }),
   stateWorking: () =>
     translate('components.native-chat.backgroundTasks.stateWorking', COPY.stateWorking),
   stateWorkingCount: (values) =>
     translate(
       'components.native-chat.backgroundTasks.stateWorkingCount',
-      COPY.stateWorkingCount,
-      values
+      COPY.stateWorkingCount.other,
+      { ...values, count: values?.count, defaultValue_one: COPY.stateWorkingCount.one }
     ),
   stateMonitoring: () =>
     translate('components.native-chat.backgroundTasks.stateMonitoring', COPY.stateMonitoring),
   stateMonitoringCount: (values) =>
     translate(
       'components.native-chat.backgroundTasks.stateMonitoringCount',
-      COPY.stateMonitoringCount,
-      values
+      COPY.stateMonitoringCount.other,
+      { ...values, count: values?.count, defaultValue_one: COPY.stateMonitoringCount.one }
     ),
   stateWaiting: () =>
     translate('components.native-chat.backgroundTasks.stateWaiting', COPY.stateWaiting),
   stateWaitingCount: (values) =>
     translate(
       'components.native-chat.backgroundTasks.stateWaitingCount',
-      COPY.stateWaitingCount,
-      values
+      COPY.stateWaitingCount.other,
+      { ...values, count: values?.count, defaultValue_one: COPY.stateWaitingCount.one }
     ),
   stateBlocked: () =>
     translate('components.native-chat.backgroundTasks.stateBlocked', COPY.stateBlocked),
   stateBlockedCount: (values) =>
     translate(
       'components.native-chat.backgroundTasks.stateBlockedCount',
-      COPY.stateBlockedCount,
-      values
+      COPY.stateBlockedCount.other,
+      { ...values, count: values?.count, defaultValue_one: COPY.stateBlockedCount.one }
     ),
   stateDone: () => translate('components.native-chat.backgroundTasks.stateDone', COPY.stateDone),
   stateDoneCount: (values) =>
-    translate('components.native-chat.backgroundTasks.stateDoneCount', COPY.stateDoneCount, values),
+    translate('components.native-chat.backgroundTasks.stateDoneCount', COPY.stateDoneCount.other, {
+      ...values,
+      count: values?.count,
+      defaultValue_one: COPY.stateDoneCount.one
+    }),
   stateIdle: () => translate('components.native-chat.backgroundTasks.stateIdle', COPY.stateIdle),
   stateIdleCount: (values) =>
-    translate('components.native-chat.backgroundTasks.stateIdleCount', COPY.stateIdleCount, values),
+    translate('components.native-chat.backgroundTasks.stateIdleCount', COPY.stateIdleCount.other, {
+      ...values,
+      count: values?.count,
+      defaultValue_one: COPY.stateIdleCount.one
+    }),
   stateUnverifiable: () =>
     translate('components.native-chat.backgroundTasks.stateUnverifiable', COPY.stateUnverifiable),
   stateUnverifiableCount: (values) =>
     translate(
       'components.native-chat.backgroundTasks.stateUnverifiableCount',
-      COPY.stateUnverifiableCount,
-      values
+      COPY.stateUnverifiableCount.other,
+      { ...values, count: values?.count, defaultValue_one: COPY.stateUnverifiableCount.one }
     ),
   reasonWaiting: () =>
     translate('components.native-chat.backgroundTasks.reasonWaiting', COPY.reasonWaiting),

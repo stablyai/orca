@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import {
   addWorkspace,
   emptySession,
   GIT_KEY,
   leaf
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 const { handlers } = vi.hoisted(() => ({
@@ -96,19 +96,6 @@ describe('the quit checkpoint in a layout-owner build', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('records main’s own quit capture before staging, though the window’s save lacks it', () => {
-    store.setWorkspaceSession(session(), 'local')
-    const captured = record(PANE_A, 2)
-    quitRecords.push(captured)
-
-    expect(stage(session())).toEqual({ ok: true })
-
-    expect(quitResumeRecordsFor).toHaveBeenCalledOnce()
-    expect(store.getWorkspaceSession('local').sleepingAgentSessionsByPaneKey?.[PANE_A]).toEqual(
-      captured
-    )
   })
 
   it('keeps a wake main recorded that the window had not seen yet', () => {

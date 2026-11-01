@@ -8,12 +8,6 @@ import { replaceDaemonPidFile } from './daemon-spawner'
 
 export class DaemonEndpointOwnershipError extends Error {}
 
-/**
- * The one method the ownership checks need from a connected client.
- *
- * Why: naming the capability instead of casting DaemonClient to Partial keeps a rename from
- * silently turning the fence into a no-op — the compiler now rejects a client without it.
- */
 type DaemonEndpointIdentityReader = {
   getDaemonIdentity?: () => DaemonEndpointIdentity | null
 }
@@ -66,15 +60,11 @@ export async function reconcileDaemonPidOwnership(
   if (!pidPath || !endpointIdentity || pidRecordMatchesEndpoint(pidPath, endpointIdentity)) {
     return
   }
-  // Why: the mismatched record's metadata describes a different daemon and must not be copied
-  // onto this one. Re-derive it from the authenticated owner instead, so the repaired record
-  // keeps the fields freshness, host pinning and pid-recycle detection depend on.
+  // Rebuild freshness, host-pinning and PID-reuse metadata from the authenticated owner.
   const { pid, startedAtMs, launchNonce } = endpointIdentity
   const ownerMetadata = await readDaemonOwnerMetadata(endpointIdentity)
   if (!replaceDaemonPidFile(pidPath, { pid, startedAtMs, launchNonce, ...ownerMetadata })) {
-    // Why: fail open. A record that disagrees with the endpoint is a diagnosable nuisance;
-    // abandoning a healthy adoptable daemon over a failed file write costs the user every
-    // persistent terminal on the machine.
+    // Failed PID-record repair must not prevent adopting a healthy daemon.
     console.warn(
       '[daemon] Could not repair daemon PID ownership; adopting the authenticated endpoint anyway'
     )
@@ -83,16 +73,7 @@ export async function reconcileDaemonPidOwnership(
   console.warn('[daemon] Repaired daemon PID ownership to match the authenticated endpoint')
 }
 
-/**
- * Recovers the owning daemon's launch metadata.
- *
- * Why: `entryPath`/`appVersion` gate bundle-freshness and (on Windows) which relocated daemon
- * host directories are pinned against pruning, and the Linux pair gates pid-recycle detection.
- * Publishing a repaired record without them makes a healthy daemon look permanently stale.
- * The values come from the authenticated hello rather than the owner's command line: a command
- * line is a single space-joined string, so any install path containing a space (`C:\Program
- * Files\...`, `/Applications/Orca 2.app/...`) cannot be split back into argv unambiguously.
- */
+/** Use hello metadata: space-joined command lines cannot reliably recover paths containing spaces. */
 async function readDaemonOwnerMetadata(
   identity: DaemonEndpointIdentity
 ): Promise<Partial<DaemonPidFile>> {
@@ -157,7 +138,7 @@ export async function cleanupFailedDaemonAdoption(
     ...legacy.map((entry) => entry.disconnectOnly()),
     (async () => {
       try {
-        // Why: other authenticated clients may win, so only daemon-side shutdownIfIdle can prove a failed adoption is killable.
+        // Other clients may connect; only daemon-side shutdownIfIdle can prove cleanup safe.
         await current.disconnectOnly()
       } catch (error) {
         current.dispose()

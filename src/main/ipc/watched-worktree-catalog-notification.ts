@@ -23,7 +23,7 @@ export function notifyWatchedWorktreeCatalogChanged(
   try {
     remoteClientNotifier?.notifyWorktreeCatalogChangedForRemoteClients(repoId)
   } catch (error) {
-    // Why: remote fanout must not block the host renderer's watcher refresh.
+    // Remote fanout failure must not block host renderer refresh.
     console.error('[worktrees] failed to notify remote clients of watched catalog change', error)
   }
 }

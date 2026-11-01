@@ -4,6 +4,7 @@ import {
   CREATE_WORKTREE_ITEM_ID
 } from '@/lib/worktree-palette-create-action'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   appendPaletteListEntries,
   CONTINUED_SECTION_HEADER_ID_SUFFIX,
@@ -35,6 +36,7 @@ export function useWorktreeJumpPaletteListEntries({
   middleLeadsSections,
   taskItems
 }: WorktreeJumpPaletteListEntriesInput) {
+  const languageRevision = useUiLanguageRevision()
   const listEntries = useMemo<PaletteListEntry[]>(() => {
     const entries: PaletteListEntry[] = []
     const {
@@ -165,8 +167,7 @@ export function useWorktreeJumpPaletteListEntries({
         )
       }
     }
-    // Why: a pasted issue/PR URL is decisive. Show linked worktrees first so
-    // Enter jumps; keep create available underneath when the user wants a new one.
+    // Issue/PR URLs put linked worktrees first for Enter-to-jump while keeping create underneath.
     if (taskSourceUrl) {
       if (visibleWorktreeItems.length > 0) {
         pushWorktreeSection()
@@ -259,6 +260,7 @@ export function useWorktreeJumpPaletteListEntries({
       entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
     }
     return entries
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
     handleExpandSection,
     hasQuery,
@@ -267,7 +269,8 @@ export function useWorktreeJumpPaletteListEntries({
     paletteSections,
     showCreateAction,
     taskSourceUrl,
-    taskItems
+    taskItems,
+    languageRevision
   ])
   const selectableItems = useMemo<PaletteItem[]>(
     () =>
@@ -289,8 +292,7 @@ export function useWorktreeJumpPaletteListEntries({
   )
   useEffect(() => {
     autoSelectedItemIdRef.current = selectionItemIds[0] ?? null
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- the controller ref preserves its original stable identity.
-  }, [selectionItemIds])
+  }, [autoSelectedItemIdRef, selectionItemIds])
   return { listEntries, listEntryRenderKeys, selectableItems, selectionItemIds }
 }
 

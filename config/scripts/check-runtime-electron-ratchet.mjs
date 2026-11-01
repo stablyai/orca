@@ -1,18 +1,6 @@
 #!/usr/bin/env node
-/**
- * Ratchet gate for Electron imports reachable from the Orca runtime, the CLI and structured chat.
- *
- * The runtime and the CLI boot on plain Node, where Electron is unavailable. Keep desktop
- * dependencies out of their graphs, including structured chat not yet wired into the runtime.
- *
- * This bundles the runtime and the structured-chat lanes with esbuild and reads the metafile for
- * every module that imports `electron`. Any such module fails: the migration reached zero.
- *
- * This is a reachability check, not a lint rule: the point is precisely the edges
- * that no per-file rule can see.
- *
- * Usage: node config/scripts/check-runtime-electron-ratchet.mjs
- */
+// Plain-Node runtime/CLI and all structured-chat lanes must remain Electron-free, including lanes not yet reachable.
+// esbuild reachability catches cross-file edges lint cannot; any electron importer fails (baseline is zero).
 import { build } from 'esbuild'
 import { existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
@@ -21,27 +9,19 @@ import process from 'node:process'
 import { isTestOnlyDirectoryName, isTestOnlySourcePath } from './test-only-source-path.mjs'
 import { createWorkspaceSourceResolver } from './workspace-source-exports.mjs'
 
-// Why absolute, not cwd-relative: `pnpm lint` runs from the repo root but CI steps and
-// editors do not always, and a cwd-relative miss surfaced as an unhandled ENOENT stack
-// instead of a usable message.
+// Resolve from module location: CI/editors may run outside root; cwd-relative paths previously caused ENOENT.
 const ROOT = path.join(import.meta.dirname, '..', '..')
 
-// The module graphs that boot on plain Node: the runtime service, the RPC server that
-// fronts it, orcad, and the CLI.
 const ENTRY_POINTS = [
   path.join(ROOT, 'src', 'main', 'runtime', 'orca-runtime.ts'),
   path.join(ROOT, 'src', 'main', 'runtime', 'runtime-rpc.ts'),
-  // Why orcad too: it imports ipc/pty directly to install the PTY controller, so its
-  // graph is strictly larger than the two runtime entries. Measuring only those let the
-  // two numbers drift — the gate would read zero while the shipped artifact regressed.
+  // orcad imports ipc/pty directly; checking only runtime entries once missed regressions in its larger graph.
   path.join(ROOT, 'src', 'main', 'orcad', 'main.ts'),
   // Why the CLI: it runs under ELECTRON_RUN_AS_NODE, and its tsconfig follows imports into src/main.
   path.join(ROOT, 'src', 'cli', 'index.ts')
 ]
 
-// Code that must run in orcad whether or not a runtime entry reaches it yet. Whole directories,
-// so a new file is covered by default; src/main/runtime still holds desktop-only code (browser
-// commands, desktop relay), so only its structured-chat files are entries there.
+// Whole lane directories cover new files automatically; only structured-chat files are plain-Node-safe inside runtime/.
 export const STRUCTURED_CHAT_LANES = [
   { directory: ['src', 'main', 'native-chat'] },
   { directory: ['src', 'main', 'claude'] },
@@ -86,7 +66,6 @@ function collectLaneFiles(directory, basename) {
   })
 }
 
-/** What the CLI and CI check: the runtime graph plus every structured-chat lane file. */
 export function defaultEntryPoints(root = ROOT) {
   return [...ENTRY_POINTS, ...collectStructuredChatEntryPoints(root)]
 }
@@ -103,12 +82,7 @@ const EXTERNAL = [
   'cpu-features'
 ]
 
-/**
- * Why: some optional native deps (ssh2's cpu-features) reference a prebuilt `.node`
- * that only exists where a build toolchain has run. Resolving them made this gate
- * pass on a developer machine and hard-fail on CI. Nothing here needs the addon —
- * only the import graph — so mark every `.node` external instead.
- */
+// Externalize every .node: optional ssh2/cpu-features prebuilds may exist locally but not CI; only the import graph matters.
 const externalNativeAddons = {
   name: 'external-native-addons',
   setup(pluginBuild) {
@@ -168,7 +142,6 @@ export async function collectElectronImporters(entryPoints, { plugins = [] } = {
   return [...importers].sort()
 }
 
-// Exported so tests run the CLI path itself; `plugins` is the same in-memory hook as above.
 export async function main({ plugins = [] } = {}) {
   const current = await collectElectronImporters(defaultEntryPoints(), {
     plugins
@@ -189,10 +162,7 @@ depend on the port, or drop the import that pulls Electron in.`
   return 0
 }
 
-// Why pathToFileURL and not a `file://` template: on Windows process.argv[1] is a
-// native path (C:\repo\...) while import.meta.url is file:///C:/repo/..., so the
-// template never matches and the gate would exit 0 without checking anything — a
-// lint gate that fails open. Same idiom as check-max-lines-ratchet.mjs:225.
+// pathToFileURL handles Windows drive/backslash argv paths; a file:// template silently skipped the gate there.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exitCode = await main()
 }

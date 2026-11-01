@@ -1,4 +1,3 @@
-// Why: runs the drain's recovery and absent-legacy-home guest scripts under `sh`.
 import { execFileSync } from 'node:child_process'
 import {
   linkSync,

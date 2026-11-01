@@ -9,12 +9,10 @@ import {
 import { dfAvailableKb } from './remote-filesystem-space'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
-/** Under `~/.orca-remote`: decides the claim when hard links cannot (see the claim command). */
+/** Claim arbiter under ~/.orca-remote when hard links cannot elect an owner. */
 export const ORCAD_MACHINE_CLAIM_ARBITER_DIRNAME = 'orcad-machine.arbiter'
 
-/** A claim step failed; the line carries the step and the shell's own error text. */
 export const ORCAD_MACHINE_CLAIM_FAILED = 'CLAIM_FAILED'
-/** The `df -Pk` line for `~/.orca-remote`, printed after a failure. */
 export const ORCAD_MACHINE_CLAIM_SPACE = 'CLAIM_SPACE'
 
 const CLAIM_STEP_TEXT = {
@@ -33,17 +31,10 @@ function isClaimStep(step: string | undefined): step is OrcadMachineClaimStep {
   return step !== undefined && Object.hasOwn(CLAIM_STEP_TEXT, step)
 }
 
-/** Below this, a failed write on the claim's filesystem reads as a full disk or spent quota. */
+/** Failed writes below this free-KB threshold suggest disk/quota exhaustion. */
 const NEARLY_FULL_KB = 1024
 
-/**
- * Publishes the claim exclusively and prints whichever claim won. Why a hard link: `ln` is atomic
- * and exclusive on NFS too, and a reader never sees a half-written claim. Where `ln` cannot decide
- * (no hard links, or an empty claim a full disk left), a directory rename picks the winner: it is
- * atomic everywhere, and the arbiter arrives already holding the winner's claim, so a crash leaves
- * no half-taken lock. Every machine then republishes that same claim, so concurrent writes agree.
- * A failed step prints `CLAIM_FAILED <step> <error>` and exits 0, so the user reads why (#30491).
- */
+/** Publish via exclusive hard link or prefilled atomic arbiter rename; print the winning claim or a bounded failure verdict. */
 export function orcadMachineClaimCommand(
   host: RemoteHostPlatform,
   loginHome: string,
@@ -60,7 +51,7 @@ export function orcadMachineClaimCommand(
   const stageClaim = remoteDir(stageName, ORCAD_MACHINE_CLAIM_FILENAME)
   const arbiter = remoteDir(ORCAD_MACHINE_CLAIM_ARBITER_DIRNAME)
   const arbiterClaim = remoteDir(ORCAD_MACHINE_CLAIM_ARBITER_DIRNAME, ORCAD_MACHINE_CLAIM_FILENAME)
-  // `mv` into an existing arbiter nests the stage inside it instead of replacing it.
+  // mv into an existing directory nests the stage rather than replacing the arbiter.
   const nestedStage = remoteDir(ORCAD_MACHINE_CLAIM_ARBITER_DIRNAME, stageName)
   const body = quotePosixShell(
     JSON.stringify({
@@ -74,22 +65,21 @@ export function orcadMachineClaimCommand(
     `orca_claim_fail() { printf '${ORCAD_MACHINE_CLAIM_FAILED} %s %s\\n' "$1" "$(printf %s "$2" | tr '\\n' ' ' | cut -c 1-300)";`,
     `rm -f ${partial}; df -Pk ${base} 2>/dev/null | tail -n 1 | sed 's/^/${ORCAD_MACHINE_CLAIM_SPACE} /'; exit 0; };`,
     `umask 077; err=$(mkdir -p ${base} 2>&1) || ${fail('mkdir', '"$err"')};`,
-    // `[ -s ]` too: a network filesystem can report a dropped write only at close, which `>` ignores.
+    // Network filesystems may defer write errors until close; require a nonempty published file too.
     `err=$(printf %s ${body} 2>&1 > ${partial}) && [ -s ${partial} ] || ${fail('write', '"$err"')};`,
-    // Once an arbiter exists it decides any claim that later goes missing or empty.
+    // An existing arbiter remains authoritative if the claim disappears or becomes empty.
     `if { [ -d ${arbiter} ] || ! ln ${partial} ${claim} 2>/dev/null; } && [ ! -s ${claim} ]; then`,
     `err=$( { mkdir ${stage} && printf %s ${body} > ${stageClaim}; } 2>&1 ) || { rm -rf ${stage}; ${fail('arbiter-write', '"$err"')}; };`,
     `mv ${stage} ${arbiter} 2>/dev/null; rm -rf ${stage} ${nestedStage};`,
     `[ -s ${arbiterClaim} ] || ${fail('arbiter-empty')};`,
     `err=$(cat ${arbiterClaim} 2>&1 > ${partial}) || ${fail('write', '"$err"')};`,
     `if [ ! -s ${claim} ]; then err=$(mv -f ${partial} ${claim} 2>&1) || ${fail('publish', '"$err"')}; fi;`,
-    // Stderr only on failure: a warning glued to the claim (which has no newline) would hide it.
+    // Keep success stderr quiet: gateway noise glued to the newline-free claim would hide it.
     `fi; rm -f ${partial}; claim=$(cat ${claim} 2>/dev/null) || { err=$(cat ${claim} 2>&1 >/dev/null); ${fail('read', '"$err"')}; };`,
     `[ -n "$claim" ] || ${fail('empty')}; printf '%s\\n' "$claim"`
   ].join(' ')
 }
 
-/** What the claim command printed: the winning claim, or the error the user should read. */
 export function readOrcadMachineClaimAnswer(
   output: string
 ): { state: 'present'; machineKey: string } | { state: 'failed'; message: string } {
@@ -98,7 +88,7 @@ export function readOrcadMachineClaimAnswer(
   const base = `~/${RELAY_REMOTE_DIR}`
   const claim = `${base}/${ORCAD_MACHINE_CLAIM_FILENAME}`
   if (!failed) {
-    // Line by line: a gateway that merges stderr into stdout can put shell noise beside it (#30491).
+    // Scan lines because gateways can merge shell stderr into the claim reply (#30491).
     for (const line of lines.toReversed()) {
       const read = parseOrcadMachineClaim(line)
       if (read.state === 'present') {

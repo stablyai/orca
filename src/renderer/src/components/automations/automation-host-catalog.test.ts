@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { hostStableKey, ownerKey } from '../../../../shared/automation-owner-key'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../../../shared/execution-host'
-import {
-  AUTOMATION_ORPHAN_ENTRY_LABEL,
-  buildAutomationHostCatalog
-} from './automation-host-catalog'
+import { automationOrphanEntryLabel, buildAutomationHostCatalog } from './automation-host-catalog'
 import type {
   AutomationCatalogSshMirrorInput,
   AutomationHostCatalog,
@@ -93,6 +90,18 @@ describe('buildAutomationHostCatalog', () => {
       querySupport: 'scoped'
     })
     expect(self.owner).toEqual({ authority: { kind: 'desktop' }, selector: { kind: 'self' } })
+  })
+
+  it('folds Desktop into its alias runtime and waits on that runtime for SSH hydration', () => {
+    const catalog = buildAutomationHostCatalog(
+      buildInput({
+        desktopAliasEnvironmentId: 'env-1',
+        runtimes: [runtime({ ssh: mirror({ targetsHydrated: false }) })]
+      })
+    )
+
+    expect(catalog.entries.map((entry) => entry.stableKey)).toEqual([runtimeSelfKey('env-1')])
+    expect(catalog.hydration.desktopSshHydrated).toBe(false)
   })
 
   it('keeps equal SSH target ids under Desktop and a runtime distinct', () => {
@@ -356,7 +365,7 @@ describe('buildAutomationHostCatalog', () => {
     )
     const orphan = catalog.entries.find((entry) => entry.kind === 'orphan')
     expect(orphan).toMatchObject({
-      label: AUTOMATION_ORPHAN_ENTRY_LABEL,
+      label: automationOrphanEntryLabel(),
       catalogState: 'authoritative',
       executionHealth: 'unavailable',
       owner: null

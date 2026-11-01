@@ -12,8 +12,7 @@ import type { PtyTransport } from './pty-transport-types'
 
 export type MobileOverlayTickDeps = {
   managerRef: { current: PaneManager | null }
-  // Why: the overlay render resolves each pane's pty through this map, so the
-  // tick gate must read the same binding to stay behavior-preserving.
+  // Affinity must use the same live PTY binding the overlay reads.
   paneTransportsRef: { current: ReadonlyMap<number, Pick<PtyTransport, 'getPtyId'>> }
 }
 
@@ -29,15 +28,7 @@ function isPtyMountedInTab(
   return false
 }
 
-/**
- * Re-render this tab's mobile-fit / presence-lock overlays when the pane-manager
- * state maps change, and refit panes the override moved.
- *
- * Both emitters are global listener sets: every event reaches every mounted tab.
- * The pty-affinity check therefore runs *before* the tick, not just before the
- * rAF work — a remote reconnect replays two handle-rotation events per pane, so
- * an ungated tick costs (events x mounted panes) re-renders per network blip.
- */
+/** Gate global fit/driver emitter events by this tab’s PTY before ticking; reconnect handle rotation otherwise rerenders every retained tab per event. */
 export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileOverlayTickDeps): {
   refreshMobileOverlays: () => void
 } {
@@ -168,8 +159,7 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
     [paneTransportsRef]
   )
 
-  // Why: a pane whose transport was swapped under a live overlay portal has no
-  // pty affinity left to tick it; the reclaim path drops the stale banner itself.
+  // Reclaim clears stale banners when transport swaps remove all affinity capable of ticking the live portal.
   const refreshMobileOverlays = useCallback((): void => {
     setOverrideTick((n) => n + 1)
   }, [])

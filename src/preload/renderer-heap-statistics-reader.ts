@@ -2,11 +2,7 @@ import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
 
 type HeapStatisticsSource = Pick<NodeJS.Process, 'getHeapStatistics' | 'getBlinkMemoryInfo'>
 
-/**
- * Reads exact V8 heap sizes, which `performance.memory` cannot express: Blink
- * quantizes that API and caches it ~20 minutes, so heap growth is invisible to
- * it. Available in a sandboxed, context-isolated preload.
- */
+// performance.memory quantizes and caches values, hiding heap growth.
 export function readRendererHeapStatistics(
   source: HeapStatisticsSource = process
 ): RendererHeapStatistics | null {
@@ -14,14 +10,13 @@ export function readRendererHeapStatistics(
   try {
     heap = source.getHeapStatistics()
   } catch {
-    // Why: diagnostics must never break the renderer if Electron drops an API.
+    // Diagnostics must tolerate missing Electron APIs.
     return null
   }
 
   let blinkAllocatedKB: number | undefined
   try {
-    // Why a separate try: Blink's number is supplementary. Losing it must not
-    // discard the exact V8 read and send callers back to the quantized metric.
+    // A failed supplementary Blink read must not discard the V8 measurements.
     blinkAllocatedKB = source.getBlinkMemoryInfo().allocated
   } catch {
     blinkAllocatedKB = undefined

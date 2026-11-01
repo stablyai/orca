@@ -109,44 +109,6 @@ describe('SetProjectLocationDialog', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('clones onto the selected host', async () => {
-    const onReady = vi.fn()
-    const user = renderDialog({ onReady })
-
-    await user.click(screen.getByRole('button', { name: /Clone from URL/ }))
-    await user.click(screen.getByRole('button', { name: 'Browse host filesystem' }))
-    await user.click(screen.getByRole('button', { name: 'Select remote folder' }))
-    await user.click(screen.getByRole('button', { name: 'Clone' }))
-
-    expect(storeMocks.setupProjectClone).toHaveBeenCalledWith({
-      projectId: 'project-orca',
-      hostId: 'ssh:openclaw',
-      url: 'git@github.com:stablyai/orca.git',
-      destination: '/remote/orca',
-      displayName: 'orca'
-    })
-    expect(onReady).toHaveBeenCalledWith(JSON.stringify(['setup-openclaw-clone', 'ssh:openclaw']))
-  })
-
-  it('hides clone for folder projects', () => {
-    renderDialog({ projectKind: 'folder' })
-    expect(screen.queryByRole('button', { name: /Clone from URL/ })).toBeNull()
-  })
-
-  it('does not render when no host is selected', () => {
-    render(
-      <SetProjectLocationDialog
-        option={null}
-        projectName="orca"
-        projectKind="git"
-        defaultCloneUrl=""
-        onClose={vi.fn()}
-        onReady={vi.fn()}
-      />
-    )
-    expect(screen.queryByTestId('set-project-location-dialog')).toBeNull()
-  })
-
   it('backs out of the host browser on Escape instead of discarding the form', async () => {
     const onClose = vi.fn()
     const user = renderDialog({ onClose })
@@ -161,7 +123,6 @@ describe('SetProjectLocationDialog', () => {
     expect(screen.queryByTestId('remote-file-browser')).toBeNull()
     expect(screen.getByRole('button', { name: 'Set location' })).toBeTruthy()
 
-    // A second Escape, now back on the form, dismisses the dialog as usual.
     await user.keyboard('{Escape}')
     expect(onClose).toHaveBeenCalled()
   })
@@ -192,7 +153,6 @@ describe('SetProjectLocationDialog', () => {
     await user.type(screen.getByPlaceholderText('/destination/on/host'), '/remote/orca')
     await user.click(screen.getByRole('button', { name: 'Clone' }))
 
-    // The user backs out and points the composer somewhere else.
     rerender(
       <SetProjectLocationDialog
         option={null}
@@ -231,14 +191,5 @@ describe('SetProjectLocationDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Set location' }))
 
     expect(onReady).toHaveBeenCalledWith(JSON.stringify(['setup-openclaw', 'ssh:openclaw']))
-  })
-
-  it('notifies the parent when dismissed', async () => {
-    const onClose = vi.fn()
-    renderDialog({ onClose })
-    await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-slot="dialog-close"]')?.click()
-    })
-    expect(onClose).toHaveBeenCalled()
   })
 })

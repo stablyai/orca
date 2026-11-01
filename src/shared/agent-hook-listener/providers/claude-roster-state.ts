@@ -15,8 +15,7 @@ export {
   type ClaudePaneStatusResolution
 } from './claude-pane-hold-evidence'
 
-/** Lead events that may re-anchor a pane's owning session. Allow-list, not a deny-list: a payload we
- *  can't attribute (unknown name, child event missing its agent_id) must void nothing. */
+/** Only attributable lead events may re-anchor ownership; unknown/child events void nothing. */
 const CLAUDE_SESSION_OWNER_EVENTS: ReadonlySet<string> = new Set([
   'SessionStart',
   'UserPromptSubmit',
@@ -25,19 +24,12 @@ const CLAUDE_SESSION_OWNER_EVENTS: ReadonlySet<string> = new Set([
   'PreToolUse',
   'PostToolUse',
   'PostToolUseFailure',
-  'PermissionRequest'
+  'PermissionRequest',
+  'Elicitation',
+  'ElicitationResult'
 ])
 
-/** A pane whose `session_id` changed is running a different conversation, so claims the previous one
- *  owned are void — the hook-independent backstop for /clear, relaunch and resume. Modern Claude
- *  emits SessionEnd on /clear, but Orca previously did not install it and older binaries emit none.
- *
- *  Voids only what the replaced session provably owned. Deliberately NOT voided:
- *  - `claudeRunningNonAgentTaskPaneKeys`: a background shell is an OS process that survives /clear,
- *    and the previous inventory is positive evidence it was running. Only a fresh inventory or a
- *    certified process death may retire it.
- *  - `confirmedTeammate` roster rows: persistent in-process teammates a lead replacement can't end.
- *  - `claudeLeadStateByPaneKey`: the caller's own fold overwrites it anyway. */
+/** Session replacement voids prior conversation claims even without SessionEnd. Preserve live shells until fresh inventory/certified death, confirmed in-process teammates, and the lead record the caller overwrites. */
 export function voidClaimsOfReplacedClaudeSession(
   state: HookListenerState,
   eventName: unknown,
@@ -52,8 +44,7 @@ export function voidClaimsOfReplacedClaudeSession(
   ) {
     return
   }
-  // Compact/unknown SessionStart events are intentionally ignored by the status fold; do not let
-  // them advance the owner anchor or the next real lead event will miss the replacement.
+  // Ignored compact/unknown SessionStart must not advance ownership or hide the next real replacement.
   if (
     eventName === 'SessionStart' &&
     hookPayload['source'] !== 'startup' &&
@@ -71,15 +62,12 @@ export function voidClaimsOfReplacedClaudeSession(
   if (previousOwner === undefined || previousOwner === sessionId) {
     return
   }
-  // Why: a compact restart mints a SessionStart mid-turn under the same conversation; the existing
-  // handler already fails closed on non-idle sources, and this must not undercut it. No other
-  // allow-listed event carries a compact `trigger`, so SessionStart is the whole guard — if a
-  // compact event is ever added to CLAUDE_SESSION_OWNER_EVENTS, re-derive one for it deliberately.
+  // Compact restarts stay in-turn. If more compact-capable owner events are added, give them equivalent guards.
   if (eventName === 'SessionStart') {
     return
   }
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-  // Why: the replaced conversation's notifications will never reach this one.
+  // Replaced conversations' owed notifications cannot reach the new one.
   state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
   if (!roster) {
@@ -107,8 +95,7 @@ export function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
-/** The inventory is the only judge of a running shell: it retires the gate when it omits the
- *  shell, and nothing about how the main agent's turn ended may override what it positively reports. */
+/** Only fresh inventory retires a reported shell; lead verdicts cannot override positive process evidence. */
 export function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
   paneKey: string,
@@ -121,8 +108,7 @@ export function updateClaudeRunningNonAgentTask(
   }
 }
 
-/** The only writer of the main agent record. The main agent's clock keeps continuity across
- *  same-state writes; a caller restoring a stash passes the stashed instant and wins. */
+/** Keep same-state lead clocks continuous; explicit restored stash times take precedence. */
 export function setClaudeMainAgentTurnState(
   state: HookListenerState,
   paneKey: string,
@@ -139,9 +125,7 @@ export function setClaudeMainAgentTurnState(
   return record
 }
 
-/** The `mainAgent` fact a row publishes from its record: nothing invented, so a pane whose main
- *  agent was never observed publishes none and readers fall back to the combined `state`.
- *  A child-induced wait occupies the record but is child work, so the main agent is the state it displaced. */
+/** Publish only observed lead facts, restoring child-displaced state; absent records fall back to aggregate state. */
 export function claudeMainAgentStatusForPayload(
   record: ClaudeLeadTurnState
 ): AgentMainAgentStatus | undefined {
@@ -156,26 +140,26 @@ export function claudeMainAgentStatusForPayload(
   }
 }
 
-/** The SERVER inferred a cancel of a LOCAL pane outside the hook stream (Ctrl+C with no Stop;
- *  current Claude sends no hook on a cancel, and a bare Esc is never inferred for Claude): record
- *  the main agent's verdict and fold it with the child work the turn left running, exactly as a
- *  Stop would be. This is the primary source of `mainAgent.outcome: 'cancellation'` in the CLI
- *  lane, and the record is what keeps a later child lifecycle event from resurrecting the
- *  cancelled main agent. Nothing here retires a shell, cron or subagent: they outlive the cancel
- *  and leave only when their inventory says so. */
+/** Record host-inferred local Ctrl+C cancellation; Claude emits no cancel hook and bare Esc is not inferred. Refold surviving children without retiring shells/crons/subagents so later hooks cannot resurrect the lead. */
 export function markClaudeLeadTurnInterrupted(
   state: HookListenerState,
   paneKey: string
+): ReturnType<typeof markClaudeLeadTurnDone> {
+  return markClaudeLeadTurnDone(state, paneKey, 'cancellation')
+}
+
+/** End the lead turn without its Stop hook; an absent outcome is unknown, as on a plain Stop. */
+export function markClaudeLeadTurnDone(
+  state: HookListenerState,
+  paneKey: string,
+  outcome?: 'cancellation'
 ): {
   state: AgentStatusState
   workingMode?: AgentWorkingMode
   mainAgent?: AgentMainAgentStatus
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 } {
-  const record = setClaudeMainAgentTurnState(state, paneKey, {
-    state: 'done',
-    outcome: 'cancellation'
-  })
+  const record = setClaudeMainAgentTurnState(state, paneKey, { state: 'done', outcome })
   const resolved = resolveClaudePaneStatus(state, paneKey, record)
   const mainAgent = claudeMainAgentStatusForPayload(record)
   return {
@@ -197,7 +181,7 @@ export function seedClaudeSubagentRosterFromSnapshots(
   }
   const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
   for (const snapshot of snapshots) {
-    // Why: idle-teammate liveness can't be proven across a restart (its TeammateIdle confirmation is gone); only working seeds restore, and a live teammate re-earns its row via SubagentStart.
+    // Idle teammates lack confirmation after restart; restore working seeds only and require live events for idle rows.
     if (snapshot.state !== 'working') {
       continue
     }
@@ -206,17 +190,15 @@ export function seedClaudeSubagentRosterFromSnapshots(
       startedAt: snapshot.startedAt,
       agentType: snapshot.agentType,
       description: snapshot.description,
-      // Why: the seed can be a phantom (child finished while Orca was down, SubagentStop lost); let a PRESENT background_tasks list omitting the id remove it, not gate the pane 'working' forever.
+      // Authoritative omission may reap phantom seeds whose finish hooks were lost offline.
       backgroundTasksAuthoritative: true,
-      // Why: no child event in this runtime has confirmed the seed, so it must not count as live child work.
+      // Restored seeds are not confirmed live work in this runtime.
       restoredFromSnapshot: true
     })
   }
 }
 
-/** Restore a settled main agent so its children's drain can still complete the row after a restart.
- *  A running shell's liveness is not restored, so only a row that says no shell ran is seeded; one
- *  that says nothing (rewritten without the fact) stays unseeded rather than falsely settling. */
+/** Restore settled leads only when persisted evidence explicitly excludes running shells; missing evidence must not falsely settle after restart. */
 export function seedClaudeLeadTurnFromPersistedStatus(
   state: HookListenerState,
   paneKey: string,
@@ -272,7 +254,7 @@ export function clearClaudePendingWaitForAgent(
   )
 }
 
-/** Clear an AskUserQuestion wait after the answer is typed (answering emits no hook event; the caller infers it from the submit keystroke). Restores the stashed pre-wait lead state or 'working', drops the cached card, and returns the pane state to emit (gated up to 'working' while children run). */
+/** Infer answered questions from submit keystrokes; restore prior lead/working state, clear the card, then fold surviving children. */
 export function clearClaudeAnsweredQuestionWait(
   state: HookListenerState,
   paneKey: string

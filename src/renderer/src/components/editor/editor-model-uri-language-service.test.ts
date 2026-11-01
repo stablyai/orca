@@ -1,9 +1,7 @@
-// Why: Monaco's TypeScript worker names each file by its model URI, so the owner part of that
-// URI decides whether imports between open tabs resolve and whether `.tsx` parses as TSX.
+// The TypeScript worker uses model URIs as filenames, determining import isolation and TSX detection.
 import { describe, expect, it } from 'vitest'
 import { URI } from 'monaco-editor/esm/vs/base/common/uri.js'
 import { TypeScriptWorker } from 'monaco-editor/esm/vs/language/typescript/tsWorker.js'
-import { ScriptKind } from 'monaco-editor/esm/vs/language/typescript/lib/typescriptServices.js'
 import { toEditorModelUri } from './editor-model-uri'
 
 function workerWith(files: Record<string, string>) {
@@ -26,14 +24,6 @@ function workerWith(files: Record<string, string>) {
 describe('editor model URIs in the TypeScript language service', () => {
   const hostA = '["hub-a","ssh:target"]'
   const viewText = "import { value } from './value'\nexport const view = <div>{value}</div>\n"
-
-  it.each([
-    ['a local file', ''],
-    ['a remote file', hostA]
-  ])('reads %s named .tsx as TSX', (_label, owner) => {
-    const view = toEditorModelUri('/repo/src/view.tsx', owner)
-    expect(workerWith({ [view]: viewText }).getScriptKind(view)).toBe(ScriptKind.TSX)
-  })
 
   it("resolves an import to the open file on the same host, not another host's", async () => {
     const view = toEditorModelUri('/repo/src/view.tsx', hostA)

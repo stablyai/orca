@@ -4,8 +4,7 @@ import {
   type AiVaultListResult
 } from '../../shared/ai-vault-types'
 
-// Matches the renderer's forced-rescan throttle: forced callers that arrive
-// inside this window share one scan, later ones may preempt a scan that hung.
+// Match the renderer throttle: forced requests share this window before they can preempt a hung scan.
 const FORCED_SCAN_PREEMPT_AFTER_MS = 5_000
 
 type ScanEntry = {
@@ -15,10 +14,8 @@ type ScanEntry = {
   startedAt: number
   promise: Promise<AiVaultListResult>
   waiterCount: number
-  // The last waiter leaving must not abort a scan that already finished.
   settled: boolean
-  // Set when a forced caller replaced this entry, so its waiters re-join the
-  // replacement instead of surfacing someone else's refresh as their own cancel.
+  // Preempted waiters join the replacement instead of surfacing another caller's cancellation.
   preemptedBy: ScanEntry | null
 }
 
@@ -54,8 +51,7 @@ export class AiVaultScanCoordinator {
       this.entries.set(args.key, entry)
     }
     if (preempted) {
-      // The replacement must be registered before the abort lands: waiters of
-      // the old scan re-join it synchronously from their abort listener.
+      // Abort listeners rejoin synchronously, so register the replacement before aborting.
       preempted.preemptedBy = entry
       preempted.controller.abort()
     }
@@ -124,9 +120,7 @@ export class AiVaultScanCoordinator {
         if (!attached) {
           return
         }
-        // Why: a forced refresh aborts the shared entry, but the other waiters
-        // never asked to cancel — rejecting them turns one window's Refresh into
-        // a cancelled multi-host merge somewhere else. Re-join the replacement.
+        // Other waiters did not cancel; a forced refresh transfers them to its replacement.
         const replacement = signal?.aborted ? null : entry.preemptedBy
         detach()
         if (!replacement) {
@@ -165,9 +159,7 @@ export class AiVaultScanCoordinator {
   }
 }
 
-// Why: without this a forced scan that never settles (no inactivity timer on the
-// legacy SSH file-stream reader, see #11364) makes every later Refresh join the
-// dead promise, so the panel stays empty until the app restarts.
+// Allow refresh to escape hung forced scans, including legacy SSH reads without inactivity timeouts (#11364).
 function canPreemptForForcedScan(entry: ScanEntry): boolean {
   return !entry.force || Date.now() - entry.startedAt >= FORCED_SCAN_PREEMPT_AFTER_MS
 }

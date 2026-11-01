@@ -70,7 +70,6 @@ export function pairingCode(
   })
 }
 
-/** Resolves the `ipcMain.handle` callback a suite registered for `channel`. */
 export function channelHandlerLookup(handleMock: Mock) {
   return function handler<TArgs, TResult>(
     channel: string

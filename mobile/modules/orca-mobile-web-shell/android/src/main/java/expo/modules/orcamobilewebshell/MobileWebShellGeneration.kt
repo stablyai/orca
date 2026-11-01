@@ -14,15 +14,7 @@ private const val MOBILE_WEB_SHELL_MAX_CONTENT_TYPE_LENGTH = 128
 
 internal data class MobileWebShellAsset(val file: File, val contentType: String)
 
-/**
- * The served surface of one activated generation: a request path to file map, built once from the
- * manifest before anything loads. Serving is a lookup in this map and never a path join at request
- * time, so "not in the manifest" is a refusal by construction rather than by sanitiser.
- *
- * Asset bytes are not re-hashed here. The TypeScript store verified every byte against the manifest
- * before the activating rename, and the directory path is one the app owns and the page can never
- * influence.
- */
+/** Serve only a prebuilt manifest path map, never request-time path joins. TypeScript verifies bytes before activation; native uses an app-owned directory. */
 internal class MobileWebShellGeneration private constructor(
   val entries: Map<String, MobileWebShellAsset>
 ) {
@@ -55,12 +47,10 @@ internal class MobileWebShellGeneration private constructor(
         if (contentType !is String || !isServableContentType(contentType)) return null
         entries["/$path"] = MobileWebShellAsset(File(directory, path), contentType)
       }
-      // Removed, not copied: the document answers at "/" and nowhere else, so the one response that
-      // carries the policy header is the only way to reach those bytes.
+      // Remove the entrypoint alias: only / may serve document bytes with the CSP header.
       val document = entries.remove("/$MOBILE_WEB_SHELL_ENTRYPOINT") ?: return null
       entries["/"] = document
-      // The manifest is written last and is not part of the content hash, so it is not in `assets`;
-      // the bootstrap page still reads it from its own origin.
+      // Bootstrap reads the last-written manifest, which is excluded from the content hash/assets.
       entries["/$MOBILE_WEB_SHELL_MANIFEST_NAME"] = MobileWebShellAsset(
         File(directory, MOBILE_WEB_SHELL_MANIFEST_NAME),
         MOBILE_WEB_SHELL_MANIFEST_CONTENT_TYPE
@@ -68,10 +58,7 @@ internal class MobileWebShellGeneration private constructor(
       return MobileWebShellGeneration(entries)
     }
 
-    /**
-     * Re-checked here rather than trusted: the schema that pins this shape is on the other side of
-     * a file the native layer cannot see change.
-     */
+    /** Revalidate the schema across the TypeScript/native file boundary. */
     fun isServableAssetPath(path: String): Boolean {
       if (path.isEmpty() || path.toByteArray(Charsets.UTF_8).size > MOBILE_WEB_SHELL_MAX_ASSET_PATH_LENGTH) {
         return false
@@ -84,11 +71,7 @@ internal class MobileWebShellGeneration private constructor(
       }
     }
 
-    /**
-     * This value becomes a response header, so it must not be able to carry a second header or a
-     * parameter we did not intend. One lowercase type, one optional charset: the manifest
-     * contract's only accepted spelling.
-     */
+    /** Accept one lowercase MIME type and optional charset to prevent header/parameter injection. */
     fun isServableContentType(contentType: String): Boolean {
       if (contentType.isEmpty() ||
         contentType.toByteArray(Charsets.UTF_8).size > MOBILE_WEB_SHELL_MAX_CONTENT_TYPE_LENGTH

@@ -30,7 +30,10 @@ export async function fetchPrHeadTrackingRef(
   }
   await gitExecFileAsync(
     ['fetch', remote, `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`],
-    options.localGitExecOptions ?? { cwd: repo.path }
+    {
+      ...(options.localGitExecOptions ?? { cwd: repo.path }),
+      timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS
+    }
   )
 }
 
@@ -52,7 +55,7 @@ export async function fetchGitHubPullRequestHeadRef(
   }
   const localGitExecOptions = options.localGitExecOptions ?? { cwd: repo.path }
   const remoteComponent = await getReviewHeadRemoteComponent(remote, localGitExecOptions)
-  // Why: return the same path the fetch wrote so callers don't re-resolve identity.
+  // Return the written ref so callers do not recompute its remote identity.
   const localRef = githubPullRequestHeadLocalRef(remoteComponent, prNumber)
   await gitExecFileAsync(
     ['fetch', '--no-tags', remote, `+refs/pull/${prNumber}/head:${localRef}`],

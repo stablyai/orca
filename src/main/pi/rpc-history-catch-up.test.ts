@@ -1,16 +1,15 @@
-// Turns made outside a Pi chat, through the path they take: Pi's `get_entries` → walk → staged
-// rows → on-disk journal, with the claim the handle would carry between opens.
+// Exercise outside turns through get_entries, branch walking, staging and the on-disk journal.
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../shared/agent-session/view/structured-agent-session-message-projection'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import { catchUpPiSession } from './rpc-history-catch-up'
 import { PiHistoryCapture } from './rpc-history-capture'
@@ -29,7 +28,7 @@ function entry(
   return { type: 'message', id, parentId, message: { role, content: [{ type: 'text', text }] } }
 }
 
-/** Answers `get_entries` the way Pi 1.3.0 does (`rpc-mode.js:503-514`), from what it loaded. */
+/** Match Pi 1.3.0 get_entries (rpc-mode.js:503–514). */
 function piWith(entries: Entry[], leafId = entries.at(-1)?.id ?? null) {
   return {
     request: async (command: string, params: Record<string, unknown> = {}) => {
@@ -90,7 +89,6 @@ async function chat() {
       `${[{ type: 'session', id: 'pi-1' }, ...entries].map((e) => JSON.stringify(e)).join('\n')}\n`
     )
   return {
-    /** One open of the chat's Pi, which has just loaded `entries` from its file. */
     open: async (entries: Entry[], leafId?: string) => {
       await save(entries)
       const result = await catchUpPiSession({
@@ -107,7 +105,6 @@ async function chat() {
       claim = result.claim
       return result
     },
-    /** A turn the chat ran: its prompt and answer rows, then the capture its end starts. */
     turn: async (text: string, entries: Entry[], anchor: string | null) => {
       ordinal += 1
       deferred.sink.appendItem(
@@ -143,7 +140,7 @@ async function chat() {
       capture.turnEnded()
       await vi.waitFor(() => expect(persist).toHaveBeenCalledOnce())
     },
-    /** A prompt handed to the chat's Pi whose turn never reached the journal (Orca died). */
+    /** Model a prompt Pi received before Orca died without journaling its turn. */
     crashedPrompt: async (text: string) => {
       ordinal += 1
       deferred.sink.appendItem(
@@ -205,7 +202,6 @@ describe('Pi chat catch-up', () => {
     ]
     expect(c.texts()).toEqual(caughtUp)
 
-    // Reopening adds nothing.
     await c.open(outside)
     expect(c.texts()).toEqual(caughtUp)
 

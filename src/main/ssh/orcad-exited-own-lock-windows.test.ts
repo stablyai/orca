@@ -3,8 +3,9 @@ import { hostname, tmpdir, uptime } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecCommandModule from './remote-exec/remote-exec-command'
+import { unusedOrcadHostTransport } from './unused-host-transport.test-fixture'
 
-// The host script's own checks are covered against the real script; here only the client's part.
+// Host-script checks run separately against the real script; these cases cover client interpretation.
 const remote = vi.hoisted((): { commands: string[]; reply: string } => ({
   commands: [],
   reply: ''
@@ -48,8 +49,7 @@ function hold(...entries: { token: string; pid: number }[]): void {
 }
 
 function find(guardsStateMutation: boolean): Promise<string | null> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked, so the connection is never used.
-  const target = { conn: {} as never, host }
+  const target = { conn: unusedOrcadHostTransport(), host }
   return findExitedOwnLockToken(target, lockDir, { baseDir, guardsStateMutation })
 }
 
@@ -89,8 +89,7 @@ describe('reclaiming this desktop’s exited lock on a Windows host', () => {
     hold({ token: 't-exited', pid: EXITED_PID })
     remote.reply = 'EXITED_OWNER t-exited\n'
     const deep = `C:/Users/me/${'nested-folder/'.repeat(200)}.orca-remote`
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked, so the connection is never used.
-    const target = { conn: {} as never, host }
+    const target = { conn: unusedOrcadHostTransport(), host }
     await expect(
       findExitedOwnLockToken(target, `${deep}/.install-lock`, {
         baseDir: deep,

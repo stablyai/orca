@@ -41,7 +41,7 @@ function isItem(value: unknown): value is RelayRevokeOutboxItem {
 export class RelayRevokeOutbox {
   private readonly path: string
   private items: RelayRevokeOutboxItem[]
-  /** Set when the outbox exists but could not be read, so `items` is not what is on disk. */
+  /** Unreadable disk state must never be treated as an empty outbox. */
   private outboxUnreadable = false
 
   constructor(userDataPath: string) {
@@ -90,8 +90,7 @@ export class RelayRevokeOutbox {
       const parsed: unknown = JSON.parse(readFileSync(this.path, 'utf-8'))
       return Array.isArray(parsed) ? parsed.filter(isItem) : []
     } catch (error) {
-      // An outbox we were denied is not an empty outbox. Saving [] over it would drop
-      // revocations that have not reached the relay, so a revoked device stays live.
+      // Saving [] over an unreadable outbox loses pending revocations and leaves revoked devices live.
       this.outboxUnreadable = isUnreadableError(error)
       return []
     }

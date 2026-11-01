@@ -195,9 +195,7 @@ export function RuntimePairingGeneratorForm({
             <div className="flex flex-wrap items-center gap-2">
               <AddressPicker
                 id="runtime-pairing-address"
-                // Why: bounded width so a short value like "This computer
-                // (127.0.0.1)" doesn't stretch the trigger across the whole card;
-                // the value can grow up to the card edge before truncating.
+                // Bound short labels without stretching the card; let longer values grow before truncating.
                 className="min-w-[240px] max-w-full"
                 triggerAriaLabel={translate(
                   'auto.components.settings.RuntimePairingUrlGenerator.de77eb1b65',
@@ -251,8 +249,7 @@ export function RuntimePairingGeneratorForm({
                   )
                 }}
               />
-              {/* Why: server sharing uses the same interface list as Mobile,
-                and VPN/tailnet addresses can appear after Settings opens. */}
+              {/* Refresh shared Mobile interfaces because VPN/tailnet addresses can appear after opening Settings. */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -299,7 +296,6 @@ export function RuntimePairingGeneratorForm({
             )}
           </div>
         ) : null}
-        {/* Why no warning here: the Share dialog's description already says the link runs as you. */}
         <div className="flex items-center justify-end gap-3">
           <Button
             type="button"

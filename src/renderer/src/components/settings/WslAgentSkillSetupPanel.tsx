@@ -76,8 +76,7 @@ export function WslAgentSkillSetupPanel({
     [getPrerequisiteStatus]
   )
   const activeCommand = installed ? (installedCommand ?? command) : command
-  // Why: the inline terminal auto-inserts when its command changes, so keep the
-  // already-open terminal pinned to the command and runtime selected at click.
+  // Pin open terminals to click-time command/runtime because command changes trigger auto-insertion.
   const openTerminalCommand = terminalSnapshot?.copiedCommand ?? activeCommand
 
   const openSetupTerminal = (): void => {

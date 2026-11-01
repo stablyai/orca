@@ -111,7 +111,7 @@ export function ActivityThreadListToolbar({
                 size="sm"
                 className="h-7 w-[116px] shrink-0 px-2 text-[11px]"
                 aria-label={translate(
-                  'auto.components.activity.ActivityPrototypePage.770d458144',
+                  'auto.components.activity.ActivityPrototypePage.groupAgentActivityBy',
                   'Group agent activity by'
                 )}
               >

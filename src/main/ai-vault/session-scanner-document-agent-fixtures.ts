@@ -3,16 +3,6 @@ import { join } from 'node:path'
 import { writeAntigravityScannerFixture } from './session-scanner-test-fixtures'
 import { jsonlBody, type AgentVaultRoots } from './session-scanner-vault-roots'
 
-// The agents whose session is a JSON document, or a directory of them, rewritten
-// in place rather than appended to. Antigravity rides along here because its
-// fixture writer already owns the layout.
-
-/**
- * Write one session per document-shaped agent.
- * @param root - The vault root, which Kimi's session index lives directly in.
- * @param roots - The scan roots to write under.
- * @param antigravitySessionId - The conversation id Antigravity resumes by.
- */
 export async function writeDocumentAgentFixtures(
   root: string,
   roots: AgentVaultRoots,
@@ -172,8 +162,7 @@ export async function writeDocumentAgentFixtures(
     })
   )
 
-  // Kimi: <sessions>/wd_*/session_*/state.json + sibling agents/main/wire.jsonl,
-  // with the work dir resolved from the top-level session_index.jsonl.
+  // Kimi resolves cwd through the top-level index beside per-session state and wire files.
   const kimiSessionDir = join(roots.kimiSessionsDir, 'wd_app_abc', 'session_kimi-session')
   await mkdir(join(kimiSessionDir, 'agents', 'main'), { recursive: true })
   await writeFile(

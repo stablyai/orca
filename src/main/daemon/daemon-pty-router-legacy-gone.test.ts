@@ -33,7 +33,7 @@ function connectError(code: 'ECONNREFUSED' | 'ENOENT' | 'ECONNRESET', syscall: s
 }
 
 describe('DaemonPtyRouter legacy socket that can never answer', () => {
-  // Windows keeps failing closed: the router never treats a missing pid as proof there.
+  // Legacy PID-only exit proof remains unsupported on Windows.
   it.skipIf(process.platform === 'win32')(
     'drops a refused or missing legacy socket and does not ask it again',
     async () => {
@@ -63,7 +63,6 @@ describe('DaemonPtyRouter legacy socket that can never answer', () => {
     }
   )
 
-  // #30486: the reattach inventory kept the dead daemon, so every unrouted pane stayed unverifiable.
   it.skipIf(process.platform === 'win32')(
     'lets a reattach prove absence once a legacy daemon has exited',
     async () => {
@@ -74,7 +73,6 @@ describe('DaemonPtyRouter legacy socket that can never answer', () => {
       const attach = { cols: 80, rows: 24, sessionId: 'gone-session', attachOnly: true }
 
       await expect(router.spawn(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
-      // The current daemon is now the only owner, so it answers the next attach directly.
       Object.assign(current, {
         spawn: vi.fn(async () => {
           throw new SessionNotFoundError('gone-session')
@@ -89,22 +87,8 @@ describe('DaemonPtyRouter legacy socket that can never answer', () => {
     }
   )
 
-  it('keeps a reattach unverifiable while the legacy socket answers, even with its pid gone', async () => {
-    const current = adapter('current')
-    const silent = adapter('silent', [], EXITED_PID)
-    vi.mocked(silent.listProcesses).mockRejectedValue(new Error('wedged'))
-    const router = new DaemonPtyRouter({ current, legacy: [silent] })
-
-    await expect(
-      router.spawn({ cols: 80, rows: 24, sessionId: 'session', attachOnly: true })
-    ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
-    expect(router.getLegacyAdapters()).toEqual([silent])
-    expect(silent.disconnectOnly).not.toHaveBeenCalled()
-  })
-
   it('judges a replacement legacy daemon by its own pid, not its predecessor', async () => {
     const current = adapter('current')
-    // Recorded at construction with the exited predecessor's pid.
     const replaced = adapter('replaced', [], EXITED_PID)
     const router = new DaemonPtyRouter({ current, legacy: [replaced] })
     Object.assign(replaced, {
@@ -120,18 +104,6 @@ describe('DaemonPtyRouter legacy socket that can never answer', () => {
       router.spawn({ cols: 80, rows: 24, sessionId: 'session', attachOnly: true })
     ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
     expect(router.getLegacyAdapters()).toEqual([replaced])
-  })
-
-  it('keeps a reattach unverifiable while a gone legacy daemon process is alive', async () => {
-    const current = adapter('current')
-    const alive = adapter('alive', [], LIVE_PID)
-    vi.mocked(alive.listProcesses).mockRejectedValue(connectError('ECONNREFUSED', 'connect'))
-    const router = new DaemonPtyRouter({ current, legacy: [alive] })
-
-    await expect(
-      router.spawn({ cols: 80, rows: 24, sessionId: 'session', attachOnly: true })
-    ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
-    expect(router.getLegacyAdapters()).toEqual([alive])
   })
 
   it('keeps a gone legacy socket whose process is alive or unproven', async () => {

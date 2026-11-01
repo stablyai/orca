@@ -12,7 +12,6 @@ import AiVaultPanel from './AiVaultPanel'
 import type { AiVaultPanelHandle } from './ai-vault-panel-handle'
 import { readAgentSessionHistoryModalRequest } from './agent-session-history-modal'
 
-/** The tabs on screen: the active workspace's focused tab, and the chat workspace's (it may float). */
 function selectVisibleTabs(state: AppState, chatWorkspaceId: string | null): string {
   const focusedTab = (workspaceId: string | null): string => {
     const groupId = workspaceId ? state.activeGroupIdByWorktree[workspaceId] : undefined
@@ -36,7 +35,7 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
   const [returnFocusTo] = useState(() =>
     document.activeElement instanceof HTMLElement ? document.activeElement : null
   )
-  // An action succeeded once the tabs on screen change; a failed one leaves them, and the dialog.
+  // Tab changes prove an action opened a destination; failed actions leave this dialog in place.
   const visibleTabs = useAppStore((s) => selectVisibleTabs(s, chatWorkspaceId))
   const [openedOver] = useState(visibleTabs)
   const tabsChanged = visibleTabs !== openedOver

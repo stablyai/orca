@@ -55,7 +55,6 @@ type RuntimeServerListProps = {
   onChanged: () => void
 }
 
-/** Every saved server once: paired, managed over SSH, and managed moves still in progress. */
 export function RuntimeServerList({
   environments,
   detailsByEnvironmentId,
@@ -138,7 +137,7 @@ export function RuntimeServerList({
           ) : (
             <RuntimeServerRow {...rowProps} onChanged={onChanged} />
           )
-        // Why the wrapper: deep links to "managed-servers" land on the first managed row.
+        // Preserve the managed-servers deep link on the first managed row.
         return environment.id === firstManagedId ? (
           <div key={environment.id} data-settings-section="managed-servers" className="scroll-mt-8">
             {row}

@@ -16,8 +16,7 @@ export async function runTerminalLeaseSubscription(args: TerminalSubscriptionArg
     resolveStream = resolve
   })
   registration.setTeardown(resolveStream)
-  // Why: chat needs the input-floor ack without registering a view subscriber or transporting duplicate PTY output.
-  // A lease-only subscriber has no terminal view, so its cached viewport must never phone-fit the PTY.
+  // Chat needs input-floor ACK without duplicate output or a view; its cached viewport must never phone-fit the PTY.
   await registration.addMobilePresence(ptyId, clientId, undefined)
   if (registration.released) {
     return
@@ -29,7 +28,7 @@ export async function runTerminalLeaseSubscription(args: TerminalSubscriptionArg
 export async function runTerminalJsonSubscription(args: TerminalSubscriptionArgs): Promise<void> {
   const { params, runtime, registration, emit, ptyId, clientId, supportsDesktopViewportClaims } =
     args
-  // Why: only unregister the width floor this subscription took (see the multiplex stream's registeredRemoteDesktopDriver note).
+  // Unregister only the floor this subscription took.
   let registeredRemoteDesktopDriver = false
   const remoteDesktopSubscriptionKey = `json:${allocateTerminalSubscriptionStreamId()}`
   let outputBatcher: TerminalOutputBatcher | null = null
@@ -80,8 +79,7 @@ export async function runTerminalJsonSubscription(args: TerminalSubscriptionArgs
     serialized: serialized?.data,
     oscLinks: serialized?.oscLinks,
     cwd: serialized?.cwd,
-    // Why: an empty snapshot with no PTY size must still report the dims the fit
-    // will produce — dimless frames re-armed the mobile fit loop (STA-3337).
+    // Unsized empty snapshots must report the upcoming fit dimensions or mobile rearms its fit loop (STA-3337).
     cols: serialized?.cols ?? size?.cols ?? params.viewport?.cols,
     rows: serialized?.rows ?? size?.rows ?? params.viewport?.rows,
     displayMode,
@@ -93,7 +91,7 @@ export async function runTerminalJsonSubscription(args: TerminalSubscriptionArgs
   const unsubscribeStreamData = runtime.subscribeToTerminalData(ptyId, (data) => {
     outputBatcher?.push(data)
   })
-  // Why: the terminal.subscribe JSON stream can feed a live xterm view, so register as a view subscriber; worst case is a withheld model reply, safer than a double reply.
+  // JSON streams may feed xterm; register a view because withholding model replies is safer than duplicate replies.
   const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
   unsubscribeData = () => {
     releaseViewSubscriber()

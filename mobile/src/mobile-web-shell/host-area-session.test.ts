@@ -33,7 +33,6 @@ const SESSION_GRANTS = [
   'native.audio.stop'
 ]
 
-/** The desktop's list as this branch writes it, trimmed to one route of each grant shape. */
 function desktopRoutes(declares: boolean): MobileWebPageRoute[] {
   return [
     {
@@ -61,7 +60,6 @@ function wideStateFor(routes: MobileWebPageRoute[] | null, pathname = HOST_ROUTE
   const opened = run(
     createMobileWebShellSession(pathname),
     { type: 'layout-changed', wide: true },
-    // No bundle capability is a desktop that serves no page at all.
     { type: 'gates-changed', gates: routes === null ? gates({ hostCapabilities: [] }) : gates() }
   )
   if (routes === null) {
@@ -75,10 +73,10 @@ function wideStateFor(routes: MobileWebPageRoute[] | null, pathname = HOST_ROUTE
 }
 
 describe('the page declaring it can own the host area', () => {
-  it('is a manifest field the desktop may write and an old phone reads past', () => {
+  it('accepts a true ownership declaration from the desktop and refuses false', () => {
     const [host] = desktopRoutes(true)
     expect(MobileWebBundleRouteSchema.safeParse(host).success).toBe(true)
-    // `true` only: a desktop writing `false` is writing a field with no meaning.
+    // Only true declares ownership; false must be rejected.
     expect(MobileWebBundleRouteSchema.safeParse({ ...host, canOwnHostArea: false }).success).toBe(
       false
     )
@@ -102,6 +100,49 @@ describe('the page declaring it can own the host area', () => {
     const unserved = [{ ...desktopRoutes(true)[0]!, grants: ['native.teleport.start'] }]
     expect(routeViewOf(unserved, HOST_ROUTE, true).ownsHostArea).toBe(false)
   })
+
+  it('keeps the area at either width only for a page that declares it across layouts', () => {
+    const [host, ...rest] = desktopRoutes(true)
+    const routes = [{ ...host!, canOwnHostAreaAcrossLayouts: true }, ...rest]
+    expect(routeViewOf(routes, HOST_ROUTE, true).ownsHostArea).toBe(true)
+    expect(routeViewOf(routes, HOST_ROUTE, false).ownsHostArea).toBe(true)
+    // A narrow detail session hands a hop to the host route back to the shell, like a wide one.
+    expect(
+      routeViewOf(routes, '/h/host-1/session/wt-1', false).pageRouteGrants.map((p) => p.pathname)
+    ).not.toContain('/h/[hostId]')
+    // Without `canOwnHostArea` the across-layouts flag claims nothing.
+    const flagOnly = [{ ...desktopRoutes(false)[0]!, canOwnHostAreaAcrossLayouts: true }]
+    expect(routeViewOf(flagOnly, HOST_ROUTE, false).ownsHostArea).toBe(false)
+    expect(routeViewOf(flagOnly, HOST_ROUTE, true).ownsHostArea).toBe(false)
+  })
+
+  it.each(['/h/[hostId]', '/h/[...page]'])(
+    'does not combine ownership declarations from a separate matching %s route',
+    (acrossLayoutsPattern) => {
+      const [host, ...details] = desktopRoutes(true)
+      const routes = [
+        host!,
+        {
+          pathname: acrossLayoutsPattern,
+          grants: ['navigate'],
+          canOwnHostAreaAcrossLayouts: true
+        },
+        ...details
+      ]
+      const parsed = MobileWebBundleManifestReadSchema.parse({
+        ...MANIFEST_WIRE,
+        buildId: computeMobileWebBundleId(MANIFEST_WIRE.assets),
+        routes
+      })
+      expect(routeViewOf(parsed.routes, HOST_ROUTE, false).ownsHostArea).toBe(false)
+      expect(routeViewOf(parsed.routes, HOST_ROUTE, true).ownsHostArea).toBe(true)
+      expect(
+        routeViewOf(parsed.routes, '/h/host-1/session/wt-1', false).pageRouteGrants.map(
+          (pair) => pair.pathname
+        )
+      ).toContain('/h/[hostId]')
+    }
+  )
 })
 
 describe('the wide host-area session', () => {
@@ -110,7 +151,6 @@ describe('the wide host-area session', () => {
     expect([...view.routeGrants].sort()).toEqual(
       [...SESSION_GRANTS, 'externalNavigation', 'native.storage.read'].sort()
     )
-    // Every pair the page compares a hop against is covered, which is what keeps it in the page.
     for (const pair of view.pageRouteGrants) {
       expect(pair.grants.every((grant) => view.routeGrants.includes(grant))).toBe(true)
     }

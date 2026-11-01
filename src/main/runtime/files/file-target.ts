@@ -17,36 +17,21 @@ export type ResolvedRuntimeFileWorktree = Worktree & { git: GitWorktreeInfo }
 
 export type ResolvedRuntimeFileTarget = {
   worktree: ResolvedRuntimeFileWorktree
-  /**
-   * The host whose filesystem holds this workspace. Never optional and never null: the field it
-   * replaced (`connectionId?: string`) spelled "runtime host", "unresolved" and "genuinely local"
-   * all as `undefined`, so every path that could not resolve answered "local" and read remote
-   * paths on the client (#11163). Unresolved now fails at resolution time instead of arriving here
-   * as a silently-local target. Mirrors `RuntimeGitTarget.executionHostId`.
-   */
+  /** Required resolved host: optional connectionId once collapsed runtime/unresolved into local (#11163). */
   executionHostId: ExecutionHostId
 }
 
-/** A workspace-relative path already joined onto its host's root; `executionHostId` routes it. */
 export type RuntimeFileExplorerPath = {
   worktree: ResolvedRuntimeFileWorktree
   path: string
   executionHostId: ExecutionHostId
 }
 
-/**
- * The two hosts this process can itself run a runtime filesystem command on, narrowed from the
- * shared host-keyed route in `src/main/providers/execution-host-provider-dispatch.ts`.
- *
- * `runtime:<env>` is deliberately not a variant, for the same reason it is not one for Git: the
- * files live on that environment's own server, which normalizes the call to its own `local`, and
- * the SSH target on its repo row is that server's *nested* one — addressable only as the pair
- * (environmentId, targetId). Handing that id to this client's SSH table reads a same-named target
- * in the wrong namespace, so it throws rather than routing.
- */
+/** This process serves local/SSH routes only. runtime:<env> belongs to that environment's server;
+ * its nested SSH id is scoped by environment and must never enter this client's SSH namespace. */
 export type RuntimeFileRoute =
   | { kind: 'local'; createProvider: typeof createLocalFilesystemProvider }
-  /** An SSH target this process does not serve; it fails or reports empty, never reads here. */
+  /** Unsupported SSH routes must fail/degrade to empty, never read locally. */
   | { kind: 'ssh'; connectionId: string }
 
 export function runtimeFileRouteForTarget(target: {
@@ -63,10 +48,8 @@ export function runtimeFileRouteForTarget(target: {
   }
 }
 
-/** What a runtime command supplies for local work; path authorization is always the runtime's. */
 export type RuntimeLocalFileHost = Omit<LocalFilesystemProviderOptions, 'resolveAuthorizedPath'>
 
-/** The local route for work this process runs itself; `ssh:` and `runtime:` hosts throw. */
 export function requireLocalRuntimeFileRoute(target: {
   executionHostId: ExecutionHostId
 }): Extract<RuntimeFileRoute, { kind: 'local' }> {
@@ -77,7 +60,6 @@ export function requireLocalRuntimeFileRoute(target: {
   return route
 }
 
-/** A provider for the target's own host, authorized against `host`'s store. */
 export function requireRuntimeFileProvider(
   target: { executionHostId: ExecutionHostId },
   host: RuntimeLocalFileHost
@@ -88,11 +70,7 @@ export function requireRuntimeFileProvider(
   })
 }
 
-/**
- * The SSH target id for the leaf helpers that still address a connection by name — watcher release
- * keys, re-arm registration, remote path stats. `undefined` is `local`; a `runtime:` host throws
- * rather than surrendering its nested target id to this client's namespace.
- */
+/** Local yields undefined; runtime hosts throw rather than expose nested SSH ids in this client's namespace. */
 export function runtimeFileSshTargetId(target: {
   executionHostId: ExecutionHostId
 }): string | undefined {

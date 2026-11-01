@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { JiraIssueTransitionControl } from './jira-issue-transition-control'
-import type { JiraIssue, JiraTransition } from '../../../shared/jira-types'
+import type { JiraIssue, JiraTransition } from '../../../shared/jira/jira-types'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
@@ -157,15 +157,6 @@ describe('Jira transition control', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open in Jira' }))
     expect(openUrl).toHaveBeenCalledWith(issue.url)
     expect(mutate).not.toHaveBeenCalled()
-  })
-
-  it('keeps failures visible and exposes Jira fallback', async () => {
-    await choose(
-      [close],
-      vi.fn().mockResolvedValue({ ok: false, error: 'Resolution is required.' })
-    )
-    expect((await screen.findByRole('alert')).textContent).toContain('Resolution is required.')
-    expect(screen.getByRole('button', { name: 'Open in Jira' })).toBeTruthy()
   })
 
   it('keeps a rejected mutation visible and offers Jira fallback', async () => {

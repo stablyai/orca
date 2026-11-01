@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// Kitty event reporting (flag 2) turns every keyup xterm sees into a release report. IME-consumed
-// keys produce keyups whose press xterm never encoded; those must not reach the app as releases.
+// Kitty event reporting must not emit orphan releases for IME-consumed presses xterm never encoded.
 import { describe, expect, it } from 'vitest'
 import sogouGtkTrace from './__fixtures__/fcitx4-sogou-gtk-im-module-trace.json'
 import fcitx5Trace from './__fixtures__/fcitx5-hangul-mixed-ascii-terminal-trace.json'

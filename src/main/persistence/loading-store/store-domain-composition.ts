@@ -104,7 +104,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
 ] as const
 
 export function installStoreDomainContexts(target: Store, domains: StoreDomains): void {
-  // Each domain keeps its context under a module-private Symbol; the Store mixes in the domain methods, so it needs those symbols too.
+  // Mixed-in methods need each domain's private context symbols installed on Store too.
   for (const domain of Object.values(domains)) {
     for (const key of Object.getOwnPropertySymbols(domain)) {
       const { value } = Object.getOwnPropertyDescriptor(domain, key) ?? {}
@@ -170,13 +170,12 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     layoutCommands: new LayoutCommandPersistence(
       runtime,
       sessions,
-      // Switch point: a terminal close kept after a failed write is saved again later.
+      // Retry persistence for terminal closes retained after failed writes.
       ORCA_LAYOUT_OWNER_IS_MAIN ? () => scheduleSave(scheduling) : undefined
     ),
     sshProfiles,
     retiredWorktreeNames,
     sshLeases,
-    // Read-only: holds the runtime state and nothing that writes.
     orcadSourceExport: new OrcadSourceExportPersistence(runtime),
     orcadCatalogImports,
     orcadMigrationBlobInstalls: new OrcadMigrationBlobInstallPersistence(runtime)

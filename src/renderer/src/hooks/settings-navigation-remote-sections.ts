@@ -1,9 +1,12 @@
 import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced-search'
 import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
-import { getPluginsPaneSearchEntries } from '@/components/settings/plugins-search'
+import {
+  getPluginsPaneSearchEntries,
+  getPluginsSectionPresentation
+} from '@/components/settings/plugins-search'
 import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy-search'
-import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
+import { getRepositoryPaneSearchEntries } from '@/components/settings/repository/repository-search'
 import { buildSettingsProjectList } from '@/components/settings/settings-project-list'
 import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
 import { translate } from '@/i18n/i18n'
@@ -112,8 +115,7 @@ export function buildRemoteSettingsSections(
           }
         ]
       : []),
-    // Why: dev tooling must not be reachable from packaged/web builds even if
-    // this pure metadata builder is called manually with isDev=true.
+    // Packaged/web builds must reject dev navigation even when callers pass isDev=true.
     ...(showDesktopOnlySettings && import.meta.env.DEV && isDev
       ? [
           {
@@ -123,8 +125,7 @@ export function buildRemoteSettingsSections(
               'auto.hooks.useSettingsNavigationMetadata.devDescription',
               'Dev-only tools for exercising UI states.'
             ),
-            // Why: distinct from the sibling Advanced section's Wrench so the two
-            // entries in the same 'advanced' group stay visually distinguishable.
+            // Use a distinct icon from sibling Advanced settings so adjacent rows remain distinguishable.
             icon: Bug,
             searchEntries: getDevToolsPaneSearchEntries(),
             group: 'advanced',
@@ -150,17 +151,16 @@ export function buildRemoteSettingsSections(
             title: translate('auto.hooks.useSettingsNavigationMetadata.pluginsTitle', 'Plugins'),
             description: translate(
               'auto.hooks.useSettingsNavigationMetadata.pluginsDescription',
-              'Install and manage experimental Orca plugins.'
+              'Install and manage Orca plugins (Alpha).'
             ),
             icon: Blocks,
             searchEntries: getPluginsPaneSearchEntries(),
-            group: 'experimental'
+            group: 'experimental',
+            badge: getPluginsSectionPresentation().badge
           }
         ]
       : []),
-    // Why: one nav row per project, not per repo row — a project set up on
-    // multiple hosts (local + a Remote Orca Server) collapses to a single
-    // entry. Same inputs as the panes so this list matches them.
+    // Collapse host-specific repo rows to one project entry using the same inputs as settings panes.
     ...buildSettingsProjectList(repos, projectGrouping).map((settingsProject) => {
       const { project, representativeRepoId, setups, checkoutLabel } = settingsProject
       const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]

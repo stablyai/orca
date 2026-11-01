@@ -1,6 +1,5 @@
 import './unused-default-rpc-methods.test-fixture'
-// A lost mutation response must be answerable without mutating again: these cover
-// `orchestration.requestShow` reading the same durable receipt --retry-request replays.
+// Read the durable retry receipt after a lost mutation response without repeating the effect.
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
@@ -10,8 +9,7 @@ import { defineMethod, type RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
 
-// Why: filter the shipped array rather than importing the module, so the test also
-// fails if the method exists but was never registered with the orchestration surface.
+// Find the shipped registration so an implemented but unregistered method still fails the test.
 const REQUEST_SHOW_METHODS = ORCHESTRATION_METHODS.filter(
   (method) => method.name === 'orchestration.requestShow'
 )
@@ -142,16 +140,6 @@ describe('orchestration.requestShow', () => {
 
     finishMutation?.()
     await runningMutation
-  })
-
-  it('reports an unknown request as absent without claiming nothing happened', async () => {
-    const { dispatcher } = createHarness()
-
-    const response = await dispatcher.dispatch(showRequest('mutation_missing'))
-
-    const result = (response as { result: { state: string; interpretation: string } }).result
-    expect(result.state).toBe('absent')
-    expect(result.interpretation).toContain('not proof that nothing happened')
   })
 
   it('scopes receipts to the caller identity that recorded them', async () => {

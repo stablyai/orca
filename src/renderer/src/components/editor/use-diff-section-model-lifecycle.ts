@@ -2,8 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { monaco } from '@/lib/monaco-setup'
 import { disposeUnattachedMonacoModelPaths } from './diff-monaco-model-disposal'
 
-// Why: virtualized section rows own Monaco model paths for their lifetime;
-// dispose on unmount/collapse so remounts do not leak detached models.
+// Dispose virtualized rows’ models on unmount/collapse so remounts cannot leak detached models.
 export function useDiffSectionModelLifecycle(params: {
   modelPathBase: string
   collapsed: boolean

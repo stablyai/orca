@@ -1,25 +1,14 @@
 import Foundation
 
-/// The page ↔ native message channel: what it is called, how big a message may be, and the
-/// predicate that decides whether a script message came from the document we served.
-///
-/// Framework-free on purpose: `tests/MobileWebShellChecks.swift` compiles this file with `swiftc`
-/// and checks it without a device or a simulator.
+/// Shared page/native bridge contract; framework-free for off-device checks.
 enum MobileWebShellBridge {
-  /// The `WKScriptMessageHandler` name and the global the document-start script installs. Android
-  /// uses the same name for its `WebMessageListener`, so one page reaches both shells.
+  /// Use the same injected global/handler name on Android and iOS.
   static let handlerName = "orcaBridge"
 
-  /// Measured on the raw JSON string in UTF-8, before anything parses it. The TypeScript contract
-  /// holds the same ceiling; native is the one that cannot be talked out of it.
+  /// Enforce the shared UTF-8 JSON byte ceiling natively, before parsing.
   static let maxMessageByteCount = 640 * 1024
 
-  /// Every clause is an allow, so a message shape nobody anticipated is refused rather than passed.
-  ///
-  /// Simulator-verified 2026-09-18: `WKFrameInfo.securityOrigin` does populate for a custom scheme,
-  /// but WebKit ASCII-lowercases the host, so `orca-mobile-web://sess-01JN_aZ9/` reports host
-  /// `sess-01jn_az9`. Session ids are base64url and mixed case, so exact equality would refuse every
-  /// message; the fold is `MobileWebShellOrigin.asciiLowercased`, shared with the request predicate.
+  /// Simulator 2026-09-18: WebKit lowercases custom-scheme hosts; use the request predicate’s ASCII-only fold for mixed-case base64url ids.
   static func accepts(_ source: MobileWebShellBridgeSource, sessionId: String) -> Bool {
     guard
       source.isOurWebView,
@@ -33,14 +22,7 @@ enum MobileWebShellBridge {
     return true
   }
 
-  /// WebKit hands the handler no reply proxy, so a native → page post has to name a frame itself.
-  /// The frame is the one the last accepted message came from, and nil is the whole answer for a
-  /// page that has never spoken, a load that failed and a renderer that died: a post with nowhere
-  /// proven to go is refused, never delivered to whatever frame happens to be current.
-  ///
-  /// `hasCommittedDocument` is the same arming acceptance reads. Between a new provisional
-  /// navigation and its commit there is no document the held frame belongs to, and `WKFrameInfo` is
-  /// a snapshot that outlives the frame it describes, so it cannot be asked.
+  /// WebKit has no reply proxy: post only to the last accepted frame while its document is committed. WKFrameInfo outlives its frame.
   static func canPost(
     toFrameOriginHost host: String?,
     sessionId: String,
@@ -61,13 +43,7 @@ enum MobileWebShellBridge {
   }
 }
 
-/// Where a native post may go: the frame of the last accepted message and the host that frame
-/// reported when it spoke. One value, so the frame and the host it is checked against can never be
-/// from different documents, and generic over the frame so the rule needs no WebKit type.
-///
-/// Held for the document that armed it and no longer. Every boundary that ends that document clears
-/// it — a new provisional navigation, the commit that replaces it, a load failure, a dead renderer,
-/// a prop update — so the document now on screen has to speak before anything is posted to it.
+/// Bind frame and reported host atomically; every document boundary clears them, requiring the new page to speak before a native post.
 struct MobileWebShellBridgeTarget<Frame> {
   private var armed: (frame: Frame, originHost: String)?
 
@@ -93,8 +69,7 @@ struct MobileWebShellBridgeSource {
   var originHost: String
 }
 
-/// Refusal is silent: the shell exposes no new state and tells the page nothing, because a page that
-/// learns which messages were dropped learns the cap. The tally is what a test can hold the cap to.
+/// Silently count refusals for tests without revealing the cap to the page.
 final class MobileWebShellBridgeGate {
   private(set) var refusedCount = 0
 

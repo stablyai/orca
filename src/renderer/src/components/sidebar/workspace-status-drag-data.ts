@@ -15,8 +15,7 @@ export function writeWorkspaceDragData(
     return
   }
   dataTransfer.effectAllowed = 'move'
-  // Why: keep the original single-id payload for older drop targets while
-  // board-to-board drags can move the whole selected batch.
+  // Retain the single-ID payload for older targets while boards also carry the selected batch.
   dataTransfer.setData(WORKSPACE_STATUS_DRAG_TYPE, firstWorktreeId)
   dataTransfer.setData(WORKSPACE_STATUS_DRAG_IDS_TYPE, JSON.stringify(worktreeIds))
   dataTransfer.setData('text/plain', firstWorktreeId)
@@ -39,7 +38,7 @@ export function readWorkspaceDragDataIds(dataTransfer: DataTransfer): string[] {
         return collectWorkspaceStatusDragIds(parsed) ?? []
       }
     } catch {
-      // Fall back to the legacy single-card payload below.
+      // Older targets publish only the single-card payload.
     }
   }
   const singleId = readWorkspaceDragData(dataTransfer)

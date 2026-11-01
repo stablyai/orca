@@ -16,34 +16,19 @@ export {
   selectRuntimeAwareSshTargetRemoved
 } from './runtime-environment-ssh-selectors'
 
-/**
- * SSH state of one remote Orca server's own SSH targets, mirrored on this
- * client. Kept strictly separate from the local `SshSlice` maps so a remote
- * machine's targets can never pollute local SSH settings, pickers, or the
- * execution-host registry — and vice versa (STA-1468, desktop topology).
- */
+/** Mirror each runtime’s SSH targets separately from local maps to prevent cross-host settings, picker and registry contamination (STA-1468). */
 export type RuntimeEnvironmentSshBucket = {
   connectionStates: Map<string, SshConnectionState>
   targetLabels: Map<string, string>
-  /** Durable SSH *registration* generation per target, for automation owner
-   * fencing. Absent for targets an older server omitted it for — never
-   * defaulted, because a guessed generation would fence against the wrong
-   * registration. Cleared with the rest of the bucket when state goes stale. */
+  /** Durable registration generation for automation fences; never guess missing legacy values, and clear when stale. */
   targetGenerations: Map<string, number>
   removedTargetLabels: Map<string, string>
-  /** Mirrors the local `sshTargetsHydrated` positive-evidence rule: absence
-   * from `targetLabels` only counts as target removal once a target list
-   * actually loaded from that environment (even an empty one). */
+  /** Absence proves removal only after a target list loads, including an empty list. */
   targetsHydrated: boolean
 }
 
 export type RuntimeEnvironmentSshSlice = {
-  /**
-   * Per-runtime-environment SSH state buckets, keyed by environment id.
-   * Do NOT read this map directly from components — use the
-   * `selectRuntimeAwareSsh*` selectors below, which route between the local
-   * SSH maps (`environmentId === null`) and the owning environment's bucket.
-   */
+  /** Read through selectRuntimeAwareSsh* to route local versus owning-environment state. */
   sshStateByEnvironment: Map<string, RuntimeEnvironmentSshBucket>
   setEnvironmentSshConnectionState: (
     environmentId: string,
@@ -61,10 +46,7 @@ export type RuntimeEnvironmentSshSlice = {
     labels: Record<string, string>,
     generation?: number
   ) => void
-  /** Transport to the environment dropped: its mirrored SSH state can no
-   * longer be trusted (it may hold a pre-drop "connected"). Downgrades the
-   * bucket to unhydrated and clears connection states so reads resolve to
-   * "unknown" until a reconnect re-hydrates. */
+  /** Clear connection evidence on transport drop; reads remain unknown until rehydration. */
   markEnvironmentSshStateStale: (environmentId: string) => void
   removeEnvironmentSshState: (environmentId: string) => void
   /** Drops buckets for environments no longer in the saved set. */
@@ -180,8 +162,7 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
         sshTargetLabelsEqual(bucket.targetLabels, targets) &&
         sshTargetGenerationsEqual(bucket.targetGenerations, targetGenerations)
       ) {
-        // Why: an unchanged (even empty) list is still a successful load — the
-        // hydration flag must flip on the first fetch of an empty target set.
+        // An unchanged empty list still proves first hydration.
         return bucket.targetsHydrated
           ? s
           : withBucket(s, environmentId, { ...bucket, connectionStates, targetsHydrated: true })
@@ -222,9 +203,7 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
       ) {
         return s
       }
-      // Labels are kept so a re-hydrating overlay can still show a friendly
-      // host name; hydration=false alone forces reads back to "unknown".
-      // Generations are dropped: fencing must never run on unverified state.
+      // Keep friendly labels while unhydrated reads return unknown; drop unverified generations so fencing cannot use them.
       return withBucket(s, environmentId, {
         ...bucket,
         connectionStates: new Map(),

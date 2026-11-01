@@ -26,7 +26,7 @@ function getErrorCode(error: unknown, seen = new Set<object>()): string | null {
     return null
   }
   seen.add(error)
-  // Why: only a mapped code ends the walk — an unmapped wrapper code would otherwise mask a nested EACCES/ENOSPC.
+  // Unmapped wrapper codes must not hide nested EACCES/ENOSPC; stop only on recognized codes.
   const code = 'code' in error ? error.code : undefined
   if (typeof code === 'string') {
     const normalizedCode = code.toUpperCase()
@@ -63,8 +63,7 @@ function describeRuntimeRpcStartFailure(error: unknown): string {
     : `${normalized.slice(0, MAX_VISIBLE_CAUSE_LENGTH - 1)}…`
 }
 
-// Why: a bare "restart" is wrong for every class but address_in_use — perms, full disks and missing
-// dirs all survive a relaunch, so each class names the thing the user actually has to change.
+// Restart fixes only address_in_use; permissions, full disks and missing directories need specific repair.
 const GUIDANCE_BY_ERROR_CLASS: Readonly<
   Record<RuntimeRpcStartErrorClass, { key: string; fallback: string }>
 > = {

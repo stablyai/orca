@@ -154,8 +154,7 @@ function ensureElectronRuntime() {
 }
 
 function runNodeCheck() {
-  // Why: a failed native addon load can poison the current process, so the
-  // post-rebuild verification must happen in a fresh Node process.
+  // Failed addon loads can poison process state; verify rebuilt addons in a fresh Node process.
   const result = spawnSync(process.execPath, [scriptPath, CHILD_CHECK_FLAG], {
     cwd: projectDir,
     encoding: 'utf8',
@@ -279,12 +278,7 @@ function collectNativeModuleFailures() {
 
 function loadNativeModule(moduleName) {
   if (moduleName === '@vscode/windows-process-tree') {
-    // A bare require loads the .node addon on win32, so it catches an ABI
-    // mismatch on its own. What it cannot catch is *which* addon loaded: the
-    // published tarball ships a prebuilt built from unpatched source that is
-    // node-addon-api, so it requires cleanly, reads every process's command
-    // line out of its address space, and ignores the CreationTime flag. Check
-    // the binary on both counts, not the load.
+    // Loadable node-addon-api prebuild can still read foreign command lines/ignore CreationTime; verify patched binary on both counts.
     assertWindowsProcessTreeCreationTime({ module: require(moduleName) })
     if (inspectWindowsProcessTreeAddon(windowsProcessTreeAddonPath()) === 'unpatched') {
       throw new Error(
@@ -301,8 +295,11 @@ function loadNativeModule(moduleName) {
     return
   }
   if (moduleName === '@orca/windows-security') {
-    // Why: the package defers loading its .node addon until the first call.
-    require(moduleName).currentUserSid()
+    const security = require(moduleName)
+    // currentUserSid loads the addon; a stale build that still loads lacks the newest export.
+    if (!security.currentUserSid() || !security.hasNativeExport('isolatedSpawnBreaksAwayFromJob')) {
+      throw new Error('stale build without the newest export; rebuild it')
+    }
     return
   }
   if (moduleName === 'node-pty') {
@@ -318,8 +315,7 @@ function loadNodePtyNativeModule() {
 
   const { loadNativeModule } = require('node-pty/lib/utils')
   const nativeName = nodePtyNativeModuleName()
-  // Why: node-pty's Windows JS wrapper defers conpty.node/pty.node until a
-  // terminal is created, so require('node-pty') alone can miss ABI mismatches.
+  // Windows node-pty defers native loading until terminal creation; bare require misses ABI failures.
   const native = loadNativeModule(nativeName)
   const addonPath = nodePtyAddonPath(require.resolve('node-pty/lib/utils'), native, nativeName)
   assertNodePtyWindowsConptyRuntime(native?.dir, dirname(addonPath))
@@ -349,8 +345,7 @@ function getPatchedNodePtyRebuildReason() {
     return null
   }
 
-  // Why: a loadable upstream node-pty prebuild is not enough; Orca's Unix and
-  // Windows patches only land in the source-built build/Release artifacts.
+  // Loadable upstream prebuilds lack Orca patches; require source-built build/Release artifacts on both platforms.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
   const artifactPaths = nodePtyBuildArtifactPaths(nodePtyDir)
   const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
@@ -380,13 +375,7 @@ function rebuildNodeRuntimeModules(moduleNames) {
       continue
     }
     if (moduleName === '@vscode/windows-process-tree') {
-      // Why before node-gyp: this module is rebuilt precisely because the
-      // binary was the unpatched one, and pnpm materializes it unpatched often
-      // enough that compiling the source as-is would just rebuild the same
-      // reader and fail the verify pass. The patched binding.gyp then includes
-      // deps/node-addon-api, which the tarball does not ship, and node-gyp must
-      // run from the physical dir -- both reasons live in
-      // windows-process-tree-gyp-rebuild.mjs.
+      // Reapply process-tree patch before rebuild or pnpm’s unpatched source reproduces the defect; physical-dir node-gyp and node-addon-api setup live in windows-process-tree-gyp-rebuild.mjs.
       ensureWindowsProcessTreeCommandLinePatch(moduleDir)
       stageWindowsProcessTreeNodeAddonApiHeaders(moduleDir)
       moduleDir = realpathSync(moduleDir)

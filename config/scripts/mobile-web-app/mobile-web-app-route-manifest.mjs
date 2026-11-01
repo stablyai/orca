@@ -7,8 +7,7 @@ export const MOBILE_WEB_APP_ROUTE_ROOT = 'h'
 
 const ROUTE_FILE = /\.[tj]sx?$/
 const NOT_A_ROUTE = /(\.(test|spec|d)\.|\+api\.|\+middleware\.)/
-// esbuild's resolveExtensions order, which only applies to an extensionless import. Routes are
-// imported by full path, so the web sibling is picked here instead.
+// Full-path imports bypass esbuild resolveExtensions, so select web sibling explicitly.
 const WEB_SIBLING_EXTENSIONS = ['.web.tsx', '.web.ts', '.web.jsx', '.web.js']
 
 function webSiblingOf(name, siblings) {
@@ -18,12 +17,7 @@ function webSiblingOf(name, siblings) {
   )
 }
 
-/**
- * Every route in the mounted subtree, sorted by key so the generated module is a pure function of
- * the tree on disk. `key` is the require.context key expo-router names the screen by, always the
- * native filename; `module` is the file the bundle imports, which is the `.web.*` sibling when one
- * exists. They differ so a web override changes the code without moving the URL.
- */
+// Sort require.context keys deterministically; keys retain native filenames/URLs while modules select web siblings.
 export async function collectMobileWebAppRoutes(appDir, routeRoot = MOBILE_WEB_APP_ROUTE_ROOT) {
   const routes = []
   async function walk(directory) {
@@ -57,10 +51,7 @@ export async function collectMobileWebAppRoutes(appDir, routeRoot = MOBILE_WEB_A
   )
 }
 
-/**
- * The page's root layout: the web sibling of `app/_layout.tsx`, never the native file, which owns
- * pairing and push. Without one expo-router mounts `DefaultNavigator`, an all-edges SafeAreaView.
- */
+// Require web root layout: native owns pairing/push; absent override mounts DefaultNavigator’s all-edge SafeAreaView.
 async function pageRootLayout(appDir) {
   const entries = await readdir(appDir, { withFileTypes: true })
   const files = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name))
@@ -70,13 +61,7 @@ async function pageRootLayout(appDir) {
 
 const ROOT_LAYOUT = '_layout.tsx'
 
-/**
- * The URL pattern expo-router gives a route key, or null for a file that is not a screen.
- *
- * Dynamic segments are kept as written (`[hostId]`), because what this feeds is a pattern the shell
- * matches a concrete route against, not a URL anyone visits. `index` names its own directory, and a
- * file whose name starts with `_` is a layout rather than a screen.
- */
+// Preserve [dynamic] segments as shell-match patterns; index names directory and _ files are layouts.
 export function routePathnameFromKey(key) {
   const segments = key.replace(/^\.\//, '').replace(ROUTE_FILE, '').split('/')
   const last = segments.at(-1)
@@ -89,16 +74,11 @@ export function routePathnameFromKey(key) {
   return `/${segments.join('/')}`
 }
 
-/** The require.context keys alone, for callers that only need the route names. */
 export async function collectMobileWebAppRouteKeys(appDir, routeRoot = MOBILE_WEB_APP_ROUTE_ROOT) {
   return (await collectMobileWebAppRoutes(appDir, routeRoot)).map((route) => route.key)
 }
 
-/**
- * The RequireContext behaviour, kept as source so a test can evaluate it against a fake `modules`
- * without bundling the real route tree. Inlined into the generated module because that module is
- * bundled for the browser and cannot import from config/scripts.
- */
+// Inline context behavior as source: browser bundle cannot import config/scripts; tests can evaluate against fake modules.
 export const ROUTE_CONTEXT_SOURCE = `const keys = Object.keys(modules)
 function routeContext(id) {
   if (!Object.prototype.hasOwnProperty.call(modules, id)) {
@@ -115,23 +95,12 @@ routeContext.resolve = (id) => {
 }
 routeContext.id = 'orca-mobile-web-app-routes'`
 
-/**
- * esbuild has no `require.context`, so the builder synthesizes the RequireContext expo-router's
- * own ExpoRoot consumes. The context itself stays synchronous — expo-router reads `keys()` to
- * build the route tree before anything renders — and only the screen behind each key is deferred,
- * through the `import()` esbuild splits into a per-route chunk.
- *
- * `default` is the whole module: a lazy module cannot answer `unstable_settings` or
- * `ErrorBoundary`, which expo-router reads synchronously off the namespace. No route in the
- * mounted subtree exports either, and `assertRoutesCarryNoSynchronousExports` below fails the
- * build rather than emitting a page that mounts with the export silently gone.
- */
+// ExpoRoot needs synchronous keys to build tree; defer only route modules through split import().
+// Lazy default hides synchronous unstable_settings/ErrorBoundary exports; assertRoutesCarryNoSynchronousExports fails build if any route adds them.
 export function renderMobileWebAppRouteManifest(routes) {
   const entryLines = routes.map(({ key, module }) => {
-    // The layout commits with the screen below it still behind its own chunk, so it is not what
-    // says the page has something to show.
-    // Optional because the closure builds call this with the page-route list, whose entries carry
-    // no key: that manifest is never loaded, since a route module imports nothing from it.
+    // Layout can commit behind pending screen chunk, so it cannot signal paint.
+    // Closure-only manifest entries lack keys and are never loaded; wrapping their screens is optional.
     const resolved = key?.endsWith('/_layout.tsx')
       ? `import(${JSON.stringify(module)})`
       : `import(${JSON.stringify(module)}).then(withRouteScreenPaintReport)`
@@ -147,36 +116,16 @@ export default routeContext
 `
 }
 
-/**
- * The expo-router exports a route module may carry besides `default`. Read off the namespace while
- * the tree is built, so a lazy module would drop them silently rather than fail.
- */
+// Expo-router reads these namespace exports synchronously; lazy modules would silently drop them.
 export const ROUTE_MODULE_SYNCHRONOUS_EXPORTS = ['unstable_settings', 'ErrorBoundary']
 
-/**
- * How esbuild has to read a route's own source. React Native ships untranspiled JSX inside `.js`,
- * including expo-router's own build/, so a `.js` route that carries JSX is a syntax error without
- * this. The builder spreads the same table into its own loaders, which is what keeps the guard
- * reading a route exactly as the bundle does.
- */
+// Share JSX-in-.js loader with builder: RN/expo-router ship untranspiled JSX, and guard must parse exactly what bundle accepts.
 export const ROUTE_SOURCE_LOADERS = { '.js': 'jsx' }
 
-/** esbuild's own normalized output for a re-export whose names it did not resolve. */
 const STAR_REEXPORT = /^export \* from "(.*)";$/gm
 
-/**
- * Which of those a route module puts on its namespace, and which specifiers it re-exports whole.
- *
- * Read from esbuild's parse rather than the source text, because the name reaching the namespace
- * is not the name any declaration carries: `export { settings as unstable_settings }`,
- * `export class ErrorBoundary` and `export { ErrorBoundary } from './boundary'` are all invisible
- * to a pattern over declarations, and all three break the lazy manifest the same way.
- *
- * `bundle` is off: this asks what one module exports, and following its imports would pull the
- * whole app in to answer. The cost is `export * from x`, whose names esbuild cannot enumerate
- * without reading x; those are returned separately so the caller fails closed instead of reading
- * an unresolved star as clean.
- */
+// Parse export namespace, not declarations: aliases/classes/reexports can expose synchronous route exports.
+// Do not bundle entire app to inspect one module; unresolved export * fails closed instead of appearing clean.
 export async function routeModuleSynchronousExports(modulePath) {
   const result = await esbuild.build({
     entryPoints: [modulePath],
@@ -185,7 +134,7 @@ export async function routeModuleSynchronousExports(modulePath) {
     format: 'esm',
     metafile: true,
     loader: ROUTE_SOURCE_LOADERS,
-    // Never written; it only names the single output the metafile is keyed by.
+    // Virtual output name only; never written to disk.
     outdir: 'route-exports',
     logLevel: 'silent'
   })
@@ -198,13 +147,7 @@ export async function routeModuleSynchronousExports(modulePath) {
   }
 }
 
-/**
- * Fails the build on any route the lazy manifest would strip an export from. Runs in the build
- * and not only in a test, because what it prevents is a page that mounts with `ErrorBoundary`
- * gone: the throw escapes to the window, nothing paints, and no log says why.
- *
- * 14 parses of one module each, so it costs a fraction of the bundle it guards.
- */
+// Enforce during build too: stripping ErrorBoundary from lazy route could yield unreported blank page.
 export async function assertRoutesCarryNoSynchronousExports(routes) {
   const read = await Promise.all(routes.map(({ module }) => routeModuleSynchronousExports(module)))
   routes.forEach(({ key }, index) => {

@@ -20,28 +20,29 @@ export type LegacySshTarget = SshTarget & {
   allowRemoteCliControlReset?: unknown
 }
 
-// Why: old targets predate configHost; default to label-based lookup so imported SSH aliases still resolve via ssh -G.
+// Legacy targets lack configHost; label fallback preserves imported ssh -G aliases.
 export function normalizeSshTarget(t: SshTarget): SshTarget {
   const target = { ...(t as LegacySshTarget) }
   const legacySyncEnabled = target.remoteWorkspaceSyncEnabled
   const currentGracePeriodSeconds = target.relayGracePeriodSeconds
   const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
   const systemSshConnectionReuse = target.systemSshConnectionReuse
+  const systemSshProxyConnectionReuse = target.systemSshProxyConnectionReuse
   const remoteRuntime = target.remoteRuntime
   const remoteRuntimeResolution = normalizeSshRemoteRuntimeResolution(
     target.remoteRuntimeResolution
   )
-  // Why: remote sync now follows the SSH relay lifecycle, so retired per-target sync/grace fields are dropped at disk load.
+  // Sync/grace now follow relay lifecycle; discard retired per-target fields.
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
   delete target.systemSshConnectionReuse
+  delete target.systemSshProxyConnectionReuse
   delete target.remoteRuntime
   delete target.remoteRuntimeResolution
   delete target.experimentalPtySourceCreditV1
-  // Why: the one-time remote CLI control reset is retired; its notice flag means nothing now.
   delete target.allowRemoteCliControlReset
-  // Why: prefer the synced grace over stale relayGracePeriodSeconds so a user's "unlimited" (0) survives migration.
+  // Preserve explicit synced unlimited grace (0) over a stale relay setting.
   const relayGracePeriodSeconds =
     legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
       ? legacyGracePeriodSeconds
@@ -50,7 +51,7 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
   }
-  // Why: old SSH form persisted 10800 even without a user choice; treat that legacy default as the new implicit default.
+  // Old forms persisted the former default even without user choice; migrate it as implicit.
   if (
     relayGracePeriodSeconds !== undefined &&
     relayGracePeriodSeconds !== LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
@@ -60,8 +61,10 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   if (systemSshConnectionReuse === false) {
     normalized.systemSshConnectionReuse = false
   }
-  // Known values survive, so an explicit Host Node choice outlives a later default flip;
-  // an unknown value from a newer build must not change the runtime.
+  if (systemSshProxyConnectionReuse === true) {
+    normalized.systemSshProxyConnectionReuse = true
+  }
+  // Keep explicit runtime choices; unknown newer values must not silently select another runtime.
   const knownRuntime = SSH_REMOTE_RUNTIMES.find((runtime) => runtime === remoteRuntime)
   if (knownRuntime) {
     normalized.remoteRuntime = knownRuntime
@@ -82,10 +85,7 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   )
 }
 
-/**
- * Phase-3 builds fenced a managed host through `owner`, which shipped builds hide. Moving the fence
- * to `orcadFence` keeps the host visible, and reachable over its relay, after a downgrade.
- */
+/** Move legacy owner fences to orcadFence so downgraded builds still show and reach the host. */
 function migrateLegacyManagedOrcadOwner(target: SshTarget): SshTarget {
   const environmentId = getLegacyManagedOrcadOwnerEnvironmentId(target.owner)
   if (!environmentId) {
@@ -93,11 +93,10 @@ function migrateLegacyManagedOrcadOwner(target: SshTarget): SshTarget {
   }
   const { owner: _legacyOwner, ...rest } = target
   const fenced = normalizeOrcadFence(rest)
-  // A malformed fence must not discard the owner's valid environment id.
   return fenced.orcadFence ? fenced : { ...fenced, orcadFence: { environmentId } }
 }
 
-// Unknown keys pass through every note below, so a newer build's optional fields survive this one.
+// Preserve unknown note fields from independently updated peers.
 function noteFields(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? { ...value } : null
 }
@@ -162,7 +161,7 @@ function normalizeOrcadFence(target: SshTarget): SshTarget {
   return rest
 }
 
-// Why strict: a malformed cache entry is dropped, which only costs one rung A attempt.
+// Malformed cache entries only cost a new runtime-resolution attempt.
 const SshRemoteRuntimeResolutionSchema = z
   .object({
     rung: z.enum(SSH_REMOTE_RUNTIME_RUNGS),
@@ -182,7 +181,6 @@ function normalizeSshRemoteRuntimeResolution(value: unknown): SshRemoteRuntimeRe
   return parsed.success ? parsed.data : null
 }
 
-// Why: strict whitelist — a record missing or mistyping a required field is dropped rather than partially trusted.
 export function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | null {
   if (!value || typeof value !== 'object') {
     return null
@@ -209,8 +207,7 @@ export function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | 
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,
     ...(typeof raw.lastAttachedAt === 'number' ? { lastAttachedAt: raw.lastAttachedAt } : {}),
     ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {}),
-    // Whitelisted or the loader would strip them on every launch, and a superseded predecessor
-    // would come back reattachable — the fan-out this mark exists to prevent.
+    // Keep supersession evidence or a reload could make retired predecessors reattachable.
     ...(typeof raw.supersededBy === 'string' && raw.supersededBy.length > 0
       ? { supersededBy: raw.supersededBy }
       : {}),

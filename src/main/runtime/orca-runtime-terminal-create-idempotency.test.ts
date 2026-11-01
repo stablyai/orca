@@ -261,9 +261,7 @@ describe('terminal create idempotency', () => {
   })
 })
 
-// Mirrors listProcessesFromRuntimeController: `undefined` aggregates every provider and
-// silently drops a non-answering SSH host, `local` is local-only, an `ssh:` host is host-scoped
-// and rethrows the host's failure.
+// Match inventory scope: undefined aggregates and drops SSH failures; local is local-only; ssh scopes/rethrows failures.
 function createHostScopedInventory(hosts: {
   local?: PtyProcessInfo[]
   ssh?: Record<string, PtyProcessInfo[] | 'unreachable'>
@@ -303,7 +301,7 @@ function remoteSession(handle: string | undefined, worktreeId = 'worktree-1'): P
 describe('terminal create reconciliation scopes inventory to the owning execution host', () => {
   it('reports runtime_unavailable instead of spawning a duplicate when the owning relay cannot answer', async () => {
     const listProcesses = createHostScopedInventory({
-      // The first create's shell is alive on ssh-1; the relay simply cannot be asked about it.
+      // Unreachable inventory cannot prove the first SSH spawn died.
       ssh: { 'ssh-1': 'unreachable', 'ssh-2': [remoteSession(undefined, 'worktree-9')] }
     })
     const { runtime } = createRuntimeForDedupe(listProcesses, { connectionId: 'ssh-1' })
@@ -592,7 +590,7 @@ describe('launch runtime dispatch and allocation phases', () => {
     Object.defineProperty(runtime, 'store', {
       value: { getRepos: () => [repo], getRepo: () => repo }
     })
-    Object.defineProperty(runtime, 'resolveWorktreeSelector', {
+    Object.defineProperty(runtime, 'resolveGitWorktreeSelector', {
       value: async () => ({ id: 'repo::workspace', repoId: 'repo', path: '/workspace' })
     })
     const events: string[] = []

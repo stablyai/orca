@@ -13,11 +13,8 @@ export type RuntimeBrowserUnavailableReason =
   | 'desktop_window_unavailable'
   | 'unknown'
 
-/**
- * Why this host cannot spawn PTYs. Members are opaque to clients: render `message`,
- * never switch exhaustively. Dynamic-loader failures are proved out of process because
- * an incompatible native binary can terminate the host before JavaScript can catch it.
- */
+/** PTY failure reasons are open to clients: render message, never switch exhaustively.
+ * Probe native-loader failures out of process because incompatible binaries can terminate the host. */
 export type RuntimeTerminalUnavailableReason =
   | 'dependency_missing'
   | 'toolchain_missing'
@@ -31,10 +28,7 @@ export type RuntimeTerminalUnavailableReason =
   | 'unknown'
 
 export type RuntimeDegradation = {
-  /**
-   * Open vocabulary. New codes ship without a protocol bump, so clients must render
-   * `message` and must not switch exhaustively on this or the `reason` field.
-   */
+  /** Open vocabulary: new codes/reasons need no protocol bump; clients render message instead of exhaustive switching. */
   code: 'browser_unavailable' | typeof TERMINAL_UNAVAILABLE_ERROR_CODE
   capability: 'browser.headless.v1' | typeof TERMINAL_PTY_DEGRADATION_CAPABILITY
   message: string

@@ -120,7 +120,7 @@ describe('createIpcPtyTransport', () => {
     const flushed = handle.flush()
     expect(flushed.length).toBeLessThanOrEqual(cap)
     expect(flushed.endsWith('PROMPT$')).toBe(true)
-    expect(flushed).not.toContain('A') // oldest chunk trimmed
+    expect(flushed).not.toContain('A')
   })
 
   it('caps a single oversized eager chunk to its most-recent tail', async () => {

@@ -1,9 +1,7 @@
 import { Redirect, useLocalSearchParams } from 'expo-router'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 
-// History is now a segment of the Source Control hub. This route stays as a thin
-// redirect so existing deep links (and any cached navigation) land on the hub with
-// the History segment selected.
+// Redirect old deep links/cached navigation to the Source Control hub’s History tab.
 export default function HistoryRedirect() {
   const params = useLocalSearchParams<{
     hostId?: string | string[]

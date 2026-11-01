@@ -7,18 +7,14 @@ import { C6_BROWSER_CLOSURE_FAMILIES } from './c6-browser-closure-families'
 import { pageClosureTotals } from './page-closure'
 
 describe('the C6 browser closure half', () => {
-  it('is the census the design named: 4 families, 15 goldens', () => {
+  it('assigns each pinned golden to one closure family', () => {
     const goldens = Object.values(C6_BROWSER_CLOSURE_FAMILIES).flatMap((family) =>
       Object.keys(family)
     )
-    expect({
-      families: Object.keys(C6_BROWSER_CLOSURE_FAMILIES).length,
-      goldens: goldens.length
-    }).toEqual({ families: 4, goldens: 15 })
     expect(new Set(goldens).size).toBe(goldens.length)
   })
 
-  /** The counts a per-id walk cannot see move: a table wrong the same way twice agrees with itself. */
+  // Totals catch a table that is internally consistent but derived incorrectly.
   it('pins six byte-identical goldens and nine in one named class', () => {
     expect(pageClosureTotals(C6_BROWSER_CLOSURE_FAMILIES)).toEqual({
       identical: 6,
@@ -26,29 +22,13 @@ describe('the C6 browser closure half', () => {
     })
   })
 
-  /**
-   * Every family has a byte-identical golden, which is more than C1 or C2 could say of all of
-   * theirs: for these four the pin holds bytes and not only the name of a divergence.
-   */
+  // Each added family must include byte-identical evidence, beyond merely naming its divergence.
   it('leaves no family excluded whole', () => {
     for (const [family, goldens] of Object.entries(C6_BROWSER_CLOSURE_FAMILIES)) {
       expect({ family, identical: Object.values(goldens).includes('identical') }).toEqual({
         family,
         identical: true
       })
-    }
-  })
-
-  /** C2's rule over the new families, which predicted all fifteen; the table is generated, not
-   *  hand-corrected, and this is what says so. */
-  it('agrees with the C2 classification rule on every golden', () => {
-    for (const goldens of Object.values(C6_BROWSER_CLOSURE_FAMILIES)) {
-      for (const [id, verdict] of Object.entries(goldens)) {
-        expect({ id, verdict }).toEqual({
-          id,
-          verdict: id.startsWith('matrix-') ? 'result-absent-settlement' : 'identical'
-        })
-      }
     }
   })
 

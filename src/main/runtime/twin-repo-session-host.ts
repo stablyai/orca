@@ -47,14 +47,7 @@ function cachedWorktreeHostId(worktree: CachedWorktreeHost): ExecutionHostId | n
     : (parseExecutionHostId(worktree.hostId)?.id ?? null)
 }
 
-/**
- * The session host of a worktree whose repo id is registered on several hosts, decided as the
- * window's save routing does (`buildHostSessionRouting`); null when the repo is on one host.
- * 1. The partitions already holding the worktree's rows name it, unless the cached worktree list
- *    positively places it elsewhere.
- * 2. Listed on two or more partitions: the shared primary.
- * 3. Otherwise only a runtime owner names it; an SSH-only, local-only or unknown worktree is local.
- */
+/** Match window save routing for same-id repos: prefer holding partitions unless listing contradicts them, use shared primary for duplicates, then runtime owner or local fallback. */
 export function resolveTwinRepoSessionHostId(
   store: TwinRepoStore,
   repos: readonly Repo[],

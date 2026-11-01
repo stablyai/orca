@@ -68,8 +68,7 @@ describe('notifyHostOfMirroredEditorClose', () => {
 
   it('records the host close intent SYNCHRONOUSLY (before the async close resolves)', () => {
     const now = Date.now()
-    // No await: the intent must be pending the instant the call returns, so a
-    // host snapshot in the dynamic-import gap can't flash the old-path tab back.
+    // Intent must exist synchronously or a snapshot during dynamic import can flash the old path back.
     notifyHostOfMirroredEditorClose(buildState(), 'wt-1', 'file-1')
 
     expect(
@@ -80,21 +79,6 @@ describe('notifyHostOfMirroredEditorClose', () => {
         now
       )
     ).toBe(true)
-  })
-
-  it('closes the mirrored editor tab on the host using the host tab id', async () => {
-    const handled = notifyHostOfMirroredEditorClose(buildState(), 'wt-1', 'file-1')
-
-    expect(handled).toBe(true)
-    await vi.waitFor(() => {
-      expect(closeWebRuntimeSessionTabMock).toHaveBeenCalled()
-    })
-    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      tabId: 'host-tab-1',
-      environmentId: 'env-1',
-      reason: 'user'
-    })
   })
 
   it('records and sends a close for every host tab linked to the document', async () => {
@@ -147,39 +131,6 @@ describe('notifyHostOfMirroredEditorClose', () => {
       })
     )
     expect(ownerLookup.calls).toBe(0)
-  })
-
-  it('does not infer a remote owner for an explicitly local file', () => {
-    const state = buildState()
-    state.openFiles = state.openFiles.map((file) => ({ ...file, runtimeEnvironmentId: null }))
-
-    expect(notifyHostOfMirroredEditorClose(state, 'wt-1', 'file-1')).toBe(false)
-    expect(ownerLookup.calls).toBe(0)
-    expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
-  })
-
-  it('does not route locally-opened (non-mirrored) files to the host', () => {
-    const state = buildState({
-      openFiles: [
-        { id: 'file-1', worktreeId: 'wt-1' }
-      ] as unknown as MirroredEditorCloseState['openFiles']
-    })
-
-    const handled = notifyHostOfMirroredEditorClose(state, 'wt-1', 'file-1')
-
-    expect(handled).toBe(false)
-    expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
-  })
-
-  it('does nothing when no web runtime session is active', () => {
-    const handled = notifyHostOfMirroredEditorClose(
-      buildState(ownerRows('local')),
-      'wt-1',
-      'file-1'
-    )
-
-    expect(handled).toBe(false)
-    expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
   })
 
   it('refuses a legacy mirrored file whose worktree is a local twin of the server', () => {

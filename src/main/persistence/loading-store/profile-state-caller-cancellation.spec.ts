@@ -34,7 +34,6 @@ export function registerProfileStateCallerCancellationTests(): void {
     clearMigrationUnsupportedPty(MIGRATION_ENTRY.ptyId)
   })
 
-  /** Seed two durable aliases, then hold the next alias commit at the given point. */
   async function holdAliasCommit(point: 'after-commit' | 'before-failure') {
     const fixture = await createWorkerMaintenanceFixture()
     const { store, authority } = fixture
@@ -55,14 +54,13 @@ export function registerProfileStateCallerCancellationTests(): void {
         throw new ProfileStateWriterError('SQLITE_BUSY', 'busy', 'known-failure')
       }
     })
-    // Commit A also carries a section no later edit touches, so only restored intent can save it.
+    // Include untouched state so retry must restore intent beyond the later edits.
     agentHookServer.transferPaneAuthority(TARGET_A, TARGET_A_2, 'pty-a', 2)
     setMigrationUnsupportedPty(MIGRATION_ENTRY)
     const controller = new AbortController()
     const pending = store.flushPendingOrThrowAsync({ signal: controller.signal })
     const settled = pending.catch((error: unknown) => error)
     await started.promise
-    // Newer edits arrive while commit A is unacknowledged.
     agentHookServer.transferPaneAuthority(TARGET_A_2, TARGET_A_3, 'pty-a', 3)
     agentHookServer.clearPaneKeyAliasesForPty('pty-b')
     store.setWorkspaceSession(
@@ -92,14 +90,12 @@ export function registerProfileStateCallerCancellationTests(): void {
         await holdAliasCommit('after-commit')
       controller.abort()
       expect(await settled).toMatchObject({ message: expect.stringContaining('aborted') })
-      // Commit A is durable, but nothing newer is reported or persisted early.
       expect(readState().legacyPaneKeyAliasEntries).toEqual(
         expect.arrayContaining([expect.objectContaining({ ptyId: 'pty-a', updatedAt: 2 })])
       )
       release.resolve()
       await store.flushPendingOrThrowAsync()
       expectLatestOwedState(readState())
-      // A's replacement is not replayed: the drain writes only the newer values.
       expect(writes).toHaveBeenCalledTimes(2)
       const readRevision = () => {
         const opened = openProfileStateDatabase(databaseFile, profileId)

@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import { UnsealedCredentialNotice } from './UnsealedCredentialNotice'
 import { useState } from 'react'
 import { AlertCircle, CheckCircle2, LoaderCircle, Unlink } from 'lucide-react'
@@ -48,8 +49,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
     }
   }
 
-  // Why: explicit user-triggered verification. This is the only settings path
-  // that decrypts a stored Linear key, avoiding surprise keychain prompts.
+  // Decrypt Linear keys only on explicit verification to avoid surprise keychain prompts.
   const handleTest = async (workspaceId: string): Promise<void> => {
     setTestingWorkspaceId(workspaceId)
     setTestResultByWorkspace((prev) => {
@@ -63,7 +63,9 @@ export function LinearIntegrationCard(): React.JSX.Element {
     }
     setTestResultByWorkspace((prev) => ({
       ...prev,
-      [workspaceId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
+      [workspaceId]: result.ok
+        ? { state: 'ok' }
+        : { state: 'error', error: taskProviderErrorMessage(result) }
     }))
     setTestingWorkspaceId(null)
   }

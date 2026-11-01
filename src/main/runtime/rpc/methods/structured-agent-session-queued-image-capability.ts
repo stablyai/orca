@@ -1,14 +1,12 @@
-// A reader that predates image cards shows a card's text only, and edits by copying that text and
-// deleting the card, which would drop its images. It is never handed a card holding an image, at
-// the RPC boundary only: the journal, the drain and every in-process reader keep the whole queue.
+// Withhold image cards only at RPC for older readers whose copy-text/delete edits would lose images; keep the canonical queue intact.
 
+import type { AgentSessionHistoryResult } from '../../../../shared/agent-session/agent-session-wire'
 import type {
-  AgentSessionHistoryResult,
   AgentSessionQueuedMessage,
   AgentSessionQueuePublicationFields
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { QueuePublication } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-publication'
-import { AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RpcContext } from '../core'
 
 type QueuedImageReader = Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
@@ -29,9 +27,7 @@ function holdsImage(card: AgentSessionQueuedMessage): boolean {
   return card.body.blocks.some((block) => block.type === 'image-ref')
 }
 
-/** The fields to replace, or null when nothing is withheld. Positions and the next card's id stay
- *  as published, as when a phone's frame trims the list. A pause over no card the reader sees would
- *  offer a Resume that sends nothing it shows. */
+/** Replace visible cards only, preserving positions/next id; hide pause when Resume would send only unseen cards. Null means nothing withheld. */
 function withoutImageCards(
   fields: QueueFields
 ):

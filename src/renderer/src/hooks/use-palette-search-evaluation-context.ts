@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import {
   createPaletteSearchContext,
   type PaletteSearchContext
-} from '@/lib/palette-match/palette-ranking'
+} from '../../../shared/palette-match/palette-ranking'
 
 /** One clock for every source participating in the current search snapshot. */
 export function usePaletteSearchEvaluationContext(snapshot: unknown): PaletteSearchContext {

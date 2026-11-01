@@ -141,9 +141,7 @@ export class DispatcherClientWriter {
     this.notifyIdle()
     try {
       this.sink.close()
-    } catch {
-      // The writer state is already closed.
-    }
+    } catch {}
     if (!this.closeNotified) {
       this.closeNotified = true
       this.onClosed(error)
@@ -169,8 +167,7 @@ export class DispatcherClientWriter {
     } finally {
       this.pumping = false
     }
-    // Why deferred: retiring a deep queue drops every entry in one pass, and notifying per drop
-    // fans out to each listener O(queue) times for capacity that only changed once.
+    // Coalesce retirement notifications: a deep queue changes capacity once, not once per dropped entry.
     if (this.retiredCapacity && !this.closed) {
       this.retiredCapacity = false
       this.notifyCapacity()

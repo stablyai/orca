@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentModelProbeSpec } from './agent-model-probe-spec'
-import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
+import { GROK_SESSION_OPTION_CATALOG } from './agent-session/options/agent-session-option-catalog-grok'
 import { getCommitMessageAgentSpec, listCommitMessageAgentIds } from './commit-message-agent-spec'
 
 describe('getAgentModelProbeSpec', () => {
@@ -17,8 +17,7 @@ describe('getAgentModelProbeSpec', () => {
   })
 
   it('wires that probe to the parser that reads a real listing', () => {
-    // Pinning binary and args alone would still pass with the wrong parser attached,
-    // leaving discovery to publish nothing on every host.
+    // Binary/argv assertions alone miss a wrong parser publishing no models.
     const parsed = getAgentModelProbeSpec('grok')!.modelDiscovery!.parse(
       'You are logged in with grok.com.\n\nDefault model: grok-4.5\n\nAvailable models:\n  * grok-4.5 (default)\n'
     )
@@ -32,8 +31,7 @@ describe('getAgentModelProbeSpec', () => {
   })
 
   it('aliases agents without a generation-only default by identity', () => {
-    // A lossy adapter here would silently drop fields like
-    // `modelDiscovery.stdinPayload` and break Claude discovery.
+    // Adapters must not lose discovery fields such as Claude's stdinPayload.
     for (const id of listCommitMessageAgentIds().filter((agentId) => agentId !== 'omp')) {
       expect(getAgentModelProbeSpec(id)).toBe(getCommitMessageAgentSpec(id))
     }
