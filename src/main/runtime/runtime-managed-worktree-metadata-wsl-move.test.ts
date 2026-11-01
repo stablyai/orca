@@ -25,6 +25,7 @@ vi.mock('electron', () => ({
 
 const MOVING = 'repo-1::/src/app'
 const STAYING = 'repo-2::/src/other'
+const KEPT = 'repo-2::/src/kept'
 
 function resolved(id: string): ResolvedWorktree {
   const repoId = id.slice(0, id.indexOf('::'))
@@ -116,14 +117,17 @@ describe('persistRuntimeManagedWorktreeSortOrder under a WSL move', () => {
   it('drops the moving project from the batch and writes the rest', () => {
     store.setWorktreeMeta(hostWorktreeTarget({ id: MOVING, hostId: 'local' }), { sortOrder: 1 })
     store.setWorktreeMeta(hostWorktreeTarget({ id: STAYING, hostId: 'local' }), { sortOrder: 2 })
+    // KEPT holds the highest rank, so the save keeps it and re-ranks the two rows placed above it.
+    store.setWorktreeMeta(hostWorktreeTarget({ id: KEPT, hostId: 'local' }), { sortOrder: 3 })
     const result = persistRuntimeManagedWorktreeSortOrder({
-      orderedIds: [MOVING, STAYING],
+      orderedIds: [MOVING, STAYING, KEPT],
       store,
       invalidateResolved: vi.fn(),
       notifyChanged: vi.fn()
     })
     expect(result).toEqual({ updated: 1 })
     expect(store.getWorktreeMeta(MOVING)?.sortOrder).toBe(1)
-    expect(store.getWorktreeMeta(STAYING)?.sortOrder).toBeGreaterThan(2)
+    expect(store.getWorktreeMeta(STAYING)?.sortOrder).toBeGreaterThan(3)
+    expect(store.getWorktreeMeta(KEPT)?.sortOrder).toBe(3)
   })
 })

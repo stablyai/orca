@@ -48,6 +48,7 @@ vi.mock('./pty/provider/state-cleanup', async () =>
 
 const MOVING = 'repo-1::/workspace/feature-wt'
 const STAYING = 'repo-2::/workspace/other-wt'
+const KEPT = 'repo-2::/workspace/kept-wt'
 
 let userDataPath: string
 beforeEach(() => {
@@ -119,10 +120,12 @@ describe('worktree IPC under a WSL move', () => {
   })
 
   it('drops the moving worktree from a sort-order batch', async () => {
+    // KEPT holds the highest rank, so the save keeps it and re-ranks the two rows placed above it.
+    const ranks: Record<string, number> = { [MOVING]: 1, [STAYING]: 2, [KEPT]: 3 }
     store.getWorktreeMeta.mockImplementation((id) =>
-      id === MOVING ? { sortOrder: 1 } : id === STAYING ? { sortOrder: 2 } : undefined
+      ranks[id] === undefined ? undefined : { sortOrder: ranks[id] }
     )
-    await handlers['worktrees:persistSortOrder'](null, { orderedIds: [MOVING, STAYING] })
+    await handlers['worktrees:persistSortOrder'](null, { orderedIds: [MOVING, STAYING, KEPT] })
     expect(store.setWorktreeMeta).toHaveBeenCalledTimes(1)
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: STAYING, hostId: 'local' }),

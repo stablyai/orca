@@ -51,7 +51,8 @@ async function expectOrderSaveSkipsGitScan(
   const events: RuntimeClientEvent[] = []
   const unsubscribe = runtime.onClientEvent((event) => events.push(event))
 
-  expect(runtime.persistManagedWorktreeSortOrder([secondId, firstId])).toEqual({ updated: 2 })
+  // Only the row that moved is re-ranked; the other keeps its rank.
+  expect(runtime.persistManagedWorktreeSortOrder([secondId, firstId])).toEqual({ updated: 1 })
   unsubscribe()
   const listed = await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
 
@@ -65,10 +66,7 @@ async function expectOrderSaveSkipsGitScan(
       type: 'worktreesChanged',
       repoId: TEST_REPO_ID,
       sortOrderOnly: true,
-      sortOrders: [
-        { worktreeId: secondId, sortOrder: sortOrderOf(secondId) },
-        { worktreeId: firstId, sortOrder: sortOrderOf(firstId) }
-      ]
+      sortOrders: [{ worktreeId: secondId, sortOrder: sortOrderOf(secondId) }]
     }
   ])
 
