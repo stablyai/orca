@@ -50,6 +50,7 @@ import {
 } from './changed-bridge-outcomes'
 import { familyGoldens, pilotGoldens, type DerivedGolden } from './derived-goldens'
 import { compareGolden, readGolden } from './golden-recording'
+import { pageRefusalOutcome } from './changed-page-outcomes'
 import { recordingDifferences } from './golden-difference'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import type { Recording, RecordingScenario } from './recording-scenario'
@@ -373,7 +374,7 @@ async function directVerdict(id: string, family: string, scenarios: readonly Rec
       scenarios,
       mode === 'page-reply-meta'
     )
-    const want = refusedReplyExpectation(view.expected, scenarios)
+    const want = pageRefusalOutcome(id, refusedReplyExpectation(view.expected, scenarios))
     const fields = divergingFields(want, view.actual)
     if (fields.length) {
       const values = recordingDifferences(want, view.actual)
