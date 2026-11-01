@@ -6,6 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { EMULATOR_KEYBOARD_PASTE_MAX_BYTES } from './emulator-keyboard-paste'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
+import type {
+  EmulatorControlApi,
+  EmulatorControlStreamStatus
+} from '../../../../shared/emulator-control-stream'
+import type { EmulatorVideoApi } from '../../../../shared/emulator-video-stream'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -20,60 +25,58 @@ type PointerInit = {
   pointerId?: number
 }
 
-class FakeWebSocket {
-  static CONNECTING = 0
-  static OPEN = 1
-  static CLOSED = 3
+type FrameListener = (frame: { streamId: string; bytes: ArrayBuffer }) => void
 
-  static instances: FakeWebSocket[] = []
+const videoApi: EmulatorVideoApi = {
+  startVideoStream: async ({ streamId }) => ({ streamId }),
+  stopVideoStream: async () => {},
+  onVideoStreamMeta: () => () => {},
+  onVideoStreamFrame: () => () => {}
+}
 
-  binaryType: BinaryType = 'blob'
-  onclose: (() => void) | null = null
-  onerror: (() => void) | null = null
-  onopen: (() => void) | null = null
-  readyState = FakeWebSocket.CONNECTING
-  readonly sent: Uint8Array[] = []
-  readonly url: string
+class FakeControlApi implements EmulatorControlApi {
+  readonly statusListeners = new Set<(status: EmulatorControlStreamStatus) => void>()
+  readonly startControlStream = vi.fn<EmulatorControlApi['startControlStream']>(async () => {})
+  readonly sendControlFrame = vi.fn<EmulatorControlApi['sendControlFrame']>()
+  readonly stopControlStream = vi.fn<EmulatorControlApi['stopControlStream']>()
 
-  constructor(url: string) {
-    this.url = url
-    FakeWebSocket.instances.push(this)
-  }
-
-  open(): void {
-    this.readyState = FakeWebSocket.OPEN
-    this.onopen?.()
-  }
-
-  send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
-    if (data instanceof Uint8Array) {
-      this.sent.push(data)
-      return
-    }
-    if (ArrayBuffer.isView(data)) {
-      this.sent.push(new Uint8Array(data.buffer, data.byteOffset, data.byteLength))
-      return
-    }
-    if (data instanceof ArrayBuffer) {
-      this.sent.push(new Uint8Array(data))
+  onControlStreamStatus(callback: (status: EmulatorControlStreamStatus) => void): () => void {
+    this.statusListeners.add(callback)
+    return () => {
+      this.statusListeners.delete(callback)
     }
   }
 
-  close(): void {
-    this.readyState = FakeWebSocket.CLOSED
-    this.onclose?.()
+  emitStatus(status: EmulatorControlStreamStatus): void {
+    for (const listener of this.statusListeners) {
+      listener(status)
+    }
   }
 }
 
 let container: HTMLDivElement
 let root: Root
+let controlApi: FakeControlApi
 
 beforeEach(() => {
   ;(
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true
-  vi.stubGlobal('WebSocket', FakeWebSocket as unknown as typeof WebSocket)
-  FakeWebSocket.instances = []
+  controlApi = new FakeControlApi()
+  vi.stubGlobal('api', { emulator: controlApi })
+  vi.stubGlobal('WebSocket', vi.fn())
+  vi.stubGlobal(
+    'VideoDecoder',
+    class {
+      state = 'unconfigured'
+
+      close(): void {
+        this.state = 'closed'
+      }
+    }
+  )
+  vi.stubGlobal('EncodedVideoChunk', class {})
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -86,6 +89,7 @@ afterEach(() => {
   container.remove()
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 function renderFrame(props?: {
@@ -108,6 +112,17 @@ function renderFrame(props?: {
       />
     )
   })
+}
+
+function connectControlStream(index = 0): string {
+  const start = controlApi.startControlStream.mock.calls[index]?.[0]
+  if (!start) {
+    throw new Error(`Control stream ${index} was not started`)
+  }
+  act(() => {
+    controlApi.emitStatus({ streamId: start.streamId, connected: true })
+  })
+  return start.streamId
 }
 
 function getScreen(): HTMLDivElement {
@@ -186,11 +201,8 @@ function pasteEvent(text: string): Event {
 }
 
 function decodedSentMessages(tag: number): unknown[] {
-  const ws = FakeWebSocket.instances[0]
-  if (!ws) {
-    return []
-  }
-  return ws.sent
+  return controlApi.sendControlFrame.mock.calls
+    .map(([{ bytes }]) => bytes)
     .filter((frame) => frame[0] === tag)
     .map((frame) => JSON.parse(new TextDecoder().decode(frame.subarray(1))))
 }
@@ -204,17 +216,25 @@ function decodedSentKeyboardFrames(): unknown[] {
 }
 
 describe('EmulatorDeviceFrame input', () => {
-  it('streams pointer drag phases directly to serve-sim', () => {
+  it('streams a live drag before pointerup when connected status precedes start completion', () => {
+    controlApi.startControlStream.mockReturnValueOnce(new Promise<void>(() => {}))
     const onGesture = vi.fn()
     renderFrame({ onGesture })
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
+    connectControlStream()
     const screen = getScreen()
 
     act(() => {
       screen.dispatchEvent(pointerEvent('pointerdown', { clientX: 50, clientY: 160 }))
       screen.dispatchEvent(pointerEvent('pointermove', { clientX: 50, clientY: 100 }))
+    })
+
+    expect(decodedSentTouches()).toEqual([
+      { type: 'begin', x: 0.5, y: 0.8 },
+      { type: 'move', x: 0.5, y: 0.5 }
+    ])
+    expect(onGesture).not.toHaveBeenCalled()
+
+    act(() => {
       screen.dispatchEvent(pointerEvent('pointerup', { clientX: 50, clientY: 40 }))
     })
 
@@ -224,11 +244,242 @@ describe('EmulatorDeviceFrame input', () => {
       { type: 'end', x: 0.5, y: 0.2 }
     ])
     expect(onGesture).not.toHaveBeenCalled()
+    expect(WebSocket).not.toHaveBeenCalled()
+  })
+
+  it('reconnects after 750ms without stale statuses interrupting live input or replaying delayed keys', () => {
+    vi.useFakeTimers()
+    const onGesture = vi.fn()
+    renderFrame({ onGesture })
+    const oldStreamId = connectControlStream()
+    const screen = getScreen()
+
+    act(() => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(keyEvent('keydown', { key: 'A' }))
+      controlApi.emitStatus({ streamId: oldStreamId, connected: false })
+      vi.advanceTimersByTime(749)
+    })
+
+    expect(controlApi.startControlStream).toHaveBeenCalledTimes(1)
+    expect(decodedSentKeyboardFrames()).toEqual([{ type: 'down', usage: 225 }])
+
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+    const streamId = connectControlStream(1)
+    expect(streamId).not.toBe(oldStreamId)
+    expect(decodedSentKeyboardFrames()).toEqual([
+      { type: 'down', usage: 225 },
+      { type: 'up', usage: 225 }
+    ])
+
+    act(() => {
+      controlApi.emitStatus({ streamId: oldStreamId, connected: false })
+      controlApi.emitStatus({ streamId: oldStreamId, connected: true })
+      screen.dispatchEvent(pointerEvent('pointerdown', { clientX: 50, clientY: 160 }))
+      screen.dispatchEvent(pointerEvent('pointermove', { clientX: 50, clientY: 100 }))
+    })
+
+    expect(decodedSentTouches()).toEqual([
+      { type: 'begin', x: 0.5, y: 0.8 },
+      { type: 'move', x: 0.5, y: 0.5 }
+    ])
+
+    act(() => {
+      screen.dispatchEvent(pointerEvent('pointerup', { clientX: 50, clientY: 40 }))
+      vi.advanceTimersByTime(750)
+    })
+
+    expect(decodedSentTouches()).toEqual([
+      { type: 'begin', x: 0.5, y: 0.8 },
+      { type: 'move', x: 0.5, y: 0.5 },
+      { type: 'end', x: 0.5, y: 0.2 }
+    ])
+    expect(
+      controlApi.sendControlFrame.mock.calls
+        .filter(([{ bytes }]) => bytes[0] === 0x03)
+        .map(([frame]) => frame.streamId)
+    ).toEqual([streamId, streamId, streamId])
+    expect(controlApi.startControlStream).toHaveBeenCalledTimes(2)
+    expect(decodedSentKeyboardFrames()).toEqual([
+      { type: 'down', usage: 225 },
+      { type: 'up', usage: 225 }
+    ])
+    expect(onGesture).not.toHaveBeenCalled()
+  })
+
+  it('rotates live touch coordinates on metadata updates without releasing a held Shift', async () => {
+    vi.useFakeTimers()
+    let frameListener: FrameListener | undefined
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static override createObjectURL(): string {
+          return 'blob:orientation-frame'
+        }
+
+        static override revokeObjectURL(): void {}
+      }
+    )
+    Object.assign(controlApi, {
+      startFrameStream: async () => ({ streamId: 'orientation-frames' }),
+      stopFrameStream: async () => {},
+      onFrameStreamFrame: (listener: FrameListener) => {
+        frameListener = listener
+        return () => {
+          frameListener = undefined
+        }
+      },
+      onFrameStreamError: () => () => {}
+    })
+    renderFrame()
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const streamId = connectControlStream()
+    act(() => {
+      frameListener?.({
+        streamId: 'orientation-frames',
+        bytes: new Uint8Array([1, 2, 3]).buffer
+      })
+    })
+    const image = container.querySelector('img')
+    if (!image) {
+      throw new Error('Emulator frame not rendered')
+    }
+    Object.defineProperties(image, {
+      naturalWidth: { value: 100 },
+      naturalHeight: { value: 200 }
+    })
+    act(() => {
+      image.dispatchEvent(new Event('load'))
+    })
+    const screen = getScreen()
+    act(() => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(keyEvent('keydown', { key: 'A' }))
+    })
+    expect(decodedSentKeyboardFrames()).toEqual([{ type: 'down', usage: 225 }])
+
+    act(() => {
+      controlApi.emitStatus({ streamId, connected: true, orientation: 'landscape_left' })
+    })
+    act(() => {
+      screen.dispatchEvent(pointerEvent('pointerdown', { clientX: 75, clientY: 87.5 }))
+      screen.dispatchEvent(pointerEvent('pointerup', { clientX: 25, clientY: 112.5 }))
+    })
+
+    expect(decodedSentTouches()).toEqual([
+      { type: 'begin', x: 0.25, y: 0.25 },
+      { type: 'end', x: 0.75, y: 0.75 }
+    ])
+    expect(decodedSentKeyboardFrames()).toEqual([{ type: 'down', usage: 225 }])
+    act(() => {
+      vi.advanceTimersByTime(12)
+    })
+    expect(decodedSentKeyboardFrames()).toEqual([
+      { type: 'down', usage: 225 },
+      { type: 'down', usage: 4 },
+      { type: 'up', usage: 4 },
+      { type: 'up', usage: 225 }
+    ])
+    expect(controlApi.startControlStream).toHaveBeenCalledOnce()
+    expect(WebSocket).not.toHaveBeenCalled()
+  })
+
+  it('keeps lost key-up recovery available across repeated reconnect failures', () => {
+    vi.useFakeTimers()
+    renderFrame()
+    const streamId = connectControlStream()
+    const screen = getScreen()
+
+    act(() => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(keyEvent('keydown', { key: 'A' }))
+      vi.advanceTimersByTime(12)
+    })
+    expect(decodedSentKeyboardFrames()).toEqual([
+      { type: 'down', usage: 225 },
+      { type: 'down', usage: 4 },
+      { type: 'up', usage: 4 },
+      { type: 'up', usage: 225 }
+    ])
+
+    act(() => {
+      controlApi.emitStatus({
+        streamId,
+        connected: false,
+        pressedKeyboardUsages: [225, 4]
+      })
+      vi.advanceTimersByTime(750)
+    })
+    const retryId = connectControlStream(1)
+
+    expect(decodedSentKeyboardFrames().slice(4)).toEqual([
+      { type: 'up', usage: 4 },
+      { type: 'up', usage: 225 }
+    ])
+
+    act(() => {
+      controlApi.emitStatus({
+        streamId: retryId,
+        connected: false,
+        pressedKeyboardUsages: controlApi.startControlStream.mock.calls[1][0].pressedKeyboardUsages
+      })
+      vi.advanceTimersByTime(750)
+    })
+    connectControlStream(2)
+    expect(decodedSentKeyboardFrames().slice(6)).toEqual([
+      { type: 'up', usage: 4 },
+      { type: 'up', usage: 225 }
+    ])
+  })
+
+  it('retries a failed control start after 750ms and waits for connected status before sending keys', async () => {
+    vi.useFakeTimers()
+    controlApi.startControlStream.mockRejectedValueOnce(new Error('Control stream failed to start'))
+    renderFrame()
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    act(() => {
+      vi.advanceTimersByTime(749)
+    })
+    expect(controlApi.startControlStream).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+      await Promise.resolve()
+    })
+    expect(controlApi.startControlStream).toHaveBeenCalledTimes(2)
+
+    const screen = getScreen()
+    act(() => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(keyEvent('keydown', { key: 'a' }))
+    })
+    expect(decodedSentKeyboardFrames()).toEqual([])
+
+    connectControlStream(1)
+    act(() => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'b' }))
+    })
+    expect(decodedSentKeyboardFrames()).toEqual([{ type: 'down', usage: 5 }])
+
+    act(() => {
+      vi.advanceTimersByTime(4)
+    })
+    expect(decodedSentKeyboardFrames()).toEqual([
+      { type: 'down', usage: 5 },
+      { type: 'up', usage: 5 }
+    ])
   })
 
   it('streams Android pointer phases to main for the scrcpy control socket', () => {
     const sendScrcpyTouch = vi.fn()
-    vi.stubGlobal('api', { emulator: { sendScrcpyTouch } })
+    vi.stubGlobal('api', { emulator: { ...videoApi, sendScrcpyTouch } })
     const onGesture = vi.fn()
     const onTap = vi.fn()
     renderFrame({ onGesture, onTap, previewUrl: 'scrcpy://serial-1', wsUrl: '' })
@@ -247,14 +498,12 @@ describe('EmulatorDeviceFrame input', () => {
     ])
     expect(onGesture).not.toHaveBeenCalled()
     expect(onTap).not.toHaveBeenCalled()
-    expect(FakeWebSocket.instances).toEqual([])
+    expect(WebSocket).not.toHaveBeenCalled()
   })
 
   it('marks bottom-origin pointer drags as serve-sim edge gestures', () => {
     renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
+    connectControlStream()
     const screen = getScreen()
 
     act(() => {
@@ -273,9 +522,7 @@ describe('EmulatorDeviceFrame input', () => {
   it('forwards focused keyboard text as serve-sim HID frames', () => {
     vi.useFakeTimers()
     renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
+    connectControlStream()
     const screen = getScreen()
 
     act(() => {
@@ -300,9 +547,7 @@ describe('EmulatorDeviceFrame input', () => {
   it('forwards focused paste text as bounded serve-sim HID frames', () => {
     vi.useFakeTimers()
     renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
+    connectControlStream()
     const screen = getScreen()
     const paste = pasteEvent('ab')
 
@@ -331,7 +576,7 @@ describe('EmulatorDeviceFrame input', () => {
     const sendScrcpyKeyboard = vi.fn<Window['api']['emulator']['sendScrcpyKeyboard']>(
       async () => true
     )
-    vi.stubGlobal('api', { emulator: { sendScrcpyKeyboard } })
+    vi.stubGlobal('api', { emulator: { ...videoApi, sendScrcpyKeyboard } })
     renderFrame({ previewUrl: 'scrcpy://serial-1', wsUrl: '' })
     const screen = getScreen()
     const paste = pasteEvent('hi\r\nyou')
@@ -352,14 +597,12 @@ describe('EmulatorDeviceFrame input', () => {
       { deviceId: 'serial-1', key: 'enter', shift: false }
     ])
     expect(toast.error).not.toHaveBeenCalled()
-    expect(FakeWebSocket.instances).toEqual([])
+    expect(WebSocket).not.toHaveBeenCalled()
   })
 
   it('rejects oversized screen paste without scheduling keyboard frames', async () => {
     renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
+    connectControlStream()
     const screen = getScreen()
     const paste = pasteEvent('a'.repeat(EMULATOR_KEYBOARD_PASTE_MAX_BYTES + 1))
 
@@ -374,12 +617,10 @@ describe('EmulatorDeviceFrame input', () => {
     expect(toast.error).toHaveBeenCalledWith('Paste is too large for emulator keyboard input.')
   })
 
-  it('releases pressed keyboard usages when delayed frames are canceled by cleanup', () => {
+  it('releases held keys before stopping control and cancels delayed frames on unmount', () => {
     vi.useFakeTimers()
     renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
+    const streamId = connectControlStream()
     const screen = getScreen()
 
     act(() => {
@@ -397,14 +638,28 @@ describe('EmulatorDeviceFrame input', () => {
       { type: 'down', usage: 225 },
       { type: 'up', usage: 225 }
     ])
+    expect(controlApi.stopControlStream).toHaveBeenCalledWith({ streamId })
+    expect(controlApi.sendControlFrame.mock.invocationCallOrder[1]).toBeLessThan(
+      controlApi.stopControlStream.mock.invocationCallOrder[0]
+    )
+    expect(controlApi.statusListeners.size).toBe(0)
+
+    act(() => {
+      controlApi.emitStatus({ streamId, connected: false })
+      vi.advanceTimersByTime(750)
+    })
+
+    expect(controlApi.startControlStream).toHaveBeenCalledTimes(1)
+    expect(decodedSentKeyboardFrames()).toEqual([
+      { type: 'down', usage: 225 },
+      { type: 'up', usage: 225 }
+    ])
   })
 
   it('does not trap Tab focus until keyboard capture is explicitly active', () => {
     vi.useFakeTimers()
     renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
+    connectControlStream()
     const screen = getScreen()
     expect(screen.getAttribute('role')).toBe('application')
 
@@ -450,9 +705,7 @@ describe('EmulatorDeviceFrame input', () => {
 
   it('leaves host modifier shortcuts alone while focused', () => {
     renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
+    connectControlStream()
     const screen = getScreen()
 
     act(() => {
@@ -466,9 +719,7 @@ describe('EmulatorDeviceFrame input', () => {
   it('turns trackpad wheel input into a live touch scroll', () => {
     vi.useFakeTimers()
     renderFrame()
-    act(() => {
-      FakeWebSocket.instances[0]?.open()
-    })
+    connectControlStream()
     const screen = getScreen()
 
     act(() => {

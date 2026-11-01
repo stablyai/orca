@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import type {
+  EmulatorControlApi,
+  EmulatorControlStreamStatus
+} from '../../../../shared/emulator-control-stream'
 import {
   encodeServeSimKeyboardFrame,
   type ServeSimKeyboardFrame
@@ -7,33 +12,10 @@ import {
   encodeServeSimTouchFrame,
   type ServeSimTouchFrame
 } from '../../../../shared/emulator-touch-frame'
-import { RotateOrientation } from '../../../../shared/rpc-contract/emulator-params'
 import type { EmulatorStreamOrientation } from './emulator-device-frame-layout'
 
 const RECONNECT_DELAY_MS = 750
 const KEYBOARD_FRAME_DELAY_MS = 4
-const SERVE_SIM_CONFIG_MESSAGE_TAG = 130
-
-// serve-sim pushes {width, height, orientation} on connect and on every rotate, fold or resize.
-function decodeServeSimOrientation(data: unknown): EmulatorStreamOrientation | undefined {
-  if (!(data instanceof ArrayBuffer)) {
-    return undefined
-  }
-  const bytes = new Uint8Array(data)
-  if (bytes[0] !== SERVE_SIM_CONFIG_MESSAGE_TAG) {
-    return undefined
-  }
-  try {
-    const config: unknown = JSON.parse(new TextDecoder().decode(bytes.subarray(1)))
-    const orientation =
-      typeof config === 'object' && config !== null && 'orientation' in config
-        ? RotateOrientation.safeParse(config.orientation)
-        : undefined
-    return orientation?.success ? orientation.data : undefined
-  } catch {
-    return undefined
-  }
-}
 
 export type ScrcpyKeyboard = {
   sendKey: (name: string, shift: boolean) => void
@@ -56,7 +38,7 @@ export function useEmulatorControlStream(
   enabled: boolean,
   scrcpyDeviceId: string | null = null
 ): EmulatorControlStream {
-  const wsRef = useRef<WebSocket | null>(null)
+  const streamRef = useRef<EmulatorControlStreamStatus | null>(null)
   const keyboardTimerIdsRef = useRef<Set<number>>(new Set())
   const pressedKeyboardUsagesRef = useRef<Set<number>>(new Set())
   const [connected, setConnected] = useState(false)
@@ -73,19 +55,22 @@ export function useEmulatorControlStream(
     keyboardTimerIdsRef.current.clear()
   }, [])
 
-  const getOpenSocket = useCallback((): WebSocket | null => {
-    const ws = wsRef.current
-    return ws?.readyState === WebSocket.OPEN ? ws : null
+  const getConnectedStreamId = useCallback((): string | null => {
+    const stream = streamRef.current
+    return stream?.connected ? stream.streamId : null
   }, [])
 
   const sendKeyboardFrameNow = useCallback(
     (frame: ServeSimKeyboardFrame): boolean => {
-      const ws = getOpenSocket()
-      if (!ws) {
+      const streamId = getConnectedStreamId()
+      if (!streamId) {
         return false
       }
       try {
-        ws.send(encodeServeSimKeyboardFrame(frame))
+        window.api.emulator.sendControlFrame({
+          streamId,
+          bytes: encodeServeSimKeyboardFrame(frame)
+        })
         if (frame.type === 'down') {
           pressedKeyboardUsagesRef.current.add(frame.usage)
         } else {
@@ -96,7 +81,7 @@ export function useEmulatorControlStream(
         return false
       }
     },
-    [getOpenSocket]
+    [getConnectedStreamId]
   )
 
   const releasePressedKeyboardUsages = useCallback(
@@ -117,13 +102,13 @@ export function useEmulatorControlStream(
     releasePressedKeyboardUsages(true)
   }, [clearKeyboardTimers, releasePressedKeyboardUsages])
 
-  // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- cleanup closes the socket held in wsRef and stops reconnects.
   useEffect(() => {
     if (!enabled || !wsUrl) {
       setConnected(false)
       return
     }
 
+    const api: EmulatorControlApi = window.api.emulator
     let disposed = false
     let reconnectTimerId: number | null = null
 
@@ -134,56 +119,74 @@ export function useEmulatorControlStream(
       }
     }
 
+    const disconnect = (streamId: string): void => {
+      if (disposed || streamRef.current?.streamId !== streamId) {
+        return
+      }
+      streamRef.current = null
+      clearKeyboardTimers()
+      setConnected(false)
+      api.stopControlStream({ streamId })
+      clearReconnectTimer()
+      reconnectTimerId = window.setTimeout(connect, RECONNECT_DELAY_MS)
+    }
+
     const connect = (): void => {
       clearReconnectTimer()
-      const ws = new WebSocket(wsUrl)
-      ws.binaryType = 'arraybuffer'
-      wsRef.current = ws
-
-      ws.onopen = () => {
-        if (!disposed && wsRef.current === ws) {
-          releasePressedKeyboardUsages()
-          setConnected(true)
-        }
-      }
-
-      ws.onmessage = (event) => {
-        const orientation = decodeServeSimOrientation(event.data)
-        if (orientation && !disposed && wsRef.current === ws) {
-          setReportedConfig({ wsUrl, orientation })
-        }
-      }
-
-      ws.onerror = () => {
-        setConnected(false)
-        ws.close()
-      }
-
-      ws.onclose = () => {
-        if (wsRef.current === ws) {
-          wsRef.current = null
-        }
-        clearKeyboardTimers()
-        setConnected(false)
-        if (!disposed) {
-          reconnectTimerId = window.setTimeout(connect, RECONNECT_DELAY_MS)
-        }
+      const streamId = createBrowserUuid()
+      streamRef.current = { streamId, connected: false }
+      setConnected(false)
+      try {
+        void api
+          .startControlStream({
+            streamId,
+            wsUrl,
+            pressedKeyboardUsages: [...pressedKeyboardUsagesRef.current]
+          })
+          .catch(() => {
+            disconnect(streamId)
+          })
+      } catch {
+        disconnect(streamId)
       }
     }
+
+    const unsubscribe = api.onControlStreamStatus((status) => {
+      const stream = streamRef.current
+      if (disposed || stream?.streamId !== status.streamId) {
+        return
+      }
+      if (status.connected) {
+        if (!stream.connected) {
+          stream.connected = true
+          releasePressedKeyboardUsages()
+        }
+        if (status.orientation) {
+          setReportedConfig({ wsUrl, orientation: status.orientation })
+        }
+        setConnected(true)
+      } else {
+        for (const usage of status.pressedKeyboardUsages ?? []) {
+          pressedKeyboardUsagesRef.current.add(usage)
+        }
+        disconnect(status.streamId)
+      }
+    })
 
     connect()
 
     return () => {
       disposed = true
+      unsubscribe()
       clearReconnectTimer()
       // Why: delayed HID frames may leave a modifier/key down if the tab closes
-      // before the matching up frame runs. Release held usages while the socket
-      // is still open, then cancel the remaining delayed queue.
+      // before the matching up frame runs. Release held usages while the control
+      // stream is still open, then cancel the remaining delayed queue.
       cancelKeyboardFrames()
-      const ws = wsRef.current
-      if (ws) {
-        wsRef.current = null
-        ws.close()
+      const stream = streamRef.current
+      if (stream) {
+        streamRef.current = null
+        api.stopControlStream({ streamId: stream.streamId })
       }
       setConnected(false)
     }
@@ -201,23 +204,23 @@ export function useEmulatorControlStream(
         })
         return true
       }
-      const ws = getOpenSocket()
-      if (!ws) {
+      const streamId = getConnectedStreamId()
+      if (!streamId) {
         return false
       }
       try {
-        ws.send(encodeServeSimTouchFrame(touch))
+        window.api.emulator.sendControlFrame({ streamId, bytes: encodeServeSimTouchFrame(touch) })
         return true
       } catch {
         return false
       }
     },
-    [getOpenSocket, scrcpyDeviceId]
+    [getConnectedStreamId, scrcpyDeviceId]
   )
 
   const sendKeyboardFrames = useCallback(
     (frames: ServeSimKeyboardFrame[]): boolean => {
-      if (frames.length === 0 || !getOpenSocket()) {
+      if (frames.length === 0 || !getConnectedStreamId()) {
         return false
       }
 
@@ -237,7 +240,7 @@ export function useEmulatorControlStream(
       }
       return true
     },
-    [getOpenSocket, sendKeyboardFrameNow]
+    [getConnectedStreamId, sendKeyboardFrameNow]
   )
 
   const scrcpyKeyboard = useMemo<ScrcpyKeyboard | null>(

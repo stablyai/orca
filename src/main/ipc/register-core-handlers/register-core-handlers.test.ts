@@ -70,8 +70,7 @@ const {
   registerLocalhostWorktreeLabelHandlersMock,
   registerNativeChatHandlersMock,
   registerEmulatorFrameStreamHandlersMock,
-  registerEmulatorVideoStreamHandlersMock,
-  registerEmulatorScrcpyTouchHandlerMock
+  registerEmulatorVideoStreamHandlersMock
 } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/test/user-data'),
   listEnvironmentsMock: vi.fn(() => []),
@@ -142,8 +141,7 @@ const {
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
   registerNativeChatHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
-  registerEmulatorVideoStreamHandlersMock: vi.fn(),
-  registerEmulatorScrcpyTouchHandlerMock: vi.fn()
+  registerEmulatorVideoStreamHandlersMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -301,8 +299,12 @@ vi.mock('../emulator-video-stream', () => ({
   registerEmulatorVideoStreamHandlers: registerEmulatorVideoStreamHandlersMock
 }))
 
+vi.mock('../emulator-control-stream', () => ({
+  registerEmulatorControlStreamHandlers: vi.fn()
+}))
+
 vi.mock('../emulator-scrcpy-touch', () => ({
-  registerEmulatorScrcpyTouchHandler: registerEmulatorScrcpyTouchHandlerMock
+  registerEmulatorScrcpyTouchHandler: vi.fn()
 }))
 
 vi.mock('../emulator-scrcpy-keyboard', () => ({
@@ -531,7 +533,6 @@ describe('registerCoreHandlers', () => {
     registerNativeChatHandlersMock.mockReset()
     registerEmulatorFrameStreamHandlersMock.mockReset()
     registerEmulatorVideoStreamHandlersMock.mockReset()
-    registerEmulatorScrcpyTouchHandlerMock.mockReset()
   })
 
   it('reports malformed runtime session lists as host diagnostics', async () => {

@@ -4,6 +4,7 @@ export type EmulatorSessionState = {
   deviceUdid: string
   wsUrl: string
   streamUrl: string
+  avccStreamUrl?: string
   axUrl?: string
   pid?: number
   managed: boolean

@@ -97,6 +97,12 @@ describe('EmulatorBridge helper ownership', () => {
     shutdownSimulatorDeviceMock.mockReset()
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
     netFetchMock.mockReset()
+    netFetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ serve_sim: { version: '0.1.49-beta.139.1' } }), {
+          status: 200
+        })
+    )
   })
 
   it('shuts down the previous Orca-managed device when requested', async () => {
@@ -403,6 +409,12 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     shutdownSimulatorDeviceMock.mockReset()
     shutdownSimulatorDeviceMock.mockImplementation(async () => {})
     netFetchMock.mockReset()
+    netFetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ serve_sim: { version: '0.1.49-beta.139.1' } }), {
+          status: 200
+        })
+    )
   })
 
   it('reports when the requested iOS device differs from the active session', async () => {
@@ -586,6 +598,50 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     })
     expect(assertInputNotShadowedMock.mock.calls).toEqual([['device-1']])
   })
+  it.each([
+    { target: 'device-1', shutsDownGuest: false },
+    { target: 'device-2', shutsDownGuest: true }
+  ])(
+    'preserves the guest on helper refresh but shuts it down for a different device: $target',
+    async ({ target, shutsDownGuest }) => {
+      const bridge = new EmulatorBridge({ waitForEndpointReady: async () => true })
+      bridge.registerActiveEmulator(
+        'wt-1',
+        {
+          ...session('device-1'),
+          streamUrl: 'http://127.0.0.1:3100/helper/device-1/stream.mjpeg',
+          avccStreamUrl: 'http://127.0.0.1:3100/helper/device-1/stream.avcc'
+        },
+        { managed: true }
+      )
+      if (!shutsDownGuest) {
+        netFetchMock.mockResolvedValueOnce(new Response('{"serve_sim":{"version":"0.1.47"}}'))
+      }
+      execServeSimCommandMock.mockResolvedValue({
+        device: target,
+        streamUrl: `http://127.0.0.1:3102/helper/${target}/stream.mjpeg`,
+        wsUrl: `ws://127.0.0.1:3102/helper/${target}/ws`
+      })
+      const commands = new RuntimeEmulatorCommands({
+        getEmulatorBridge: () => bridge,
+        resolveEmulatorWorkspaceId: async () => 'wt-1',
+        resolveEmulatorCleanupWorkspaceId: async () => 'wt-1',
+        // SAFETY: attach only uses webContents.send on this test window.
+        getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+        getSettings: () => ({ mobileEmulatorEnabled: true })
+      })
+
+      const result = await commands.emulatorAttach({ device: target, worktree: 'wt-1' })
+
+      expect(result.info?.deviceUdid).toBe(target)
+      expect(result.info?.avccStreamUrl).toBe(`http://127.0.0.1:3102/helper/${target}/stream.avcc`)
+      if (shutsDownGuest) {
+        expect(shutdownSimulatorDeviceMock).toHaveBeenCalledExactlyOnceWith('device-1')
+      } else {
+        expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
+      }
+    }
+  )
 
   it('rejects attach when mobile emulator is disabled', async () => {
     const bridge = new EmulatorBridge()

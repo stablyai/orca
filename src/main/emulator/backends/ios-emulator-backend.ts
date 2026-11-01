@@ -17,7 +17,10 @@ import {
   stripEmulatorTargetArgs,
   type ServeSimExecutable
 } from '../serve-sim-execution'
-import { waitForServeSimEndpointReady } from '../serve-sim-endpoint-readiness'
+import {
+  readServeSimHelperVersion,
+  waitForServeSimEndpointReady
+} from '../serve-sim-endpoint-readiness'
 import {
   killServeSimHelperProcessesForDevice,
   listServeSimHelperProcessesForDevice
@@ -34,6 +37,8 @@ import type {
   EmulatorBackendCapabilities,
   EmulatorDevice
 } from './emulator-backend'
+
+const VERIFIED_AVCC_HELPER_VERSION = '0.1.49-beta.139.1'
 
 export class IosEmulatorBackend implements EmulatorBackend {
   readonly kind = 'ios' as const
@@ -244,9 +249,15 @@ export class IosEmulatorBackend implements EmulatorBackend {
         )
       }
     }
+    // --detach may adopt a shared helper; a version mismatch only disables AVCC.
+    const helperVersion = await readServeSimHelperVersion(info.streamUrl)
     // Keep the native Simulator window hidden while Orca embeds its stream.
     await hideNativeSimulatorApp().catch(() => {})
-    return { ...info, streamCodec: 'mjpeg', backend: 'ios' }
+    const avccStreamUrl =
+      helperVersion === VERIFIED_AVCC_HELPER_VERSION && info.streamUrl.endsWith('/stream.mjpeg')
+        ? `${info.streamUrl.slice(0, -'/stream.mjpeg'.length)}/stream.avcc`
+        : undefined
+    return { ...info, avccStreamUrl, streamCodec: 'mjpeg', backend: 'ios' }
   }
 
   async stopHelperForDevice(
@@ -266,7 +277,15 @@ export class IosEmulatorBackend implements EmulatorBackend {
     if (!(await this.waitForEndpointReady(info.streamUrl))) {
       return false
     }
-    return this.hasHelperForSession(info)
+    if (!(await this.hasHelperForSession(info))) {
+      return false
+    }
+    if (!info.avccStreamUrl) {
+      return true
+    }
+    const helperVersion = await readServeSimHelperVersion(info.streamUrl)
+    // A failed diagnostic must not tear down an already verified, reachable helper.
+    return helperVersion === null || helperVersion === VERIFIED_AVCC_HELPER_VERSION
   }
 
   private async hasHelperForSession(info: EmulatorSessionInfo): Promise<boolean> {

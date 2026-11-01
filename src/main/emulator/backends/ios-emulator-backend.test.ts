@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cancelTrackingResponse } from '../../lib/unread-response-body.test-fixtures'
 import type { SimulatorDevice } from '../simctl-simulator-devices'
 import type { ServeSimHelperProcess } from '../serve-sim-helper-processes'
 import type * as ServeSimExecution from '../serve-sim-execution'
@@ -72,6 +73,7 @@ vi.mock('../serve-sim-detached-session', () => ({
 }))
 
 import { EmulatorError } from '../emulator-errors'
+import { readServeSimHelperVersion } from '../serve-sim-endpoint-readiness'
 import { IosEmulatorBackend } from './ios-emulator-backend'
 
 const EXECUTABLE = { command: '/serve-sim', env: {} }
@@ -99,6 +101,12 @@ describe('IosEmulatorBackend', () => {
     parseServeSimDetachedSessionMock.mockReset()
     netFetchMock.mockReset()
     notifyutilState.stdout = 'com.apple.coredevice.dtuhidd.active 0\n'
+    netFetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ serve_sim: { version: '0.1.49-beta.139.1' } }), {
+          status: 200
+        })
+    )
   })
 
   it('advertises the iOS accessibility tree capability', () => {
@@ -277,18 +285,202 @@ describe('IosEmulatorBackend', () => {
     ])
   })
 
-  it('starts a session and tags it as mjpeg', async () => {
+  it('enables AVCC only after verifying the live helper while retaining its MJPEG URL', async () => {
+    parseServeSimDetachedSessionMock.mockReturnValue({
+      deviceUdid: 'device-1',
+      streamUrl: 'http://127.0.0.1:3102/helper/device-1/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3102/helper/device-1/ws',
+      helperPid: 1234
+    })
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+    const info = await backend.startSession('device-1')
+
+    expect(info.streamUrl).toBe('http://127.0.0.1:3102/helper/device-1/stream.mjpeg')
+    expect(info.avccStreamUrl).toBe('http://127.0.0.1:3102/helper/device-1/stream.avcc')
+    expect(info.streamCodec).toBe('mjpeg')
+    expect(netFetchMock).toHaveBeenCalledExactlyOnceWith(
+      'http://127.0.0.1:3102/api/diagnostics',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
+    expect(execServeSimCommandMock).toHaveBeenCalledTimes(1)
+    expect(hideNativeSimulatorAppMock).toHaveBeenCalledTimes(1)
+  })
+  it('preserves a ready shared helper when diagnostics is rate limited', async () => {
+    netFetchMock.mockImplementation(async () => new Response('Rate limited', { status: 429 }))
+    const existing = {
+      deviceUdid: 'device-1',
+      streamUrl: 'http://127.0.0.1:3102/helper/device-1/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3102/helper/device-1/ws',
+      helperPid: 1234
+    }
+    parseServeSimDetachedSessionMock.mockReturnValue(existing)
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+
+    const info = await backend.startSession('device-1')
+
+    expect(info.streamUrl).toBe(existing.streamUrl)
+    expect(info.avccStreamUrl).toBeUndefined()
+    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(execServeSimCommandMock.mock.calls.some(([, args]) => args?.includes('--kill'))).toBe(
+      false
+    )
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
+    expect(
+      await backend.isSessionReusable({
+        ...existing,
+        avccStreamUrl: 'http://127.0.0.1:3102/helper/device-1/stream.avcc'
+      })
+    ).toBe(true)
+  })
+
+  it.each([
+    ['an old helper without diagnostics', 'Not found', 404],
+    ['an identified old helper', '{"serve_sim":{"version":"0.1.47"}}', 200],
+    ['an unmeasured newer helper', '{"serve_sim":{"version":"0.1.49-beta.140.2"}}', 200]
+  ])(
+    'preserves %s as a ready shared JPEG helper without rebooting the guest',
+    async (_name, body, status) => {
+      netFetchMock.mockResolvedValueOnce(new Response(body, { status }))
+      const existing = {
+        deviceUdid: 'device-1',
+        streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
+        wsUrl: 'ws://127.0.0.1:3102',
+        helperPid: 1234
+      }
+      parseServeSimDetachedSessionMock.mockReturnValue(existing)
+      const waitForEndpointReady = vi.fn(async () => true)
+      const backend = new IosEmulatorBackend({ waitForEndpointReady })
+
+      const info = await backend.startSession('device-1')
+
+      expect(info).toEqual({
+        ...existing,
+        avccStreamUrl: undefined,
+        streamCodec: 'mjpeg',
+        backend: 'ios'
+      })
+      expect(waitForEndpointReady).toHaveBeenCalledTimes(1)
+      expect(execServeSimCommandMock.mock.calls.map(([, args]) => args)).toEqual([
+        ['--detach', '-q', 'device-1']
+      ])
+      expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+      expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
+      expect(ensureSimulatorBootedMock).toHaveBeenCalledTimes(1)
+      expect(await backend.isSessionReusable(info)).toBe(true)
+      expect(netFetchMock.mock.calls.map(([url]) => url)).toEqual([
+        'http://127.0.0.1:3102/api/diagnostics'
+      ])
+    }
+  )
+
+  it.each([
+    { status: 404, version: 404 },
+    { status: 429, version: null },
+    { status: 500, version: null }
+  ])(
+    'cancels non-OK diagnostics bodies (HTTP $status) without changing the version result',
+    async ({ status, version }) => {
+      let cancelled = false
+      const response = cancelTrackingResponse(status, () => {
+        cancelled = true
+      })
+      netFetchMock.mockResolvedValueOnce(response)
+
+      expect(await readServeSimHelperVersion('http://127.0.0.1:3102/stream.mjpeg')).toBe(version)
+      expect(cancelled).toBe(true)
+      expect(response.bodyUsed).toBe(true)
+    }
+  )
+
+  it.each([
+    ['missing diagnostics', 'Not found', 404],
+    ['invalid JSON', '{', 200],
+    ['a null response', 'null', 200],
+    ['an invalid version type', '{"serve_sim":{"version":140}}', 200],
+    ['an unmeasured helper', '{"serve_sim":{"version":"0.1.49-beta.140.2"}}', 200]
+  ])('retains JPEG when a ready replacement has %s', async (_name, body, status) => {
+    netFetchMock.mockResolvedValueOnce(new Response(body, { status }))
     parseServeSimDetachedSessionMock.mockReturnValue({
       deviceUdid: 'device-1',
       streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
       wsUrl: 'ws://127.0.0.1:3102',
       helperPid: 1234
     })
-    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+    const waitForEndpointReady = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    const backend = new IosEmulatorBackend({ waitForEndpointReady })
+
     const info = await backend.startSession('device-1')
-    expect(info.deviceUdid).toBe('device-1')
+
+    expect(info.streamUrl).toBe('http://127.0.0.1:3102/stream.mjpeg')
+    expect(info.avccStreamUrl).toBeUndefined()
     expect(info.streamCodec).toBe('mjpeg')
-    expect(hideNativeSimulatorAppMock).toHaveBeenCalledTimes(1)
+    expect(waitForEndpointReady).toHaveBeenCalledTimes(2)
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(execServeSimCommandMock).toHaveBeenCalledTimes(3)
+    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(1)
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
+    expect(ensureSimulatorBootedMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the same retry budget for readiness and an unverifiable replacement', async () => {
+    netFetchMock.mockRejectedValueOnce(new DOMException('Timed out', 'TimeoutError'))
+    parseServeSimDetachedSessionMock.mockReturnValue({
+      deviceUdid: 'device-1',
+      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3102',
+      helperPid: 1234
+    })
+    const waitForEndpointReady = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    const backend = new IosEmulatorBackend({ waitForEndpointReady })
+
+    const info = await backend.startSession('device-1')
+
+    expect(info.streamUrl).toBe('http://127.0.0.1:3102/stream.mjpeg')
+    expect(info.avccStreamUrl).toBeUndefined()
+    expect(waitForEndpointReady).toHaveBeenCalledTimes(2)
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(1)
+    expect(execServeSimCommandMock).toHaveBeenCalledTimes(3)
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
+  })
+
+  it('cleans up and rejects an unreachable replacement without another restart', async () => {
+    parseServeSimDetachedSessionMock.mockReturnValue({
+      deviceUdid: 'device-1',
+      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3102',
+      helperPid: 1234
+    })
+    const waitForEndpointReady = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(false)
+    const backend = new IosEmulatorBackend({ waitForEndpointReady })
+
+    await expect(backend.startSession('device-1')).rejects.toMatchObject({
+      code: 'emulator_helper_failed'
+    })
+
+    expect(waitForEndpointReady).toHaveBeenCalledTimes(2)
+    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(2)
+    expect(execServeSimCommandMock).toHaveBeenCalledTimes(4)
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
+  })
+
+  it('retains non-loopback streams without probing or restarting their helper', async () => {
+    parseServeSimDetachedSessionMock.mockReturnValue({
+      deviceUdid: 'device-1',
+      streamUrl: 'https://remote.example/helper/device-1/stream.mjpeg',
+      wsUrl: 'wss://remote.example/helper/device-1/ws',
+      helperPid: 1234
+    })
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+
+    const info = await backend.startSession('device-1')
+
+    expect(info.avccStreamUrl).toBeUndefined()
+    expect(info.streamUrl).toBe('https://remote.example/helper/device-1/stream.mjpeg')
+    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(execServeSimCommandMock).toHaveBeenCalledTimes(1)
   })
 
   it('recycles the device and retries when the helper finds no framebuffer', async () => {
@@ -420,6 +612,23 @@ describe('IosEmulatorBackend', () => {
 
     const unreachable = new IosEmulatorBackend({ waitForEndpointReady: async () => false })
     expect(await unreachable.isSessionReusable(info)).toBe(false)
+  })
+
+  it('does not reuse advertised video after the live helper becomes unverifiable', async () => {
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+    const info = {
+      deviceUdid: 'device-1',
+      streamUrl: 'http://127.0.0.1:3102/helper/device-1/stream.mjpeg',
+      avccStreamUrl: 'http://127.0.0.1:3102/helper/device-1/stream.avcc',
+      wsUrl: 'ws://127.0.0.1:3102/helper/device-1/ws',
+      helperPid: 1234
+    }
+    expect(await backend.isSessionReusable(info)).toBe(true)
+
+    netFetchMock.mockResolvedValueOnce(new Response('Not found', { status: 404 }))
+    expect(await backend.isSessionReusable(info)).toBe(false)
+    expect(execServeSimCommandMock).not.toHaveBeenCalled()
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
   })
 
   it('keeps a reachable helper when its process lookup fails', async () => {
