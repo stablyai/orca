@@ -8,11 +8,11 @@ import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
 import { TERMINAL_QUERY_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal-query-methods'
 import { JournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database'
-import { AgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store'
+import { AgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store'
 import {
   peekOpenedAgentSessionRecordStore,
   releaseAgentSessionRecordStore
-} from '../../src/main/runtime/agent-session-record-store-slot'
+} from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
 import { testOrcaSessionId } from '../../src/shared/orca-session-address-test-fixture'
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'

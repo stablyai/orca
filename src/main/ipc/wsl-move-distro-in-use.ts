@@ -2,7 +2,7 @@
 import { readWslHostDeployments } from '../../shared/wsl-host-deployment-store'
 import { wslMoveJournalKey } from '../../shared/wsl-move/wsl-move-cutover'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   isLocalWslMoveRow,
   wslMoveHostDistro

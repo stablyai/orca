@@ -1,11 +1,11 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalRenderItem,
-  type AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
+  type AgentJournalRenderItem
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import { HISTORY_CATCH_UP_MAX_OPERATIONS } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
 import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
 
 /** Every saved item used by the projection is a conditional commit dependency, even if equal. */

@@ -121,6 +121,25 @@ describe('required members', () => {
     expect(refuses(reviewTerminalTabsSchema, { tabs: 'none' })).toBe(true)
   })
 
+  it('keeps which agent a terminal runs, so a note can go straight to the only one', () => {
+    const tabs = reads(reviewTerminalTabsSchema, {
+      tabs: [
+        { id: 'tab-1', type: 'terminal', terminal: 't-1', launchAgent: 'claude' },
+        { id: 'tab-2', type: 'terminal', terminal: 't-2', agentStatus: { agentType: 'codex' } },
+        { id: 'tab-3', type: 'terminal', terminal: 't-3', agentStatus: null },
+        {
+          id: 'tab-4',
+          type: 'terminal',
+          terminal: 't-4',
+          title: 'zsh',
+          launchAgent: 'claude',
+          agentStatus: { agentType: 'claude', state: 'done' }
+        }
+      ]
+    })
+    expect(tabs?.map((tab) => tab.agent)).toEqual(['claude', 'codex', undefined, undefined])
+  })
+
   it('requires the three compare members every summary line reads', () => {
     const summary = { baseRef: 'origin/main', compareRef: 'feature', changedFiles: 2 }
     expect(reads(branchCompareProjectionSchema, { summary, entries: [] }).summary.baseRef).toBe(
@@ -362,6 +381,40 @@ describe('closed arm sets drop rather than default', () => {
       ]
     })
     expect(details?.comments[0]?.reactions).toEqual([{ content: '+1', count: 2 }])
+  })
+
+  it('keeps the PR files the diff screen reads viewed state and commentable lines from', () => {
+    const details = reads(githubWorkItemDetailsSchema, {
+      item: { id: 'i-1', number: 7, type: 'pr', state: 'open' },
+      files: [
+        {
+          path: 'src/a.ts',
+          status: 'modified',
+          additions: 2,
+          deletions: 1,
+          isBinary: false,
+          reviewCommentLineNumbers: [3, 4],
+          viewerViewedState: 'DISMISSED'
+        },
+        { path: 'src/b.ts', status: 'moved', viewerViewedState: 'SOMETIMES' },
+        { status: 'added' }
+      ]
+    })
+    expect(details?.files).toEqual([
+      {
+        path: 'src/a.ts',
+        status: 'modified',
+        additions: 2,
+        deletions: 1,
+        isBinary: false,
+        reviewCommentLineNumbers: [3, 4],
+        viewerViewedState: 'DISMISSED'
+      },
+      { path: 'src/b.ts', status: 'modified', additions: 0, deletions: 0, isBinary: false }
+    ])
+    expect(
+      reads(githubWorkItemDetailsSchema, { item: { id: 'i-1', number: 7, type: 'pr' } })?.files
+    ).toBeUndefined()
   })
 })
 

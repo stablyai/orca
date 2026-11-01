@@ -28,7 +28,7 @@ describe('synthetic agent titles', () => {
     expect(shouldDriveSyntheticAgentTitleFromHook('codex', 'done')).toBe(true)
   })
 
-  it.each(['opencode', 'omp'] as const)(
+  it.each(['opencode', 'omp', 'pi'] as const)(
     'does not synthesize %s titles over its own session titles',
     (agent) => {
       expect(getSyntheticAgentTerminalTitle(agent, 'done')).toBeNull()

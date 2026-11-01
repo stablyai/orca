@@ -94,6 +94,9 @@ describe('WSL host backstop for Windows drive projects', () => {
       notifyReposChanged: () => {},
       resolveFolderConnectionId: () => null,
       teardownFolderWorkspacePtys: async () => undefined,
+      acquireFileWatcherRemoval: async () => {
+        throw new Error('not used')
+      },
       cleanupRemovedFolderWorkspaceState: () => undefined,
       emitWorktreeLifecycle: () => undefined
     })

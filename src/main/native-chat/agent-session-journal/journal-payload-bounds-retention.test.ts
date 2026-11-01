@@ -5,7 +5,7 @@ import {
   type AgentJournalBoundedPayload,
   type AgentJournalItemBody,
   type AgentJournalToolCallState
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { codexItemBody } from '../../codex/codex-structured-item-translation'
 import {
   AGENT_SESSION_WIRE_PAYLOAD_HEAD_BYTES,

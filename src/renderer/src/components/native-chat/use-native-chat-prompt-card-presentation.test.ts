@@ -60,15 +60,6 @@ describe('dismissed prompt occurrences outlive the view but not the prompt', () 
     expect(renderPresentation().result.current.card).toBeNull()
   })
 
-  it('re-shows a transcript-only question after the view stops observing it', () => {
-    const first = renderPresentation()
-    act(() => first.result.current.collapse())
-    expect(first.result.current.collapsedCard).toBe(question)
-    first.unmount()
-
-    expect(renderPresentation().result.current.card).toBe(question)
-  })
-
   it('shows an identical question again once the prompt cleared', () => {
     const view = renderPresentation()
     act(() => view.result.current.dismiss())

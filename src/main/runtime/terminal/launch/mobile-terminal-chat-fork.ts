@@ -1,9 +1,10 @@
 import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
-import type { AiVaultResumeLaunchSettings } from '../../../../shared/ai-vault-resume-startup'
 import type { MobileTerminalCommand } from './mobile-terminal-startup'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
-import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  type AgentLaunchRuntime,
+  agentLaunchQuotingShell
+} from '../../../../shared/agent-launch-runtime'
 import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -11,6 +12,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
 import { resolveWslHostAgentCmdOverrides } from '../../wsl-host-agent-terminal-launch'
 import {
+  type AiVaultResumeLaunchSettings,
   assertAiVaultCopiedSessionStoreAllowed,
   buildAiVaultForkStartup,
   buildAiVaultLocalResumeStartup,

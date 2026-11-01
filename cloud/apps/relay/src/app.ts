@@ -38,7 +38,7 @@ import {
   type RelayAssignment,
   type RelayAssignmentStore,
   type ResolvedRelayAssignment
-} from './assignment-store.js'
+} from './assignment/assignment-store.js'
 import { ASSIGNMENT_LEASE_AUDIENCE, assignmentLeaseKeyId } from './assignment/assignment-lease.js'
 import { AssignmentRejectionLogWindow } from './assignment/assignment-rejection-log-window.js'
 import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'

@@ -1,11 +1,11 @@
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
-import type { AgentSessionLease } from '../../../../shared/agent-session-record'
+import type { AgentSessionLease } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 
 const hostRef: { current: unknown } = { current: null }
@@ -69,12 +69,14 @@ function installHost(options: {
   let closed = false
   hostRef.current = {
     deps: {
+      logger: { warn: vi.fn() },
       store: { getConversation: () => (record ? agentSessionConversationView(record) : null) }
     },
     getPersistedVisibleSessionTabIndex: () => ({
       present: true,
       sessionIds: options.tabListed ? [IDENTITY.sessionId] : []
     }),
+    getSessionTabId: () => (options.tabListed ? 'tab-1' : null),
     hasSession: () => (closed ? false : (options.hasSession ?? true)),
     setSessionTabVisibility: options.setSessionTabVisibility ?? (async () => {}),
     close:
@@ -164,6 +166,9 @@ describe('structured worker stop', () => {
       const retireStructuredAgentSessionTabFromSnapshot = vi.fn()
       const result = await stopStructuredWorker(IDENTITY, {
         forgetStructuredSessionMail: vi.fn(),
+        captureStructuredAgentSessionPresentation: () => ({ raw: null, saved: [] }),
+        currentLocalStructuredSessionPresentation: () => null,
+        removeCapturedStructuredSessionSavedTabs: vi.fn(),
         retireStructuredAgentSessionTabFromSnapshot
       })
       expect(result).toMatchObject({ stopped: false, closeAttempted: true })
@@ -189,7 +194,7 @@ describe('structured worker stop', () => {
     expect(result.stopped).toBe(false)
   })
 
-  it('claims no close when the tab-visibility step threw before one was issued', async () => {
+  it('attempts provider close despite a failed tab visibility write', async () => {
     // Claiming closed_agent_terminal without an actual close would hide a still-running child.
     const close = vi.fn(async () => {})
     installHost({
@@ -200,8 +205,8 @@ describe('structured worker stop', () => {
     })
     const result = await stopStructuredWorker(IDENTITY)
     expect(result.stopped).toBe(false)
-    expect(result.closeAttempted).toBe(false)
-    expect(close).not.toHaveBeenCalled()
+    expect(result.closeAttempted).toBe(true)
+    expect(close).toHaveBeenCalledOnce()
   })
 
   it('retains when the host is not installed, and claims no close', async () => {

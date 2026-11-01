@@ -1,7 +1,7 @@
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import type { WorkspaceLayoutLoadContext } from '../../../../shared/workspace-layout/workspace-layout-load-types'
-import { isPaneSleepRecord } from '../../../../shared/agent-session-resume'
+import { isPaneSleepRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   pairedRuntimeHostOfBinding,
   terminalHoldsPane,

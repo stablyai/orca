@@ -105,11 +105,9 @@ export default function MermaidViewer({
   return (
     <div ref={rootRef} className="mermaid-viewer h-full min-h-0 overflow-auto scrollbar-editor">
       <div className="mermaid-viewer-canvas">
-        {/* DOMPurify strips foreignObject HTML labels; request native SVG text so labels survive sanitization. */}
         <MermaidBlock
           content={diagramSource}
           isDark={isDark}
-          htmlLabels={false}
           onRenderComplete={onRenderComplete}
           onExpand={expandDiagram}
         />

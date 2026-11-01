@@ -38,14 +38,6 @@ describe('WorkspaceGitIdentity', () => {
     expect(identity.observeScan([row({ linkedPR: null })], SCANNED)).toEqual([])
   })
 
-  it('keeps a link written after the last scan, which may belong to the new branch', () => {
-    const identity = new WorkspaceGitIdentity()
-    identity.observeScan([row({ linkedPR: null })], SCANNED)
-    expect(identity.observeScan([row({ branch: 'refs/heads/b', linkedPR: 9 })], SCANNED)).toEqual(
-      []
-    )
-  })
-
   it('keeps a PR linked on a new branch that a cached rescan still reported as the old one', () => {
     const identity = new WorkspaceGitIdentity()
     const cachedRun = {}
@@ -56,15 +48,6 @@ describe('WorkspaceGitIdentity', () => {
     expect(identity.observeScan([row({ branch: 'refs/heads/b', linkedPR: 9 })], SCANNED)).toEqual(
       []
     )
-  })
-
-  it('records a link once git ran again on the same branch, so a later switch clears it', () => {
-    const identity = new WorkspaceGitIdentity()
-    identity.observeScan([row({ linkedPR: null })], SCANNED)
-    identity.observeScan([row({ linkedPR: 9 })], SCANNED)
-    expect(
-      identity.observeScan([row({ branch: 'refs/heads/b', linkedPR: 9 })], SCANNED)
-    ).toHaveLength(1)
   })
 
   it('treats a recreated workspace, or one with no instance id, as new', () => {

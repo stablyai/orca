@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useRef } from 'react'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
 import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
@@ -16,7 +16,7 @@ import {
 } from './use-native-chat-reveal-latest'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
-import type { StructuredPromptItem } from './use-structured-agent-session'
+import type { StructuredPromptItem } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import {
   clearNativeChatDraftCacheForTests,
   writeNativeChatDraftCache

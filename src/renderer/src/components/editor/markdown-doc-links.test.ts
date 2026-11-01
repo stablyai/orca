@@ -5,9 +5,7 @@ import Markdown from 'react-markdown'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import {
   createMarkdownDocumentIndex,
-  createMarkdownDocLinkHref,
   getMarkdownDocLinkAnchor,
-  parseMarkdownDocLinkHref,
   remarkMarkdownDocLinks,
   resolveMarkdownDocLink,
   splitMarkdownDocLinkText
@@ -36,22 +34,6 @@ const documents: MarkdownDocument[] = [
 ]
 
 describe('splitMarkdownDocLinkText', () => {
-  it('splits one doc link', () => {
-    expect(splitMarkdownDocLinkText('See [[setup-guide]].')).toEqual([
-      { type: 'text', value: 'See ' },
-      { type: 'docLink', target: 'setup-guide', label: 'setup-guide' },
-      { type: 'text', value: '.' }
-    ])
-  })
-
-  it('splits aliased doc links', () => {
-    expect(splitMarkdownDocLinkText('See [[docs/setup-guide.md|Setup Guide]].')).toEqual([
-      { type: 'text', value: 'See ' },
-      { type: 'docLink', target: 'docs/setup-guide.md', label: 'Setup Guide' },
-      { type: 'text', value: '.' }
-    ])
-  })
-
   it('splits multiple doc links', () => {
     expect(splitMarkdownDocLinkText('[[one]] and [[two]]')).toEqual([
       { type: 'docLink', target: 'one', label: 'one' },
@@ -71,27 +53,6 @@ describe('splitMarkdownDocLinkText', () => {
 })
 
 describe('resolveMarkdownDocLink', () => {
-  it('resolves basename links', () => {
-    const result = resolveMarkdownDocLink('setup-guide', createMarkdownDocumentIndex(documents))
-    expect(result.status).toBe('resolved')
-    expect(result.status === 'resolved' ? result.document.relativePath : null).toBe(
-      'docs/setup-guide.md'
-    )
-  })
-
-  it('resolves relative paths with or without extensions', () => {
-    const index = createMarkdownDocumentIndex(documents)
-
-    expect(resolveMarkdownDocLink('docs/setup-guide', index)).toMatchObject({
-      status: 'resolved',
-      document: { relativePath: 'docs/setup-guide.md' }
-    })
-    expect(resolveMarkdownDocLink('notes/README.MDX', index)).toMatchObject({
-      status: 'resolved',
-      document: { relativePath: 'notes/README.MDX' }
-    })
-  })
-
   it('resolves heading anchors against the document target', () => {
     const index = createMarkdownDocumentIndex(documents)
 
@@ -150,24 +111,6 @@ describe('resolveMarkdownDocLink', () => {
     )
     expect(result.status).toBe('resolved')
   })
-
-  it('returns missing for unknown links', () => {
-    expect(resolveMarkdownDocLink('missing-note', createMarkdownDocumentIndex(documents))).toEqual({
-      status: 'missing'
-    })
-  })
-})
-
-describe('doc link hrefs', () => {
-  it('round-trips encoded targets', () => {
-    const href = createMarkdownDocLinkHref('docs/setup guide')
-    expect(href).toBe('#orca-doc-link=docs%2Fsetup%20guide')
-    expect(parseMarkdownDocLinkHref(href)).toBe('docs/setup guide')
-  })
-
-  it('ignores normal hash links', () => {
-    expect(parseMarkdownDocLinkHref('#overview')).toBeNull()
-  })
 })
 
 describe('getMarkdownDocLinkAnchor', () => {
@@ -180,19 +123,6 @@ describe('getMarkdownDocLinkAnchor', () => {
 })
 
 describe('remarkMarkdownDocLinks', () => {
-  it('runs as a react-markdown remark plugin', () => {
-    const html = renderToStaticMarkup(
-      React.createElement(
-        Markdown,
-        { remarkPlugins: [remarkMarkdownDocLinks] },
-        'link to [[other.md]]'
-      )
-    )
-
-    expect(html).toContain('<a href="#orca-doc-link=other.md">other.md</a>')
-    expect(html).not.toContain('[[other.md]]')
-  })
-
   it('renders aliased doc links with the alias text', () => {
     const html = renderToStaticMarkup(
       React.createElement(

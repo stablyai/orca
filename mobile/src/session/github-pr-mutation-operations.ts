@@ -69,6 +69,11 @@ export const githubPrReviewCommentReplyAdd = mutationStatusOperation(
   'github.addPRReviewCommentReply'
 )
 
+export const githubPrReviewCommentAdd = mutationStatusOperation(
+  'github.add-pr-review-comment',
+  'github.addPRReviewComment'
+)
+
 export const githubPrIssueCommentAdd = mutationStatusOperation(
   'github.add-issue-comment',
   'github.addIssueComment'
@@ -99,6 +104,17 @@ export const githubPrReviewThreadResolve = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.resolve-review-thread',
     method: 'github.resolveReviewThread',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('pr-mutation-confirmation', githubPrMutationConfirmationSchema)
+  })
+)
+
+// GitHub's viewed mark answers a bare boolean; false means it was not applied.
+export const githubPrFileViewedSet = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'github.set-pr-file-viewed',
+    method: 'github.setPRFileViewed',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('pr-mutation-confirmation', githubPrMutationConfirmationSchema)

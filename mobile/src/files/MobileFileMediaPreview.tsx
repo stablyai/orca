@@ -10,7 +10,7 @@ import { MobileMediaPlayback } from './MobileMediaPlayback'
 import { MobilePdfPreview } from './MobilePdfPreview'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
-import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { MobileLoadErrorState } from '../components/MobileStateView'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -81,7 +81,7 @@ function MediaDownload({ media, client, title }: Props) {
     return <MobileMediaPlayback key={state.uri} uri={state.uri} mimeType={mimeType} title={title} />
   }
   if ('error' in state) {
-    return <MobileLoadErrorState message={state.error} onRetry={() => setAttempt(attempt + 1)} />
+    return <MobileLoadErrorState error={state.error} onRetry={() => setAttempt(attempt + 1)} />
   }
   return (
     <View style={styles.state}>

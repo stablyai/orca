@@ -1,5 +1,5 @@
 import { extname } from 'node:path'
-import { hasUnsafeProviderSessionIdChars } from '../../shared/agent-session-resume'
+import { hasUnsafeProviderSessionIdChars } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT,
   type AiVaultSessionTitleRequest,

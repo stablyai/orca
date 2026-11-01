@@ -7,15 +7,15 @@ import * as profileStorage from '../../../orca-profiles/profile-storage-paths'
 import {
   pendingAgentSessionOperationRow,
   agentSessionOperationKey
-} from '../../../../shared/agent-session-operation-ledger'
-import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session-launch-args'
-import * as runtimeRecords from '../../agent-session-runtime-end-record'
-import { AgentSessionRecordStore } from '../../agent-session-record-store'
+} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/agent-session-launch-args'
+import * as runtimeRecords from '../../agent-session/records/agent-session-runtime-end-record'
+import { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
 import {
   releaseAgentSessionRecordStore,
   peekOpenedAgentSessionRecordStore
-} from '../../agent-session-record-store-slot'
+} from '../../agent-session/records/agent-session-record-store-slot'
 import { createSessionCallerHarness } from '../../rpc/orchestration-session-caller-test-fixture'
 import { ORCHESTRATION_CREW_METHODS } from '../../rpc/methods/orchestration/crew-methods'
 import { CrewFrame, type OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'

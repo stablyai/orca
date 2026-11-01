@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
 } from '../claude-stream-json-connection'
-import { ClaudeStructuredSessionAdapter } from '../claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 
 const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 const IDENTITY: AgentSessionJournalIdentity = {

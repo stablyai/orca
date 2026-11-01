@@ -77,8 +77,7 @@
       "cancel": "Filtreleri koru"
     },
     "startupWorktreeRefresh": {
-      "loading": "Çalışma alanları bulunuyor…",
-      "description": "Yerel ve uzak projeler yüklenirken daha fazla çalışma alanı görünebilir."
+      "loading": "Çalışma alanları bulunuyor…"
     },
     "wslMoved": {
       "movedToHost": "{{distro}} ana makinesine taşındı",
@@ -126,6 +125,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} zaten ana makine olarak ekli.",
         "distroStopped": "Liste okunduktan sonra {{distro}} durdu. Başlatmak için “Başlat ve ekle” seçeneğini seçin.",
+        "distroUnverifiable": "WSL, {{distro}} dağıtımının çalışıp çalışmadığını yanıtlamadı. Listeyi yenileyin veya iletişim kutusundan ekleyin; gerekirse başlatılır.",
         "wsl1": "{{distro}}, Orca'nın artık desteklemediği WSL 1'i kullanıyor. Windows terminalinde şu komutla WSL 2'ye dönüştürün: {{command}}",
         "notRegistered": "{{distro}} yüklü bir WSL dağıtımı değil. Yüklü dağıtımları görmek için Windows terminalinde {{command}} komutunu çalıştırın veya dağıtımı yeniden yükleyip tekrar deneyin.",
         "sshManaged": "{{distro}} içinde zaten “{{server}}” için Orca sunucusu çalışıyor ve bu bilgisayar ona SSH üzerinden bağlanıyor. Önce bu sunucuyu kaldırın; WSL ana makinesine taşıma henüz desteklenmiyor."
@@ -214,7 +214,8 @@
     "wslHostOffer": {
       "title": "{{distro}} dağıtımını ana makine olarak çalıştır (önerilir)",
       "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
-      "accept": "Ana makine olarak çalıştır"
+      "accept": "Ana makine olarak çalıştır",
+      "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın."
     }
   },
   "app": {
@@ -1749,7 +1750,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Çalışma alanı dışındaki dosyalar eşlenen bir sunucuda henüz önizlenemiyor.",
           "webClientUnavailable": "Belge önizlemeleri web istemcisinde kullanılamıyor."
         }
       },
@@ -6537,15 +6537,17 @@
           "remoteRuntimeEditorHint": "Bu bilgisayardaki uygulamalar, bu sunucunun dosyalarını yalnızca Orca sunucuya SSH üzerinden erişiyorsa açabilir.",
           "remotePathInvalid": "Yol, SSH sunucusu için geçerli değil.",
           "remotePathInvalidDetail": "Tekrar denemeden önce çalışma alanını yenileyin.",
-          "remoteLaunchFailed": "Yol düzenleyicide açılamadı.",
-          "remoteLaunchFailedDetail": "Bu makinede yapılandırılmış düzenleyici komutunu kontrol edin.",
+          "pathLaunchFailed": "Yol düzenleyicide açılamadı.",
+          "pathLaunchFailedDetail": "Bu makinede yapılandırılmış düzenleyici komutunu kontrol edin.",
           "1417fd8380": "Uygulamaları özelleştir...",
           "8009ab69a6": "Şununla aç:",
           "bd0e8159f8": "Bu makinedeki düzenleyici komutunu veya dosya yöneticisi yapılandırmasını kontrol edin.",
           "9a5381eb09": "Çalışma alanı klasörü açılamadı.",
           "0bed8727db": "Taşınmış veya silinmiş olabilir. Çalışma alanlarını yenileyin veya Orca'dan kaldırın.",
           "3921d3d9a5": "Çalışma alanı klasörü bulunamadı.",
+          "pathNotFound": "Dosya veya klasör bulunamadı. Taşınmış veya silinmiş olabilir.",
           "f387af445b": "Çalışma alanı yolu geçerli bir yerel yol değil.",
+          "pathInvalid": "Yol geçerli bir yerel yol değil.",
           "wsl": "WSL"
         },
         "WorktreeTitleInlineRename": {
@@ -7122,12 +7124,14 @@
           "added": "Zaten ana makine olarak ekli",
           "running": "Çalışıyor",
           "stopped": "Durduruldu",
+          "unverifiable": "Bilinmiyor",
           "title": "WSL dağıtımı ekle",
           "description": "Orca sunucusunu dağıtım içinde çalıştırır; böylece git, dosyalar ve terminaller doğrudan Linux'ta çalışır. Bu dağıtımda \\\\wsl.localhost üzerinden açtığınız projeler, terminalleri boşta kaldığında otomatik olarak bu ana bilgisayara taşınır; Windows sürücüsündeki (/mnt/…) projeler bu bilgisayarda kalır. Taşınan bir projeyi kenar çubuğundan geri getirebilirsiniz.",
           "distro": "Dağıtım",
           "loading": "WSL dağıtımları aranıyor…",
           "placeholder": "Dağıtım seçin",
           "stoppedHint": "{{value0}} durdurulmuş. Eklemek onu başlatır.",
+          "unverifiableHint": "WSL, {{value0}} dağıtımının çalışıp çalışmadığını bildirmedi. Eklemek gerekirse onu başlatır.",
           "addingHint": "Orca sunucusu dağıtıma yüklenip başlatılıyor. İlk seferinde bir dakika sürebilir.",
           "adding": "Kuruluyor…",
           "startAndAdd": "Başlat ve ekle",
@@ -7560,14 +7564,13 @@
           "932ff1fbff": "Tema",
           "leftSidebarAppearance": {
             "title": "Sol Kenar Çubuğu Görünümü",
-            "rowDescription": "Sol kenar çubuğunu terminalinizle eşleştirin, varsayılanda bırakın veya bir renk tonu kullanın.",
             "default": "Varsayılan",
-            "matchTerminal": "Terminalle Eşleştir",
             "tinted": "Renk Tonlu",
             "tintColor": "Kenar Çubuğu Rengi",
             "tintColorDescription": "Sol kenar çubuğu yüzeyine karıştırılan renk.",
             "tintOpacity": "Renk Yoğunluğu",
-            "tintOpacityDescription": "Rengin kenar çubuğuna ne kadar güçlü karıştırılacağını kontrol eder."
+            "tintOpacityDescription": "Rengin kenar çubuğuna ne kadar güçlü karıştırılacağını kontrol eder.",
+            "tintDescription": "Sol kenar çubuğunu varsayılan bırakın veya renklendirin. Terminali izlemek için açık veya koyu tema olarak Terminalle Eşleştir seçeneğini seçin."
           },
           "interfaceDefaultFont": "Varsayılan yazı tipi",
           "terminalDefaultFont": "Varsayılan yazı tipi",
@@ -9318,10 +9321,7 @@
           "1afcc1d973": "Dikey Dolgu",
           "25e2f8e8e1": "Terminal ızgarası çevresindeki yatay dolgu, piksel cinsinden.",
           "36b8402015": "Yatay Dolgu",
-          "53ce336e15": "Pencere bulanıklığı değişikliğini uygulamak için Orca'yı yeniden başlatın.",
           "c65bb9ce63": "Yeniden başlatma gerekli",
-          "97950bb087": "Terminal penceresine arka plan bulanıklığı uygular. Yeniden başlatma gerektirir.",
-          "2b82242f43": "Pencere Bulanıklığı",
           "809f37738d": "Terminal arka planının saydamlığını kontrol eder. 1 tamamen opak, 0 tamamen saydamdır.",
           "ea7b1a158e": "Arka Plan Opaklığı",
           "03acb60aa0": "Terminal arka planının saydamlığını kontrol eder.",
@@ -9750,11 +9750,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Sol Kenar Çubuğu Görünümü",
-              "description": "Sol kenar çubuğunu terminalinizle eşleştirin, varsayılan bırakın veya bir renk tonu kullanın.",
               "project": "proje",
-              "terminal": "terminal",
               "background": "arka plan",
-              "tint": "renk tonu"
+              "tint": "renk tonu",
+              "tintDescription": "Sol kenar çubuğunu varsayılan bırakın veya renklendirin. Terminali izlemek için açık veya koyu tema olarak Terminalle Eşleştir seçeneğini seçin."
             },
             "workspaceCardLayout": {
               "title": "Çalışma Alanı Kartı Düzeni",
@@ -9807,7 +9806,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "Terminalle Eşleştir"
           }
         },
         "auto": {
@@ -10979,8 +10979,6 @@
             "f6dd9ff606": "arka plan",
             "71eb45e293": "bulanıklık",
             "0838b3717b": "pencere",
-            "bc2054657a": "Terminal penceresine arka plan bulanıklığı uygulayın. Yeniden başlatma gerektirir.",
-            "72d0482137": "Pencere Bulanıklığı",
             "7db59c4738": "alfa",
             "46d99ef4bb": "opaklık",
             "4c643695aa": "Terminal arka planının saydamlığını kontrol eder.",
@@ -12739,7 +12737,7 @@
         "wslHosts": {
           "title": "WSL ana makineleri",
           "experimental": "Deneysel",
-          "description": "Orca her dağıtımın içinde bir sunucu çalıştırır. Durdurulmuş bir dağıtım yalnızca projelerinden birini açtığınızda veya buradan bağlandığınızda başlar.",
+          "description": "Orca her dağıtımın içinde bir sunucu çalıştırır. Bir proje açmak durdurulmuş bir dağıtımı asla başlatmaz: Başlat’a tıklayın, yeni bir terminal açın veya buradan bağlanın.",
           "add": "WSL dağıtımı ekle",
           "connect": "Bağlan",
           "forceUpdate": "Güncellemeyi zorla",
@@ -13286,7 +13284,9 @@
           "light": "Açık",
           "languageIncomplete": "%{{value0}} çevrildi; Orca’nın dili olarak kullanmak için fazla eksik",
           "languageCoverage": "Arayüz dili · %{{value0}} çevrildi",
-          "newFileMenu": "+ menüsüne ekler"
+          "newFileMenu": "+ menüsüne ekler",
+          "editorReplacesViewer": "{{value0}} dosyalarını Orca görüntüleyicisi yerine açar",
+          "editorMayReplaceViewer": "{{value0}} dosyalarını Orca görüntüleyicisi yerine açabilir"
         },
         "PluginPageAction": {
           "failedTitle": "{{value0}} yüklenemedi",
@@ -13341,6 +13341,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "Oluştur"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "Terminalle Eşleştir",
+          "dynamic": "dinamik"
         }
       },
       "right": {
@@ -16142,16 +16146,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Yakınlaştır",
-          "6c89c73d9f": "Yakınlaştırmayı sıfırla",
           "be27304574": "Uzaklaştır",
-          "77bfc9b35a": "Görseli pop-up'ta aç",
           "3ef9551ba2": "Önizleme yükleniyor...",
-          "d9d2944855": "Dosya önizlemesi yüklenemedi"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Kapatmak için Esc tuşuna basın",
-          "535f4e2b56": "Kapat",
-          "9e27b2ecaf": "Tam boyutlu görsel önizlemesi"
+          "d9d2944855": "Dosya önizlemesi yüklenemedi",
+          "fitToView": "Görünüme sığdır",
+          "actualSize": "Gerçek boyut",
+          "expand": "Görseli büyüt"
         },
         "IpynbViewer": {
           "859bf9fc21": "Hücreyi çalıştır",
@@ -16273,7 +16273,10 @@
           "zoomOut": "Uzaklaştır",
           "zoomIn": "Yakınlaştır",
           "fit": "Ekrana sığdır",
-          "close": "Kapat"
+          "close": "Kapat",
+          "copyPng": "PNG olarak kopyala",
+          "copiedPng": "PNG olarak kopyalandı",
+          "copyPngFailed": "Görsel kopyalanamadı"
         },
         "MermaidBlock": {
           "dcc132e691": "Diyagram hatası:",
@@ -19592,8 +19595,6 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Sohbet arayüzünde devam etmek için bu sunucudaki Orca'yı güncelleyin.",
-        "exitUnconfirmedFromTerminal": "{{agent}} bu sohbeti zaten başka bir terminalde yürütüyor. O terminalde {{agent}} uygulamasından çıkın veya terminali kapatın, ardından bu sohbeti Oturum geçmişi bölümünden açın.",
-        "exitUnconfirmed": "{{agent}} bu sohbeti zaten başka bir terminalde yürütüyor. O terminalde {{agent}} uygulamasından çıkın veya terminali kapatın, ardından bu sohbeti Oturum geçmişi bölümünden açın.",
         "notSavedYet": "{{agent}} bu sohbeti henüz kaydetmedi. Yanıt verdikten sonra yeniden deneyin."
       },
       "state": {
@@ -19833,7 +19834,8 @@
         "stopped": "{{distro}} durduruldu",
         "start": "Başlat",
         "unverifiable": "Orca, {{distro}} öğesinin çalışıp çalışmadığını denetleyemedi",
-        "startToSend": "Göndermek için {{distro}} dağıtımını başlatın."
+        "startToSend": "Göndermek için {{distro}} dağıtımını başlatın.",
+        "startDistro": "{{distro}} dağıtımını başlat"
       },
       "interruptedContinue": {
         "continue": "Devam et",
@@ -22016,12 +22018,8 @@
       "refreshBeforeEnd": "PTY'ler yenilenene kadar sonlandırma yapılamaz.",
       "endUnsupported": "Bu terminal sonlandırılamaz. Çalıştığı makine gerekli güvenlik kontrollerini desteklemiyor. Sekmesinden veya çalıştığı makinede kapatın.",
       "checkingTabs": "Sekmeler kontrol ediliyor…",
-      "endTitle": "{{terminal}} sonlandırılsın mı?",
-      "endDescription": "Bu işlem terminali ve alt süreçlerini sonlandırır. Kaydedilmemiş çalışmalar kaybolabilir.",
       "lastProcess": "Son görülen süreç: {{process}}",
-      "cancel": "İptal",
       "ending": "Sonlandırılıyor…",
-      "end": "Terminali sonlandır",
       "unassigned": "Atanmamış",
       "thisComputer": "Bu bilgisayar",
       "localOwnedCount_one": "Bu bilgisayarda {{count}} Orca PTY'si",

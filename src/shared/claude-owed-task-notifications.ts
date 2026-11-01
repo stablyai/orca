@@ -1,3 +1,6 @@
+import { isRecord } from './agent-status-child-work-value-guards'
+import { runsOrcaOrchestrationWait } from './orca-cli-invocations'
+
 /** Main-agent background tasks keyed by launch/notification task ID. Notifications can arrive a turn after task end and an empty Stop; owed work keeps the pane active (#23942). Captures: __fixtures__/claude-task-notification-hooks.jsonl. */
 export type ClaudeLaunchedBackgroundTasks = Map<string, ClaudeLaunchedBackgroundTask>
 
@@ -11,6 +14,10 @@ type ClaudeLaunchedBackgroundTask = {
   settled?: true
   /** A delivered notification, distinct from a lease that merely gave up waiting. */
   notificationDelivered?: true
+  /** A shell blocked on worker agents (`orca orchestration check --wait`): agent work, not monitoring. */
+  awaitsAgents?: true
+  /** Known only from the main agent's task list (e.g. after a listener restart): a subagent may own it, so it owes the main agent nothing. */
+  listedOnly?: true
 }
 
 /** An idle notification lease is expectation, not proof: Stop never promises an empty queue and posts can be lost/reordered. Captured deliveries took 40–130ms; Claude idle_prompt consistently fired after 60s. */
@@ -22,8 +29,13 @@ const CLAUDE_LAUNCHED_BACKGROUND_TASK_LIMIT = 256
 /** The task id a main-agent PostToolUse reports for work it left running in the background. */
 export function readClaudeBackgroundTaskLaunch(
   toolName: string | undefined,
-  toolResponse: unknown
-): { id: string; kind: ClaudeLaunchedBackgroundTask['kind'] } | null {
+  toolResponse: unknown,
+  toolInput?: unknown
+):
+  | (Pick<ClaudeLaunchedBackgroundTask, 'kind' | 'awaitsAgents'> & {
+      id: string
+    })
+  | null {
   if (typeof toolResponse !== 'object' || toolResponse === null) {
     return null
   }
@@ -37,22 +49,40 @@ export function readClaudeBackgroundTaskLaunch(
   const rawShellId =
     response.backgroundTaskId ?? (toolName === 'Monitor' ? response.taskId : undefined)
   const shellId = typeof rawShellId === 'string' ? rawShellId.trim() : ''
-  return shellId.length > 0 ? { id: shellId, kind: 'shell' } : null
+  if (shellId.length === 0) {
+    return null
+  }
+  const command = isRecord(toolInput) ? toolInput.command : undefined
+  return {
+    id: shellId,
+    kind: 'shell',
+    ...(runsOrcaOrchestrationWait(command) ? { awaitsAgents: true as const } : {})
+  }
 }
 
 export function recordClaudeBackgroundTaskLaunch(
   tasks: ClaudeLaunchedBackgroundTasks,
-  launch: { id: string; kind: ClaudeLaunchedBackgroundTask['kind'] }
+  launch: Pick<ClaudeLaunchedBackgroundTask, 'kind' | 'awaitsAgents' | 'listedOnly'> & {
+    id: string
+  }
 ): void {
   const previous = tasks.get(launch.id)
   if (previous) {
     if (previous.kind === launch.kind) {
-      previous.launchUnconfirmed = undefined
+      previous.awaitsAgents ||= launch.awaitsAgents
+      if (!launch.listedOnly) {
+        previous.launchUnconfirmed = undefined
+        previous.listedOnly = undefined
+      }
     }
     return
   }
   if (makeClaudeTaskRecordRoom(tasks)) {
-    tasks.set(launch.id, { kind: launch.kind })
+    tasks.set(launch.id, {
+      kind: launch.kind,
+      ...(launch.awaitsAgents ? { awaitsAgents: true as const } : {}),
+      ...(launch.listedOnly ? { listedOnly: true as const } : {})
+    })
   }
 }
 
@@ -84,7 +114,11 @@ export function recordClaudeUnconfirmedAgentEnd(
   now: number
 ): void {
   if (!tasks.has(agentId) && makeClaudeTaskRecordRoom(tasks)) {
-    tasks.set(agentId, { kind: 'agent', launchUnconfirmed: true, notificationOwedAt: now })
+    tasks.set(agentId, {
+      kind: 'agent',
+      launchUnconfirmed: true,
+      notificationOwedAt: now
+    })
   }
 }
 
@@ -132,7 +166,11 @@ export function oweClaudeShellTaskNotifications(
 ): void {
   for (const [id, task] of tasks) {
     if (task.kind === 'shell' && !runningShellIds.has(id)) {
-      task.notificationOwedAt ??= now
+      if (task.listedOnly) {
+        tasks.delete(id)
+      } else {
+        task.notificationOwedAt ??= now
+      }
     }
   }
 }
@@ -229,10 +267,20 @@ function claudeOwedTaskNotificationKinds(tasks: ClaudeLaunchedBackgroundTasks | 
   const owed = { agent: false, shell: false }
   for (const task of tasks?.values() ?? []) {
     if (task.launchUnconfirmed !== true && task.notificationOwedAt !== undefined) {
-      owed[task.kind] = true
+      owed[task.awaitsAgents ? 'agent' : task.kind] = true
     }
   }
   return owed
+}
+
+/** A recorded worker wait lives from launch until its notification is delivered, stopped or given up on. */
+export function claudeTasksAwaitAgents(tasks: ClaudeLaunchedBackgroundTasks | undefined): boolean {
+  for (const task of tasks?.values() ?? []) {
+    if (task.awaitsAgents) {
+      return true
+    }
+  }
+  return false
 }
 
 /** Return owed kinds after expiring idle debt; undefined mainAgentIdleSince means this event is the idle boundary. */

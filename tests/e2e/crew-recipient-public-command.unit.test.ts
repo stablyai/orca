@@ -3,7 +3,7 @@ import { partialRuntimeStore } from '../../src/main/runtime/runtime-store-partia
 import { resolveOrcaSessionParty } from '../../src/main/runtime/orchestration/orchestration-party'
 import { subscribeCrew } from '../../src/main/runtime/orchestration/crew/crew-stream'
 import { CrewFrame, type OrchestrationCrewFrame } from '../../src/shared/orchestration-crew'
-import { releaseAgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store-slot'
+import { releaseAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
 import { testOrcaSessionId } from '../../src/shared/orca-session-address-test-fixture'
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'

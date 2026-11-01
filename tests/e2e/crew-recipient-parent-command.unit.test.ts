@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { partialRuntimeStore } from '../../src/main/runtime/runtime-store-partial-fixture'
 import { RuntimeClientError } from '../../src/cli/runtime-client'
-import { releaseAgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store-slot'
+import { releaseAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
 import { createOrdinaryCrewCommandFixture } from './crew-recipient-public-command.test-fixture'
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock('../../src/main/native-chat/agent-session-wire/structured-agent-session-registry', () => ({

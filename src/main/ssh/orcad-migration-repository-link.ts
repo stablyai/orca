@@ -9,7 +9,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { SshManagedServerLinkedProject } from '../../shared/ssh-types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   abortOrcadMigrationCutover,
   type OrcadMigrationDestinationCatalog

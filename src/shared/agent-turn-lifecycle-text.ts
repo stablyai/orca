@@ -1,4 +1,4 @@
-import type { AgentJournalTurnLifecycleState } from './agent-session-journal-types'
+import type { AgentJournalTurnLifecycleState } from './agent-session/journal/agent-session-journal-types'
 
 /** Legacy raw status text must not call an unobserved end completed. */
 export function agentTurnLifecycleText(

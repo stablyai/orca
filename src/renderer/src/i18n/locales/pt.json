@@ -432,8 +432,7 @@
       "cancel": "Manter filtros"
     },
     "startupWorktreeRefresh": {
-      "loading": "Descobrindo espaços de trabalho…",
-      "description": "Mais espaços de trabalho podem aparecer enquanto os projetos locais e remotos são carregados."
+      "loading": "Descobrindo espaços de trabalho…"
     },
     "wslMoved": {
       "movedToHost": "Movido para o host {{distro}}",
@@ -481,6 +480,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} já é um host.",
         "distroStopped": "{{distro}} parou após a leitura da lista. Escolha “Iniciar e adicionar” para iniciá-la.",
+        "distroUnverifiable": "O WSL não respondeu se {{distro}} está em execução. Atualize a lista ou adicione-a pela caixa de diálogo, que a inicia se necessário.",
         "wsl1": "{{distro}} usa WSL 1, que o Orca não suporta mais. Converta-a para WSL 2 em um terminal do Windows com: {{command}}",
         "notRegistered": "{{distro}} não é uma distribuição WSL instalada. Execute {{command}} em um terminal do Windows para ver as instaladas ou reinstale-a e tente novamente.",
         "sshManaged": "{{distro}} já executa o servidor Orca de “{{server}}”, que este computador acessa por SSH. Remova esse servidor primeiro; ainda não há suporte para movê-lo para um host WSL."
@@ -593,7 +593,8 @@
     "wslHostOffer": {
       "title": "Executar {{distro}} como host (recomendado)",
       "why": "Git, arquivos e terminais passam a rodar nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
-      "accept": "Executar como host"
+      "accept": "Executar como host",
+      "projectNotFound": "Não foi possível encontrar o projeto adicionado para mover. Use \"Mover para o host {{distro}}…\" no projeto na barra lateral."
     }
   },
   "tray": {
@@ -2684,7 +2685,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Arquivos fora do espaço de trabalho ainda não podem ser pré-visualizados em um servidor pareado.",
           "webClientUnavailable": "Prévias de documentos não estão disponíveis no cliente web."
         }
       },
@@ -3619,8 +3619,6 @@
             "f6dd9ff606": "fundo",
             "71eb45e293": "desfoque",
             "0838b3717b": "janela",
-            "bc2054657a": "Aplica desfoque de fundo à janela do terminal. Requer reinicialização.",
-            "72d0482137": "Desfoque da Janela",
             "7db59c4738": "alfa",
             "46d99ef4bb": "opacidade",
             "4c643695aa": "Controla a transparência do fundo do terminal.",
@@ -4278,11 +4276,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Aparência da Barra Lateral Esquerda",
-              "description": "Faça a barra lateral esquerda combinar com seu terminal, manter o padrão ou usar uma tonalidade.",
               "project": "projeto",
-              "terminal": "terminal",
               "background": "fundo",
-              "tint": "tonalidade"
+              "tint": "tonalidade",
+              "tintDescription": "Mantenha a barra lateral esquerda padrão ou aplique uma tonalidade. Para seguir o terminal, escolha Combinar com o Terminal como tema claro ou escuro."
             },
             "workspaceCardLayout": {
               "title": "Layout do Cartão de Espaço de Trabalho",
@@ -4335,7 +4332,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "Combinar com o Terminal"
           }
         },
         "repository": {
@@ -5185,10 +5183,7 @@
           "1afcc1d973": "Espaçamento Interno Vertical",
           "25e2f8e8e1": "Espaçamento interno horizontal em volta da grade do terminal, em pixels.",
           "36b8402015": "Espaçamento Interno Horizontal",
-          "53ce336e15": "Reinicie o Orca para aplicar a alteração de desfoque da janela.",
           "c65bb9ce63": "Reinicialização necessária",
-          "97950bb087": "Aplica desfoque de fundo à janela do terminal. Requer reinicialização.",
-          "2b82242f43": "Desfoque da Janela",
           "809f37738d": "Controla a transparência do fundo do terminal. 1 é totalmente opaco, 0 é totalmente transparente.",
           "ea7b1a158e": "Opacidade do Fundo",
           "03acb60aa0": "Controla a transparência do fundo do terminal.",
@@ -5494,14 +5489,13 @@
           "932ff1fbff": "Tema",
           "leftSidebarAppearance": {
             "title": "Aparência da Barra Lateral Esquerda",
-            "rowDescription": "Faça a barra lateral esquerda combinar com seu terminal, manter o padrão ou usar uma tonalidade.",
             "default": "Padrão",
-            "matchTerminal": "Combinar com o Terminal",
             "tinted": "Tonalizado",
             "tintColor": "Tonalidade da Barra Lateral",
             "tintColorDescription": "A cor misturada na superfície da barra lateral esquerda.",
             "tintOpacity": "Intensidade da Tonalidade",
-            "tintOpacityDescription": "Controla com que intensidade a tonalidade é misturada na barra lateral."
+            "tintOpacityDescription": "Controla com que intensidade a tonalidade é misturada na barra lateral.",
+            "tintDescription": "Mantenha a barra lateral esquerda padrão ou aplique uma tonalidade. Para seguir o terminal, escolha Combinar com o Terminal como tema claro ou escuro."
           },
           "interfaceDefaultFont": "Fonte padrão",
           "terminalDefaultFont": "Fonte padrão",
@@ -9008,7 +9002,7 @@
         "wslHosts": {
           "title": "Hosts WSL",
           "experimental": "Experimental",
-          "description": "O Orca executa um servidor dentro de cada distribuição. Uma distribuição parada só é iniciada quando você abre um dos projetos dela ou a conecta aqui.",
+          "description": "O Orca executa um servidor dentro de cada distribuição. Abrir um projeto nunca inicia uma distribuição parada: clique em Iniciar, abra um novo terminal ou conecte-a aqui.",
           "add": "Adicionar distribuição WSL",
           "connect": "Conectar",
           "forceUpdate": "Forçar atualização",
@@ -9599,7 +9593,9 @@
           "light": "Claro",
           "languageIncomplete": "{{value0}}% traduzido, incompleto demais para usar como idioma do Orca",
           "languageCoverage": "Idioma da interface · {{value0}}% traduzido",
-          "newFileMenu": "Adiciona ao menu +"
+          "newFileMenu": "Adiciona ao menu +",
+          "editorReplacesViewer": "Abre {{value0}} em vez do visualizador do Orca",
+          "editorMayReplaceViewer": "Pode abrir {{value0}} em vez do visualizador do Orca"
         },
         "PluginPageHero": {
           "screenshots": "Capturas de tela",
@@ -9621,6 +9617,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "Criar"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "Combinar com o Terminal",
+          "dynamic": "dinâmico"
         }
       },
       "right": {
@@ -11582,15 +11582,17 @@
           "remoteEditorUnsupportedDetail": "Escolha VS Code, Cursor ou Zed, ou use o app localmente.",
           "remotePathInvalid": "O caminho não é válido para o host SSH.",
           "remotePathInvalidDetail": "Atualize o espaço de trabalho antes de tentar novamente.",
-          "remoteLaunchFailed": "Não foi possível abrir o caminho no editor.",
-          "remoteLaunchFailedDetail": "Verifique o comando do editor configurado nesta máquina.",
+          "pathLaunchFailed": "Não foi possível abrir o caminho no editor.",
+          "pathLaunchFailedDetail": "Verifique o comando do editor configurado nesta máquina.",
           "1417fd8380": "Personalizar aplicativos...",
           "8009ab69a6": "Abrir em",
           "bd0e8159f8": "Verifique a configuração do comando do editor ou do gerenciador de arquivos nesta máquina.",
           "9a5381eb09": "Não foi possível abrir a pasta do espaço de trabalho.",
           "0bed8727db": "Ela pode ter sido movida ou excluída. Atualize os espaços de trabalho ou remova-a do Orca.",
           "3921d3d9a5": "A pasta do espaço de trabalho não foi encontrada.",
+          "pathNotFound": "Arquivo ou pasta não encontrado. Ele pode ter sido movido ou excluído.",
           "f387af445b": "O caminho do espaço de trabalho não é um caminho local válido.",
+          "pathInvalid": "O caminho não é um caminho local válido.",
           "remoteEditorHint": "Somente VS Code, Cursor e Zed podem abrir pastas em um host SSH.",
           "remoteRuntimeEditorHint": "Os aplicativos deste computador só podem abrir arquivos deste servidor quando o Orca se conecta a ele por SSH.",
           "wsl": "WSL"
@@ -12596,12 +12598,14 @@
           "added": "Já é um host",
           "running": "Em execução",
           "stopped": "Parada",
+          "unverifiable": "Desconhecido",
           "title": "Adicionar distribuição WSL",
           "description": "O Orca executa seu servidor dentro da distribuição, para que git, arquivos e terminais funcionem nativamente no Linux. Os projetos desta distribuição que você abriu por \\\\wsl.localhost são movidos automaticamente para este host quando seus terminais ficam ociosos; projetos em uma unidade do Windows (/mnt/…) permanecem neste computador. Você pode trazer de volta um projeto movido pela barra lateral.",
           "distro": "Distribuição",
           "loading": "Procurando distribuições WSL…",
           "placeholder": "Escolha uma distribuição",
           "stoppedHint": "{{value0}} está parada. Adicioná-la irá iniciá-la.",
+          "unverifiableHint": "O WSL não informou se {{value0}} está em execução. Adicioná-la a inicia se necessário.",
           "addingHint": "Instalando e iniciando o servidor Orca na distribuição. Na primeira vez, pode levar um minuto.",
           "adding": "Configurando…",
           "startAndAdd": "Iniciar e adicionar",
@@ -13210,11 +13214,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Aumentar zoom",
-          "6c89c73d9f": "Redefinir zoom",
           "be27304574": "Diminuir zoom",
-          "77bfc9b35a": "Abrir imagem em popup",
           "3ef9551ba2": "Carregando pré-visualização...",
-          "d9d2944855": "Falha ao carregar a pré-visualização do arquivo"
+          "d9d2944855": "Falha ao carregar a pré-visualização do arquivo",
+          "fitToView": "Ajustar à visualização",
+          "actualSize": "Tamanho real",
+          "expand": "Expandir imagem"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "sem-titulo.md",
@@ -13363,11 +13368,6 @@
           "57aac3979a": "Original",
           "fb0ae4f3c0": "Sem pré-visualização"
         },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Pressione Esc para fechar",
-          "535f4e2b56": "Fechar",
-          "9e27b2ecaf": "Pré-visualização de imagem em tamanho completo"
-        },
         "MonacoEditor": {
           "68cb83f4a7": "Adicionar nota no texto selecionado",
           "fd68ae03b3": "Buscar nos Arquivos",
@@ -13513,7 +13513,10 @@
           "zoomOut": "Diminuir zoom",
           "zoomIn": "Aumentar zoom",
           "fit": "Ajustar à tela",
-          "close": "Fechar"
+          "close": "Fechar",
+          "copyPng": "Copiar como PNG",
+          "copiedPng": "Copiado como PNG",
+          "copyPngFailed": "Não foi possível copiar a imagem"
         },
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "A inserção da imagem foi cancelada porque o destino mudou. O arquivo importado foi mantido.",
@@ -20657,8 +20660,6 @@
       "transcriptLabel": "Conversa",
       "resumeInNewChat": {
         "hostUpdateRequired": "Atualize o Orca neste host para continuar na interface de chat.",
-        "exitUnconfirmedFromTerminal": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
-        "exitUnconfirmed": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
         "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder."
       },
       "loadingEarlierMessages": "Carregando mensagens anteriores…",
@@ -20803,7 +20804,8 @@
         "stopped": "{{distro}} está parado",
         "start": "Iniciar",
         "unverifiable": "O Orca não conseguiu verificar se {{distro}} está em execução",
-        "startToSend": "Inicie {{distro}} para enviar."
+        "startToSend": "Inicie {{distro}} para enviar.",
+        "startDistro": "Iniciar {{distro}}"
       },
       "interruptedContinue": {
         "continue": "Continuar",
@@ -22386,7 +22388,6 @@
       "workspace": "Espaço de trabalho",
       "binding": "Aba",
       "idCopied": "ID da sessão do Orca copiado",
-      "cancel": "Cancelar",
       "unassigned": "Não atribuído",
       "thisComputer": "Este computador",
       "retry": "Tentar novamente",
@@ -22404,19 +22405,16 @@
       "agentOwnership": "Evidência de vínculo com o agente",
       "observationTime": "Horário da observação",
       "goToTerminal": "Ir para o terminal",
-      "endTitle": "Encerrar {{terminal}}?",
       "checkingTabs": "Verificando abas…",
       "detailsNamed": "Detalhes para {{terminal}}",
       "copyId": "Copiar ID da sessão do Orca",
       "ending": "Encerrando…",
       "localOwnedCount_one": "{{count}} PTY do Orca neste computador",
-      "endDescription": "Isso encerra o terminal e seus processos filhos. O trabalho não salvo pode ser perdido.",
       "lastProcess": "Último processo visto: {{process}}",
       "localOwnedCount_other": "{{count}} PTYs do Orca neste computador",
       "localOwnedCount_many": "{{count}} PTYs do Orca neste computador",
       "loading": "Carregando terminais…",
       "endNamed": "Encerrar {{terminal}}",
-      "end": "Encerrar terminal",
       "openNamed": "Abrir {{terminal}}",
       "withoutTab": "{{count}} sem aba",
       "observedTime": "Última observação: {{time}}",

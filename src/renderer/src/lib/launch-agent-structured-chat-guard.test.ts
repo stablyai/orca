@@ -25,7 +25,8 @@ import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.
 import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import {
   resetStructuredAgentLaunchRegistryForTests,
-  getStructuredLaunchStateBySessionId
+  getStructuredLaunchStateBySessionId,
+  retireStructuredAgentSessionLaunchCancellationTombstone
 } from './agent-session/launch/structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
 import * as capabilities from '@/runtime/local-runtime-capabilities'
@@ -118,8 +119,8 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   afterEach(async () => {
-    const { cancelStructuredAgentLaunch, retireStructuredAgentSessionLaunchCancellationTombstone } =
-      await import('./structured-agent-session-launch')
+    const { cancelStructuredAgentLaunch } =
+      await import('./agent-session/launch/structured-agent-session-launch')
     const pending = ['codex-session-1', 'codex-session-2'].flatMap((id) => {
       const launch = getStructuredLaunchStateBySessionId(id)
       return launch ? [launch.promise] : []
@@ -494,7 +495,8 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockToastError).not.toHaveBeenCalled()
 
     // A new launch would open a new chat; the unconfirmed one is re-checked by its own Retry.
-    const { retryStructuredAgentSessionLaunch } = await import('./structured-agent-session-launch')
+    const { retryStructuredAgentSessionLaunch } =
+      await import('./agent-session/launch/structured-agent-session-launch')
     expect(retryStructuredAgentSessionLaunch('wt-1', firstIntent.sessionId)).toBe(true)
     await vi.waitFor(() => expect(mockRefreshLocalStructuredSessionTabs).toHaveBeenCalledTimes(3))
 

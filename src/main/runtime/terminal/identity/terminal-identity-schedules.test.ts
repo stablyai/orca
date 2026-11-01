@@ -61,8 +61,17 @@ it('retains pane-issued process identity across reload with exact first-match an
       })
       expect(read()).toBe('ssh-process')
       f.owner.source.removeIncarnation('retained-process')
-      expect(read()).toBe('later-valid:later')
+      // No pane shows later-valid, so its alias answers only exit waits.
+      expect(read()).toBe('ssh-process')
+      f.owner.source.setIncarnation('retained-process', {
+        handle,
+        incarnationId: 'replacement',
+        leafKey: 'first'
+      })
+      expect(read()).toBe('ssh-process')
       f.owner.source.removeIncarnation('later-valid')
+      expect(read()).toBe('retained-process:replacement')
+      f.owner.source.removeIncarnation('retained-process')
       expect(read()).toBe('ssh-process')
       f.runtime.releaseOrchestrationCompatibilitySshAttachment(attachment.attachmentId)
       expect(read()).toBeNull()
