@@ -24,6 +24,7 @@ import {
 } from '../agent-hooks/managed-agent-hook-controls'
 import { agentHookServer } from '../agent-hooks/server'
 import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
+import { installLocalHookRootEvidence } from '../agent-hooks/local-hook-root-evidence'
 import {
   indexPersistedPaneKeyPtyIds,
   resolveAgentWorkspaceExecutionHostId,
@@ -120,11 +121,9 @@ async function sweepRestoredStatusesAgainstLocalPtys(): Promise<void> {
 }
 
 export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
+  // One inventory read serves hook acquisition and tmux status.
   agentHookServer.setTmuxManagedPtyResolver(
-    createLocalTmuxManagedPtyResolver({
-      getPtyId: getPtyIdForPaneKey,
-      listProcesses: async () => (await getDaemonProvider()?.listProcesses()) ?? []
-    })
+    createLocalTmuxManagedPtyResolver(installLocalHookRootEvidence(agentHookServer))
   )
   logStartupMilestone('first-window-startup-services-start')
   const startupServices = startFirstWindowStartupServices({

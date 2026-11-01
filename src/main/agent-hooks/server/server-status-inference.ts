@@ -212,7 +212,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
         : undefined
     const state = local?.state ?? relayed?.stateName ?? 'done'
     const workingMode = local?.workingMode ?? relayed?.workingMode
-    return this.applyNormalizedStatus({
+    return this.applyRestatedStatus({
       paneKey: existing.paneKey,
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,
@@ -285,7 +285,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     }
     // Update the producer too so later child hooks cannot resurrect the answered question.
     const restored = clearClaudeAnsweredQuestionWait(this.state, existing.paneKey)
-    const inferred = this.applyNormalizedStatus({
+    const inferred = this.applyRestatedStatus({
       paneKey: existing.paneKey,
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,

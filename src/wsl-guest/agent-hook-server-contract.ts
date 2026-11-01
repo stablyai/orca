@@ -3,6 +3,7 @@ import type {
   AgentHookUnavailableEnvelope
 } from '../shared/agent-hook-relay'
 import type { TmuxManagedPty } from '../shared/tmux-agent-hook-owner'
+import type { HookRootEvidenceReader } from '../shared/hook-process-root-evidence'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
@@ -23,6 +24,8 @@ export type RelayHookServerOptions = {
   /** Token captured from the successful host spawn; absent authority keeps the physical poster. */
   getAgentLaunchToken?: (paneKey: string) => string | undefined
   isPaneSurfaceRetired?: (paneKey: string) => boolean
+  /** Reads this guest's process table when a hook tries to acquire a pane with no proven owner. */
+  readHookRootEvidence?: HookRootEvidenceReader
 }
 
 export type RelayHookServerStartOptions = {

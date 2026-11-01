@@ -1,5 +1,6 @@
 import { previewHookPresence } from '../shared/agent-hook-presence-transition'
 import { hasOtherAgentProcessOwner, isSameAgentProcess } from '../shared/agent-process-presence'
+import { readHookProcessVerdict } from '../shared/agent-hook-owner-presence'
 import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
@@ -59,7 +60,16 @@ export function applyRelayHookEvent(
   if (cancellation.hold) {
     return previous
   }
-  const preview = previewHookPresence(cancellation.event, previous)
+  const preview = previewHookPresence(
+    cancellation.event,
+    previous,
+    true,
+    false,
+    readHookProcessVerdict(host.state, previous, {
+      paneKey: incoming.paneKey,
+      process: incoming.agentPresence?.process
+    })
+  )
   const transitioned = preview.transitioned && {
     ...preview.transitioned,
     statusAdmissionSession: incoming.statusAdmissionSession
@@ -69,9 +79,7 @@ export function applyRelayHookEvent(
   }
   const revised = withRelayClaudeTurnRevision(
     previous,
-    transitioned.agentPresence?.ended
-      ? { ...transitioned, providerSessionOnly: true }
-      : transitioned,
+    preview.exited ? { ...transitioned, providerSessionOnly: true } : transitioned,
     source
   )
   // Why: the relay is this pane's execution host, the only side that sees the event name.

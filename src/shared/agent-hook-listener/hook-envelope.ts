@@ -85,6 +85,7 @@ export function mergeAgentHookRequestHeaders(body: unknown, headers: IncomingHtt
   return {
     ...metadata,
     agentProcess: readHookHeader(headers, 'x-orca-agent-process'),
+    tmuxPane: readHookHeader(headers, 'x-orca-tmux-pane'),
     payload: body
   }
 }

@@ -1,3 +1,4 @@
+import type { WslGuestRoot } from '../../shared/wsl-guest-root-marker'
 import type * as pty from 'node-pty'
 import type { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
@@ -47,6 +48,8 @@ export const ptyWorktreeId = new Map<string, string>()
 export const ptyInitialCwd = new Map<string, string>()
 // Why: reattach carries current settings, not the live process's launch context; keep the first creator's WSL/native identity.
 export const ptyWslDistroById = new Map<string, string | null>()
+/** A WSL PTY's guest root shell, from its launch output; dies with this PTY. */
+export const ptyWslGuestRootById = new Map<string, WslGuestRoot>()
 // Why: node-pty callbacks dispose before env teardown, but onExit separately owns physical-exit proof during termination.
 export const ptyDisposables = new Map<string, { dispose: () => void }[]>()
 export const ptyExitDisposables = new Map<string, { dispose: () => void }>()
@@ -116,6 +119,7 @@ export function clearPtyState(id: string): void {
   ptyWorktreeId.delete(id)
   ptyInitialCwd.delete(id)
   ptyWslDistroById.delete(id)
+  ptyWslGuestRootById.delete(id)
   ptyLoadGeneration.delete(id)
   ptyTerminationMode.delete(id)
   ptyReportsChildExitStatus.delete(id)

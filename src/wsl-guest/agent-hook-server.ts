@@ -68,6 +68,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   private readonly forwardClaudeAgentView: RelayHookServerOptions['forwardClaudeAgentView']
   private isPaneSurfaceRetired: (paneKey: string) => boolean
   private getAgentLaunchToken: (paneKey: string) => string | undefined
+  private readonly readHookRootEvidence: RelayHookServerOptions['readHookRootEvidence']
   private fixedToken: string | undefined
   private preferredPort: number
   private portFallbackApplied = false
@@ -88,6 +89,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.forwardClaudeAgentView = options.forwardClaudeAgentView
     this.isPaneSurfaceRetired = options.isPaneSurfaceRetired ?? (() => false)
     this.getAgentLaunchToken = options.getAgentLaunchToken ?? (() => undefined)
+    this.readHookRootEvidence = options.readHookRootEvidence
     this.configureCanonicalHooks(
       options,
       (paneKey) => this.clearPaneState(paneKey, true),
@@ -126,6 +128,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       ingestRelayHookSpoolRecord(record, this.state, this.env, {
         providerNormalization: this.providerNormalization,
         checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
+        readHookRootEvidence: this.readHookRootEvidence,
         isCurrent,
         apply: (...args) => this.applyEvent(...args),
         onAccepted: (row) => this.retryScheduler.observeClaudeHook(row, record.receivedAt),
@@ -148,6 +151,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
           state: this.state,
           providerNormalization: this.providerNormalization,
           checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
+          readHookRootEvidence: this.readHookRootEvidence,
           isPaneSurfaceRetired: this.isPaneSurfaceRetired,
           getAgentLaunchToken: this.getAgentLaunchToken,
           applyEvent: (...args) => this.applyEvent(...args),

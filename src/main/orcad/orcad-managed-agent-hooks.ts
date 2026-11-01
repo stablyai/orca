@@ -11,6 +11,8 @@ import { reconcileStartupManagedAgentHooks } from '../agent-hooks/managed-agent-
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
+import { agentHookServer } from '../agent-hooks/server'
+import { installLocalHookRootEvidence } from '../agent-hooks/local-hook-root-evidence'
 
 /**
  * Reconcile hooks at startup as well as setting changes so newly managed hosts report status immediately.
@@ -22,6 +24,8 @@ export function startOrcadManagedAgentHooks(
   registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
 ): { readinessPublished: () => void } {
   const published = Promise.withResolvers<void>()
+  // SSH and WSL-host panes run beside this host, so it proves which agent owns each pane.
+  installLocalHookRootEvidence(agentHookServer)
   let stopping = false
   const agentView = getClaudeAgentViewService()
   void agentView.reconcile(store.getSettings())

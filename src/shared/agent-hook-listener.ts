@@ -1,5 +1,6 @@
 import { readHookAgentProcess } from './agent-process-presence'
 import { isInheritedHookStatus } from './agent-hook-presence-transition'
+import { readHookProcessAdmission } from './agent-hook-owner-presence'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import {
@@ -146,7 +147,14 @@ export function normalizeHookPayload(
     hasSeparateHookSessionAdmission(source) && options.bindingStatusByPaneKey
       ? options.bindingStatusByPaneKey.get(paneKey)
       : previousStatus
+  // A relay's provider view lags its committed rows; process evidence reads the committed one.
+  const processAdmission = readHookProcessAdmission(
+    state,
+    options.bindingStatusByPaneKey ?? state.lastStatusByPaneKey,
+    { paneKey, worktreeId, process: agentProcess }
+  )
   if (
+    processAdmission.refused ||
     isInheritedHookStatus(
       {
         paneKey,
@@ -157,7 +165,8 @@ export function normalizeHookPayload(
         agentPresence: agentProcess ? { agent: source, process: agentProcess } : undefined,
         payload: { agentType: source, state: 'working', prompt: '' }
       },
-      admissionStatus
+      admissionStatus,
+      processAdmission.verdict
     )
   ) {
     return null

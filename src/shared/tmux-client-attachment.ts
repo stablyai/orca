@@ -25,6 +25,12 @@ export function readTmuxHookPane(value: unknown): TmuxHookPane | null {
   return { socket, pane }
 }
 
+/** The `<pane> <socket>` hint a Claude hook sends from TMUX_PANE and TMUX. */
+export function readTmuxHookPaneHint(value: unknown): TmuxHookPane | null {
+  const match = typeof value === 'string' ? /^(%\d{1,12}) (\/.+)$/.exec(value) : null
+  return match ? readTmuxHookPane({ socket: match[2], pane: match[1] }) : null
+}
+
 export function parseTmuxAttachedClients(output: string): TmuxAttachedClient[] | null {
   if (output.length > 65536) {
     return null

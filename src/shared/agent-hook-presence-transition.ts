@@ -7,11 +7,13 @@ import {
 } from './agent-hook-listener/pane-provider-session'
 import { extractAgentProviderSession } from './agent-session/lifecycle/agent-session-resume'
 import { resolveAgentStatusIdentity } from './agent-status-identity'
+import type { HookProcessVerdict } from './hook-process-root-evidence'
 
 /** Refuse before provider folds can mutate prompt, tool or child state. */
 export function isInheritedHookStatus(
   incoming: AgentHookEventPayload,
-  previous: AgentHookEventPayload | undefined
+  previous: AgentHookEventPayload | undefined,
+  rootVerdict?: HookProcessVerdict
 ): boolean {
   const receivedAt =
     previous && 'receivedAt' in previous && typeof previous.receivedAt === 'number'
@@ -20,7 +22,10 @@ export function isInheritedHookStatus(
   if (!previous || receivedAt === undefined || !sameAgentStatusTerminalOwner(previous, incoming)) {
     return false
   }
-  const preview = previewHookPresence(incoming, previous)
+  const preview = previewHookPresence(incoming, previous, true, false, rootVerdict)
+  if (preview.acquired) {
+    return false
+  }
   return resolveAgentStatusIdentity({
     existing: {
       agentType: previous.payload.agentType,
@@ -41,11 +46,19 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
   incoming: T,
   previous: AgentHookEventPayload | undefined,
   fromHook = true,
-  retireBinding = false
+  retireBinding = false,
+  rootVerdict?: HookProcessVerdict
 ) {
   const context = readHookSessionContext(incoming, fromHook)
   if (previous && !sameAgentStatusTerminalOwner(previous, incoming)) {
     previous = undefined
+  }
+  const exit = incoming.agentPresence?.ended === true
+  // Why: the execution host proved this process is the pane's own agent, which outranks an
+  // association that never proved a process, whatever its agent or session.
+  const acquired = fromHook && rootVerdict === 'root' && !exit
+  if (acquired && previous?.agentPresence) {
+    previous = { ...previous, agentPresence: undefined }
   }
   const recorded = previous?.agentPresence
   const recordedAgent = recorded?.agent
@@ -68,6 +81,39 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
   }
   const previousBinding =
     previous && owner !== recorded ? { ...previous, agentPresence: owner } : previous
+  const refused = fromHook && (rootVerdict === 'nested' || rootVerdict === 'competing')
+  // An unreadable acquisition attempt proves nothing about the sender's process.
+  const event =
+    fromHook && rootVerdict === 'unknown' && !exit
+      ? { ...context.event, agentPresence: undefined }
+      : context.event
+  // Why: the pane's proven root exiting ends the same agent's unproven record it could never
+  // prove; only its own exit retires it, once, without first naming it a live owner.
+  const retiring =
+    fromHook &&
+    exit &&
+    rootVerdict === 'root' &&
+    !previous?.providerSessionOnly &&
+    !recorded?.ended &&
+    !recorded?.process &&
+    recorded?.agent === incoming.agentPresence?.agent
+      ? recorded
+      : undefined
+  const session = context.event.providerSession?.id ?? retiring?.session
+  const transitioned = retiring
+    ? {
+        ...context.event,
+        payload: previous?.payload ?? incoming.payload,
+        agentPresence: {
+          ...incoming.agentPresence,
+          agent: retiring.agent,
+          ...(session ? { session } : {}),
+          ended: true as const
+        }
+      }
+    : refused
+      ? undefined
+      : transitionHookPresence(event, previousBinding, fromHook)
   const matched = Boolean(
     fromHook &&
     scopedSource &&
@@ -83,7 +129,10 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
     ...context,
     owner,
     statusAdmissionSession,
-    transitioned: transitionHookPresence(context.event, previousBinding),
+    acquired,
+    transitioned,
+    /** Only an admitted exit from the owner's process ends it; a carried retirement record does not. */
+    exited: fromHook && transitioned?.agentPresence?.ended === true,
     returningProviderSession:
       matched && owner && scopedSource
         ? (extractAgentProviderSession(scopedSource, {
@@ -97,18 +146,25 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
 /** A pane has one owning agent; only the owner's own proven process can end it. */
 function transitionHookPresence(
   incoming: AgentHookEventPayload,
-  previous: AgentHookEventPayload | undefined
+  previous: AgentHookEventPayload | undefined,
+  fromHook: boolean
 ): AgentHookEventPayload | undefined {
   const recorded = previous?.agentPresence
+  const sender = incoming.agentPresence?.process
+  // Only admitted process-ending SessionEnd or host-proved exits mark ended; other SessionEnd events update status.
+  const exit = incoming.agentPresence?.ended === true
   const owner =
     recorded &&
     !recorded.ended &&
     (!previous?.providerSessionOnly || hasSeparateHookSessionAdmission(recorded.agent))
       ? recorded
       : undefined
-  const sender = incoming.agentPresence?.process
-  // Only admitted process-ending SessionEnd or host-proved exits mark ended; other SessionEnd events update status.
-  const exit = incoming.agentPresence?.ended === true
+  if (!fromHook) {
+    // Why: a terminal or inferred report proves no process or session, so it keeps the recorded
+    // association as it is (suspended and retired ones too) and never names an owner itself.
+    const kept = owner ?? (recorded?.ended ? recorded : undefined)
+    return incoming.agentPresence === kept ? incoming : { ...incoming, agentPresence: kept }
+  }
   if (owner && (exit || !owner.suspended)) {
     if (exit) {
       const fromOwner = owner.process && sender && isSameAgentProcess(owner.process, sender)

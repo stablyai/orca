@@ -1,4 +1,5 @@
 import { checkHookOwnerPresence } from '../shared/agent-hook-owner-presence'
+import type { HookRootEvidenceReader } from '../shared/hook-process-root-evidence'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
 import { mergeAgentHookRequestHeaders } from '../shared/agent-hook-listener/hook-envelope'
@@ -26,6 +27,7 @@ export async function handleRelayHookRequest(
     env: string
     state: HookListenerState
     checkAgentPresence: (paneKey: string) => Promise<void>
+    readHookRootEvidence?: HookRootEvidenceReader
     providerNormalization: RelayProviderHookNormalization
     isPaneSurfaceRetired: (paneKey: string) => boolean
     getAgentLaunchToken: (paneKey: string) => string | undefined
@@ -89,7 +91,8 @@ export async function handleRelayHookRequest(
       source,
       hookBody,
       options.env,
-      options.checkAgentPresence
+      options.checkAgentPresence,
+      options.readHookRootEvidence
     )
     if (!options.isCurrent()) {
       res.writeHead(204)

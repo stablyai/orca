@@ -6,6 +6,12 @@ import { readFileSync } from 'node:fs'
 import { isAgentStatusHooksEnabled } from './managed-agent-hook-controls'
 import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
 import { agentHookServer } from './server'
+import {
+  createLocalPtyInventoryReader,
+  createWslBridgePaneRootReader
+} from './local-tmux-managed-pty'
+import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
+import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import { getOpenCode2PluginSource, getOpenCodePluginSource } from '../opencode/hook-service'
@@ -64,6 +70,8 @@ export type WslHookRelayManagerDeps = {
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
   beginRelaySession?: (connectionId: string) => void
   receiveClaudeAgentView?: (body: unknown) => unknown
+  /** The guest root a distro's bridge PTY recorded at launch, for that relay's acquisition proof. */
+  resolvePaneRoot?: (connectionId: string, distro: string, paneKey: string) => Promise<unknown>
   bindInterruptReconciliation?: (
     mux: Parameters<typeof bindRemoteClaudeInterruptReconciliation>[1],
     connectionId: string,
@@ -91,6 +99,13 @@ export function isWslHookRelayAllowed(deps: WslHookRelayManagerDeps): boolean {
     isAgentStatusHooksEnabled(deps.managedHookSettings())
   )
 }
+
+const readBridgePaneRoot = createWslBridgePaneRootReader(
+  createLocalPtyInventoryReader({
+    getPtyId: getPtyIdForPaneKey,
+    listProcesses: () => getLocalPtyProvider().listProcesses()
+  })
+)
 
 export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   platform: () => process.platform,
@@ -128,6 +143,11 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     return agentHookServer.ingestRemote(capped as IngestEnvelope, connectionId)
   },
   beginRelaySession: (connectionId) => agentHookServer.beginRemoteRelaySession(connectionId),
+  resolvePaneRoot: (connectionId, distro, paneKey) => {
+    // Asking proves this relay checks pane roots before it forwards a process as the pane's owner.
+    agentHookServer.noteRelayProvesPaneRoots(connectionId)
+    return readBridgePaneRoot(distro, paneKey)
+  },
   bindInterruptReconciliation: (mux, connectionId, isCurrent) =>
     bindRemoteClaudeInterruptReconciliation(agentHookServer, mux, connectionId, isCurrent),
   installHooks: installRemoteManagedAgentHooks,

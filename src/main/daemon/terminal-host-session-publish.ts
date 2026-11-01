@@ -20,7 +20,10 @@ import type { InternalCreateOrAttachOptions } from './terminal-host-agent-sessio
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import { resolveDaemonSessionScrollbackRows } from './daemon-session-scrollback-window'
 import { TerminalAttachCanceledError } from './daemon-errors'
-import { recordSessionSpawnPaneKey } from './terminal-host-session-listing'
+import {
+  recordSessionSpawnPaneKey,
+  recordSessionWslGuestRoot
+} from './terminal-host-session-listing'
 import {
   attachSessionInputViewer,
   isSessionInputClosed,
@@ -114,6 +117,8 @@ export async function spawnAndPublishSession(
     historySeedChunks: opts.historySeedChunks,
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
     wslDistro,
+    // A WSL guest root rides only this live session's inventory row; it dies with the session.
+    ...(wslDistro ? { onWslGuestRoot: (root) => recordSessionWslGuestRoot(session, root) } : {}),
     onExit: createSessionExitHandler(
       deps.onSessionExit,
       opts.sessionId,

@@ -1,6 +1,7 @@
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
+import type { HookRootEvidenceReader } from '../../../shared/hook-process-root-evidence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 import {
@@ -12,6 +13,30 @@ import { AgentHookServerTmuxStatus } from './server-tmux-status'
 import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
+  /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
+  protected readHookRootEvidence: HookRootEvidenceReader | undefined
+
+  setHookRootEvidenceReader(reader: HookRootEvidenceReader): void {
+    this.readHookRootEvidence = reader
+  }
+
+  /** A hook's own preflight probing the pane's recorded owner on behalf of a live sender. */
+  protected challengeHookOwner(paneKey: string): Promise<unknown> {
+    return this.checkAgentPresence(paneKey)
+  }
+
+  /** HTTP and spool hooks share one ownership preflight before provider folds. */
+  protected checkHookOwner(source: AgentHookSource, body: unknown): Promise<unknown> | undefined {
+    return checkHookOwnerPresence(
+      this.state,
+      source,
+      body,
+      this.env,
+      (paneKey) => this.challengeHookOwner(paneKey),
+      this.readHookRootEvidence
+    )
+  }
+
   protected override applyNormalizedStatus(
     ...args: Parameters<AgentHookServerTmuxStatus['applyNormalizedStatus']>
   ): EnrichedAgentHookEventPayload | undefined {
@@ -123,9 +148,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.applySpoolHook(record, body)
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
-    const pending = checkHookOwnerPresence(this.state, record.source, body, this.env, (paneKey) =>
-      this.checkAgentPresence(paneKey)
-    )
+    const pending = this.checkHookOwner(record.source, body)
     return pending ? pending.then(apply) : apply()
   }
 
