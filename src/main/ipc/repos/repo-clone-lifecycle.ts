@@ -10,7 +10,7 @@ import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { getGitCloneFailureMessage } from '../../../shared/git-clone-failure-message'
 import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../../git/runner'
 import { reuseSavedCloneTarget } from '../../git/saved-clone-target'
-import { getRepoName } from '../../git/repo'
+import { getGitRepoRootAsync, getRepoName } from '../../git/repo'
 import type { ClaimedCloneTarget } from '../../git/repo-clone-path'
 import {
   cleanupClaimedCloneTarget,
@@ -27,6 +27,7 @@ import { notifyReposChanged } from './repos-changed-notification'
 import { runWithClonePathLock } from './clone-path-lock'
 import { resolveClonedFolderConversion } from '../../folder-repo-git-conversion'
 import { findExtraFolderWorkspaceIds } from '../../folder-workspace-meta-presence'
+import { findProjectAtSameRealPath } from '../../project-realpath-identity'
 
 type ActiveCloneMetadata = {
   path: string
@@ -119,13 +120,18 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
     async (_event, args: { url: string; destination: string }): Promise<Repo> => {
       const clonePath = deriveValidatedClonePath(args)
       const clonePathKey = getClonePathComparisonKey(clonePath)
+      let resolvedClonePath = clonePath
+      let aliasMatch: Repo | null = null
       // Remote projects can share this path string without belonging to this clone host.
       const findSaved = (): Repo | undefined =>
         store
           .getRepos()
           .find(
             (r) =>
-              getClonePathComparisonKey(r.path) === clonePathKey &&
+              (getClonePathComparisonKey(r.path) === clonePathKey ||
+                getClonePathComparisonKey(r.path) ===
+                  getClonePathComparisonKey(resolvedClonePath) ||
+                (aliasMatch !== null && r.id === aliasMatch.id && r.path === aliasMatch.path)) &&
               getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
           )
       return runWithClonePathLock(clonePathKey, async () => {
@@ -137,6 +143,12 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
         const pendingController = new AbortController()
         pendingLocalCloneControllers.add(pendingController)
         try {
+          aliasMatch = await findProjectAtSameRealPath(
+            store
+              .getRepos()
+              .filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID),
+            clonePath
+          )
           const reused = await reuseSavedCloneTarget(
             findSaved,
             args.url,
@@ -249,6 +261,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
         })
 
         try {
+          resolvedClonePath = await getGitRepoRootAsync(clonePath)
           // Clone may land in an existing folder project; upgrade it instead of duplicating registration.
           const existing = findSaved()
           if (existing) {
@@ -287,13 +300,13 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
           }
 
           const detected = await detectRepoIconAndUpstream({
-            repoPath: clonePath,
+            repoPath: resolvedClonePath,
             kind: 'git',
             executionHostId: LOCAL_EXECUTION_HOST_ID
           })
           const repo: Repo = {
             id: randomUUID(),
-            path: clonePath,
+            path: resolvedClonePath,
             displayName: getRepoName(clonePath),
             badgeColor: DEFAULT_REPO_BADGE_COLOR,
             ...detected,

@@ -156,6 +156,7 @@ export function classifyWorktreeOwnership(args: {
 
 export function toDetectedWorktree(args: {
   repo: Repo
+  isSelectedCheckout?: boolean
   worktree: Worktree
   meta?: WorktreeMeta
   settings: Pick<
@@ -179,7 +180,8 @@ export function toDetectedWorktree(args: {
     ...args,
     worktreeVisibilitySourceMatcher: sourceMatcher
   })
-  const selectedCheckout = areRuntimePathsEqual(args.worktree.path, args.repo.path)
+  const selectedCheckout =
+    args.isSelectedCheckout ?? areRuntimePathsEqual(args.worktree.path, args.repo.path)
   const isLegacyRepoForVisibility =
     args.isLegacyRepoForVisibility ?? isLegacyRepoForExternalWorktreeVisibility(args.repo)
   const visible = shouldShowWorktree({

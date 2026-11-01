@@ -8,10 +8,12 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
 import { probeGitAvailability } from '../../git/git-availability'
 import { gitExecFileAsync } from '../../git/runner'
+import { getGitRepoRootAsync } from '../../git/repo'
+import { findProjectAtSameRealPath } from '../../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
@@ -102,8 +104,17 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
 
       const targetPath = join(parentPath, name)
 
+      const findExisting = async (): Promise<Repo | null | undefined> => {
+        const candidates = store
+          .getRepos()
+          .filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
+        return (
+          candidates.find((repo) => repo.path === targetPath) ??
+          (repoKind === 'git' ? await findProjectAtSameRealPath(candidates, targetPath) : null)
+        )
+      }
       // Repeated Create requests must share one registration.
-      const existing = store.getRepos().find((r) => r.path === targetPath)
+      const existing = await findExisting()
       if (existing) {
         emitRepoAdded('folder_picker', true, repoKind === 'git')
         return { repo: existing }
@@ -154,7 +165,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
               : undefined
           const isEexist = code === 'EEXIST' || (err instanceof Error && /EEXIST/.test(err.message))
           if (isEexist) {
-            const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+            const raceWinner = await findExisting()
             if (raceWinner) {
               return { repo: raceWinner }
             }
@@ -202,21 +213,22 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
 
       // IPC calls interleave while awaiting filesystem and Git work; recheck before registration.
-      const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+      const raceWinner = await findExisting()
       if (raceWinner) {
         // A concurrent winner owns the directory even if this request created it.
         emitRepoAdded('folder_picker', true, repoKind === 'git')
         return { repo: raceWinner }
       }
 
+      const repoPath = repoKind === 'git' ? await getGitRepoRootAsync(targetPath) : targetPath
       const detected = await detectRepoIconAndUpstream({
-        repoPath: targetPath,
+        repoPath,
         kind: repoKind,
         executionHostId: LOCAL_EXECUTION_HOST_ID
       })
       const repo: Repo = {
         id: randomUUID(),
-        path: targetPath,
+        path: repoPath,
         displayName: name,
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
         ...detected,
