@@ -1,5 +1,6 @@
 import { useAppStore } from '../../store'
 import type { TabSplitDirection } from '../../store/slices/tabs'
+import { canMoveUnifiedTabAcrossWorktrees } from '../../store/slices/tabs/tabs-cross-worktree-move'
 import { mirrorWebRuntimeTabMove } from './web-runtime-tab-move-mirror'
 import {
   isDesktopCreatedTabInFrameDrawnServerWorkspace,
@@ -90,10 +91,12 @@ export type MoveToWorktreeTarget = {
 
 export function resolveMoveToWorktreeTargets(unifiedTabId: string): MoveToWorktreeTarget[] {
   const state = useAppStore.getState()
-  const sourceWorktreeId = Object.entries(state.unifiedTabsByWorktree ?? {}).find(([, tabs]) =>
+  const sourceEntry = Object.entries(state.unifiedTabsByWorktree ?? {}).find(([, tabs]) =>
     tabs.some((candidate) => candidate.id === unifiedTabId)
-  )?.[0]
-  if (!sourceWorktreeId) {
+  )
+  const sourceWorktreeId = sourceEntry?.[0]
+  const sourceTab = sourceEntry?.[1].find((candidate) => candidate.id === unifiedTabId)
+  if (!sourceWorktreeId || !sourceTab || !canMoveUnifiedTabAcrossWorktrees(sourceTab.contentType)) {
     return []
   }
   const sourceRepoId = sourceWorktreeId.includes('::') ? sourceWorktreeId.split('::')[0] : null

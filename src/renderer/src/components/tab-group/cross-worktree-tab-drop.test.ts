@@ -182,6 +182,61 @@ describe('T597 cross-worktree tab drag-and-drop & Move to Workspace', () => {
     expect(useAppStore.getState().activeTabIdByWorktree[targetWorktreeId]).toBe(tabId)
   })
 
+  it('refuses cross-worktree moves for unsupported editor tabs and recomputes source surface', () => {
+    const editorUnifiedId = 'editor-tab-1'
+    const editorFileId = 'file-1'
+    useAppStore.setState((prev) => ({
+      ...prev,
+      openFiles: [
+        {
+          id: editorFileId,
+          filePath: '/tmp/worktree-a/README.md',
+          relativePath: 'README.md',
+          worktreeId: sourceWorktreeId,
+          language: 'markdown',
+          mode: 'edit'
+        } as never
+      ],
+      unifiedTabsByWorktree: {
+        ...prev.unifiedTabsByWorktree,
+        [sourceWorktreeId]: [
+          ...(prev.unifiedTabsByWorktree[sourceWorktreeId] ?? []),
+          {
+            id: editorUnifiedId,
+            entityId: editorFileId,
+            worktreeId: sourceWorktreeId,
+            groupId: sourceGroupId,
+            contentType: 'editor',
+            label: 'README.md',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2000
+          }
+        ]
+      },
+      groupsByWorktree: {
+        ...prev.groupsByWorktree,
+        [sourceWorktreeId]: [
+          {
+            id: sourceGroupId,
+            worktreeId: sourceWorktreeId,
+            activeTabId: tabId,
+            tabOrder: [tabId, editorUnifiedId],
+            recentTabIds: [tabId, editorUnifiedId]
+          }
+        ]
+      }
+    }))
+
+    expect(resolveMoveToWorktreeTargets(editorUnifiedId)).toEqual([])
+    expect(useAppStore.getState().moveTabToWorktree(editorUnifiedId, targetWorktreeId)).toBe(false)
+
+    expect(useAppStore.getState().moveTabToWorktree(tabId, targetWorktreeId)).toBe(true)
+    expect(useAppStore.getState().activeTabTypeByWorktree[sourceWorktreeId]).toBe('editor')
+    expect(useAppStore.getState().activeFileIdByWorktree[sourceWorktreeId]).toBe(editorFileId)
+  })
+
   it('resolves and highlights hovered sidebar worktree drop cards', () => {
     const fakeCard = {
       attrs: new Map<string, string>([
