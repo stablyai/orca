@@ -1,4 +1,5 @@
 import { Files, GitBranch, LayoutGrid } from 'lucide-react'
+import { contrastRatio } from '../../lib/plugin-theme-tokens'
 import type { CSSProperties } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { TooltipProvider } from '../ui/tooltip'
@@ -27,6 +28,7 @@ const palette: ThemeVariables = {
   '--worktree-sidebar-active': '#24385B',
   '--worktree-sidebar-active-border': '#4781EE',
   '--sidebar': '#222429',
+  '--sidebar-foreground': '#D1D3DA',
   '--sidebar-ring': '#4781EE',
   '--sidebar-accent': '#293F65',
   '--sidebar-accent-foreground': '#D1D3DA',
@@ -120,10 +122,42 @@ export const selected = defineFixture({
     const card = scope.querySelector('[data-worktree-card-active="primary"]')
     if (!marker || getComputedStyle(marker).backgroundColor !== token('--tab-active-indicator'))
       throw new Error('Active tab marker must use its dedicated theme color')
-    if (!tool || getComputedStyle(tool).color !== token('--sidebar-ring'))
-      throw new Error('Active tool icon must use theme selection color')
+    probe.style.color = 'color-mix(in srgb, var(--sidebar-ring) 20%, var(--sidebar-foreground))'
+    if (!tool || getComputedStyle(tool).color !== getComputedStyle(probe).color)
+      throw new Error('Active tool icon must blend theme accent with sidebar foreground')
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Missing color probe context')
+    const color = (value: string): readonly [number, number, number, number] => {
+      context.fillStyle = value
+      context.fillRect(0, 0, 1, 1)
+      const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data
+      return [r, g, b, a / 255]
+    }
+    const surface = color(token('--sidebar'))
+    for (const button of scope.querySelectorAll('button[aria-pressed="true"]')) {
+      const icon = getComputedStyle(button).color
+      const indicator = button.querySelector('div')
+      if (contrastRatio(color(icon), surface) < 3)
+        throw new Error('Active tool icon must have at least 3:1 sidebar contrast')
+      if (!indicator || getComputedStyle(indicator).backgroundColor !== icon)
+        throw new Error('Both tool layouts must share the accessible selection color')
+    }
     if (!card || getComputedStyle(card).backgroundColor !== token('--worktree-sidebar-active'))
       throw new Error('Current worktree must use its dedicated theme fill')
     probe.remove()
+  }
+})
+
+export const builtIn = defineFixture({
+  ...selected,
+  interact: async (frame) => {
+    const scope = frame.querySelector('[data-selection-fixture]')
+    if (!(scope instanceof HTMLElement)) throw new Error('Missing selection fixture')
+    for (const token of ['--sidebar', '--sidebar-foreground', '--sidebar-ring'])
+      scope.style.removeProperty(token)
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    await Promise.all(scope.getAnimations({ subtree: true }).map((animation) => animation.finished))
+    await selected.interact?.(frame)
   }
 })
