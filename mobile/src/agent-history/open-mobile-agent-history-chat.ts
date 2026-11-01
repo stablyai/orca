@@ -44,7 +44,8 @@ export async function openMobileAgentHistoryChat(args: {
   ) {
     return false
   } else if (result.kind !== 'superseded') {
-    const failure = result.kind === 'failed' ? result.failure : undefined
+    const failure: StructuredSessionOpenFailure | undefined =
+      result.kind === 'failed' ? result.failure : undefined
     args.failed(failure?.reason ?? 'unknown', failure?.workspaceKind)
   }
   return true
