@@ -103,6 +103,20 @@ export function latestNativeChatTaskList(
   return book.list()
 }
 
+/** The open transcript's own list, or the main plan when that transcript has none. */
+export function nativeChatVisibleTaskList(
+  sessionMessages: readonly NativeChatMessage[],
+  focusedMessages: readonly NativeChatMessage[] | null
+): NativeChatTaskList | null {
+  if (focusedMessages) {
+    const focused = latestNativeChatTaskList(focusedMessages)
+    if (focused && focused.tasks.length > 0) {
+      return focused
+    }
+  }
+  return latestNativeChatTaskList(sessionMessages)
+}
+
 export function nativeChatSubagentActivities(
   conversation: readonly NativeChatMessage[],
   subagentRows: ReadonlyMap<string, readonly { message: NativeChatMessage }[]> = new Map()

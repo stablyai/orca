@@ -300,7 +300,7 @@ const styles = themedStyleSheet(() => ({
     height: 4,
     borderRadius: radii.pill,
     overflow: 'hidden',
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.translucentFill
   },
   fill: {
     height: '100%',
