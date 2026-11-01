@@ -17,7 +17,15 @@ import type {
 import { evaluateOrcaTree, type OrcaCallback } from './declarative-evaluate'
 import { createPersistQueue } from './declarative-persist-queue'
 import { createMemoryRetention } from './declarative-memory-retention'
-import { describePluginError } from './declarative-error-location'
+import {
+  defaultSchedule,
+  errorMessage,
+  HYDRATION_TIMEOUT_MS,
+  isCallable,
+  MAX_RETAINED_RENDERS,
+  MIN_RENDER_INTERVAL_MS,
+  newDocumentId
+} from './declarative-renderer-support'
 import { readHostMessage } from './declarative-host-messages'
 import { createPanelContext } from './declarative-panel-context'
 
@@ -32,33 +40,6 @@ export type {
   OrcaRuntimeOptions,
   OrcaTheme
 } from './declarative-runtime-types'
-
-// Why: an update loop must not flood the host; ~one render per display frame is plenty.
-const MIN_RENDER_INTERVAL_MS = 16
-// Renders the host has not acknowledged yet whose callbacks stay resolvable.
-const MAX_RETAINED_RENDERS = 32
-// Why a ceiling: an older host never answers `ui.ready`, and the panel must still appear.
-const HYDRATION_TIMEOUT_MS = 3000
-
-function errorMessage(error: unknown): string {
-  return describePluginError(error).slice(0, 4096)
-}
-
-function defaultSchedule(flush: () => void, delayMs: number): void {
-  if (delayMs > 0) {
-    setTimeout(flush, delayMs)
-  } else {
-    queueMicrotask(flush)
-  }
-}
-
-function newDocumentId(now: number): string {
-  return `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-function isCallable(value: unknown): value is (...args: unknown[]) => unknown {
-  return typeof value === 'function'
-}
 
 export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaDeclarativeRuntime {
   const { post } = options

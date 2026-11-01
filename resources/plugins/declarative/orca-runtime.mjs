@@ -558,6 +558,27 @@ function describePluginError(error, base = pageBase()) {
   return message.startsWith(`${file}:`) ? message : `${at}: ${message}`;
 }
 
+// src/shared/plugins/declarative/runtime/declarative-renderer-support.ts
+var MIN_RENDER_INTERVAL_MS = 16;
+var MAX_RETAINED_RENDERS = 32;
+var HYDRATION_TIMEOUT_MS = 3e3;
+function errorMessage(error) {
+  return describePluginError(error).slice(0, 4096);
+}
+function defaultSchedule(flush, delayMs) {
+  if (delayMs > 0) {
+    setTimeout(flush, delayMs);
+  } else {
+    queueMicrotask(flush);
+  }
+}
+function newDocumentId(now) {
+  return `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+function isCallable(value) {
+  return typeof value === "function";
+}
+
 // src/shared/plugins/declarative/runtime/declarative-host-messages.ts
 function readHostMessage(payload) {
   if (typeof payload !== "object" || payload === null) {
@@ -651,25 +672,6 @@ function createPanelContext(onRetain) {
 }
 
 // src/shared/plugins/declarative/runtime/declarative-renderer.ts
-var MIN_RENDER_INTERVAL_MS = 16;
-var MAX_RETAINED_RENDERS = 32;
-var HYDRATION_TIMEOUT_MS = 3e3;
-function errorMessage(error) {
-  return describePluginError(error).slice(0, 4096);
-}
-function defaultSchedule(flush, delayMs) {
-  if (delayMs > 0) {
-    setTimeout(flush, delayMs);
-  } else {
-    queueMicrotask(flush);
-  }
-}
-function newDocumentId(now) {
-  return `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-function isCallable(value) {
-  return typeof value === "function";
-}
 function createOrcaDeclarativeRuntime(options) {
   const { post } = options;
   const bridge = options.bridge ?? null;
