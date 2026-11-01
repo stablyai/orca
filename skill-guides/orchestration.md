@@ -42,21 +42,14 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
   (the user will work in those chats), don't start workers; per workspace run
   `ORCA worktree create --name <name> --no-parent --agent <agent> --prompt "<brief>" --json`
   and end your turn.
-- Add `--model` only if the user named one. Add `--task-title "<short title>"`
-  to name the Task in wakes and lists.
-- Your first `--spec` start creates a Run bound to you; later starts join it. Pass
-  `--run <run_id>` to group workers into another Run; `worker-list --run <run_id>`
-  shows that Run's workers together.
+- Add `--model` only if the user named one. Name each Task with
+  `--task-title`; pass `--run <run_id>` to group workers into one Run.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
 - To talk to a worker, use
   `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body "<message>"`
-  in any state: a working worker reads it now. A finished one gets it as a new
-  follow-up Task and reports again with `worker_done`; the receipt's `delivery`
-  says how: `follow_up` (its live agent), `reopened` (its conversation resumed in
-  a new tab) or `started_fresh` (a new agent given the earlier task and report).
-  A correction sent to a worker that just finished, such as a reviewer, re-runs
-  its whole job: say exactly what to redo, or wait for its report instead.
+  in any state: a working worker reads it now; a finished or closed one gets it
+  as a new follow-up Task, so say exactly what to redo. The receipt says which.
   Except on a paired server: a finished worker there refuses `send`, so start
   new work there with `worker-start --on <server>` (load
   `references/placement-and-remote.md` first).
@@ -76,23 +69,19 @@ Never:
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: steer it with `send`, stop and retry it, or tell the user.
 - A `worker_done` settles its Task; never mark a reported failure completed.
-- A worker that stopped on a transient API error (a 503 or rate limit in its last
-  output) keeps its Dispatch open: `send` it `continue` and it resumes in place.
-  Not every errored stop wakes you: when you are awake and a worker with an open
-  Dispatch shows `stale`, `worker-read` it.
-- In `worker-list`, `attention` `root_completion` marks a succeeded top-level
-  Task (nothing to do); `stale` means its agent status has not changed for 30
-  minutes, which needs a look only while its Dispatch is open.
+- A worker that stopped on a transient error keeps its work open: `send` it
+  `continue`. If a worker with open work seems stuck, `worker-read` it, then
+  steer it with `send`.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.
 - Lost track? `ORCA orchestration inbox --terminal run:<run_id> --limit 50`
   shows mail `check` already handled.
 
-A worker in your workspace closes about 2 minutes after it reports
-(`autoReleaseAt`). One started in a new worktree, or with `--keep-open`, stays open
-through follow-ups; once nobody will use its chat or send it more work, run
-`ORCA orchestration worker-release --dispatch <dispatch_id>`. If `worker-list` gives
-a worker a `next`, follow it. `send` reopens a closed worker when you need it again.
+Finished workers close on their own, except ones started in a new worktree or
+with `--keep-open`: release those with
+`ORCA orchestration worker-release --dispatch <dispatch_id>` when done. If
+`worker-list` gives a worker a `next`, follow it. `send` reopens a closed worker
+when you need it again.
 Start a worker in your workspace with `--keep-open` when the user will keep using
 its chat after it reports: they want to watch it or talk to it. To keep one already
 started, run
@@ -103,11 +92,8 @@ started, run
 Make each spec self-contained: the target, the change, constraints, what the
 worker may edit, and the evidence that proves it is done. Say whether a
 non-zero exit means the Task failed or capturing it is the deliverable. Send
-fixes to a worker unless the user gave them to you.
-
-A read-only reviewer sharing the author's worktree should review the pushed diff
-or a named commit, not the working tree: an author revising there changes files
-under it. Give it its own worktree when it must run the code.
+fixes to a worker unless the user gave them to you. A read-only reviewer sharing
+the author's worktree should review the pushed diff, not files still changing.
 
 Fetch this guide once. Summarize the worker's evidence; rerun checks only for a
 gap or contradiction.
