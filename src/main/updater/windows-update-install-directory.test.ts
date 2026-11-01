@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NsisUpdater } from 'electron-updater/out/NsisUpdater'
-import { pinWindowsUpdateInstallDirectory } from './windows-update-install-directory'
+import { resolveWindowsUpdateInstallDirectory } from './windows-update-install-directory'
 
-function runNsisInstall(updater: object): string[] {
+function runNsisInstall(installDirectory: string | undefined): string[] {
   const spawnLog = vi.fn((_cmd: string, _args: string[]) => Promise.resolve(true))
   // Exercise the real updater so an upstream rename of installDirectory fails here.
   NsisUpdater.prototype['doInstall'].call(
-    { ...updater, installerPath: 'C:\\Temp\\orca-windows-setup.exe', spawnLog },
+    { installDirectory, installerPath: 'C:\\Temp\\orca-windows-setup.exe', spawnLog },
     { isSilent: true, isForceRunAfter: true, isAdminRightsRequired: false }
   )
   return spawnLog.mock.calls[0]?.[1] ?? []
@@ -58,13 +58,17 @@ afterEach(() => {
   }
 })
 
-describe('pinWindowsUpdateInstallDirectory', () => {
+describe('resolveWindowsUpdateInstallDirectory', () => {
   it('installs a Windows update into the folder the installed app was moved to', () => {
     const folder = makeFolder(INSTALLED_LAYOUT, ['locales', 'resources'])
-    const updater = {}
-    pinWindowsUpdateInstallDirectory(updater, 'win32', join(folder, 'Orca.exe'))
+    const installDirectory = resolveWindowsUpdateInstallDirectory('win32', join(folder, 'Orca.exe'))
 
-    expect(runNsisInstall(updater)).toEqual(['--updated', '/S', '--force-run', `/D=${folder}`])
+    expect(runNsisInstall(installDirectory)).toEqual([
+      '--updated',
+      '/S',
+      '--force-run',
+      `/D=${folder}`
+    ])
   })
 
   it.each<[string, string[], string[]]>([
@@ -73,10 +77,9 @@ describe('pinWindowsUpdateInstallDirectory', () => {
     ['a folder holding user files', [...INSTALLED_LAYOUT, 'notes.docx'], []]
   ])('keeps the default install location for %s', (_label, files, directories) => {
     const folder = makeFolder(files, directories)
-    const updater = {}
-    pinWindowsUpdateInstallDirectory(updater, 'win32', join(folder, 'Orca.exe'))
+    const installDirectory = resolveWindowsUpdateInstallDirectory('win32', join(folder, 'Orca.exe'))
 
-    expect(runNsisInstall(updater)).toEqual(['--updated', '/S', '--force-run'])
+    expect(runNsisInstall(installDirectory)).toEqual(['--updated', '/S', '--force-run'])
   })
 
   it('keeps the default install location when the folder path has a space', () => {
@@ -86,27 +89,23 @@ describe('pinWindowsUpdateInstallDirectory', () => {
     for (const file of INSTALLED_LAYOUT) {
       writeFileSync(join(folder, file), '')
     }
-    const updater = {}
-    pinWindowsUpdateInstallDirectory(updater, 'win32', join(folder, 'Orca.exe'))
+    const installDirectory = resolveWindowsUpdateInstallDirectory('win32', join(folder, 'Orca.exe'))
 
-    expect(runNsisInstall(updater)).toEqual(['--updated', '/S', '--force-run'])
+    expect(runNsisInstall(installDirectory)).toEqual(['--updated', '/S', '--force-run'])
   })
 
   it('never pins a drive root', () => {
-    const updater = {}
-    pinWindowsUpdateInstallDirectory(updater, 'win32', 'D:\\Orca.exe')
+    const installDirectory = resolveWindowsUpdateInstallDirectory('win32', 'D:\\Orca.exe')
 
-    expect(runNsisInstall(updater)).toEqual(['--updated', '/S', '--force-run'])
+    expect(runNsisInstall(installDirectory)).toEqual(['--updated', '/S', '--force-run'])
   })
 
   it('leaves other platforms on their default install location', () => {
-    const updater = {}
-    pinWindowsUpdateInstallDirectory(
-      updater,
+    const installDirectory = resolveWindowsUpdateInstallDirectory(
       'darwin',
       '/Applications/Orca.app/Contents/MacOS/Orca'
     )
 
-    expect(runNsisInstall(updater)).toEqual(['--updated', '/S', '--force-run'])
+    expect(runNsisInstall(installDirectory)).toEqual(['--updated', '/S', '--force-run'])
   })
 })

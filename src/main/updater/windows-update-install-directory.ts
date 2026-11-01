@@ -30,20 +30,18 @@ function isDedicatedOrcaInstallDirectory(directory: string): boolean {
 }
 
 // NSIS updates install to the registry's InstallLocation, which a moved install leaves pointing at the
-// default per-user folder; pass the running folder as /D= so the update replaces the copy the user runs.
-export function pinWindowsUpdateInstallDirectory(
-  autoUpdater: object,
+// default per-user folder; returns the running folder to pass as /D= so the update replaces the copy the user runs.
+export function resolveWindowsUpdateInstallDirectory(
   platform: NodeJS.Platform,
   exePath: string
-): void {
+): string | undefined {
   if (platform !== 'win32') {
-    return
+    return undefined
   }
   const installDirectory = win32.dirname(exePath)
   // spawn quotes a spaced arg as "/D=...", and NSIS keeps the trailing quote in INSTDIR, breaking the update.
   if (/\s/.test(installDirectory) || !isDedicatedOrcaInstallDirectory(installDirectory)) {
-    return
+    return undefined
   }
-  // NsisUpdater reads installDirectory, which the cross-platform AppUpdater type omits.
-  Object.assign(autoUpdater, { installDirectory })
+  return installDirectory
 }
