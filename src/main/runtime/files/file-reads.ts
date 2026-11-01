@@ -1,5 +1,4 @@
 import { open, stat } from 'node:fs/promises'
-import { extname } from 'node:path'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import type {
@@ -19,20 +18,20 @@ import {
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   MOBILE_FILE_READ_MAX_BYTES,
-  RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES,
   assertPreviewWithinTransportBudget,
   previewableBinaryByteLimit
 } from './file-preview-budget'
 import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
+import { openLocalRegularFile } from '../../ipc/filesystem/local-regular-file-read'
 import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 import { guardWslUncPathAccess } from '../../wsl/wsl-unc-access-gate'
 import { resolveLocalFileRequestPath } from '../../ipc/local-file-access-resolution'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
-import { filePreviewForPath } from '../../../shared/file-preview-kind'
+import { readLocalPreviewMimeType } from '../../ipc/filesystem/local-file-preview-type'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import {
   NodeFileReadTooLargeError,
-  readNodeFileWithinLimit
+  readNodeFileHandleWithinLimit
 } from '../../../shared/node-bounded-file-reader'
 import { isBinaryBuffer } from '../../../shared/binary-buffer'
 import type {
@@ -85,25 +84,35 @@ export class RuntimeFileReads {
     const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
     requireLocalRuntimeFileRoute(target)
     const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
-    const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-    const buffer = await readPreviewBytes(
-      filePath,
-      mimeType ? binaryPreviewMaxBytes(maxContentBytes) : MOBILE_FILE_READ_MAX_BYTES
-    )
-    if (mimeType) {
+    const { handle } = await openLocalRegularFile(filePath)
+    try {
+      const mimeType = await readLocalPreviewMimeType(filePath, handle)
+      const { buffer } = await readNodeFileHandleWithinLimit(
+        handle,
+        mimeType ? binaryPreviewMaxBytes(maxContentBytes) : MOBILE_FILE_READ_MAX_BYTES
+      )
+      if (mimeType) {
+        return assertPreviewWithinTransportBudget(
+          { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType },
+          maxContentBytes
+        )
+      }
+
+      if (isBinaryBuffer(buffer)) {
+        return assertPreviewWithinTransportBudget({ content: '', isBinary: true }, maxContentBytes)
+      }
       return assertPreviewWithinTransportBudget(
-        { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType },
+        { content: buffer.toString('utf-8'), isBinary: false },
         maxContentBytes
       )
+    } catch (error) {
+      if (error instanceof NodeFileReadTooLargeError) {
+        throw new Error('file_too_large')
+      }
+      throw error
+    } finally {
+      await handle.close()
     }
-
-    if (isBinaryBuffer(buffer)) {
-      return assertPreviewWithinTransportBudget({ content: '', isBinary: true }, maxContentBytes)
-    }
-    return assertPreviewWithinTransportBudget(
-      { content: buffer.toString('utf-8'), isBinary: false },
-      maxContentBytes
-    )
   }
 
   async readDocPreviewFile(
@@ -209,21 +218,29 @@ export class RuntimeFileReads {
     // Automatic loads never wake a stopped WSL distro.
     return guardWslUncPathAccess(filePath, async () => {
       const imagePath = await resolveLocalFileRequestPath(filePath, CHAT_IMAGE_ACCESS, store)
-      // Paths inside project roots skip the rule's type check.
-      const preview = filePreviewForPath(imagePath)
-      if (preview?.kind !== 'image') {
-        throw new Error('not_an_image')
+      const { handle } = await openLocalRegularFile(imagePath)
+      try {
+        // Paths inside project roots skip the rule's type check.
+        const mimeType = await readLocalPreviewMimeType(imagePath, handle)
+        if (!mimeType?.startsWith('image/')) {
+          throw new Error('not_an_image')
+        }
+        const { buffer } = await readNodeFileHandleWithinLimit(
+          handle,
+          binaryPreviewMaxBytes(maxContentBytes)
+        )
+        return assertPreviewWithinTransportBudget(
+          { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType },
+          maxContentBytes
+        )
+      } catch (error) {
+        if (error instanceof NodeFileReadTooLargeError) {
+          throw new Error('file_too_large')
+        }
+        throw error
+      } finally {
+        await handle.close()
       }
-      const { mimeType } = preview
-      const buffer = await readPreviewBytes(
-        windowsFsPath(imagePath),
-        binaryPreviewMaxBytes(maxContentBytes),
-        { regularFileOnly: true }
-      )
-      return assertPreviewWithinTransportBudget(
-        { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType },
-        maxContentBytes
-      )
     })
   }
 }
@@ -232,21 +249,6 @@ function binaryPreviewMaxBytes(maxContentBytes: number | undefined): number {
   return maxContentBytes === undefined
     ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
     : previewableBinaryByteLimit(maxContentBytes)
-}
-
-async function readPreviewBytes(
-  filePath: string,
-  maxBytes: number,
-  options?: { regularFileOnly: true }
-): Promise<Buffer> {
-  try {
-    return (await readNodeFileWithinLimit(filePath, maxBytes, options)).buffer
-  } catch (error) {
-    if (error instanceof NodeFileReadTooLargeError) {
-      throw new Error('file_too_large')
-    }
-    throw error
-  }
 }
 
 async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promise<string> {

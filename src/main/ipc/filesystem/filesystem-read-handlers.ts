@@ -112,11 +112,18 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         args.filePath,
         async () => {
           const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
+          const requireImage =
+            args.access?.kind === 'chat-image' &&
+            !(await resolveDesktopAuthorizedPath(filePath, store).catch(() => undefined))
           const media = await readLocalFilePreview(event, args, store, {
             documents: args.rangePreview === true
           })
           if (media) {
             return media
+          }
+          if (requireImage) {
+            // The serving handle must satisfy the image grant even if the path was replaced.
+            return readLocalFileContent(filePath, { requireImage: true })
           }
           return args.includeLocalLogMetadata === true
             ? readLocalLogSnapshot(filePath)

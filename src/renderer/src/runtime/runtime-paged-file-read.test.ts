@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readRuntimeFileContent } from './runtime-file-read-client'
+import { readRuntimeFileContent, readRuntimeFilePreview } from './runtime-file-read-client'
 import { writeRuntimeFile } from './runtime-file-mutation-client'
 import {
   fsReadFileChunk,
@@ -58,13 +58,14 @@ function isChunkParams(params: unknown): params is ChunkParams {
 function serveRemoteFile(relativePath: string, file: RemoteFile): void {
   const stats = file.stats ?? [{ size: file.bytes.length, mtime: 1 }]
   const binary = /\.(pdf|png)$/.test(relativePath)
+  const unknownBinary = !relativePath.includes('.') && file.bytes.subarray(0, 8000).includes(0)
   let statCalls = 0
   runtimeEnvironmentCall.mockImplementation(({ method, params }: RuntimeRpcRequest) => {
     if (file.missingMethods?.includes(method)) {
       return Promise.resolve(fail('method_not_found', `Unknown method: ${method}`))
     }
     if (method === 'files.read') {
-      if (binary) {
+      if (binary || unknownBinary) {
         return Promise.resolve(fail('runtime_error', 'binary_file'))
       }
       const truncated = file.bytes.length > READ_CAP
@@ -91,7 +92,9 @@ function serveRemoteFile(relativePath: string, file: RemoteFile): void {
                     isImage: true,
                     mimeType: 'application/pdf'
                   }
-                : { content: file.bytes.toString('utf8'), isBinary: false }
+                : unknownBinary
+                  ? { content: '', isBinary: true }
+                  : { content: file.bytes.toString('utf8'), isBinary: false }
             )
       )
     }
@@ -270,6 +273,56 @@ describe('remote reads larger than one RPC reply', () => {
       'Remote file read returned an invalid chunk'
     )
   })
+})
+
+describe('extensionless images on a host without signature detection', () => {
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+    'base64'
+  )
+
+  it.each(['editor', 'preview'])(
+    'opens an extensionless PNG through the %s route',
+    async (route) => {
+      serveRemoteFile('download', { bytes: png })
+      const result =
+        route === 'editor'
+          ? await readRuntimeFileContent({ ...remote('download'), pageOversizedBinary: true })
+          : await readRuntimeFilePreview(
+              {
+                target: remote('download').target,
+                worktreeId: 'wt-1',
+                worktreePath: '/remote/repo'
+              },
+              '/remote/repo/download'
+            )
+      expect(result).toEqual({
+        content: png.toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      })
+    }
+  )
+
+  it('only probes an extensionless non-image binary', async () => {
+    serveRemoteFile('download', { bytes: Buffer.alloc(128, 0) })
+    await expect(
+      readRuntimeFileContent({ ...remote('download'), pageOversizedBinary: true })
+    ).resolves.toEqual({ content: '', isBinary: true })
+    expect(methodCalls('files.readChunk')).toHaveLength(1)
+    expect(methodCalls('files.stat')).toHaveLength(0)
+  })
+
+  it.each(['files.stat', 'files.readChunk'])(
+    'preserves binary results on hosts without %s',
+    async (missing) => {
+      serveRemoteFile('download', { bytes: png, missingMethods: [missing] })
+      await expect(
+        readRuntimeFileContent({ ...remote('download'), pageOversizedBinary: true })
+      ).resolves.toEqual({ content: '', isBinary: true })
+    }
+  )
 })
 
 describe('remote saves larger than one request frame', () => {

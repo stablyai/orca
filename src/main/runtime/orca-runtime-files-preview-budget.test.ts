@@ -36,6 +36,10 @@ describe('RuntimeFileCommands', () => {
   // Mobile image tabs use readPreview; exceeding the outbound budget would kill their socket.
   describe('previewable binary budget', () => {
     const previewTempDirs: string[] = []
+    const pngImage = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+      'base64'
+    )
 
     afterEach(async () => {
       await Promise.all(previewTempDirs.map((dir) => rm(dir, { recursive: true, force: true })))
@@ -101,6 +105,40 @@ describe('RuntimeFileCommands', () => {
         commands.readChatImagePreview('id:wt-1', join(dir, 'notes.txt'))
       ).rejects.toThrow('not_an_image')
     })
+
+    it('serves extensionless chat images with their detected MIME type and enforces the budget', async () => {
+      const dir = await previewFixture()
+      const filePath = join(dir, 'downloaded-image')
+      await writeFile(filePath, pngImage)
+      const { commands } = createRuntimeFileCommands()
+      statMock.mockResolvedValue({ isFile: () => true })
+      resolveAuthorizedPathMock.mockRejectedValue(new Error('Access denied'))
+
+      await expect(commands.readChatImagePreview('id:wt-1', filePath)).resolves.toEqual({
+        content: pngImage.toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      })
+      await expect(commands.readChatImagePreview('id:wt-1', filePath, 1)).rejects.toThrow(
+        'file_too_large'
+      )
+    })
+
+    it.each(['image.pdf', 'image.mp4', 'image.txt'])(
+      'does not override the non-image extension of an in-project %s',
+      async (name) => {
+        const dir = await previewFixture()
+        const filePath = join(dir, name)
+        await writeFile(filePath, pngImage)
+        const { commands } = createRuntimeFileCommands({ path: dir })
+        resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+
+        await expect(commands.readChatImagePreview('id:wt-1', filePath)).rejects.toThrow(
+          'not_an_image'
+        )
+      }
+    )
 
     it('refuses chat images for an SSH workspace, whose paths name the remote machine', async () => {
       const dir = await previewFixture()

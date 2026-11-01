@@ -74,6 +74,38 @@ describe('a granted host file outside every workspace', () => {
     )
   })
 
+  it.each(['binary_file', 'empty binary'])(
+    'explains an older host %s response for an extensionless image outside its workspace',
+    async (response) => {
+      runtimeEnvironmentCall.mockImplementation(async ({ method }) => ({
+        id: 'rpc',
+        _meta: { runtimeId: 'remote-runtime' },
+        ...(method === 'files.resolveTerminalPath'
+          ? {
+              ok: true,
+              result: {
+                exists: true,
+                openTarget: { kind: 'absolute-file', absolutePath: '/tmp/download', grantId: 'g-1' }
+              }
+            }
+          : method === 'files.readTerminalArtifactPreview' && response === 'empty binary'
+            ? { ok: true, result: { content: '', isBinary: true } }
+            : { ok: false, error: { code: 'runtime_error', message: 'binary_file' } })
+      }))
+      await expect(
+        readRuntimeFilePreview(
+          { target: granted.target, worktreeId: granted.worktreeId, worktreePath: '/repo' },
+          '/tmp/download',
+          { kind: 'chat-image' }
+        )
+      ).rejects.toThrow('If it is an image, update Orca on this host and retry.')
+      expect(fsReadFile).not.toHaveBeenCalled()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'files.readChatImage' })
+      )
+    }
+  )
+
   it('reads a first image grant at the canonical host path and renews only that path', async () => {
     const canonicalPath = '/private/tmp/out.png'
     const preview = { content: 'iVBO', isBinary: true, isImage: true, mimeType: 'image/png' }

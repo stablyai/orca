@@ -1,8 +1,6 @@
+import { IMAGE_SIGNATURE_BYTES } from '../../../shared/image-file-signature'
 import { BINARY_PROBE_BYTES } from '../../../shared/binary-buffer'
-import {
-  IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
-  filePreviewExtension
-} from '../../../shared/file-preview-kind'
+import { previewableBinaryMimeType, filePreviewExtension } from '../../../shared/file-preview-kind'
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
@@ -114,12 +112,13 @@ export async function readFileInChunks(
   return { kind: 'ok', bytes }
 }
 
-/** A binary the host refused as text: only images and PDFs preview, so no other is fetched. */
+/** Unknown extensionless binaries may be images; other unsupported extensions stay binary. */
 export async function readRemoteBinaryFile(
   address: RuntimeRemoteFileAddress,
   options: { pageOversized: boolean }
 ): Promise<RuntimeFilePreviewResult> {
-  return previewableBinaryMimeType(address.relativePath)
+  return previewableBinaryMimeType(address.relativePath) ||
+    !filePreviewExtension(address.relativePath)
     ? readRemoteFilePreview(address, options)
     : { content: '', isBinary: true }
 }
@@ -157,8 +156,9 @@ export async function readRemoteFilePreview(
   options: { pageOversized: boolean }
 ): Promise<RuntimeFilePreviewResult> {
   const remote = pinRemoteFileAddress(address)
+  let result: RuntimeFilePreviewResult
   try {
-    return await callRuntimeRpc<RuntimeFilePreviewResult>(
+    result = await callRuntimeRpc<RuntimeFilePreviewResult>(
       remote.target,
       'files.readPreview',
       { worktree: remote.worktree, relativePath: remote.relativePath },
@@ -181,6 +181,34 @@ export async function readRemoteFilePreview(
     }
     return pagedFilePreviewResult(remote.relativePath, paged.bytes)
   }
+  if (
+    options.pageOversized &&
+    result.isBinary &&
+    !result.isImage &&
+    !result.content &&
+    !filePreviewExtension(remote.relativePath)
+  ) {
+    // Older hosts return an empty binary for extensionless images; probe before fetching the body.
+    const probe = await nullWhenUnsupported(() =>
+      readRemoteRuntimeFileChunk(remote, 0, IMAGE_SIGNATURE_BYTES)
+    )
+    if (
+      probe &&
+      previewableBinaryMimeType(
+        remote.relativePath,
+        decodeChunk(probe.contentBase64, probe.bytesRead)
+      )
+    ) {
+      const paged = await readRemoteFileInChunks(remote)
+      if (paged.kind === 'too_large') {
+        throw new Error(`Remote file is too large to preview (${paged.size} bytes)`)
+      }
+      if (paged.kind === 'ok') {
+        return pagedFilePreviewResult(remote.relativePath, paged.bytes)
+      }
+    }
+  }
+  return result
 }
 
 /** The `files.readPreview` result for bytes the host was too large to send in one reply. */
@@ -188,7 +216,7 @@ export function pagedFilePreviewResult(
   relativePath: string,
   bytes: Uint8Array
 ): RuntimeFilePreviewResult {
-  const mimeType = previewableBinaryMimeType(relativePath)
+  const mimeType = previewableBinaryMimeType(relativePath, bytes)
   if (mimeType) {
     return { content: bytesToBase64(bytes), isBinary: true, isImage: true, mimeType }
   }
@@ -202,11 +230,6 @@ export function pagedTextFileResult(bytes: Uint8Array): RuntimeFilePreviewResult
   }
   // Why: keep a BOM like the host's Buffer decode, or a save would silently drop it.
   return { content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), isBinary: false }
-}
-
-/** The image/PDF previews the host's `files.readPreview` sends whole; one table for both sides. */
-export function previewableBinaryMimeType(relativePath: string): string | undefined {
-  return IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePreviewExtension(relativePath)]
 }
 
 async function nullWhenUnsupported<TResult>(call: () => Promise<TResult>): Promise<TResult | null> {

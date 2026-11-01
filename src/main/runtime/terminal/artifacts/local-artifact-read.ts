@@ -1,10 +1,8 @@
 import { open, constants, type FileHandle } from 'node:fs/promises'
-import { extname } from 'node:path'
 import type { TerminalFileGrant } from './file-grants'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   MOBILE_FILE_READ_MAX_BYTES,
-  RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES,
   previewableBinaryByteLimit
 } from '../../files/file-preview-budget'
 import {
@@ -15,6 +13,7 @@ import {
 } from './artifact-integrity'
 import { isBinaryBuffer } from '../../../../shared/binary-buffer'
 import type { RuntimeFilePreviewResult } from '../../../../shared/runtime-types'
+import { readLocalPreviewMimeType } from '../../../ipc/filesystem/local-file-preview-type'
 
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
 
@@ -48,7 +47,7 @@ export async function readLocalTerminalArtifactPreviewFromHandle(
     throw new Error('Cannot preview a directory')
   }
   assertTerminalFileGrantFresh(grant, fileStats)
-  const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(grant.absolutePath).toLowerCase()]
+  const mimeType = await readLocalPreviewMimeType(grant.absolutePath, handle)
   if (mimeType) {
     const binaryMaxBytes =
       maxContentBytes === undefined

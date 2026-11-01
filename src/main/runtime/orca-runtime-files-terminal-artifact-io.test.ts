@@ -343,6 +343,40 @@ describe('RuntimeFileCommands', () => {
       ).rejects.toThrow('terminal_file_grant_stale')
     })
 
+    it('previews an extensionless image through its outside-workspace grant', async () => {
+      const image = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+        'base64'
+      )
+      const artifactPath = await tempFile('download', '')
+      await writeFile(artifactPath, image)
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+      await expect(
+        commands.readTerminalArtifactPreview(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).resolves.toEqual({
+        content: image.toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      })
+      await expect(
+        commands.readTerminalArtifactPreview(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a',
+          1
+        )
+      ).rejects.toThrow('file_too_large')
+    })
+
     it('keeps local terminal artifact previews above the remote cap available', async () => {
       const size = RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
       const artifactPath = await tempFile('result.png', 'a'.repeat(size))
