@@ -130,14 +130,9 @@ describe('useMobileNativeChatPrompts transcript asks', () => {
 })
 
 describe('useMobileNativeChatPrompts in a structured chat', () => {
-  it.each([
-    ['accepted', true],
-    ['queued', true],
-    ['unknown', true],
-    ['rejected', false]
-  ] as const)(
+  it.each(['accepted', 'queued', 'unknown', 'rejected'] as const)(
     'answers a Codex async question through an ordinary %s send',
-    async (outcome, accepted) => {
+    async (outcome) => {
       const sendWithOutcome = vi.fn(async () => outcome)
       const questions = [{ title: 'Which color?', options: ['Red', 'Blue'] }]
       const message: NativeChatMessage = {
@@ -200,7 +195,7 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
       expect(ask).toEqual(initialAsk)
       expect(ask?.questions[0]?.options.map((option) => option.label)).toEqual(['Red', 'Blue'])
       await expect(ask && captured?.structuredAnswer?.(ask, [{ indices: [1] }])).resolves.toBe(
-        accepted
+        outcome
       )
       expect(sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
       messages = [

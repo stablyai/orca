@@ -89,9 +89,17 @@ export function useMobileNativeChatPromptController({
   const answerAsk = useNativeChatAcceptedAction(
     async (prompt: AskPrompt, selections: AskAnswerSelection[]) => {
       const hide = asyncHides.capture(prompt.occurrenceIds ?? [])
-      const accepted = await (structuredAnswer ?? terminal.answerAsk)(prompt, selections)
-      // Only terminal writes acknowledge delivery; structured admission leaves retirement to rows.
-      if (accepted && prompt.replyAsMessage && !structuredAnswer) {
+      if (structuredAnswer) {
+        const outcome = await structuredAnswer(prompt, selections)
+        // Admission leaves retirement to rows, but a queued answer posts none until the turn ends.
+        if (outcome === 'queued') {
+          hide()
+        }
+        return outcome !== 'rejected'
+      }
+      const accepted = await terminal.answerAsk(prompt, selections)
+      // Only terminal writes acknowledge delivery.
+      if (accepted && prompt.replyAsMessage) {
         hide()
       }
       return accepted

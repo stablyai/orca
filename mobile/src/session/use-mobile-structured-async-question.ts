@@ -4,6 +4,7 @@ import {
   type AskAnswerSelection
 } from '../../../src/shared/native-chat-ask-answer'
 import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 export type MobileStructuredAskSession = Pick<
@@ -18,7 +19,12 @@ export function useMobileStructuredAsyncQuestion(args: {
   transcriptLoading: boolean
 }): {
   ask: AskPrompt | null
-  answer: ((prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>) | null
+  answer:
+    | ((
+        prompt: AskPrompt,
+        selections: AskAnswerSelection[]
+      ) => Promise<MobileNativeChatSendOutcome>)
+    | null
 } {
   const { structured, pendingAsk, transcriptLoading } = args
   // A journal prompt takes the card slot first, as on desktop.
@@ -28,8 +34,9 @@ export function useMobileStructuredAsyncQuestion(args: {
   const sendWithOutcome = structured?.sendWithOutcome
   const answer = useCallback(
     async (prompt: AskPrompt, selections: AskAnswerSelection[]) =>
-      sendWithOutcome !== undefined &&
-      (await sendWithOutcome(formatAskAnswer(prompt, selections))) !== 'rejected',
+      sendWithOutcome === undefined
+        ? 'rejected'
+        : await sendWithOutcome(formatAskAnswer(prompt, selections)),
     [sendWithOutcome]
   )
   return { ask, answer: structured ? answer : null }

@@ -43,7 +43,10 @@ export function NativeChatStructuredAsyncQuestion({
       prompt={prompt}
       onAnswer={(selections) => {
         // Send admission can precede delivery; canonical transcript rows retire questions.
-        send(formatAskAnswer(prompt, selections), [])
+        // A queued answer posts no row until the turn ends, so hide it or every Submit queues a copy.
+        if (send(formatAskAnswer(prompt, selections), []) === 'queued') {
+          dismiss()
+        }
       }}
       onCancel={dismiss}
     />

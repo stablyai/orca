@@ -361,7 +361,7 @@ describe('NativeChatStructuredAsyncQuestion', () => {
     let settle = () => {}
     const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
       settle = () => request?.onSettled?.('unconfirmed')
-      return 'queued'
+      return true
     })
     const render = () =>
       act(() =>
@@ -399,30 +399,31 @@ describe('NativeChatStructuredAsyncQuestion', () => {
     expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
   })
 
-  it.each([false, true, 'queued'] as const)(
-    'does not make %s admission a retained hide',
-    (admission) => {
-      const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => admission)
-      act(() =>
-        root.render(
-          <NativeChatStructuredAsyncQuestion
-            paneKey="tab-1:structured"
-            sourceKey="host"
-            sourceScope="journal/session/epoch"
-            session={{ messages: [asked], readPhase: 'ready' }}
-            send={send}
-          />
-        )
+  it.each([
+    [false, true],
+    [true, true],
+    ['queued', false]
+  ] as const)('hides the card only for a queued answer (admission: %s)', (admission, shown) => {
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => admission)
+    act(() =>
+      root.render(
+        <NativeChatStructuredAsyncQuestion
+          paneKey="tab-1:structured"
+          sourceKey="host"
+          sourceScope="journal/session/epoch"
+          session={{ messages: [asked], readPhase: 'ready' }}
+          send={send}
+        />
       )
-      act(() =>
-        [...container.querySelectorAll('button[aria-pressed]')]
-          .find((node) => node.textContent?.includes('Blue'))!
-          .dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      )
-      act(() => vi.runAllTimers())
-      expect(container.textContent).toContain('Which color?')
-    }
-  )
+    )
+    act(() =>
+      [...container.querySelectorAll('button[aria-pressed]')]
+        .find((node) => node.textContent?.includes('Blue'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    act(() => vi.runAllTimers())
+    expect(container.textContent?.includes('Which color?')).toBe(shown)
+  })
   it('resets pending choices when host ownership changes with the same portable definition', () => {
     const send = vi.fn(() => true)
     const render = (host: string) =>
