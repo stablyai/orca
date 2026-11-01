@@ -1,5 +1,5 @@
-import type { PRComment } from '../../../shared/github/comment-types'
-import type { PRCommentGroup } from '../../../shared/pr-comment-groups'
+import type { PRComment } from './comment-types'
+import type { PRCommentGroup } from '../pr-comment-groups'
 
 export type PRCommentsResolutionReviewKind = 'PR' | 'MR'
 

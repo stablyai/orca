@@ -1,7 +1,7 @@
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { CheckStatus } from '../../../../../shared/github/pull-request-types'
-import type { HostedReviewState } from '../../../../../shared/hosted-review'
-import { reviewRefreshIntervalMs } from '../../../../../shared/review-refresh-policy'
+import type { PRCheckDetail } from './check-types'
+import type { CheckStatus } from './pull-request-types'
+import type { HostedReviewState } from '../hosted-review'
+import { reviewRefreshIntervalMs } from '../review-refresh-policy'
 
 export function detailedChecksStatus(checks: readonly PRCheckDetail[]): CheckStatus | undefined {
   if (checks.length === 0) {
@@ -24,6 +24,17 @@ export function detailedChecksStatus(checks: readonly PRCheckDetail[]): CheckSta
     return 'failure'
   }
   return checks.some((check) => check.conclusion === 'success') ? 'success' : 'neutral'
+}
+
+// Unchanged checks back off to 2 min; a change restores the 1 min cadence. Failures back off from 1 to 15 min.
+export function nextChecksPollBackoffMs(
+  previousMs: number,
+  result: 'changed' | 'unchanged' | 'failed'
+): number {
+  if (result === 'failed') {
+    return Math.min(Math.max(60_000, previousMs * 2), 900_000)
+  }
+  return result === 'unchanged' ? Math.min(previousMs * 2, 120_000) : 60_000
 }
 
 export class ChecksDetailPollingPolicy {
