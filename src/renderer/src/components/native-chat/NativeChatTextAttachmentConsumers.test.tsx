@@ -1,22 +1,16 @@
 // @vitest-environment happy-dom
 import { useRef, useMemo } from 'react'
-import { useQueuedEditFixture, withText, writeSpy } from './structured-queued-edit.test-fixture'
-import { NativeChatQueuedMessageComposer } from './NativeChatQueuedMessageComposer'
-import { NativeChatComposer } from './NativeChatComposer'
-import { fileReferenceContent } from './native-chat-prompt-document'
-import {
-  NativeChatMarkdownImageOwnerProvider,
-  NativeChatMarkdownImageOwnerContext
-} from './native-chat-markdown-image-owner'
-import { useAppStore } from '@/store'
-import { nativeChatFanoutFixture } from './native-chat-workspace-test-fixtures'
-import { getDefaultSettings } from '../../../../shared/constants'
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+
+import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
+
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { TooltipProvider } from '@/components/ui/tooltip'
+
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
-import { NativeChatTextAttachmentScope } from './NativeChatTextAttachments'
+import {
+  NativeChatTextAttachmentScope,
+  NativeChatTextAttachments
+} from './NativeChatTextAttachments'
 import { useNativeChatPastedTextFile } from './use-native-chat-pasted-text-file'
 import {
   insertNativeChatPastedText,
@@ -31,7 +25,16 @@ import {
 import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
 import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
 
-const mocks = vi.hoisted(() => ({ save: vi.fn(), rpc: vi.fn(), write: vi.fn(), resolved: false }))
+const mocks = vi.hoisted(() => ({
+  save: vi.fn(),
+  rpc: vi.fn(),
+  write: vi.fn(),
+  resolved: false,
+  start: vi.fn(),
+  append: vi.fn(),
+  finish: vi.fn(),
+  cancel: vi.fn()
+}))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
 vi.mock('./native-chat-visual-markdown-extension', () => ({
   useNativeChatVisualMarkdownExtension: () => undefined
@@ -102,8 +105,10 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-it('opens pending and settled draft pills, retains remove/undo and restores the token map', async () => {
+it('opens draft and sent sources, exports exact bytes and scrolls a giant-line paste to the end', async () => {
   const text = `\ufeff${'🙂paste\r\n'.repeat(5000)}`
+  mocks.start.mockResolvedValue({ canceled: false, transferId: 'output' })
+  mocks.finish.mockResolvedValue({ canceled: false })
   mocks.resolved = false
   const upload = Promise.withResolvers<string>()
   mocks.save.mockReturnValue(upload.promise)
@@ -123,7 +128,15 @@ it('opens pending and settled draft pills, retains remove/undo and restores the 
   })
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { ui: { savePastedTextAsFile: mocks.save, writeClipboardText: mocks.write } }
+    value: {
+      ui: { savePastedTextAsFile: mocks.save, writeClipboardText: mocks.write },
+      fs: {
+        startDownloadedFile: mocks.start,
+        appendDownloadedFileChunk: mocks.append,
+        finishDownloadedFile: mocks.finish,
+        cancelDownloadedFile: mocks.cancel
+      }
+    }
   })
   let view = render(<Composer />)
   await act(async () => {
@@ -172,144 +185,67 @@ it('opens pending and settled draft pills, retains remove/undo and restores the 
     'immediate'
   )
   expect(readNativeChatComposerDraft(scope).text).toBe(saved.text)
-  view = render(<Composer initialValue={saved.text} />)
+  view = render(
+    <NativeChatTextAttachments
+      content={sent}
+      structured
+      runtimeContext={{ target: { kind: 'local' }, worktreeId: 'w', worktreePath: '/repo' }}
+      renderText={(content) => <span>{content}</span>}
+    />
+  )
   await openSource()
+  fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
+  await waitFor(() => expect(mocks.write).toHaveBeenCalledTimes(2))
+  expect(mocks.write.mock.calls[1]).toEqual([text])
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Save file' }).hasAttribute('disabled')).toBe(false)
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Save file' }))
+  await waitFor(() => expect(mocks.finish).toHaveBeenCalledOnce())
+  expect(
+    Buffer.concat(
+      mocks.append.mock.calls.map(([args]) => Buffer.from(args.contentBase64, 'base64'))
+    ).equals(Buffer.from(text))
+  ).toBe(true)
   view.unmount()
-})
-
-it.each(['save', 'cancel'] as const)(
-  'retires the actual queued composer source on %s while the normal composer keeps its editor',
-  async (exit) => {
-    const initial = useAppStore.getInitialState()
-    const fixture = nativeChatFanoutFixture(1, 1, 0)
-    useAppStore.setState(
-      {
-        ...initial,
-        ...fixture,
-        settings: getDefaultSettings('/test35636'),
-        runtimeEnvironmentCatalogHydrated: true
-      },
+  const giant = `${'x'.repeat(25 * 1024 * 1024)}TAIL`
+  mocks.resolved = false
+  const heldUpload = Promise.withResolvers<string>()
+  mocks.save.mockReturnValueOnce(heldUpload.promise)
+  const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600)
+  const offsetHeight = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(600)
+  view = render(<Composer />)
+  await act(async () => {
+    expect(paste(giant)).toBe(true)
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Pasted text' }))
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Copy contents' }).hasAttribute('disabled')).toBe(
       true
     )
-    const text = 'queued source bytes'
-    const bytes = Buffer.from(text)
-    const reply = {
-      snapshot: 'a'.repeat(64),
-      size: bytes.length,
-      bytesRead: bytes.length,
-      contentBase64: bytes.toString('base64'),
-      eof: true
-    }
-    mocks.rpc.mockImplementation(async (_target, method) =>
-      method === 'status.get' ? { capabilities: ['native-chat.text-attachment-read.v1'] } : reply
-    )
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: {
-        ui: { writeClipboardText: mocks.write },
-        git: { discoverCommitMessageModels: vi.fn(async () => ({ success: false })) }
-      }
-    })
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      }
-    )
-    const transport: NativeChatStructuredComposerTransport = {
-      capturePresentation: () => () => true,
-      send: () => true,
-      dispatchCommand: async () => ({ handled: false, accepted: false, error: null }),
-      optionsSurface: {
-        getSnapshot: () => [],
-        setOption: vi.fn(),
-        invokeAction: vi.fn(),
-        subscribe: () => () => {}
-      },
-      optionSnapshot: [],
-      onError: vi.fn(),
-      runtime: 'local',
-      sessionId: 'session-0',
-      runtimeEnvironmentId: null
-    }
-    function Chat() {
-      const queue = useQueuedEditFixture({ messages: [withText(`@${path}`)] })
-      return (
-        <TooltipProvider>
-          <NativeChatMarkdownImageOwnerProvider tabId="chat-0" sessionId="session-0" isVisible>
-            <NativeChatComposer
-              terminalTabId="chat-0"
-              paneKey="normal35636"
-              targetPtyId={null}
-              agent="codex"
-              structuredTransport={transport}
-            />
-            <button onClick={() => void queue.begin('card')}>Edit queued source</button>
-            {queue.editor ? (
-              <NativeChatQueuedMessageComposer
-                editor={queue.editor}
-                attachTo={{ terminalTabId: 'chat-0', transport }}
-              />
-            ) : null}
-          </NativeChatMarkdownImageOwnerProvider>
-        </TooltipProvider>
-      )
-    }
-    const view = render(<Chat />)
-    try {
-      const normal = screen.getByRole('textbox')
-      const normalEditor = promptEditor(normal)
-      await act(async () => normalEditor.commands.insertContent('unsent normal draft'))
-      fireEvent.click(screen.getByRole('button', { name: 'Edit queued source' }))
-      await waitFor(() => expect(screen.getAllByRole('textbox')).toHaveLength(2))
-      const editor = screen.getAllByRole('textbox')[1]!
-      const queuedEditor = promptEditor(editor)
-      await act(async () =>
-        queuedEditor.commands.insertContent([
-          { type: 'text', text: 'edited ' },
-          fileReferenceContent(path),
-          { type: 'text', text: ' ' }
-        ])
-      )
-      await openSource()
-      const pending = Promise.withResolvers<typeof reply>()
-      mocks.rpc.mockImplementationOnce(() => pending.promise)
-      fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
-      await act(async () => {})
-      if (exit === 'save') {
-        fireEvent.keyDown(editor, { key: 'Enter' })
-        await waitFor(() => expect(writeSpy).toHaveBeenCalled())
-      } else {
-        fireEvent.click(
-          within(view.container).getByRole('button', { name: 'Cancel', hidden: true })
-        )
-      }
-      await waitFor(() =>
-        expect(screen.queryByRole('button', { name: 'Copy contents' })).toBeNull()
-      )
-      await act(async () => pending.resolve(reply))
-      expect(mocks.write).not.toHaveBeenCalled()
-      {
-        await waitFor(() => expect(screen.getAllByRole('textbox')).toEqual([normal]))
-        expect(promptEditor(normal)).toBe(normalEditor)
-        expect(promptValue(normal)).toBe('unsent normal draft')
-        fireEvent.click(screen.getByRole('button', { name: 'Edit queued source' }))
-        await waitFor(() => expect(screen.getAllByRole('textbox')).toHaveLength(2))
-        await act(async () =>
-          promptEditor(screen.getAllByRole('textbox')[1]!).commands.insertContent(
-            fileReferenceContent(path)
-          )
-        )
-        await openSource()
-        fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
-        await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(text))
-      }
-    } finally {
-      view.unmount()
-      useAppStore.setState(initial, true)
-      vi.unstubAllGlobals()
-    }
+  )
+  const scroller = document.querySelector('.scrollbar-editor')
+  if (!(scroller instanceof HTMLElement)) {
+    throw new Error('Expected real text scroller')
   }
-)
+  await waitFor(() =>
+    expect(scroller.querySelectorAll('[data-text-segment]').length).toBeGreaterThan(0)
+  )
+  const track = scroller.lastElementChild
+  if (!(track instanceof HTMLElement)) {
+    throw new Error('Expected virtual track')
+  }
+  expect(Number.parseFloat(track.style.height)).toBeLessThan(8_000_000)
+  fireEvent.scroll(scroller, { target: { scrollTop: Number.parseFloat(track.style.height) - 600 } })
+  await waitFor(() => expect(scroller.textContent).toContain('TAIL'))
+  expect(scroller.querySelectorAll('[data-text-segment]').length).toBeLessThanOrEqual(256)
+  fireEvent.scroll(scroller, { target: { scrollTop: 0 } })
+  await waitFor(() =>
+    expect(scroller.querySelector('[data-text-segment]')?.textContent).toBe('x'.repeat(256))
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  await act(async () => heldUpload.resolve(path))
+  view.unmount()
+  height.mockRestore()
+  offsetHeight.mockRestore()
+})

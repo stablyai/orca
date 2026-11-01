@@ -1,3 +1,3 @@
-export function textInputFontSizeForBody(bodySize: number): number {
-  return bodySize
-}
+import { typography } from '../theme/mobile-theme'
+
+export const TEXT_INPUT_FONT_SIZE = typography.bodySize

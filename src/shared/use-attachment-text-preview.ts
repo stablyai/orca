@@ -1,12 +1,12 @@
 import type * as React from 'react'
 import { AttachmentTextSource, type AttachmentTextRead } from './attachment-text-source'
 
-type Display = Awaited<ReturnType<AttachmentTextSource['page']>>
 type Preview = {
   source: AttachmentTextSource
-  display: Display | null
+  revision: number
   busy: boolean
   error: string
+  readError: string
 }
 
 export function createAttachmentTextPreviewHook({
@@ -15,60 +15,53 @@ export function createAttachmentTextPreviewHook({
   useCallback
 }: Pick<typeof React, 'useState' | 'useEffect' | 'useCallback'>) {
   return function useAttachmentTextPreview(path: string, read: AttachmentTextRead) {
-    const [revision, setRevision] = useState(0)
+    const [retryRevision, setRetryRevision] = useState(0)
     const [preview, setPreview] = useState<Preview>(() => ({
       source: new AttachmentTextSource(path, read),
-      display: null,
-      busy: true,
-      error: ''
+      revision: 0,
+      busy: false,
+      error: '',
+      readError: ''
     }))
-    const loadSource = useCallback(
-      async (source: AttachmentTextSource, page: number, subpage = 0) => {
+    const demand = useCallback((source: AttachmentTextSource, indices: number[]) => {
+      setPreview((state) => (state.source === source ? { ...state, readError: '' } : state))
+      source.requestViewport(indices, (cause) => {
         setPreview((state) =>
-          state.source === source ? { ...state, busy: true, error: '' } : state
+          state.source === source && !source.disposed
+            ? {
+                ...state,
+                revision: state.revision + 1,
+                readError:
+                  cause === undefined
+                    ? state.readError
+                    : cause instanceof TypeError
+                      ? 'This file cannot be previewed as text. Save it to open it in another app.'
+                      : cause instanceof Error
+                        ? cause.message
+                        : 'Unable to open attachment. Try again.'
+              }
+            : state
         )
-        try {
-          const display = await source.page(page, subpage)
-          source.assertCurrent()
-          setPreview((state) => (state.source === source ? { ...state, display } : state))
-        } catch (cause) {
-          if (!source.disposed) {
-            setPreview((state) =>
-              state.source === source
-                ? {
-                    ...state,
-                    error:
-                      cause instanceof TypeError
-                        ? 'This file cannot be previewed as text. Save it to open it in another app.'
-                        : cause instanceof Error
-                          ? cause.message
-                          : 'Unable to open attachment. Try again.'
-                  }
-                : state
-            )
-          }
-        } finally {
-          if (!source.disposed) {
-            setPreview((state) => (state.source === source ? { ...state, busy: false } : state))
-          }
-        }
-      },
-      []
-    )
+      })
+    }, [])
     useEffect(() => {
       const source = new AttachmentTextSource(path, read)
-      setPreview({ source, display: null, busy: true, error: '' })
-      void loadSource(source, 0)
+      setPreview({ source, revision: 0, busy: false, error: '', readError: '' })
+      demand(source, [0])
       return () => source.dispose()
-    }, [path, read, revision, loadSource])
+    }, [path, read, retryRevision, demand])
     return {
       ...preview,
+      error: preview.error || preview.readError,
       setError: (error: string) =>
         setPreview((state) => (state.source === preview.source ? { ...state, error } : state)),
       setBusy: (busy: boolean) =>
         setPreview((state) => (state.source === preview.source ? { ...state, busy } : state)),
-      load: (page: number, subpage = 0) => loadSource(preview.source, page, subpage),
-      retry: () => setRevision((value) => value + 1)
+      demand: useCallback(
+        (indices: number[]) => demand(preview.source, indices),
+        [preview.source, demand]
+      ),
+      retry: () => setRetryRevision((value) => value + 1)
     }
   }
 }

@@ -3104,15 +3104,10 @@
       "copyFrame": "Full Copy for this attachment needs the upcoming phone update.",
       "copyFailed": "Unable to copy attachment. Try again.",
       "pastedText": "Pasted text",
-      "first": "First",
-      "prev": "Prev",
-      "next": "Next",
-      "last": "Last",
       "textAttachment": "Text attachment",
       "byteSize": "{{size}} bytes",
       "saveUpdate": "Save will be available in a phone update.",
-      "fullCopySaveUpdate": "Full Copy and Save for this attachment will be available in a phone update.",
-      "attachmentPage": "Attachment page"
+      "fullCopySaveUpdate": "Full Copy and Save for this attachment will be available in a phone update."
     },
     "agentMessage": {
       "startedWorker": "Started worker",

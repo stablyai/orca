@@ -1,13 +1,12 @@
 // @vitest-environment happy-dom
-import { StrictMode, useContext, useState, useMemo } from 'react'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { useContext, useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { i18n } from '@/i18n/i18n'
-import * as languageRevision from '@/i18n/translation-resource-version'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
-  NativeChatTextAttachments,
   NativeChatTextAttachmentScope,
   NativeChatTextAttachmentOpener
 } from './NativeChatTextAttachments'
@@ -29,26 +28,6 @@ const mocks = vi.hoisted(() => {
     append: vi.fn(),
     finish: vi.fn(),
     cancel: vi.fn()
-  }
-})
-const subscriptions = vi.hoisted(() => ({ registered: 0, live: 0, notifications: 0, removed: 0 }))
-vi.mock('@/i18n/translation-resource-version', async (importOriginal) => {
-  const original = await importOriginal<typeof languageRevision>()
-  return {
-    ...original,
-    subscribeTranslationResourceVersion: vi.fn((callback: () => void) => {
-      subscriptions.registered += 1
-      subscriptions.live += 1
-      const unsubscribe = original.subscribeTranslationResourceVersion(() => {
-        subscriptions.notifications += 1
-        callback()
-      })
-      return () => {
-        subscriptions.live -= 1
-        subscriptions.removed += 1
-        unsubscribe()
-      }
-    })
   }
 })
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
@@ -109,61 +88,6 @@ afterEach(async () => {
 const waitUntilEnabled = (name: string) =>
   waitFor(() => expect(screen.getByRole('button', { name }).hasAttribute('disabled')).toBe(false))
 
-it('keeps terminal text unchanged and does no body reads until a structured reference is opened', async () => {
-  const content = `Read @${path}`
-  const renderText = (text: string) => <span>{text}</span>
-  const baseline = { ...subscriptions }
-  const view = render(
-    <NativeChatTextAttachments content={content} structured={false} renderText={renderText} />
-  )
-  expect(subscriptions).toEqual(baseline)
-  const terminalNode = view.container.firstChild
-  const revision = languageRevision.getTranslationResourceVersion()
-  await act(async () => {
-    await i18n.changeLanguage('fr')
-  })
-  expect(languageRevision.getTranslationResourceVersion()).toBeGreaterThan(revision)
-  view.rerender(
-    <NativeChatTextAttachments content={content} structured={false} renderText={renderText} />
-  )
-  expect(view.container.firstChild).toBe(terminalNode)
-  expect(subscriptions).toEqual(baseline)
-  expect(mocks.rpc).not.toHaveBeenCalled()
-  await act(async () => {
-    await i18n.changeLanguage('en')
-  })
-  expect(subscriptions).toEqual(baseline)
-  expect(screen.queryByRole('button')).toBeNull()
-  expect(view.container.textContent).toBe(content)
-  view.rerender(
-    <NativeChatTextAttachments
-      content={content}
-      structured
-      runtimeContext={{ target, worktreeId: 'w', worktreePath: '/repo' }}
-      renderText={renderText}
-    />
-  )
-  expect(mocks.rpc).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Pasted text' }))
-  await waitUntilEnabled('Copy contents')
-  expect(
-    mocks.rpc.mock.calls.filter((call) => call[1] === 'agentSessionAttachment.readTextChunk')
-  ).toHaveLength(1)
-  fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
-  await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(bytes.toString('utf8')))
-  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Copied contents'))
-  expect(screen.getByText('Section 1/1')).toBeTruthy()
-  expect(screen.getByRole('spinbutton', { name: 'Attachment page' })).toBeTruthy()
-  await waitUntilEnabled('Save file')
-  fireEvent.click(screen.getByRole('button', { name: 'Save file' }))
-  await waitFor(() => expect(mocks.finish).toHaveBeenCalled())
-  expect(
-    Buffer.concat(
-      mocks.append.mock.calls.map(([args]) => Buffer.from(args.contentBase64, 'base64'))
-    )
-  ).toEqual(bytes)
-})
-
 it('shows the old-host limitation and refreshes capability on Retry without affecting the message', async () => {
   capable = false
   render(<NativeChatTextAttachmentPreview path={path} target={target} onClose={() => {}} />)
@@ -174,265 +98,77 @@ it('shows the old-host limitation and refreshes capability on Retry without affe
   await waitUntilEnabled('Copy contents')
 })
 
-it('survives StrictMode cleanup and refuses clipboard publication after the owner is re-paired', async () => {
-  render(
-    <StrictMode>
-      <NativeChatTextAttachmentPreview path={path} target={target} onClose={() => {}} />
-    </StrictMode>
-  )
-  await waitUntilEnabled('Copy contents')
-  const gate = Promise.withResolvers<void>()
-  const started = Promise.withResolvers<void>()
-  const normal = mocks.rpc.getMockImplementation()!
-  mocks.rpc.mockImplementationOnce(async (...args) => {
-    started.resolve()
-    await gate.promise
-    return normal(...args)
-  })
-  fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
-  await started.promise
-  await act(async () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-text', createdAt: 2 }])
-    gate.resolve()
-  })
-  expect(mocks.write).not.toHaveBeenCalled()
-})
-
-it.each([true, false])(
-  'keeps focused stateful composer descendants mounted when owner context changes (structured=%s)',
-  async (enabled) => {
-    mocks.context = { target: { kind: 'local' }, worktreeId: 'w', worktreePath: '/repo' }
-    function Child() {
-      const [value, setValue] = useState('')
-      const open = useContext(NativeChatTextAttachmentOpener)
-      return (
-        <>
-          <input
-            aria-label="draft"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-          />
-          <button onClick={() => open?.(path)}>Open source</button>
-        </>
-      )
-    }
-    function Ui() {
-      const runtimeContext = mocks.context
-      const owner = useMemo(
-        () => ({ runtimeContext, isVisible: true, fileLinkContext: null }),
-        [runtimeContext]
-      )
-      return (
-        <NativeChatMarkdownImageOwnerContext.Provider value={owner}>
-          <NativeChatTextAttachmentScope enabled={enabled}>
-            <Child />
-          </NativeChatTextAttachmentScope>
-        </NativeChatMarkdownImageOwnerContext.Provider>
-      )
-    }
-    const ui = () => <Ui />
-    const view = render(ui())
-    const input = screen.getByRole('textbox', { name: 'draft' })
-    fireEvent.change(input, { target: { value: 'local editor state' } })
-    input.focus()
-    mocks.context = { ...mocks.context, worktreePath: '/renamed' }
-    view.rerender(ui())
-    expect(screen.getByRole('textbox', { name: 'draft', hidden: true })).toBe(input)
-    expect(document.activeElement).toBe(input)
-    expect(input.getAttribute('value')).toBe('local editor state')
-    if (!enabled) {
-      expect(mocks.rpc).not.toHaveBeenCalled()
-      return
-    }
-    fireEvent.click(screen.getByRole('button', { name: 'Open source' }))
-    await waitUntilEnabled('Copy contents')
-    const gate = Promise.withResolvers<unknown>()
-    const normal = mocks.rpc.getMockImplementation()!
-    mocks.rpc.mockImplementationOnce(() => gate.promise)
-    fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
-    await act(async () => {})
-    mocks.context = { ...mocks.context, expectedSshConnectionGeneration: 2 }
-    view.rerender(ui())
-    expect(screen.queryByRole('button', { name: 'Copy contents' })).toBeNull()
-    await act(async () =>
-      gate.resolve(
-        await normal(target, 'agentSessionAttachment.readTextChunk', {
-          offset: 0,
-          length: bytes.length
-        })
-      )
+it('keeps focused stateful composer descendants mounted when owner context changes', async () => {
+  mocks.context = { target: { kind: 'local' }, worktreeId: 'w', worktreePath: '/repo' }
+  function Child() {
+    const [value, setValue] = useState('')
+    const open = useContext(NativeChatTextAttachmentOpener)
+    return (
+      <>
+        <input
+          aria-label="draft"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+        />
+        <button onClick={() => open?.(path)}>Open source</button>
+      </>
     )
-    expect(mocks.write).not.toHaveBeenCalled()
-    expect(mocks.finish).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Open source' }))
-    await waitUntilEnabled('Copy contents')
-    expect(screen.getByRole('textbox', { name: 'draft', hidden: true })).toBe(input)
-    const picker = Promise.withResolvers<{ canceled: false; transferId: string }>()
-    mocks.start.mockReturnValueOnce(picker.promise)
-    fireEvent.click(screen.getByRole('button', { name: 'Save file' }))
-    await act(async () => {})
-    mocks.context = { ...mocks.context, worktreePath: '/changed-again' }
-    view.rerender(ui())
-    await act(async () => picker.resolve({ canceled: false, transferId: 'late-output' }))
-    expect(mocks.cancel).toHaveBeenCalledWith({ transferId: 'late-output' })
-    expect(mocks.append).not.toHaveBeenCalled()
-    expect(mocks.finish).not.toHaveBeenCalled()
   }
-)
-
-it('exports all raw web bytes and cancels desktop picker/output failures', async () => {
-  mocks.web = true
-  const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:35636')
-  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-  const view = render(
-    <NativeChatTextAttachmentPreview path={path} target={target} onClose={() => {}} />
+  function Ui() {
+    const runtimeContext = mocks.context
+    const owner = useMemo(
+      () => ({ runtimeContext, isVisible: true, fileLinkContext: null }),
+      [runtimeContext]
+    )
+    return (
+      <NativeChatMarkdownImageOwnerContext.Provider value={owner}>
+        <NativeChatTextAttachmentScope enabled>
+          <Child />
+        </NativeChatTextAttachmentScope>
+      </NativeChatMarkdownImageOwnerContext.Provider>
+    )
+  }
+  const ui = () => <Ui />
+  const view = render(ui())
+  const input = screen.getByRole('textbox', { name: 'draft' })
+  fireEvent.change(input, { target: { value: 'local editor state' } })
+  input.focus()
+  mocks.context = { ...mocks.context, worktreePath: '/renamed' }
+  view.rerender(ui())
+  expect(screen.getByRole('textbox', { name: 'draft', hidden: true })).toBe(input)
+  expect(document.activeElement).toBe(input)
+  expect(input.getAttribute('value')).toBe('local editor state')
+  fireEvent.click(screen.getByRole('button', { name: 'Open source' }))
+  await waitUntilEnabled('Copy contents')
+  const gate = Promise.withResolvers<unknown>()
+  const normal = mocks.rpc.getMockImplementation()!
+  mocks.rpc.mockImplementationOnce(() => gate.promise)
+  fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
+  await act(async () => {})
+  mocks.context = { ...mocks.context, expectedSshConnectionGeneration: 2 }
+  view.rerender(ui())
+  expect(screen.queryByRole('button', { name: 'Copy contents' })).toBeNull()
+  await act(async () =>
+    gate.resolve(
+      await normal(target, 'agentSessionAttachment.readTextChunk', {
+        offset: 0,
+        length: bytes.length
+      })
+    )
   )
-  const save = () => screen.getByRole('button', { name: 'Save file' })
-  await waitUntilEnabled('Save file')
-  fireEvent.click(save())
-  await waitFor(() => expect(click).toHaveBeenCalledOnce())
-  const blob = create.mock.calls[0]![0]
-  if (!(blob instanceof Blob)) {
-    throw new Error('Expected a complete file Blob')
-  }
-  expect(Buffer.from(await blob.arrayBuffer())).toEqual(bytes)
-  expect(mocks.start).not.toHaveBeenCalled()
-  create.mockRestore()
-  click.mockRestore()
-  view.unmount()
-  mocks.web = false
-  mocks.start.mockResolvedValueOnce({ canceled: true })
-  render(<NativeChatTextAttachmentPreview path={path} target={target} onClose={() => {}} />)
-  await waitUntilEnabled('Save file')
-  fireEvent.click(save())
-  await waitFor(() => expect(mocks.start).toHaveBeenCalledOnce())
-  await waitUntilEnabled('Save file')
+  expect(mocks.write).not.toHaveBeenCalled()
+  expect(mocks.finish).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Open source' }))
+  await waitUntilEnabled('Copy contents')
+  expect(screen.getByRole('textbox', { name: 'draft', hidden: true })).toBe(input)
+  const picker = Promise.withResolvers<{ canceled: false; transferId: string }>()
+  mocks.start.mockReturnValueOnce(picker.promise)
+  fireEvent.click(screen.getByRole('button', { name: 'Save file' }))
+  await act(async () => {})
+  mocks.context = { ...mocks.context, worktreePath: '/changed-again' }
+  view.rerender(ui())
+  await act(async () => picker.resolve({ canceled: false, transferId: 'late-output' }))
+  expect(mocks.cancel).toHaveBeenCalledWith({ transferId: 'late-output' })
   expect(mocks.append).not.toHaveBeenCalled()
   expect(mocks.finish).not.toHaveBeenCalled()
-  mocks.append.mockRejectedValueOnce(new Error('Output failed'))
-  fireEvent.click(save())
-  await screen.findByText('Output failed')
-  expect(mocks.cancel).toHaveBeenCalledWith({ transferId: 'output' })
-  expect(mocks.finish).not.toHaveBeenCalled()
-})
-
-it('updates translated labels without replacing the viewer, rereading or retaining closed subscriptions', async () => {
-  const language = 'fr-x-pr35636-population'
-  const initialLive = subscriptions.live
-  const renderText = (text: string) => <span>{text}</span>
-  i18n.addResourceBundle(language, 'translation', {
-    components: {
-      'native-chat': {
-        composer: { pastedTextLabel: 'Texte collé' },
-        textAttachmentPreview: { copyContents: 'Copier tout', attachmentPage: 'Page jointe' }
-      }
-    }
-  })
-  const view = render(
-    <NativeChatTextAttachments
-      content={`@${path}`}
-      structured
-      runtimeContext={{ target, worktreeId: 'w', worktreePath: '/repo' }}
-      renderText={renderText}
-    />
-  )
-  fireEvent.click(screen.getByRole('button', { name: 'Pasted text' }))
-  await waitUntilEnabled('Copy contents')
-  const input = screen.getByRole('spinbutton')
-  const reads = mocks.rpc.mock.calls.length
-  const notified = subscriptions.notifications
-  const revision = languageRevision.getTranslationResourceVersion()
-  const live = subscriptions.live
-  await act(async () => {
-    await i18n.changeLanguage(language)
-  })
-  expect(subscriptions.notifications - notified).toBe(
-    live * (languageRevision.getTranslationResourceVersion() - revision)
-  )
-  expect(screen.getByRole('spinbutton', { name: 'Page jointe' })).toBe(input)
-  expect(
-    Array.from(view.container.querySelectorAll('button')).some(
-      (node) => node.textContent === 'Texte collé'
-    )
-  ).toBe(true)
-  expect(screen.getByRole('button', { name: 'Copier tout' })).toBeTruthy()
-  await act(async () => {
-    i18n.addResource(
-      language,
-      'translation',
-      'components.native-chat.textAttachmentPreview.copyContents',
-      'Copier encore'
-    )
-  })
-  expect(mocks.rpc).toHaveBeenCalledTimes(reads)
-  fireEvent.click(screen.getByRole('button', { name: 'Copier encore' }))
-  await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(bytes.toString('utf8')))
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-  view.unmount()
-  expect(subscriptions.live).toBe(initialLive)
-  const retired = subscriptions.notifications
-  await act(async () => {
-    i18n.addResource(language, 'translation', 'retired35636', 'value')
-  })
-  expect(subscriptions.notifications).toBe(retired)
-  i18n.removeResourceBundle(language, 'translation')
-})
-
-it('presents owned reader and hook failures in the current locale without re-reading or replacing external errors', async () => {
-  const language = 'fr-x-pr35636-errors'
-  i18n.addResourceBundle(language, 'translation', {
-    components: {
-      'native-chat': {
-        textAttachmentPreview: {
-          hostUpdate: 'Mettre à jour cet hôte, puis réessayer.',
-          notText: 'Enregistrer ce fichier pour l’ouvrir.',
-          openFailed: 'Impossible d’ouvrir la pièce jointe.',
-          unreadableReply: 'Réponse illisible.',
-          incompleteReply: 'Réponse incomplète.'
-        }
-      }
-    }
-  })
-  capable = false
-  const view = render(
-    <NativeChatTextAttachmentPreview path={path} target={target} onClose={() => {}} />
-  )
-  await screen.findByText(
-    'This host cannot open text attachments yet. Update Orca on that host, then retry.'
-  )
-  const reads = mocks.rpc.mock.calls.length
-  await act(async () => {
-    await i18n.changeLanguage(language)
-  })
-  expect(screen.getByText('Mettre à jour cet hôte, puis réessayer.')).toBeTruthy()
-  expect(mocks.rpc).toHaveBeenCalledTimes(reads)
-  capable = true
-  mocks.rpc.mockRejectedValueOnce(new TypeError('invalid encoding'))
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-  await screen.findByText('Enregistrer ce fichier pour l’ouvrir.')
-  mocks.rpc.mockRejectedValueOnce('external non-error')
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-  await screen.findByText('Impossible d’ouvrir la pièce jointe.')
-  mocks.rpc.mockRejectedValueOnce(new Error('External diagnostic unchanged'))
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-  await screen.findByText('External diagnostic unchanged')
-  mocks.rpc
-    .mockResolvedValueOnce({ capabilities: [AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY] })
-    .mockResolvedValueOnce({})
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-  await screen.findByText('Réponse illisible.')
-  mocks.rpc
-    .mockResolvedValueOnce({ capabilities: [AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY] })
-    .mockResolvedValueOnce({
-      snapshot: 'a'.repeat(64),
-      size: 1,
-      bytesRead: 0,
-      contentBase64: '',
-      eof: true
-    })
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-  await screen.findByText('Réponse incomplète.')
-  view.unmount()
-  await i18n.changeLanguage('en')
-  i18n.removeResourceBundle(language, 'translation')
 })

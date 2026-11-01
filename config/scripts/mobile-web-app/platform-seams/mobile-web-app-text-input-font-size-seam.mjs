@@ -7,7 +7,7 @@ import ts from 'typescript-api'
 export const TEXT_INPUT_FONT_SIZE_SEAM = 'src/platform/text-input-font-size.web.ts'
 
 const SEAM_EXPORT = 'TEXT_INPUT_FONT_SIZE'
-const SEAM_MODULE = 'src/theme/mobile-theme.ts'
+const SEAM_MODULE = 'src/platform/text-input-font-size.ts'
 
 const FLOOR_EXPORT = 'TEXT_INPUT_FONT_SIZE_FLOOR'
 
@@ -26,29 +26,10 @@ export function textInputFontSizeFloor(mobileDir) {
     throw new Error(`[text-input-font-size-seam] no seam at ${TEXT_INPUT_FONT_SIZE_SEAM}`)
   }
   const parsed = parse(TEXT_INPUT_FONT_SIZE_SEAM, source)
-  const declarations = parsed.statements.flatMap((statement) =>
-    ts.isVariableStatement(statement) &&
-    statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
-      ? statement.declarationList.declarations
-          .filter(
-            (declaration) =>
-              ts.isIdentifier(declaration.name) && declaration.name.text === FLOOR_EXPORT
-          )
-          .map((declaration) => ({
-            initializer: declaration.initializer,
-            constant: (statement.declarationList.flags & ts.NodeFlags.Const) !== 0
-          }))
-      : []
-  )
-  const declared = declarations[0]?.initializer
-  if (
-    declarations.length !== 1 ||
-    !declarations[0].constant ||
-    declared === undefined ||
-    !ts.isNumericLiteral(declared)
-  ) {
+  const declared = declarationOf(parsed, FLOOR_EXPORT)
+  if (declared === null || !ts.isNumericLiteral(declared)) {
     throw new Error(
-      `[text-input-font-size-seam] ${TEXT_INPUT_FONT_SIZE_SEAM} declares no numeric unique exported const ${FLOOR_EXPORT}`
+      `[text-input-font-size-seam] ${TEXT_INPUT_FONT_SIZE_SEAM} declares no numeric ${FLOOR_EXPORT}`
     )
   }
   const floor = Number(declared.text)
@@ -245,8 +226,10 @@ function originOf(mobileDir, parsed, file, name) {
 }
 
 // Recognize seam by imported binding, not same-spelled local constant or unrelated import.
-export function isTextInputFontSizeBinding(mobileDir, file, source, name) {
-  const parsed = parse(file, source)
+function isSeamBinding(mobileDir, parsed, file, initializer) {
+  if (!ts.isIdentifier(initializer)) {
+    return false
+  }
   for (const statement of parsed.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
       continue
@@ -257,7 +240,7 @@ export function isTextInputFontSizeBinding(mobileDir, file, source, name) {
     }
     for (const element of bindings.elements) {
       if (
-        element.name.text === name &&
+        element.name.text === initializer.text &&
         (element.propertyName ?? element.name).text === SEAM_EXPORT &&
         moduleIdentity(resolveLocal(mobileDir, file, statement.moduleSpecifier.text)) ===
           SEAM_MODULE
@@ -368,8 +351,7 @@ function fontSizeIn(mobileDir, parsed, file, object) {
         text: entry.initializer.getText(),
         line: parsed.getLineAndCharacterOfPosition(entry.getStart(parsed)).line + 1,
         onSeam:
-          (ts.isIdentifier(entry.initializer) &&
-            isTextInputFontSizeBinding(mobileDir, file, parsed.text, entry.initializer.text)) ||
+          isSeamBinding(mobileDir, parsed, file, entry.initializer) ||
           isLiteralAtOrAboveFloor(mobileDir, parsed, entry.initializer)
       }
     }

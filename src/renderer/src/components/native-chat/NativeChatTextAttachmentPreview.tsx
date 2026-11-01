@@ -1,12 +1,4 @@
-import {
-  useMemo,
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  type PointerEvent,
-  type MouseEvent
-} from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,13 +8,13 @@ import {
   SheetTitle,
   SheetDescription
 } from '@/components/ui/sheet'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { createAttachmentTextPreviewHook } from '../../../../shared/use-attachment-text-preview'
 import { ATTACHMENT_TEXT_COPY_MAX_BYTES } from '../../../../shared/attachment-text-source'
+import { AttachmentTextScrollView } from './AttachmentTextScrollView'
 import { formatAttachmentPreviewError } from './native-chat-text-attachment-error'
 import { createChatAttachmentReader } from './native-chat-text-attachment-read'
 import { chatTextAttachmentName } from '../../../../shared/native-chat-text-attachment-references'
@@ -46,110 +38,8 @@ export function NativeChatTextAttachmentPreview({
 }) {
   useUiLanguageRevision()
   const read = useMemo(() => createChatAttachmentReader(target, text), [target, text])
-  const { source, display, busy, error, setError, setBusy, load, retry } = useAttachmentTextPreview(
-    path,
-    read
-  )
-  type Navigation = 'first' | 'prev' | 'next' | 'last'
-  type FieldCommit = PromiseWithResolvers<typeof display> & { ready?: true }
-  const pendingCommit = useRef<FieldCommit | null>(null)
-  const pageInputRef = useRef<HTMLInputElement>(null)
-  const [commitRevision, setCommitRevision] = useState(0)
-  useEffect(() => {
-    if (pendingCommit.current?.ready) {
-      pendingCommit.current.resolve(display)
-      pendingCommit.current = null
-    }
-  }, [commitRevision, display])
-  useEffect(
-    () => () => {
-      pendingCommit.current?.resolve(null)
-      pendingCommit.current = null
-    },
-    [source]
-  )
-  const [pageInput, setPageInput] = useState<{
-    source: typeof source
-    display: typeof display
-    draft?: string
-  }>({ source, display })
-  if (pageInput.source !== source || pageInput.display !== display) {
-    setPageInput({ source, display })
-  }
-  const commitPage = () => {
-    const value = pageInput.draft
-    setPageInput({ source, display })
-    const page = Number(value)
-    if (
-      value !== undefined &&
-      !busy &&
-      !pendingCommit.current &&
-      Number.isInteger(page) &&
-      page >= 1 &&
-      page <= source.pageCount &&
-      !(display?.page === page - 1 && display.subpage === 0)
-    ) {
-      const commit: FieldCommit = Promise.withResolvers<typeof display>()
-      pendingCommit.current = commit
-      void load(page - 1).then(() => {
-        if (pendingCommit.current === commit) {
-          if (source.disposed) {
-            pendingCommit.current = null
-            commit.resolve(null)
-          } else {
-            commit.ready = true
-            setCommitRevision((revision) => revision + 1)
-          }
-        }
-      })
-    }
-  }
-  const navigate = async (action: Navigation) => {
-    const current = pendingCommit.current ? await pendingCommit.current.promise : display
-    if (!current || source.disposed) {
-      return
-    }
-    if (action === 'first' || action === 'last') {
-      return load(
-        action === 'first' ? 0 : source.pageCount - 1,
-        action === 'first' ? 0 : Number.MAX_SAFE_INTEGER
-      )
-    }
-    const subpage = current.subpage + (action === 'prev' ? -1 : 1)
-    const withinPage = subpage >= 0 && subpage < current.subpages
-    const page = withinPage ? current.page : current.page + (subpage < 0 ? -1 : 1)
-    if (page < 0 || page >= source.pageCount) {
-      return
-    }
-    return load(page, subpage < 0 ? Number.MAX_SAFE_INTEGER : withinPage ? subpage : 0)
-  }
-  const atStart = !display || (display.page === 0 && display.subpage === 0)
-  const atEnd =
-    !display || (display.page + 1 === source.pageCount && display.subpage + 1 === display.subpages)
-  const activationProps = (disabled: boolean, onActivate: () => void) => ({
-    disabled,
-    onPointerDown: (event: PointerEvent) => {
-      if (
-        !disabled &&
-        event.isPrimary &&
-        event.button === 0 &&
-        document.activeElement === pageInputRef.current
-      ) {
-        event.preventDefault()
-      }
-    },
-    onMouseDown: (event: MouseEvent) => {
-      if (!disabled && event.button === 0 && document.activeElement === pageInputRef.current) {
-        event.preventDefault()
-      }
-    },
-    onClick: () => {
-      pageInputRef.current?.blur()
-      onActivate()
-    }
-  })
-  const navigationProps = (action: Navigation, disabled: boolean) =>
-    activationProps(disabled, () => void navigate(action))
+  const { source, revision, busy, error, setError, setBusy, demand, retry } =
+    useAttachmentTextPreview(path, read)
   const name =
     text === undefined
       ? chatTextAttachmentName(
@@ -158,11 +48,7 @@ export function NativeChatTextAttachmentPreview({
         )
       : translate('components.native-chat.composer.pastedTextLabel', 'Pasted text')
   const run = async (action: 'copy' | 'save') => {
-    if (pendingCommit.current) {
-      await pendingCommit.current.promise
-    } else {
-      setError('')
-    }
+    setError('')
     if (source.disposed) {
       return
     }
@@ -247,10 +133,7 @@ export function NativeChatTextAttachmentPreview({
         }
       }}
     >
-      <SheetContent
-        className="flex w-full flex-col sm:max-w-2xl"
-        closeButtonProps={activationProps(false, () => {})}
-      >
+      <SheetContent className="flex w-full flex-col sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>{name}</SheetTitle>
           <SheetDescription className="break-all">
@@ -270,10 +153,8 @@ export function NativeChatTextAttachmentPreview({
           <Button
             variant="outline"
             size="sm"
-            {...activationProps(
-              busy || source.size === null || copyTooLarge,
-              () => void run('copy')
-            )}
+            disabled={busy || source.size === null || copyTooLarge}
+            onClick={() => void run('copy')}
           >
             {translate(
               'components.native-chat.textAttachmentPreview.copyContents',
@@ -283,7 +164,8 @@ export function NativeChatTextAttachmentPreview({
           <Button
             variant="outline"
             size="sm"
-            {...activationProps(busy || source.size === null, () => void run('save'))}
+            disabled={busy || source.size === null}
+            onClick={() => void run('save')}
           >
             {translate('components.native-chat.textAttachmentPreview.saveFile', 'Save file')}
           </Button>
@@ -291,10 +173,10 @@ export function NativeChatTextAttachmentPreview({
             <Button
               variant="ghost"
               size="sm"
-              {...activationProps(false, () => {
+              onClick={() => {
                 source.dispose()
                 onClose()
-              })}
+              }}
             >
               {translate('common.cancel', 'Cancel')}
             </Button>
@@ -311,66 +193,12 @@ export function NativeChatTextAttachmentPreview({
         {error ? (
           <div role="alert" className="px-4 text-sm">
             <p>{formatAttachmentPreviewError(error)}</p>
-            <Button variant="outline" size="sm" {...activationProps(busy, retry)}>
+            <Button variant="outline" size="sm" disabled={busy} onClick={retry}>
               {translate('common.retry', 'Retry')}
             </Button>
           </div>
         ) : null}
-        <div className="scrollbar-editor min-h-0 flex-1 overflow-auto px-4" aria-busy={busy}>
-          {display?.segments.map((segment, index) => (
-            <div key={index} className="whitespace-pre-wrap break-all font-mono text-sm">
-              {segment.replace(/\n$/, '') || '\u00a0'}
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 px-4 pb-4 text-sm">
-          <Button variant="ghost" size="sm" {...navigationProps('first', busy || atStart)}>
-            {translate('components.native-chat.textAttachmentPreview.first', 'First')}
-          </Button>
-          <Button variant="ghost" size="sm" {...navigationProps('prev', busy || atStart)}>
-            {translate('auto.components.TaskPage.297a805b64', 'Previous')}
-          </Button>
-          <label>
-            {translate('components.native-chat.textAttachmentPreview.page', 'Page')}{' '}
-            <input
-              ref={pageInputRef}
-              aria-label={translate(
-                'components.native-chat.textAttachmentPreview.attachmentPage',
-                'Attachment page'
-              )}
-              className="w-16 rounded border bg-background px-1"
-              type="number"
-              min={1}
-              max={source.pageCount}
-              disabled={busy}
-              value={pageInput.draft ?? String((display?.page ?? 0) + 1)}
-              onChange={(event) => setPageInput({ source, display, draft: event.target.value })}
-              onBlur={commitPage}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !isImeOwnedKeyboardEvent(event)) {
-                  event.preventDefault()
-                  event.currentTarget.blur()
-                }
-              }}
-            />{' '}
-            / {source.pageCount}
-          </label>
-          <span>
-            {display
-              ? translate(
-                  'components.native-chat.textAttachmentPreview.section',
-                  'Section {{section}}/{{sections}}',
-                  { section: display.subpage + 1, sections: display.subpages }
-                )
-              : ''}
-          </span>
-          <Button variant="ghost" size="sm" {...navigationProps('next', busy || atEnd)}>
-            {translate('auto.components.TaskPage.b73717af92', 'Next')}
-          </Button>
-          <Button variant="ghost" size="sm" {...navigationProps('last', busy || !display)}>
-            {translate('components.native-chat.textAttachmentPreview.last', 'Last')}
-          </Button>
-        </div>
+        <AttachmentTextScrollView source={source} revision={revision} demand={demand} />
       </SheetContent>
     </Sheet>
   )

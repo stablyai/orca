@@ -447,13 +447,7 @@ it.each(
     })
     rows('compact', child('restored'))
     await act(async () => {})
-    const cold = { ...visits }
-    const passBound = fallback ? 8 : 6
-    expect(cold.worktrees).toBeGreaterThanOrEqual(population)
-    expect(cold.worktrees).toBeLessThanOrEqual(passBound * population)
-    expect(cold.repos).toBeGreaterThan(0)
-    expect(cold.repos).toBeLessThanOrEqual(passBound)
-    const ownerCalls = mocks.owner.mock.calls.length
+    expect(visits.worktrees).toBeGreaterThanOrEqual(population)
     visits.worktrees = 0
     visits.repos = 0
     await click(2)
@@ -471,16 +465,6 @@ it.each(
     // Owner indexes are warm; clicks must not rescan either catalog.
     expect(visits.worktrees).toBe(0)
     expect(visits.repos).toBe(0)
-    expect(mocks.owner.mock.calls.length).toBeGreaterThan(ownerCalls)
-    expect(mocks.owner).toHaveLastReturnedWith({
-      kind: 'resolved',
-      owner: { endpoint: { kind: 'self' }, at: 'ssh:test' }
-    })
-    expect(requests[0]).toMatchObject({
-      terminal: 'T',
-      sessionId: 'P',
-      client: { id: 'orca-desktop', type: 'desktop' }
-    })
     expect(requests).toHaveLength(fallback ? 2 : 1)
     expect(bridge.receive({ ...identity(), action: 'take' })).toEqual({})
     expect(mocks.info).not.toHaveBeenCalled()

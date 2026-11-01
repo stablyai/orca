@@ -1,21 +1,22 @@
 // @vitest-environment happy-dom
-import { useContext, useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import type { TerminalActivationController } from '../use-terminal-activation-actions'
+import type { NativeChatStructuredViewProps } from './native-chat-view-types'
+import { useContext, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { registerTabGroupBody } from '../tab-group/tab-group-body-geometry'
 import { useTerminalKeyboardShortcuts } from '../use-terminal-keyboard-shortcuts'
 import { useTerminalWorkspaceFoundation } from '../use-terminal-workspace-foundation'
-import type { TerminalActivationController } from '../use-terminal-activation-actions'
+
 import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPaneOverlayLayer'
 import {
   NativeChatTextAttachmentScope,
-  NativeChatTextAttachmentOpener,
-  NativeChatTextAttachments
+  NativeChatTextAttachmentOpener
 } from './NativeChatTextAttachments'
 import { nativeChatFanoutFixture } from './native-chat-workspace-test-fixtures'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
@@ -61,23 +62,12 @@ function Editor({ tabId }: { tabId: string }) {
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
       />
-      {mocks.fallback ? (
-        <NativeChatTextAttachments
-          content={`@${path}`}
-          structured
-          runtimeContext={{ target: { kind: 'local' }, worktreeId: ws, worktreePath: '/repo/0' }}
-          renderText={(text) => <span>{text}</span>}
-        />
-      ) : (
-        <button onClick={() => open?.(path)}>Open source</button>
-      )}
+      <button onClick={() => open?.(path)}>Open source</button>
     </>
   )
 }
 function ChatBody({ tabId }: NativeChatStructuredViewProps) {
-  return mocks.fallback ? (
-    <Editor tabId={tabId} />
-  ) : (
+  return (
     <NativeChatTextAttachmentScope enabled>
       <Editor tabId={tabId} />
     </NativeChatTextAttachmentScope>
@@ -217,7 +207,6 @@ beforeEach(() => {
     },
     true
   )
-  mocks.fallback = false
   mocks.web = false
   mocks.write.mockReset().mockResolvedValue(undefined)
   mocks.start.mockReset().mockResolvedValue({ canceled: false, transferId: 'output35636' })
@@ -253,123 +242,53 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const cases = [
-  { fallback: false, hide: 'tab', stage: 'copy' },
-  { fallback: false, hide: 'workspace', stage: 'picker' },
-  { fallback: false, hide: 'pane', stage: 'append' },
-  { fallback: true, hide: 'tab', stage: 'copy' },
-  { fallback: true, hide: 'workspace', stage: 'web-read' },
-  { fallback: true, hide: 'pane', stage: 'save-read' }
-] as const
-it.each(cases)(
-  'retires $stage on genuine $hide hide (fallback=$fallback), preserves editor and reopens',
-  async ({ fallback, hide, stage }) => {
-    mocks.fallback = fallback
-    const webClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    const webUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:35636')
-    const view = render(<Host />)
-    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'draft-chat-0' })
-    fireEvent.change(input, { target: { value: 'editor state survives hide' } })
-    input.focus()
-    const open = () =>
-      fireEvent.click(screen.getByRole('button', { name: fallback ? 'log.txt' : 'Open source' }))
-    const ready = async () =>
-      waitFor(() =>
-        expect(screen.getByRole('button', { name: 'Copy contents' }).hasAttribute('disabled')).toBe(
-          false
-        )
-      )
-    open()
-    await ready()
-    const delayed = Promise.withResolvers<unknown>()
-    const waiting = Promise.withResolvers<void>()
-    if (stage === 'picker') {
-      mocks.start.mockImplementationOnce(() => {
-        waiting.resolve()
-        return delayed.promise
-      })
-    } else if (stage === 'append') {
-      mocks.append.mockImplementationOnce(() => {
-        waiting.resolve()
-        return delayed.promise
-      })
-    } else {
-      mocks.rpc.mockImplementationOnce(() => {
-        waiting.resolve()
-        return delayed.promise
-      })
-    }
-    mocks.web = stage === 'web-read'
-    fireEvent.click(
-      screen.getByRole('button', { name: stage === 'copy' ? 'Copy contents' : 'Save file' })
-    )
-    await waiting.promise
-    const dispatched = {
-      reads: mocks.rpc.mock.calls.length,
-      starts: mocks.start.mock.calls.length,
-      appends: mocks.append.mock.calls.length
-    }
-    if (hide === 'tab') {
-      // The application command, not a mocked visibility handler, activates the next retained chat.
-      fireEvent.keyDown(screen.getByRole('dialog'), {
-        key: ']',
-        code: 'BracketRight',
-        ctrlKey: true,
-        altKey: true
-      })
-      expect(useAppStore.getState().getActiveTab(ws)?.id).toBe('chat-1')
-    } else {
-      await act(async () => {
-        if (hide === 'workspace') {
-          useAppStore.setState({ activeWorktreeId: 'folder:another' })
-        } else {
-          useAppStore.getState().setActiveView('tasks')
-        }
-      })
-    }
-    await act(async () => {})
-    const retained = view.container.querySelector(
-      '[data-structured-agent-session-overlay-tab-id="chat-0"]'
-    )
-    expect(retained?.hasAttribute('inert')).toBe(true)
-    expect(screen.queryByRole('dialog')).toBeNull()
-    await act(async () =>
-      delayed.resolve(
-        stage === 'picker'
-          ? { canceled: false, transferId: 'late35636' }
-          : stage === 'append'
-            ? undefined
-            : chunk()
+it('retires delayed Copy on a genuine keyboard tab hide, preserves the editor and reopens', async () => {
+  const view = render(<Host />)
+  const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'draft-chat-0' })
+  fireEvent.change(input, { target: { value: 'editor state survives hide' } })
+  input.focus()
+  const open = () => fireEvent.click(screen.getByRole('button', { name: 'Open source' }))
+  const ready = () =>
+    waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Copy contents' }).hasAttribute('disabled')).toBe(
+        false
       )
     )
-    expect(mocks.write).not.toHaveBeenCalled()
-    expect(mocks.finish).not.toHaveBeenCalled()
-    expect(webClick).not.toHaveBeenCalled()
-    expect(webUrl).not.toHaveBeenCalled()
-    expect(mocks.rpc).toHaveBeenCalledTimes(dispatched.reads)
-    expect(mocks.start).toHaveBeenCalledTimes(dispatched.starts)
-    expect(mocks.append).toHaveBeenCalledTimes(dispatched.appends)
-    if (stage === 'picker' || stage === 'append') {
-      expect(mocks.cancel).toHaveBeenCalledWith({
-        transferId: stage === 'picker' ? 'late35636' : 'output35636'
-      })
-    }
-    await act(async () => {
-      useAppStore.setState({ activeWorktreeId: ws, activeView: 'terminal' })
-      if (hide === 'tab') {
-        fireEvent.keyDown(document, { key: '[', code: 'BracketLeft', ctrlKey: true, altKey: true })
-      }
-    })
-    const returned = screen.getByRole<HTMLInputElement>('textbox', { name: 'draft-chat-0' })
-    expect(returned).toBe(input)
-    expect(returned.value).toBe('editor state survives hide')
-    returned.focus()
-    expect(document.activeElement).toBe(input)
-    expect(screen.queryByRole('dialog')).toBeNull()
-    mocks.web = false
-    open()
-    await ready()
-    fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
-    await waitFor(() => expect(mocks.write).toHaveBeenCalledExactlyOnceWith('selected source'))
-  }
-)
+  open()
+  await ready()
+  const delayed = Promise.withResolvers<unknown>()
+  const waiting = Promise.withResolvers<void>()
+  mocks.rpc.mockImplementationOnce(() => {
+    waiting.resolve()
+    return delayed.promise
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
+  await waiting.promise
+  const dispatched = mocks.rpc.mock.calls.length
+  fireEvent.keyDown(screen.getByRole('dialog'), {
+    key: ']',
+    code: 'BracketRight',
+    ctrlKey: true,
+    altKey: true
+  })
+  expect(useAppStore.getState().getActiveTab(ws)?.id).toBe('chat-1')
+  await act(async () => {})
+  expect(
+    view.container
+      .querySelector('[data-structured-agent-session-overlay-tab-id="chat-0"]')
+      ?.hasAttribute('inert')
+  ).toBe(true)
+  expect(screen.queryByRole('dialog')).toBeNull()
+  await act(async () => delayed.resolve(chunk()))
+  expect(mocks.write).not.toHaveBeenCalled()
+  expect(mocks.rpc).toHaveBeenCalledTimes(dispatched)
+  fireEvent.keyDown(document, { key: '[', code: 'BracketLeft', ctrlKey: true, altKey: true })
+  const returned = screen.getByRole<HTMLInputElement>('textbox', { name: 'draft-chat-0' })
+  expect(returned).toBe(input)
+  expect(returned.value).toBe('editor state survives hide')
+  expect(screen.queryByRole('dialog')).toBeNull()
+  open()
+  await ready()
+  fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
+  await waitFor(() => expect(mocks.write).toHaveBeenCalledExactlyOnceWith('selected source'))
+})

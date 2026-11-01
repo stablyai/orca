@@ -1,4 +1,3 @@
-vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText: vi.fn() }) }))
 vi.mock('./MobileFileMediaPreview', () => ({ MobileFileMediaPreview: () => null }))
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'

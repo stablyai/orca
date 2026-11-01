@@ -1,5 +1,3 @@
-import { textInputFontSizeForBody } from '../platform/text-input-font-size'
-
 // Desktop's main.css tokens per scheme; keep mobile on these instead of introducing inline colors.
 
 export type MobileColorScheme = 'light' | 'dark'
@@ -203,8 +201,6 @@ export const typography = {
   metaSize: 12,
   monoFamily: 'monospace' as const
 } as const
-
-export const TEXT_INPUT_FONT_SIZE = textInputFontSizeForBody(typography.bodySize)
 
 // One press and one disabled look for every control; fills on press use colors.translucentFill.
 export const feedback = {

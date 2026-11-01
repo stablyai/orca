@@ -23,9 +23,8 @@ export type AttachmentTextRead = ((
 ) => Promise<unknown>) & {
   assertCurrent?: () => void
 }
-export const ATTACHMENT_TEXT_PAGE_BYTES = 16 * 1024 - 8
+export const ATTACHMENT_TEXT_BLOCK_BYTES = 16 * 1024 - 8
 export const ATTACHMENT_TEXT_COPY_MAX_BYTES = 16 * 1024 * 1024
-const SUBPAGE_SEGMENTS = 256
 
 export function attachmentTextBytes(contentBase64: string): Uint8Array {
   if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(contentBase64)) {
@@ -53,13 +52,13 @@ export function attachmentTextSegments(text: string): string[] {
   return segments
 }
 
-/** A preview owns one snapshot, two byte pages and a serial read queue; exports never populate the page cache. */
+/** A preview owns one snapshot, two byte blocks and a serial read queue; exports never populate the block cache. */
 export class AttachmentTextSource {
   size: number | null = null
   snapshot: string | undefined
   private readonly abort = new AbortController()
   private tail: Promise<unknown> = Promise.resolve()
-  private readonly pages = new Map<number, string[]>()
+  private readonly blocks = new Map<number, string[]>()
 
   constructor(
     readonly path: string,
@@ -67,6 +66,9 @@ export class AttachmentTextSource {
   ) {}
 
   dispose(): void {
+    this.demand = null
+    this.blocks.clear()
+    this.rowCounts.clear()
     this.abort.abort()
   }
   get disposed(): boolean {
@@ -122,22 +124,22 @@ export class AttachmentTextSource {
     return operation
   }
 
-  get pageCount(): number {
-    return Math.max(1, Math.ceil((this.size ?? 0) / ATTACHMENT_TEXT_PAGE_BYTES))
+  get blockCount(): number {
+    return Math.max(1, Math.ceil((this.size ?? 0) / ATTACHMENT_TEXT_BLOCK_BYTES))
   }
 
-  async page(page: number, subpage = 0) {
+  async block(index: number) {
     this.assertCurrent()
-    let segments = this.pages.get(page)
+    let segments = this.blocks.get(index)
     if (!segments) {
-      const offset = page * ATTACHMENT_TEXT_PAGE_BYTES
+      const offset = index * ATTACHMENT_TEXT_BLOCK_BYTES
       const start = Math.max(0, offset - 3)
-      const { bytes, eof } = await this.chunk(start, ATTACHMENT_TEXT_PAGE_BYTES + (offset ? 6 : 3))
+      const { bytes, eof } = await this.chunk(start, ATTACHMENT_TEXT_BLOCK_BYTES + (offset ? 6 : 3))
       let from = offset - start
       while (from < bytes.length && (bytes[from]! & 0xc0) === 0x80) {
         from++
       }
-      let to = Math.min(bytes.length, offset + ATTACHMENT_TEXT_PAGE_BYTES - start)
+      let to = Math.min(bytes.length, offset + ATTACHMENT_TEXT_BLOCK_BYTES - start)
       if (!eof || to < bytes.length) {
         while (to < bytes.length && (bytes[to]! & 0xc0) === 0x80) {
           to++
@@ -149,19 +151,67 @@ export class AttachmentTextSource {
       if (text.includes('\0')) {
         throw new Error('This file cannot be previewed as text. Save it to open it in another app.')
       }
-      segments = attachmentTextSegments(text)
-      this.pages.set(page, segments)
-      while (this.pages.size > 2) {
-        this.pages.delete(this.pages.keys().next().value!)
+      // A CRLF split across byte blocks is one display break; exports retain the original bytes.
+      const displayText = text.replace(/\r\n?/g, '\n')
+      segments = attachmentTextSegments(
+        from > 0 && bytes[from - 1] === 13 && text.startsWith('\n')
+          ? displayText.slice(1)
+          : displayText
+      )
+      this.blocks.set(index, segments)
+      while (this.blocks.size > 2) {
+        this.blocks.delete(this.blocks.keys().next().value!)
       }
     }
-    const subpages = Math.max(1, Math.ceil(segments.length / SUBPAGE_SEGMENTS))
-    const selected = Math.min(subpage, subpages - 1)
-    return {
-      page,
-      subpage: selected,
-      subpages,
-      segments: segments.slice(selected * SUBPAGE_SEGMENTS, (selected + 1) * SUBPAGE_SEGMENTS)
+    this.blocks.delete(index)
+    this.blocks.set(index, segments)
+    this.rowCounts.set(index, segments.length)
+    return segments
+  }
+
+  private readonly rowCounts = new Map<number, number>()
+  private demand: { indices: number[]; publish: (error?: unknown) => void } | null = null
+  private reading = false
+
+  cachedBlock(index: number): readonly string[] | undefined {
+    return this.blocks.get(index)
+  }
+  rowCount(index: number): number {
+    return this.rowCounts.get(index) ?? 64
+  }
+
+  // Replace pending viewport work; only the already dispatched range may outlive a demand.
+  requestViewport(indices: number[], publish: (error?: unknown) => void): void {
+    this.demand = { indices: indices.slice(0, 2), publish }
+    if (!this.reading) {
+      void this.drainViewport()
+    }
+  }
+  private async drainViewport(): Promise<void> {
+    this.reading = true
+    try {
+      while (this.demand && !this.disposed) {
+        const demand = this.demand
+        try {
+          for (const index of demand.indices) {
+            if (this.demand !== demand) {
+              break
+            }
+            await this.block(index)
+          }
+          if (this.demand === demand && !this.disposed) {
+            this.demand = null
+            demand.publish()
+          }
+        } catch (error) {
+          if (this.demand === demand && !this.disposed) {
+            this.demand = null
+            demand.publish(error)
+          }
+        }
+      }
+    } finally {
+      this.reading = false
     }
   }
 

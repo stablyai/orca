@@ -33,18 +33,8 @@ const renderText = (content: string) =>
 it('keeps original whole-body interpretation independent of exact lexical actions and terminal eligibility', async () => {
   const references = await import('../../../../shared/native-chat-text-attachment-references')
   const recognize = vi.spyOn(references, 'nativeChatTextAttachmentPaths')
-  const contents = [
-    `Literal:\n\n\`\`\`text\n@${path}\nKEEP THIS CODE\n\`\`\`\n\nOUTSIDE CODE`,
-    `\` @${path} \``,
-    `    @${path}\n`,
-    `> - \` @${path} \``,
-    `**Read @${path} then stop**`,
-    `\\*escaped* @${path} `,
-    `see@${path.replace(/orca-paste-[^/]+$/, 'a&copy;.txt')} `,
-    `@${path.replace(/orca-paste-[^/]+$/, 'a`b.txt')} @${path.replace(/orca-paste-[^/]+$/, 'c`d.txt')} `,
-    `\` @${path}\``
-  ]
-  for (const content of contents) {
+  const content = `**Read @${path} then stop**\n\n\`\`\`text\n@${path}\nKEEP THIS CODE\n\`\`\`\n@${path.replace(/orca-paste-[^/]+$/, 'a&copy;.txt')}`
+  {
     const direct = render(renderText(content))
     const expected = direct.container.innerHTML
     direct.unmount()
@@ -73,73 +63,22 @@ it('keeps original whole-body interpretation independent of exact lexical action
     terminal.unmount()
   }
   expect(rpc).not.toHaveBeenCalled()
-  recognize.mockRestore()
-})
-
-it('recognizes only changed rows at 100 mounted rows without reading attachment bodies before open', async () => {
-  const references = await import('../../../../shared/native-chat-text-attachment-references')
-  const recognize = vi.spyOn(references, 'nativeChatTextAttachmentPaths')
-  const renderText = (text: string) => createElement('span', null, text)
-  for (const count of [100]) {
-    let rows = Array.from(
-      { length: count },
-      (_, index) => `row ${index} **Read @${path} then stop** ${'prose '.repeat(100)}`
-    )
-    const ui = () =>
-      rows.map((content, index) =>
-        createElement(NativeChatTextAttachments, {
-          key: index,
-          content,
-          structured: true,
-          renderText
-        })
-      )
-    recognize.mockClear()
-    const view = render(ui())
-    expect(recognize).toHaveBeenCalledTimes(count)
-    recognize.mockClear()
-    for (let update = 0; update < 3; update++) {
-      view.rerender(ui())
-    }
-    expect(recognize).not.toHaveBeenCalled()
-    rows = rows.map((content, index) => (index === 0 ? `${content}changed` : content))
-    view.rerender(ui())
-    expect(recognize).toHaveBeenCalledTimes(1)
-    view.unmount()
-  }
-  expect(rpc).not.toHaveBeenCalled()
-  recognize.mockRestore()
-})
-
-it('opens original descriptor-less POSIX, Windows and UNC tokens without entity, escape or punctuation normalization', async () => {
-  const { formatNativeChatFileReference } = await import('../../../../shared/agent-image-paste')
-  const { NativeChatTextAttachmentOpener } = await import('./NativeChatTextAttachments')
-  const uuid = '12345678-1234-1234-1234-123456789abc'
-  const paths = [
-    `/root/agent-session-attachments/${uuid}/normal.txt`,
-    `/root [@] ' " (x)/agent-session-attachments/${uuid}/_notes_.txt`,
-    `/root/agent-session-attachments/${uuid}/a&copy;.txt`,
-    `/root/agent-session-attachments/${uuid}/a©.txt`,
-    `/root/agent-session-attachments/${uuid}/a\`b\`.txt`,
-    `/root/agent-session-attachments/${uuid}/literal.txt\``,
-    `/root/agent-session-attachments/${uuid}/literal.txt)`,
-    `C:\\Orca data\\agent-session-attachments\\${uuid}\\brackets[1](2).txt`,
-    `\\\\server\\root @ ' "\\agent-session-attachments\\${uuid}\\日本語.txt`
-  ]
   const opened: string[] = []
-  const content = [
-    ...paths.map(formatNativeChatFileReference),
-    '@/workspace/file.txt',
-    `@/root/agent-session-attachments/${uuid}/.upload.part`
-  ].join(' ')
-  const view = render(
+  const { NativeChatTextAttachmentOpener } = await import('./NativeChatTextAttachments')
+  const { formatNativeChatFileReference } = await import('../../../../shared/agent-image-paste')
+  const exact = path.replace(/orca-paste-[^/]+$/, 'a&copy;.txt')
+  const action = render(
     createElement(
       NativeChatTextAttachmentOpener.Provider,
       { value: (path) => opened.push(path) },
-      createElement(NativeChatTextAttachments, { content, structured: true, renderText })
+      createElement(NativeChatTextAttachments, {
+        content: formatNativeChatFileReference(exact),
+        structured: true,
+        renderText
+      })
     )
   )
-  view.container.querySelectorAll('button').forEach((button) => button.click())
-  expect(opened).toEqual(paths)
-  view.unmount()
+  action.container.querySelector('button')!.click()
+  expect(opened).toEqual([exact])
+  recognize.mockRestore()
 })

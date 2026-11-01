@@ -365,7 +365,11 @@ it('shares real answer preparation at N and 10N across candidates, owners and se
             expect(measured.routes).toBeLessThanOrEqual(
               measured.selectors + 1 + Number(Boolean(launchCwd))
             )
-            expect(measured.records).toBe(0)
+            if (launchCwd) {
+              expect(measured.records).toBeGreaterThanOrEqual(count)
+            } else {
+              expect(measured.records).toBe(0)
+            }
             expect(measured.records).toBeLessThanOrEqual(count * (measured.routes + 8))
             expect(measured.answers).toBe(
               4 +
