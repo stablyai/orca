@@ -11,6 +11,8 @@
     // pulling that graph in reports ~280 errors about the desktop rather than about mobile. Their
     // own runtime coverage is vitest, which runs them under Node.
     "src/components/WorktreeAgentList.runtime-lineage.test.tsx",
+    // Interim: this body is unchecked until its Node+declaration owner lands; vitest covers it only.
+    "src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx",
     "src/session/mobile-native-command-discovery.test.tsx",
     "src/tasks/agent-launch-mobile-replay.test.ts",
     "src/test-support/rpc-recording/recorded-request-params.test.ts",

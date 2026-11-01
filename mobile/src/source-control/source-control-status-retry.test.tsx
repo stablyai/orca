@@ -259,6 +259,8 @@ it('reuses Source Control across worktrees without loading the old fallback into
   const heldPr: Held[] = []
   const heldUsers: Held[] = []
   let detailsBody = 'body'
+  let holdDetails = false
+  const heldDetails: (() => void)[] = []
   const pendingProbes: ((reply: RpcResponse) => void)[] = []
   const pendingStatuses: ((reply: RpcResponse) => void)[] = []
   let switched = false
@@ -271,6 +273,7 @@ it('reuses Source Control across worktrees without loading the old fallback into
     prRepo: repository,
     headSha: 'pr-head'
   }
+  let prValue: typeof pullRequest | null = pullRequest
   const status = (branch: string) => ({ entries: [], branch, head: `${branch}-head` })
   physical.sendRequest = async (method, params) => {
     requests.push({ method, params })
@@ -303,7 +306,7 @@ it('reuses Source Control across worktrees without loading the old fallback into
                   : method === 'hostedReview.forBranch'
                     ? null
                     : method === 'github.prForBranch'
-                      ? pullRequest
+                      ? prValue
                       : method === 'github.prChecks'
                         ? []
                         : method === 'status.get'
@@ -330,6 +333,9 @@ it('reuses Source Control across worktrees without loading the old fallback into
                               : undefined
     if (value === undefined) {
       throw new Error(`unexpected ${method}`)
+    }
+    if (holdDetails && method === 'github.workItemDetails') {
+      return new Promise((resolve) => heldDetails.push(() => resolve(rpcSuccess(method, value))))
     }
     return rpcSuccess(method, value)
   }
@@ -458,23 +464,58 @@ it('reuses Source Control across worktrees without loading the old fallback into
   expect(hasText('fork-second')).toBe(true)
   expect(search().props.value).toBe('fork')
 
-  // A failed background read keeps the accepted PR, picker and draft; a later success updates in place.
-  await act(async () => doubles.refetchPr!({ includeDetails: false }))
-  await settle()
-  await act(async () => heldPr.shift()!.reject(new Error('socket closed')))
-  await settle()
-  expect(hasText('Loading pull request…')).toBe(false)
-  expect(hasText('socket closed')).toBe(false)
-  expect(composer().props.value).toBe('unsent draft')
-  expect(hasText('fork-second')).toBe(true)
+  // A current read failure keeps the PR, picker and draft and shows the existing refresh line with Retry.
+  const refreshLine = () =>
+    tree!.root.findAll(
+      (node) =>
+        String(node.type) === 'Text' && node.props.children === 'Failed to refresh pull request.'
+    )
+  holdDetails = true
   detailsBody = 'refreshed body'
   await act(async () => doubles.refetchPr!({ includeDetails: true }))
   await settle()
   await act(async () => heldPr.shift()!.resolve(rpcSuccess('current', pullRequest)))
   await settle()
+  expect(heldDetails).toHaveLength(1)
+  await act(async () => doubles.refetchPr!({ includeDetails: false }))
+  await settle()
+  await act(async () => heldPr.shift()!.reject(new Error('socket closed')))
+  await settle()
+  expect(refreshLine()).toHaveLength(1)
+  expect(hasText('Loading pull request…')).toBe(false)
+  expect(hasText('socket closed')).toBe(false)
+  expect(composer().props.value).toBe('unsent draft')
+  expect(search().props.value).toBe('fork')
+  expect(hasText('fork-second')).toBe(true)
+  // Details settling later cannot certify the PR read, so the line stays.
+  await act(async () => heldDetails.shift()!())
+  await settle()
   expect(tree!.root.find((node) => String(node.type) === 'CommentMarkdown').props.content).toBe(
     'refreshed body'
   )
+  expect(refreshLine()).toHaveLength(1)
+  // Retry keeps the line while pending; a current good read clears it in place.
+  holdDetails = false
+  await press('Retry loading pull request')
+  await settle()
+  expect(refreshLine()).toHaveLength(1)
+  await act(async () => heldPr.shift()!.resolve(rpcSuccess('retry', pullRequest)))
+  await settle()
+  expect(refreshLine()).toHaveLength(0)
   expect(composer().props.value).toBe('unsent draft')
   expect(search().props.value).toBe('fork')
+
+  // An accepted no-PR result is retained and marked the same way.
+  prValue = null
+  await act(async () => doubles.refetchPr!({ includeDetails: false }))
+  await settle()
+  await act(async () => heldPr.shift()!.resolve(rpcSuccess('none', null)))
+  await settle()
+  expect(refreshLine()).toHaveLength(0)
+  await act(async () => doubles.refetchPr!({ includeDetails: false }))
+  await settle()
+  await act(async () => heldPr.shift()!.reject(new Error('socket closed')))
+  await settle()
+  expect(refreshLine()).toHaveLength(1)
+  expect(hasText('socket closed')).toBe(false)
 })

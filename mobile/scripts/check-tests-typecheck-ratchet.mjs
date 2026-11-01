@@ -18,6 +18,10 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
     'Node-side: renders the mobile consumer of real desktop SQLite assignment projection, against Node rather than RN libs'
   ],
   [
+    'src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx',
+    'Interim, unchecked: imports the desktop runtime RPC registry and GitHub provider, whose Node graph does not check against RN libs; only vitest covers this body until its checked owner replaces this entry'
+  ],
+  [
     'src/session/mobile-native-command-discovery.test.tsx',
     'Node-side: imports the desktop ACP command discovery source, checked against @types/node rather than RN libs'
   ],

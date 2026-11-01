@@ -38,14 +38,14 @@ export function useMobileTasksItemState() {
     setPrFileLoadingPath(null)
     setExpandedPrFilePath(null)
   }, [])
-  // A connection loss retires the open file read but keeps accepted contents and expansion; reconnecting reads it again.
+  // Every connection change retires the open file read but keeps accepted contents and expansion; once connected it reads again.
   const reconcilePrFileConnection = useCallback((connected: boolean) => {
+    if (fileRequest.current) {
+      interruptedFileRequest.current = fileRequest.current
+      fileRequest.current = null
+      setPrFileLoadingPath(null)
+    }
     if (!connected) {
-      if (fileRequest.current) {
-        interruptedFileRequest.current = fileRequest.current
-        fileRequest.current = null
-        setPrFileLoadingPath(null)
-      }
       return
     }
     const interrupted = interruptedFileRequest.current

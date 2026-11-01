@@ -179,7 +179,8 @@ export function useMobileTasksRouteAndItemState() {
   const itemState = useMobileTasksItemState()
   const { actionItem, setActionItem, claimPublication } = useMobileTasksSelection(
     client,
-    itemState.detailPayload
+    itemState.detailPayload,
+    itemState.reconcilePrFileConnection
   )
   const [mergeMethodTaskItem, setMergeMethodTaskItem] = useState<
     Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }> | null

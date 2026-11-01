@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState, type SetStateAction } f
 import type { ActionableTaskItem } from './mobile-tasks-project-workspace-types'
 import type { DetailPayload, GitHubWorkItem } from './mobile-tasks-provider-detail-types'
 import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
 import {
   githubWorkItemTargetKey,
   resolveGitHubWorkItemTarget,
@@ -31,7 +32,12 @@ export function requireGitHubTaskTarget(source: GitHubWorkItem) {
   return target
 }
 
-export function useMobileTasksSelection(client: RpcClient | null, details: DetailPayload | null) {
+export function useMobileTasksSelection(
+  client: RpcClient | null,
+  details: DetailPayload | null,
+  // The shared file owner's retire/recover step, run from this listener for each real connection change.
+  onConnectionChange: (connected: boolean) => void
+) {
   const [actionItem, publishItem] = useState<ActionableTaskItem | null>(null)
   const owner = useRef({ item: actionItem, visit: {}, client, revision: 0, details, live: true })
   useLayoutEffect(() => {
@@ -44,17 +50,33 @@ export function useMobileTasksSelection(client: RpcClient | null, details: Detai
   }, [client, details])
   useLayoutEffect(() => {
     owner.current.live = true
-    const stop = client?.onStateChange((state) => {
+    let observed: { state: ConnectionState; generation: number | undefined } | null = null
+    // One owner sees every raw (state, generation) change, including a down/up pair in one render.
+    const reconcile = (state: ConnectionState) => {
+      const generation = client?.getGeneration?.()
+      if (observed?.state === state && Object.is(observed.generation, generation)) {
+        return
+      }
+      const first = observed === null
+      observed = { state, generation }
+      if (first) {
+        return
+      }
       if (state !== 'connected') {
         owner.current.revision += 1
       }
-    })
+      onConnectionChange(state === 'connected')
+    }
+    const stop = client?.onStateChange(reconcile)
+    if (client) {
+      reconcile(client.getState())
+    }
     return () => {
       stop?.()
       owner.current.live = false
       owner.current.revision += 1
     }
-  }, [client])
+  }, [client, onConnectionChange])
   const setActionItem = useCallback((update: SetStateAction<ActionableTaskItem | null>) => {
     const current = owner.current
     const next = typeof update === 'function' ? update(current.item) : update

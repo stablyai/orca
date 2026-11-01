@@ -10,7 +10,7 @@ import { useMobileTasksMutation } from './use-mobile-tasks-workspace-and-project
 import { useMobileTasksItemSelectionEffects } from './use-mobile-tasks-list-and-detail-effects'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import { useMobileTasksHostedCommentReviewActions } from './use-mobile-tasks-hosted-comment-review-actions'
-import React, { useState, useRef, useSyncExternalStore } from 'react'
+import React, { useState, useRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
@@ -94,9 +94,9 @@ async function mount() {
   let select!: (selected: Extract<TaskItem, { provider: 'github' }> | null) => void
   let selectProject!: (selected: GitHubProjectRow | null) => void
   function ProbeModel() {
-    const connState = useSyncExternalStore(logical.onStateChange, logical.getState)
     const itemState = useMobileTasksItemState()
-    const selection = useMobileTasksSelection(logical, itemState.detailPayload)
+    const { detailPayload, reconcilePrFileConnection } = itemState
+    const selection = useMobileTasksSelection(logical, detailPayload, reconcilePrFileConnection)
     const mutation = useMobileTasksMutation()
     const [items, setItems] = useState<TaskItem[]>([a, b])
     const [error, setError] = useState('')
@@ -162,8 +162,7 @@ async function mount() {
     useMobileTasksItemSelectionEffects({
       ...itemState,
       ...selection,
-      client: logical,
-      connState
+      client: logical
     })
     const project: Pick<
       ProjectFileMergeActionsInput,
@@ -599,31 +598,32 @@ it('same-SHA A re-entry file successor retains loading and contents after old A 
   expect(f.read()).toMatchObject({ prFileContents: {}, prFileLoadingPath: 'same.ts' })
   await f.answer({ original: 'fresh', modified: 'fresh' }, 1)
   await fresh
-  expect(f.read()).toMatchObject({
-    prFileLoadingPath: null,
-    prFileContents: { 'same.ts': { modified: 'fresh' } }
-  })
+  expect(f.read().prFileLoadingPath).toBeNull()
+  expect(f.read().prFileContents['same.ts']).toMatchObject({ modified: 'fresh' })
 
-  // Connection loss keeps accepted contents/expansion and retires the open read; reconnect reads it again.
-  const reads = () => f.client.requests.filter(({ method }) => method === 'github.prFileContents')
-  let interrupted!: Promise<void>
-  await act(async () => {
-    interrupted = f.read().toggleGitHubFileExpansion(f.a, { ...file, path: 'other.ts' })
+  // Each real connection change retires the open read, keeps contents/expansion and starts one successor.
+  const reads = (c = f.client) => c.requests.filter((r) => r.method === 'github.prFileContents')
+  const recover = async (path: string, change: () => void | Promise<void>, session = f.client) => {
+    await act(async () => void f.read().toggleGitHubFileExpansion(f.a, { ...file, path }))
+    const stale = reads().at(-1)!
+    const before = reads(session).length
+    await act(async () => change())
+    expect([reads(session).length, f.read().prFileLoadingPath]).toEqual([before + 1, path])
+    expect(f.read()).toMatchObject({ expandedPrFilePath: path, prFileContents: { 'same.ts': {} } })
+    await act(async () => stale.resolve(rpcSuccess('stale', { original: 'x', modified: 'stale' })))
+    expect([f.read().prFileLoadingPath, f.read().prFileContents[path]]).toEqual([path, undefined])
+    const live = { original: 'x', modified: path }
+    await act(async () => reads(session).at(-1)!.resolve(rpcSuccess('live', live)))
+    expect(f.read()).toMatchObject({ prFileLoadingPath: null, prFileContents: { [path]: {} } })
+  }
+  await recover('batched.ts', () => {
+    f.client.pushState('reconnecting')
+    f.client.pushState('connected')
   })
-  await act(async () => f.client.pushState('reconnecting'))
-  expect(f.read()).toMatchObject({ expandedPrFilePath: 'other.ts', prFileLoadingPath: null })
-  expect(f.read().prFileContents).toMatchObject({ 'same.ts': { modified: 'fresh' } })
   await act(async () => f.client.pushState('connected'))
-  expect([reads().length, f.read().prFileLoadingPath]).toEqual([4, 'other.ts'])
-  await f.answer({ original: 'stale', modified: 'stale' }, f.client.requests.indexOf(reads()[2]))
-  await interrupted
-  expect([f.read().prFileLoadingPath, f.read().prFileContents['other.ts']]).toEqual([
-    'other.ts',
-    undefined
-  ])
-  await f.answer({ original: 'new', modified: 'recovered' }, f.client.requests.indexOf(reads()[3]))
-  expect(f.read().prFileContents['other.ts']).toMatchObject({ modified: 'recovered' })
-  expect(f.read()).toMatchObject({ expandedPrFilePath: 'other.ts', prFileLoadingPath: null })
+  expect(reads()).toHaveLength(4)
+  const next = createFakeRpcClient()
+  await recover('migrated.ts', () => f.logical.migrateTo(next, 'lan'), next)
 })
 
 it.each([10, 100])(

@@ -228,34 +228,58 @@ function PrSidebarContent({
       </View>
     )
   }
+  // A failed refresh keeps the accepted result; its line sits in a fixed slot so the content below never remounts.
+  const refreshFailed =
+    (state.kind === 'ready' || state.kind === 'none') && state.refreshFailed === true ? (
+      <View style={styles.refreshFailedRow}>
+        <Text style={styles.refreshFailedText}>
+          {t('session.prActionsEngine.refreshFailed', 'Failed to refresh pull request.')}
+        </Text>
+        <Pressable
+          style={styles.retryButton}
+          onPress={onRetry}
+          accessibilityRole="button"
+          accessibilityLabel={t('components.prSidebar.retryLoading', 'Retry loading pull request')}
+        >
+          <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
+          <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
+        </Pressable>
+      </View>
+    ) : null
   if (branch === 'none') {
     // Offer create for GitHub branch without PR, matching desktop rather than dead-end message.
     return (
-      <PrSidebarCreateEmptyState
-        client={client}
-        worktreeId={worktreeId}
-        gitBranch={gitBranch}
-        gitStatus={gitStatus}
-        connState={connState}
-        workspaceLabel={workspaceLabel}
-        onCreated={refetch}
-      />
+      <>
+        {refreshFailed}
+        <PrSidebarCreateEmptyState
+          client={client}
+          worktreeId={worktreeId}
+          gitBranch={gitBranch}
+          gitStatus={gitStatus}
+          connState={connState}
+          workspaceLabel={workspaceLabel}
+          onCreated={refetch}
+        />
+      </>
     )
   }
   if (branch === 'ready' && state.kind === 'ready') {
     return (
-      <PrSidebarSections
-        data={state.data}
-        client={client}
-        worktreeId={worktreeId}
-        actions={actions}
-        commentActions={commentActions}
-        titleAction={titleAction}
-        triage={triage}
-        refetch={refetch}
-        botAuthorOverrides={botAuthorOverrides}
-        showOpenOnWeb={showOpenOnWeb}
-      />
+      <>
+        {refreshFailed}
+        <PrSidebarSections
+          data={state.data}
+          client={client}
+          worktreeId={worktreeId}
+          actions={actions}
+          commentActions={commentActions}
+          titleAction={titleAction}
+          triage={triage}
+          refetch={refetch}
+          botAuthorOverrides={botAuthorOverrides}
+          showOpenOnWeb={showOpenOnWeb}
+        />
+      </>
     )
   }
   return null

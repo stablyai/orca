@@ -33,8 +33,9 @@ export type PrSidebarData = {
 export type PrSidebarState =
   | { kind: 'hidden' }
   | { kind: 'loading' }
-  | { kind: 'ready'; data: PrSidebarData }
-  | { kind: 'none' }
+  // refreshFailed: a current PR read failed while this accepted result stayed on screen.
+  | { kind: 'ready'; data: PrSidebarData; refreshFailed?: true }
+  | { kind: 'none'; refreshFailed?: true }
   | { kind: 'error'; message: string }
   | { kind: 'blocked'; message: string }
 

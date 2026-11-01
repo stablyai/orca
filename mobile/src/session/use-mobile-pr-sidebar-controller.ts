@@ -162,11 +162,15 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (!owner.live || !shouldApplyResult(seq, owner.loadSeq)) {
         return
       }
-      // A failed refresh is not a departure: keep the accepted PR or no-PR result in place.
+      // A failed refresh is not a departure: keep the accepted PR or no-PR result and mark it until a good read.
+      const accepted = owner.latest
       if (
         (next.kind === 'error' || next.kind === 'blocked') &&
-        (owner.latest.kind === 'ready' || owner.latest.kind === 'none')
+        (accepted.kind === 'ready' || accepted.kind === 'none')
       ) {
+        if (!accepted.refreshFailed) {
+          publishState({ ...accepted, refreshFailed: true })
+        }
         return
       }
 
@@ -217,7 +221,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         prior: owner.latest.data.details,
         pr: owner.latest.data.pr
       })
-      publishState({ kind: 'ready', data: { ...owner.latest.data, details } })
+      // Details cannot certify the PR read, so a refresh failure stays marked.
+      publishState({ ...owner.latest, data: { ...owner.latest.data, details } })
     },
     [buildDeps, branch, headSha, identity, worktreeId, owner, publishState]
   )
@@ -262,10 +267,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       prior: owner.latest.data.details,
       pr: owner.latest.data.pr
     })
-    publishState({
-      kind: 'ready',
-      data: { ...owner.latest.data, details }
-    })
+    publishState({ ...owner.latest, data: { ...owner.latest.data, details } })
   }, [buildDeps, identity, worktreeId, owner, publishState])
 
   // Restart same-branch reads on HEAD advance so their check lookup cannot keep a stale SHA.

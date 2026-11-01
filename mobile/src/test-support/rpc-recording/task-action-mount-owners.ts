@@ -23,8 +23,12 @@ function useTaskStateAndSelection(
     'mobile/src/tasks/github-task-identity.ts'
   )
   const state = useMobileTasksItemState()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mount adapter stores its actual recording client in this field.
-  const selection = useMobileTasksSelection(model.client as RpcClient, state.detailPayload)
+  const selection = useMobileTasksSelection(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mount adapter stores its actual recording client in this field.
+    model.client as RpcClient,
+    state.detailPayload,
+    state.reconcilePrFileConnection
+  )
   useLayoutEffect(() => {
     const isStateKey = (key: string): key is keyof typeof state => key in state
     for (const [field, value] of Object.entries(fixture)) {
