@@ -205,7 +205,7 @@ export default function BrowserTab({
         />
       )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
-      <TabTitleLabel tabId={tab.id} title={tabLabel} />
+      <TabTitleLabel title={tabLabel} />
       {showAudioControl && (
         // Why: unlike close, stays visible on inactive tabs; finding the playing tab is the point.
         <button

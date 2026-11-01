@@ -165,7 +165,6 @@ export function renderTabBarSurface({
               tabIds={[...sortableIds, ...clientHostedBrowserRows.map((row) => row.browserPageId)]}
               worktreeId={worktreeId}
               shown={props.stripShown}
-              stripRef={tabStripRef}
             >
               <TabStripTooltipProvider>
                 {renderedItems}

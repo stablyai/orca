@@ -265,19 +265,25 @@ test.describe('Tab strip active-tab dock', () => {
         expect(await allGeometry()).toEqual(settledGeometry)
       }
     }
-    // Hovering holds widths even after titles go quiet.
-    await orcaPage.waitForTimeout(3_500)
-    expect(await allGeometry()).toEqual(settledGeometry)
-
-    // Away from the strip, constant renames still hold; widths settle once titles stop changing.
+    // Titles arriving between quiet periods must not move the visible strip either.
+    await orcaPage.clock.install()
     const stripBounds = await orcaPage.locator(STRIP).first().boundingBox()
     await orcaPage.mouse.move(stripBounds!.x + 40, stripBounds!.y + stripBounds!.height + 200)
     for (const title of ['Chat', 'Review', longTitle]) {
       await renameFromAgent(title)
-      await orcaPage.waitForTimeout(1_000)
+      await orcaPage.clock.fastForward(5_000)
       expect(await allGeometry()).toEqual(settledGeometry)
     }
-    await expect.poll(() => width(long), { timeout: 10_000 }).toBeGreaterThan(384)
+    await renameFromAgent('Chat')
+    expect(await allGeometry()).toEqual(settledGeometry)
+    await orcaPage.clock.fastForward(60_000)
+    expect(await allGeometry()).toEqual(settledGeometry)
+
+    // Opening and cancelling rename preserves the entire strip, including close buttons.
+    await long.locator('[data-testid="sortable-tab"]').dblclick()
+    expect(await allGeometry()).toEqual(settledGeometry)
+    await long.locator('[data-tab-rename-input="true"]').press('Escape')
+    expect(await allGeometry()).toEqual(settledGeometry)
 
     // A rename the user typed resizes immediately.
     const renameFromUser = async (title: string): Promise<void> => {
@@ -302,6 +308,47 @@ test.describe('Tab strip active-tab dock', () => {
     expect(buttonBox).not.toBeNull()
     expect(buttonBox!.x - stripBox!.x - stripBox!.width).toBeGreaterThanOrEqual(0)
     expect(buttonBox!.x - stripBox!.x - stripBox!.width).toBeLessThanOrEqual(12)
+  })
+
+  test('holds browser tab geometry when audio controls appear and disappear', async ({
+    orcaPage
+  }) => {
+    const worktreeId = await waitForActiveWorktree(orcaPage)
+    await enableFitTabsToTitles(orcaPage)
+    const browser = await orcaPage.evaluate((worktreeId) => {
+      const state = window.__store!.getState()
+      const tab = state.createBrowserTab(worktreeId, 'about:blank', {
+        activate: false
+      })
+      state.createTab(worktreeId, undefined, undefined, { activate: false })
+      return { id: tab.id, pageId: tab.activePageId }
+    }, worktreeId)
+    const slot = orcaPage.locator(slotSelector(browser.id))
+    await expect(slot).toContainText('New Tab')
+    const geometry = (): Promise<number[][]> =>
+      orcaPage.$$eval(`${STRIP} > [data-tab-strip-slot]`, (slots) =>
+        slots.map((slot) => {
+          const rect = slot.getBoundingClientRect()
+          return [rect.x, rect.width]
+        })
+      )
+    await slot.hover()
+    const before = await geometry()
+    for (const audible of [true, false]) {
+      await orcaPage.evaluate(
+        ({ pageId, audible }) => {
+          window.__store!.setState((state) => ({
+            browserAudiblePageIds: { ...state.browserAudiblePageIds, [pageId]: audible }
+          }))
+        },
+        { pageId: browser.pageId, audible }
+      )
+      await expect(slot.getByRole('button', { name: 'Mute Tab', exact: true })).toHaveCount(
+        audible ? 1 : 0
+      )
+      await nextFrames(orcaPage, 2)
+      expect(await geometry()).toEqual(before)
+    }
   })
 
   test('keeps tab and close-button positions stable through agent detection and activity changes', async ({

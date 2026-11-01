@@ -31,8 +31,7 @@ import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
 import { SortableTabRenameInput } from './SortableTabRenameInput'
 import {
   isTerminalTabActivityLive,
-  terminalTabHasUnreadActivity,
-  terminalTabLeadingIconSlots
+  terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
 import { useTerminalTabActivity } from './use-terminal-tab-activity'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
@@ -199,7 +198,12 @@ export default function SortableTab({
     disabled: isEditing
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive)
+  const slotProps = useTabStripSlotProps(tab.id, isActive, {
+    ref: renameOwnerRef,
+    savedName: tab.customTitle ?? null,
+    rename: committedRename,
+    editing: isEditing
+  })
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -270,17 +274,7 @@ export default function SortableTab({
           onKeyDown={onRenameKeyDown}
         />
       ) : (
-        <TabTitleLabel
-          tabId={tab.id}
-          title={displayTitle}
-          liveTitle={liveTitle}
-          leadingSlots={terminalTabLeadingIconSlots({
-            hasAgent: tabAgent !== null,
-            activityStatus,
-            showUnreadActivity
-          })}
-          rename={committedRename}
-        />
+        <TabTitleLabel title={displayTitle} />
       )}
       {tab.color && !isEditing && (
         <span
@@ -347,7 +341,6 @@ export default function SortableTab({
     <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
       <ContextMenuTrigger asChild>
         <div
-          ref={renameOwnerRef}
           {...slotProps}
           onContextMenu={(event) => {
             // The hover card is portalled: React still routes its events through this slot.

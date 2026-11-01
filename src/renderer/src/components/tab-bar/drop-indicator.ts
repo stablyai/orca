@@ -26,7 +26,11 @@ export function getTabStripBorderClasses(
   options?: { includeTopBorder?: boolean }
 ): string {
   const includeTopBorder = options?.includeTopBorder ?? true
-  return [includeTopBorder ? 'border-t' : '', hasTabsToRight ? 'border-r' : '', 'border-border']
+  return [
+    includeTopBorder ? 'border-t' : '',
+    hasTabsToRight ? 'border-r' : 'border-r border-r-transparent',
+    'border-border'
+  ]
     .filter(Boolean)
     .join(' ')
 }

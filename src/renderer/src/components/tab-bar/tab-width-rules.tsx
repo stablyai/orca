@@ -1,285 +1,138 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject
-} from 'react'
+import { createContext, useContext, useLayoutEffect, useMemo, type RefObject } from 'react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
 
-// Definite widths prevent live titles from resizing the strip; flex-shrink still allows narrowing to the minimum.
 export const TAB_CONTAINER_FIXED_WIDTH_CLASSES = 'w-[180px] min-w-[72px] min-[1280px]:w-[220px]'
-
-// Share crowded strips equally, releasing unused space from tabs that fit their titles.
-export const TAB_CONTAINER_FIT_WIDTH_CLASSES = 'min-w-25 max-w-max flex-[1_1_0px]'
-
+export const TAB_CONTAINER_FIT_WIDTH_CLASSES = 'min-w-25 flex-[1_1_0px]'
 export const TAB_ROOT_WIDTH_CLASSES = 'w-full'
-
 export const TAB_LABEL_WIDTH_CLASSES = 'min-w-0 flex-1 truncate'
 
-// Each extra leading glyph is a 12px icon plus the 4px gap before it (w-3 + gap-1).
-const TAB_LEADING_SLOT_WIDTH = '1rem'
+export type TabTitleRename = { count: number; title: string | null }
 
-// Agents can retitle a tab every few seconds; widths wait for the strip to go quiet so tabs move at most once.
-const TITLE_QUIET_MS = 3000
-
-type SettledTabTitle = {
-  title: string
-  leadingSlots: number
-  widthKey: string
+type TabWidthSnapshot = {
+  width: number
   renameCount: number
   awaitingRename: boolean
 }
 
-type TabTitleWidthStrip = {
-  widthKey: string
-  /** Lives on the strip so labels that remount (menus, rename) keep their held width. */
-  settledByTabId: Map<string, SettledTabTitle>
-  noteTitleChange: () => void
+type TabWidthStrip = {
+  shown: boolean
+  widths: Map<string, TabWidthSnapshot>
 }
 
-/** Null keeps fixed-width tabs; otherwise tabs fit titles and re-settle whenever the key changes. */
-const TabTitleWidthContext = createContext<TabTitleWidthStrip | null>(null)
+const TabWidthContext = createContext<TabWidthStrip | null>(null)
 
-/** Settle widths once titles stop changing, never while the pointer is over the strip, and whenever it is shown again. */
+/** Refit on workspace return; background title and decoration changes never resize a visible strip. */
 export function TabTitleWidthProvider({
   worktreeId,
   shown,
-  stripRef,
   tabIds,
   children
 }: {
   worktreeId: string
   tabIds: readonly string[]
-  /** Strips outside the worktree switcher (floating panel) report their own visibility. */
   shown?: boolean
-  stripRef: RefObject<HTMLElement | null>
   children: React.ReactNode
 }): React.JSX.Element {
   const fitsTitles = useAppStore((s) => s.settings?.experimentalFitTabsToTitles === true)
   const worktreeShown = useAppStore((s) => s.activeWorktreeId === worktreeId)
   const isShown = shown ?? worktreeShown
-  const [pointerInside, setPointerInside] = useState(false)
-  // A hidden strip never receives pointerleave, so drop the hover rather than hold widths on return.
-  if (!isShown && pointerInside) {
-    setPointerInside(false)
-  }
-  const held = pointerInside && isShown
-  const [settleCount, setSettleCount] = useState(0)
-  const [settledByTabId] = useState(() => new Map<string, SettledTabTitle>())
-  useEffect(() => {
-    const openTabIds = new Set(tabIds)
-    for (const tabId of settledByTabId.keys()) {
-      if (!openTabIds.has(tabId)) {
-        settledByTabId.delete(tabId)
+  const strip = useMemo(
+    () => (fitsTitles ? { shown: isShown, widths: new Map<string, TabWidthSnapshot>() } : null),
+    [fitsTitles, isShown]
+  )
+  useLayoutEffect(() => {
+    const openIds = new Set(tabIds)
+    for (const id of strip?.widths.keys() ?? []) {
+      if (!openIds.has(id)) {
+        strip?.widths.delete(id)
       }
     }
-  }, [tabIds, settledByTabId])
-  const quietRef = useRef<{
-    pending: boolean
-    held: boolean
-    timer?: ReturnType<typeof setTimeout>
-  }>({ pending: false, held: false })
-  const scheduleSettle = useCallback(() => {
-    const quiet = quietRef.current
-    clearTimeout(quiet.timer)
-    quiet.timer = quiet.held
-      ? undefined
-      : setTimeout(() => {
-          quiet.pending = false
-          setSettleCount((count) => count + 1)
-        }, TITLE_QUIET_MS)
-  }, [])
-  const noteTitleChange = useCallback(() => {
-    quietRef.current.pending = true
-    scheduleSettle()
-  }, [scheduleSettle])
-  useEffect(() => {
-    const quiet = quietRef.current
-    quiet.held = held
-    if (quiet.pending) {
-      scheduleSettle()
-    }
-  }, [held, scheduleSettle])
-  useEffect(() => () => clearTimeout(quietRef.current.timer), [])
-  useEffect(() => {
-    const strip = stripRef.current
-    if (!fitsTitles || !strip) {
-      return
-    }
-    const enter = (): void => setPointerInside(true)
-    const leave = (): void => setPointerInside(false)
-    strip.addEventListener('pointerenter', enter)
-    strip.addEventListener('pointerleave', leave)
-    return () => {
-      strip.removeEventListener('pointerenter', enter)
-      strip.removeEventListener('pointerleave', leave)
-      setPointerInside(false)
-    }
-  }, [fitsTitles, stripRef])
-  const widthKey = fitsTitles ? `${isShown ? 'shown' : 'hidden'}:${settleCount}` : null
-  const strip = useMemo(() => {
-    if (widthKey === null) {
-      // Forget held titles so re-enabling the setting starts from live titles.
-      settledByTabId.clear()
-      return null
-    }
-    return { widthKey, settledByTabId, noteTitleChange }
-  }, [widthKey, settledByTabId, noteTitleChange])
-  return <TabTitleWidthContext.Provider value={strip}>{children}</TabTitleWidthContext.Provider>
+  }, [strip, tabIds])
+  return <TabWidthContext.Provider value={strip}>{children}</TabWidthContext.Provider>
 }
 
 export function useFitsTabsToTitles(): boolean {
-  return useContext(TabTitleWidthContext) !== null
+  return useContext(TabWidthContext) !== null
 }
 
-export type TabTitleRename = { count: number; title: string | null }
+export type TabWidthOptions = {
+  savedName?: string | null
+  rename?: TabTitleRename
+  editing?: boolean
+  ref?: RefObject<HTMLDivElement | null>
+}
 
-/** Hold the width-defining title and icon count until the strip settles or the user renames, so agent renames and status changes can't keep shifting tabs. */
-function useSettledTabTitle(
+/** Snapshot the entire tab's intrinsic width before paint, including controls, without measuring title churn. */
+export function useTabWidthSnapshot(
   tabId: string,
-  title: string,
-  liveTitle: string,
-  leadingSlots: number,
-  rename: TabTitleRename | undefined
-): { settledTitle: string; settledSlots: number } {
-  const strip = useContext(TabTitleWidthContext)
-  let settledTitle = title
-  let settledSlots = leadingSlots
-  if (strip !== null) {
-    const { widthKey, settledByTabId } = strip
-    const previous = settledByTabId.get(tabId)
-    const next = nextSettledTabTitle(previous, {
-      title,
-      leadingSlots,
-      widthKey,
-      renameCount: rename?.count ?? 0,
-      renamedTo: rename?.title
-    })
-    if (next !== previous) {
-      // Idempotent for a given key and title, so a discarded render cannot leave a wrong width.
-      settledByTabId.set(tabId, next)
+  slotRef: RefObject<HTMLDivElement | null>,
+  { savedName, rename, editing = false }: TabWidthOptions
+): void {
+  const strip = useContext(TabWidthContext)
+  useLayoutEffect(() => {
+    const slot = slotRef.current
+    if (!slot) {
+      return
     }
-    settledTitle = next.title
-    settledSlots = next.leadingSlots
-  }
-  const noteTitleChange = strip?.noteTitleChange
-  const lastLive = useRef({ title, liveTitle, leadingSlots })
-  useEffect(() => {
-    const previous = lastLive.current
-    lastLive.current = { title, liveTitle, leadingSlots }
-    if (
-      settledTitle !== title ||
-      settledSlots !== leadingSlots ||
-      previous.title !== title ||
-      previous.liveTitle !== liveTitle ||
-      previous.leadingSlots !== leadingSlots
-    ) {
-      noteTitleChange?.()
+    if (!strip) {
+      slot.style.removeProperty('width')
+      slot.style.removeProperty('max-width')
+      return
     }
-  }, [title, liveTitle, leadingSlots, settledTitle, settledSlots, noteTitleChange])
-  return { settledTitle, settledSlots }
-}
-
-function nextSettledTabTitle(
-  previous: SettledTabTitle | undefined,
-  live: {
-    title: string
-    leadingSlots: number
-    widthKey: string
-    renameCount: number
-    renamedTo: string | null | undefined
-  }
-): SettledTabTitle {
-  const { title, leadingSlots, widthKey, renameCount, renamedTo } = live
-  if (!previous || previous.widthKey !== widthKey) {
-    return {
-      title,
-      leadingSlots,
-      widthKey,
+    if (!strip.shown || editing) {
+      return
+    }
+    const previous = strip.widths.get(tabId)
+    const renameCount = rename?.count ?? 0
+    const renamed =
+      previous !== undefined && renameCount > 0 && previous.renameCount !== renameCount
+    const renameArrived = previous?.awaitingRename && savedName === rename?.title
+    if (renamed && savedName !== rename?.title) {
+      strip.widths.set(tabId, { ...previous, renameCount, awaitingRename: true })
+      return
+    }
+    if (previous && !renamed && !renameArrived) {
+      slot.style.width = slot.style.maxWidth = `${previous.width}px`
+      return
+    }
+    const root = slot.querySelector<HTMLElement>(
+      '[data-tab-id], [data-client-hosted-browser-row-id]'
+    )
+    if (!root || root.getClientRects().length === 0) {
+      return
+    }
+    const oldWidth = root.style.width
+    root.style.width = 'max-content'
+    const width = Math.max(100, root.getBoundingClientRect().width)
+    root.style.width = oldWidth
+    slot.style.width = slot.style.maxWidth = `${width}px`
+    strip.widths.set(tabId, {
+      width,
       renameCount,
       awaitingRename: false
-    }
-  }
-  if (previous.renameCount !== renameCount) {
-    // A host may normalize or clear the committed name, so the next title change also settles.
-    return {
-      title,
-      leadingSlots,
-      widthKey,
-      renameCount,
-      awaitingRename: title !== renamedTo
-    }
-  }
-  if (previous.awaitingRename && previous.title !== title) {
-    return { ...previous, title, awaitingRename: false }
-  }
-  return previous
+    })
+  })
 }
 
 export function TabTitleLabel({
-  tabId,
   title,
-  liveTitle = title,
-  leadingSlots = 1,
-  rename,
   className,
   style,
   onDoubleClick
 }: {
-  tabId: string
   title: string
-  /** Live terminal title, even when a custom name supplies the displayed text. */
-  liveTitle?: string
-  /** Glyphs in the tab's leading icon; the label absorbs changes until the strip settles. */
-  leadingSlots?: number
-  /** The user's latest inline rename; its result may arrive after a host round trip. */
-  rename?: TabTitleRename
   className?: string
   style?: React.CSSProperties
   onDoubleClick?: React.MouseEventHandler<HTMLSpanElement>
 }): React.JSX.Element {
-  const { settledTitle, settledSlots } = useSettledTabTitle(
-    tabId,
-    title,
-    liveTitle,
-    leadingSlots,
-    rename
-  )
-  const slotShift = settledSlots - leadingSlots
-  if (settledTitle === title && slotShift === 0) {
-    return (
-      <span
-        className={cn(TAB_LABEL_WIDTH_CLASSES, 'mr-1', className)}
-        style={style}
-        onDoubleClick={onDoubleClick}
-      >
-        {title}
-      </span>
-    )
-  }
   return (
-    // The hidden pseudo-element sizes the tab from the settled title without duplicating text content;
-    // its margin gives back (or takes) the width the leading icon gained (or lost) since the strip settled.
     <span
+      className={cn(TAB_LABEL_WIDTH_CLASSES, 'mr-1', className)}
+      style={style}
       onDoubleClick={onDoubleClick}
-      data-settled-title={settledTitle}
-      style={
-        {
-          ...style,
-          '--tab-slot-shift': `calc(${slotShift} * ${TAB_LEADING_SLOT_WIDTH})`
-        } as React.CSSProperties
-      }
-      className={cn(
-        'relative mr-1 min-w-0 flex-1 overflow-hidden whitespace-nowrap before:invisible before:inline-block before:mr-(--tab-slot-shift) before:content-[attr(data-settled-title)]',
-        className
-      )}
     >
-      <span className="absolute inset-0 truncate">{title}</span>
+      {title}
     </span>
   )
 }

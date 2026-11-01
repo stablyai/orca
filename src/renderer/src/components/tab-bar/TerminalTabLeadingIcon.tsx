@@ -51,7 +51,6 @@ export function TerminalTabLeadingIcon({
   isActive,
   progress
 }: TerminalTabLeadingIconProps): React.JSX.Element {
-  // Icons take their natural width; title-fit tabs hold their width through slot changes in TabTitleLabel.
   const iconClassName = 'mr-1 inline-flex shrink-0 items-center gap-1'
   if (showUnreadActivity) {
     return (

@@ -86,6 +86,7 @@ function TabWidthFixture({
           activeTabId={activeTabId}
           activeTabType="terminal"
           worktreeId={WORKSPACE_ID}
+          stripShown
           groupId="tab-width-group"
           browserTabs={browserTabs}
           editorFiles={editorFiles}

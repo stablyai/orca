@@ -69,7 +69,6 @@ export default function ClientHostedBrowserTab({
             aria-hidden
           />
           <TabTitleLabel
-            tabId={row.browserPageId}
             title={label}
             className={row.hostAbsent ? 'text-muted-foreground' : undefined}
           />

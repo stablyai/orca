@@ -59,6 +59,23 @@ vi.mock('./use-tab-strip-slot-props', () => ({
   useTabStripSlotProps: () => ({ className: '', 'data-tab-strip-slot': '' })
 }))
 
+vi.mock('./tab-width-rules', () => ({
+  TAB_ROOT_WIDTH_CLASSES: 'w-full',
+  TabTitleLabel({
+    title,
+    className,
+    style,
+    onDoubleClick
+  }: {
+    title: string
+    className?: string
+    style?: Record<string, string>
+    onDoubleClick?: (event: { stopPropagation: () => void }) => void
+  }) {
+    return { type: 'span', props: { className, style, onDoubleClick, children: title } }
+  }
+}))
+
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
     attributes: {},

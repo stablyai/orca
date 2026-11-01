@@ -41,8 +41,7 @@ export function SortableTabRenameInput({
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onAuxClick={(event) => event.stopPropagation()}
-      // Why: base Input's min-w-0 lets flex shrink it to ~0 in a saturated tab bar; force a usable minimum width.
-      className="mr-1 h-5 min-w-[72px] flex-1 px-1 py-0 text-xs"
+      className="mr-1 h-5 min-w-0 flex-1 px-1 py-0 text-xs"
       spellCheck={false}
     />
   )

@@ -2,12 +2,11 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, Smartphone } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import { EditorFileTabRenameInput } from './EditorFileTabRenameInput'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
@@ -29,7 +28,7 @@ import {
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
-import { TAB_ROOT_WIDTH_CLASSES, TabTitleLabel } from './tab-width-rules'
+import { TAB_ROOT_WIDTH_CLASSES, TabTitleLabel, type TabTitleRename } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
@@ -133,6 +132,7 @@ export default function EditorFileTab({
   )
   const [menuOpen, setMenuOpen] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
+  const [committedRename, setCommittedRename] = useState<TabTitleRename>({ count: 0, title: null })
   const renameInputRef = useRef<HTMLInputElement>(null)
   const renameFocusFrameRef = useRef<number | null>(null)
   const skipMenuFocusRestoreRef = useRef(false)
@@ -167,6 +167,7 @@ export default function EditorFileTab({
     if (!newName || newName === oldName) {
       return
     }
+    setCommittedRename((previous) => ({ count: previous.count + 1, title: newName }))
     const worktreePath = getUntitledFileRoot(file, worktree?.path ?? null)
     void renameFileOnDisk({
       oldPath: file.filePath,
@@ -232,7 +233,11 @@ export default function EditorFileTab({
     disabled: isRenaming
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(file.tabId ?? file.id, isActive)
+  const slotProps = useTabStripSlotProps(file.tabId ?? file.id, isActive, {
+    savedName: basename(file.filePath),
+    rename: committedRename,
+    editing: isRenaming
+  })
 
   const tabRoot = (
     <div
@@ -286,43 +291,17 @@ export default function EditorFileTab({
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
         {isRenaming ? (
-          <Input
-            ref={setRenameInputElement}
-            data-tab-rename-input="true"
-            aria-label={translate(
-              'auto.components.tab.bar.EditorFileTab.3da7445c84',
-              'Rename file {{value0}}',
-              { value0: basename(file.filePath) }
-            )}
-            defaultValue={basename(file.filePath)}
-            // Keep inline rename within titlebar height while reserving readable filename width.
-            className="mr-1 h-5 w-[12ch] min-w-[72px] max-w-[132px] rounded-sm bg-input/40 px-1 py-0 text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
-            spellCheck={false}
-            onPointerDown={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            onDoubleClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              // IME candidate confirmation must not commit the rename.
-              if (isImeCompositionKeyDown(e)) {
-                return
-              }
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                e.stopPropagation()
-                commitRename()
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                e.stopPropagation()
-                renameCancelledRef.current = true
-                setIsRenaming(false)
-              }
+          <EditorFileTabRenameInput
+            inputRef={setRenameInputElement}
+            fileName={basename(file.filePath)}
+            onCommit={commitRename}
+            onCancel={() => {
+              renameCancelledRef.current = true
+              setIsRenaming(false)
             }}
-            onBlur={commitRename}
           />
         ) : (
           <TabTitleLabel
-            tabId={file.tabId ?? file.id}
             title={tabLabel}
             className={`mr-0${isPreviewTab ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
