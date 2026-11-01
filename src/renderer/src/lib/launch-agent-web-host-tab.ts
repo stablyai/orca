@@ -1,3 +1,4 @@
+import { showGeneratedInputNotice } from './launch-agent-paste-timeout-notice'
 import type { AgentLaunchChoices } from '../../../shared/agent-launch-choices'
 import { structuredAgentLabel } from './agent-session/launch/structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
@@ -148,13 +149,7 @@ export async function launchAgentInWebHostTab(args: {
     }
     const failureNotified = hasPrompt && !promptDelivered
     if (failureNotified) {
-      toast.error(
-        translate(
-          'agentLaunch.terminalPromptFailed',
-          'Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.',
-          { value0: structuredAgentLabel(agent) }
-        )
-      )
+      showGeneratedInputNotice({ agent, text: args.prompt ?? '', certainty: 'unconfirmed' })
     }
     return {
       delivered: promptDelivered,

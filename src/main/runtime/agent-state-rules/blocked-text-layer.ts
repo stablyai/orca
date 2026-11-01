@@ -1,3 +1,4 @@
+import { findAgentInputDialogIndex } from '../../../shared/agent-input-dialog'
 import { escapeRegex } from '../../../shared/string-utils'
 import { findStartupDialogBlockedSignals } from '../startup-dialog-blocked-signals'
 import { startOfLastNonBlankLines } from '../terminal-wait-tail-window'
@@ -12,7 +13,7 @@ import {
 // Any pane can contain another agent's dialog; the latest live blocker wins.
 
 const BUILT_IN_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|available\s*\u00B7|esc\s*skip|enter\s*confirm\s*\u00B7|enter\/esc\s*(?:continue|confirm)|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always/
+  /esc to (?:cancel|go back|exit)|enter to (?:confirm|select)|update available|choose working directory to|codex just got an upgrade|available\s*\u00B7|esc\s*skip|enter\s*confirm\s*\u00B7|enter\/esc\s*(?:continue|confirm)|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always/
 
 /** Cheap negative test; identity remains stable until rules change for caller caches. */
 export const terminalWaitBlockedSentinelRe = compiledFromActiveAgentStateRules(
@@ -32,16 +33,21 @@ export function findTerminalWaitBlockedSignal(
   fullTail: string,
   options: { wholeText?: boolean } = {}
 ): BlockedTextSignal | null {
+  const genericIndex = findAgentInputDialogIndex(fullTail)
+  const genericSignal: BlockedTextSignal | null =
+    genericIndex === null ? null : { reason: 'agent-interactive-prompt', index: genericIndex }
   const windowStart = options.wholeText
     ? 0
     : startOfLastNonBlankLines(fullTail, LIVE_PROMPT_TAIL_LINES)
   const normalized = windowStart === 0 ? fullTail : fullTail.slice(windowStart)
   if (!terminalWaitBlockedSentinelRe().test(normalized)) {
-    return null
+    return genericSignal
   }
   const signal = findBlockedSignalInLiveWindow(normalized)
   // Convert the live-window index to full-tail coordinates for ready-header comparison.
-  return signal === null ? null : { reason: signal.reason, index: signal.index + windowStart }
+  return signal === null
+    ? genericSignal
+    : { reason: signal.reason, index: signal.index + windowStart }
 }
 
 export function isUnblockedAfter(normalized: string, readyIndex: number | null): boolean {

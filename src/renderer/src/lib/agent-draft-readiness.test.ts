@@ -25,6 +25,16 @@ vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOri
   isRemoteRuntimePtyId: () => false
 }))
 
+vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
+  readPtyInputScreen: async () => ({ lines: ['❯ '], alternateScreen: false })
+}))
+vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+  inspectRuntimeTerminalProcess: async () => ({
+    foregroundProcess: 'codex',
+    hasChildProcesses: true
+  })
+}))
+
 const PTY_ID = 'pty-buffered-codex'
 const CODEX_COMPOSER = '\x1b[?1049h\x1b[1m›\x1b[0m Implement {feature}'
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
@@ -76,7 +86,7 @@ describe('waitForAgentDraftInputReady', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('takes the box at the deadline when the grace would outlast the budget', async () => {
+  it('refuses at the deadline when the grace would outlast the budget', async () => {
     vi.useFakeTimers()
     vi.stubGlobal('window', globalThis)
     let settled: boolean | null = null
@@ -88,7 +98,7 @@ describe('waitForAgentDraftInputReady', () => {
     await vi.advanceTimersByTimeAsync(999)
     expect(settled).toBeNull()
     await vi.advanceTimersByTimeAsync(1)
-    expect(settled).toBe(true)
+    expect(settled).toBe(false)
     expect(vi.getTimerCount()).toBe(0)
   })
 

@@ -6,3 +6,5 @@ export const ClientEventsUnsubscribeParams = z.object({
     .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
     .pipe(z.string().min(1, 'Missing subscriptionId'))
 })
+
+export const DismissGeneratedInputNoticeParams = z.object({ id: z.string().min(1) })

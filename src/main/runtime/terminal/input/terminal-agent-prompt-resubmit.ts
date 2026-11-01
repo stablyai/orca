@@ -1,5 +1,22 @@
+import { waitForGeneratedAgentInput } from '../../../../shared/generated-agent-input-readiness'
+import { resolvePasteReadySignal } from '../../../../shared/draft-paste-ready-scanner'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import {
+  isExpectedAgentProcess,
+  isAgentForegroundWrapperProcess,
+  recognizeAgentProcess
+} from '../../../../shared/agent-process-recognition'
+import { isShellProcess, getAgentLabel } from '../../../../shared/agent-detection'
+import {
+  detectTerminalWaitBlockedReason,
+  isKnownReadyPromptBody
+} from '../../terminal-wait-detection'
 import { OrcaRuntimeWithTitlelessPaneAgentIdentity } from '../wait/titleless-pane-agent-identity'
-import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
+import { readScreenInputVeto } from '../../screen-input-veto'
+import type {
+  AgentPromptExpectedBinding,
+  RuntimeAgentPromptWriteOptions
+} from '../../runtime-terminal-contracts'
 import {
   AGENT_PROMPT_SUBMIT,
   isHeldAgentPromptDraft
@@ -19,6 +36,108 @@ type HeldAgentPrompt = {
 }
 
 export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntimeWithTitlelessPaneAgentIdentity {
+  protected assertAgentPromptExpectedBinding(
+    handle: string,
+    expected: AgentPromptExpectedBinding | undefined
+  ): void {
+    if (!expected) {
+      return
+    }
+    const current = this.getTerminalPromptRequestBinding(handle)
+    if (
+      current.ptyId !== expected.ptyId ||
+      current.processIncarnation !== expected.processIncarnation
+    ) {
+      throw new Error('terminal_handle_stale')
+    }
+  }
+
+  async generatedInputScreenIsClear(ptyId: string, deadline = Infinity): Promise<boolean> {
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const foreground = await this.ptyController?.getForegroundProcess(ptyId)
+    if (isShellProcess(foreground ?? '')) {
+      return false
+    }
+    const screen =
+      this.readCaughtUpRuledScreen(ptyId) ?? (await this.readCurrentTerminalWaitScreen(ptyId))
+    const resolved = this.getPtyAgent(ptyId)
+    const agent = isTuiAgent(resolved) ? resolved : null
+    return (
+      screen != null &&
+      this.getPtyLifecycleGeneration(ptyId) === generation &&
+      readScreenInputVeto(agent, () => ({
+        lines: screen.lines,
+        alternateScreen:
+          'alternateScreen' in screen ? screen.alternateScreen : screen.isAlternateScreen
+      })) !== true &&
+      detectTerminalWaitBlockedReason(screen.lines.join('\n')) === null &&
+      Date.now() < deadline
+    )
+  }
+
+  async waitForGeneratedTerminalInput(
+    handle: string,
+    signal?: AbortSignal,
+    timeoutMs?: number
+  ): Promise<boolean> {
+    const ptyId = this.getTerminalPtyIdForHandle(handle)
+    if (!ptyId) {
+      return false
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const resolved = this.getPtyAgent(ptyId)
+    const agent = isTuiAgent(resolved) ? resolved : null
+    const config = agent ? TUI_AGENT_CONFIG[agent] : null
+    return waitForGeneratedAgentInput(
+      {
+        subscribe: (observe) => this.subscribeToTerminalData(ptyId, observe),
+        replay: () => this.recentPtyOutputById.get(ptyId)?.read(),
+        composerReady: async () => {
+          const screen =
+            this.readCaughtUpRuledScreen(ptyId) ?? (await this.readCurrentTerminalWaitScreen(ptyId))
+          return (
+            screen != null &&
+            isKnownReadyPromptBody(screen.lines.join('\n'), agent, () => screen.lines, true)
+          )
+        },
+        accept: async (quiet) => {
+          if (!(await this.generatedInputScreenIsClear(ptyId))) {
+            return false
+          }
+          const foreground = await this.ptyController?.getForegroundProcess(ptyId)
+          if (isShellProcess(foreground ?? '')) {
+            return false
+          }
+          const expectedInFront = config
+            ? isExpectedAgentProcess(foreground, config.expectedProcess)
+            : recognizeAgentProcess(foreground) !== null
+          if (quiet && !expectedInFront) {
+            if (
+              !isAgentForegroundWrapperProcess(foreground ?? '') ||
+              !(await this.ptyController?.hasChildProcesses?.(ptyId))
+            ) {
+              return false
+            }
+          }
+          return (
+            this.getTerminalPtyIdForHandle(handle) === ptyId &&
+            this.getPtyLifecycleGeneration(ptyId) === generation &&
+            (await this.generatedInputScreenIsClear(ptyId))
+          )
+        }
+      },
+      resolvePasteReadySignal(config, true),
+      { signal, timeoutMs, requireComposerMarker: Boolean(config?.composerReadyCaptures?.length) }
+    )
+  }
+
+  generatedInputRefusal(ptyId: string): Error {
+    const agent = this.getPtyAgent(ptyId)
+    return new Error(
+      `${agent ? getAgentLabel(agent) : 'The agent'} could not take your prompt. Answer any dialog in its terminal, then retry.`
+    )
+  }
+
   /** Retry blind Enter and drafts held by Windows input-record pastes or unopened dsh launchpads; retries cannot fail a submitted prompt. */
   protected async resubmitHeldAgentPrompt(
     ptyId: string,
@@ -63,6 +182,9 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
           continue
         }
         await options.beforeWrite?.(ptyId)
+        if (!(await this.generatedInputScreenIsClear(ptyId))) {
+          return resubmits
+        }
         // Recheck after yielding: read the screen before the synchronous deadline/turn checks to avoid stale writes.
         if (!blind && (!(await holdsPrompt()) || Date.now() >= deadline)) {
           return resubmits

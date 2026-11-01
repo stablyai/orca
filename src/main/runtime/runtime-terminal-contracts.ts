@@ -277,6 +277,9 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   promptForSchedule?: string
   /** Caller observed composer input acceptance; schedule Enter using desktop draft-paste timing instead of render settlement. */
   composerReady?: boolean
+  /** Admission and all generated suffixes share the initiating operation's deadline. */
+  inputDeadline?: number
+  inputReady?: boolean
   /** See buildAgentPromptPasteBytes. */
   leadLine?: string
   /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */
@@ -290,6 +293,7 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   expectedBinding?: AgentPromptExpectedBinding
   /** Run on accepted Enter write, including OMP paste framing; later abort cannot undo submitted text. */
   onSubmitWritten?: () => void
+  onPasteWritten?: () => void
 }
 
 export type AgentPromptExpectedBinding = { ptyId: string; processIncarnation: string }

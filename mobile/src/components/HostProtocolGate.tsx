@@ -7,6 +7,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { HostStatusGatesContext } from './host-protocol-gates-context'
+import { GeneratedInputNotices } from './GeneratedInputNotices'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
 type Props = {
@@ -81,6 +82,7 @@ export function HostProtocolGate({
           // Hide pending stack from TalkBack too; touch overlay alone does not block Android screen-reader navigation.
           importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}
         >
+          <GeneratedInputNotices client={client} capabilities={gates.hostCapabilities} />
           {children}
         </View>
         {covered ? (

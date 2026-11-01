@@ -1,10 +1,10 @@
-// Pre-bind keys would prefix the launch command; draft until agent readiness and discard if the user starts driving the live screen.
+// Pre-bind keys would prefix the launch command; draft until agent readiness and recover if the user starts driving the live screen.
 
 import { useAppStore } from '@/store'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-paste-ready-timeout'
-import { waitForAgentDraftInputReady } from '@/lib/agent-draft-readiness'
+import { agentInputIsAdmitted, waitForAgentDraftInputReady } from '@/lib/agent-draft-readiness'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
 import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
 import { PTY_PRECONNECT_INPUT_MAX_CODE_UNITS } from '../pty-preconnect-input-buffer'
@@ -54,6 +54,7 @@ type DraftPhase = 'capturing' | 'delivering' | 'closed'
 export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): void {
   let phase: DraftPhase = 'capturing'
   let draft = ''
+  let wrote = false
   let liveInputSinceBind = false
   let agent: TuiAgent | null | undefined
 
@@ -107,43 +108,63 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     return true
   }
 
-  const dropDraft = (draftAgent: TuiAgent): void => {
-    const dropped = draft !== ''
+  const recoverDraft = (draftAgent: TuiAgent): void => {
+    const retained = draft !== ''
+    const content = draft
     draft = ''
     phase = 'closed'
-    if (dropped && !session.disposed) {
+    if (retained) {
       createPasteReadinessTimeoutNotice({
         worktreeId: session.deps.worktreeId,
         tabId: session.deps.tabId,
         agent: draftAgent,
-        submitted: false
-      }).onTimeout()
+        submitted: false,
+        content
+      }).onTimeout(wrote ? 'unconfirmed' : 'not-sent')
     }
   }
 
-  const pasteDraft = async (ptyId: string, draftAgent: TuiAgent): Promise<void> => {
+  const pasteDraft = async (
+    ptyId: string,
+    draftAgent: TuiAgent,
+    deadline: number
+  ): Promise<void> => {
     if (session.disposed || session.transport.getPtyId() !== ptyId) {
+      recoverDraft(draftAgent)
+      return
+    }
+    const status = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]?.state
+    // The user is already driving the screen, or a prompt is waiting on an answer.
+    if (liveInputSinceBind || status === 'blocked' || status === 'waiting') {
+      recoverDraft(draftAgent)
+      return
+    }
+    const text = draft
+    // Why merge: a launch-time draft not yet pasted sends both as one, in typing order.
+    if (session.ownsStartupDraftPaste && !session.startupDraftPasteAttempted) {
+      session.startupDraftPrompt = joinDraftText(session.startupDraftPrompt, text)
       draft = ''
       phase = 'closed'
       return
     }
-    const status = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]?.state
-    // Why drop: the user is already driving the screen, or a prompt is waiting on an answer.
-    if (liveInputSinceBind || status === 'blocked' || status === 'waiting') {
-      dropDraft(draftAgent)
-      return
+    const sent = await sendAgentDraftPasteContent(ptyId, text, 'driving', async (data) => {
+      if (
+        session.disposed ||
+        session.transport.getPtyId() !== ptyId ||
+        !(await agentInputIsAdmitted(ptyId, draftAgent)) ||
+        Date.now() >= deadline
+      ) {
+        return false
+      }
+      wrote = true
+      return writeTerminalPastePtyInput(session.transport, data, 'driving')
+    }).catch(() => false)
+    if (!sent) {
+      recoverDraft(draftAgent)
+    } else {
+      draft = ''
+      phase = 'closed'
     }
-    const text = draft
-    draft = ''
-    phase = 'closed'
-    // Why merge: a launch-time draft not yet pasted sends both as one, in typing order.
-    if (session.ownsStartupDraftPaste && !session.startupDraftPasteAttempted) {
-      session.startupDraftPrompt = joinDraftText(session.startupDraftPrompt, text)
-      return
-    }
-    await sendAgentDraftPasteContent(ptyId, text, 'driving', (data) =>
-      writeTerminalPastePtyInput(session.transport, data, 'driving')
-    ).catch(() => false)
   }
 
   session.onAgentPreReadyDraftPtyBound = (ptyId: string, freshSpawn: boolean): void => {
@@ -158,21 +179,33 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     }
     liveInputSinceBind = false
     phase = 'delivering'
-    if (!freshSpawn) {
-      // An attached pane may still be at the shell; pasting now would prefix its pending launch command.
-      dropDraft(draftAgent)
+    if (session.ownsStartupDraftPaste && !session.startupDraftPasteAttempted) {
+      session.startupDraftPrompt = joinDraftText(session.startupDraftPrompt, draft)
+      draft = ''
+      phase = 'closed'
       return
     }
+    if (!freshSpawn) {
+      // An attached pane may still be at the shell; pasting now would prefix its pending launch command.
+      recoverDraft(draftAgent)
+      return
+    }
+    const deadline = Date.now() + resolveDraftPasteReadyTimeoutMs(draftAgent)
     void waitForAgentDraftInputReady(
       ptyId,
       resolveDraftPasteReadyTimeoutMs(draftAgent),
-      TUI_AGENT_CONFIG[draftAgent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
-    ).then((ready) => (ready ? pasteDraft(ptyId, draftAgent) : dropDraft(draftAgent)))
+      TUI_AGENT_CONFIG[draftAgent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste',
+      draftAgent
+    )
+      .then((ready) => (ready ? pasteDraft(ptyId, draftAgent, deadline) : recoverDraft(draftAgent)))
+      .catch(() => recoverDraft(draftAgent))
   }
 
   session.discardAgentPreReadyDraft = (): void => {
-    draft = ''
-    phase = 'closed'
+    const draftAgent = resolveAgent()
+    if (draftAgent) {
+      recoverDraft(draftAgent)
+    }
   }
 }
 

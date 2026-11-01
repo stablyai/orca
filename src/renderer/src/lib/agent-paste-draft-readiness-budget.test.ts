@@ -27,7 +27,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('./agent-draft-readiness', () => ({
-  waitForAgentDraftInputReady: testState.waitForReady
+  waitForAgentDraftInputReady: testState.waitForReady,
+  agentInputIsAdmitted: async () => true
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
@@ -36,6 +37,8 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: testState.sendInput
 }))
+
+vi.mock('./launch-agent-paste-timeout-notice', () => ({ showGeneratedInputNotice: vi.fn() }))
 
 describe('pty-bound agent draft readiness budget', () => {
   beforeEach(() => {
@@ -76,7 +79,12 @@ describe('pty-bound agent draft readiness budget', () => {
     await vi.advanceTimersByTimeAsync(10_000)
 
     await expect(promise).resolves.toBe(true)
-    expect(testState.waitForReady).toHaveBeenCalledWith('pty-1', 20_000, 'codex-composer-prompt')
+    expect(testState.waitForReady).toHaveBeenCalledWith(
+      'pty-1',
+      60_000,
+      'codex-composer-prompt',
+      'codex'
+    )
     expect(testState.sendInput).toHaveBeenCalledExactlyOnceWith(
       'pty-1',
       '\x1b[200~draft\x1b[201~',
@@ -99,8 +107,9 @@ describe('pty-bound agent draft readiness budget', () => {
     await expect(promise).resolves.toBe(true)
     expect(testState.waitForReady).toHaveBeenCalledWith(
       'pty-1',
-      20_000,
-      'render-cursor-after-bracketed-paste'
+      60_000,
+      'render-cursor-after-bracketed-paste',
+      'opencode'
     )
     expect(testState.sendInput).toHaveBeenCalledTimes(1)
     expect(onUnconfirmedDelivery).not.toHaveBeenCalled()
@@ -120,7 +129,12 @@ describe('pty-bound agent draft readiness budget', () => {
       await vi.advanceTimersByTimeAsync(12_000)
 
       await expect(promise).resolves.toBe(true)
-      expect(testState.waitForReady).toHaveBeenCalledWith('pty-1', 20_000, 'opencode-agent-row')
+      expect(testState.waitForReady).toHaveBeenCalledWith(
+        'pty-1',
+        60_000,
+        'opencode-agent-row',
+        agent
+      )
     }
   )
 
@@ -141,10 +155,10 @@ describe('pty-bound agent draft readiness budget', () => {
     await vi.advanceTimersByTimeAsync(12_000)
 
     await expect(promise).resolves.toBe(true)
-    expect(testState.waitForReady).toHaveBeenCalledWith('pty-1', 20_000, signal)
+    expect(testState.waitForReady).toHaveBeenCalledWith('pty-1', 60_000, signal, agent)
   })
 
-  it('flags a blind paste when only the opencode process, not its composer, was seen', async () => {
+  it('does not fall through to paste after a refused readiness wait', async () => {
     // ConPTY omits DECSET 2004; distinguish OpenCode’s blind-write fallback from observed delivery (#22479).
     testState.waitForReady.mockResolvedValue(false)
     testState.inspectProcess.mockResolvedValue({
@@ -162,9 +176,9 @@ describe('pty-bound agent draft readiness budget', () => {
 
     await vi.advanceTimersByTimeAsync(1000)
 
-    await expect(promise).resolves.toBe(true)
-    expect(testState.sendInput).toHaveBeenCalledTimes(1)
-    expect(onUnconfirmedDelivery).toHaveBeenCalledTimes(1)
+    await expect(promise).resolves.toBe(false)
+    expect(testState.sendInput).not.toHaveBeenCalled()
+    expect(onUnconfirmedDelivery).not.toHaveBeenCalled()
   })
 
   // An AI button's pane may settle its grid for longer than the spawn budget before it spawns.
@@ -198,12 +212,13 @@ describe('pty-bound agent draft readiness budget', () => {
     }
   )
 
-  it('keeps the 8s readiness deadline for agents without an agent-specific budget', async () => {
+  it('honors a caller deadline for agents without a specific marker', async () => {
     const onTimeout = vi.fn()
     const promise = pasteDraftToAgentPtyWhenReady({
       ptyId: 'pty-1',
       content: 'draft',
       agent: 'gemini',
+      timeoutMs: 8000,
       forcePaste: true,
       onTimeout
     })
@@ -214,7 +229,8 @@ describe('pty-bound agent draft readiness budget', () => {
     expect(testState.waitForReady).toHaveBeenCalledWith(
       'pty-1',
       8000,
-      'render-quiet-after-bracketed-paste'
+      'render-quiet-after-bracketed-paste',
+      'gemini'
     )
     expect(onTimeout).toHaveBeenCalledTimes(1)
     expect(testState.sendInput).not.toHaveBeenCalled()

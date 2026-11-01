@@ -83,7 +83,7 @@ describe('writing a launch prompt into a terminal agent', () => {
     })
 
     expect(delivered).toBe(true)
-    expect(stub.waitForFreshWorkerComposer).toHaveBeenCalledWith('term_1', 'claude', 8_000, {
+    expect(stub.waitForFreshWorkerComposer).toHaveBeenCalledWith('term_1', 'claude', 60_000, {
       requireComposerMarker: false,
       stopOnDialog: true
     })
@@ -287,7 +287,7 @@ describe('writing a launch prompt into a terminal agent', () => {
     })
 
     expect(delivered).toBe(true)
-    expect(stub.waitForFreshWorkerComposer).toHaveBeenCalledWith('term_1', 'claude', 8_000, {
+    expect(stub.waitForFreshWorkerComposer).toHaveBeenCalledWith('term_1', 'claude', 60_000, {
       requireComposerMarker: false,
       stopOnDialog: true
     })
@@ -479,7 +479,7 @@ describe('cancelling a launch prompt', () => {
     })
 
     expect(delivered).toBe(false)
-    expect(stub.waitForFreshWorkerComposer).toHaveBeenCalledWith('term_1', 'claude', 8_000, {
+    expect(stub.waitForFreshWorkerComposer).toHaveBeenCalledWith('term_1', 'claude', 60_000, {
       requireComposerMarker: false,
       stopOnDialog: true,
       signal: controller.signal
@@ -565,7 +565,7 @@ describe('cancelling a launch prompt', () => {
     ).resolves.toBe(false)
   })
 
-  it('passes no signal or acceptance hook when the caller gave no signal', async () => {
+  it('tracks accepted Enter even when the caller gave no signal', async () => {
     const stub = runtimeStub({})
 
     await deliverTerminalAgentLaunchPrompt({
@@ -578,7 +578,7 @@ describe('cancelling a launch prompt', () => {
 
     const options = stub.sendTerminalAgentPrompt.mock.calls[0]![2]
     expect(options).not.toHaveProperty('signal')
-    expect(options).not.toHaveProperty('onSubmitWritten')
+    expect(options.onSubmitWritten).toEqual(expect.any(Function))
     expect(stub.waitForTerminal.mock.calls[0]![1]).not.toHaveProperty('signal')
   })
 })

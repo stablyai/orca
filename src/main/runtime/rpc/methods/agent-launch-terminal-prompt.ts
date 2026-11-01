@@ -42,9 +42,10 @@ async function waitThroughBlockingPrompts(
   freshLaunch: boolean,
   clock: ReadinessClock,
   signal: AbortSignal | undefined,
-  terminalCreation?: TerminalReadinessCreation
+  terminalCreation?: TerminalReadinessCreation,
+  timeoutBudgetMs = AGENT_READY_TIMEOUT_MS
 ): Promise<RuntimeTerminalWait | undefined> {
-  const deadline = clock.now() + AGENT_READY_TIMEOUT_MS
+  const deadline = clock.now() + timeoutBudgetMs
   for (;;) {
     // At least 1 ms: the terminal wait reads 0 as "use the 5-minute default", and a late sleep can
     // land past the deadline.
@@ -106,6 +107,8 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   clock?: ReadinessClock
   /** Aborting ends the readiness wait and refuses the paste; text already handed over stays so. */
   signal?: AbortSignal
+  onRefused?: (certainty: 'not-sent' | 'unconfirmed') => void
+  inputDeadline?: number
 }): Promise<boolean> {
   if (args.text.trim().length === 0) {
     return false
@@ -116,6 +119,8 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   })
   // Once Enter left, a later throw (an abort during verification) cannot unsend the text.
   let submitted = false
+  let pasted = false
+  const inputDeadline = args.inputDeadline ?? Date.now() + AGENT_READY_TIMEOUT_MS
   try {
     const wait = await waitThroughBlockingPrompts(
       args.runtime,
@@ -124,17 +129,27 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       args.freshLaunch,
       args.clock ?? REAL_CLOCK,
       args.signal,
-      args.terminalCreation
+      args.terminalCreation,
+      Math.max(0, inputDeadline - Date.now())
     )
     // An unsatisfied wait does not authorize pasting into a dialog, dead process or unready agent.
-    if (wait && !wait.satisfied) {
+    if (!wait?.satisfied) {
       console.warn(
-        `[agent-launch] the terminal agent did not become ready (${wait.status}); its launch prompt was not delivered`
+        `[agent-launch] the terminal agent did not become ready (${wait?.status ?? 'unknown'}); its launch prompt was not delivered`
       )
+      args.onRefused?.('not-sent')
       return false
     }
     const sent = await args.runtime.sendTerminalAgentPrompt(args.handle, args.text, {
       inputKind: 'launch',
+      inputReady: true,
+      onPasteWritten: () => {
+        pasted = true
+      },
+      onSubmitWritten: () => {
+        submitted = true
+      },
+      inputDeadline,
       // A fresh launch's composer was just seen ready; a reused pane's state is only inferred.
       composerReady: args.freshLaunch,
       beforeWrite: guard.beforeWrite,
@@ -143,20 +158,17 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       requestId: randomUUID(),
       // Once handed over, let the pane show progress; the launch receipt does not claim turn observation.
       observationTimeoutMs: 0,
-      ...(args.signal
-        ? {
-            signal: args.signal,
-            onSubmitWritten: () => {
-              submitted = true
-            }
-          }
-        : {})
+      ...(args.signal ? { signal: args.signal } : {})
     })
+    if (!sent.accepted) {
+      args.onRefused?.(pasted ? 'unconfirmed' : 'not-sent')
+    }
     return sent.accepted
   } catch (error) {
     if (isAgentPromptStalledError(error) || submitted) {
       return true
     }
+    args.onRefused?.(pasted ? 'unconfirmed' : 'not-sent')
     console.warn(
       '[agent-launch] the terminal agent started, its launch prompt was not delivered',
       error

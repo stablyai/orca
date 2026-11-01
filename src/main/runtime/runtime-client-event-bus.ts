@@ -1,3 +1,4 @@
+import { GeneratedAgentInputNotices } from './generated-agent-input-notices'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { notifyRuntimeListeners } from './runtime-async-boundaries'
 
@@ -7,6 +8,10 @@ type RuntimeClientEventBusDeps = {
 }
 
 export class RuntimeClientEventBus {
+  readonly generatedInputNotices = new GeneratedAgentInputNotices((notices) =>
+    this.emit({ type: 'generatedInputNoticesChanged', notices })
+  )
+
   private readonly listeners = new Set<(event: RuntimeClientEvent) => void>()
   private readonly excludedTerminalSideEffectListeners = new Set<
     (event: RuntimeClientEvent) => void

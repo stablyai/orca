@@ -29,7 +29,7 @@ export function deliverLaunchPromptToAgentTab(args: {
   submit: boolean
   forcePaste: boolean
   timeoutMs?: number
-  onTimeout?: () => void
+  onTimeout?: (certainty?: 'not-sent' | 'unconfirmed') => void
   /** The paste was written without ever observing the agent's composer. */
   onUnconfirmedDelivery?: () => void
   /** The launch pane's PTY once its agent started; the chat copy is seeded only then. */
