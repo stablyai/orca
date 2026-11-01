@@ -62,7 +62,9 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       setWindowButtonPosition: vi.fn(),
       maximize: vi.fn(),
+      setFullScreen: vi.fn(),
       show: vi.fn(),
+      showInactive: vi.fn(),
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
@@ -73,13 +75,13 @@ describe('createMainWindow', () => {
     return { browserWindowInstance, windowHandlers }
   }
 
-  function createStartupRevealStore(savedMaximized: boolean) {
+  function createStartupRevealStore(savedMaximized: boolean, savedFullscreen = false) {
     return {
-      getUI: () =>
-        ({
-          windowMaximized: savedMaximized
-        }) as never,
-      getSettings: () => ({ windowBackgroundBlur: false }) as never,
+      getUI: () => ({
+        windowMaximized: savedMaximized,
+        windowFullscreen: savedFullscreen
+      }),
+      getSettings: () => ({ windowBackgroundBlur: false }),
       updateUI: vi.fn()
     }
   }
@@ -94,7 +96,10 @@ describe('createMainWindow', () => {
       Object.assign(browserWindowInstance, { showInactive })
       try {
         withPlatform(platform, () => {
-          createMainWindow(createStartupRevealStore(true) as never, { revealOnDidFinishLoad: true })
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Startup reads only the UI/settings and updateUI supplied by this store fixture.
+          createMainWindow(createStartupRevealStore(true, true) as never, {
+            revealOnDidFinishLoad: true
+          })
           const revealAfterLoad = browserWindowInstance.webContents.on.mock.calls.find(
             ([event]) => event === 'did-finish-load'
           )?.[1]
@@ -105,10 +110,48 @@ describe('createMainWindow', () => {
           expect(browserWindowInstance.show).not.toHaveBeenCalled()
           expect(showInactive).not.toHaveBeenCalled()
           expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+          expect(browserWindowInstance.setFullScreen).not.toHaveBeenCalled()
         })
       } finally {
         vi.unstubAllEnvs()
       }
+    }
+  )
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'does not enter fullscreen during an inactive headful launch on %s',
+    (platform) => {
+      vi.stubEnv('ORCA_E2E_HEADFUL', '1')
+      const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+      withPlatform(platform, () => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Startup reads only the UI/settings and updateUI supplied by this store fixture.
+        createMainWindow(createStartupRevealStore(false, true) as never)
+        windowHandlers['ready-to-show']()
+      })
+      expect(browserWindowInstance.showInactive).toHaveBeenCalledOnce()
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.setFullScreen).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'restores saved fullscreen once after showing the window on %s',
+    (platform) => {
+      const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+      withPlatform(platform, () => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Startup reads only the UI/settings and updateUI supplied by this store fixture.
+        createMainWindow(createStartupRevealStore(true, true) as never, {
+          revealOnDidFinishLoad: true
+        })
+        browserWindowInstance.webContents.on.mock.calls.find(
+          ([event]) => event === 'did-finish-load'
+        )?.[1]()
+        windowHandlers['ready-to-show']()
+      })
+      expect(browserWindowInstance.maximize).toHaveBeenCalledOnce()
+      expect(browserWindowInstance.setFullScreen).toHaveBeenCalledExactlyOnceWith(true)
+      expect(browserWindowInstance.maximize).toHaveBeenCalledBefore(browserWindowInstance.show)
+      expect(browserWindowInstance.show).toHaveBeenCalledBefore(browserWindowInstance.setFullScreen)
     }
   )
 

@@ -1,7 +1,11 @@
-import { app, type BrowserWindow, type Event } from 'electron'
+import { app, autoUpdater, type BrowserWindow, type Event } from 'electron'
 import type { Store } from '../persistence'
 import { uiZoomFactorFromLevel } from '../../shared/ui-zoom-level'
-import { isWindowlessLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
+import {
+  isBackgroundLaunch,
+  isWindowlessLaunch,
+  showWindowWithoutStealingFocus
+} from './foreground-activation-policy'
 import { MIN_HEIGHT, MIN_WIDTH, syncTrafficLightPosition } from './main-window-visual-lifecycle'
 
 export type MainWindowStateLifecycle = {
@@ -16,9 +20,10 @@ export function installMainWindowStateLifecycle(args: {
   mainWindow: BrowserWindow
   revealOnDidFinishLoad: boolean
   savedMaximized: boolean
+  savedFullscreen: boolean
   store: Store | null
 }): MainWindowStateLifecycle {
-  const { mainWindow, revealOnDidFinishLoad, savedMaximized, store } = args
+  const { mainWindow, revealOnDidFinishLoad, savedMaximized, savedFullscreen, store } = args
   mainWindow.webContents.on('dom-ready', () => {
     const level = store?.getUI().uiZoomLevel ?? 0
     mainWindow.webContents.setZoomLevel(level)
@@ -66,6 +71,9 @@ export function installMainWindowStateLifecycle(args: {
       mainWindow.maximize()
     }
     showWindowWithoutStealingFocus(mainWindow)
+    if (savedFullscreen && !isBackgroundLaunch()) {
+      mainWindow.setFullScreen(true)
+    }
   }
   mainWindow.on('ready-to-show', revealInitialWindow)
   if (revealOnDidFinishLoad === true) {
@@ -76,52 +84,58 @@ export function installMainWindowStateLifecycle(args: {
   let boundsTimer: ReturnType<typeof setTimeout> | null = null
   // Teardown emits near-minimum bounds; freeze writes once closing to preserve remembered size.
   let windowClosing = false
+  const persistBounds = (): void => {
+    if (
+      windowClosing ||
+      mainWindow.isDestroyed() ||
+      mainWindow.isMinimized() ||
+      mainWindow.isFullScreen()
+    ) {
+      return
+    }
+    const isMaximized = mainWindow.isMaximized()
+    const bounds = isMaximized ? mainWindow.getNormalBounds() : mainWindow.getBounds()
+    if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
+      console.warn('[window] Skipping persist of near-minimum windowBounds:', bounds)
+      store?.updateUI({ windowMaximized: isMaximized })
+      return
+    }
+    store?.updateUI({ windowMaximized: isMaximized, windowBounds: bounds })
+  }
   const saveBounds = (): void => {
     if (boundsTimer) {
       clearTimeout(boundsTimer)
     }
     boundsTimer = setTimeout(() => {
       boundsTimer = null
-      if (windowClosing || mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
-        return
-      }
-      // Persist maximized state and bounds atomically, including near-minimum rejection.
-      const isMaximized = mainWindow.isMaximized()
-      if (isMaximized) {
-        store?.updateUI({ windowMaximized: true })
-        return
-      }
-      const bounds = mainWindow.getBounds()
-      // Reject teardown's shrink-to-minimum bounds even after freeze races; default next launch (#1269).
-      if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
-        console.warn('[window] Skipping persist of near-minimum windowBounds:', bounds)
-        store?.updateUI({ windowMaximized: false })
-        return
-      }
-      store?.updateUI({ windowMaximized: false, windowBounds: bounds })
+      persistBounds()
     }, 500)
   }
   mainWindow.on('resize', saveBounds)
   mainWindow.on('move', saveBounds)
 
-  // Updater removes close listeners; before-quit must also freeze bounds.
   const freezeBoundsOnQuit = (event?: Event): void => {
     if (event?.defaultPrevented) {
       return
     }
-    windowClosing = true
     if (boundsTimer) {
       clearTimeout(boundsTimer)
       boundsTimer = null
+      persistBounds()
     }
+    windowClosing = true
   }
   app.on('before-quit', freezeBoundsOnQuit)
+  // Native updates close windows before app's before-quit, after removing window close listeners.
+  const nativeUpdater =
+    process.platform === 'darwin' || process.platform === 'win32' ? autoUpdater : null
+  nativeUpdater?.on('before-quit-for-update', freezeBoundsOnQuit)
 
   mainWindow.on('maximize', () => {
     if (windowClosing) {
       return
     }
-    store?.updateUI({ windowMaximized: true })
+    persistBounds()
     mainWindow.webContents.send('window:maximize-changed', true)
   })
   mainWindow.on('unmaximize', () => {
@@ -129,21 +143,20 @@ export function installMainWindowStateLifecycle(args: {
       return
     }
     mainWindow.webContents.send('window:maximize-changed', false)
-    const bounds = mainWindow.getBounds()
-    // Teardown unmaximize can emit minimum bounds; apply the same persistence guard.
-    if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
-      console.warn('[window] Skipping unmaximize-time persist of near-min bounds:', bounds)
-      store?.updateUI({ windowMaximized: false })
-      return
-    }
-    store?.updateUI({ windowMaximized: false, windowBounds: bounds })
+    persistBounds()
   })
 
   mainWindow.on('enter-full-screen', () => {
+    if (!windowClosing) {
+      store?.updateUI({ windowFullscreen: true })
+    }
     mainWindow.webContents.send('window:fullscreen-changed', true)
   })
 
   mainWindow.on('leave-full-screen', () => {
+    if (!windowClosing) {
+      store?.updateUI({ windowFullscreen: false })
+    }
     mainWindow.webContents.send('window:fullscreen-changed', false)
   })
 
@@ -152,7 +165,10 @@ export function installMainWindowStateLifecycle(args: {
   }
   return {
     clearInitialRevealFallbackTimer,
-    dispose: () => app.removeListener('before-quit', freezeBoundsOnQuit),
+    dispose: () => {
+      app.removeListener('before-quit', freezeBoundsOnQuit)
+      nativeUpdater?.removeListener('before-quit-for-update', freezeBoundsOnQuit)
+    },
     freezeBoundsOnQuit,
     isWindowClosing: () => windowClosing,
     resumeBoundsPersistence

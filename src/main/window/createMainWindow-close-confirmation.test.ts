@@ -210,7 +210,7 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
-  it('does not persist pending bounds after bypassing close for a gone renderer', () => {
+  it('saves pending bounds before bypassing close for a gone renderer', () => {
     vi.useFakeTimers()
 
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
@@ -236,6 +236,7 @@ describe('createMainWindow', () => {
       isFullScreen: vi.fn(() => false),
       getSize: vi.fn(() => [1200, 800]),
       getBounds: vi.fn(() => ({ x: 10, y: 20, width: 1000, height: 700 })),
+      isMinimized: vi.fn(() => false),
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
@@ -264,6 +265,13 @@ describe('createMainWindow', () => {
     )
     const preventDefault = vi.fn()
     windowHandlers.close({ preventDefault } as never)
+    expect(updateUI).toHaveBeenCalledExactlyOnceWith({
+      windowMaximized: false,
+      windowBounds: { x: 10, y: 20, width: 1000, height: 700 }
+    })
+    updateUI.mockClear()
+    browserWindowInstance.getBounds.mockReturnValue({ x: 0, y: 0, width: 480, height: 360 })
+    windowHandlers.resize()
     vi.advanceTimersByTime(500)
 
     expect(preventDefault).not.toHaveBeenCalled()

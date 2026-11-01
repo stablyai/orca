@@ -201,6 +201,7 @@ export function createMainWindow(
     mainWindow,
     revealOnDidFinishLoad: opts?.revealOnDidFinishLoad === true,
     savedMaximized,
+    savedFullscreen: store?.getUI().windowFullscreen ?? false,
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
