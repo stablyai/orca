@@ -6,9 +6,10 @@ import { transcriptFallbackId } from './transcript-fallback-id'
 import { extendTranscriptBoundary } from './transcript-file-version'
 import { inTranscriptFileOrder } from './transcript-file-order'
 import {
-  MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
-  type NativeChatLineDecoder
-} from './transcript-tail-reader'
+  MAX_NATIVE_CHAT_IMAGE_TRANSCRIPT_RECORD_BYTES,
+  exceedsPlainTranscriptRecordLimit
+} from './transcript-record-limits'
+import type { NativeChatLineDecoder } from './transcript-tail-reader'
 import { openTranscriptReadStream, transcriptFileStat } from './wsl-transcript-fs-access'
 
 const APPEND_BATCH_MESSAGE_LIMIT = 40
@@ -99,7 +100,7 @@ export async function readIncrementalTranscriptMessages(
       return
     }
     state.pendingBytes += part.length
-    if (state.pendingBytes > MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES) {
+    if (state.pendingBytes > MAX_NATIVE_CHAT_IMAGE_TRANSCRIPT_RECORD_BYTES) {
       state.pendingChunks.length = 0
       state.droppingOversizedRecord = true
       return
@@ -118,6 +119,9 @@ export async function readIncrementalTranscriptMessages(
     // A single synchronously decoded chunk is already owned; avoid copying it.
     const bytes =
       state.pendingChunks.length === 1 ? state.pendingChunks[0] : Buffer.concat(state.pendingChunks)
+    if (exceedsPlainTranscriptRecordLimit(bytes)) {
+      return
+    }
     let line = bytes.toString('utf8')
     if (line.endsWith('\r')) {
       line = line.slice(0, -1)

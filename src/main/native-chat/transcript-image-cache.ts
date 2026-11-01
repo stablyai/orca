@@ -17,6 +17,7 @@ import type {
   NativeChatImageRefBlock,
   NativeChatMessage
 } from '../../shared/native-chat/native-chat-types'
+import { NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES } from './transcript-record-limits'
 import { isKnownRasterImageMimeType } from '../../shared/raster-image-preview-limits'
 import {
   PRIVATE_FILE_MODE,
@@ -24,8 +25,7 @@ import {
   tightenPathMode
 } from '../daemon/daemon-private-file-modes'
 
-// Bound transient decoding and disk use per screenshot.
-export const NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES = 8 * 1024 * 1024
+export { NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES }
 const CACHE_DIR_NAME = 'native-chat-images'
 const CACHE_FILE_NAME = /^[0-9a-f]{64}\.(png|jpg|gif|webp|bmp|ico)$/
 
