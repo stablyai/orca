@@ -19,12 +19,12 @@ const palette: ThemeVariables = {
   '--ring': '#4781EE',
   '--accent': '#293F65',
   '--accent-foreground': '#D1D3DA',
-  '--tab-active': '#293F65',
+  '--tab-active': '#24385B',
   '--tab-active-foreground': '#D1D3DA',
-  '--tab-active-indicator': '#4781EE',
+  '--tab-active-indicator': '#759CF0',
   '--tab-inactive': '#26282D',
   '--tab-inactive-foreground': '#A6ABB5',
-  '--worktree-sidebar-active': '#293F65',
+  '--worktree-sidebar-active': '#24385B',
   '--worktree-sidebar-active-border': '#4781EE',
   '--sidebar': '#222429',
   '--sidebar-ring': '#4781EE',
@@ -118,12 +118,12 @@ export const selected = defineFixture({
     const marker = scope.querySelector('[data-tab-marker]')
     const tool = scope.querySelector('button[aria-label="Files"]')
     const card = scope.querySelector('[data-worktree-card-active="primary"]')
-    if (!marker || getComputedStyle(marker).backgroundColor !== token('--ring'))
-      throw new Error('Active tab marker must use theme ring color')
+    if (!marker || getComputedStyle(marker).backgroundColor !== token('--tab-active-indicator'))
+      throw new Error('Active tab marker must use its dedicated theme color')
     if (!tool || getComputedStyle(tool).color !== token('--sidebar-ring'))
       throw new Error('Active tool icon must use theme selection color')
-    if (!card || getComputedStyle(card).backgroundColor !== token('--worktree-sidebar-accent'))
-      throw new Error('Current worktree must use theme selection fill')
+    if (!card || getComputedStyle(card).backgroundColor !== token('--worktree-sidebar-active'))
+      throw new Error('Current worktree must use its dedicated theme fill')
     probe.remove()
   }
 })
