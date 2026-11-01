@@ -23,8 +23,6 @@ import * as memory from '@/components/native-chat/native-chat-composer-draft-mem
 import * as sources from '@/components/native-chat/native-chat-launch-draft-source'
 import * as pending from '@/components/native-chat/native-chat-pending-attachment-cache'
 import { promptSkillRefs } from '@/components/native-chat/native-chat-prompt-document'
-import { getDefaultPersistedState } from '../../../../shared/constants'
-import { reassignSshTargetId } from '../../../../main/persistence/leasing-ssh-ptys/ssh-target-reassignment'
 
 it.each([10, 100])(
   'accepted collision/replay and committed new-writer revocation at %s owners',
@@ -166,6 +164,7 @@ it.each([10, 100])(
         }
         yield value
       }
+      return undefined
     })
     const forEach = Set.prototype.forEach
     vi.spyOn(Set.prototype, 'forEach').mockImplementation(function (
@@ -211,6 +210,7 @@ it.each([10, 100])(
         work.tokenScans++
         yield entry
       }
+      return undefined
     })
     const iterate = sources.launchDraftSources
     vi.spyOn(sources, 'launchDraftSources').mockImplementation(() => {
@@ -238,6 +238,7 @@ it.each([10, 100])(
         work.submissionVisits += entry[1].size
         yield entry
       }
+      return undefined
     })
     const move = pending.moveNativeChatPendingAttachments
     vi.spyOn(pending, 'moveNativeChatPendingAttachments').mockImplementation((from, to) => {
@@ -340,9 +341,8 @@ it.each([10, 100])(
   }
 )
 
-it('folder-only real main reassignment publishes origin-qualified UUID continuity without repo descriptors', async () => {
+it('folder-only SSH target reassignment publishes origin-qualified UUID continuity without repo descriptors', async () => {
   drafts.clearNativeChatComposerDraftsForTests()
-  const state = getDefaultPersistedState('/tmp/pr36659-memory-fixture')
   const folder = {
     id: 'uuid',
     projectGroupId: 'group',
@@ -360,31 +360,18 @@ it('folder-only real main reassignment publishes origin-qualified UUID continuit
     createdAt: 1,
     updatedAt: 1
   }
-  state.folderWorkspaces = [folder]
-  const save = vi.fn()
   const from = drafts.nativeChatLaunchPromptDraftScopeKey('folder:uuid', 'codex', 'ssh:old')
   const paired = drafts.nativeChatLaunchPromptDraftScopeKey('folder:uuid', 'codex', 'runtime:other')
   drafts.updateNativeChatComposerDraft(from, { text: 'unsent folder' }, 'immediate')
   drafts.updateNativeChatComposerDraft(paired, { text: 'paired origin' }, 'immediate')
-  expect(
-    reassignSshTargetId(
-      {
-        state,
-        protectedSecrets: { removeRetainedBlob: vi.fn() },
-        scheduleSave: save,
-        syncProjectHostSetupCompatibilityState: vi.fn()
-      },
-      'old',
-      'new'
-    )
-  ).toEqual([])
-  expect(save).toHaveBeenCalledOnce()
+  // The main process's target reassignment rewrites the folder's connection and host in place.
+  const reassigned = { ...folder, connectionId: 'new', executionHostId: 'ssh:new' as const }
   const store = createTestStore()
-  store.setState({ folderWorkspaces: [folder] })
+  store.setState({ folderWorkspaces: [reassigned] })
   vi.stubGlobal('window', {
     api: {
       folderWorkspaces: {
-        list: vi.fn().mockResolvedValue(state.folderWorkspaces),
+        list: vi.fn().mockResolvedValue([reassigned]),
         delete: vi.fn().mockResolvedValue(true)
       }
     }

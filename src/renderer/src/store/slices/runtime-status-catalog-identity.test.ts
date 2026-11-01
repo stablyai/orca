@@ -168,11 +168,11 @@ it('runtime catalog replacement preserves ordinary setup drafts, preparation and
     )
   expect(attempt.draft?.text).toBe('keep')
   store.getState().setRuntimeEnvironments(
-    cloneRedactedCatalog({
-      ...environment,
-      pairingRevision: pairingRevision + 2,
+    // The host key fingerprint is a field of the public catalog entry, not the stored environment.
+    cloneRedactedCatalog({ ...environment, pairingRevision: pairingRevision + 2 }).map((entry) => ({
+      ...entry,
       hostKeyFingerprint: 'different-peer'
-    })
+    }))
   )
   expect(attempt.draft?.text).toBe('keep')
   expect(pendingChips.nativeChatPendingAttachmentSnapshot(launch).map((chip) => chip.id)).toEqual([

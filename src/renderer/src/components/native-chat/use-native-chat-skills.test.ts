@@ -191,7 +191,20 @@ it.each(['local', 'ssh:box'] as const)(
       detectedWorktreesByRepo: {},
       floatingWorkspacePath: null,
       folderWorkspaces: [folder('local', '/local/repo'), folder('ssh:box', '/remote/repo')],
-      projectGroups: [{ id: 'pg-1', name: 'group', parentPath: null, parentGroupId: null }],
+      projectGroups: [
+        {
+          id: 'pg-1',
+          name: 'group',
+          parentPath: null,
+          parentGroupId: null,
+          createdFrom: 'manual',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 0,
+          updatedAt: 0
+        }
+      ],
       projects: [],
       repos: [],
       restoredRuntimeHostIdByWorkspaceSessionKey: {},

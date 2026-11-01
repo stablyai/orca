@@ -70,12 +70,13 @@ it.each([false, true])(
 it('the actual rename event protects both identities before starting discovery', async () => {
   recentlyRenamedWorktreeIdExpiry.clear()
   const unsubs: (() => void)[] = []
+  vi.spyOn(initialState, 'fetchWorktrees').mockImplementation(async () => {
+    expect(recentlyRenamedWorktreeIdExpiry.has('repo::/old')).toBe(true)
+    expect(recentlyRenamedWorktreeIdExpiry.has('repo::/new')).toBe(true)
+    return false
+  })
   useAppStore.setState({
-    fetchWorktrees: vi.fn(async () => {
-      expect(recentlyRenamedWorktreeIdExpiry.has('repo::/old')).toBe(true)
-      expect(recentlyRenamedWorktreeIdExpiry.has('repo::/new')).toBe(true)
-      return false
-    }),
+    fetchWorktrees: initialState.fetchWorktrees,
     fetchWorktreeLineage: vi.fn(),
     migrateWorktreeIdentity: vi.fn()
   })
@@ -99,12 +100,13 @@ it('the conditionally installed qualified rename keeps ordinary setup content an
   drafts.updateNativeChatComposerDraft(from, { text: 'moving' }, 'immediate')
   drafts.updateNativeChatComposerDraft(twin, { text: 'twin' }, 'immediate')
   const fetched = Promise.withResolvers<void>()
+  vi.spyOn(initialState, 'fetchWorktrees').mockImplementation(async () => {
+    fetched.resolve()
+    return false
+  })
   useAppStore.setState({
     repos: [{ ...TEST_REPO, id: 'repo' }],
-    fetchWorktrees: vi.fn(async () => {
-      fetched.resolve()
-      return false
-    }),
+    fetchWorktrees: initialState.fetchWorktrees,
     migrateWorktreeIdentity: vi.fn()
   })
   const unsubs: (() => void)[] = []

@@ -476,7 +476,7 @@ import {
   NATIVE_CHAT_PASTED_TEXT_FILE_THRESHOLD
 } from './use-native-chat-pasted-text-file'
 
-it.each([
+it.each<[reverse: boolean, firstAccepted: boolean, delayed?: boolean]>([
   [false, false],
   [true, false],
   [false, true],

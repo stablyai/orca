@@ -50,7 +50,10 @@ export function AgentLaunchSetupPanel({
   value?: AgentPickerDraft
   disabled?: boolean
   onDraftChange?: (draft: AgentPickerDraft) => void
-  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
+  // Returning false (or a promise of it) refuses the launch; a caller with no answer, as before, accepts.
+  onUse:
+    | ((draft: AgentPickerDraft) => void)
+    | ((draft: AgentPickerDraft) => boolean | Promise<boolean>)
 }) {
   const footer = useRef<AgentLaunchSetupFooterHandle>(null)
   const [localDraft, updateDraft] = useState(() => initial ?? agentPickerDraft(entry))

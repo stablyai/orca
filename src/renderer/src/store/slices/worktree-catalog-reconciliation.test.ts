@@ -190,6 +190,7 @@ it.each([10, 100])(
         counts.loadedBytes += JSON.stringify(entry[1]).length
         yield entry
       }
+      return undefined
     })
     const write = vi.fn(storage.write),
       update = vi.fn(storage.update),
@@ -255,6 +256,7 @@ it.each([10, 100])(
           counts[name]++
           yield item
         }
+        return undefined
       })
       vi.spyOn(array, 'map').mockImplementation((callback, context) => {
         counts[name] += array.length
@@ -300,6 +302,7 @@ it.each([10, 100])(
           counts[name]++
           yield member
         }
+        return undefined
       })
       vi.spyOn(members, 'forEach').mockImplementation((callback, context) => {
         counts[name] += members.size
@@ -328,6 +331,7 @@ it.each([10, 100])(
           counts.handles++
           yield entry
         }
+        return undefined
       })
     }
     const compose = addition.withIndependentNativeChatComposerDraft

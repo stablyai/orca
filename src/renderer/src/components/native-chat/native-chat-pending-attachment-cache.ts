@@ -278,13 +278,11 @@ export function dropNativeChatPendingAttachmentsForTab(tabId: string): void {
 }
 
 export function dropNativeChatPendingAttachmentsOwnedBy(owner: NativeChatComposerDraftOwner): void {
-  dropNativeChatPendingAttachmentsWhere((scopeKey, pendingOwner) => {
-    const current = pendingOwner
-    return (
-      current?.workspaceId === owner.workspaceId &&
-      current.executionHostId === owner.executionHostId
-    )
-  })
+  dropNativeChatPendingAttachmentsWhere(
+    (_scopeKey, pendingOwner) =>
+      pendingOwner?.workspaceId === owner.workspaceId &&
+      pendingOwner.executionHostId === owner.executionHostId
+  )
 }
 
 export function clearNativeChatPendingAttachmentsForTests(): void {

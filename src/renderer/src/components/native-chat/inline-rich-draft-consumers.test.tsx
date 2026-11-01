@@ -472,6 +472,7 @@ function useCapturedPrompt(
 ) {
   const root = useRef<HTMLDivElement>(null)
   const handle = useRef<NativeChatComposerHandle>(null)
+  const ref = useRef<NativeChatComposerHandle>(null)
   const insertion = useNativeChatTypedInsertion({
     textareaRef: input,
     isComposing: () => composing,
@@ -486,6 +487,7 @@ function useCapturedPrompt(
     pasteFromClipboard: () => {}
   }))
   useNativeChatComposerEditSession({
+    ref,
     root,
     handle,
     draftScopeKey: key,

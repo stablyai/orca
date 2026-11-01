@@ -20,6 +20,7 @@ import {
 } from './structured-queued-edit.test-fixture'
 import { act, render, renderHook, waitFor, within } from '@testing-library/react'
 import { createRef } from 'react'
+import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
@@ -569,6 +570,7 @@ it.each(['updated', 'not-editable', 'clean-gone', 'cancel'] as const)(
       })
       const editor = queued.editor
       useNativeChatComposerEditSession({
+        ref: createRef<NativeChatComposerHandle>(),
         editSession: editor
           ? { save: editor.save, cancel: editor.cancel, canSave: editor.canSave }
           : undefined,
