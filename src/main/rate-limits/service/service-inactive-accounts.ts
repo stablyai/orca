@@ -31,9 +31,11 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     }
     this.pushToRenderer()
 
+    let stoppedByOptOut = false
     try {
       for (const account of accounts) {
         if (!this.isClaudeUsageEnabled()) {
+          stoppedByOptOut = true
           for (const remaining of accounts) {
             this.inactiveClaudeFetching.delete(remaining.id)
           }
@@ -59,6 +61,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             signal
           })
           if (!this.isClaudeUsageEnabled()) {
+            stoppedByOptOut = true
             for (const remaining of accounts) {
               this.inactiveClaudeFetching.delete(remaining.id)
             }
@@ -93,7 +96,11 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         this.pushToRenderer()
       }
 
-      if (!signal.aborted && fetchGeneration === this.inactiveClaudeAccountsGeneration) {
+      if (
+        !stoppedByOptOut &&
+        !signal.aborted &&
+        fetchGeneration === this.inactiveClaudeAccountsGeneration
+      ) {
         this.lastInactiveClaudeFetchAt = Date.now()
       }
     } finally {

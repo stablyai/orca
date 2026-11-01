@@ -186,4 +186,23 @@ describe('RateLimitService Claude usage opt-out', () => {
     expect(fetchManagedAccountUsage).toHaveBeenCalledTimes(1)
     expect(service.getState().inactiveClaudeAccounts.every((row) => !row.isFetching)).toBe(true)
   })
+
+  it('does not debounce inactive Claude accounts fetch if stopped by opt-out', async () => {
+    const service = new RateLimitService()
+    let enabled = false
+    service.setClaudeUsageEnabledResolver(() => enabled)
+    service.setInactiveClaudeAccountsResolver(() => [
+      { id: 'acc-1', managedAuthRuntime: 'host', wslDistro: null, wslLinuxAuthPath: null }
+    ])
+
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    expect(service['lastInactiveClaudeFetchAt']).toBe(0)
+
+    enabled = true
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    expect(fetchManagedAccountUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'acc-1' }),
+      expect.anything()
+    )
+  })
 })
