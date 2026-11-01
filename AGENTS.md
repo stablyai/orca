@@ -60,7 +60,7 @@ Every change must consider these areas:
   4. Folder Workspaces
     * Don't assume every workspace is a git worktree.
 
-## Footguns
-# Git / GitHub
+# Footguns
+## Git / GitHub
 
 If changing code around `git`, `gh`, source-control, or review behavior read [`docs/agents-md-refs/git-workflow.md`](./docs/agents-md-refs/git-workflow.md).
