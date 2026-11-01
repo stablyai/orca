@@ -33,7 +33,10 @@ const LAUNCH_FAILED: Electron.RenderProcessGoneDetails = { reason: 'launch-faile
 const CRASHED: Electron.RenderProcessGoneDetails = { reason: 'crashed', exitCode: 5 }
 
 /** Reproduce spawn refusal: launch-failed then ERR_FAILED before a document; the same WebContents loads once process headroom returns. */
-function createSpawnRefusingWindow(platform: NodeJS.Platform = 'darwin') {
+function createSpawnRefusingWindow(
+  platform: NodeJS.Platform = 'darwin',
+  failure: Electron.RenderProcessGoneDetails = LAUNCH_FAILED
+) {
   const handlers: Record<string, (...args: any[]) => void> = {}
   const spawn = { refused: true }
   const webContents = {
@@ -56,7 +59,7 @@ function createSpawnRefusingWindow(platform: NodeJS.Platform = 'darwin') {
       return Promise.resolve()
     }
     queueMicrotask(() =>
-      withPlatform(platform, () => handlers['render-process-gone']?.({}, LAUNCH_FAILED))
+      withPlatform(platform, () => handlers['render-process-gone']?.({}, failure))
     )
     return Promise.reject(
       new Error("ERR_FAILED (-2) loading 'file:///opt/orca/renderer/index.html'")
@@ -184,15 +187,22 @@ describe('renderer launch-failed recovery', () => {
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
   })
 
-  it('keeps Windows launch failures on the short recovery schedule', async () => {
-    const { load } = createSpawnRefusingWindow('win32')
-    const { onRendererRecoveryExhausted } = open()
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(load).toHaveBeenCalledTimes(4)
-    expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
-    expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
-      expect.objectContaining({ cause: 'launch-failed', recentRecoveryCount: 3 })
+  it('rides out a Windows sandbox CreateProcess refusal in place instead of prompting', async () => {
+    // Windows SBOX_ERROR_CREATE_PROCESS; awin repro (job capped at 1 process for 5s) prompted after ~1s on the 750ms breaker.
+    const { spawn } = createSpawnRefusingWindow('win32', {
+      reason: 'launch-failed',
+      exitCode: 18
+    })
+    const { onRendererRecoveryExhausted, onRecoveryReloadOutcome } = open()
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+    spawn.refused = false
+
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(onRecoveryReloadOutcome).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'loaded' })
     )
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
   })
 
   it('keeps the crash-loop breaker for renderers that actually crash', async () => {
