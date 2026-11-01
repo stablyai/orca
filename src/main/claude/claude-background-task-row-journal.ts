@@ -3,7 +3,7 @@ import type {
   AgentJournalTurnScope
 } from '../../shared/agent-session-journal-types'
 import { backgroundTaskJournalBody } from '../../shared/native-chat/input/native-chat-background-task-row'
-import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
+import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionLifecycleJournal,

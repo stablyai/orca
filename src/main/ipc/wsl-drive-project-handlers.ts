@@ -10,7 +10,7 @@ import { registerWslDriveUncConversionHandlers } from './wsl-drive-unc-conversio
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { readWorktreeLinks as readWorktreeAdminLinks } from '../git/worktree-prune-guard'
 import { resolveLocalProjectRuntimeForProject } from '../local-project-runtime-resolution'
-import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
+import { wslHostsOptedIn } from '../wsl/wsl-host-gate'
 import {
   convertWslDriveProjectToWindowsGit,
   previewWslDriveProjectWindowsGit,
@@ -49,7 +49,8 @@ function requireId(value: unknown): string {
 }
 
 function gatedDeps(store: Store): WslDriveProjectDeps {
-  if (process.platform !== 'win32' || !wslHostsGateOpen()) {
+  // Opt-in, so the setting off or a block learned this run stops a conversion before it starts.
+  if (process.platform !== 'win32' || !wslHostsOptedIn(store.getSettings())) {
     throw new Error('wsl_drive_project_unavailable')
   }
   return {

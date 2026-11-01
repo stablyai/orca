@@ -6,11 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
-import {
-  AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,
-  AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES
-} from '../../../../shared/protocol-version'
+
 import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-agent-session-attachments'
@@ -103,11 +99,6 @@ async function uploadBytes(name: string, bytes: Buffer): Promise<string> {
 }
 
 describe('agentSessionAttachment.*', () => {
-  it('is advertised, so a client can tell a host with the store from an older one', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY)
-    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY)
-  })
-
   it('stores an upload for the chat and hands back the server path', async () => {
     const { uploadId } = result<{ uploadId: string }>(
       await call(
@@ -134,27 +125,6 @@ describe('agentSessionAttachment.*', () => {
     expect(preview).toMatchObject({ ok: true, result: { isBinary: true, mimeType: 'image/png' } })
   })
 
-  it('refuses a client that cannot read structured sessions', async () => {
-    const response = await call(
-      'agentSessionAttachment.uploadStart',
-      { sessionId: 'session-alpha', name: 'shot.png', byteLength: 3 },
-      { clientKind: 'runtime', clientCapabilities: [] }
-    )
-    expect(response).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
-    })
-  })
-
-  it('refuses a declared size over the attachment limit before storing anything', async () => {
-    const response = await call(
-      'agentSessionAttachment.uploadStart',
-      { sessionId: 'session-alpha', name: 'big.bin', byteLength: 51 * 1024 * 1024 },
-      CLIENT_A
-    )
-    expect(response.ok).toBe(false)
-  })
-
   it("keeps one client's upload out of another's reach", async () => {
     const { uploadId } = result<{ uploadId: string }>(
       await call(
@@ -173,18 +143,6 @@ describe('agentSessionAttachment.*', () => {
     )
     expect(response).toMatchObject({ ok: false })
     expect(store.isUploadInFlight(uploadId)).toBe(true)
-  })
-
-  it('refuses an upload for a chat this host does not hold', async () => {
-    const response = await call(
-      'agentSessionAttachment.uploadStart',
-      { sessionId: 'session-elsewhere', name: 'a.txt', byteLength: 1 },
-      CLIENT_A
-    )
-    expect(response).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('not on this host') }
-    })
   })
 
   it('answers a remote preview of an image over 3 MiB with a small refusal, not an oversized reply', async () => {

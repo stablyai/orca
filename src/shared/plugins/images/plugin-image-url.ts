@@ -20,8 +20,8 @@ export function pluginShaImageUrl(sha256: string): string {
   return `${PLUGIN_IMAGE_SCHEME}://sha/${sha256}`
 }
 
-/** `slot` is `icon`, `cover`, `screenshot-<index>`, or a contribution's icon: `editor-<index>`
- *  (custom editors) or `new-file-<index>` (new files). */
+/** `slot` is `icon`, `cover`, `screenshot-<index>`, a contribution's icon: `editor-<index>`
+ *  (custom editors) or `new-file-<index>` (new files), or an app theme's background: `theme-<index>`. */
 export function pluginInstalledImageUrl(
   pluginKey: string,
   contentHash: string,
@@ -51,8 +51,8 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
     key &&
     contentHash &&
     slot &&
-    /^(?:[0-9a-f]{64}|dev)$/.test(contentHash) &&
-    /^(?:icon|cover|(?:screenshot|editor|new-file)-\d{1,2})$/.test(slot)
+    /^(?:[0-9a-f]{64}|[0-9a-f]{32}|dev)$/.test(contentHash) &&
+    /^(?:icon|cover|(?:screenshot|editor|new-file)-\d{1,2}|theme-(?:0|[1-9]\d{0,2}))$/.test(slot)
   ) {
     return { kind: 'installed', pluginKey: decodeURIComponent(key), contentHash, slot }
   }

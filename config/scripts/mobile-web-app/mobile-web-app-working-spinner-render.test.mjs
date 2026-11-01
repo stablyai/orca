@@ -111,13 +111,15 @@ async function openProbe() {
   return { errors, page }
 }
 
+// The rings turn with Web Animations, which never write inline style, so read the computed rotation.
 const readRotations = (page) =>
   page.evaluate(() =>
-    ['working-spinner', 'working-dot'].map(
-      (id) =>
-        [...document.querySelectorAll(`#${id} *`)].find((node) => node.style.transform)?.style
-          .transform ?? null
-    )
+    ['working-spinner', 'working-dot'].map((id) => {
+      const ring = [...document.querySelectorAll(`#${id} *`)].find(
+        (node) => node.getAnimations().length > 0
+      )
+      return ring ? getComputedStyle(ring).transform : null
+    })
   )
 
 describeRender('working rings on the page', () => {

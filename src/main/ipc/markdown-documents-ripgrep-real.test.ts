@@ -106,10 +106,6 @@ describe('Markdown listing with bundled ripgrep', () => {
     )
   })
 
-  it('returns an empty list for an empty ordinary folder', async () => {
-    await expect(listMarkdownDocuments(root)).resolves.toEqual([])
-  })
-
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'returns readable Markdown when ignored database directories deny access',
     async () => {

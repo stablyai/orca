@@ -11,7 +11,7 @@ import {
   askTypedText,
   toggleAskOption
 } from '../../../../../src/shared/native-chat-ask-card-rules'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../i18n/mobile-i18n'
@@ -185,7 +185,11 @@ export function MobileNativeChatAsk({
             <Pressable
               // oxlint-disable-next-line react-doctor/no-array-index-as-key -- Questions are positional: selections are index-addressed and a prompt never reorders them.
               key={i}
-              style={[styles.tab, i === index && styles.tabActive]}
+              style={({ pressed }) => [
+                styles.tab,
+                i === index && styles.tabActive,
+                pressed && pressedStyle
+              ]}
               disabled={submitting}
               onPress={() => {
                 autoAdvance.cancel()
@@ -261,7 +265,7 @@ export function MobileNativeChatAsk({
 
       <View style={styles.footer}>
         <Pressable
-          style={styles.cancel}
+          style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
           onPress={() => void cancel()}
           disabled={submitting}
           hitSlop={8}
@@ -274,7 +278,11 @@ export function MobileNativeChatAsk({
           </Text>
         ) : null}
         <Pressable
-          style={[styles.next, !currentAnswered && styles.nextSkip]}
+          style={({ pressed }) => [
+            styles.next,
+            !currentAnswered && styles.nextSkip,
+            pressed && pressedStyle
+          ]}
           onPress={confirm}
           disabled={submitting}
         >

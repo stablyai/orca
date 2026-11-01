@@ -18,6 +18,14 @@ const native = vi.hoisted(() => {
   const clients: { hostId: string; state: string; client: RpcClient }[] = []
   return { token: vi.fn(), schedule: vi.fn(), eligible: vi.fn(), clients }
 })
+vi.mock(
+  '../settings/settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('react-native', () => ({
   AppState: { currentState: 'background' },
   Platform: { OS: 'ios' },
@@ -143,7 +151,7 @@ async function begin(route: string, rpc: ReturnType<typeof connection>) {
     await act(async () => {
       renderer = create(createElement(NotificationDisplayTest, { onTroubleshoot: vi.fn() }))
     })
-    await act(async () => findAllByHostType(renderer!.root, 'Pressable')[0].props.onPress())
+    await act(async () => findAllByHostType(renderer!.root, 'ListRow')[0].props.onPress())
   }
   await vi.waitFor(() => expect(native.token).toHaveBeenCalled())
 }

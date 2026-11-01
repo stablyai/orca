@@ -8,7 +8,7 @@ import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatToolCallBlock
-} from '../../native-chat-types'
+} from '../native-chat-types'
 import { pairToolBlocks } from '../tools/native-chat-tool-pairs'
 
 export type NativeChatTaskListPredecessors = Partial<

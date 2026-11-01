@@ -16,7 +16,7 @@ vi.mock('./transcript-reader', async (importOriginal) => {
   }
 })
 
-import { isTextBlock } from '../../shared/native-chat-types'
+import { isTextBlock } from '../../shared/native-chat/native-chat-types'
 import {
   clearNativeChatTranscriptCache,
   readNativeChatTranscriptCached,

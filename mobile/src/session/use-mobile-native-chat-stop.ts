@@ -5,7 +5,7 @@ import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from './mobile-session-write-operations'
 import { openMobileNativeChatSendBudget } from './native-chat/mobile-native-chat-send'
-import { nativeChatStopSendsSecondEscape } from '../../../src/shared/native-chat-agent-support'
+import { nativeChatStopSendsSecondEscape } from '../../../src/shared/native-chat/native-chat-agent-support'
 import { NATIVE_CHAT_QUESTION_STEP_MS } from '../../../src/shared/native-chat/input/native-chat-answer-stepping'
 
 // Resolves false only when no Escape could have landed, so the chat may offer Stop again.

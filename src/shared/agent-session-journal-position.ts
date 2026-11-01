@@ -1,7 +1,7 @@
 // Order by creation sequence then write index, never time: crash recovery can append an earlier provider clock at a later sequence.
 
 import type { AgentJournalPosition, AgentJournalRenderItem } from './agent-session-journal-types'
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 
 type PositionedItem = Pick<AgentJournalRenderItem, 'sequence' | 'sequenceIndex'>
 

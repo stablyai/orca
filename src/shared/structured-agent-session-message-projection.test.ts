@@ -13,7 +13,7 @@ import {
   projectStructuredAgentSessionMessages,
   structuredAgentSessionRejectedShownInPlace
 } from './structured-agent-session-message-projection'
-import { projectNativeChatTranscriptMessages } from './native-chat-transcript-projection'
+import { projectNativeChatTranscriptMessages } from './native-chat/transcript/native-chat-transcript-projection'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_WRITE_FAILED

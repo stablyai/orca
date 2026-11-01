@@ -3,7 +3,7 @@ import type {
   AgentChildWorkEvidenceHandle
 } from '../../shared/agent-status-child-work-evidence'
 import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
-import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
+import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../shared/agent-status-child-work-value-guards'
 import type { AcpTimelineEvent } from './acp-timeline-event'
 

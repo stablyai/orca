@@ -1,3 +1,4 @@
+import { noteProviderCacheAnswer } from '../source-control/hosted-review-provider-read'
 import type { RawGiteaPullRequest } from './pull-request-mappers'
 
 export type GiteaPullRequestPageFetcher = (page: number) => Promise<RawGiteaPullRequest[] | null>
@@ -78,10 +79,12 @@ export async function scanGiteaPullRequests(
 ): Promise<RawGiteaPullRequest[]> {
   const cached = reusableScanCacheEntry(repoKey)
   if (cached) {
+    noteProviderCacheAnswer()
     return cached.pullRequests
   }
   const running = inFlightScans.get(repoKey)
   if (running) {
+    noteProviderCacheAnswer()
     return running
   }
   const generation = scanGenerations.get(repoKey) ?? 0

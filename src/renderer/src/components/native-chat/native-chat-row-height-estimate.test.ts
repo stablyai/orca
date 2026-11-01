@@ -1,7 +1,7 @@
 import { orchestrationNoticeMessage } from '../../../../shared/native-chat-orchestration-notice.test-fixture'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   estimateNativeChatRowHeight,
   estimateNativeChatTextLines,

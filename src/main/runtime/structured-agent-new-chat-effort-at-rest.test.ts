@@ -8,15 +8,15 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionAccountHome, AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
-import { structuredAgentSessionSeedCatalog } from '../../shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import { agentChatPermissionModes } from '../../shared/agent-chat-permission-mode'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot,
   type StructuredAgentSessionOptionState
-} from '../../shared/structured-agent-session-options'
+} from '../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { grokModelCatalogFromState } from '../acp/acp-dialects/grok-model-catalog'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'

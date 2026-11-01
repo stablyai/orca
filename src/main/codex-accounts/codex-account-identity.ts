@@ -22,14 +22,21 @@ export class CodexAccountIdentity {
     private readonly assertManagedHomePath: (
       candidatePath: string,
       expectedAccountId?: string
-    ) => string
+    ) => string | Promise<string>
   ) {}
 
-  readFromHome(managedHomePath: string, expectedAccountId: string): ResolvedCodexIdentity {
-    const authFilePath = join(
-      this.assertManagedHomePath(managedHomePath, expectedAccountId),
-      'auth.json'
+  async readFromHome(
+    managedHomePath: string,
+    expectedAccountId: string
+  ): Promise<ResolvedCodexIdentity> {
+    return this.readFromTrustedHome(
+      await this.assertManagedHomePath(managedHomePath, expectedAccountId)
     )
+  }
+
+  /** `trustedHomePath` has already passed the managed-home ownership check. */
+  readFromTrustedHome(trustedHomePath: string): ResolvedCodexIdentity {
+    const authFilePath = join(trustedHomePath, 'auth.json')
     let contents: string
     try {
       contents = readFileSync(authFilePath, 'utf-8')

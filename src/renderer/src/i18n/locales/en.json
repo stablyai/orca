@@ -126,6 +126,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} is already a host.",
         "distroStopped": "{{distro}} stopped since the list was read. Choose Start and add to start it.",
+        "distroUnverifiable": "WSL didn’t answer whether {{distro}} is running. Refresh the list, or add it from the dialog, which starts it if needed.",
         "wsl1": "{{distro}} runs WSL 1, which Orca no longer supports. Convert it to WSL 2 in a Windows terminal with: {{command}}",
         "notRegistered": "{{distro}} is not an installed WSL distro. Run {{command}} in a Windows terminal to see the installed ones, or reinstall it and try again.",
         "sshManaged": "{{distro}} already runs the Orca server for “{{server}}”, which this computer reaches over SSH. Remove that server first; moving it to a WSL host isn’t supported yet."
@@ -210,6 +211,11 @@
     },
     "cardProperties": {
       "agentModel": "Agent model"
+    },
+    "wslHostOffer": {
+      "title": "Run {{distro}} as a host (recommended)",
+      "why": "Git, files and terminals then run natively in Linux instead of across the Windows file share.",
+      "accept": "Run as host"
     }
   },
   "app": {
@@ -7214,14 +7220,17 @@
           "distro": "Distro",
           "loading": "Looking for WSL distros…",
           "placeholder": "Choose a distro",
-          "none": "No WSL distros found. Install one with: wsl --install",
           "stoppedHint": "{{value0}} is stopped. Adding it starts it.",
           "addingHint": "Installing and starting the Orca server in the distro. The first time can take a minute.",
           "adding": "Setting up…",
           "startAndAdd": "Start and add",
           "add": "Add host",
           "refresh": "Refresh",
-          "wsl1Hint": "WSL 1 distros can’t be hosts. Convert one in a Windows terminal with: wsl --set-version {{value0}} 2"
+          "wsl1Reason": "WSL 1 can’t run an Orca host; convert with {{command}}",
+          "noWsl2Title": "No WSL 2 distros found",
+          "noWsl2Install": "Install one from a Windows terminal with {{command}}, then choose Refresh.",
+          "unverifiable": "Unknown",
+          "unverifiableHint": "WSL didn’t say whether {{value0}} is running. Adding it starts it if needed."
         },
         "wslHostRowStatus": {
           "connecting": "Starting",
@@ -9398,7 +9407,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI magenta color",
-          "03c855d15f": "Reset all color overrides",
           "63f8d9336e": "Color Overrides",
           "e86e09b5c7": "Override individual terminal colors.",
           "1d1920dc8a": "Hide the mouse cursor when typing in the terminal.",
@@ -9465,7 +9473,11 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Restart now",
           "907131d741": "Restarting…",
-          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.",
+          "color_overrides_dark_description": "Override individual colors of the dark terminal theme.",
+          "color_overrides_light_description": "Override individual colors of the light terminal theme.",
+          "reset_dark_color_overrides": "Reset dark color overrides",
+          "reset_light_color_overrides": "Reset light color overrides"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Reset"
@@ -10367,7 +10379,7 @@
             "e61157e926": "Editor Word Wrap",
             "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
             "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+            "editorFontFamilyDesc": "Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.",
             "collapseUnchanged": "Collapse Unchanged Regions",
             "collapseUnchangedDesc": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
             "collapseUnchangedKw": "collapse",
@@ -11870,7 +11882,7 @@
         },
         "EditorFontFamilySetting": {
           "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+          "description": "Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.",
           "placeholder": "Same as terminal font"
         },
         "GeneralRemoteServerUpdates": {
@@ -12824,7 +12836,7 @@
         "wslHosts": {
           "title": "WSL hosts",
           "experimental": "Experimental",
-          "description": "Orca runs a server inside each distro. A stopped distro starts only when you open one of its projects or connect it here.",
+          "description": "Orca runs a server inside each distro. Opening a project never starts a stopped distro: click Start, open a new terminal, or connect it here.",
           "add": "Add WSL distro",
           "connect": "Connect",
           "forceUpdate": "Force update",
@@ -13255,7 +13267,9 @@
           "light": "Light",
           "languageIncomplete": "{{value0}}% translated, too incomplete to use as Orca’s language",
           "languageCoverage": "Interface language · {{value0}}% translated",
-          "newFileMenu": "Adds to the + menu"
+          "newFileMenu": "Adds to the + menu",
+          "editorReplacesViewer": "Opens {{value0}} instead of Orca’s viewer",
+          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer"
         },
         "PluginCardAction": {
           "installed": "Installed",
@@ -13416,6 +13430,57 @@
           "manyDescription": "They won’t update until you review them.",
           "review": "Review",
           "dismiss": "Dismiss"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Make sure you trust this folder",
+          "title": "Make sure you trust {{value0}}",
+          "theme": "This theme is from {{value0}}, not Orca. Only install plugins from authors you trust.",
+          "content": "This plugin is from {{value0}}, not Orca. Only install plugins from authors you trust.",
+          "translations": "This translation is from {{value0}}, not Orca. Translations can change any text in Orca, so only install them from authors you trust.",
+          "code": "This plugin is from {{value0}}, not Orca. It runs the publisher’s code inside Orca, so only install it if you trust {{value0}}.",
+          "git": "Orca hasn’t checked this repository. A plugin from it can run its publisher’s code inside Orca, so only install it if you trust {{value0}}.",
+          "localFolder": "This is an unverified local folder. A plugin from it can run code inside Orca, so only install it if you trust where it came from.",
+          "devFolder": "This is an unverified local folder. Orca loads its plugin as it is, and later code edits run without asking, so only add folders you trust.",
+          "publisher": "Publisher",
+          "repository": "Repository",
+          "folder": "Folder",
+          "catalog": "Catalog",
+          "cancel": "Cancel",
+          "addFolder": "Add folder",
+          "install": "Install"
+        },
+        "editorTypography": {
+          "fontSizeUnit": "px",
+          "lineHeightAuto": "Auto",
+          "ligaturesAutoEnabled": "Auto - enabled for \"{{value0}}\".",
+          "ligaturesAutoDisabled": "Auto - disabled for \"{{value0}}\".",
+          "ligaturesOff": "Off",
+          "ligaturesAuto": "Auto",
+          "ligaturesOn": "On",
+          "fontSmoothingGrayscale": "Grayscale",
+          "fontSmoothingNative": "Native",
+          "typographyKw": "typography",
+          "fontSize": "Editor Font Size",
+          "fontSizeDesc": "Base size for file editors and diff views. Leave empty to follow the terminal font size.",
+          "sizeKw": "size",
+          "fontWeight": "Editor Font Weight",
+          "fontWeightDesc": "Weight for file editors and diff views. Leave empty for regular weight (400).",
+          "weightKw": "weight",
+          "boldKw": "bold",
+          "lineHeight": "Editor Line Height",
+          "lineHeightDesc": "Line spacing as a multiple of the editor font size; values of 8 or more are read as pixels. Leave empty or 0 for automatic spacing.",
+          "lineHeightKw": "line height",
+          "spacingKw": "spacing",
+          "ligatures": "Editor Font Ligatures",
+          "ligaturesDesc": "Render ligatures such as => and !== in file editors and diff views.",
+          "ligaturesKw": "ligatures",
+          "ligatureKw": "ligature",
+          "fontFeaturesKw": "font features",
+          "fontSmoothing": "Font Smoothing",
+          "fontSmoothingDesc": "How terminals and code editors smooth text. Native draws heavier glyphs, closer to other macOS terminals.",
+          "smoothingKw": "smoothing",
+          "antialiasingKw": "antialiasing",
+          "thinKw": "thin text"
         }
       },
       "right": {
@@ -14823,7 +14888,8 @@
                   "79aa06bb2c": "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status.",
                   "6ec12cee0c": "Couldn't refresh. GitHub is unreachable right now. Showing the last known status.",
                   "de088015e8": "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status.",
-                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
+                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status.",
+                  "manual_provider": "Couldn't refresh from {{provider}}. Try again."
                 }
               }
             },
@@ -16230,16 +16296,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Zoom in",
-          "6c89c73d9f": "Reset zoom",
           "be27304574": "Zoom out",
-          "77bfc9b35a": "Open image in popup",
           "3ef9551ba2": "Loading preview...",
-          "d9d2944855": "Failed to load file preview"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Press Esc to close",
-          "535f4e2b56": "Close",
-          "9e27b2ecaf": "Full-size image preview"
+          "d9d2944855": "Failed to load file preview",
+          "fitToView": "Fit to view",
+          "actualSize": "Actual size",
+          "expand": "Expand image"
         },
         "IpynbViewer": {
           "859bf9fc21": "Run cell",
@@ -16361,7 +16423,10 @@
           "zoomOut": "Zoom out",
           "zoomIn": "Zoom in",
           "fit": "Fit to screen",
-          "close": "Close"
+          "close": "Close",
+          "copiedPng": "Copied as PNG",
+          "copyPngFailed": "Could not copy image",
+          "copyPng": "Copy as PNG"
         },
         "MermaidBlock": {
           "dcc132e691": "Diagram error:",
@@ -19393,6 +19458,8 @@
       },
       "composer": {
         "send": "Send",
+        "alternateSteerHint": "{{shortcut}} to steer",
+        "alternateQueueHint": "{{shortcut}} to queue",
         "noPty": "No live terminal — toggle back to reconnect.",
         "locked": "Input is held by another device.",
         "placeholder": "Ask anything, @ to mention files, / for commands",
@@ -19687,9 +19754,18 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Update Orca on this host to continue in Chat UI.",
-        "exitUnconfirmedFromTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal, then open this conversation from Session History.",
-        "exitUnconfirmed": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal, then open this conversation from Session History.",
-        "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies."
+        "exitUnconfirmedFromTerminal": "{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then open this conversation from Session History.",
+        "exitUnconfirmed": "{{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then try again.",
+        "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
+        "historyUnavailable": "Orca couldn't read the conversation",
+        "chatHeld": "another chat or terminal is using it",
+        "startFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open: {{reason}}. Your conversation is saved. Open it from Session History.",
+        "notSavedAfterClose": "{{agent}}'s terminal was closed, but {{agent}} hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead.",
+        "otherTerminalAfterClose": "{{agent}}'s terminal was closed, but {{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History.",
+        "chatFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open. Your conversation is saved. Open it from Session History.",
+        "terminalChanged": "The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.",
+        "terminalExitUnproven": "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",
+        "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again."
       },
       "state": {
         "loading": {
@@ -19890,7 +19966,6 @@
         "editMessage": "Edit message",
         "showFullMessage": "Show full message",
         "showLess": "Show less",
-        "turnOffQueueing": "Turn off queueing",
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
         "withdrawnHold": "Stopped before it was sent",
@@ -19935,13 +20010,15 @@
         "start": "Start",
         "startFailed": "Couldn’t start {{distro}}. Check it in Settings → Remote Orca Servers.",
         "unverifiable": "Orca couldn't check whether {{distro}} is running",
-        "startToSend": "Start {{distro}} to send."
+        "startToSend": "Start {{distro}} to send.",
+        "startDistro": "Start {{distro}}"
       },
       "interruptedContinue": {
         "continue": "Continue",
         "failed": "Couldn't continue this chat. Try again, or send a message.",
         "explanation": "Continue, and the agent first checks whether its last step finished.",
-        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again."
+        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
+        "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
@@ -20105,6 +20182,13 @@
       },
       "webPeek": {
         "unavailable": "No preview for this page."
+      },
+      "usageLimitActions": {
+        "continueNow": "Continue Now",
+        "leadIn": "Continue this chat without waiting:",
+        "switchAccount": "Switch Account",
+        "addAccount": "Add Account…",
+        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
       }
     },
     "tab": {
@@ -20486,12 +20570,11 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "Queue follow-ups",
+        "followUpBehaviorTitle": "Queue follow-ups",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
-        "queueFollowUpsCopy": "Messages you send while the agent is working wait as cards you can steer, edit, or delete. Messages with images send right away.",
-        "queueFollowUpsToggleLabel": "Toggle queue follow-ups",
+        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message.",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",
         "resumeSearchRelaunch": "relaunch",
@@ -21524,7 +21607,7 @@
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
-      "nextLaunch": "{{value0}} → {{value1}}. The next Claude you start uses it. Running sessions keep their account.",
+      "nextLaunch": "{{value0}} → {{value1}}. The next Claude terminal you start uses it. Running Claude terminals keep their account.",
       "profileSwitching": "Switching applies to the next Claude you start in any tab.",
       "systemDefault": "System default",
       "unnamedAccount": "Claude account",
@@ -21550,8 +21633,8 @@
         "session": "Claude session",
         "busy": "Working",
         "idle": "Idle",
-        "settingTitle": "When you switch accounts while Claude is running",
-        "settingDescription": "Restarting continues each running conversation on the new account.",
+        "settingTitle": "When you switch accounts while Claude is running in terminals",
+        "settingDescription": "Restarting continues each terminal conversation on the new account.",
         "keyword": {
           "restart": "restart",
           "running": "running"
@@ -21823,7 +21906,10 @@
       "showLinked_one": "Show {{count}} linked review or task",
       "showLinked_other": "Show {{count}} linked reviews and tasks",
       "linkedCount_one": "{{count}} linked",
-      "linkedCount_other": "{{count}} linked"
+      "linkedCount_other": "{{count}} linked",
+      "addEmoji": "Add emoji",
+      "addEmojiTooltip": "Add emoji (or type :)",
+      "noEmojiFound": "No emoji found"
     },
     "attachments": {
       "updateRuntime": "Update the remote runtime to change workspace links",
@@ -22293,12 +22379,8 @@
       "refreshBeforeEnd": "End is unavailable until PTYs are refreshed.",
       "endUnsupported": "End is unavailable for this terminal. Its host does not support the required safety checks. Close it from its tab or on its host.",
       "checkingTabs": "Checking tabs…",
-      "endTitle": "End {{terminal}}?",
-      "endDescription": "This ends the terminal and its child processes. Unsaved work may be lost.",
       "lastProcess": "Last seen process: {{process}}",
-      "cancel": "Cancel",
       "ending": "Ending…",
-      "end": "End terminal",
       "unassigned": "Unassigned",
       "thisComputer": "This computer",
       "localOwnedCount_one": "{{count}} Orca PTY on this computer",
@@ -22315,7 +22397,11 @@
       "endHint": "End this terminal and its child processes.",
       "claimed": "An agent now owns this terminal. Refresh before trying again.",
       "attached": "A client is now attached to this terminal. Refresh before trying again.",
-      "unverifiableEnd": "Unverifiable: the host could not confirm the result. The terminal may still be running."
+      "unverifiableEnd": "Unverifiable: the host could not confirm the result. The terminal may still be running.",
+      "selectAll": "Select all terminals",
+      "selectAllShort": "Select all",
+      "endSelected": "End selected ({{count}})",
+      "selectNamed": "Select {{terminal}}"
     },
     "resources": "Resources",
     "ptys": "PTYs",

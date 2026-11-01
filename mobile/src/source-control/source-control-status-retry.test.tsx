@@ -17,10 +17,14 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
+vi.mock('lucide-react-native', () => ({
+  CircleAlert: 'Icon',
+  GitBranch: 'Icon',
+  WifiOff: 'Icon'
+}))
 vi.mock('./MobileSourceControlHeader', () => ({ MobileSourceControlHeader: () => null }))
 vi.mock('./MobileSourceControlContent', () => ({ MobileSourceControlContent: () => null }))
 vi.mock('./MobileSourceControlModals', () => ({ MobileSourceControlModals: () => null }))
-vi.mock('./MobileSourceControlSegments', () => ({ MobileSourceControlSegments: () => null }))
 vi.mock('./MobileSourceControlBranchCard', () => ({ MobileSourceControlBranchCard: () => null }))
 vi.mock('./MobileGitHistoryList', () => ({ MobileGitHistoryList: () => null }))
 vi.mock('../components/pr-sidebar/MobilePrViewPanel', () => ({ MobilePrViewPanelBody: () => null }))
@@ -103,7 +107,7 @@ function retryControls(rendered: ReactTestRenderer): ReactTestInstance[] {
     .filter((node) =>
       node
         .findAll((text) => String(text.type) === 'Text')
-        .some((text) => text.props.children === 'Retry')
+        .some((text) => text.props.children === 'Reconnect')
     )
 }
 
@@ -112,7 +116,7 @@ describe("source control's status Retry while the host is unreachable", () => {
     doubles.forceReconnect = null
     const rendered = render()
     expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop...')
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
     ).not.toHaveLength(0)
     expect(retryControls(rendered)).toHaveLength(0)
   })

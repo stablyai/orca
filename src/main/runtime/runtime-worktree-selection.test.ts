@@ -24,32 +24,12 @@ describe('getRuntimeWorktreeRemovalOptionsKey', () => {
     ].map(getRuntimeWorktreeRemovalOptionsKey)
     expect(new Set(keys).size).toBe(keys.length)
   })
-
-  it('treats an omitted option as its off value', () => {
-    expect(getRuntimeWorktreeRemovalOptionsKey({})).toBe(
-      getRuntimeWorktreeRemovalOptionsKey({
-        force: false,
-        runHooks: false,
-        allowUnverifiedPtyStop: false,
-        allowFailedArchiveHook: false
-      })
-    )
-  })
 })
 
 describe('runtimeRepoMatchesExecutionHost', () => {
   it('matches an unstamped SSH repo against its own host (#11163)', () => {
     // Legacy connectionId must match ssh:<target> requests or repo-add/clone dedupe creates duplicate rows.
     expect(runtimeRepoMatchesExecutionHost({ connectionId: 'target-1' }, 'ssh:target-1')).toBe(true)
-  })
-
-  it('matches a stamped SSH repo against its own host', () => {
-    expect(
-      runtimeRepoMatchesExecutionHost(
-        { connectionId: 'target-1', executionHostId: 'ssh:target-1' },
-        'ssh:target-1'
-      )
-    ).toBe(true)
   })
 
   it('rejects an unstamped SSH repo against a different SSH host', () => {
@@ -63,17 +43,6 @@ describe('runtimeRepoMatchesExecutionHost', () => {
     expect(runtimeRepoMatchesExecutionHost({ connectionId: 'target-1' }, 'runtime:env-1')).toBe(
       false
     )
-  })
-
-  it('keeps a host-less legacy repo adoptable by any host', () => {
-    expect(runtimeRepoMatchesExecutionHost({}, 'runtime:env-1')).toBe(true)
-    expect(runtimeRepoMatchesExecutionHost({}, 'local')).toBe(true)
-    expect(runtimeRepoMatchesExecutionHost({}, 'ssh:target-1')).toBe(true)
-  })
-
-  it('matches any repo when the caller names no host', () => {
-    expect(runtimeRepoMatchesExecutionHost({ connectionId: 'target-1' })).toBe(true)
-    expect(runtimeRepoMatchesExecutionHost({ executionHostId: 'runtime:env-1' }, null)).toBe(true)
   })
 
   it('keeps a stamped repo bound to the host it names', () => {

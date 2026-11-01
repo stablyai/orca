@@ -1,5 +1,5 @@
 import type { AgentMessageSource } from './agent-session/agent-session-message-source'
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 
 export const ORCHESTRATION_NOTICE_TEXT =
   'You have 2 orchestration messages. Run `orca orchestration check`.'
