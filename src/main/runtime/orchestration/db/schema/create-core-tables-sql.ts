@@ -227,6 +227,7 @@ CREATE TABLE IF NOT EXISTS structured_mail_sends (
   session_id     TEXT NOT NULL,
   operation_id   TEXT NOT NULL,
   minted_at_ms   INTEGER NOT NULL,
+  fence          INTEGER NOT NULL,
   PRIMARY KEY (mailbox_handle, message_id)
 );
 

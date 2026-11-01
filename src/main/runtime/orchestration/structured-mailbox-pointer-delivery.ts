@@ -125,10 +125,12 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           return
         }
         for (const message of batch) {
+          // Parked first, so a send that throws is retried on this session's next journal edge.
+          this.park(mailboxHandle, current.sessionId, currentReservedTypes)
           if ((await this.admit(db, mailboxHandle, current, message)) === 'park') {
-            this.park(mailboxHandle, current.sessionId, currentReservedTypes)
             return
           }
+          this.parkedUntilJournalEdge.delete(mailboxHandle)
         }
         // The arrival snapshot protects its first handoff; successors derive live waiter ownership.
         currentReservedTypes = undefined
@@ -163,13 +165,19 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         outstanding.add(row.message_id)
         continue
       }
+      // A lost send waits for a later turn or a /clear, so edges alone never restart a failing agent;
+      // `check` still returns it meanwhile.
+      const sent = { atMs: row.minted_at_ms, fence: row.fence }
+      if (state === 'lost' && !(await this.deps.host.repeatable(row.session_id, sent))) {
+        outstanding.add(row.message_id)
+        continue
+      }
       if (state === 'handed') {
         db.markAsReadAndDelivered([message.id])
-      } else if (state === 'lost') {
-        // Rejected or unanswered: `check` still returns it, and this lane does not loop on it.
-        db.markAsDelivered([message.id], mailboxHandle)
+      } else {
+        // Repeatable, or nothing on record (it never landed, or a rewind dropped it): send it again.
+        db.markAsUndelivered([message.id])
       }
-      // 'absent': nothing landed, so an undelivered message is admitted again under a new id.
       db.deleteStructuredMailSend(mailboxHandle, row.message_id)
     }
     return outstanding
@@ -204,7 +212,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         message_id: message.id,
         session_id: sessionId,
         operation_id: operationId,
-        minted_at_ms: Date.now()
+        minted_at_ms: Date.now(),
+        fence
       })
     }
     const outcome = await this.deps.host.send({
@@ -240,10 +249,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           forget()
           return 'next'
         }
+        // Pending, rejected or unanswered: the record decides on a later pass.
         db.markAsDelivered([message.id], mailboxHandle)
-        if (outcome.state !== 'pending') {
-          forget()
-        }
         return 'next'
     }
   }

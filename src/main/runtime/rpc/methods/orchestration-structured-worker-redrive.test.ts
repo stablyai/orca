@@ -228,7 +228,7 @@ async function reattach(sessionId: string) {
 
 describe('the structured redrive publication edge', () => {
   it.each(['stream', 'journal'] as const)(
-    '%s delivers real CLI mail after settlement, retains failed sends and cancels teardown',
+    '%s queues real CLI mail behind the running turn, retains failed sends and cancels teardown',
     async (carrier) => {
       vi.useRealTimers()
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
@@ -333,25 +333,34 @@ describe('the structured redrive publication edge', () => {
       }
       try {
         await server.start()
-        const messageId = await sendMail('Continue after the current turn')
-        expect(state.db.getMessageById(messageId)?.delivered_at).toBeNull()
-        expect(dispatch).not.toHaveBeenCalled()
+        // A send that throws stamps nothing; the session's next journal edge sends it again.
         const send = vi.spyOn(host, 'send').mockRejectedValueOnce(new Error('provider unavailable'))
-        await worker.journal.appendTombstone(turn, { fence })
-        expect(host.currentWork(worker.identity.sessionId)?.working()).toBe(false)
-        await vi.advanceTimersByTimeAsync(300)
-        expect(notify).toHaveBeenCalledWith(worker.identity.sessionId)
+        const messageId = await sendMail('Continue after the current turn')
         expect(send).toHaveBeenCalledTimes(1)
         expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
-        expect(dispatch).not.toHaveBeenCalled()
         await worker.append('provider-available')
         await vi.advanceTimersByTimeAsync(300)
+        expect(notify).toHaveBeenCalledWith(worker.identity.sessionId)
         expect(send).toHaveBeenCalledTimes(2)
+        // Queued behind the running turn, like a person's message: delivered, not yet handed over.
+        expect(state.db.getMessageById(messageId)).toMatchObject({
+          read: 0,
+          delivered_at: expect.any(String)
+        })
+        expect(dispatch).not.toHaveBeenCalled()
+        // The turn ends and the chat's own drain hands the card over.
+        await worker.journal.appendTombstone(turn, { fence })
+        await vi.advanceTimersByTimeAsync(300)
         expect(dispatch).toHaveBeenCalledTimes(1)
         expect(dispatch.mock.calls[0]![0].body).toMatchObject({
           kind: 'message',
           role: 'user',
-          blocks: [{ type: 'text', text: expect.stringContaining('orchestration check') }],
+          blocks: [
+            {
+              type: 'text',
+              text: expect.stringContaining('Subject: Continue after the current turn')
+            }
+          ],
           from: {
             orchestration: {
               message: 'mail-notice',
@@ -360,26 +369,15 @@ describe('the structured redrive publication edge', () => {
             }
           }
         })
-        expect(state.db.getMessageById(messageId)?.delivered_at).not.toBeNull()
-        const nextTurn = { provider: 'orca', clientMessageId: 'busy-at-teardown' } as const
-        await worker.journal.appendItem(
-          nextTurn,
-          { kind: 'turn', turnId: 'busy-at-teardown', state: 'running' },
-          { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-        )
-        expect(host.currentWork(worker.identity.sessionId)?.working()).toBe(true)
-        await vi.advanceTimersByTimeAsync(300)
-        const cancelledId = await sendMail('Do not deliver after teardown')
-        expect(state.db.getMessageById(cancelledId)?.delivered_at).toBeNull()
-        await worker.journal.appendTombstone(nextTurn, { fence })
         releaseStructuredWorkerSession(worker.identity.sessionId, state.runtime)
         disposeStream()
         notify.mockClear()
+        const cancelledId = await sendMail('Do not deliver after teardown')
         await worker.append('after-teardown')
         await vi.advanceTimersByTimeAsync(5_000)
         expect(notify).not.toHaveBeenCalled()
         expect(dispatch).toHaveBeenCalledTimes(1)
-        expect(state.db.getMessageById(cancelledId)).toMatchObject({ read: 0, delivered_at: null })
+        expect(state.db.getMessageById(cancelledId)).toMatchObject({ read: 0 })
       } finally {
         disposeStream()
         await server.stop()

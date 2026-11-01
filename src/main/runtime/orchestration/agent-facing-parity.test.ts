@@ -120,6 +120,7 @@ async function renderChatMail(mailbox: string): Promise<{ text: string; id: stri
     host: {
       currentFence: () => 1,
       observe: async () => 'handed',
+      repeatable: async () => false,
       withdraw: async () => true,
       send: async (input) => {
         for (const block of input.body.blocks) {

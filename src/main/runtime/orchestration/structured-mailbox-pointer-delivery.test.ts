@@ -33,6 +33,7 @@ function harness(options: { busy?: boolean; refuse?: boolean } = {}) {
   /** What the chat holds per operation id: a waiting card, or what its handoff became. */
   const chat = new Map<string, StructuredMailSendState>()
   const texts: string[] = []
+  let turnRan = false
   const db = {
     getRun: () => undefined,
     getDispatchContextById: () => ({ run_id: 'run_1' }),
@@ -47,6 +48,11 @@ function harness(options: { busy?: boolean; refuse?: boolean } = {}) {
     markAsDelivered: (ids: string[]) => {
       for (const id of ids) {
         mail.get(id)!.delivered_at ??= 'now'
+      }
+    },
+    markAsUndelivered: (ids: string[]) => {
+      for (const id of ids) {
+        mail.get(id)!.delivered_at = null
       }
     },
     markAsReadAndDelivered: (ids: string[]) => {
@@ -80,6 +86,7 @@ function harness(options: { busy?: boolean; refuse?: boolean } = {}) {
         : { kind: 'sent' as const, state: 'accepted' as const }
     }),
     observe: vi.fn(async (_sessionId, operationId) => chat.get(operationId) ?? 'absent'),
+    repeatable: vi.fn(async () => turnRan),
     withdraw: vi.fn(async (_sessionId, operationId) => {
       chat.delete(operationId)
       return true
@@ -130,6 +137,9 @@ function harness(options: { busy?: boolean; refuse?: boolean } = {}) {
     },
     setRefuse: (next: boolean) => {
       refuse = next
+    },
+    setTurnRan: (next: boolean) => {
+      turnRan = next
     }
   }
 }
@@ -203,6 +213,22 @@ describe('structured mailbox delivery: each message whole', () => {
     const first = h.records.get('m1')!.operation_id
     h.chat.delete(first)
     h.mail.get('m1')!.delivered_at = null
+    await h.deliver()
+    expect(h.host.send).toHaveBeenCalledTimes(2)
+    expect(h.records.get('m1')?.operation_id).not.toBe(first)
+  })
+
+  it('repeats a send the agent may never have taken only after a later turn ran', async () => {
+    const h = harness({ busy: true })
+    h.receive('m1')
+    await h.deliver()
+    const first = h.records.get('m1')!.operation_id
+    h.chat.set(first, 'lost')
+    await h.deliver()
+    await h.deliver()
+    expect(h.host.send).toHaveBeenCalledTimes(1)
+    expect(h.mail.get('m1')?.read).toBe(0)
+    h.setTurnRan(true)
     await h.deliver()
     expect(h.host.send).toHaveBeenCalledTimes(2)
     expect(h.records.get('m1')?.operation_id).not.toBe(first)

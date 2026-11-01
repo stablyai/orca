@@ -68,15 +68,13 @@ describe('nested receiving work follows its current consumer', () => {
       await f.report(helper)
       expect(nudges).toHaveBeenCalledWith(`run:${run.id}`, 'worker_done')
       expect(db.getWorkerDispatch(helper.dispatch.id)?.state).toBe('succeeded')
-      const retained = vi.fn()
       const pointer = new OrchestrationStructuredMailboxPointerDelivery({
         getDb: () => db,
         getMessageWaiters: () => undefined,
         resolveStructuredTarget: (handle) => f.runtime.mailTarget(handle),
         getCliCommand: () => 'orca-dev',
         senderSnapshot: () => ({ name: null, agent: null }),
-        host: createStructuredMailboxPointerHost(),
-        onRetain: retained
+        host: createStructuredMailboxPointerHost()
       })
       unsubscribe = await f.rig.host.subscribe({
         id: 'real-pointer-wake',
@@ -84,10 +82,14 @@ describe('nested receiving work follows its current consumer', () => {
         emit: () => pointer.onJournalActivity(PARENT)
       })
       const dispatches = f.rig.adapter.dispatch.mock.calls.length
+      const [result] = db.getUndeliveredUnreadMessages(`run:${run.id}`, undefined, {
+        excludeIds: batch.messages.map((message) => message.id)
+      })
+      expect(result?.type).toBe('worker_done')
       expect(pointer.deliverForHandle(`run:${run.id}`)).toBe(true)
-      await vi.waitFor(() =>
-        expect(retained).toHaveBeenCalledWith(expect.objectContaining({ reason: 'turn-unsettled' }))
-      )
+      // The running ordinary turn holds the helper result as a queued card; it does not steer.
+      await vi.waitFor(() => expect(db.getMessageById(result!.id)?.delivered_at).toBeTruthy())
+      expect(db.getMessageById(result!.id)?.read).toBeFalsy()
       expect(f.rig.adapter.dispatch).toHaveBeenCalledTimes(dispatches)
       await f.turn(ordinary, 'completed')
       await vi.waitFor(() => expect(f.rig.adapter.dispatch.mock.calls.length).toBe(dispatches + 1))
@@ -97,34 +99,31 @@ describe('nested receiving work follows its current consumer', () => {
       }
       const notice = journal.submissions().find((submission) => {
         const body = journal.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
-        return body?.kind === 'message' && body.from?.orchestration?.message === 'mail-notice'
+        return (
+          body?.kind === 'message' &&
+          body.from?.orchestration?.message === 'mail-notice' &&
+          body.from.orchestration.messages.map((message) => message.messageId).join() === result!.id
+        )
       })
       if (!notice) {
-        throw new Error('production pointer did not submit its canonical notice')
+        throw new Error('production delivery did not submit the helper result as its own message')
       }
       await f.turn(notice.clientMessageId, 'running')
+      // Handed whole to the agent, the helper result is read; a check has nothing left to return.
+      await vi.waitFor(() => expect(db.getMessageById(result!.id)?.read).toBeTruthy())
       db.acknowledgeMailboxDelivery({
         runId: run.id,
         mailboxHandle: `run:${run.id}`,
         consumerGeneration: run.consumer_generation,
         deliveryId: batch.delivery.id
       })
-      const resultBatch = db.getOrCreateMailboxDelivery({
-        runId: run.id,
-        mailboxHandle: `run:${run.id}`,
-        consumerGeneration: run.consumer_generation
-      })
-      if (!resultBatch) {
-        throw new Error('real report not accepted into the current Run')
-      }
-      expect(resultBatch.messages.map((message) => message.to_handle)).toEqual([`run:${run.id}`])
-      expect(resultBatch.messages.map((message) => message.type)).toEqual(['worker_done'])
-      db.acknowledgeMailboxDelivery({
-        runId: run.id,
-        mailboxHandle: `run:${run.id}`,
-        consumerGeneration: run.consumer_generation,
-        deliveryId: resultBatch.delivery.id
-      })
+      expect(
+        db.getOrCreateMailboxDelivery({
+          runId: run.id,
+          mailboxHandle: `run:${run.id}`,
+          consumerGeneration: run.consumer_generation
+        })
+      ).toBeFalsy()
       expect(await f.rig.host.prospectiveAccountHome(PARENT)).toEqual(HOME_A)
       await f.turn('unrelated-newer', 'completed')
       expect(await f.rig.host.prospectiveAccountHome(PARENT)).toEqual(HOME_A)

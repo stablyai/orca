@@ -15,6 +15,7 @@ import {
   dispatcher,
   host,
   openChat,
+  queuedCardTexts,
   request,
   runtime,
   sendUserMessage,
@@ -363,18 +364,33 @@ describe('a send to a finished structured worker', () => {
     const { taskId } = await coordinatorRunAndTask()
     const { identity, firstDispatchId } = await finishedStructuredWorker(taskId, 'none')
     const worker = connectionFor(identity.sessionId)
-    await sendTo(firstDispatchId, 'and the docs')
-    // The mail pointer arrives; the worker reports without reading it.
+    expect(await sendUserMessage(identity.sessionId, 'go')).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
-    await settleTurn(identity.sessionId, 0)
+    worker.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
+    await host.flushStreamedEvents(identity.sessionId)
+    await sendTo(firstDispatchId, 'and the docs')
+    // The mail waits as a card behind the running turn; the worker reports before it is handed over.
+    await vi.waitFor(
+      async () => expect(await queuedCardTexts(identity.sessionId)).toHaveLength(1),
+      WAIT
+    )
 
     expect(await reportDone(identity.sessionId, taskId, firstDispatchId)).toMatchObject({
       ok: true
     })
+    // The follow-up took the mail, so its card was deleted and only the follow-up's own Task waits.
+    await vi.waitFor(async () => {
+      const cards = await queuedCardTexts(identity.sessionId)
+      expect(cards).toHaveLength(1)
+      expect(cards[0]).toContain('`check` command above')
+    }, WAIT)
+    worker.handlers.onNotification?.('turn/completed', { turn: { id: 'turn-1' } })
+    await host.flushStreamedEvents(identity.sessionId)
     await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
     await settleTurn(identity.sessionId, 1)
 
     expect(turnText(worker.turns[1]!)).toContain('`check` command above')
+    expect(worker.turns.map(turnText).join('\n')).not.toContain('and the docs')
     await vi.waitFor(
       () => expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toHaveLength(0),
       WAIT

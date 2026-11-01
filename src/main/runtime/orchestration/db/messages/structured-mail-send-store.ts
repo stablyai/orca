@@ -7,6 +7,8 @@ export type StructuredMailSendRow = {
   session_id: string
   operation_id: string
   minted_at_ms: number
+  /** The session's fence when it was sent: a context cleared since then never took it. */
+  fence: number
 }
 
 export function getStructuredMailSends(
@@ -41,13 +43,20 @@ export function putStructuredMailSend(this: OrchestrationDb, row: StructuredMail
   this.db
     .prepare(
       `INSERT INTO structured_mail_sends
-         (mailbox_handle, message_id, session_id, operation_id, minted_at_ms)
-       VALUES (?, ?, ?, ?, ?)
+         (mailbox_handle, message_id, session_id, operation_id, minted_at_ms, fence)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(mailbox_handle, message_id) DO UPDATE SET
          session_id = excluded.session_id, operation_id = excluded.operation_id,
-         minted_at_ms = excluded.minted_at_ms`
+         minted_at_ms = excluded.minted_at_ms, fence = excluded.fence`
     )
-    .run(row.mailbox_handle, row.message_id, row.session_id, row.operation_id, row.minted_at_ms)
+    .run(
+      row.mailbox_handle,
+      row.message_id,
+      row.session_id,
+      row.operation_id,
+      row.minted_at_ms,
+      row.fence
+    )
 }
 
 export function deleteStructuredMailSend(

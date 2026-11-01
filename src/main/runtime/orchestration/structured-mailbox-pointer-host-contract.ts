@@ -19,7 +19,7 @@ export type StructuredMailSendState =
   | 'waiting'
   /** The agent was handed it, or the person deleted its card. */
   | 'handed'
-  /** Rejected, unanswered, or nothing recorded any more. */
+  /** Rejected or left unanswered: it may never have reached the agent. */
   | 'lost'
   /** Nothing recorded under the id: the send never landed. */
   | 'absent'
@@ -38,6 +38,10 @@ export type StructuredMailboxPointerHost = {
     stillOwed: () => boolean
   }) => Promise<StructuredPointerSendOutcome>
   observe: (sessionId: string, operationId: string) => Promise<StructuredMailSendState>
+  /** Whether a lost send is worth repeating: the agent accepted a turn since, or a /clear replaced
+   *  the context it went to. Edges alone never repeat it, so an agent dying on every start is not
+   *  restarted by each one. */
+  repeatable: (sessionId: string, sent: { atMs: number; fence: number }) => Promise<boolean>
   /** Delete a card still waiting in the queue; false when it could not be deleted now. */
   withdraw: (sessionId: string, operationId: string) => Promise<boolean>
   /** Current lease fence; `null` when no record backs the session any more. */

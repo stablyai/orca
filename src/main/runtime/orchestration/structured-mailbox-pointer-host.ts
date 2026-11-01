@@ -105,6 +105,22 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       return observeMailSend(sessionId, operationId)
     },
 
+    async repeatable(sessionId, sent) {
+      const boundary =
+        getStructuredAgentSessionHost()?.deps.store.getConversation(
+          sessionId
+        )?.providerContextBoundary
+      if (boundary && sent.fence <= boundary.afterFence) {
+        return true
+      }
+      const snapshot = await readSessionJournal(sessionId)
+      return (
+        snapshot?.submissions.some(
+          (entry) => entry.dispatchState === 'accepted' && entry.submittedAt > sent.atMs
+        ) ?? false
+      )
+    },
+
     async withdraw(sessionId, operationId) {
       const host = getStructuredAgentSessionHost()
       const fence = host?.deps.store.getConversation(sessionId)?.currentFence

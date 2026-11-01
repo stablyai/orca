@@ -58,22 +58,23 @@ describe('structured pointer schema migration', () => {
     }
   })
 
-  it('creates the structured pointer operation store', () => {
+  it('creates the structured mail send store', () => {
     const db = new OrchestrationDb(':memory:')
     try {
-      expect(db.getStructuredPointerOperation('dispatch:d1')).toBeUndefined()
-      db.putStructuredPointerOperation({
+      expect(db.getStructuredMailSends('dispatch:d1')).toEqual([])
+      db.putStructuredMailSend({
         mailbox_handle: 'dispatch:d1',
+        message_id: 'm1',
         session_id: 's1',
         operation_id: '1757030400000-0123456789abcdef0123456789abcdef',
-        batch_fingerprint: 'fp',
-        minted_at_ms: 1_757_030_400_000
+        minted_at_ms: 1_757_030_400_000,
+        fence: 1
       })
-      expect(db.getStructuredPointerOperation('dispatch:d1')?.operation_id).toBe(
+      expect(db.getStructuredMailSends('dispatch:d1').map((row) => row.operation_id)).toEqual([
         '1757030400000-0123456789abcdef0123456789abcdef'
-      )
-      db.deleteStructuredPointerOperation('dispatch:d1')
-      expect(db.getStructuredPointerOperation('dispatch:d1')).toBeUndefined()
+      ])
+      db.deleteStructuredMailSend('dispatch:d1', 'm1')
+      expect(db.getStructuredMailSends('dispatch:d1')).toEqual([])
     } finally {
       db.close()
     }
